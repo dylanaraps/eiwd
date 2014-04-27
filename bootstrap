@@ -1,3 +1,7 @@
 #!/bin/sh
 
-autoreconf --force --install
+if [ ! -d build-aux ]; then
+	mkdir build-aux
+fi
+
+autoreconf --force --install --symlink
