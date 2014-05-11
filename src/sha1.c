@@ -27,7 +27,7 @@
 #include <string.h>
 #include <ell/ell.h>
 
-#include "sha1.h"
+#include "src/sha1.h"
 
 #define SHA1_MAC_LEN 20
 
