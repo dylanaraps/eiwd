@@ -20,3 +20,8 @@ autom4te.cache
 ell
 src/iwd
 client/iwctl
+unit/test-pbkdf2-sha1
+unit/test-prf-sha1
+unit/*.log
+unit/*.trs
+test-suite.log

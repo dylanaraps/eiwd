@@ -36,6 +36,18 @@ src_iwd_LDADD = ell/libell-internal.la
 client_iwctl_SOURCES = client/main.c
 client_iwctl_LDADD = ell/libell-internal.la
 
+noinst_PROGRAMS = unit/test-pbkdf2-sha1 unit/test-prf-sha1
+
+unit_test_pbkdf2_sha1_SOURCES = unit/test-pbkdf2-sha1.c \
+					src/sha1.h src/sha1.c
+unit_test_pbkdf2_sha1_LDADD = ell/libell-internal.la
+
+unit_test_prf_sha1_SOURCES = unit/test-prf-sha1.c \
+					src/sha1.h src/sha1.c
+unit_test_prf_sha1_LDADD = ell/libell-internal.la
+
+TESTS = $(noinst_PROGRAMS)
+
 AM_CFLAGS = -fvisibility=hidden
 
 MAINTAINERCLEANFILES = Makefile.in configure config.h.in aclocal.m4
