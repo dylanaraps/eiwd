@@ -27,6 +27,11 @@ ell_sources = ell/ell.h ell/private.h \
 
 ell_libell_internal_la_SOURCES = $(ell_sources)
 
+bin_PROGRAMS = src/iwd
+
+src_iwd_SOURCES = src/main.c
+src_iwd_LDADD = ell/libell-internal.la
+
 AM_CFLAGS = -fvisibility=hidden
 
 MAINTAINERCLEANFILES = Makefile.in configure config.h.in aclocal.m4
