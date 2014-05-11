@@ -29,8 +29,7 @@ ell_libell_internal_la_SOURCES = $(ell_sources)
 
 AM_CFLAGS = -fvisibility=hidden
 
-MAINTAINERCLEANFILES = Makefile.in configure \
-			config.h.in aclocal.m4 build-aux/* $(ell_sources)
+MAINTAINERCLEANFILES = Makefile.in configure config.h.in aclocal.m4
 
 DISTCLEANFILES = $(BUILT_SOURCES)
 
@@ -43,3 +42,6 @@ ell/internal: Makefile
 			$(LN_S) -t ell -f $(top_srcdir)/../../ell/$$f ; \
 		fi \
 	done > $@
+
+maintainer-clean-local:
+	-rm -rf build-aux ell
