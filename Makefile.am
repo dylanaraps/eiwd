@@ -58,7 +58,7 @@ AM_CFLAGS = -fvisibility=hidden
 
 MAINTAINERCLEANFILES = Makefile.in configure config.h.in aclocal.m4
 
-DISTCLEANFILES = $(BUILT_SOURCES)
+DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests)
 
 BUILT_SOURCES = ell/internal
 
