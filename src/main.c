@@ -72,13 +72,18 @@ int main(int argc, char *argv[])
 
 	l_debug("Bus location: %s", bus_name);
 
+	if (!kdbus_open_bus(bus_name, "net.connman.iwd", "iwd")) {
+		exit_status = EXIT_FAILURE;
+		goto destroy;
+	}
+
 	l_main_run();
 
 	exit_status = EXIT_SUCCESS;
 
+destroy:
 	l_free(bus_name);
 
-destroy:
 	kdbus_destroy_bus();
 
 done:
