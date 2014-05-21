@@ -151,7 +151,7 @@ static bool name_acquire(const char *name)
 	snprintf(cmd_name.param, sizeof(cmd_name.param), "%s", name);
 	cmd_name.head.size = sizeof(cmd_name.head) + strlen(cmd_name.param) + 1;
 
-	l_debug("Aquiring name %s", cmd_name.param);
+	l_debug("Acquiring name %s", cmd_name.param);
 
 	if (ioctl(kdbus_conn, KDBUS_CMD_NAME_ACQUIRE, &cmd_name) < 0) {
 		l_error("Failed to acquire name: %m");
@@ -213,6 +213,8 @@ bool kdbus_open_bus(const char *path, const char *name, const char *conn_name)
 		return false;
         }
 
+	l_debug("Name: :1.%lu", cmd_hello.head.id);
+
 	memcpy(kdbus_id128, cmd_hello.head.id128, sizeof(kdbus_id128));
 
 	l_debug("UUID: %02x%02x%02x%02x-%02x%02x%02x%02x-"
@@ -225,6 +227,9 @@ bool kdbus_open_bus(const char *path, const char *name, const char *conn_name)
 				kdbus_id128[10], kdbus_id128[11],
 				kdbus_id128[12], kdbus_id128[13],
 				kdbus_id128[14], kdbus_id128[15]);
+
+	l_debug("Bloom size: %lu", cmd_hello.head.bloom.size);
+	l_debug("Bloom hashes: %lu", cmd_hello.head.bloom.n_hash);
 
 	if (!name_acquire(name)) {
 		close(kdbus_conn);
