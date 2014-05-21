@@ -34,6 +34,7 @@ ell_libell_internal_la_SOURCES = $(ell_sources)
 bin_PROGRAMS = src/iwd client/iwctl
 
 src_iwd_SOURCES = src/main.c linux/nl80211.h linux/kdbus.h \
+					src/kdbus.h src/kdbus.c \
 					src/sha1.h src/sha1.c
 src_iwd_LDADD = ell/libell-internal.la
 

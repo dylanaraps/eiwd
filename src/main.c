@@ -27,6 +27,8 @@
 #include <stdlib.h>
 #include <ell/ell.h>
 
+#include "src/kdbus.h"
+
 static void signal_handler(struct l_signal *signal, uint32_t signo,
 							void *user_data)
 {
@@ -43,6 +45,8 @@ int main(int argc, char *argv[])
 {
 	struct l_signal *signal;
 	sigset_t mask;
+	char *bus_name;
+	int exit_status;
 
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGINT);
@@ -51,14 +55,34 @@ int main(int argc, char *argv[])
 	signal = l_signal_create(&mask, signal_handler, NULL, NULL);
 
 	l_log_set_stderr();
+	l_debug_enable("*");
 
 	l_info("Wireless daemon version %s", VERSION);
 
-	l_debug_enable("*");
+	if (!kdbus_create_bus()) {
+		exit_status = EXIT_FAILURE;
+		goto done;
+	}
+
+	bus_name = kdbus_lookup_bus();
+	if (!bus_name) {
+		exit_status = EXIT_FAILURE;
+		goto destroy;
+	}
+
+	l_debug("Bus location: %s", bus_name);
 
 	l_main_run();
 
+	exit_status = EXIT_SUCCESS;
+
+	l_free(bus_name);
+
+destroy:
+	kdbus_destroy_bus();
+
+done:
 	l_signal_remove(signal);
 
-	return EXIT_SUCCESS;
+	return exit_status;
 }
