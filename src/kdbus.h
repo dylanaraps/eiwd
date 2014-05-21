@@ -26,3 +26,5 @@ bool kdbus_create_bus(void);
 bool kdbus_destroy_bus(void);
 
 char *kdbus_lookup_bus(void);
+bool kdbus_open_bus(const char *path, const char *name, const char *conn_name);
+bool kdbus_close_bus(void);
