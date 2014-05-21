@@ -45,9 +45,17 @@ int main(int argc, char *argv[])
 
 	l_debug("Bus location: %s", bus_name);
 
+	if (!kdbus_open_bus(bus_name, NULL, "iwctl")) {
+		exit_status = EXIT_FAILURE;
+		goto destroy;
+	}
+
 	exit_status = EXIT_SUCCESS;
 
+destroy:
 	l_free(bus_name);
+
+	kdbus_close_bus();
 
 done:
 	return exit_status;
