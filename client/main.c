@@ -25,8 +25,30 @@
 #endif
 
 #include <stdlib.h>
+#include <ell/ell.h>
+
+#include "src/kdbus.h"
 
 int main(int argc, char *argv[])
 {
-	return EXIT_SUCCESS;
+	char *bus_name;
+	int exit_status;
+
+	l_log_set_stderr();
+	l_debug_enable("*");
+
+	bus_name = kdbus_lookup_bus();
+	if (!bus_name) {
+		exit_status = EXIT_FAILURE;
+		goto done;
+	}
+
+	l_debug("Bus location: %s", bus_name);
+
+	exit_status = EXIT_SUCCESS;
+
+	l_free(bus_name);
+
+done:
+	return exit_status;
 }
