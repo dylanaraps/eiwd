@@ -23,11 +23,11 @@ ell_sources = ell/ell.h ell/private.h \
 			ell/netlink.h ell/netlink.c \
 			ell/dbus-private.h \
 			ell/dbus.h ell/dbus.c \
-			ell/dbus-util.h ell/dbus-util.c \
-			ell/dbus-message.h ell/dbus-message.c \
+			ell/dbus-util.c \
+			ell/dbus-message.c \
 			ell/dbus-service.h ell/dbus-service.c \
 			ell/gvariant-private.h \
-			ell/gvariant-util.h ell/gvariant-util.c
+			ell/gvariant-util.c
 
 ell_libell_internal_la_SOURCES = $(ell_sources)
 
