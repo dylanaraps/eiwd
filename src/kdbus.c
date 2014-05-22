@@ -192,15 +192,10 @@ bool kdbus_open_bus(const char *path, const char *name, const char *conn_name)
 	cmd_hello.head.size = sizeof(cmd_hello.head) + cmd_hello.name_size;
 	cmd_hello.head.conn_flags = KDBUS_HELLO_ACCEPT_FD;
 	cmd_hello.head.attach_flags = KDBUS_ATTACH_TIMESTAMP |
-					KDBUS_ATTACH_CREDS |
 					KDBUS_ATTACH_NAMES |
-					KDBUS_ATTACH_COMM |
-					KDBUS_ATTACH_EXE |
-					KDBUS_ATTACH_CMDLINE |
+					KDBUS_ATTACH_CREDS |
 					KDBUS_ATTACH_CAPS |
 					KDBUS_ATTACH_CGROUP |
-					KDBUS_ATTACH_SECLABEL |
-					KDBUS_ATTACH_AUDIT |
 					KDBUS_ATTACH_CONN_NAME;
 	cmd_hello.head.pool_size = POOL_SIZE;
 
