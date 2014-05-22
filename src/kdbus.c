@@ -213,7 +213,7 @@ bool kdbus_open_bus(const char *path, const char *name, const char *conn_name)
 		return false;
         }
 
-	l_debug("Name: :1.%lu", cmd_hello.head.id);
+	l_debug("Name: :1.%" PRIu64, cmd_hello.head.id);
 
 	memcpy(kdbus_id128, cmd_hello.head.id128, sizeof(kdbus_id128));
 
@@ -228,8 +228,8 @@ bool kdbus_open_bus(const char *path, const char *name, const char *conn_name)
 				kdbus_id128[12], kdbus_id128[13],
 				kdbus_id128[14], kdbus_id128[15]);
 
-	l_debug("Bloom size: %lu", cmd_hello.head.bloom.size);
-	l_debug("Bloom hashes: %lu", cmd_hello.head.bloom.n_hash);
+	l_debug("Bloom size: %" PRIu64, cmd_hello.head.bloom.size);
+	l_debug("Bloom hashes: %" PRIu64, cmd_hello.head.bloom.n_hash);
 
 	if (!name_acquire(name)) {
 		close(kdbus_conn);
