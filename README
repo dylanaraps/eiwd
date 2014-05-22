@@ -1,0 +1,76 @@
+Wireless daemon for Linux
+*************************
+
+Copyright (C) 2013-2014  Intel Corporation. All rights reserved.
+
+
+Compilation and installation
+============================
+
+In order to compile the source code you need following software packages:
+	- GCC compiler
+	- GNU C library
+	- Embedded Linux library
+
+To configure run:
+	./configure --prefix=/usr
+
+Configure automatically searches for all required components and packages.
+
+To compile and install run:
+	make && make install
+
+
+Embedded Linux library
+======================
+
+In order to compile the daemon and control utility the development version
+of Embedded Linux library is required to be present. The development
+repositories can be found here:
+
+	git://git.kernel.org/pub/scm/libs/ell/ell.git
+	https://kernel.googlesource.com/pub/scm/libs/ell/ell.git
+
+The build systems requires that the Embedded Linux library source code
+is available on the same top level directory as the Wireless daemon
+source code:
+
+	.
+	|--- ell
+	|    |--- ell
+	|    `--- unit
+	`--- iwd
+	     |--- src
+	     `--- client
+
+It is not required to build or install Embedded Linux library. The build
+will happen when building the Wireless daemon and it will then be linked
+internally.
+
+
+Kernel dependencies
+===================
+
+In order to use this daemon and control utility the kdbus kernel module
+is required. The development repositories can be found here:
+
+	https://github.com/gregkh/kdbus
+	https://code.google.com/p/d-bus/
+
+The daemon will start its own private bus that is located at the /dev/kdbus
+device hierarchy:
+
+	/dev/kdbus
+	|--- control
+	`--- 0-iwd
+	     `--- bus
+
+When started as root, the new private bus will be /dev/kdbus/0-iwd/bus
+and it can be verified with the busctl utility from systemd:
+
+	# busctl --address=kernel:path=/dev/kdbus/0-iwd/bus
+	NAME       PID  PROCESS     USER      CONNECTION    CONNECTION-NAME
+	:1.1     62151  iwd         root      :1.1          iwd
+	:1.2     62153  busctl      root      :1.2          sd-busctl
+
+Clients talking to the daemon must specifiy the private bus address.
