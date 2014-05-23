@@ -23,6 +23,7 @@ ell_sources = ell/ell.h ell/private.h \
 			ell/netlink.h ell/netlink.c \
 			ell/dbus-private.h \
 			ell/dbus.h ell/dbus.c \
+			ell/dbus-kernel.c \
 			ell/dbus-util.c \
 			ell/dbus-message.c \
 			ell/dbus-service.h ell/dbus-service.c \
