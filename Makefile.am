@@ -20,6 +20,7 @@ ell_sources = ell/ell.h ell/private.h \
 			ell/log.h ell/log.c \
 			ell/plugin.h ell/plugin.c \
 			ell/checksum.h ell/checksum.c \
+			ell/netlink-private.h \
 			ell/netlink.h ell/netlink.c \
 			ell/dbus-private.h \
 			ell/dbus.h ell/dbus.c \
