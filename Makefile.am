@@ -22,6 +22,7 @@ ell_sources = ell/ell.h ell/private.h \
 			ell/checksum.h ell/checksum.c \
 			ell/netlink-private.h \
 			ell/netlink.h ell/netlink.c \
+			ell/genl.h ell/genl.c \
 			ell/dbus-private.h \
 			ell/dbus.h ell/dbus.c \
 			ell/dbus-kernel.c \
