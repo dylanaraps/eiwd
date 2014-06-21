@@ -29,6 +29,8 @@
 #include <net/if.h>
 #include <ell/ell.h>
 
+#include "src/netdev.h"
+
 struct netdev_data {
 	uint32_t index;
 	uint32_t flags;

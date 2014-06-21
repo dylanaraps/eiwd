@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <ell/ell.h>
 
+#include "src/netdev.h"
 #include "src/kdbus.h"
 
 static void signal_handler(struct l_signal *signal, uint32_t signo,
