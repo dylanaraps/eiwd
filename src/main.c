@@ -77,7 +77,14 @@ int main(int argc, char *argv[])
 		goto destroy;
 	}
 
+	if (!netdev_init()) {
+		exit_status = EXIT_FAILURE;
+		goto destroy;
+	}
+
 	l_main_run();
+
+	netdev_exit();
 
 	exit_status = EXIT_SUCCESS;
 
