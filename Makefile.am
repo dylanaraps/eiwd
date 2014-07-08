@@ -49,7 +49,7 @@ client_iwctl_LDADD = ell/libell-internal.la
 
 noinst_PROGRAMS =
 
-unit_tests = unit/test-pbkdf2-sha1 unit/test-prf-sha1
+unit_tests = unit/test-pbkdf2-sha1 unit/test-prf-sha1 unit/test-ie
 
 if MAINTAINER_MODE
 noinst_PROGRAMS += $(unit_tests)
@@ -62,6 +62,9 @@ unit_test_pbkdf2_sha1_LDADD = ell/libell-internal.la
 unit_test_prf_sha1_SOURCES = unit/test-prf-sha1.c \
 					src/sha1.h src/sha1.c
 unit_test_prf_sha1_LDADD = ell/libell-internal.la
+
+unit_test_ie_SOURCES = unit/test-ie.c src/ie.h src/ie.c
+unit_test_ie_LDADD = ell/libell-internal.la
 
 TESTS = $(unit_tests)
 
