@@ -153,3 +153,17 @@ enum ie_type {
 	IE_TYPE_VENDOR_SPECIFIC                      = 221,
 	/* Reserved 222 - 255 */
 };
+
+struct ie_tlv_iter {
+	unsigned int max;
+	unsigned int pos;
+	const unsigned char *tlv;
+	unsigned int tag;
+	unsigned int len;
+	const unsigned char *data;
+};
+
+void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
+			unsigned int len);
+unsigned int ie_tlv_iter_get_tag(struct ie_tlv_iter *iter);
+bool ie_tlv_iter_next(struct ie_tlv_iter *iter);
