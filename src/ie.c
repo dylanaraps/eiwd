@@ -37,6 +37,14 @@ void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 	iter->pos = 0;
 }
 
+void ie_tlv_iter_recurse(struct ie_tlv_iter *iter,
+				struct ie_tlv_iter *recurse)
+{
+	recurse->tlv = iter->data;
+	recurse->max = iter->len;
+	recurse->pos = 0;
+}
+
 unsigned int ie_tlv_iter_get_tag(struct ie_tlv_iter *iter)
 {
 	return iter->tag;
