@@ -50,13 +50,15 @@ static void ie_test(const void *data)
 	struct ie_tlv_iter iter;
 	struct ie *ie;
 	unsigned int count = 0, pos = 0;
+	char *str;
 
 	ie_tlv_iter_init(&iter, test->buf, test->len);
 
 	while (ie_tlv_iter_next(&iter)) {
 		ie = (struct ie *)&test->buf[pos];
-		printf("IE %d [%d/%d/%s]\n", count, ie->type, ie->len,
-			l_util_hexstring(&test->buf[pos + 2], ie->len));
+		str = l_util_hexstring(&test->buf[pos + 2], ie->len);
+		printf("IE %d [%d/%d/%s]\n", count, ie->type, ie->len, str);
+		l_free(str);
 
 		assert(iter.tag == test->buf[pos++]);
 		assert(iter.len == test->buf[pos++]);
