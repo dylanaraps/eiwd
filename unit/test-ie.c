@@ -49,7 +49,7 @@ static void ie_test(const void *data)
 	const struct test_data *test = data;
 	struct ie_tlv_iter iter;
 	struct ie *ie;
-	int count = 0, pos = 0;
+	unsigned int count = 0, pos = 0;
 
 	ie_tlv_iter_init(&iter, test->buf, test->len);
 
