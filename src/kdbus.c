@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <string.h>
 #include <glob.h>
 #include <ell/ell.h>
@@ -116,7 +117,6 @@ bool kdbus_destroy_bus(void)
 char *kdbus_lookup_bus(void)
 {
 	glob_t gl;
-	size_t i;
 	char *path = NULL;
 
 	if (glob("/dev/kdbus/*-iwd/bus", GLOB_ONLYDIR, NULL, &gl)) {
@@ -170,6 +170,7 @@ bool kdbus_open_bus(const char *path, const char *name, const char *conn_name)
 		uint64_t name_type;
 		char name_param[16];
 	} cmd_hello;
+	uint64_t id, size, n_hash;
 
 	if (kdbus_conn >= 0)
 		return false;
@@ -208,7 +209,9 @@ bool kdbus_open_bus(const char *path, const char *name, const char *conn_name)
 		return false;
         }
 
-	l_debug("Name: :1.%" PRIu64, cmd_hello.head.id);
+	id = cmd_hello.head.id;
+
+	l_debug("Name: :1.%" PRIu64, id);
 
 	memcpy(kdbus_id128, cmd_hello.head.id128, sizeof(kdbus_id128));
 
@@ -223,8 +226,11 @@ bool kdbus_open_bus(const char *path, const char *name, const char *conn_name)
 				kdbus_id128[12], kdbus_id128[13],
 				kdbus_id128[14], kdbus_id128[15]);
 
-	l_debug("Bloom size: %" PRIu64, cmd_hello.head.bloom.size);
-	l_debug("Bloom hashes: %" PRIu64, cmd_hello.head.bloom.n_hash);
+	size = cmd_hello.head.bloom.size;
+	n_hash = cmd_hello.head.bloom.n_hash;
+
+	l_debug("Bloom size: %" PRIu64, size);
+	l_debug("Bloom hashes: %" PRIu64, n_hash);
 
 	if (!name_acquire(name)) {
 		close(kdbus_conn);
