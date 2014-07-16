@@ -27,6 +27,30 @@ AC_PROG_LN_S
 LT_PREREQ(2.2)
 LT_INIT([disable-static])
 
+AC_ARG_ENABLE(optimization, AC_HELP_STRING([--disable-optimization],
+			[disable code optimization through compiler]), [
+	if (test "${enableval}" = "no"); then
+		CFLAGS="$CFLAGS -O0"
+	fi
+])
+
+AC_ARG_ENABLE(debug, AC_HELP_STRING([--enable-debug],
+			[enable compiling with debugging information]), [
+	if (test "${enableval}" = "yes" &&
+				test "${ac_cv_prog_cc_g}" = "yes"); then
+		CFLAGS="$CFLAGS -g"
+	fi
+])
+
+AC_ARG_ENABLE(pie, AC_HELP_STRING([--enable-pie],
+			[enable position independent executables flag]), [
+	if (test "${enableval}" = "yes" &&
+				test "${ac_cv_prog_cc_pie}" = "yes"); then
+		CFLAGS="$CFLAGS -fPIE"
+		LDFLAGS="$LDFLAGS -pie"
+	fi
+])
+
 AC_CONFIG_FILES(Makefile)
 
 AC_OUTPUT
