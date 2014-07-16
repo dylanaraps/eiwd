@@ -49,6 +49,9 @@ bool ie_tlv_iter_next(struct ie_tlv_iter *iter)
 	unsigned int tag;
 	unsigned int len;
 
+	if (iter->pos >= iter->max)
+		return false;
+
 	tag = *tlv++;
 	len = *tlv++;
 
