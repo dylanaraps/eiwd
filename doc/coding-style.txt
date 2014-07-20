@@ -19,6 +19,7 @@ Besides the kernel coding style above, oFono has special flavors for its own.
 Some of them are mandatory (marked as 'M'), while some others are optional
 (marked as 'O'), but generally preferred.
 
+
 M1: Blank line before and after an if/while/do/for statement
 ============================================================
 There should be a blank line before if statement unless the if is nested and
@@ -51,7 +52,7 @@ b = 3;
 
 The only exception to this rule applies when a variable is being allocated:
 array = g_try_new0(int, 20);
-if (array == NULL)	// Correct
+if (array)	// Correct
 	return;
 
 
@@ -127,6 +128,7 @@ gboolean sim_ust_is_available(unsigned char *service_ust, unsigned char len,
 						enum sim_ust_service index);
 						// better
 
+
 M5: Git commit message 50/72 formatting
 =======================================
 The commit message header should be within 50 characters. And if you have
@@ -186,7 +188,6 @@ must not contain include guards.
 
 M11: Naming of enums
 ====================
-
 Enums must have a descriptive name.  The enum type should be small caps and
 it should not be typedef-ed.  Enum contents should be in CAPITAL letters and
 prefixed by the enum type name.
@@ -207,6 +208,7 @@ enum animal_type {
 	ANIMAL_TYPE_EIGHT_LEGS =	8,
 	ANIMAL_TYPE_TWO_LEGS =		2,
 };
+
 
 M12: Enum as switch variable
 ====================
@@ -244,25 +246,21 @@ However if the enum comes from an external header file outside ofono
 we cannot make any assumption of how the enum is defined and this
 rule might not apply.
 
+
 M13: Check for pointer being NULL
 =================================
-
-When checking if a pointer or a return value is NULL, explicitly compare to
-NULL rather than use the shorter check with "!" operator.
+When checking if a pointer or a return value is NULL, use the shorter check
+with "!" operator rather than explicitly compare to NULL.
 
 Example:
 1)
 array = g_try_new0(int, 20);
-if (!array)	// Wrong
+if (!array)	// Correct
 	return;
 
 2)
-if (!g_at_chat_get_slave(chat))	// Wrong
-	return -EINVAL;
-
-3)
 array = g_try_new0(int, 20);
-if (array == NULL)	// Correct
+if (array == NULL)	// Wrong
 	return;
 
 
@@ -294,6 +292,7 @@ void foo()	// Wrong
 {
 }
 
+
 M16: Don't use hex value with shift operators
 ==============================================
 The expression argument to the shift operators should not be in hex.
@@ -305,6 +304,7 @@ Example:
 
 2)
 0x1 << y	// Wrong
+
 
 O1: Shorten the name
 ====================
