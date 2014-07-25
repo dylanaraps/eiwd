@@ -74,3 +74,107 @@ bool ie_tlv_iter_next(struct ie_tlv_iter *iter)
 
 	return true;
 }
+
+#define TLV_HEADER_LEN 2
+
+static bool ie_tlv_builder_init_recurse(struct ie_tlv_builder *builder,
+					unsigned char *tlv, unsigned int size)
+{
+	if (!builder)
+		return false;
+
+	if (!tlv) {
+		memset(builder->buf, 0, MAX_BUILDER_SIZE);
+		builder->tlv = builder->buf;
+		builder->max = MAX_BUILDER_SIZE;
+	} else {
+		builder->tlv = tlv;
+		builder->max = size;
+	}
+
+	builder->pos = 0;
+	builder->parent = NULL;
+	builder->tag = 0xffff;
+	builder->len = 0;
+
+	return true;
+}
+
+bool ie_tlv_builder_init(struct ie_tlv_builder *builder)
+{
+	return ie_tlv_builder_init_recurse(builder, NULL, 0);
+}
+
+static void ie_tlv_builder_write_header(struct ie_tlv_builder *builder)
+{
+	unsigned char *tlv = builder->tlv + builder->pos;
+
+	tlv[0] = builder->tag;
+	tlv[1] = builder->len;
+}
+
+bool ie_tlv_builder_set_length(struct ie_tlv_builder *builder,
+					unsigned int new_len)
+{
+	unsigned int new_pos = builder->pos + TLV_HEADER_LEN + new_len;
+
+	if (new_pos > builder->max)
+		return false;
+
+	if (builder->parent)
+		ie_tlv_builder_set_length(builder->parent, new_pos);
+
+	builder->len = new_len;
+
+	return true;
+}
+
+bool ie_tlv_builder_next(struct ie_tlv_builder *builder, unsigned int new_tag)
+{
+	if (new_tag > 0xff)
+		return false;
+
+	if (builder->tag != 0xffff) {
+		ie_tlv_builder_write_header(builder);
+		builder->pos += TLV_HEADER_LEN + builder->len;
+	}
+
+	if (!ie_tlv_builder_set_length(builder, 0))
+		return false;
+
+	builder->tag = new_tag;
+
+	return true;
+}
+
+unsigned char *ie_tlv_builder_get_data(struct ie_tlv_builder *builder)
+{
+	return builder->tlv + TLV_HEADER_LEN + builder->pos;
+}
+
+bool ie_tlv_builder_recurse(struct ie_tlv_builder *builder,
+					struct ie_tlv_builder *recurse)
+{
+	unsigned char *end = builder->buf + builder->max;
+	unsigned char *data = ie_tlv_builder_get_data(builder);
+
+	if (!ie_tlv_builder_init_recurse(recurse, data, end - data))
+		return false;
+
+	recurse->parent = builder;
+
+	return true;
+}
+
+void ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
+			unsigned int *out_len)
+{
+	unsigned int len;
+
+	ie_tlv_builder_write_header(builder);
+
+	len = builder->pos + TLV_HEADER_LEN + builder->len;
+
+	if (out_len)
+		*out_len = len;
+}

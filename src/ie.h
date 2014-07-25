@@ -163,9 +163,32 @@ struct ie_tlv_iter {
 	const unsigned char *data;
 };
 
+#define MAX_BUILDER_SIZE (8 * 1024)
+
+struct ie_tlv_builder {
+	unsigned char buf[MAX_BUILDER_SIZE];
+
+	unsigned int max;
+	unsigned int pos;
+	unsigned char *tlv;
+	struct ie_tlv_builder *parent;
+
+	unsigned int tag;
+	unsigned int len;
+};
+
 void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 			unsigned int len);
 void ie_tlv_iter_recurse(struct ie_tlv_iter *iter,
 			struct ie_tlv_iter *recurse);
 unsigned int ie_tlv_iter_get_tag(struct ie_tlv_iter *iter);
 bool ie_tlv_iter_next(struct ie_tlv_iter *iter);
+bool ie_tlv_builder_init(struct ie_tlv_builder *builder);
+bool ie_tlv_builder_set_length(struct ie_tlv_builder *builder,
+			unsigned int new_len);
+bool ie_tlv_builder_next(struct ie_tlv_builder *builder, unsigned int new_tag);
+unsigned char *ie_tlv_builder_get_data(struct ie_tlv_builder *builder);
+bool ie_tlv_builder_recurse(struct ie_tlv_builder *builder,
+			struct ie_tlv_builder *recurse);
+void ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
+			unsigned int *out_len);
