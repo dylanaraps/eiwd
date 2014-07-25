@@ -137,9 +137,152 @@ static unsigned char *append_data(unsigned char *buf, struct ie *ie,
 	return ptr;
 }
 
+static int create_ie(int ie_count, struct ie_tlv_builder *builder,
+		int type, int len, unsigned char *value)
+{
+	int total_len = 0;
+	char *str;
+
+	str = l_util_hexstring(value, len);
+	printf("IE %d [%d/%d/%s]\n", ie_count, type, len, str);
+	l_free(str);
+	assert(ie_tlv_builder_next(builder, type));
+	total_len += 1;
+	assert(ie_tlv_builder_set_length(builder, len));
+	total_len += 1;
+	memcpy(ie_tlv_builder_get_data(builder), value, len);
+	total_len += len;
+
+	return total_len;
+}
+
+#define ie(type, len, value...)						\
+	do {								\
+		unsigned char buf[] = { value };			\
+		final_len += create_ie(ie_count, &builder, type, len, buf); \
+		ie_count++;						\
+	} while (0)
+
+static void ie_test_writer(const void *data)
+{
+	struct test_data *test = (struct test_data *)data;
+	struct ie_tlv_builder builder;
+	unsigned int final_len = 0, builder_len, expected_len = test->len;
+	unsigned char *expected_buf = test->buf;
+	int ie_count = 0;
+	char *str;
+
+	assert(ie_tlv_builder_init(&builder));
+
+	test->buf = builder.buf;
+	test->len = builder.max;
+
+	ie(IE_TYPE_SSID, 0x0c,
+		0x57, 0x65, 0x73, 0x31, 0x4f, 0x70, 0x65, 0x6e,
+		0x57, 0x4c, 0x41, 0x4e);
+	ie(IE_TYPE_SUPPORTED_RATES, 0x08,
+		0x8c, 0x12, 0x98, 0x24, 0xb0, 0x48, 0x60, 0x6c);
+	ie(IE_TYPE_TIM, 0x04, 0x00, 0x01, 0x00, 0x00);
+	ie(IE_TYPE_RSN, 0x14,
+		0x01, 0x00, 0x00, 0x0f, 0xac, 0x04, 0x01, 0x00,
+		0x00, 0x0f, 0xac, 0x04, 0x01, 0x00, 0x00, 0x0f,
+		0xac, 0x02, 0x0c, 0x00);
+	ie(IE_TYPE_BSS_LOAD, 0x05, 0x02, 0x00, 0x02, 0x00, 0x00);
+	ie(IE_TYPE_HT_CAPABILITIES, 0x1a,
+		0x6f, 0x08, 0x17, 0xff, 0xff, 0xff, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00);
+	ie(IE_TYPE_HT_OPERATION, 0x16,
+		0x24, 0x0d, 0x16, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
+	ie(IE_TYPE_OVERLAPPING_BSS_SCAN_PARAMETERS, 0x0e,
+		0x14, 0x00, 0x0a, 0x00, 0x2c, 0x01, 0xc8, 0x00,
+		0x14, 0x00, 0x05, 0x00, 0x19, 0x00);
+	ie(IE_TYPE_EXTENDED_CAPABILITIES, 0x08,
+		0x01, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x40);
+	ie(191 /* IEEE 802.11ac/D3.1 VHT Capabilities */, 0x0c,
+		0x32, 0x58, 0x82, 0x0f, 0xea, 0xff, 0x00, 0x00,
+		0xea, 0xff, 0x00, 0x00);
+	ie(192 /* IEEE 802.11ac/D3.1 VHT Operation */, 0x05,
+		0x01, 0x2a, 0x00, 0x00, 0x00);
+	ie(195 /* unknown */, 0x04, 0x02, 0x02, 0x02, 0x02);
+	ie(IE_TYPE_VENDOR_SPECIFIC, 0x31,
+		0x00, 0x50, 0xf2,             /* OUI (Microsoft) */
+		0x04,                         /* WPS type */
+		0x10, 0x4a, 0x00, 0x01, 0x10, /* version */
+		0x10, 0x44, 0x00, 0x01, 0x02, /* wps state */
+		0x10, 0x47,                   /* UUID E */
+		0x00, 0x10,                   /* len */
+		0x98, 0x42, 0x13, 0x05, 0x23, 0x6e, 0xde, 0x3a,
+		0xfa, 0x13, 0x0a, 0x79, 0x44, 0x0f, 0xab, 0x43, /* enrollee */
+		0x10, 0x3c, 0x00, 0x01, 0x03, /* RF bands: 2.5 & 5 GHz */
+		0x10, 0x49, 0x00, 0x06, 0x00, 0x37, 0x2a, 0x00,
+		0x01, 0x20                    /* vendor extension */ );
+	ie(IE_TYPE_VENDOR_SPECIFIC, 0x09,
+		0x00, 0x10, 0x18,             /* OUI (Broadcom) */
+		0x02,                         /* type */
+		0x02, 0x00, 0x1c, 0x00, 0x00  /* data */ );
+	ie(IE_TYPE_VENDOR_SPECIFIC, 0x18,
+		0x00, 0x50, 0xf2,             /* OUI (Microsoft) */
+		0x02,                         /* WMM/WME type */
+		0x01, 0x01, 0x80, 0x00, 0x03, 0xa4, 0x00, 0x00,
+		0x27, 0xa4, 0x00, 0x00, 0x42, 0x43, 0x5e, 0x00,
+		0x62, 0x32, 0x2f, 0x00, 0x01, 0x9a, 0xc1, 0xc8 /* data */ );
+
+	ie_tlv_builder_finalize(&builder, &builder_len);
+
+	assert(final_len == builder_len);
+	assert(expected_len = final_len);
+	assert(ie_count == test->num_ie);
+
+	str = l_util_hexstring(test->buf, final_len);
+	printf("IE buf %s\n", str);
+	l_free(str);
+
+	if (memcmp(test->buf, expected_buf, final_len)) {
+		int i;
+
+		str = l_util_hexstring(&beacon_frame[36], final_len);
+		printf("Expecting buf %s\n", str);
+		l_free(str);
+
+		for (i = 0; i < final_len; i++) {
+			if (expected_buf[i] != test->buf[i]) {
+				printf("1st difference at pos %d "
+					"expecting 0x%02x got 0x%02x\n",
+					i, expected_buf[i], test->buf[i]);
+				break;
+			}
+		}
+
+		assert(!memcmp(test->buf, expected_buf, final_len));
+	}
+
+	printf("Wrote %d IE total len %d\n", ie_count, expected_len);
+}
+
+static void ie_test_writer_invalid_tag(const void *data)
+{
+	struct ie_tlv_builder builder;
+
+	assert(ie_tlv_builder_init(&builder));
+	assert(!ie_tlv_builder_next(&builder, 256));
+}
+
+static void ie_test_writer_invalid_len(const void *data)
+{
+	struct ie_tlv_builder builder;
+
+	assert(ie_tlv_builder_init(&builder));
+	assert(ie_tlv_builder_next(&builder, 255));
+	assert(!ie_tlv_builder_set_length(&builder, MAX_BUILDER_SIZE));
+}
+
 int main(int argc, char *argv[])
 {
-	struct test_data tc1 = { 0 };
+	struct test_data tc1 = { 0 }, tc2 = { 0 }, tc3 = { 0 }, tc4 = { 0 };
 
 	l_test_init(&argc, &argv);
 
@@ -147,6 +290,14 @@ int main(int argc, char *argv[])
 	tc1.num_ie = 15;
 	tc1.len = 252;
 	l_test_add("/ie/reader/static", ie_test_reader, &tc1);
+
+	l_test_add("/ie/writer/invalid-tag", ie_test_writer_invalid_tag, &tc2);
+	l_test_add("/ie/writer/invalid-len", ie_test_writer_invalid_len, &tc3);
+
+	tc4.buf = &beacon_frame[36];
+	tc4.num_ie = 15;
+	tc4.len = 252;
+	l_test_add("/ie/writer/create", ie_test_writer, &tc4);
 
 	return l_test_run();
 }
