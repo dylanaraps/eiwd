@@ -28,6 +28,7 @@
 #include <ell/ell.h>
 
 #include "src/netdev.h"
+#include "src/wiphy.h"
 #include "src/kdbus.h"
 
 static void signal_handler(struct l_signal *signal, uint32_t signo,
@@ -83,8 +84,15 @@ int main(int argc, char *argv[])
 		goto destroy;
 	}
 
+	if (!wiphy_init()) {
+		netdev_exit();
+		exit_status = EXIT_FAILURE;
+		goto destroy;
+	}
+
 	l_main_run();
 
+	wiphy_exit();
 	netdev_exit();
 
 	exit_status = EXIT_SUCCESS;
