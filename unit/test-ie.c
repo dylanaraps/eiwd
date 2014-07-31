@@ -126,22 +126,6 @@ static struct test_data beacon_frame_data = {
 	.len = 252,
 };
 
-static unsigned char *append_data(unsigned char *buf, struct ie *ie,
-				unsigned int *total_len)
-{
-	unsigned char *ptr;
-	unsigned old, len = ie->len + 1 + 1;
-
-	old = *total_len;
-	*total_len += len;
-
-	ptr = realloc(buf, *total_len);
-
-	memcpy(ptr + old, ie, len);
-
-	return ptr;
-}
-
 static int create_ie(int ie_count, struct ie_tlv_builder *builder,
 		int type, int len, unsigned char *value)
 {
