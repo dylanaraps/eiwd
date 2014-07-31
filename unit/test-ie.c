@@ -71,7 +71,6 @@ static void ie_test_reader(const void *data)
 	assert(count == test->num_ie);
 }
 
-
 static unsigned char beacon_frame[] = {
 	/* IEEE 802.11 Beacon frame */
 	0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
@@ -119,6 +118,12 @@ static unsigned char beacon_frame[] = {
 	0x01, 0x01, 0x80, 0x00, 0x03, 0xa4, 0x00, 0x00,
 	0x27, 0xa4, 0x00, 0x00, 0x42, 0x43, 0x5e, 0x00,
 	0x62, 0x32, 0x2f, 0x00, 0x01, 0x9a, 0xc1, 0xc8,
+};
+
+static struct test_data beacon_frame_data = {
+	.buf = beacon_frame + 36,
+	.num_ie = 15,
+	.len = 252,
 };
 
 static unsigned char *append_data(unsigned char *buf, struct ie *ie,
@@ -282,22 +287,14 @@ static void ie_test_writer_invalid_len(const void *data)
 
 int main(int argc, char *argv[])
 {
-	struct test_data tc1 = { 0 }, tc2 = { 0 }, tc3 = { 0 }, tc4 = { 0 };
-
 	l_test_init(&argc, &argv);
 
-	tc1.buf = &beacon_frame[36];
-	tc1.num_ie = 15;
-	tc1.len = 252;
-	l_test_add("/ie/reader/static", ie_test_reader, &tc1);
+	l_test_add("/ie/reader/static", ie_test_reader, &beacon_frame_data);
 
-	l_test_add("/ie/writer/invalid-tag", ie_test_writer_invalid_tag, &tc2);
-	l_test_add("/ie/writer/invalid-len", ie_test_writer_invalid_len, &tc3);
+	l_test_add("/ie/writer/invalid-tag", ie_test_writer_invalid_tag, NULL);
+	l_test_add("/ie/writer/invalid-len", ie_test_writer_invalid_len, NULL);
 
-	tc4.buf = &beacon_frame[36];
-	tc4.num_ie = 15;
-	tc4.len = 252;
-	l_test_add("/ie/writer/create", ie_test_writer, &tc4);
+	l_test_add("/ie/writer/create", ie_test_writer, &beacon_frame_data);
 
 	return l_test_run();
 }
