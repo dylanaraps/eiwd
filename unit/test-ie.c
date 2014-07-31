@@ -169,7 +169,7 @@ static void ie_test_writer(const void *data)
 	struct ie_tlv_builder builder;
 	unsigned int final_len = 0, builder_len, expected_len = test->len;
 	unsigned char *expected_buf = test->buf;
-	int ie_count = 0;
+	unsigned int ie_count = 0;
 	char *str;
 
 	assert(ie_tlv_builder_init(&builder));
@@ -242,7 +242,7 @@ static void ie_test_writer(const void *data)
 	l_free(str);
 
 	if (memcmp(test->buf, expected_buf, final_len)) {
-		int i;
+		unsigned int i;
 
 		str = l_util_hexstring(&beacon_frame[36], final_len);
 		printf("Expecting buf %s\n", str);
