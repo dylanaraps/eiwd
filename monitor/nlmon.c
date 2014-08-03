@@ -115,12 +115,42 @@ enum attr_type {
 	ATTR_STRING,
 	ATTR_ADDRESS,
 	ATTR_BINARY,
+	ATTR_NESTED,
 };
 
 struct attr_entry {
 	uint16_t attr;
 	const char *str;
 	enum attr_type type;
+	union {
+		const struct attr_entry *nested;
+		void (*func) (void);
+	};
+};
+
+static const struct attr_entry iftype_table[] = {
+	{ NL80211_IFTYPE_ADHOC,		"Ad-hoc",	ATTR_FLAG },
+	{ NL80211_IFTYPE_STATION,	"Station",	ATTR_FLAG },
+	{ NL80211_IFTYPE_AP,		"AP",		ATTR_FLAG },
+	{ NL80211_IFTYPE_AP_VLAN,	"AP-VLAN",	ATTR_FLAG },
+	{ NL80211_IFTYPE_WDS,		"WDS",		ATTR_FLAG },
+	{ NL80211_IFTYPE_MONITOR,	"Monitor",	ATTR_FLAG },
+	{ NL80211_IFTYPE_MESH_POINT,	"Mesh-point",	ATTR_FLAG },
+	{ NL80211_IFTYPE_P2P_CLIENT,	"P2P-Client",	ATTR_FLAG },
+	{ NL80211_IFTYPE_P2P_GO,	"P2P-GO",	ATTR_FLAG },
+	{ NL80211_IFTYPE_P2P_DEVICE,	"P2P-Device",	ATTR_FLAG },
+	{ }
+};
+
+static const struct attr_entry sta_flag_table[] = {
+	{ NL80211_STA_FLAG_AUTHORIZED,		"Authorized",	ATTR_FLAG },
+	{ NL80211_STA_FLAG_SHORT_PREAMBLE,	"ShortPreamble",ATTR_FLAG },
+	{ NL80211_STA_FLAG_WME,			"WME",		ATTR_FLAG },
+	{ NL80211_STA_FLAG_MFP,			"MFP",		ATTR_FLAG },
+	{ NL80211_STA_FLAG_AUTHENTICATED,	"Authenticated",ATTR_FLAG },
+	{ NL80211_STA_FLAG_TDLS_PEER,		"TDLS-Peer",	ATTR_FLAG },
+	{ NL80211_STA_FLAG_ASSOCIATED,		"Associated",	ATTR_FLAG },
+	{ }
 };
 
 static const struct attr_entry attr_table[] = {
@@ -157,7 +187,7 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_STA_AID,
 			"Station AID", ATTR_U16 },
 	{ NL80211_ATTR_STA_FLAGS,
-			"Station Flags" },
+			"Station Flags", ATTR_NESTED, { sta_flag_table } },
 	{ NL80211_ATTR_STA_LISTEN_INTERVAL,
 			"Station Listen Interval", ATTR_U16 },
 	{ NL80211_ATTR_STA_SUPPORTED_RATES,
@@ -187,7 +217,8 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_HT_CAPABILITY,
 			"HT Capability" },
 	{ NL80211_ATTR_SUPPORTED_IFTYPES,
-			"Supported Interface Types" },
+			"Supported Interface Types", ATTR_NESTED,
+							{ iftype_table } },
 	{ NL80211_ATTR_REG_ALPHA2,
 			"Regulatory Alpha2", ATTR_STRING },
 	{ NL80211_ATTR_REG_RULES,
@@ -365,7 +396,8 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_INTERFACE_COMBINATIONS,
 			"Interface Combinations" },
 	{ NL80211_ATTR_SOFTWARE_IFTYPES,
-			"Software Interface Types" },
+			"Software Interface Types", ATTR_NESTED,
+							{ iftype_table } },
 	{ NL80211_ATTR_REKEY_DATA,
 			"Rekey Data" },
 	{ NL80211_ATTR_MAX_NUM_SCHED_SCAN_SSIDS,
@@ -550,7 +582,8 @@ static const struct attr_entry attr_table[] = {
 #define NLA_DATA(nla)		((void*)(((char*)(nla)) + NLA_LENGTH(0)))
 #define NLA_PAYLOAD(nla)	((int)((nla)->nla_len - NLA_LENGTH(0)))
 
-static void print_attributes(int indent, const void *buf, uint32_t len)
+static void print_attributes(int indent, const struct attr_entry *table,
+						const void *buf, uint32_t len)
 {
 	const struct nlattr *nla;
 	const char *str;
@@ -559,6 +592,7 @@ static void print_attributes(int indent, const void *buf, uint32_t len)
 	for (nla = buf ; NLA_OK(nla, len); nla = NLA_NEXT(nla, len)) {
 		uint16_t nla_type = nla->nla_type & NLA_TYPE_MASK;
 		enum attr_type type;
+		const struct attr_entry *nested;
 		uint64_t val64;
 		uint32_t val32;
 		uint16_t val16;
@@ -566,12 +600,16 @@ static void print_attributes(int indent, const void *buf, uint32_t len)
 
 		str = "Reserved";
 		type = ATTR_UNSPEC;
+		nested = NULL;
 
-		for (i = 0; attr_table[i].str; i++) {
-			if (nla_type == attr_table[i].attr) {
-				str = attr_table[i].str;
-				type = attr_table[i].type;
-				break;
+		if (table) {
+			for (i = 0; table[i].str; i++) {
+				if (nla_type == table[i].attr) {
+					str = table[i].str;
+					type = table[i].type;
+					nested = table[i].nested;
+					break;
+				}
 			}
 		}
 
@@ -630,11 +668,15 @@ static void print_attributes(int indent, const void *buf, uint32_t len)
 						NLA_PAYLOAD(nla));
 			print_hexdump(NLA_DATA(nla), NLA_PAYLOAD(nla));
 			break;
+		case ATTR_NESTED:
+			printf("%*c%s: len %u\n", indent, ' ', str,
+						NLA_PAYLOAD(nla));
+			if (!nested)
+				printf("missing table\n");
+			print_attributes(indent + 4, nested,
+					NLA_DATA(nla), NLA_PAYLOAD(nla));
+			break;
 		}
-
-		if (nla->nla_type & NLA_F_NESTED)
-			print_attributes(indent + 2, NLA_DATA(nla),
-							NLA_PAYLOAD(nla));
 	}
 }
 
@@ -805,7 +847,7 @@ static void print_message(const struct nlmsghdr *nlmsg)
 					nlmsg->nlmsg_flags,
 					NLMSG_PAYLOAD(nlmsg, 0));
 
-	print_attributes(4, NLMSG_DATA(nlmsg) + GENL_HDRLEN,
+	print_attributes(4, attr_table, NLMSG_DATA(nlmsg) + GENL_HDRLEN,
 					NLMSG_PAYLOAD(nlmsg, GENL_HDRLEN));
 }
 
