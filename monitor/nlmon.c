@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include <errno.h>
+#include <ctype.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -57,6 +58,51 @@ static void nlmon_req_free(void *data)
 	struct nlmon_req *req = data;
 
 	l_free(req);
+}
+
+#define print_indent(indent, fmt, args...) \
+	printf("%*c" fmt "\n", (indent), ' ', ## args)
+
+#define print_text(fmt, args...) \
+		print_indent(8, fmt, ## args)
+
+static void print_hexdump(const unsigned char *buf, uint16_t len)
+{
+	static const char hexdigits[] = "0123456789abcdef";
+	char str[68];
+	uint16_t i;
+
+	if (!len)
+		return;
+
+	for (i = 0; i < len; i++) {
+		str[((i % 16) * 3) + 0] = hexdigits[buf[i] >> 4];
+		str[((i % 16) * 3) + 1] = hexdigits[buf[i] & 0xf];
+		str[((i % 16) * 3) + 2] = ' ';
+		str[(i % 16) + 49] = isprint(buf[i]) ? buf[i] : '.';
+
+		if ((i + 1) % 16 == 0) {
+			str[47] = ' ';
+			str[48] = ' ';
+			str[65] = '\0';
+			print_text("%s", str);
+			str[0] = ' ';
+		}
+	}
+
+	if (i % 16 > 0) {
+		uint16_t j;
+		for (j = (i % 16); j < 16; j++) {
+			str[(j * 3) + 0] = ' ';
+			str[(j * 3) + 1] = ' ';
+			str[(j * 3) + 2] = ' ';
+			str[j + 49] = ' ';
+		}
+		str[47] = ' ';
+		str[48] = ' ';
+		str[65] = '\0';
+		print_text("%s", str);
+	}
 }
 
 enum attr_type {
@@ -533,6 +579,7 @@ static void print_attributes(int indent, const void *buf, uint32_t len)
 		case ATTR_UNSPEC:
 			printf("%*c%s: len %u\n", indent, ' ', str,
 						NLA_PAYLOAD(nla));
+			print_hexdump(NLA_DATA(nla), NLA_PAYLOAD(nla));
 			break;
 		case ATTR_FLAG:
 			printf("%*c%s: true\n", indent, ' ', str);
@@ -574,12 +621,14 @@ static void print_attributes(int indent, const void *buf, uint32_t len)
 		case ATTR_ADDRESS:
 			printf("%*c%s: len %u\n", indent, ' ', str,
 						NLA_PAYLOAD(nla));
+			print_hexdump(NLA_DATA(nla), NLA_PAYLOAD(nla));
 			if (NLA_PAYLOAD(nla) != 6)
 				printf("malformed packet\n");
 			break;
 		case ATTR_BINARY:
 			printf("%*c%s: len %u\n", indent, ' ', str,
 						NLA_PAYLOAD(nla));
+			print_hexdump(NLA_DATA(nla), NLA_PAYLOAD(nla));
 			break;
 		}
 
