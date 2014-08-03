@@ -74,3 +74,20 @@ and it can be verified with the busctl utility from systemd:
 	:1.2     62153  busctl      root      :1.2          sd-busctl
 
 Clients talking to the daemon must specifiy the private bus address.
+
+
+Netlink monitoring
+==================
+
+The included iwmon utility can be used to monitor the 802.11 subsystem
+generic netlink commands and events. It uses the nlmon kernel driver
+from Linux 3.10 and later.
+
+In order to use iwmon to create traces, the nlmon network interface
+needs to be created:
+
+	ip link add name nlmon type nlmon
+	ip link set dev nlmon up
+
+For now it is important that the netlink monitor interace is actually
+named nlmon. Future version might relax this requirement.
