@@ -919,7 +919,7 @@ struct nlmon *nlmon_create(void)
 
 	nlmon = l_new(struct nlmon, 1);
 
-	nlmon->id = 27;
+	nlmon->id = GENL_ID_GENERATE;
 	nlmon->req_list = l_queue_new();
 
 	return nlmon;
@@ -935,13 +935,46 @@ void nlmon_destroy(struct nlmon *nlmon)
 	l_free(nlmon);
 }
 
+static void genl_ctrl(struct nlmon *nlmon, const void *data, uint32_t len)
+{
+	const struct genlmsghdr *genlmsg = data;
+	const struct nlattr *nla;
+	char name[GENL_NAMSIZ];
+	uint16_t id = GENL_ID_GENERATE;
+
+	if (genlmsg->cmd != CTRL_CMD_NEWFAMILY)
+		return;
+
+	for (nla = data + GENL_HDRLEN; NLA_OK(nla, len);
+						nla = NLA_NEXT(nla, len)) {
+		switch (nla->nla_type & NLA_TYPE_MASK) {
+		case CTRL_ATTR_FAMILY_ID:
+			id = *((uint16_t *) NLA_DATA(nla));
+			break;
+		case CTRL_ATTR_FAMILY_NAME:
+			strncpy(name, NLA_DATA(nla), GENL_NAMSIZ);
+			break;
+		}
+	}
+
+	if (id == GENL_ID_GENERATE)
+		return;
+
+	if (!strcmp(name, NL80211_GENL_NAME))
+		nlmon->id = id;
+}
+
 void nlmon_print(struct nlmon *nlmon, const void *data, uint32_t size)
 {
 	const struct nlmsghdr *nlmsg;
 
 	for (nlmsg = data; NLMSG_OK(nlmsg, size);
 				nlmsg = NLMSG_NEXT(nlmsg, size)) {
-		nlmon_message(nlmon, nlmsg);
+		if (nlmsg->nlmsg_type == GENL_ID_CTRL)
+			genl_ctrl(nlmon, NLMSG_DATA(nlmsg),
+						NLMSG_PAYLOAD(nlmsg, 0));
+		else
+			nlmon_message(nlmon, nlmsg);
 	}
 }
 
