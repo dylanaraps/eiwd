@@ -145,6 +145,7 @@ static int process_pcap(struct pcap *pcap)
 
 	while (pcap_read(pcap, NULL, buf, sizeof(buf), &len)) {
 		uint16_t arphrd_type;
+		uint16_t proto_type;
 
 		if (len < 16) {
 			fprintf(stderr, "Too short package\n");
@@ -158,7 +159,13 @@ static int process_pcap(struct pcap *pcap)
 			return EXIT_FAILURE;
 		}
 
-		nlmon_print(nlmon, buf + 16, len - 16);
+		proto_type = L_GET_UNALIGNED((const uint16_t *) (buf + 14));
+
+		switch (L_BE16_TO_CPU(proto_type)) {
+		case NETLINK_GENERIC:
+			nlmon_print(nlmon, buf + 16, len - 16);
+			break;
+		}
 	}
 
 	nlmon_destroy(nlmon);
