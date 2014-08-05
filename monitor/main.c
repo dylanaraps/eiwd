@@ -27,11 +27,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include <sys/socket.h>
 #include <linux/genetlink.h>
+#include <linux/if_arp.h>
 #include <ell/ell.h>
 
 #include "linux/nl80211.h"
 #include "monitor/nlmon.h"
+#include "monitor/pcap.h"
 
 static struct nlmon *nlmon = NULL;
 
@@ -132,6 +135,37 @@ static struct l_netlink *genl_lookup(const char *ifname)
 	return genl;
 }
 
+static int process_pcap(struct pcap *pcap)
+{
+	struct nlmon *nlmon = NULL;
+	uint8_t buf[8192];
+	uint32_t len;
+
+	nlmon = nlmon_create();
+
+	while (pcap_read(pcap, NULL, buf, sizeof(buf), &len)) {
+		uint16_t arphrd_type;
+
+		if (len < 16) {
+			fprintf(stderr, "Too short package\n");
+			return EXIT_FAILURE;
+		}
+
+		arphrd_type = L_GET_UNALIGNED((const uint16_t *) (buf + 2));
+
+		if (L_BE16_TO_CPU(arphrd_type) != ARPHRD_NETLINK) {
+			fprintf(stderr, "Wrong header type\n");
+			return EXIT_FAILURE;
+		}
+
+		nlmon_print(nlmon, buf + 16, len - 16);
+	}
+
+	nlmon_destroy(nlmon);
+
+	return EXIT_SUCCESS;
+}
+
 static void signal_handler(struct l_signal *signal, uint32_t signo,
 							void *user_data)
 {
@@ -149,11 +183,13 @@ static void usage(void)
 		"Usage:\n");
 	printf("\tiwmon [options]\n");
 	printf("options:\n"
+		"\t-r, --read <file>      Read netlink PCAP trace files\n"
 		"\t-i, --interface <dev>  Use specified netlink monitor\n"
 		"\t-h, --help             Show help options\n");
 }
 
 static const struct option main_options[] = {
+	{ "read",      required_argument, NULL, 'r' },
 	{ "interface", required_argument, NULL, 'i' },
 	{ "version",   no_argument,       NULL, 'v' },
 	{ "help",      no_argument,       NULL, 'h' },
@@ -162,6 +198,7 @@ static const struct option main_options[] = {
 
 int main(int argc, char *argv[])
 {
+	const char *reader_path = NULL;
 	const char *ifname = "nlmon";
 	struct l_signal *signal;
 	struct l_netlink *genl;
@@ -171,11 +208,14 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "i:vh", main_options, NULL);
+		opt = getopt_long(argc, argv, "r:i:vh", main_options, NULL);
 		if (opt < 0)
 			break;
 
 		switch (opt) {
+		case 'r':
+			reader_path = optarg;
+			break;
 		case 'i':
 			ifname = optarg;
 			break;
@@ -201,6 +241,25 @@ int main(int argc, char *argv[])
 
 	signal = l_signal_create(&mask, signal_handler, NULL, NULL);
 
+	if (reader_path) {
+		struct pcap *pcap;
+
+		pcap = pcap_open(reader_path);
+		if (!pcap) {
+			exit_status = EXIT_FAILURE;
+			goto done;
+		}
+
+		if (pcap_get_type(pcap) != PCAP_TYPE_LINUX_SLL) {
+			fprintf(stderr, "Invalid packet format\n");
+			exit_status = EXIT_FAILURE;
+		} else
+			exit_status = process_pcap(pcap);
+
+		pcap_close(pcap);
+		goto done;
+	}
+
 	genl = genl_lookup(ifname);
 
 	l_main_run();
@@ -210,6 +269,7 @@ int main(int argc, char *argv[])
 
 	exit_status = EXIT_SUCCESS;
 
+done:
 	l_signal_remove(signal);
 
 	return exit_status;
