@@ -1015,14 +1015,14 @@ static struct l_io *open_packet(const char *name)
 	return io;
 }
 
-struct nlmon *nlmon_open(uint16_t id)
+struct nlmon *nlmon_open(const char *ifname, uint16_t id)
 {
 	struct nlmon *nlmon;
 
 	nlmon = l_new(struct nlmon, 1);
 
 	nlmon->id = id;
-	nlmon->io = open_packet("nlmon");
+	nlmon->io = open_packet(ifname);
 	nlmon->req_list = l_queue_new();
 
 	l_io_set_read_handler(nlmon->io, nlmon_receive, nlmon, NULL);

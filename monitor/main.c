@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <getopt.h>
 #include <linux/genetlink.h>
 #include <ell/ell.h>
 
@@ -45,7 +46,8 @@ static struct nlmon *nlmon = NULL;
 #define NLA_DATA(nla)		((void*)(((char*)(nla)) + NLA_LENGTH(0)))
 #define NLA_PAYLOAD(nla)	((int)((nla)->nla_len - NLA_LENGTH(0)))
 
-static void genl_parse(uint16_t type, const void *data, uint32_t len)
+static void genl_parse(uint16_t type, const void *data, uint32_t len,
+							const char *ifname)
 {
 	const struct genlmsghdr *genlmsg = data;
 	const struct nlattr *nla;
@@ -77,28 +79,32 @@ static void genl_parse(uint16_t type, const void *data, uint32_t len)
 		return;
 
 	if (!strcmp(name, NL80211_GENL_NAME))
-		nlmon = nlmon_open(id);
+		nlmon = nlmon_open(ifname, id);
 }
 
 static void genl_notify(uint16_t type, const void *data,
 						uint32_t len, void *user_data)
 {
-	genl_parse(type, data, len);
+	const char *ifname = user_data;
+
+	genl_parse(type, data, len, ifname);
 }
 
 static void genl_callback(int error, uint16_t type, const void *data,
 						uint32_t len, void *user_data)
 {
+	const char *ifname = user_data;
+
 	if (error < 0) {
 		fprintf(stderr, "Failed to lookup nl80211 family\n");
 		l_main_quit();
 		return;
 	}
 
-	genl_parse(type, data, len);
+	genl_parse(type, data, len, ifname);
 }
 
-static struct l_netlink *genl_lookup(void)
+static struct l_netlink *genl_lookup(const char *ifname)
 {
 	struct l_netlink *genl;
 	char buf[GENL_HDRLEN + NLA_HDRLEN + GENL_NAMSIZ];
@@ -121,7 +127,7 @@ static struct l_netlink *genl_lookup(void)
 					NL80211_GENL_NAME, GENL_NAMSIZ);
 
 	l_netlink_send(genl, GENL_ID_CTRL, 0, buf, sizeof(buf),
-						genl_callback, NULL, NULL);
+					genl_callback, (char *) ifname, NULL);
 
 	return genl;
 }
@@ -137,12 +143,57 @@ static void signal_handler(struct l_signal *signal, uint32_t signo,
 	}
 }
 
+static void usage(void)
+{
+	printf("iwmon - Wireless monitor\n"
+		"Usage:\n");
+	printf("\tiwmon [options]\n");
+	printf("options:\n"
+		"\t-i, --interface <dev>  Use specified netlink monitor\n"
+		"\t-h, --help             Show help options\n");
+}
+
+static const struct option main_options[] = {
+	{ "interface", required_argument, NULL, 'i' },
+	{ "version",   no_argument,       NULL, 'v' },
+	{ "help",      no_argument,       NULL, 'h' },
+	{ }
+};
+
 int main(int argc, char *argv[])
 {
+	const char *ifname = "nlmon";
 	struct l_signal *signal;
 	struct l_netlink *genl;
 	sigset_t mask;
 	int exit_status;
+
+	for (;;) {
+		int opt;
+
+		opt = getopt_long(argc, argv, "i:vh", main_options, NULL);
+		if (opt < 0)
+			break;
+
+		switch (opt) {
+		case 'i':
+			ifname = optarg;
+			break;
+		case 'v':
+			printf("%s\n", VERSION);
+			return EXIT_SUCCESS;
+		case 'h':
+			usage();
+			return EXIT_SUCCESS;
+		default:
+			return EXIT_FAILURE;
+		}
+	}
+
+	if (argc - optind > 0) {
+		fprintf(stderr, "Invalid command line parameters\n");
+		return EXIT_FAILURE;
+	}
 
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGINT);
@@ -150,7 +201,7 @@ int main(int argc, char *argv[])
 
 	signal = l_signal_create(&mask, signal_handler, NULL, NULL);
 
-	genl = genl_lookup();
+	genl = genl_lookup(ifname);
 
 	l_main_run();
 
