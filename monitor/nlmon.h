@@ -26,3 +26,7 @@ struct nlmon;
 
 struct nlmon *nlmon_open(const char *ifname, uint16_t id);
 void nlmon_close(struct nlmon *nlmon);
+
+struct nlmon *nlmon_create(void);
+void nlmon_destroy(struct nlmon *nlmon);
+void nlmon_print(struct nlmon *nlmon, const void *data, uint32_t size);

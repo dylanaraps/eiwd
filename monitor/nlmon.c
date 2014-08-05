@@ -913,6 +913,38 @@ static void nlmon_message(struct nlmon *nlmon, const struct nlmsghdr *nlmsg)
 	}
 }
 
+struct nlmon *nlmon_create(void)
+{
+	struct nlmon *nlmon;
+
+	nlmon = l_new(struct nlmon, 1);
+
+	nlmon->id = 27;
+	nlmon->req_list = l_queue_new();
+
+	return nlmon;
+}
+
+void nlmon_destroy(struct nlmon *nlmon)
+{
+	if (!nlmon)
+		return;
+
+	l_queue_destroy(nlmon->req_list, nlmon_req_free);
+
+	l_free(nlmon);
+}
+
+void nlmon_print(struct nlmon *nlmon, const void *data, uint32_t size)
+{
+	const struct nlmsghdr *nlmsg;
+
+	for (nlmsg = data; NLMSG_OK(nlmsg, size);
+				nlmsg = NLMSG_NEXT(nlmsg, size)) {
+		nlmon_message(nlmon, nlmsg);
+	}
+}
+
 static bool nlmon_receive(struct l_io *io, void *user_data)
 {
 	struct nlmon *nlmon = user_data;
