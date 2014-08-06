@@ -645,14 +645,14 @@ static void print_attributes(int indent, const struct attr_entry *table,
 				printf("malformed packet\n");
 			break;
 		case ATTR_U8:
-			val8 = *((uint32_t *) NLA_DATA(nla));
+			val8 = *((uint8_t *) NLA_DATA(nla));
 			printf("%*c%s: %u (0x%02x)\n", indent, ' ', str,
 								val8, val8);
 			if (NLA_PAYLOAD(nla) != 1)
 				printf("malformed packet\n");
 			break;
 		case ATTR_U16:
-			val16 = *((uint32_t *) NLA_DATA(nla));
+			val16 = *((uint16_t *) NLA_DATA(nla));
 			printf("%*c%s: %u (0x%04x)\n", indent, ' ', str,
 								val16, val16);
 			if (NLA_PAYLOAD(nla) != 2)
