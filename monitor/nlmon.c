@@ -154,6 +154,22 @@ static const struct attr_entry sta_flag_table[] = {
 	{ }
 };
 
+static const struct attr_entry bss_table[] = {
+	{ NL80211_BSS_BSSID,		"BSSID",	ATTR_ADDRESS	},
+	{ NL80211_BSS_FREQUENCY,	"Frequency",	ATTR_U32	},
+	{ NL80211_BSS_TSF,		"TSF",		ATTR_U64	},
+	{ NL80211_BSS_BEACON_INTERVAL,	"Beacon Interval", ATTR_U16	},
+	{ NL80211_BSS_CAPABILITY,	"Capability",	ATTR_U16	},
+	{ NL80211_BSS_INFORMATION_ELEMENTS, "IEs",	ATTR_BINARY	},
+	{ NL80211_BSS_SIGNAL_MBM,	"Signal mBm",	ATTR_S32	},
+	{ NL80211_BSS_SIGNAL_UNSPEC,	"Signal Unspec",ATTR_U8		},
+	{ NL80211_BSS_STATUS,		"Status",	ATTR_FLAG	},
+	{ NL80211_BSS_SEEN_MS_AGO,	"Seen ms ago",	ATTR_U32	},
+	{ NL80211_BSS_BEACON_IES,	"Beacon IEs",	ATTR_BINARY	},
+	{ NL80211_BSS_CHAN_WIDTH,	"Chan Width",	ATTR_U32	},
+	{ }
+};
+
 static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_WIPHY,
 			"Wiphy", ATTR_U32 },
@@ -249,7 +265,7 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_GENERATION,
 			"Generation", ATTR_U32 },
 	{ NL80211_ATTR_BSS,
-			"BSS" },
+			"BSS", ATTR_NESTED, { bss_table } },
 	{ NL80211_ATTR_REG_INITIATOR,
 			"Regulatory Initiator" },
 	{ NL80211_ATTR_REG_TYPE,
