@@ -117,6 +117,7 @@ enum attr_type {
 	ATTR_ADDRESS,
 	ATTR_BINARY,
 	ATTR_NESTED,
+	ATTR_ARRAY,
 };
 
 struct attr_entry {
@@ -125,6 +126,7 @@ struct attr_entry {
 	enum attr_type type;
 	union {
 		const struct attr_entry *nested;
+		enum attr_type array_type;
 		void (*func) (void);
 	};
 };
@@ -259,9 +261,11 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_MAX_NUM_SCAN_SSIDS,
 			"Max Number Scan SSIDs", ATTR_U8 },
 	{ NL80211_ATTR_SCAN_FREQUENCIES,
-			"Scan Frequencies" },
+			"Scan Frequencies", ATTR_ARRAY,
+						{ .array_type = ATTR_U32 } },
 	{ NL80211_ATTR_SCAN_SSIDS,
-			"Scan SSIDs" },
+			"Scan SSIDs", ATTR_ARRAY,
+					{ .array_type = ATTR_BINARY } },
 	{ NL80211_ATTR_GENERATION,
 			"Generation", ATTR_U32 },
 	{ NL80211_ATTR_BSS,
@@ -271,7 +275,8 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_REG_TYPE,
 			"Regulatory Type" },
 	{ NL80211_ATTR_SUPPORTED_COMMANDS,
-			"Supported Commands" },
+			"Supported Commands", ATTR_ARRAY,
+						{ .array_type = ATTR_U32 } },
 	{ NL80211_ATTR_FRAME,
 			"Frame", ATTR_BINARY },
 	{ NL80211_ATTR_SSID,
@@ -599,6 +604,49 @@ static const struct attr_entry attr_table[] = {
 #define NLA_DATA(nla)		((void*)(((char*)(nla)) + NLA_LENGTH(0)))
 #define NLA_PAYLOAD(nla)	((int)((nla)->nla_len - NLA_LENGTH(0)))
 
+static void print_value(int indent, const char *label, enum attr_type type,
+						const void *buf, uint32_t len)
+{
+	uint16_t val_u16;
+	uint32_t val_u32;
+
+	switch (type) {
+	case ATTR_U16:
+		val_u16 = *((uint16_t *) buf);
+		printf("%*c%s: %u (0x%04x)\n", indent, ' ',
+						label, val_u16, val_u16);
+		if (len != 2)
+			printf("malformed packet\n");
+		break;
+	case ATTR_U32:
+		val_u32 = *((uint32_t *) buf);
+		printf("%*c%s: %u (0x%08x)\n", indent, ' ',
+						label, val_u32, val_u32);
+		if (len != 4)
+			printf("malformed packet\n");
+		break;
+	default:
+		printf("%*c%s: len %u\n", indent, ' ', label, len);
+		print_hexdump(buf, len);
+		break;
+	}
+}
+
+static void print_array(int indent, enum attr_type type,
+						const void *buf, uint32_t len)
+{
+	const struct nlattr *nla;
+
+	for (nla = buf ; NLA_OK(nla, len); nla = NLA_NEXT(nla, len)) {
+		uint16_t nla_type = nla->nla_type & NLA_TYPE_MASK;
+		char str[8];
+
+		snprintf(str, sizeof(str), "%u", nla_type);
+		print_value(indent, str, type,
+				NLA_DATA(nla), NLA_PAYLOAD(nla));
+	}
+}
+
 static void print_attributes(int indent, const struct attr_entry *table,
 						const void *buf, uint32_t len)
 {
@@ -609,6 +657,7 @@ static void print_attributes(int indent, const struct attr_entry *table,
 	for (nla = buf ; NLA_OK(nla, len); nla = NLA_NEXT(nla, len)) {
 		uint16_t nla_type = nla->nla_type & NLA_TYPE_MASK;
 		enum attr_type type;
+		enum attr_type array_type;
 		const struct attr_entry *nested;
 		uint64_t val64;
 		uint32_t val32;
@@ -620,6 +669,7 @@ static void print_attributes(int indent, const struct attr_entry *table,
 
 		str = "Reserved";
 		type = ATTR_UNSPEC;
+		array_type = ATTR_UNSPEC;
 		nested = NULL;
 
 		if (table) {
@@ -628,6 +678,7 @@ static void print_attributes(int indent, const struct attr_entry *table,
 					str = table[i].str;
 					type = table[i].type;
 					nested = table[i].nested;
+					array_type = table[i].array_type;
 					break;
 				}
 			}
@@ -703,6 +754,14 @@ static void print_attributes(int indent, const struct attr_entry *table,
 			if (!nested)
 				printf("missing table\n");
 			print_attributes(indent + 4, nested,
+					NLA_DATA(nla), NLA_PAYLOAD(nla));
+			break;
+		case ATTR_ARRAY:
+			printf("%*c%s: len %u\n", indent, ' ', str,
+						NLA_PAYLOAD(nla));
+			if (array_type == ATTR_UNSPEC)
+				printf("missing type\n");
+			print_array(indent + 4, array_type,
 					NLA_DATA(nla), NLA_PAYLOAD(nla));
 			break;
 		}
