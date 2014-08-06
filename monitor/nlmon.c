@@ -597,6 +597,8 @@ static void print_attributes(int indent, const struct attr_entry *table,
 		uint32_t val32;
 		uint16_t val16;
 		uint8_t val8;
+		uint8_t *ptr;
+		char addr[18];
 
 		str = "Reserved";
 		type = ATTR_UNSPEC;
@@ -657,9 +659,12 @@ static void print_attributes(int indent, const struct attr_entry *table,
 						(char *) NLA_DATA(nla));
 			break;
 		case ATTR_ADDRESS:
-			printf("%*c%s: len %u\n", indent, ' ', str,
-						NLA_PAYLOAD(nla));
-			print_hexdump(NLA_DATA(nla), NLA_PAYLOAD(nla));
+			ptr = NLA_DATA(nla);
+			snprintf(addr, sizeof(addr),
+					"%02X:%02X:%02X:%02X:%02X:%02X",
+					ptr[0], ptr[1], ptr[2],
+					ptr[3], ptr[4], ptr[5]);
+			printf("%*c%s: %s\n", indent, ' ', str, addr);
 			if (NLA_PAYLOAD(nla) != 6)
 				printf("malformed packet\n");
 			break;
