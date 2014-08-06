@@ -256,6 +256,8 @@ int main(int argc, char *argv[])
 
 	signal = l_signal_create(&mask, signal_handler, NULL, NULL);
 
+	printf("Wireless monitor ver %s\n", VERSION);
+
 	if (reader_path) {
 		struct pcap *pcap;
 
