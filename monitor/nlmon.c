@@ -112,6 +112,7 @@ enum attr_type {
 	ATTR_U16,
 	ATTR_U32,
 	ATTR_U64,
+	ATTR_S32,
 	ATTR_STRING,
 	ATTR_ADDRESS,
 	ATTR_BINARY,
@@ -597,6 +598,7 @@ static void print_attributes(int indent, const struct attr_entry *table,
 		uint32_t val32;
 		uint16_t val16;
 		uint8_t val8;
+		int32_t val_s32;
 		uint8_t *ptr;
 		char addr[18];
 
@@ -652,6 +654,12 @@ static void print_attributes(int indent, const struct attr_entry *table,
 			printf("%*c%s: %lu (0x%016lx)\n", indent, ' ', str,
 								val64, val64);
 			if (NLA_PAYLOAD(nla) != 8)
+				printf("malformed packet\n");
+			break;
+		case ATTR_S32:
+			val_s32 = *((int32_t *) NLA_DATA(nla));
+			printf("%*c%s: %d\n", indent, ' ', str, val_s32);
+			if (NLA_PAYLOAD(nla) != 4)
 				printf("malformed packet\n");
 			break;
 		case ATTR_STRING:
