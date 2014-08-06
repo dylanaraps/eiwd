@@ -24,6 +24,7 @@
 #include <config.h>
 #endif
 
+#include <stdlib.h>
 #include <ell/ell.h>
 
 #include "linux/nl80211.h"
@@ -66,7 +67,8 @@ bool wiphy_init(void)
 		return false;
 	}
 
-	l_genl_set_debug(genl, do_debug, "[GENL] ", NULL);
+	if (getenv("IWD_GENL_DEBUG"))
+		l_genl_set_debug(genl, do_debug, "[GENL] ", NULL);
 
 	l_debug("Opening nl80211 interface");
 
