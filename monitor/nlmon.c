@@ -118,6 +118,7 @@ enum attr_type {
 	ATTR_BINARY,
 	ATTR_NESTED,
 	ATTR_ARRAY,
+	ATTR_FLAG_OR_U16,
 };
 
 struct attr_entry {
@@ -380,7 +381,7 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_FRAME_TYPE,
 			"Frame Type", ATTR_U16 },
 	{ NL80211_ATTR_CONTROL_PORT_ETHERTYPE,
-			"Control Port Ethertype", ATTR_U16 },
+			"Control Port Ethertype", ATTR_FLAG_OR_U16 },
 	{ NL80211_ATTR_CONTROL_PORT_NO_ENCRYPT,
 			"Control Port No Encrypt", ATTR_FLAG },
 	{ NL80211_ATTR_SUPPORT_IBSS_RSN,
@@ -763,6 +764,16 @@ static void print_attributes(int indent, const struct attr_entry *table,
 				printf("missing type\n");
 			print_array(indent + 4, array_type,
 					NLA_DATA(nla), NLA_PAYLOAD(nla));
+			break;
+		case ATTR_FLAG_OR_U16:
+			if (NLA_PAYLOAD(nla) == 0)
+				printf("%*c%s: true\n", indent, ' ', str);
+			else if (NLA_PAYLOAD(nla) == 2) {
+				val16 = *((uint16_t *) NLA_DATA(nla));
+				printf("%*c%s: %u (0x%04x)\n", indent, ' ',
+							str, val16, val16);
+			} else
+				printf("malformed packet\n");
 			break;
 		}
 	}
