@@ -148,22 +148,30 @@ static int process_pcap(struct pcap *pcap)
 		uint16_t proto_type;
 
 		if (len < 16) {
-			fprintf(stderr, "Too short package\n");
-			return EXIT_FAILURE;
+			printf("Too short packet\n");
+			continue;
 		}
 
 		arphrd_type = L_GET_UNALIGNED((const uint16_t *) (buf + 2));
 
 		if (L_BE16_TO_CPU(arphrd_type) != ARPHRD_NETLINK) {
-			fprintf(stderr, "Wrong header type\n");
-			return EXIT_FAILURE;
+			printf("Unsupported ARPHRD %u\n",
+						L_BE16_TO_CPU(arphrd_type));
+			continue;
 		}
 
 		proto_type = L_GET_UNALIGNED((const uint16_t *) (buf + 14));
 
 		switch (L_BE16_TO_CPU(proto_type)) {
+		case NETLINK_ROUTE:
+			printf("RTNL packet\n");
+			break;
 		case NETLINK_GENERIC:
 			nlmon_print(nlmon, buf + 16, len - 16);
+			break;
+		default:
+			printf("Other protocol %u\n",
+						L_BE16_TO_CPU(proto_type));
 			break;
 		}
 	}
