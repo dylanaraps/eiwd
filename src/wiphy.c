@@ -184,7 +184,7 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 						L_UINT_TO_PTR(ifindex));
 	if (!netdev) {
 		netdev = l_new(struct netdev, 1);
-		l_queue_push_tail(wiphy->netdev_list, netdev);
+		l_queue_push_head(wiphy->netdev_list, netdev);
 	}
 
 	memcpy(netdev->name, ifname, sizeof(netdev->name));
