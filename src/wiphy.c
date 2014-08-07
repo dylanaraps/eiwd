@@ -257,6 +257,78 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
+static void wiphy_config_notify(struct l_genl_msg *msg, void *user_data)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	uint8_t cmd;
+
+	cmd = l_genl_msg_get_command(msg);
+
+	l_debug("Notification of command %u", cmd);
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+	}
+}
+
+static void wiphy_scan_notify(struct l_genl_msg *msg, void *user_data)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	uint8_t cmd;
+
+	cmd = l_genl_msg_get_command(msg);
+
+	l_debug("Scan notification %u", cmd);
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+	}
+}
+
+static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	uint8_t cmd;
+
+	cmd = l_genl_msg_get_command(msg);
+
+	l_debug("MLME notification %u", cmd);
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+	}
+}
+
+static void wiphy_regulatory_notify(struct l_genl_msg *msg, void *user_data)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	uint8_t cmd;
+
+	cmd = l_genl_msg_get_command(msg);
+
+	l_debug("Regulatory notification %u", cmd);
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+	}
+}
+
 static void nl80211_appeared(void *user_data)
 {
 	struct l_genl_msg *msg;
@@ -271,6 +343,22 @@ static void nl80211_appeared(void *user_data)
 		l_warn("Destroying existing list of wiphy devices");
 		l_queue_destroy(wiphy_list, NULL);
 	}
+
+	if (!l_genl_family_register(nl80211, "config", wiphy_config_notify,
+								NULL, NULL))
+		l_error("Registering for config notification failed");
+
+	if (!l_genl_family_register(nl80211, "scan", wiphy_scan_notify,
+								NULL, NULL))
+		l_error("Registering for scan notification failed");
+
+	if (!l_genl_family_register(nl80211, "mlme", wiphy_mlme_notify,
+								NULL, NULL))
+		l_error("Registering for MLME notification failed");
+
+	if (!l_genl_family_register(nl80211, "regulatory",
+					wiphy_regulatory_notify, NULL, NULL))
+		l_error("Registering for regulatory notification failed");
 
 	wiphy_list = l_queue_new();
 
