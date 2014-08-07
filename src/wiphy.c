@@ -46,6 +46,7 @@ struct netdev {
 struct wiphy {
 	uint32_t id;
 	char name[20];
+	uint32_t feature_flags;
 	struct l_queue *netdev_list;
 };
 
@@ -252,6 +253,20 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 			}
 
 			memcpy(wiphy->name, data, len);
+			break;
+
+		case NL80211_ATTR_FEATURE_FLAGS:
+			if (!wiphy) {
+				l_warn("No wiphy structure found");
+				return;
+			}
+
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid feature flags attribute");
+				return;
+			}
+
+			wiphy->feature_flags = *((uint32_t *) data);
 			break;
 		}
 	}
