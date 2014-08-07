@@ -329,6 +329,33 @@ static void wiphy_regulatory_notify(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
+static void protocol_features_callback(struct l_genl_msg *msg, void *user_data)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	uint32_t features = 0;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_PROTOCOL_FEATURES:
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid protocol features attribute");
+				return;
+			}
+
+			features = *((uint32_t *) data);
+			break;
+		}
+	}
+
+	if (features & NL80211_PROTOCOL_FEATURE_SPLIT_WIPHY_DUMP)
+		l_debug("Found split wiphy dump support");
+}
+
 static void nl80211_appeared(void *user_data)
 {
 	struct l_genl_msg *msg;
@@ -361,6 +388,12 @@ static void nl80211_appeared(void *user_data)
 		l_error("Registering for regulatory notification failed");
 
 	wiphy_list = l_queue_new();
+
+	msg = l_genl_msg_new(NL80211_CMD_GET_PROTOCOL_FEATURES);
+	if (!l_genl_family_send(nl80211, msg, protocol_features_callback,
+								NULL, NULL))
+		l_error("Getting protocol features failed");
+	l_genl_msg_unref(msg);
 
 	msg = l_genl_msg_new(NL80211_CMD_GET_WIPHY);
 	if (!l_genl_family_dump(nl80211, msg, wiphy_dump_callback, NULL, NULL))
