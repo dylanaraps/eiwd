@@ -94,10 +94,9 @@ static bool wiphy_match(const void *a, const void *b)
 	return (wiphy->id == id);
 }
 
-static void wiphy_interface_dump_callback(struct l_genl_msg *msg,
-							void *user_data)
+static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 {
-	struct wiphy *wiphy = user_data;
+	struct wiphy *wiphy = NULL;
 	struct netdev *netdev;
 	struct l_genl_attr attr;
 	uint16_t type, len;
@@ -148,8 +147,10 @@ static void wiphy_interface_dump_callback(struct l_genl_msg *msg,
 				return;
 			}
 
-			if (wiphy->id != *((uint32_t *) data)) {
-				l_warn("Mismatching wiphy attribute");
+			wiphy = l_queue_find(wiphy_list, wiphy_match,
+					L_UINT_TO_PTR(*((uint32_t *) data)));
+			if (!wiphy) {
+				l_warn("No wiphy structure found");
 				return;
 			}
 			break;
@@ -194,20 +195,6 @@ static void wiphy_interface_dump_callback(struct l_genl_msg *msg,
 	l_debug("Found interface %s", netdev->name);
 }
 
-static void wiphy_get_interfaces(struct wiphy *wiphy)
-{
-	struct l_genl_msg *msg;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_GET_INTERFACE, 8);
-
-	if (!l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY,
-					sizeof(uint32_t), &wiphy->id))
-		return;
-
-	l_genl_family_dump(nl80211, msg, wiphy_interface_dump_callback,
-								wiphy, NULL);
-}
-
 static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy = NULL;
@@ -215,7 +202,6 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 	uint16_t type, len;
 	const void *data;
 	uint32_t id;
-	bool created = false;
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -250,8 +236,7 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 				wiphy = l_new(struct wiphy, 1);
 				wiphy->id = id;
 				wiphy->netdev_list = l_queue_new();
-				l_queue_push_tail(wiphy_list, wiphy);
-				created = true;
+				l_queue_push_head(wiphy_list, wiphy);
 			}
 			break;
 
@@ -269,11 +254,6 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 			memcpy(wiphy->name, data, len);
 			break;
 		}
-	}
-
-	if (created) {
-		l_debug("Found wiphy %s", wiphy->name);
-		wiphy_get_interfaces(wiphy);
 	}
 }
 
@@ -295,8 +275,15 @@ static void nl80211_appeared(void *user_data)
 	wiphy_list = l_queue_new();
 
 	msg = l_genl_msg_new(NL80211_CMD_GET_WIPHY);
+	if (!l_genl_family_dump(nl80211, msg, wiphy_dump_callback, NULL, NULL))
+		l_error("Getting all wiphy devices failed");
+	l_genl_msg_unref(msg);
 
-	l_genl_family_dump(nl80211, msg, wiphy_dump_callback, NULL, NULL);
+	msg = l_genl_msg_new(NL80211_CMD_GET_INTERFACE);
+	if (!l_genl_family_dump(nl80211, msg, interface_dump_callback,
+								NULL, NULL))
+		l_error("Getting all interface information failed");
+	l_genl_msg_unref(msg);
 }
 
 static void nl80211_vanished(void *user_data)
