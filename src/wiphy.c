@@ -443,3 +443,25 @@ bool wiphy_exit(void)
 
 	return true;
 }
+
+static void wiphy_check_dellink(void *data, void *user_data)
+{
+	uint32_t index = L_PTR_TO_UINT(user_data);
+	struct wiphy *wiphy = data;
+	struct netdev *netdev;
+
+	netdev = l_queue_remove_if(wiphy->netdev_list, netdev_match,
+						L_UINT_TO_PTR(index));
+	if (netdev) {
+		l_warn("Removing leftover interface %s", netdev->name);
+		netdev_free(netdev);
+	}
+}
+
+void wiphy_notify_dellink(uint32_t index)
+{
+	if (!wiphy_list)
+		return;
+
+	l_queue_foreach(wiphy_list, wiphy_check_dellink, L_UINT_TO_PTR(index));
+}

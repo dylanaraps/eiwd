@@ -30,6 +30,7 @@
 #include <net/if.h>
 #include <ell/ell.h>
 
+#include "src/wiphy.h"
 #include "src/netdev.h"
 
 struct netdev_data {
@@ -91,6 +92,8 @@ static void dellink_notify(const struct ifinfomsg *ifi, int bytes)
 {
 	struct netdev_data *netdev;
 	uint32_t index = ifi->ifi_index;
+
+	wiphy_notify_dellink(index);
 
 	netdev = l_hashmap_remove(netdev_list, L_UINT_TO_PTR(index));
 	if (!netdev)
