@@ -24,6 +24,7 @@
 #include <config.h>
 #endif
 
+#include <stdlib.h>
 #include <linux/rtnetlink.h>
 #include <net/if_arp.h>
 #include <net/if.h>
@@ -146,7 +147,8 @@ bool netdev_init(void)
 		return false;
 	}
 
-	l_netlink_set_debug(rtnl, do_debug, "[RTNL] ", NULL);
+	if (getenv("IWD_RTNL_DEBUG"))
+		l_netlink_set_debug(rtnl, do_debug, "[RTNL] ", NULL);
 
 	netdev_list = l_hashmap_new();
 
