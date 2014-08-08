@@ -197,7 +197,7 @@ static void usage(void)
 	printf("iwmon - Wireless monitor\n"
 		"Usage:\n");
 	printf("\tiwmon [options]\n");
-	printf("options:\n"
+	printf("Options:\n"
 		"\t-r, --read <file>      Read netlink PCAP trace files\n"
 		"\t-i, --interface <dev>  Use specified netlink monitor\n"
 		"\t-h, --help             Show help options\n");
