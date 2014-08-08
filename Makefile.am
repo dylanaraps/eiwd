@@ -53,7 +53,9 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					monitor/pcap.h monitor/pcap.c
 monitor_iwmon_LDADD = ell/libell-internal.la
 
-noinst_PROGRAMS =
+noinst_PROGRAMS = tools/hwsim
+
+tools_hwsim_LDADD = ell/libell-internal.la
 
 unit_tests = unit/test-pbkdf2-sha1 unit/test-prf-sha1 unit/test-ie
 
