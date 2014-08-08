@@ -91,3 +91,24 @@ needs to be created:
 
 For now it is important that the netlink monitor interace is actually
 named nlmon. Future version might relax this requirement.
+
+
+Simulating devices
+==================
+
+The Linux driver mac80211_hwsim provides the functionality to simulate
+Wireless devices using fake virtual air. Just load the module.
+
+	modprobe mac80211_hwsim radios=0
+
+Provding the radios=0 is important since otherwise it starts out with
+two new Wireless radios by default.
+
+With the provided hwsim utility it is now possible to add and remove
+virtual radio devices.
+
+	hwsim --create
+	hwsim --destroy=<radio-id>
+
+The radio id assigned to each virtual device is its internal id used
+by the Wireless device.
