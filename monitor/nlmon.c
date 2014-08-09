@@ -908,7 +908,7 @@ static void print_message(const struct nlmsghdr *nlmsg)
 			str = "Noop";
 			break;
 		case NLMSG_ERROR:
-			str = "Error";
+			str = "Complete";
 			break;
 		case NLMSG_DONE:
 			str = "Done";
@@ -925,6 +925,17 @@ static void print_message(const struct nlmsghdr *nlmsg)
 						out ? '<' : '>', str,
 						nlmsg->nlmsg_type,
 						nlmsg->nlmsg_flags,
+						NLMSG_PAYLOAD(nlmsg, 0));
+
+		if (nlmsg->nlmsg_type == NLMSG_ERROR) {
+			uint32_t status = *((uint32_t *) NLMSG_DATA(nlmsg));
+
+			printf("%*cStatus: %s (%u)\n", 4, ' ',
+						strerror(status), status);
+			print_hexdump(NLMSG_DATA(nlmsg) + 4,
+						NLMSG_PAYLOAD(nlmsg, 4));
+		} else
+			print_hexdump(NLMSG_DATA(nlmsg),
 						NLMSG_PAYLOAD(nlmsg, 0));
 		return;
 	}
