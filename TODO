@@ -288,3 +288,21 @@ Wireless monitor
 
   Priority: High
   Complexity: C1
+
+
+Wireless simulator
+==================
+
+- Add support for builtin wireless access point emulator
+
+  When creating a pair of mac80211_hwsim radios, allow one to operate as
+  access point.  The hwsim utility will emulate the access point on the
+  second interface for as long as it is running.  Which means that from
+  the first interface it is possible to scan and connect to this access
+  point using standard wireless tools (including iwd and iwctl).
+
+  Code for the AP mode can be shared from iwd feature for access point
+  operation once that has been implemented.
+
+  Priority: Medium
+  Complexity: C8
