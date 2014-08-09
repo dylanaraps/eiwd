@@ -166,7 +166,7 @@ static const struct attr_entry bss_table[] = {
 	{ NL80211_BSS_INFORMATION_ELEMENTS, "IEs",	ATTR_BINARY	},
 	{ NL80211_BSS_SIGNAL_MBM,	"Signal mBm",	ATTR_S32	},
 	{ NL80211_BSS_SIGNAL_UNSPEC,	"Signal Unspec",ATTR_U8		},
-	{ NL80211_BSS_STATUS,		"Status",	ATTR_FLAG	},
+	{ NL80211_BSS_STATUS,		"Status",	ATTR_U32	},
 	{ NL80211_BSS_SEEN_MS_AGO,	"Seen ms ago",	ATTR_U32	},
 	{ NL80211_BSS_BEACON_IES,	"Beacon IEs",	ATTR_BINARY	},
 	{ NL80211_BSS_CHAN_WIDTH,	"Chan Width",	ATTR_U32	},
