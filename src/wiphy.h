@@ -27,3 +27,5 @@ bool wiphy_init(void);
 bool wiphy_exit(void);
 
 void wiphy_notify_dellink(uint32_t index);
+
+void wiphy_set_ssid(const char *ssid);

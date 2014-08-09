@@ -51,10 +51,12 @@ static void usage(void)
 		"Usage:\n");
 	printf("\tiwd [options]\n");
 	printf("Options:\n"
+		"\t-S, --ssid <ssid>      SSID of network\n"
 		"\t-h, --help             Show help options\n");
 }
 
 static const struct option main_options[] = {
+	{ "ssid",      required_argument, NULL, 'S' },
 	{ "version",   no_argument,       NULL, 'v' },
 	{ "help",      no_argument,       NULL, 'h' },
 	{ }
@@ -70,11 +72,14 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "vh", main_options, NULL);
+		opt = getopt_long(argc, argv, "S:vh", main_options, NULL);
 		if (opt < 0)
 			break;
 
 		switch (opt) {
+		case 'S':
+			wiphy_set_ssid(optarg);
+			break;
 		case 'v':
 			printf("%s\n", VERSION);
 			return EXIT_SUCCESS;

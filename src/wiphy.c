@@ -33,6 +33,8 @@
 #include "linux/nl80211.h"
 #include "src/wiphy.h"
 
+static const char *network_ssid = NULL;
+
 static struct l_genl *genl = NULL;
 static struct l_genl_family *nl80211 = NULL;
 
@@ -541,4 +543,9 @@ void wiphy_notify_dellink(uint32_t index)
 		return;
 
 	l_queue_foreach(wiphy_list, wiphy_check_dellink, L_UINT_TO_PTR(index));
+}
+
+void wiphy_set_ssid(const char *ssid)
+{
+	network_ssid = ssid;
 }
