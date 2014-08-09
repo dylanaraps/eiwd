@@ -239,6 +239,22 @@ Wireless monitor
   Priority: Medium
   Complexity: C1
 
+- Create netlink monitor interface if it does not exist
+
+  Currently the netlink monitor interface needs to be created manually
+  and also brought up.  The iwmon utility could just automate this task
+  by using RTNL to find an existing netlink monitor interface, and in
+  case it does not exist, create a new one.
+
+  It might be beneficial that when iwmon terminates that it then also
+  removes the netlink monitor interface again (in case it created it).
+
+  Alternatively a command line option might be used for controlling
+  this behavior of creating and removing netlink monitor interfaces.
+
+  Priority: Medium
+  Complexity: C1
+
 - Subscribe to all nl80211 multicast groups at startup
 
   It seems the nlmon packets are limited to actual subscribed mutlicast
