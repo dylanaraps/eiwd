@@ -104,6 +104,32 @@ mac80211_hwsim
   Priority: Medium
   Complexity: C1
 
+- Allow configuration of MAC address or list of MAC addresses
+
+  The radios are auto-generating a fake MAC address.  It would be useful
+  to allow specifying a MAC address to be used.  In certain cases it might
+  be also useful to provide a list of MAC addresses so that for example
+  with secondary interfaces these can be used.
+
+  Priority: Low
+  Complexity: C2
+
+- Move mac80211_hwsim.h header file to UAPI includes
+
+  The mac80211_hwsim.h is the public API description of this netlink
+  interface and thus it should be provided via UAPI includes.
+
+  For this work work the mac80211_hwsim.h header needs to be modified
+  so that it also compiles from userspace.  At the moment it throws
+  errors.  And it needs to become part of the UAPI headers of the
+  Linux kernel.
+
+  In addition it should provide HWSIM_GENL_NAME that provides the
+  generic netlink "MAC82011_HWSIM" family string.
+
+  Priority: Low
+  Complexity: C1
+
 - Provide kernel option to allow defining the number of initial radios
 
   By default the mac80211_hwsim modules creates 2 radios by default unless
@@ -115,6 +141,10 @@ mac80211_hwsim
 
   For our testing we want to load mac80211_hwsim without any radios. Maybe
   this should be the default for the new kernel option.
+
+  If the default of initial radios can be changed to zero, then it is also
+  possible to add MODULE_ALIAS_GENL_FAMILY to support auto-loading of
+  the mac80211_hwsim kernel module.
 
   Priority: Low
   Complexity: C1
