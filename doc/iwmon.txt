@@ -1,0 +1,30 @@
+IWMON(1)
+========
+:doctype: manpage
+
+
+NAME
+----
+iwmon - Wireless monitor
+
+
+SYNOPSIS
+--------
+*iwmon* ['OPTIONS']
+
+
+DESCRIPTION
+-----------
+The iwmon(1) command provides access to the wireless subsystem commands,
+responses and events from the nl80211 generic netlink interface.
+
+
+AUTHOR
+------
+iwmon was originally written by Marcel Holtmann.
+
+
+COPYING
+-------
+Free use of this software is granted under ther terms of the GNU Lesser
+General Public Licenses (LGPL).

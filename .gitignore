@@ -22,6 +22,7 @@ src/iwd
 client/iwctl
 monitor/iwmon
 tools/hwsim
+doc/iwmon.1
 unit/test-pbkdf2-sha1
 unit/test-prf-sha1
 unit/*.log

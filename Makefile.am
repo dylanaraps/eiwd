@@ -76,11 +76,17 @@ unit_test_ie_LDADD = ell/libell-internal.la
 
 TESTS = $(unit_tests)
 
+manual_pages = doc/iwmon.1
+
+dist_man_MANS = $(manual_pages)
+
+EXTRA_DIST = $(manual_pages:.1=.txt)
+
 AM_CFLAGS = -fvisibility=hidden
 
 MAINTAINERCLEANFILES = Makefile.in configure config.h.in aclocal.m4
 
-DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests)
+DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests) $(manual_pages)
 
 BUILT_SOURCES = ell/internal
 
@@ -91,6 +97,9 @@ ell/internal: Makefile
 			$(LN_S) -t ell -f $(top_srcdir)/../../ell/$$f ; \
 		fi \
 	done > $@
+
+%.1: %.txt
+	$(AM_V_GEN)a2x --doctype manpage --format manpage $(srcdir)/$<
 
 maintainer-clean-local:
 	-rm -rf build-aux ell
