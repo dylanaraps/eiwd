@@ -247,10 +247,13 @@ Wireless monitor
   groups that the nl80211 lists.
 
   This means that the netlink socket used for resolving nl80211 family
-  name needs to be kept option and actively processed since it will also
+  name needs to be kept open and actively processed since it will also
   receive these multicast events.  However the event itself can be dropped
   since the one from nlmon with the proper kernel level timestamps should
   be taken into account.
+
+  An alternative is to fix the netlink_deliver_tap() function in the
+  kernel netlink layer to not be affected by the broadcast filtering.
 
   Priority: Medium
   Complexity: C1
