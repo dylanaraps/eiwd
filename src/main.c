@@ -52,11 +52,13 @@ static void usage(void)
 	printf("\tiwd [options]\n");
 	printf("Options:\n"
 		"\t-S, --ssid <ssid>      SSID of network\n"
+		"\t-K, --kdbus            Setup Kernel D-Bus\n"
 		"\t-h, --help             Show help options\n");
 }
 
 static const struct option main_options[] = {
 	{ "ssid",      required_argument, NULL, 'S' },
+	{ "kdbus",     no_argument,       NULL, 'K' },
 	{ "version",   no_argument,       NULL, 'v' },
 	{ "help",      no_argument,       NULL, 'h' },
 	{ }
@@ -64,9 +66,9 @@ static const struct option main_options[] = {
 
 int main(int argc, char *argv[])
 {
+	bool enable_kdbus = false;
 	struct l_signal *signal;
 	sigset_t mask;
-	char *bus_name;
 	int exit_status;
 
 	for (;;) {
@@ -79,6 +81,9 @@ int main(int argc, char *argv[])
 		switch (opt) {
 		case 'S':
 			wiphy_set_ssid(optarg);
+			break;
+		case 'K':
+			enable_kdbus = true;
 			break;
 		case 'v':
 			printf("%s\n", VERSION);
@@ -107,22 +112,31 @@ int main(int argc, char *argv[])
 
 	l_info("Wireless daemon version %s", VERSION);
 
-	if (!kdbus_create_bus()) {
-		exit_status = EXIT_FAILURE;
-		goto done;
-	}
+	if (enable_kdbus) {
+		char *bus_name;
+		bool result;
 
-	bus_name = kdbus_lookup_bus();
-	if (!bus_name) {
-		exit_status = EXIT_FAILURE;
-		goto destroy;
-	}
+		if (!kdbus_create_bus()) {
+			exit_status = EXIT_FAILURE;
+			goto done;
+		}
 
-	l_debug("Bus location: %s", bus_name);
+		bus_name = kdbus_lookup_bus();
+		if (!bus_name) {
+			exit_status = EXIT_FAILURE;
+			goto destroy;
+		}
 
-	if (!kdbus_open_bus(bus_name, "net.connman.iwd", "iwd")) {
-		exit_status = EXIT_FAILURE;
-		goto destroy;
+		l_debug("Bus location: %s", bus_name);
+
+		result = kdbus_open_bus(bus_name, "net.connman.iwd", "iwd");
+
+		l_free(bus_name);
+
+		if (!result) {
+			exit_status = EXIT_FAILURE;
+			goto destroy;
+		}
 	}
 
 	if (!netdev_init()) {
@@ -144,9 +158,8 @@ int main(int argc, char *argv[])
 	exit_status = EXIT_SUCCESS;
 
 destroy:
-	l_free(bus_name);
-
-	kdbus_destroy_bus();
+	if (enable_kdbus)
+		kdbus_destroy_bus();
 
 done:
 	l_signal_remove(signal);
