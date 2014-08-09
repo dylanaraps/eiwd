@@ -311,6 +311,14 @@ Wireless simulator
 Wireless daemon
 ===============
 
+- Parsing and building of 802.11 management frames
+
+  Multiple frames types are send around via nl80211 interface.  These
+  frames need to be parsed and build via generic infrastructure.
+
+  Priority: High
+  Complexity: C4
+
 - Add support for 4-way handshake authentication and key generation
 
   The 4-way handshake key generation for pre-shared keys (PSK) should be
