@@ -122,6 +122,12 @@ static void mlme_authenticate(struct netdev *netdev, struct bss *bss)
 	struct l_genl_msg *msg;
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 
+	if (!bss) {
+		bss = l_queue_peek_head(netdev->bss_list);
+		if (!bss)
+			return;
+	}
+
 	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4,
@@ -130,6 +136,27 @@ static void mlme_authenticate(struct netdev *netdev, struct bss *bss)
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, strlen(bss->ssid),
 								bss->ssid);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
+	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
+	l_genl_msg_unref(msg);
+}
+
+static void mlme_associate(struct netdev *netdev, struct bss *bss)
+{
+	struct l_genl_msg *msg;
+
+	if (!bss) {
+		bss = l_queue_peek_head(netdev->bss_list);
+		if (!bss)
+			return;
+	}
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_ASSOCIATE, 512);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4,
+							&bss->frequency);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, strlen(bss->ssid),
+								bss->ssid);
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 	l_genl_msg_unref(msg);
 }
@@ -542,6 +569,8 @@ static void wiphy_scan_notify(struct l_genl_msg *msg, void *user_data)
 
 static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 {
+	struct wiphy *wiphy = NULL;
+	struct netdev *netdev = NULL;
 	struct l_genl_attr attr;
 	uint16_t type, len;
 	const void *data;
@@ -555,6 +584,55 @@ static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 		return;
 
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_WIPHY:
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid wiphy attribute");
+				return;
+			}
+
+			wiphy = l_queue_find(wiphy_list, wiphy_match,
+					L_UINT_TO_PTR(*((uint32_t *) data)));
+			if (!wiphy) {
+				l_warn("No wiphy structure found");
+				return;
+			}
+			break;
+
+		case NL80211_ATTR_IFINDEX:
+			if (!wiphy) {
+				l_warn("No wiphy structure found");
+				return;
+			}
+
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid interface index attribute");
+				return;
+			}
+
+			netdev = l_queue_find(wiphy->netdev_list, netdev_match,
+					L_UINT_TO_PTR(*((uint32_t *) data)));
+			if (!netdev) {
+				l_warn("No interface structure found");
+				return;
+			}
+			break;
+		}
+	}
+
+	if (!wiphy) {
+		l_warn("Scan notification is missing wiphy attribute");
+		return;
+	}
+
+	if (!netdev) {
+		l_warn("Scan notification is missing interface attribute");
+		return;
+	}
+
+	if (cmd == NL80211_CMD_AUTHENTICATE) {
+		mlme_associate(netdev, NULL);
+		return;
 	}
 }
 
