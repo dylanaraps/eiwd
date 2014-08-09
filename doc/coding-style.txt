@@ -1,23 +1,28 @@
-﻿Every project has its coding style, and oFono is not an exception. This
-document describes the preferred coding style for oFono code, in order to keep
-some level of consistency among developers so that code can be easily
-understood and maintained, and also to help your code survive under
-maintainer's fastidious eyes so that you can get a passport for your patch
-ASAP.
+Background
+==========
 
-First of all, oFono coding style must follow every rule for Linux kernel
-(http://www.kernel.org/doc/Documentation/CodingStyle). There also exists a tool
-named checkpatch.pl to help you check the compliance with it. Just type
-"checkpatch.pl --no-tree patch_name" to check your patch. In theory, you need
-to clean up all the warnings and errors except this one: "ERROR: Missing
-Signed-off-by: line(s)". oFono does not used Signed-Off lines, so including
-them is actually an error.  In certain circumstances one can ignore the 80
-character per line limit.  This is generally only allowed if the alternative
-would make the code even less readable.
+Every project has its coding style, and the Wireless daemon is not an
+exception.  This document describes the preferred coding style for the
+Wireless daemon code, in order to keep some level of consistency among
+developers so that code can be easily understood and maintained, and also
+to help your code survive under maintainer's fastidious eyes so that you
+can get a passport for your patch ASAP.
 
-Besides the kernel coding style above, oFono has special flavors for its own.
-Some of them are mandatory (marked as 'M'), while some others are optional
-(marked as 'O'), but generally preferred.
+First of all, the Wireless daemon coding style must follow every rule for
+Linux kernel (http://www.kernel.org/doc/Documentation/CodingStyle).  There
+also exists a tool named checkpatch.pl to help you check the compliance
+with it. Just type "checkpatch.pl --no-tree patch_name" to check your patch.
+
+In theory, you need to clean up all the warnings and errors except this
+one: "ERROR: Missing Signed-off-by: line(s)".  The Wirless daemon does not
+used Signed-Off lines, so including them is actually an error.  In certain
+circumstances one can ignore the 80 character per line limit.  This is
+generally only allowed if the alternative would make the code even less
+readable.
+
+Besides the kernel coding style above, the Wireless daemon has special
+flavors for its own. Some of them are mandatory (marked as 'M'), while
+some others are optional (marked as 'O'), but generally preferred.
 
 
 M1: Blank line before and after an if/while/do/for statement
