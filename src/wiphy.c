@@ -97,6 +97,74 @@ static bool wiphy_match(const void *a, const void *b)
 	return (wiphy->id == id);
 }
 
+static void trigger_scan_callback(struct l_genl_msg *msg, void *user_data)
+{
+	struct wiphy *wiphy = user_data;
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+	}
+
+	l_debug("Scan triggered for wiphy %s", wiphy->name);
+}
+
+static void trigger_scan(struct wiphy *wiphy)
+{
+	struct netdev *netdev;
+	struct l_genl_msg *msg;
+
+	if (!network_ssid)
+		return;
+
+	netdev = l_queue_peek_head(wiphy->netdev_list);
+	if (!netdev)
+		return;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN, 16);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_family_send(nl80211, msg, trigger_scan_callback, wiphy, NULL);
+	l_genl_msg_unref(msg);
+}
+
+static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
+{
+	struct wiphy *wiphy = user_data;
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+	}
+
+	l_debug("Scan result for wiphy %s", wiphy->name);
+}
+
+static void get_scan(struct wiphy *wiphy)
+{
+	struct netdev *netdev;
+	struct l_genl_msg *msg;
+
+	if (!network_ssid)
+		return;
+
+	netdev = l_queue_peek_head(wiphy->netdev_list);
+	if (!netdev)
+		return;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_GET_SCAN, 8);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_family_dump(nl80211, msg, get_scan_callback, wiphy, NULL);
+	l_genl_msg_unref(msg);
+}
+
 static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy = NULL;
@@ -196,6 +264,8 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 	netdev->type = iftype;
 
 	l_debug("Found interface %s", netdev->name);
+
+	trigger_scan(wiphy);
 }
 
 static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
@@ -294,6 +364,7 @@ static void wiphy_config_notify(struct l_genl_msg *msg, void *user_data)
 
 static void wiphy_scan_notify(struct l_genl_msg *msg, void *user_data)
 {
+	struct wiphy *wiphy = NULL;
 	struct l_genl_attr attr;
 	uint16_t type, len;
 	const void *data;
@@ -307,6 +378,31 @@ static void wiphy_scan_notify(struct l_genl_msg *msg, void *user_data)
 		return;
 
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_WIPHY:
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid wiphy attribute");
+				return;
+			}
+
+			wiphy = l_queue_find(wiphy_list, wiphy_match,
+					L_UINT_TO_PTR(*((uint32_t *) data)));
+			if (!wiphy) {
+				l_warn("No wiphy structure found");
+				return;
+			}
+			break;
+		}
+	}
+
+	if (!wiphy) {
+		l_warn("Scan notification is missing wiphy attribute");
+		return;
+	}
+
+	if (cmd == NL80211_CMD_NEW_SCAN_RESULTS) {
+		get_scan(wiphy);
+		return;
 	}
 }
 
