@@ -117,6 +117,23 @@ static bool wiphy_match(const void *a, const void *b)
 	return (wiphy->id == id);
 }
 
+static void mlme_authenticate(struct netdev *netdev, struct bss *bss)
+{
+	struct l_genl_msg *msg;
+	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4,
+							&bss->frequency);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, strlen(bss->ssid),
+								bss->ssid);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
+	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
+	l_genl_msg_unref(msg);
+}
+
 static void trigger_scan_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy = user_data;
@@ -216,6 +233,8 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 		bss->frequency = frequency;
 		bss->ssid = l_strdup(network_ssid);
 		l_queue_push_head(netdev->bss_list, bss);
+
+		mlme_authenticate(netdev, bss);
 	}
 }
 
