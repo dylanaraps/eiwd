@@ -206,3 +206,47 @@ cfg80211 / nl80211
 
   Priority: Low
   Complexity: C2
+
+
+Wireless monitor
+================
+
+- Add support for Information Element (IE) decoding
+
+  Several netlink attributes provide binary blobs representing IEs.  Add
+  support for decoding them inline using the src/ie.c infrastructure.
+
+  Priority: Medium
+  Complexity: C1
+
+- Subscribe to all nl80211 multicast groups at startup
+
+  It seems the nlmon packets are limited to actual subscribed mutlicast
+  groups.  To get a complete picture of all the nl80211 commands and
+  events, it is required that iwmon adds membership to all multicast
+  groups that the nl80211 lists.
+
+  This means that the netlink socket used for resolving nl80211 family
+  name needs to be kept option and actively processed since it will also
+  receive these multicast events.  However the event itself can be dropped
+  since the one from nlmon with the proper kernel level timestamps should
+  be taken into account.
+
+  Priority: Medium
+  Complexity: C1
+
+- Add support for receiving kernel side timestamps
+
+  When packets are received from nlmon, they should be marked with an
+  appropiate timestamp.  Enable SO_TIMESTAMP socket option.
+
+  Priority: Medium
+  Complexity: C1
+
+- Colorize the command, response and event packets
+
+  Use terminal colors to separate command, response and event packets
+  with different colors.
+
+  Priority: Medium
+  Complexity: C1
