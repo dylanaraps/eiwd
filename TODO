@@ -1,0 +1,133 @@
+Background
+==========
+
+- Priority scale: High, Medium and Low
+
+- Complexity scale: C1, C2, C4 and C8.  The complexity scale is exponential,
+  with complexity 1 being the lowest complexity.  Complexity is a function
+  of both task 'complexity' and task 'scope'.
+
+  The general rule of thumb is that a complexity 1 task should take 1-2 weeks
+  for a person very familiar with the codebase.  Higher complexity tasks
+  require more time and have higher uncertainty.
+
+  Higher complexity tasks should be refined into several lower complexity tasks
+  once the task is better understood.
+
+
+mac80211_hwsim
+==============
+
+- Add support for returning HWSIM_ATTR_RADIO_ID from HWSIM_CMD_CREATE_RADIO
+
+  The HWSIM_CMD_CREATE_RADIO command should return HWSIM_CMD_CREATE_RADIO
+  on success so that the radio id for the created wiphy can be mapped by
+  test tools or when having to destroy that radio again.
+
+  Priority: High
+  Complexity: C1
+
+- Add support for client tracking of HWSIM_CMD_CREATE_RADIO
+
+  When using HWSIM_CMD_CREATE_RADIO command the newly created radio is
+  not bound to the owner of the netlink socket.  This means that the radio
+  stays around even after the client quits.  For testing tools it would
+  be beneficial if the newly created radio could be bound to the lifetime
+  of the netlink socket.
+
+  Create a new HWSIM_ATTR_DESTROY_RADIO_ON_CLOSE (netlink flag attribute)
+  that can be given to HWSIM_CMD_CREATE_RADIO to indicate this behavior.
+
+  Priority: High
+  Complexity: C1
+
+- Rename HWSIM_CMD_CREATE_RADIO into HWSIM_CMD_NEW_RADIO
+
+  Using the name HWSIM_CMD_NEW_RADIO is more fitting on how other pieces
+  of the wireless system work.
+
+  Rename the HWSIM_CMD_CREATE_RADIO entry in the enum and provde a define
+  for source level comaptiblity.
+
+  Priority: Medium
+  Complexity: C1
+
+- Rename HWSIM_CMD_DESTROY_RADIO into HWSIM_CMD_DEL_RADIO
+
+  Using the name HWSIM_CMD_DEL_RADIO is more fitting on how other pieces
+  of the wireless system work.
+
+  Rename the HWSIM_CMD_DESTROY_RADIO entry in the enum and provde a define
+  for source level comaptiblity.
+
+  Priority: Medium
+  Complexity: C1
+
+- Provide multicast events for HWSIM_CMD_NEW_RADIO and HWSIM_CMD_DEL_RADIO
+
+  When adding new radios via HWSIM_CMD_NEW_RADIO then listeners on the
+  multicast group "config" should be informed.  Same as when an existing
+  radio gets removed via HWSIM_CMD_DEL_RADIO, send event to "config"
+  multicast group.
+
+  The multicast group "config" does not exist at the moment and needs
+  be introduced as well.
+
+  Priority: Medium
+  Complexity: C1
+
+- Add support for HWSIM_CMD_GET_RADIO command
+
+  Currently it is not possible to list the existing radio created by
+  mac80211_hwsim.  Use the command to dump a list of radios where each
+  radio at minimum containts the HWSIM_ATTR_RADIO_ID.
+
+  For the result HWSIM_CMD_NEW_RADIO (previously HWSIM_CMD_CREATE_RADIO)
+  should be used.
+
+  The dump version should not require any attributes and list all radios
+  while otherwise the HWSIM_ATTR_RADIO_ID is required to provide details
+  of a specific radio.
+
+  Priority: Medium
+  Complexity: C1
+
+- Add support for HWSIM_CMD_SET_RADIO command
+
+  To allow modifying an existing radio, add the HWSIM_CMD_SET_RADIO.  The
+  first possible feature should be to emulate the hardware RFKILL switch.
+
+  It might be required to add a HWSIM_ATTR_RADIO_HW_RFKILL attribute flag
+  to the HWSIM_CMD_NEW_RADIO to enable virtual radios with a hardware
+  level RFKILL switch.
+
+  Priority: Medium
+  Complexity: C1
+
+- Provide kernel option to allow defining the number of initial radios
+
+  By default the mac80211_hwsim modules creates 2 radios by default unless
+  it is overwritten with the radios=x module parameter.
+
+  To allow loading the mac80211_hwsim by default and even with accidental
+  loading of the module, it would be good to provide a kernel configuration
+  option that allows changing the default value here.
+
+  For our testing we want to load mac80211_hwsim without any radios. Maybe
+  this should be the default for the new kernel option.
+
+  Priority: Low
+  Complexity: C1
+
+- New configuration options for radios
+
+  At the moment the radios created are all equal and feature rich.  However
+  for testing we want to create radios with different emulated hardware
+  capabilities.  Provide new attributes or flags that allow enabling or
+  disabling certain mac80211 features.
+
+  For example AP mode, P2P mode, number of interface combinations, TDLS
+  support, number of Scan SSIDs, supported ciphers and so on.
+
+  Priority: Low
+  Complexity: C2
