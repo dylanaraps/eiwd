@@ -31,6 +31,7 @@
 #include <ell/ell.h>
 
 #include "linux/nl80211.h"
+#include "src/ie.h"
 #include "src/wiphy.h"
 
 static const char *network_ssid = NULL;
@@ -38,11 +39,18 @@ static const char *network_ssid = NULL;
 static struct l_genl *genl = NULL;
 static struct l_genl_family *nl80211 = NULL;
 
+struct bss {
+	uint8_t addr[ETH_ALEN];
+	uint32_t frequency;
+	char *ssid;
+};
+
 struct netdev {
 	uint32_t index;
 	char name[IFNAMSIZ];
 	uint32_t type;
 	uint8_t addr[ETH_ALEN];
+	struct l_queue *bss_list;
 };
 
 struct wiphy {
@@ -61,12 +69,25 @@ static void do_debug(const char *str, void *user_data)
 	l_info("%s%s", prefix, str);
 }
 
+static void bss_free(void *data)
+{
+	struct bss *bss = data;
+
+	l_debug("Freeing BSS %02X:%02X:%02X:%02X:%02X:%02X [%s]",
+			bss->addr[0], bss->addr[1], bss->addr[2],
+			bss->addr[3], bss->addr[4], bss->addr[5], bss->ssid);
+
+	l_free(bss->ssid);
+	l_free(bss);
+}
+
 static void netdev_free(void *data)
 {
 	struct netdev *netdev = data;
 
 	l_debug("Freeing interface %s", netdev->name);
 
+	l_queue_destroy(netdev->bss_list, bss_free);
 	l_free(netdev);
 }
 
@@ -85,7 +106,6 @@ static void wiphy_free(void *data)
 	l_debug("Freeing wiphy %s", wiphy->name);
 
 	l_queue_destroy(wiphy->netdev_list, netdev_free);
-
 	l_free(wiphy);
 }
 
@@ -131,10 +151,79 @@ static void trigger_scan(struct wiphy *wiphy)
 	l_genl_msg_unref(msg);
 }
 
+static bool parse_ie(const void *data, uint16_t len)
+{
+	struct ie_tlv_iter iter;
+	bool result = false;
+
+	ie_tlv_iter_init(&iter, data, len);
+
+	while (ie_tlv_iter_next(&iter)) {
+		uint8_t tag = ie_tlv_iter_get_tag(&iter);
+
+		if (tag == 0) {
+			char *str;
+
+			str = l_strndup((const char *) iter.data, iter.len);
+			if (!strcmp(str, network_ssid)) {
+				l_debug("Found network SSID=%s", str);
+				result = true;
+			}
+			l_free(str);
+		}
+	}
+
+	return result;
+}
+
+static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
+{
+	uint16_t type, len;
+	const void *data;
+	uint8_t bssid[ETH_ALEN];
+	uint32_t frequency;
+	bool found = false;
+
+	while (l_genl_attr_next(attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_BSS_BSSID:
+			if (len != sizeof(bssid)) {
+				l_warn("Invalid BSSID attribute");
+				return;
+			}
+			memcpy(bssid, data, len);
+			break;
+		case NL80211_BSS_FREQUENCY:
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid frequency attribute");
+				return;
+			}
+			frequency = *((uint32_t *) data);
+			break;
+		case NL80211_BSS_INFORMATION_ELEMENTS:
+			found = parse_ie(data, len);
+			break;
+		}
+	}
+
+	if (found) {
+		struct bss *bss;
+
+		l_debug("Frequency %u", frequency);
+
+		bss = l_new(struct bss, 1);
+		memcpy(bss->addr, bssid, sizeof(bss->addr));
+		bss->frequency = frequency;
+		bss->ssid = l_strdup(network_ssid);
+		l_queue_push_head(netdev->bss_list, bss);
+	}
+}
+
 static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy = user_data;
-	struct l_genl_attr attr;
+	struct netdev *netdev = NULL;
+	struct l_genl_attr attr, nested;
 	uint16_t type, len;
 	const void *data;
 
@@ -142,9 +231,34 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 		return;
 
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-	}
+		switch (type) {
+		case NL80211_ATTR_IFINDEX:
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid interface index attribute");
+				return;
+			}
 
-	l_debug("Scan result for wiphy %s", wiphy->name);
+			netdev = l_queue_find(wiphy->netdev_list, netdev_match,
+					L_UINT_TO_PTR(*((uint32_t *) data)));
+			if (!netdev) {
+				l_warn("No interface structure found");
+				return;
+			}
+			break;
+
+		case NL80211_ATTR_BSS:
+			if (!netdev) {
+				l_warn("No interface structure found");
+				return;
+			}
+
+			if (!l_genl_attr_recurse(&attr, &nested))
+				return;
+
+			parse_bss(netdev, &nested);
+			break;
+		}
+	}
 }
 
 static void get_scan(struct wiphy *wiphy)
@@ -255,6 +369,7 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 						L_UINT_TO_PTR(ifindex));
 	if (!netdev) {
 		netdev = l_new(struct netdev, 1);
+		netdev->bss_list = l_queue_new();
 		l_queue_push_head(wiphy->netdev_list, netdev);
 	}
 
