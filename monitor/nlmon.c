@@ -1182,11 +1182,16 @@ static struct l_io *open_packet(const char *name)
 struct nlmon *nlmon_open(const char *ifname, uint16_t id)
 {
 	struct nlmon *nlmon;
+	struct l_io *io;
+
+	io = open_packet(ifname);
+	if (!io)
+		return NULL;
 
 	nlmon = l_new(struct nlmon, 1);
 
 	nlmon->id = id;
-	nlmon->io = open_packet(ifname);
+	nlmon->io = io;
 	nlmon->req_list = l_queue_new();
 
 	l_io_set_read_handler(nlmon->io, nlmon_receive, nlmon, NULL);

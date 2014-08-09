@@ -81,8 +81,11 @@ static void genl_parse(uint16_t type, const void *data, uint32_t len,
 	if (id == GENL_ID_GENERATE)
 		return;
 
-	if (!strcmp(name, NL80211_GENL_NAME))
+	if (!strcmp(name, NL80211_GENL_NAME)) {
 		nlmon = nlmon_open(ifname, id);
+		if (!nlmon)
+			l_main_quit();
+	}
 }
 
 static void genl_notify(uint16_t type, const void *data,
