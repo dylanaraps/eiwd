@@ -306,3 +306,29 @@ Wireless simulator
 
   Priority: Medium
   Complexity: C8
+
+
+Wireless daemon
+===============
+
+- Add support for 4-way handshake authentication and key generation
+
+  The 4-way handshake key generation for pre-shared keys (PSK) should be
+  a standalone feature (independent from EAP).
+
+  It is also important to have extensive unit test support for 4-way
+  handshake messages and key generation itself.
+
+  Priority: High
+  Complexity: C4
+
+- Add support for EAP based authentication and key generation
+
+  Provide full EAP support for enterprise wireless.  However it should be
+  possible to build wireless daemon without EAP support.
+
+  It is also intended that this EAP code can be utilized as shared library
+  and be beneficial for systemd-networkd for wired authentication.
+
+  Priority: Low
+  Complexity: C8
