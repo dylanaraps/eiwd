@@ -1144,6 +1144,7 @@ static struct l_io *open_packet(const char *name)
 {
 	struct l_io *io;
 	struct sockaddr_ll sll;
+	struct packet_mreq mr;
 	struct ifreq ifr;
 	int fd;
 
@@ -1170,6 +1171,19 @@ static struct l_io *open_packet(const char *name)
 		perror("Failed to bind packet socket");
 		close(fd);
 		return NULL;
+	}
+
+	memset(&mr, 0, sizeof(mr));
+	mr.mr_ifindex = ifr.ifr_ifindex;
+	mr.mr_type = PACKET_MR_ALLMULTI;
+
+	if (setsockopt(fd, SOL_PACKET, PACKET_ADD_MEMBERSHIP,
+						&mr, sizeof(mr) < 0)) {
+		perror("Failed to enable all multicast");
+		if (errno != EINVAL) {
+			close(fd);
+			return NULL;
+		}
 	}
 
 	io = l_io_new(fd);
