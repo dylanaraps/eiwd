@@ -131,3 +131,48 @@ mac80211_hwsim
 
   Priority: Low
   Complexity: C2
+
+
+cfg80211 / nl80211
+==================
+
+- Fix missing NL80211_CMD_NEW_WIPHY and NL80211_CMD_DEL_WIPHY events
+
+  When new wiphy devices are added or removed ensure that the appropiate
+  events are send to the "config" multicast group.
+
+  Priority: High
+  Complexity: C1
+
+- Fix missing NL80211_CMD_NEW_INTERFACE and NL80211_CMD_DEL_INTERFACE events
+
+  When new network interfaces added or removed ensure that the appropiate
+  events are send to the "config" multicast group.
+
+  Priority: High
+  Complexity: C1
+
+- Bind NL80211_CMD_START_SCHED_SCAN to netlink socket
+
+  When issuing the NL80211_CMD_START_SCHED_SCAN it should be bound to the
+  executing netlink client socket.  If the application closes that netlink
+  socket the scheduled scan operation should be canceled.
+
+  Priority: Medium
+  Complexity: C2
+
+- Add missing support for NL80211_CMD_GET_INTERFACE filtering
+
+  The NL80211_CMD_GET_INTERFACE command description indicates that you
+  can filter results based NL80211_ATTR_WIPHY.  This feature has never
+  been implemented.
+
+  Either remove that feature from the description since it does not exist
+  or actually implemented the filtering on wiphy.  Johannes indicated that
+  fixing the description might be the better approach.  If the feature is
+  easy to add, then it should be added.  However if filtering on wiphy is
+  a rather complicated task, then better just update the description to
+  match the reality.
+
+  Priority: Low
+  Complexity: C2
