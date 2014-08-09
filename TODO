@@ -250,3 +250,41 @@ Wireless monitor
 
   Priority: Medium
   Complexity: C1
+
+- Add support for writing PCAP files
+
+  The new -w <file> option should allow for writing PCAP files with the
+  Linux SLL link type.
+
+  When creating PCAP files using tcpdump a lot of extra information from
+  all netlink sockets are written.  This write support should only write
+  the information related to nl80211.  However parts from the generic
+  netlink control channel from resolving the nl80211 family name must
+  be included as well.
+
+  It might be also beneficial to include RTNL messages related to the
+  wireless network interfaces.  Currently these are all filtered out.
+
+  Priority: Medium
+  Complexity: C2
+
+- Track RTNL messages for wireless network interface
+
+  The RTNL messages indicate operation state changes and with are also
+  relevant for a complete picture of the userspace kernel communication.
+
+  However the complicated part is to identify which network interfaces
+  are wireless related and which are not.  Obviously the non-wireless
+  network interfaces need to be filtered out.
+
+  Priority: Medium
+  Complexity: C2
+
+- Handle netlink core control messages correctly
+
+  The core control netlink messages for NLMSG_ERROR and NLMSG_DONE are
+  not decoded properly.  Add detailed decoding and also decode all the
+  flags that are related to the core control messages.
+
+  Priority: High
+  Complexity: C1
