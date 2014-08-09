@@ -87,6 +87,7 @@ In order to use iwmon to create traces, the nlmon network interface
 needs to be created:
 
 	ip link add name nlmon type nlmon
+	ip link set dev nlmon allmulticast on
 	ip link set dev nlmon up
 
 For now it is important that the netlink monitor interace is actually
