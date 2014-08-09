@@ -24,7 +24,9 @@
 #include <config.h>
 #endif
 
+#include <stdio.h>
 #include <stdlib.h>
+#include <getopt.h>
 #include <ell/ell.h>
 
 #include "src/netdev.h"
@@ -43,12 +45,51 @@ static void signal_handler(struct l_signal *signal, uint32_t signo,
 	}
 }
 
+static void usage(void)
+{
+	printf("iwd - Wireless daemon\n"
+		"Usage:\n");
+	printf("\tiwd [options]\n");
+	printf("Options:\n"
+		"\t-h, --help             Show help options\n");
+}
+
+static const struct option main_options[] = {
+	{ "version",   no_argument,       NULL, 'v' },
+	{ "help",      no_argument,       NULL, 'h' },
+	{ }
+};
+
 int main(int argc, char *argv[])
 {
 	struct l_signal *signal;
 	sigset_t mask;
 	char *bus_name;
 	int exit_status;
+
+	for (;;) {
+		int opt;
+
+		opt = getopt_long(argc, argv, "vh", main_options, NULL);
+		if (opt < 0)
+			break;
+
+		switch (opt) {
+		case 'v':
+			printf("%s\n", VERSION);
+			return EXIT_SUCCESS;
+		case 'h':
+			usage();
+			return EXIT_SUCCESS;
+		default:
+			return EXIT_FAILURE;
+		}
+	}
+
+	if (argc - optind > 0) {
+		fprintf(stderr, "Invalid command line parameters\n");
+		return EXIT_FAILURE;
+	}
 
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGINT);
