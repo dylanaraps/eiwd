@@ -928,10 +928,10 @@ static void print_message(const struct nlmsghdr *nlmsg)
 						NLMSG_PAYLOAD(nlmsg, 0));
 
 		if (nlmsg->nlmsg_type == NLMSG_ERROR) {
-			uint32_t status = *((uint32_t *) NLMSG_DATA(nlmsg));
+			struct nlmsgerr *err = NLMSG_DATA(nlmsg);
 
-			printf("%*cStatus: %s (%u)\n", 4, ' ',
-						strerror(status), status);
+			printf("%*cStatus: %s (%d)\n", 4, ' ',
+					strerror(-err->error), -err->error);
 			print_hexdump(NLMSG_DATA(nlmsg) + 4,
 						NLMSG_PAYLOAD(nlmsg, 4));
 		} else
