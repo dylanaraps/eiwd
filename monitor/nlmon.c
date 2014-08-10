@@ -255,6 +255,7 @@ enum attr_type {
 	ATTR_U32,
 	ATTR_U64,
 	ATTR_S32,
+	ATTR_S64,
 	ATTR_STRING,
 	ATTR_ADDRESS,
 	ATTR_BINARY,
@@ -289,6 +290,15 @@ static const struct attr_entry iftype_table[] = {
 	{ }
 };
 
+static const struct attr_entry bss_param_table[] = {
+	{ NL80211_STA_BSS_PARAM_CTS_PROT,	"CTS protection",  ATTR_FLAG },
+	{ NL80211_STA_BSS_PARAM_SHORT_PREAMBLE,	"Short Preamble",  ATTR_FLAG },
+	{ NL80211_STA_BSS_PARAM_SHORT_SLOT_TIME,"Short Slot Time", ATTR_FLAG },
+	{ NL80211_STA_BSS_PARAM_DTIM_PERIOD,	"DTIM Period",     ATTR_U8   },
+	{ NL80211_STA_BSS_PARAM_BEACON_INTERVAL,"Beacon Interval", ATTR_U16  },
+	{ }
+};
+
 static const struct attr_entry sta_flag_table[] = {
 	{ NL80211_STA_FLAG_AUTHORIZED,		"Authorized",	ATTR_FLAG },
 	{ NL80211_STA_FLAG_SHORT_PREAMBLE,	"ShortPreamble",ATTR_FLAG },
@@ -300,11 +310,70 @@ static const struct attr_entry sta_flag_table[] = {
 	{ }
 };
 
+static void print_sta_flag_update(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const struct nl80211_sta_flag_update *flags = data;
+	unsigned int i;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	print_attr(level + 1, "Mask: 0x%08x", flags->mask);
+	for (i = 0; sta_flag_table[i].str; i++) {
+		if (flags->mask & (1 << sta_flag_table[i].attr))
+			print_attr(level + 2, "%s", sta_flag_table[i].str);
+	}
+
+	print_attr(level + 1, "Set: 0x%08x", flags->set);
+	for (i = 0; sta_flag_table[i].str; i++) {
+		if (flags->set & (1 << sta_flag_table[i].attr))
+			print_attr(level + 2, "%s", sta_flag_table[i].str);
+	}
+}
+
+static const struct attr_entry sta_info_table[] = {
+	{ NL80211_STA_INFO_INACTIVE_TIME,
+					"Inactivity time",	ATTR_U32 },
+	{ NL80211_STA_INFO_RX_BYTES,	"Total RX bytes",	ATTR_U32 },
+	{ NL80211_STA_INFO_TX_BYTES,	"Total TX bytes",	ATTR_U32 },
+	{ NL80211_STA_INFO_RX_BYTES64,	"Total RX bytes",	ATTR_U64 },
+	{ NL80211_STA_INFO_TX_BYTES64,	"Total TX bytes",	ATTR_U64 },
+	{ NL80211_STA_INFO_SIGNAL,	"Signal strength",	ATTR_U8  },
+	{ NL80211_STA_INFO_TX_BITRATE,	"TX bitrate" },
+	{ NL80211_STA_INFO_RX_PACKETS,	"RX packets",		ATTR_U32 },
+	{ NL80211_STA_INFO_TX_PACKETS,	"TX packets",		ATTR_U32 },
+	{ NL80211_STA_INFO_TX_RETRIES,	"TX retries",		ATTR_U32 },
+	{ NL80211_STA_INFO_TX_FAILED,	"TX failed",		ATTR_U32 },
+	{ NL80211_STA_INFO_SIGNAL_AVG,	"Signal strength average",
+								ATTR_U8  },
+	{ NL80211_STA_INFO_LLID,	"Mesh LLID",		ATTR_U16 },
+	{ NL80211_STA_INFO_PLID,	"Mesh PLID",		ATTR_U16 },
+	{ NL80211_STA_INFO_PLINK_STATE, "P-Link state" },
+	{ NL80211_STA_INFO_RX_BITRATE,	"RX bitrate" },
+	{ NL80211_STA_INFO_BSS_PARAM,	"BSS parameters",
+					ATTR_NESTED, { bss_param_table } },
+	{ NL80211_STA_INFO_CONNECTED_TIME,
+					"Connected time",	ATTR_U32 },
+	{ NL80211_STA_INFO_STA_FLAGS,	"Station flags",
+			ATTR_CUSTOM, { .function = print_sta_flag_update } },
+	{ NL80211_STA_INFO_BEACON_LOSS,	"Beacon loss",		ATTR_U32 },
+	{ NL80211_STA_INFO_T_OFFSET,	"Timing offset",	ATTR_S64 },
+	{ NL80211_STA_INFO_LOCAL_PM,	"Local mesh PM",	ATTR_U32 },
+	{ NL80211_STA_INFO_PEER_PM,	"Peer mesh PM",		ATTR_U32 },
+	{ NL80211_STA_INFO_NONPEER_PM,	"Neighbor mesh PM",	ATTR_U32 },
+	{ NL80211_STA_INFO_CHAIN_SIGNAL,
+					"Per-chain signal strength" },
+	{ NL80211_STA_INFO_CHAIN_SIGNAL_AVG,
+					"Per-chain signal strength average" },
+	{ }
+};
+
 static const struct attr_entry bss_table[] = {
 	{ NL80211_BSS_BSSID,		"BSSID",	ATTR_ADDRESS	},
 	{ NL80211_BSS_FREQUENCY,	"Frequency",	ATTR_U32	},
 	{ NL80211_BSS_TSF,		"TSF",		ATTR_U64	},
-	{ NL80211_BSS_BEACON_INTERVAL,	"Beacon Interval", ATTR_U16	},
+	{ NL80211_BSS_BEACON_INTERVAL,	"Beacon Interval",
+							ATTR_U16	},
 	{ NL80211_BSS_CAPABILITY,	"Capability",	ATTR_U16	},
 	{ NL80211_BSS_INFORMATION_ELEMENTS, "IEs",
 				ATTR_CUSTOM, { .function = print_ie }	},
@@ -391,7 +460,7 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_STA_VLAN,
 			"Station VLAN", ATTR_U32 },
 	{ NL80211_ATTR_STA_INFO,
-			"Station Info" },
+			"Station Info", ATTR_NESTED, { sta_info_table } },
 	{ NL80211_ATTR_WIPHY_BANDS,
 			"Wiphy Bands" },
 	{ NL80211_ATTR_MNTR_FLAGS,
@@ -488,7 +557,8 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_USE_MFP,
 			"Use MFP", ATTR_U32 },
 	{ NL80211_ATTR_STA_FLAGS2,
-			"Station Flags 2" },
+			"Station Flags 2", ATTR_CUSTOM,
+				{ .function = print_sta_flag_update } },
 	{ NL80211_ATTR_CONTROL_PORT,
 			"Control Port", ATTR_FLAG },
 	{ NL80211_ATTR_TESTDATA,
@@ -846,6 +916,7 @@ static void print_attributes(int indent, const struct attr_entry *table,
 		uint16_t val16;
 		uint8_t val8;
 		int32_t val_s32;
+		int64_t val_s64;
 		uint8_t *ptr;
 		char addr[18];
 
@@ -909,6 +980,12 @@ static void print_attributes(int indent, const struct attr_entry *table,
 		case ATTR_S32:
 			val_s32 = *((int32_t *) NLA_DATA(nla));
 			print_attr(indent, "%s: %d", str, val_s32);
+			if (NLA_PAYLOAD(nla) != 4)
+				printf("malformed packet\n");
+			break;
+		case ATTR_S64:
+			val_s64 = *((int64_t *) NLA_DATA(nla));
+			print_attr(indent, "%s: %ld", str, val_s64);
 			if (NLA_PAYLOAD(nla) != 4)
 				printf("malformed packet\n");
 			break;
