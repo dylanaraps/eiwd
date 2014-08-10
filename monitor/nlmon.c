@@ -99,7 +99,7 @@ do { \
 		print_indent(4 + (level) * 4, COLOR_OFF, "", "", color, \
 								fmt, ## args)
 
-static void print_packet(struct timeval *tv, char ident,
+static void print_packet(const struct timeval *tv, char ident,
 					const char *color, const char *label,
 					const char *text, const char *extra)
 {
@@ -931,9 +931,10 @@ static const struct {
 	{ }
 };
 
-static void print_message(enum msg_type type, uint16_t flags, int status,
-					uint8_t cmd, uint8_t version,
-					const void *data, uint32_t len)
+static void print_message(const struct timeval *tv, enum msg_type type,
+						uint16_t flags, int status,
+						uint8_t cmd, uint8_t version,
+						const void *data, uint32_t len)
 {
 	char extra_str[64];
 	const char *label = "";
@@ -1038,11 +1039,15 @@ static bool nlmon_req_match(const void *a, const void *b)
 	return (req->seq == match->seq && req->pid == match->pid);
 }
 
-static void store_message(struct nlmon *nlmon, const struct nlmsghdr *nlmsg)
+static void store_message(struct nlmon *nlmon, const struct timeval *tv,
+					const struct tpacket_auxdata *tp,
+					const struct nlmsghdr *nlmsg)
 {
 }
 
-static void nlmon_message(struct nlmon *nlmon, const struct nlmsghdr *nlmsg)
+static void nlmon_message(struct nlmon *nlmon, const struct timeval *tv,
+					const struct tpacket_auxdata *tp,
+					const struct nlmsghdr *nlmsg)
 {
 	struct nlmon_req *req;
 
@@ -1073,8 +1078,8 @@ static void nlmon_message(struct nlmon *nlmon, const struct nlmsghdr *nlmsg)
 				return;
 			}
 
-			store_message(nlmon, nlmsg);
-			print_message(type, nlmsg->nlmsg_flags, status,
+			store_message(nlmon, tv, tp, nlmsg);
+			print_message(tv, type, nlmsg->nlmsg_flags, status,
 						req->cmd, req->version,
 						NULL, sizeof(status));
 			nlmon_req_free(req);
@@ -1099,8 +1104,8 @@ static void nlmon_message(struct nlmon *nlmon, const struct nlmsghdr *nlmsg)
 
 		l_queue_push_tail(nlmon->req_list, req);
 
-		store_message(nlmon, nlmsg);
-		print_message(MSG_REQUEST, flags, 0,
+		store_message(nlmon, tv, tp, nlmsg);
+		print_message(tv, MSG_REQUEST, flags, 0,
 					req->cmd, req->version,
 					NLMSG_DATA(nlmsg) + GENL_HDRLEN,
 					NLMSG_PAYLOAD(nlmsg, GENL_HDRLEN));
@@ -1122,8 +1127,8 @@ static void nlmon_message(struct nlmon *nlmon, const struct nlmsghdr *nlmsg)
 			type = MSG_RESULT;
 		}
 
-		store_message(nlmon, nlmsg);
-		print_message(type, nlmsg->nlmsg_flags, 0,
+		store_message(nlmon, tv, tp, nlmsg);
+		print_message(tv, type, nlmsg->nlmsg_flags, 0,
 					genlmsg->cmd, genlmsg->version,
 					NLMSG_DATA(nlmsg) + GENL_HDRLEN,
 					NLMSG_PAYLOAD(nlmsg, GENL_HDRLEN));
@@ -1200,7 +1205,7 @@ void nlmon_print_genl(struct nlmon *nlmon, const void *data, uint32_t size)
 			genl_ctrl(nlmon, NLMSG_DATA(nlmsg),
 						NLMSG_PAYLOAD(nlmsg, 0));
 		else
-			nlmon_message(nlmon, nlmsg);
+			nlmon_message(nlmon, NULL, NULL, nlmsg);
 	}
 }
 
@@ -1212,6 +1217,10 @@ static bool nlmon_receive(struct l_io *io, void *user_data)
 	struct sockaddr_ll sll;
 	struct iovec iov;
 	struct cmsghdr *cmsg;
+	struct timeval copy_tv;
+	struct tpacket_auxdata copy_tp;
+	const struct timeval *tv = NULL;
+	const struct tpacket_auxdata *tp = NULL;
 	unsigned char buf[8192];
 	unsigned char control[32];
 	ssize_t bytes_read;
@@ -1248,20 +1257,22 @@ static bool nlmon_receive(struct l_io *io, void *user_data)
 
 	for (cmsg = CMSG_FIRSTHDR(&msg); cmsg;
 				cmsg = CMSG_NXTHDR(&msg, cmsg)) {
-		struct tpacket_auxdata tp;
+		if (cmsg->cmsg_level == SOL_SOCKET &&
+					cmsg->cmsg_type == SCM_TIMESTAMP) {
+			memcpy(&copy_tv, CMSG_DATA(cmsg), sizeof(copy_tv));
+			tv = &copy_tv;
+		}
 
-		if (cmsg->cmsg_level != SOL_PACKET)
-			continue;
-
-		if (cmsg->cmsg_type != PACKET_AUXDATA)
-			continue;
-
-		memcpy(&tp, CMSG_DATA(cmsg), sizeof(tp));
+		if (cmsg->cmsg_level == SOL_PACKET &&
+					cmsg->cmsg_type != PACKET_AUXDATA) {
+			memcpy(&copy_tp, CMSG_DATA(cmsg), sizeof(copy_tp));
+			tp = &copy_tp;
+		}
 	}
 
 	for (nlmsg = iov.iov_base; NLMSG_OK(nlmsg, bytes_read);
 				nlmsg = NLMSG_NEXT(nlmsg, bytes_read)) {
-		nlmon_message(nlmon, nlmsg);
+		nlmon_message(nlmon, tv, tp, nlmsg);
 	}
 
 	return true;
@@ -1273,7 +1284,7 @@ static struct l_io *open_packet(const char *name)
 	struct sockaddr_ll sll;
 	struct packet_mreq mr;
 	struct ifreq ifr;
-	int fd;
+	int fd, opt = 1;
 
 	fd = socket(PF_PACKET, SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
 	if (fd < 0) {
@@ -1307,6 +1318,12 @@ static struct l_io *open_packet(const char *name)
 	if (setsockopt(fd, SOL_PACKET, PACKET_ADD_MEMBERSHIP,
 						&mr, sizeof(mr)) < 0) {
 		perror("Failed to enable all multicast");
+		close(fd);
+		return NULL;
+	}
+
+	if (setsockopt(fd, SOL_SOCKET, SO_TIMESTAMP, &opt, sizeof(opt)) < 0) {
+		perror("Failed to enable timestamps");
 		close(fd);
 		return NULL;
 	}
