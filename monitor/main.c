@@ -142,12 +142,18 @@ static struct l_netlink *genl_lookup(const char *ifname)
 static int process_pcap(struct pcap *pcap)
 {
 	struct nlmon *nlmon = NULL;
-	uint8_t buf[8192];
+	uint8_t *buf;
 	uint32_t len;
+
+	buf = malloc(1024 * 16);
+	if (!buf) {
+		fprintf(stderr, "Failed to allocate packet buffer\n");
+		return EXIT_FAILURE;
+	}
 
 	nlmon = nlmon_create();
 
-	while (pcap_read(pcap, NULL, buf, sizeof(buf), &len)) {
+	while (pcap_read(pcap, NULL, buf, 1024 * 16, &len)) {
 		uint16_t arphrd_type;
 		uint16_t proto_type;
 
@@ -177,6 +183,8 @@ static int process_pcap(struct pcap *pcap)
 	}
 
 	nlmon_destroy(nlmon);
+
+	free(buf);
 
 	return EXIT_SUCCESS;
 }
