@@ -133,7 +133,7 @@ uint32_t pcap_get_snaplen(struct pcap *pcap)
 }
 
 bool pcap_read(struct pcap *pcap, struct timeval *tv,
-				void *data, uint32_t size, uint32_t *len)
+		void *data, uint32_t size, uint32_t *len, uint32_t *real_len)
 {
 	struct pcap_pkt pkt;
 	uint32_t toread;
@@ -165,6 +165,9 @@ bool pcap_read(struct pcap *pcap, struct timeval *tv,
 
 	if (len)
 		*len = toread;
+
+	if (real_len)
+		*real_len = pkt.incl_len;
 
 	return true;
 }

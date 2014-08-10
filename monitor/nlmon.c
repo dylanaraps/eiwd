@@ -1429,16 +1429,18 @@ static void genl_ctrl(struct nlmon *nlmon, const void *data, uint32_t len)
 		nlmon->id = id;
 }
 
-void nlmon_print_rtnl(struct nlmon *nlmon, const void *data, uint32_t size)
+void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
+					const void *data, uint32_t size)
 {
 	char str[16];
 
 	sprintf(str, "len %u", size);
 
-	print_packet(NULL, '*', COLOR_WHITE, "Route Netlink", str, "");
+	print_packet(tv, '*', COLOR_WHITE, "Route Netlink", str, "");
 }
 
-void nlmon_print_genl(struct nlmon *nlmon, const void *data, uint32_t size)
+void nlmon_print_genl(struct nlmon *nlmon, const struct timeval *tv,
+					const void *data, uint32_t size)
 {
 	const struct nlmsghdr *nlmsg;
 
@@ -1448,7 +1450,7 @@ void nlmon_print_genl(struct nlmon *nlmon, const void *data, uint32_t size)
 			genl_ctrl(nlmon, NLMSG_DATA(nlmsg),
 						NLMSG_PAYLOAD(nlmsg, 0));
 		else
-			nlmon_message(nlmon, NULL, NULL, nlmsg);
+			nlmon_message(nlmon, tv, NULL, nlmsg);
 	}
 }
 

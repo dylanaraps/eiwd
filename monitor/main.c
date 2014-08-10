@@ -139,13 +139,20 @@ static struct l_netlink *genl_lookup(const char *ifname)
 	return genl;
 }
 
+#define MAX_SNAPLEN (1024 * 16)
+
 static int process_pcap(struct pcap *pcap)
 {
 	struct nlmon *nlmon = NULL;
+	struct timeval tv;
 	uint8_t *buf;
-	uint32_t len;
+	uint32_t snaplen, len, real_len;
 
-	buf = malloc(1024 * 16);
+	snaplen = pcap_get_snaplen(pcap);
+	if (snaplen > MAX_SNAPLEN)
+		snaplen = MAX_SNAPLEN;
+
+	buf = malloc(snaplen);
 	if (!buf) {
 		fprintf(stderr, "Failed to allocate packet buffer\n");
 		return EXIT_FAILURE;
@@ -153,7 +160,7 @@ static int process_pcap(struct pcap *pcap)
 
 	nlmon = nlmon_create();
 
-	while (pcap_read(pcap, NULL, buf, 1024 * 16, &len)) {
+	while (pcap_read(pcap, &tv, buf, snaplen, &len, &real_len)) {
 		uint16_t arphrd_type;
 		uint16_t proto_type;
 
@@ -161,6 +168,9 @@ static int process_pcap(struct pcap *pcap)
 			printf("Too short packet\n");
 			continue;
 		}
+
+		if (len < real_len)
+			printf("Packet truncated from %u\n", real_len);
 
 		arphrd_type = L_GET_UNALIGNED((const uint16_t *) (buf + 2));
 
@@ -174,10 +184,10 @@ static int process_pcap(struct pcap *pcap)
 
 		switch (L_BE16_TO_CPU(proto_type)) {
 		case NETLINK_ROUTE:
-			nlmon_print_rtnl(nlmon, buf, len);
+			nlmon_print_rtnl(nlmon, &tv, buf, len);
 			break;
 		case NETLINK_GENERIC:
-			nlmon_print_genl(nlmon, buf + 16, len - 16);
+			nlmon_print_genl(nlmon, &tv, buf + 16, len - 16);
 			break;
 		}
 	}

@@ -21,6 +21,7 @@
  */
 
 #include <stdint.h>
+#include <sys/time.h>
 
 struct nlmon;
 
@@ -29,5 +30,7 @@ void nlmon_close(struct nlmon *nlmon);
 
 struct nlmon *nlmon_create(void);
 void nlmon_destroy(struct nlmon *nlmon);
-void nlmon_print_rtnl(struct nlmon *nlmon, const void *data, uint32_t size);
-void nlmon_print_genl(struct nlmon *nlmon, const void *data, uint32_t size);
+void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
+					const void *data, uint32_t size);
+void nlmon_print_genl(struct nlmon *nlmon, const struct timeval *tv,
+					const void *data, uint32_t size);
