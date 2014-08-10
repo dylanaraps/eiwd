@@ -1170,7 +1170,11 @@ static void print_message(const struct timeval *tv, enum msg_type type,
 		print_field("Status: %s (%d)", strerror(status), status);
 		break;
 	case MSG_COMPLETE:
-		print_field("Status: %d", status);
+		if (status < 0)
+			print_field("Status: %s (%d)",
+					strerror(-status), -status);
+		else
+			print_field("Status: %d", status);
 		break;
 	}
 }
