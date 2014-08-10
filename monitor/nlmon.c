@@ -39,7 +39,22 @@
 #include <ell/ell.h>
 
 #include "linux/nl80211.h"
+#include "monitor/display.h"
 #include "monitor/nlmon.h"
+
+#define COLOR_REQUEST		COLOR_BLUE
+#define COLOR_RESPONSE		COLOR_MAGENTA
+#define COLOR_COMPLETE		COLOR_MAGENTA
+#define COLOR_RESULT		COLOR_MAGENTA
+#define COLOR_EVENT		COLOR_CYAN
+
+enum msg_type {
+	MSG_REQUEST,
+	MSG_RESPONSE,
+	MSG_COMPLETE,
+	MSG_RESULT,
+	MSG_EVENT,
+};
 
 struct nlmon {
 	uint16_t id;
@@ -51,6 +66,8 @@ struct nlmon_req {
 	uint32_t seq;
 	uint32_t pid;
 	uint16_t flags;
+	uint8_t cmd;
+	uint8_t version;
 };
 
 static void nlmon_req_free(void *data)
@@ -60,13 +77,38 @@ static void nlmon_req_free(void *data)
 	l_free(req);
 }
 
-#define print_indent(indent, fmt, args...) \
-	printf("%*c" fmt "\n", (indent), ' ', ## args)
+#define print_indent(indent, color1, prefix, title, color2, fmt, args...) \
+do { \
+	printf("%*c%s%s%s%s" fmt "%s\n", (indent), ' ', \
+		use_color() ? (color1) : "", prefix, title, \
+		use_color() ? (color2) : "", ## args, \
+		use_color() ? COLOR_OFF : ""); \
+} while (0)
 
-#define print_text(fmt, args...) \
-		print_indent(8, fmt, ## args)
+#define print_text(color, fmt, args...) \
+		print_indent(4, COLOR_OFF, "", "", color, fmt, ## args)
 
-static void print_hexdump(const unsigned char *buf, uint16_t len)
+#define print_field(fmt, args...) \
+		print_indent(4, COLOR_OFF, "", "", COLOR_OFF, fmt, ## args)
+
+#define print_attr(level, fmt, args...) \
+		print_indent(4 + (level) * 4, COLOR_OFF, "", "", COLOR_OFF, \
+								fmt, ## args)
+
+#define print_attr_color(level, color, fmt, args...) \
+		print_indent(4 + (level) * 4, COLOR_OFF, "", "", color, \
+								fmt, ## args)
+
+static void print_packet(struct timeval *tv, char ident,
+					const char *color, const char *label,
+					const char *text, const char *extra)
+{
+	printf("%s%c %s: %s%s %s\n", use_color() ? color : "", ident, label,
+				text, use_color() ? COLOR_OFF : "" ,extra);
+}
+
+static void print_hexdump(unsigned int level,
+				const unsigned char *buf, uint16_t len)
 {
 	static const char hexdigits[] = "0123456789abcdef";
 	char str[68];
@@ -85,7 +127,7 @@ static void print_hexdump(const unsigned char *buf, uint16_t len)
 			str[47] = ' ';
 			str[48] = ' ';
 			str[65] = '\0';
-			print_text("%s", str);
+			print_attr_color(level, COLOR_WHITE, "%s", str);
 			str[0] = ' ';
 		}
 	}
@@ -101,7 +143,7 @@ static void print_hexdump(const unsigned char *buf, uint16_t len)
 		str[47] = ' ';
 		str[48] = ' ';
 		str[65] = '\0';
-		print_text("%s", str);
+		print_attr_color(level, COLOR_WHITE, "%s", str);
 	}
 }
 
@@ -614,21 +656,19 @@ static void print_value(int indent, const char *label, enum attr_type type,
 	switch (type) {
 	case ATTR_U16:
 		val_u16 = *((uint16_t *) buf);
-		printf("%*c%s: %u (0x%04x)\n", indent, ' ',
-						label, val_u16, val_u16);
+		print_attr(indent, "%s: %u (0x%04x)", label, val_u16, val_u16);
 		if (len != 2)
 			printf("malformed packet\n");
 		break;
 	case ATTR_U32:
 		val_u32 = *((uint32_t *) buf);
-		printf("%*c%s: %u (0x%08x)\n", indent, ' ',
-						label, val_u32, val_u32);
+		print_attr(indent, "%s: %u (0x%08x)", label, val_u32, val_u32);
 		if (len != 4)
 			printf("malformed packet\n");
 		break;
 	default:
-		printf("%*c%s: len %u\n", indent, ' ', label, len);
-		print_hexdump(buf, len);
+		print_attr(indent, "%s: len %u", label, len);
+		print_hexdump(indent  + 1, buf, len);
 		break;
 	}
 }
@@ -687,51 +727,51 @@ static void print_attributes(int indent, const struct attr_entry *table,
 
 		switch (type) {
 		case ATTR_UNSPEC:
-			printf("%*c%s: len %u\n", indent, ' ', str,
+			print_attr(indent, "%s: len %u", str,
 						NLA_PAYLOAD(nla));
-			print_hexdump(NLA_DATA(nla), NLA_PAYLOAD(nla));
+			print_hexdump(indent + 1,
+					NLA_DATA(nla), NLA_PAYLOAD(nla));
 			break;
 		case ATTR_FLAG:
-			printf("%*c%s: true\n", indent, ' ', str);
+			print_attr(indent, "%s: true", str);
 			if (NLA_PAYLOAD(nla) != 0)
 				printf("malformed packet\n");
 			break;
 		case ATTR_U8:
 			val8 = *((uint8_t *) NLA_DATA(nla));
-			printf("%*c%s: %u (0x%02x)\n", indent, ' ', str,
-								val8, val8);
+			print_attr(indent, "%s: %u (0x%02x)", str, val8, val8);
 			if (NLA_PAYLOAD(nla) != 1)
 				printf("malformed packet\n");
 			break;
 		case ATTR_U16:
 			val16 = *((uint16_t *) NLA_DATA(nla));
-			printf("%*c%s: %u (0x%04x)\n", indent, ' ', str,
-								val16, val16);
+			print_attr(indent, "%s: %u (0x%04x)", str,
+							val16, val16);
 			if (NLA_PAYLOAD(nla) != 2)
 				printf("malformed packet\n");
 			break;
 		case ATTR_U32:
 			val32 = *((uint32_t *) NLA_DATA(nla));
-			printf("%*c%s: %u (0x%08x)\n", indent, ' ', str,
-								val32, val32);
+			print_attr(indent, "%s: %u (0x%08x)", str,
+							val32, val32);
 			if (NLA_PAYLOAD(nla) != 4)
 				printf("malformed packet\n");
 			break;
 		case ATTR_U64:
 			val64 = *((uint64_t *) NLA_DATA(nla));
-			printf("%*c%s: %lu (0x%016lx)\n", indent, ' ', str,
-								val64, val64);
+			print_attr(indent, "%s: %lu (0x%016lx)", str,
+							val64, val64);
 			if (NLA_PAYLOAD(nla) != 8)
 				printf("malformed packet\n");
 			break;
 		case ATTR_S32:
 			val_s32 = *((int32_t *) NLA_DATA(nla));
-			printf("%*c%s: %d\n", indent, ' ', str, val_s32);
+			print_attr(indent, "%s: %d", str, val_s32);
 			if (NLA_PAYLOAD(nla) != 4)
 				printf("malformed packet\n");
 			break;
 		case ATTR_STRING:
-			printf("%*c%s: %s\n", indent, ' ', str,
+			print_attr(indent, "%s: %s", str,
 						(char *) NLA_DATA(nla));
 			break;
 		case ATTR_ADDRESS:
@@ -740,38 +780,39 @@ static void print_attributes(int indent, const struct attr_entry *table,
 					"%02X:%02X:%02X:%02X:%02X:%02X",
 					ptr[0], ptr[1], ptr[2],
 					ptr[3], ptr[4], ptr[5]);
-			printf("%*c%s: %s\n", indent, ' ', str, addr);
+			print_attr(indent, "%s: %s", str, addr);
 			if (NLA_PAYLOAD(nla) != 6)
 				printf("malformed packet\n");
 			break;
 		case ATTR_BINARY:
-			printf("%*c%s: len %u\n", indent, ' ', str,
+			print_attr(indent, "%s: len %u", str,
 						NLA_PAYLOAD(nla));
-			print_hexdump(NLA_DATA(nla), NLA_PAYLOAD(nla));
+			print_hexdump(indent + 1,
+					NLA_DATA(nla), NLA_PAYLOAD(nla));
 			break;
 		case ATTR_NESTED:
-			printf("%*c%s: len %u\n", indent, ' ', str,
+			print_attr(indent, "%s: len %u", str,
 						NLA_PAYLOAD(nla));
 			if (!nested)
 				printf("missing table\n");
-			print_attributes(indent + 4, nested,
+			print_attributes(indent + 1, nested,
 					NLA_DATA(nla), NLA_PAYLOAD(nla));
 			break;
 		case ATTR_ARRAY:
-			printf("%*c%s: len %u\n", indent, ' ', str,
+			print_attr(indent, "%s: len %u", str,
 						NLA_PAYLOAD(nla));
 			if (array_type == ATTR_UNSPEC)
 				printf("missing type\n");
-			print_array(indent + 4, array_type,
+			print_array(indent + 1, array_type,
 					NLA_DATA(nla), NLA_PAYLOAD(nla));
 			break;
 		case ATTR_FLAG_OR_U16:
 			if (NLA_PAYLOAD(nla) == 0)
-				printf("%*c%s: true\n", indent, ' ', str);
+				print_attr(indent, "%s: true", str);
 			else if (NLA_PAYLOAD(nla) == 2) {
 				val16 = *((uint16_t *) NLA_DATA(nla));
-				printf("%*c%s: %u (0x%04x)\n", indent, ' ',
-							str, val16, val16);
+				print_attr(indent, "%s: %u (0x%04x)", str,
+								val16, val16);
 			} else
 				printf("malformed packet\n");
 			break;
@@ -890,75 +931,98 @@ static const struct {
 	{ }
 };
 
-static void print_message(const struct nlmsghdr *nlmsg)
+static void print_message(enum msg_type type, uint16_t flags, int status,
+					uint8_t cmd, uint8_t version,
+					const void *data, uint32_t len)
 {
-	const struct genlmsghdr *genlmsg;
-	const char *str;
-	bool out;
-	int i;
+	char extra_str[64];
+	const char *label = "";
+	const char *color = COLOR_OFF;
+	const char *cmd_str;
+	bool out = false;
+	int i, pos;
 
-	if (nlmsg->nlmsg_seq && (nlmsg->nlmsg_flags & NLM_F_REQUEST))
+	switch (type) {
+	case MSG_REQUEST:
+		label = "Request";
+		color = COLOR_REQUEST;
 		out = true;
-	else
-		out = false;
-
-	if (nlmsg->nlmsg_type < NLMSG_MIN_TYPE) {
-		switch (nlmsg->nlmsg_type) {
-		case NLMSG_NOOP:
-			str = "Noop";
-			break;
-		case NLMSG_ERROR:
-			str = "Complete";
-			break;
-		case NLMSG_DONE:
-			str = "Done";
-			break;
-		case NLMSG_OVERRUN:
-			str = "Overrun";
-			break;
-		default:
-			str = "Reserved";
-			break;
-		}
-
-		printf("%c %s (%u) flags 0x%04x len %u\n",
-						out ? '<' : '>', str,
-						nlmsg->nlmsg_type,
-						nlmsg->nlmsg_flags,
-						NLMSG_PAYLOAD(nlmsg, 0));
-
-		if (nlmsg->nlmsg_type == NLMSG_ERROR) {
-			struct nlmsgerr *err = NLMSG_DATA(nlmsg);
-
-			printf("%*cStatus: %s (%d)\n", 4, ' ',
-					strerror(-err->error), -err->error);
-			print_hexdump(NLMSG_DATA(nlmsg) + 4,
-						NLMSG_PAYLOAD(nlmsg, 4));
-		} else
-			print_hexdump(NLMSG_DATA(nlmsg),
-						NLMSG_PAYLOAD(nlmsg, 0));
-		return;
+		break;
+	case MSG_RESPONSE:
+		label = "Response";
+		color = COLOR_RESPONSE;
+		break;
+	case MSG_COMPLETE:
+		label = "Complete";
+		color = COLOR_COMPLETE;
+		break;
+	case MSG_RESULT:
+		label = "Result";
+		color = COLOR_RESULT;
+		break;
+	case MSG_EVENT:
+		label = "Event";
+		color = COLOR_EVENT;
+		break;
 	}
 
-	genlmsg = NLMSG_DATA(nlmsg);
-
-	str = "Reserved";
+	cmd_str = "Reserved";
 
 	for (i = 0; cmd_table[i].str; i++) {
-		if (genlmsg->cmd == cmd_table[i].cmd) {
-			str = cmd_table[i].str;
+		if (cmd_table[i].cmd == cmd) {
+			cmd_str = cmd_table[i].str;
 			break;
 		}
 	}
 
-	printf("%c %s (%u) flags 0x%04x len %u\n",
-					out ? '<' : '>', str,
-					genlmsg->cmd,
-					nlmsg->nlmsg_flags,
-					NLMSG_PAYLOAD(nlmsg, 0));
+	pos = sprintf(extra_str, "(0x%02x) len %u", cmd, len);
 
-	print_attributes(4, attr_table, NLMSG_DATA(nlmsg) + GENL_HDRLEN,
-					NLMSG_PAYLOAD(nlmsg, GENL_HDRLEN));
+	if (flags) {
+		pos += sprintf(extra_str + pos, " [");
+
+		if (flags & NLM_F_MULTI) {
+			flags &= ~NLM_F_MULTI;
+			pos += sprintf(extra_str + pos, "multi%c",
+							flags ? ',' : ']');
+		}
+
+		if (flags & NLM_F_ACK) {
+			flags &= ~NLM_F_ACK;
+			pos += sprintf(extra_str + pos, "ack%c",
+							flags ? ',' : ']');
+		}
+
+		if (flags & NLM_F_ECHO) {
+			flags &= ~NLM_F_ECHO;
+			pos += sprintf(extra_str + pos, "echo%c",
+							flags ? ',' : ']');
+		}
+
+		if ((flags & NLM_F_DUMP) == NLM_F_DUMP) {
+			flags &= ~NLM_F_DUMP;
+			pos += sprintf(extra_str + pos, "dump%c",
+							flags ? ',' : ']');
+		}
+
+		if (flags)
+			pos += sprintf(extra_str + pos, "0x%x]", flags);
+	}
+
+	print_packet(NULL, out ? '<' : '>', color, label, cmd_str, extra_str);
+
+	switch (type) {
+	case MSG_REQUEST:
+	case MSG_RESULT:
+	case MSG_EVENT:
+		print_attributes(0, attr_table, data, len);
+		break;
+	case MSG_RESPONSE:
+		print_field("Status: %s (%d)", strerror(status), status);
+		break;
+	case MSG_COMPLETE:
+		print_field("Status: %d", status);
+		break;
+	}
 }
 
 struct nlmon_req_match {
@@ -974,6 +1038,10 @@ static bool nlmon_req_match(const void *a, const void *b)
 	return (req->seq == match->seq && req->pid == match->pid);
 }
 
+static void store_message(struct nlmon *nlmon, const struct nlmsghdr *nlmsg)
+{
+}
+
 static void nlmon_message(struct nlmon *nlmon, const struct nlmsghdr *nlmsg)
 {
 	struct nlmon_req *req;
@@ -987,8 +1055,29 @@ static void nlmon_message(struct nlmon *nlmon, const struct nlmsghdr *nlmsg)
 		req = l_queue_remove_if(nlmon->req_list,
 						nlmon_req_match, &match);
 		if (req) {
+			enum msg_type type;
+			struct nlmsgerr *err;
+			int status;
+
+			switch (nlmsg->nlmsg_type) {
+			case NLMSG_ERROR:
+				type = MSG_RESPONSE;
+				err = NLMSG_DATA(nlmsg);
+				status = -err->error;
+				break;
+			case NLMSG_DONE:
+				type = MSG_COMPLETE;
+				status = *((int *) NLMSG_DATA(nlmsg));
+				break;
+			default:
+				return;
+			}
+
+			store_message(nlmon, nlmsg);
+			print_message(type, nlmsg->nlmsg_flags, status,
+						req->cmd, req->version,
+						NULL, sizeof(status));
 			nlmon_req_free(req);
-			print_message(nlmsg);
 		}
 		return;
 	}
@@ -997,15 +1086,28 @@ static void nlmon_message(struct nlmon *nlmon, const struct nlmsghdr *nlmsg)
 		return;
 
 	if (nlmsg->nlmsg_flags & NLM_F_REQUEST) {
+		const struct genlmsghdr *genlmsg = NLMSG_DATA(nlmsg);
+		uint32_t flags = nlmsg->nlmsg_flags & ~NLM_F_REQUEST;
+
 		req = l_new(struct nlmon_req, 1);
 
 		req->seq = nlmsg->nlmsg_seq;
 		req->pid = nlmsg->nlmsg_pid;
 		req->flags = nlmsg->nlmsg_flags;
+		req->cmd = genlmsg->cmd;
+		req->version = genlmsg->version;
 
 		l_queue_push_tail(nlmon->req_list, req);
-		print_message(nlmsg);
+
+		store_message(nlmon, nlmsg);
+		print_message(MSG_REQUEST, flags, 0,
+					req->cmd, req->version,
+					NLMSG_DATA(nlmsg) + GENL_HDRLEN,
+					NLMSG_PAYLOAD(nlmsg, GENL_HDRLEN));
 	} else {
+		const struct genlmsghdr *genlmsg = NLMSG_DATA(nlmsg);
+		enum msg_type type = MSG_EVENT;
+
 		struct nlmon_req_match match = {
 			.seq = nlmsg->nlmsg_seq,
 			.pid = nlmsg->nlmsg_pid
@@ -1017,9 +1119,14 @@ static void nlmon_message(struct nlmon *nlmon, const struct nlmsghdr *nlmsg)
 				l_queue_remove(nlmon->req_list, req);
 				nlmon_req_free(req);
 			}
+			type = MSG_RESULT;
 		}
 
-		print_message(nlmsg);
+		store_message(nlmon, nlmsg);
+		print_message(type, nlmsg->nlmsg_flags, 0,
+					genlmsg->cmd, genlmsg->version,
+					NLMSG_DATA(nlmsg) + GENL_HDRLEN,
+					NLMSG_PAYLOAD(nlmsg, GENL_HDRLEN));
 	}
 }
 
@@ -1074,7 +1181,16 @@ static void genl_ctrl(struct nlmon *nlmon, const void *data, uint32_t len)
 		nlmon->id = id;
 }
 
-void nlmon_print(struct nlmon *nlmon, const void *data, uint32_t size)
+void nlmon_print_rtnl(struct nlmon *nlmon, const void *data, uint32_t size)
+{
+	char str[16];
+
+	sprintf(str, "len %u", size);
+
+	print_packet(NULL, '*', COLOR_WHITE, "Route Netlink", str, "");
+}
+
+void nlmon_print_genl(struct nlmon *nlmon, const void *data, uint32_t size)
 {
 	const struct nlmsghdr *nlmsg;
 

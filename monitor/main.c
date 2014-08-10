@@ -168,14 +168,10 @@ static int process_pcap(struct pcap *pcap)
 
 		switch (L_BE16_TO_CPU(proto_type)) {
 		case NETLINK_ROUTE:
-			printf("RTNL packet\n");
+			nlmon_print_rtnl(nlmon, buf, len);
 			break;
 		case NETLINK_GENERIC:
-			nlmon_print(nlmon, buf + 16, len - 16);
-			break;
-		default:
-			printf("Other protocol %u\n",
-						L_BE16_TO_CPU(proto_type));
+			nlmon_print_genl(nlmon, buf + 16, len - 16);
 			break;
 		}
 	}
