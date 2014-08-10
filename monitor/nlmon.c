@@ -148,6 +148,53 @@ static void print_hexdump(unsigned int level,
 	}
 }
 
+static const struct {
+	const uint8_t oui[3];
+	const char *str;
+} oui_table[] = {
+	{ { 0x00, 0x03, 0x7f }, "Atheros"		},
+	{ { 0x00, 0x03, 0x93 }, "Apple"			},
+	{ { 0x00, 0x0f, 0xac }, "IEEE 802.11"		},
+	{ { 0x00, 0x10, 0x18 }, "Broadcom"		},
+	{ { 0x00, 0x17, 0xf2 }, "Apple"			},
+	{ { 0x00, 0x40, 0x96 }, "Cisco Systems"		},
+	{ { 0x00, 0x50, 0xf2 }, "Microsoft"		},
+	{ { 0x00, 0x90, 0x4c }, "Epigram"		},
+	{ { 0x50, 0x6f, 0x9a }, "Wi-Fi Alliance"	},
+	{ }
+};
+
+static void print_ie_vendor(unsigned int level,
+					const void *data, uint16_t size)
+{
+	const uint8_t *oui = data;
+	const char *str = NULL;
+	unsigned int i;
+
+	print_attr(level, "Vendor specific: len %u", size);
+
+	if (size < 3) {
+		print_hexdump(level + 1, data, size);
+		return;
+	}
+
+	for (i = 0; oui_table[i].str; i++) {
+		if (!memcmp(oui_table[i].oui, oui, 3)) {
+			str = oui_table[i].str;
+			break;
+		}
+	}
+
+	if (str)
+		print_attr(level + 1, "%s (%02x:%02x:%02x)", str,
+						oui[0], oui[1], oui[2]);
+	else
+		print_attr(level + 1, "%02x:%02x:%02x",
+						oui[0], oui[1], oui[2]);
+
+	print_hexdump(level + 1, data + 3, size - 3);
+}
+
 static void print_ie(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
@@ -160,8 +207,15 @@ static void print_ie(unsigned int level, const char *label,
 	while (ie_tlv_iter_next(&iter)) {
 		uint8_t tag = ie_tlv_iter_get_tag(&iter);
 
-		print_attr(level + 1, "Tag %u: len %u", tag, iter.len);
-		print_hexdump(level + 2, iter.data, iter.len);
+		switch (tag) {
+		case IE_TYPE_VENDOR_SPECIFIC:
+			print_ie_vendor(level + 1, iter.data, iter.len);
+			break;
+		default:
+			print_attr(level + 1, "Tag %u: len %u", tag, iter.len);
+			print_hexdump(level + 2, iter.data, iter.len);
+			break;
+		}
 	}
 }
 
