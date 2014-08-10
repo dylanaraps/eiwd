@@ -165,6 +165,86 @@ static void print_ie(unsigned int level, const char *label,
 	}
 }
 
+static void print_frame_type(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	uint16_t frame_type = *((uint16_t *) data);
+	uint8_t type = frame_type & 0x000c;
+	uint8_t subtype = (frame_type & 0x00f0) >> 4;
+	const char *str;
+
+	print_attr(level, "%s: 0x%04x", label, frame_type);
+
+	switch (type) {
+	case 0x00:
+		str = "Management";
+		break;
+	default:
+		str = "Reserved";
+		break;
+	}
+
+	print_attr(level + 1, "Type: %s (%u)", str, type);
+
+	switch (subtype) {
+	case 0x00:
+		str = "Association request";
+		break;
+	case 0x01:
+		str = "Association response";
+		break;
+	case 0x02:
+		str = "Reassociation request";
+		break;
+	case 0x03:
+		str = "Reassociation response";
+		break;
+	case 0x04:
+		str = "Probe request";
+		break;
+	case 0x05:
+		str = "Probe response";
+		break;
+	case 0x06:
+		str = "Timingd Advertisement";
+		break;
+	case 0x08:
+		str = "Beacon";
+		break;
+	case 0x09:
+		str = "ATIM";
+		break;
+	case 0x0a:
+		str = "Disassociation";
+		break;
+	case 0x0b:
+		str = "Authentication";
+		break;
+	case 0x0c:
+		str = "Deauthentication";
+		break;
+	case 0x0d:
+		str = "Action";
+		break;
+	case 0x0e:
+		str = "Action No Ack";
+		break;
+	default:
+		str = "Reserved";
+		break;
+	}
+
+	print_attr(level + 1, "Subtype: %s (%u)", str, subtype);
+}
+
+static void print_frame(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	print_attr(level, "%s: len %u", label, size);
+	print_frame_type(level + 1, "Frame Type", data, 2);
+	print_hexdump(level + 1, data, size);
+}
+
 typedef void (*attr_func_t) (unsigned int level, const char *label,
 					const void *data, uint16_t size);
 enum attr_type {
@@ -235,6 +315,37 @@ static const struct attr_entry bss_table[] = {
 	{ NL80211_BSS_BEACON_IES, "Beacon IEs",
 				ATTR_CUSTOM, { .function = print_ie }	},
 	{ NL80211_BSS_CHAN_WIDTH,	"Chan Width",	ATTR_U32	},
+	{ }
+};
+
+static const struct attr_entry frame_types_field_table[] = {
+	{ NL80211_ATTR_FRAME_TYPE,
+			"Frame Type", ATTR_CUSTOM,
+					{ .function = print_frame_type } },
+	{ }
+};
+
+static const struct attr_entry frame_types_table[] = {
+	{ NL80211_IFTYPE_ADHOC, "Ad-hoc", ATTR_NESTED,
+						{ frame_types_field_table } },
+	{ NL80211_IFTYPE_STATION, "Station", ATTR_NESTED,
+						{ frame_types_field_table } },
+	{ NL80211_IFTYPE_AP, "AP", ATTR_NESTED,
+						{ frame_types_field_table } },
+	{ NL80211_IFTYPE_AP_VLAN, "AP-VLAN", ATTR_NESTED,
+						{ frame_types_field_table } },
+	{ NL80211_IFTYPE_WDS, "WDS", ATTR_NESTED,
+						{ frame_types_field_table } },
+	{ NL80211_IFTYPE_MONITOR, "Monitor", ATTR_NESTED,
+						{ frame_types_field_table } },
+	{ NL80211_IFTYPE_MESH_POINT, "Mesh-point", ATTR_NESTED,
+						{ frame_types_field_table } },
+	{ NL80211_IFTYPE_P2P_CLIENT, "P2P-Client", ATTR_NESTED,
+						{ frame_types_field_table } },
+	{ NL80211_IFTYPE_P2P_GO, "P2P-GO", ATTR_NESTED,
+						{ frame_types_field_table } },
+	{ NL80211_IFTYPE_P2P_DEVICE, "P2P-Device", ATTR_NESTED,
+						{ frame_types_field_table } },
 	{ }
 };
 
@@ -345,7 +456,7 @@ static const struct attr_entry attr_table[] = {
 			"Supported Commands", ATTR_ARRAY,
 						{ .array_type = ATTR_U32 } },
 	{ NL80211_ATTR_FRAME,
-			"Frame", ATTR_BINARY },
+			"Frame", ATTR_CUSTOM, { .function = print_frame } },
 	{ NL80211_ATTR_SSID,
 			"SSID", ATTR_BINARY },
 	{ NL80211_ATTR_AUTH_TYPE,
@@ -441,11 +552,14 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_WIPHY_TX_POWER_LEVEL,
 			"Wiphy TX Power Level", ATTR_U32 },
 	{ NL80211_ATTR_TX_FRAME_TYPES,
-			"TX Frame Types" },
+			"TX Frame Types", ATTR_NESTED,
+						{ frame_types_table } },
 	{ NL80211_ATTR_RX_FRAME_TYPES,
-			"RX Frame Types" },
+			"RX Frame Types", ATTR_NESTED,
+						{ frame_types_table } },
 	{ NL80211_ATTR_FRAME_TYPE,
-			"Frame Type", ATTR_U16 },
+			"Frame Type", ATTR_CUSTOM,
+					{ .function = print_frame_type } },
 	{ NL80211_ATTR_CONTROL_PORT_ETHERTYPE,
 			"Control Port Ethertype", ATTR_FLAG_OR_U16 },
 	{ NL80211_ATTR_CONTROL_PORT_NO_ENCRYPT,
