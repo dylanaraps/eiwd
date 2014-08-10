@@ -155,6 +155,9 @@ bool pcap_read(struct pcap *pcap, struct timeval *tv,
 	if (bytes_read < 0)
 		return false;
 
+	if (bytes_read < pkt.incl_len)
+		lseek(pcap->fd, pkt.incl_len - bytes_read, SEEK_CUR);
+
 	if (tv) {
 		tv->tv_sec = pkt.ts_sec;
 		tv->tv_usec = pkt.ts_usec;
