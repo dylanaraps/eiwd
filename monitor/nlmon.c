@@ -1302,7 +1302,7 @@ static void print_message(const struct timeval *tv, enum msg_type type,
 			pos += sprintf(extra_str + pos, "0x%x]", flags);
 	}
 
-	print_packet(NULL, out ? '<' : '>', color, label, cmd_str, extra_str);
+	print_packet(tv, out ? '<' : '>', color, label, cmd_str, extra_str);
 
 	switch (type) {
 	case MSG_REQUEST:
