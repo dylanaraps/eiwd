@@ -147,6 +147,8 @@ static void print_hexdump(unsigned int level,
 	}
 }
 
+typedef void (*attr_func_t) (unsigned int level, const char *label,
+					const void *data, uint16_t size);
 enum attr_type {
 	ATTR_UNSPEC,
 	ATTR_FLAG,
@@ -161,6 +163,7 @@ enum attr_type {
 	ATTR_NESTED,
 	ATTR_ARRAY,
 	ATTR_FLAG_OR_U16,
+	ATTR_CUSTOM,
 };
 
 struct attr_entry {
@@ -170,7 +173,7 @@ struct attr_entry {
 	union {
 		const struct attr_entry *nested;
 		enum attr_type array_type;
-		void (*func) (void);
+		attr_func_t function;
 	};
 };
 
@@ -700,6 +703,7 @@ static void print_attributes(int indent, const struct attr_entry *table,
 		enum attr_type type;
 		enum attr_type array_type;
 		const struct attr_entry *nested;
+		attr_func_t function;
 		uint64_t val64;
 		uint32_t val32;
 		uint16_t val16;
@@ -720,6 +724,7 @@ static void print_attributes(int indent, const struct attr_entry *table,
 					type = table[i].type;
 					nested = table[i].nested;
 					array_type = table[i].array_type;
+					function = table[i].function;
 					break;
 				}
 			}
@@ -815,6 +820,13 @@ static void print_attributes(int indent, const struct attr_entry *table,
 								val16, val16);
 			} else
 				printf("malformed packet\n");
+			break;
+		case ATTR_CUSTOM:
+			if (function)
+				function(indent, str, NLA_DATA(nla),
+							NLA_PAYLOAD(nla));
+			else
+				printf("missing function\n");
 			break;
 		}
 	}
