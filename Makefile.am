@@ -50,7 +50,8 @@ client_iwctl_LDADD = ell/libell-internal.la
 
 monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					monitor/nlmon.h monitor/nlmon.c \
-					monitor/pcap.h monitor/pcap.c
+					monitor/pcap.h monitor/pcap.c \
+					monitor/display.h monitor/display.c
 monitor_iwmon_LDADD = ell/libell-internal.la
 
 noinst_PROGRAMS = tools/hwsim

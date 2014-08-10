@@ -35,6 +35,7 @@
 #include "linux/nl80211.h"
 #include "monitor/nlmon.h"
 #include "monitor/pcap.h"
+#include "monitor/display.h"
 
 static struct nlmon *nlmon = NULL;
 
@@ -264,6 +265,8 @@ int main(int argc, char *argv[])
 	if (reader_path) {
 		struct pcap *pcap;
 
+		open_pager();
+
 		pcap = pcap_open(reader_path);
 		if (!pcap) {
 			exit_status = EXIT_FAILURE;
@@ -277,6 +280,8 @@ int main(int argc, char *argv[])
 			exit_status = process_pcap(pcap);
 
 		pcap_close(pcap);
+
+		close_pager();
 		goto done;
 	}
 
