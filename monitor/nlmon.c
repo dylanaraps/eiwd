@@ -161,7 +161,7 @@ static void print_ie(unsigned int level, const char *label,
 		uint8_t tag = ie_tlv_iter_get_tag(&iter);
 
 		print_attr(level + 1, "Tag %u: len %u", tag, iter.len);
-		print_hexdump(level + 1, iter.data, iter.len);
+		print_hexdump(level + 2, iter.data, iter.len);
 	}
 }
 
