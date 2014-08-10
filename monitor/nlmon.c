@@ -32,6 +32,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <linux/if.h>
+#include <linux/if_arp.h>
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
 #include <linux/netlink.h>
@@ -60,6 +61,7 @@ enum msg_type {
 struct nlmon {
 	uint16_t id;
 	struct l_io *io;
+	struct l_io *pae_io;
 	struct l_queue *req_list;
 };
 
@@ -1634,22 +1636,130 @@ static struct l_io *open_packet(const char *name)
 	return io;
 }
 
+void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
+					uint8_t type, uint32_t index,
+					const void *data, uint32_t size)
+{
+	char str[16];
+
+	sprintf(str, "len %u", size);
+
+	print_packet(tv, (type == PACKET_HOST) ? '>' : '<',
+				COLOR_YELLOW, "PAE Packet", str, "");
+	print_attr(0, "Interface Index: %u", index);
+	print_hexdump(0, data, size);
+}
+
+static bool pae_receive(struct l_io *io, void *user_data)
+{
+	struct nlmon *nlmon = user_data;
+	struct msghdr msg;
+	struct sockaddr_ll sll;
+	struct iovec iov;
+	struct cmsghdr *cmsg;
+	struct timeval copy_tv;
+	const struct timeval *tv = NULL;
+	unsigned char buf[8192];
+	unsigned char control[32];
+	ssize_t bytes_read;
+	int fd;
+
+	fd = l_io_get_fd(io);
+	if (fd < 0)
+		return false;
+
+	memset(&sll, 0, sizeof(sll));
+
+	memset(&iov, 0, sizeof(iov));
+	iov.iov_base = buf;
+	iov.iov_len = sizeof(buf);
+
+	memset(&msg, 0, sizeof(msg));
+	msg.msg_name = &sll;
+	msg.msg_namelen = sizeof(sll);
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+	msg.msg_control = control;
+	msg.msg_controllen = sizeof(control);
+
+	bytes_read = recvmsg(fd, &msg, 0);
+	if (bytes_read < 0) {
+		if (errno != EAGAIN && errno != EINTR)
+			return false;
+
+		return true;
+	}
+
+	if (sll.sll_protocol != htons(ETH_P_PAE))
+		return true;
+
+	if (sll.sll_hatype != ARPHRD_ETHER)
+		return true;
+
+	for (cmsg = CMSG_FIRSTHDR(&msg); cmsg;
+				cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+		if (cmsg->cmsg_level == SOL_SOCKET &&
+					cmsg->cmsg_type == SCM_TIMESTAMP) {
+			memcpy(&copy_tv, CMSG_DATA(cmsg), sizeof(copy_tv));
+			tv = &copy_tv;
+		}
+	}
+
+	nlmon_print_pae(nlmon, tv, sll.sll_pkttype, sll.sll_ifindex,
+							buf, bytes_read);
+
+	return true;
+}
+
+static struct l_io *open_pae(void)
+{
+	struct l_io *io;
+	int fd, opt = 1;
+
+	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK,
+							htons(ETH_P_PAE));
+	if (fd < 0) {
+		perror("Failed to create authentication socket");
+		return NULL;
+	}
+
+	if (setsockopt(fd, SOL_SOCKET, SO_TIMESTAMP, &opt, sizeof(opt)) < 0) {
+		perror("Failed to enable authentication imestamps");
+		close(fd);
+		return NULL;
+	}
+
+	io = l_io_new(fd);
+
+	l_io_set_close_on_destroy(io, true);
+
+	return io;
+}
+
 struct nlmon *nlmon_open(const char *ifname, uint16_t id)
 {
 	struct nlmon *nlmon;
-	struct l_io *io;
+	struct l_io *io, *pae_io;
 
 	io = open_packet(ifname);
 	if (!io)
 		return NULL;
 
+	pae_io = open_pae();
+	if (!pae_io) {
+		l_io_destroy(io);
+		return NULL;
+	}
+
 	nlmon = l_new(struct nlmon, 1);
 
 	nlmon->id = id;
 	nlmon->io = io;
+	nlmon->pae_io = pae_io;
 	nlmon->req_list = l_queue_new();
 
 	l_io_set_read_handler(nlmon->io, nlmon_receive, nlmon, NULL);
+	l_io_set_read_handler(nlmon->pae_io, pae_receive, nlmon, NULL);
 
 	return nlmon;
 }
@@ -1660,6 +1770,7 @@ void nlmon_close(struct nlmon *nlmon)
 		return;
 
 	l_io_destroy(nlmon->io);
+	l_io_destroy(nlmon->pae_io);
 	l_queue_destroy(nlmon->req_list, nlmon_req_free);
 
 	l_free(nlmon);
