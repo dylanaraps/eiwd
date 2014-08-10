@@ -93,6 +93,19 @@ needs to be created:
 For now it is important that the netlink monitor interace is actually
 named nlmon. Future version might relax this requirement.
 
+It is possible to create netlink traces in PCAP format using tcpdump
+and then read them via iwmon utility:
+
+	tcpdump -i nlmon -w trace-file.pcap
+
+The resulting PCAP files will use Linux cooked packet format containing
+packets with ARPHRD_NETLINK type. They can be read using iwmon:
+
+	iwmon -r trace-file.pcap
+
+At this time iwmon is not able to write PCAP files by itself. This might
+change in future versions.
+
 
 Simulating devices
 ==================
