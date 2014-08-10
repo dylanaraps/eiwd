@@ -39,6 +39,7 @@
 #include <ell/ell.h>
 
 #include "linux/nl80211.h"
+#include "src/ie.h"
 #include "monitor/display.h"
 #include "monitor/nlmon.h"
 
@@ -147,6 +148,23 @@ static void print_hexdump(unsigned int level,
 	}
 }
 
+static void print_ie(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	struct ie_tlv_iter iter;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	ie_tlv_iter_init(&iter, data, size);
+
+	while (ie_tlv_iter_next(&iter)) {
+		uint8_t tag = ie_tlv_iter_get_tag(&iter);
+
+		print_attr(level + 1, "Tag %u: len %u", tag, iter.len);
+		print_hexdump(level + 1, iter.data, iter.len);
+	}
+}
+
 typedef void (*attr_func_t) (unsigned int level, const char *label,
 					const void *data, uint16_t size);
 enum attr_type {
@@ -208,12 +226,14 @@ static const struct attr_entry bss_table[] = {
 	{ NL80211_BSS_TSF,		"TSF",		ATTR_U64	},
 	{ NL80211_BSS_BEACON_INTERVAL,	"Beacon Interval", ATTR_U16	},
 	{ NL80211_BSS_CAPABILITY,	"Capability",	ATTR_U16	},
-	{ NL80211_BSS_INFORMATION_ELEMENTS, "IEs",	ATTR_BINARY	},
+	{ NL80211_BSS_INFORMATION_ELEMENTS, "IEs",
+				ATTR_CUSTOM, { .function = print_ie }	},
 	{ NL80211_BSS_SIGNAL_MBM,	"Signal mBm",	ATTR_S32	},
 	{ NL80211_BSS_SIGNAL_UNSPEC,	"Signal Unspec",ATTR_U8		},
 	{ NL80211_BSS_STATUS,		"Status",	ATTR_U32	},
 	{ NL80211_BSS_SEEN_MS_AGO,	"Seen ms ago",	ATTR_U32	},
-	{ NL80211_BSS_BEACON_IES,	"Beacon IEs",	ATTR_BINARY	},
+	{ NL80211_BSS_BEACON_IES, "Beacon IEs",
+				ATTR_CUSTOM, { .function = print_ie }	},
 	{ NL80211_BSS_CHAN_WIDTH,	"Chan Width",	ATTR_U32	},
 	{ }
 };
@@ -303,7 +323,8 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_MGMT_SUBTYPE,
 			"Management Subtype", ATTR_U8 },
 	{ NL80211_ATTR_IE,
-			"Information Elements", ATTR_BINARY },
+			"Information Elements", ATTR_CUSTOM,
+						{ .function = print_ie } },
 	{ NL80211_ATTR_MAX_NUM_SCAN_SSIDS,
 			"Max Number Scan SSIDs", ATTR_U8 },
 	{ NL80211_ATTR_SCAN_FREQUENCIES,
@@ -376,9 +397,9 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_AKM_SUITES,
 			"AKM Suites" },
 	{ NL80211_ATTR_REQ_IE,
-			"Request IE" },
+			"Request IE", ATTR_CUSTOM, { .function = print_ie } },
 	{ NL80211_ATTR_RESP_IE,
-			"Response IE" },
+			"Response IE", ATTR_CUSTOM, { .function = print_ie } },
 	{ NL80211_ATTR_PREV_BSSID,
 			"Previous BSSID", ATTR_ADDRESS },
 	{ NL80211_ATTR_KEY,
@@ -477,9 +498,11 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_HIDDEN_SSID,
 			"Hidden SSID", ATTR_U32 },
 	{ NL80211_ATTR_IE_PROBE_RESP,
-			"IE Probe Response" },
+			"IE Probe Response", ATTR_CUSTOM,
+						{ .function = print_ie } },
 	{ NL80211_ATTR_IE_ASSOC_RESP,
-			"IE Assoc Response" },
+			"IE Assoc Response", ATTR_CUSTOM,
+						{ .function = print_ie } },
 	{ NL80211_ATTR_STA_WME,
 			"Station WME" },
 	{ NL80211_ATTR_SUPPORT_AP_UAPSD,
