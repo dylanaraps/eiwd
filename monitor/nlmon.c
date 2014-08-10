@@ -418,6 +418,19 @@ static const struct attr_entry frame_types_table[] = {
 	{ }
 };
 
+static const struct attr_entry cqm_table[] = {
+	{ NL80211_ATTR_CQM_RSSI_THOLD,	"RSSI threshold",	ATTR_U32 },
+	{ NL80211_ATTR_CQM_RSSI_HYST,	"RSSI hysteresis",	ATTR_U32 },
+	{ NL80211_ATTR_CQM_RSSI_THRESHOLD_EVENT,
+					"RSSI threshold event",	ATTR_U32 },
+	{ NL80211_ATTR_CQM_PKT_LOSS_EVENT,
+					"Packet loss event",	ATTR_U32 },
+	{ NL80211_ATTR_CQM_TXE_RATE,	"TX error rate",	ATTR_U32 },
+	{ NL80211_ATTR_CQM_TXE_PKTS,	"TX error packets",	ATTR_U32 },
+	{ NL80211_ATTR_CQM_TXE_INTVL,	"TX error interval",	ATTR_U32 },
+	{ }
+};
+
 static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_WIPHY,
 			"Wiphy", ATTR_U32 },
@@ -612,7 +625,7 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_PS_STATE,
 			"PS State", ATTR_U32 },
 	{ NL80211_ATTR_CQM,
-			"CQM" },
+			"CQM", ATTR_NESTED, { cqm_table } },
 	{ NL80211_ATTR_LOCAL_STATE_CHANGE,
 			"Local State Change", ATTR_FLAG },
 	{ NL80211_ATTR_AP_ISOLATE,
