@@ -106,6 +106,24 @@ packets with ARPHRD_NETLINK type. They can be read using iwmon:
 At this time iwmon is not able to write PCAP files by itself. This might
 change in future versions.
 
+When also the authentication protocol traffic on port 0x888e (ETH_P_PAE)
+is needed, then a second capture is required:
+
+	tcpdump -i any 'ether proto 0x888e' -w trace-pae.pcap
+
+It is possible to combine these two PCAP files using the mergecap utility
+and create a combined trace file:
+
+	mergecap -F pcap -w trace.pcap trace-file.pcap trace-pae.pcap
+
+This will create a trace.pcap file that includes the complete picture
+of nl80211 netlink traffic and authentication messages. All packets are
+merged in chronological order based on timestamps.
+
+Unfortunately it is not possible to instruct tcpdump filtering to do
+this in a single capture. Post-processing of the PCAP files is required
+at the moment.
+
 
 Simulating devices
 ==================
