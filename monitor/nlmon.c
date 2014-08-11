@@ -312,6 +312,7 @@ static const struct {
 	{ 0x000fac05, "WEP-104"				},
 	{ 0x000fac06, "BIP"				},
 	{ 0x000fac07, "Group traffic not allowed"	},
+	{ 0x00147201, "WPI-SMS4"			},
 	{ }
 };
 
