@@ -315,7 +315,7 @@ static const struct {
 	{ }
 };
 
-static void print_key_cipher(unsigned int level, const char *label,
+static void print_cipher_suite(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
 	uint32_t cipher = *((uint32_t *) data);
@@ -340,8 +340,8 @@ static void print_cipher_suites(unsigned int level, const char *label,
 {
 	print_attr(level, "%s: len %u", label, size);
 
-	while (size > 4) {
-		print_key_cipher(level + 1, NULL, data, 4);
+	while (size >= 4) {
+		print_cipher_suite(level + 1, NULL, data, 4);
 		data += 4;
 		size -= 4;
 	}
@@ -558,7 +558,7 @@ static const struct attr_entry attr_table[] = {
 			"Key Index", ATTR_U8 },
 	{ NL80211_ATTR_KEY_CIPHER,
 			"Key Cipher", ATTR_CUSTOM,
-					{ .function = print_key_cipher } },
+					{ .function = print_cipher_suite } },
 	{ NL80211_ATTR_KEY_SEQ,
 			"Key Sequence", ATTR_BINARY },
 	{ NL80211_ATTR_KEY_DEFAULT,
@@ -693,9 +693,11 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_STATUS_CODE,
 			"Status Code", ATTR_U16 },
 	{ NL80211_ATTR_CIPHER_SUITES_PAIRWISE,
-			"Cipher Suites Pairwise" },
+			"Cipher Suites Pairwise", ATTR_CUSTOM,
+					{ .function = print_cipher_suites } },
 	{ NL80211_ATTR_CIPHER_SUITE_GROUP,
-			"Cipher Suite Group", ATTR_U32 },
+			"Cipher Suite Group", ATTR_CUSTOM,
+					{ .function = print_cipher_suite } },
 	{ NL80211_ATTR_WPA_VERSIONS,
 			"WPA Versions", ATTR_U32 },
 	{ NL80211_ATTR_AKM_SUITES,
