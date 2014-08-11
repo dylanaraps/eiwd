@@ -1553,7 +1553,10 @@ static bool nlmon_receive(struct l_io *io, void *user_data)
 		return true;
 	}
 
-	if (ntohs(sll.sll_protocol) != NETLINK_GENERIC)
+	if (sll.sll_protocol != htons(NETLINK_GENERIC))
+		return true;
+
+	if (sll.sll_hatype != ARPHRD_NETLINK)
 		return true;
 
 	for (cmsg = CMSG_FIRSTHDR(&msg); cmsg;
