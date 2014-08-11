@@ -255,6 +255,18 @@ Wireless monitor
   Priority: Medium
   Complexity: C1
 
+- Add support for PACKET_RECV_OUTPUT socket option of AF_PACKET
+
+  Instead of having to switch every interface manually into promiscuous
+  mode, it would be useful to set PACKET_RECV_OUTPUT to receive also
+  the traffic that leaves the system.
+
+  This would make tracing PAE / EAPoL traffic easy and provides better
+  sniffing capabilities.
+
+  Priority: High
+  Complexity: C1
+
 - Subscribe to all nl80211 multicast groups at startup
 
   It seems the nlmon packets are limited to actual subscribed mutlicast
