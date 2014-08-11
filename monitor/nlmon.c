@@ -1682,15 +1682,63 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 					uint8_t type, int index,
 					const void *data, uint32_t size)
 {
-	char str[16];
+	uint8_t eapol_ver, eapol_type;
+	uint16_t eapol_len;
+	char extra_str[16];
+	const char *str;
 
-	sprintf(str, "len %u", size);
+	sprintf(extra_str, "len %u", size);
 
 	print_packet(tv, (type == PACKET_HOST) ? '>' : '<',
-				COLOR_YELLOW, "PAE Packet", str, "");
+				COLOR_YELLOW, "PAE Packet", extra_str, "");
 	if (index >= 0)
 		print_attr(0, "Interface Index: %u", index);
-	print_hexdump(0, data, size);
+
+	if (size < 4)
+		return;
+
+	eapol_ver = *((const uint8_t *) data);
+	eapol_type = *((const uint8_t *) (data + 1));
+	eapol_len = L_GET_UNALIGNED((const uint16_t *) (data + 2));
+	eapol_len = L_BE16_TO_CPU(eapol_len);
+
+	print_attr(0, "EAPoL: len %u", eapol_len);
+
+	switch (eapol_ver) {
+	case 0x01:
+		str = "802.11X-2001";
+		break;
+	case 0x02:
+		str = "802.11X-2004";
+		break;
+	default:
+		str = "Reserved";
+		break;
+	}
+
+	print_attr(1, "Version: %s (%u)", str, eapol_ver);
+
+	switch (eapol_type) {
+	case 0x00:
+		str = "Packet";
+		break;
+	case 0x01:
+		str = "Start";
+		break;
+	case 0x02:
+		str = "Logoff";
+		break;
+	case 0x03:
+		str = "Key";
+		break;
+	default:
+		str = "Reserved";
+		break;
+	}
+
+	print_attr(1, "Type: %s (%u)", str, eapol_type);
+
+	print_hexdump(1, data + 4, size - 4);
 }
 
 static bool pae_receive(struct l_io *io, void *user_data)

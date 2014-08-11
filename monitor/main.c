@@ -187,14 +187,15 @@ static int process_pcap(struct pcap *pcap)
 			switch (proto_type) {
 			case ETH_P_PAE:
 				nlmon_print_pae(nlmon, &tv, pkt_type, -1,
-								buf, len);
+							buf + 16, len - 16);
 				break;
 			}
 			break;
 		case ARPHRD_NETLINK:
 			switch (proto_type) {
 			case NETLINK_ROUTE:
-				nlmon_print_rtnl(nlmon, &tv, buf, len);
+				nlmon_print_rtnl(nlmon, &tv,
+							buf + 16, len - 16);
 				break;
 			case NETLINK_GENERIC:
 				nlmon_print_genl(nlmon, &tv,
