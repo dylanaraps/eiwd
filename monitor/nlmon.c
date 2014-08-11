@@ -757,7 +757,7 @@ static const struct attr_entry attr_table[] = {
 			"Key Default Types", ATTR_NESTED,
 						{ key_default_type_table } },
 	{ NL80211_ATTR_MAX_REMAIN_ON_CHANNEL_DURATION,
-			"Remain on Channel Duration " },
+			"Max Remain on Channel Duration ", ATTR_U32 },
 	{ NL80211_ATTR_MESH_SETUP,
 			"Mesh Setup" },
 	{ NL80211_ATTR_WIPHY_ANTENNA_AVAIL_TX,
