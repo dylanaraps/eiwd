@@ -329,7 +329,22 @@ static void print_key_cipher(unsigned int level, const char *label,
 		}
 	}
 
-	print_attr(level, "%s: %s (0x%08x)", label, str, cipher);
+	if (label)
+		print_attr(level, "%s: %s (0x%08x)", label, str, cipher);
+	else
+		print_attr(level, "%s (0x%08x)", str, cipher);
+}
+
+static void print_cipher_suites(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	print_attr(level, "%s: len %u", label, size);
+
+	while (size > 4) {
+		print_key_cipher(level + 1, NULL, data, 4);
+		data += 4;
+		size -= 4;
+	}
 }
 
 typedef void (*attr_func_t) (unsigned int level, const char *label,
@@ -644,7 +659,8 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_MAX_SCAN_IE_LEN,
 			"Max Scan IE Length", ATTR_U16 },
 	{ NL80211_ATTR_CIPHER_SUITES,
-			"Cipher Suites" },
+			"Cipher Suites", ATTR_CUSTOM,
+					{ .function = print_cipher_suites } },
 	{ NL80211_ATTR_FREQ_BEFORE,
 			"Frequency Before" },
 	{ NL80211_ATTR_FREQ_AFTER,
