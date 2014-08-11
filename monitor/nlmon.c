@@ -301,6 +301,37 @@ static void print_frame(unsigned int level, const char *label,
 	print_hexdump(level + 1, data, size);
 }
 
+static const struct {
+	uint32_t cipher;
+	const char *str;
+} cipher_table[] = {
+	{ 0x000fac00, "Use group cipher suite"		},
+	{ 0x000fac01, "WEP-40"				},
+	{ 0x000fac02, "TKIP"				},
+	{ 0x000fac04, "CCMP"				},
+	{ 0x000fac05, "WEP-104"				},
+	{ 0x000fac06, "BIP"				},
+	{ 0x000fac07, "Group traffic not allowed"	},
+	{ }
+};
+
+static void print_key_cipher(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	uint32_t cipher = *((uint32_t *) data);
+	const char *str = "Reserved";
+	unsigned int i;
+
+	for (i = 0; cipher_table[i].str; i++) {
+		if (cipher_table[i].cipher == cipher) {
+			str = cipher_table[i].str;
+			break;
+		}
+	}
+
+	print_attr(level, "%s: %s (0x%08x)", label, str, cipher);
+}
+
 typedef void (*attr_func_t) (unsigned int level, const char *label,
 					const void *data, uint16_t size);
 enum attr_type {
@@ -487,6 +518,12 @@ static const struct attr_entry cqm_table[] = {
 	{ }
 };
 
+static const struct attr_entry key_default_type_table[] = {
+	{ NL80211_KEY_DEFAULT_TYPE_UNICAST,	"Unicast",	ATTR_FLAG },
+	{ NL80211_KEY_DEFAULT_TYPE_MULTICAST,	"Multicast",	ATTR_FLAG },
+	{ }
+};
+
 static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_WIPHY,
 			"Wiphy", ATTR_U32 },
@@ -505,7 +542,8 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_KEY_IDX,
 			"Key Index", ATTR_U8 },
 	{ NL80211_ATTR_KEY_CIPHER,
-			"Key Cipher", ATTR_U32 },
+			"Key Cipher", ATTR_CUSTOM,
+					{ .function = print_key_cipher } },
 	{ NL80211_ATTR_KEY_SEQ,
 			"Key Sequence", ATTR_BINARY },
 	{ NL80211_ATTR_KEY_DEFAULT,
@@ -716,7 +754,8 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_BSS_HT_OPMODE,
 			"BSS HT Operation Mode", ATTR_U16 },
 	{ NL80211_ATTR_KEY_DEFAULT_TYPES,
-			"Key Default Types" },
+			"Key Default Types", ATTR_NESTED,
+						{ key_default_type_table } },
 	{ NL80211_ATTR_MAX_REMAIN_ON_CHANNEL_DURATION,
 			"Remain on Channel Duration " },
 	{ NL80211_ATTR_MESH_SETUP,
