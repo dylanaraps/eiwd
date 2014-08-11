@@ -163,6 +163,7 @@ static int process_pcap(struct pcap *pcap)
 	while (pcap_read(pcap, &tv, buf, snaplen, &len, &real_len)) {
 		uint16_t arphrd_type;
 		uint16_t proto_type;
+		uint16_t pkt_type;
 
 		if (len < 16) {
 			printf("Too short packet\n");
@@ -172,22 +173,37 @@ static int process_pcap(struct pcap *pcap)
 		if (len < real_len)
 			printf("Packet truncated from %u\n", real_len);
 
-		arphrd_type = L_GET_UNALIGNED((const uint16_t *) (buf + 2));
+		pkt_type = L_GET_UNALIGNED((const uint16_t *) buf);
+		pkt_type = L_BE16_TO_CPU(pkt_type);
 
-		if (L_BE16_TO_CPU(arphrd_type) != ARPHRD_NETLINK) {
-			printf("Unsupported ARPHRD %u\n",
-						L_BE16_TO_CPU(arphrd_type));
-			continue;
-		}
+		arphrd_type = L_GET_UNALIGNED((const uint16_t *) (buf + 2));
+		arphrd_type = L_BE16_TO_CPU(arphrd_type);
 
 		proto_type = L_GET_UNALIGNED((const uint16_t *) (buf + 14));
+		proto_type = L_BE16_TO_CPU(proto_type);
 
-		switch (L_BE16_TO_CPU(proto_type)) {
-		case NETLINK_ROUTE:
-			nlmon_print_rtnl(nlmon, &tv, buf, len);
+		switch (arphrd_type) {
+		case ARPHRD_ETHER:
+			switch (proto_type) {
+			case ETH_P_PAE:
+				nlmon_print_pae(nlmon, &tv, pkt_type, -1,
+								buf, len);
+				break;
+			}
 			break;
-		case NETLINK_GENERIC:
-			nlmon_print_genl(nlmon, &tv, buf + 16, len - 16);
+		case ARPHRD_NETLINK:
+			switch (proto_type) {
+			case NETLINK_ROUTE:
+				nlmon_print_rtnl(nlmon, &tv, buf, len);
+				break;
+			case NETLINK_GENERIC:
+				nlmon_print_genl(nlmon, &tv,
+							buf + 16, len - 16);
+				break;
+			}
+			break;
+		default:
+			printf("Unsupported ARPHRD %u\n", arphrd_type);
 			break;
 		}
 	}

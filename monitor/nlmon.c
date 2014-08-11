@@ -1640,7 +1640,7 @@ static struct l_io *open_packet(const char *name)
 }
 
 void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
-					uint8_t type, uint32_t index,
+					uint8_t type, int index,
 					const void *data, uint32_t size)
 {
 	char str[16];
@@ -1649,7 +1649,8 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 
 	print_packet(tv, (type == PACKET_HOST) ? '>' : '<',
 				COLOR_YELLOW, "PAE Packet", str, "");
-	print_attr(0, "Interface Index: %u", index);
+	if (index >= 0)
+		print_attr(0, "Interface Index: %u", index);
 	print_hexdump(0, data, size);
 }
 
