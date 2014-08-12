@@ -37,6 +37,7 @@
 #include <linux/if_ether.h>
 #include <linux/netlink.h>
 #include <linux/genetlink.h>
+#include <linux/rtnetlink.h>
 #include <ell/ell.h>
 
 #include "linux/nl80211.h"
@@ -1284,6 +1285,41 @@ static const struct {
 	{ }
 };
 
+static void netlink_str(char *str, size_t size,
+				uint16_t type, uint16_t flags, uint32_t len)
+{
+	int pos;
+
+	pos = sprintf(str, "(0x%02x) len %u", type, len);
+
+	if (flags) {
+		pos += sprintf(str + pos, " [");
+
+		if (flags & NLM_F_MULTI) {
+			flags &= ~NLM_F_MULTI;
+			pos += sprintf(str + pos, "multi%c", flags ? ',' : ']');
+		}
+
+		if (flags & NLM_F_ACK) {
+			flags &= ~NLM_F_ACK;
+			pos += sprintf(str + pos, "ack%c", flags ? ',' : ']');
+		}
+
+		if (flags & NLM_F_ECHO) {
+			flags &= ~NLM_F_ECHO;
+			pos += sprintf(str + pos, "echo%c", flags ? ',' : ']');
+		}
+
+		if ((flags & NLM_F_DUMP) == NLM_F_DUMP) {
+			flags &= ~NLM_F_DUMP;
+			pos += sprintf(str + pos, "dump%c", flags ? ',' : ']');
+		}
+
+		if (flags)
+			pos += sprintf(str + pos, "0x%x]", flags);
+	}
+}
+
 static void print_message(const struct timeval *tv, enum msg_type type,
 						uint16_t flags, int status,
 						uint8_t cmd, uint8_t version,
@@ -1294,7 +1330,7 @@ static void print_message(const struct timeval *tv, enum msg_type type,
 	const char *color = COLOR_OFF;
 	const char *cmd_str;
 	bool out = false;
-	int i, pos;
+	int i;
 
 	switch (type) {
 	case MSG_REQUEST:
@@ -1329,38 +1365,7 @@ static void print_message(const struct timeval *tv, enum msg_type type,
 		}
 	}
 
-	pos = sprintf(extra_str, "(0x%02x) len %u", cmd, len);
-
-	if (flags) {
-		pos += sprintf(extra_str + pos, " [");
-
-		if (flags & NLM_F_MULTI) {
-			flags &= ~NLM_F_MULTI;
-			pos += sprintf(extra_str + pos, "multi%c",
-							flags ? ',' : ']');
-		}
-
-		if (flags & NLM_F_ACK) {
-			flags &= ~NLM_F_ACK;
-			pos += sprintf(extra_str + pos, "ack%c",
-							flags ? ',' : ']');
-		}
-
-		if (flags & NLM_F_ECHO) {
-			flags &= ~NLM_F_ECHO;
-			pos += sprintf(extra_str + pos, "echo%c",
-							flags ? ',' : ']');
-		}
-
-		if ((flags & NLM_F_DUMP) == NLM_F_DUMP) {
-			flags &= ~NLM_F_DUMP;
-			pos += sprintf(extra_str + pos, "dump%c",
-							flags ? ',' : ']');
-		}
-
-		if (flags)
-			pos += sprintf(extra_str + pos, "0x%x]", flags);
-	}
+	netlink_str(extra_str, sizeof(extra_str), cmd, flags, len);
 
 	print_packet(tv, out ? '<' : '>', color, label, cmd_str, extra_str);
 
@@ -1546,11 +1551,73 @@ static void genl_ctrl(struct nlmon *nlmon, const void *data, uint32_t len)
 void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
 					const void *data, uint32_t size)
 {
-	char str[16];
+	uint32_t aligned_size = NLMSG_ALIGN(size);
+	const struct nlmsghdr *nlmsg;
 
-	sprintf(str, "len %u", size);
+	for (nlmsg = data; NLMSG_OK(nlmsg, aligned_size);
+				nlmsg = NLMSG_NEXT(nlmsg, aligned_size)) {
+		char extra_str[32];
+		const char *str;
+		bool out;
 
-	print_packet(tv, '*', COLOR_WHITE, "Route Netlink", str, "");
+		switch (nlmsg->nlmsg_type) {
+		case NLMSG_NOOP:
+			str = "Noop";
+			break;
+		case NLMSG_ERROR:
+			str = "Error";
+			break;
+		case NLMSG_DONE:
+			str = "Done";
+			break;
+		case NLMSG_OVERRUN:
+			str = "Overrun";
+			break;
+		case RTM_NEWLINK:
+			str = "New Link";
+			break;
+		case RTM_DELLINK:
+			str = "Delete Link";
+			break;
+		case RTM_GETLINK:
+			str = "Get Link";
+			break;
+		case RTM_SETLINK:
+			str = "Set Link";
+			break;
+		case RTM_NEWADDR:
+			str = "New Address";
+			break;
+		case RTM_DELADDR:
+			str = "Delete Address";
+			break;
+		case RTM_GETADDR:
+			str = "Get Address";
+			break;
+		case RTM_NEWROUTE:
+			str = "New Route";
+			break;
+		case RTM_DELROUTE:
+			str = "Delete Route";
+			break;
+		case RTM_GETROUTE:
+			str = "Get Route";
+			break;
+		default:
+			str = "Reserved";
+			break;
+		}
+
+		out = !!(nlmsg->nlmsg_flags & NLM_F_REQUEST);
+
+		netlink_str(extra_str, sizeof(extra_str),
+					nlmsg->nlmsg_type,
+					nlmsg->nlmsg_flags & ~NLM_F_REQUEST,
+					NLMSG_PAYLOAD(nlmsg, 0));
+
+		print_packet(tv, out ? '<' : '>',
+				COLOR_YELLOW, "RTNL", str, extra_str);
+	}
 }
 
 void nlmon_print_genl(struct nlmon *nlmon, const struct timeval *tv,
@@ -1709,7 +1776,7 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 	sprintf(extra_str, "len %u", size);
 
 	print_packet(tv, (type == PACKET_HOST) ? '>' : '<',
-				COLOR_YELLOW, "PAE Packet", extra_str, "");
+					COLOR_YELLOW, "PAE", extra_str, "");
 	if (index >= 0)
 		print_attr(0, "Interface Index: %u", index);
 
