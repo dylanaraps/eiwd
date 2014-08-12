@@ -170,8 +170,10 @@ static int process_pcap(struct pcap *pcap)
 			continue;
 		}
 
-		if (len < real_len)
+		if (len < real_len) {
 			printf("Packet truncated from %u\n", real_len);
+			continue;
+		}
 
 		pkt_type = L_GET_UNALIGNED((const uint16_t *) buf);
 		pkt_type = L_BE16_TO_CPU(pkt_type);
