@@ -262,7 +262,7 @@ static void print_frame_type(unsigned int level, const char *label,
 		str = "Probe response";
 		break;
 	case 0x06:
-		str = "Timingd Advertisement";
+		str = "Timing Advertisement";
 		break;
 	case 0x08:
 		str = "Beacon";
