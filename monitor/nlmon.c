@@ -1556,6 +1556,7 @@ void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
 
 	for (nlmsg = data; NLMSG_OK(nlmsg, aligned_size);
 				nlmsg = NLMSG_NEXT(nlmsg, aligned_size)) {
+		const struct ifinfomsg *ifi;
 		char extra_str[32];
 		const char *str;
 		bool out;
@@ -1617,6 +1618,18 @@ void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
 
 		print_packet(tv, out ? '<' : '>',
 				COLOR_YELLOW, "RTNL", str, extra_str);
+
+		switch (nlmsg->nlmsg_type) {
+		case RTM_SETLINK:
+			ifi = NLMSG_DATA(nlmsg);
+
+			print_field("Interface Index: %d", ifi->ifi_index);
+
+			print_hexdump(0, NLMSG_DATA(nlmsg) +
+						NLMSG_ALIGN(sizeof(*ifi)),
+					NLMSG_PAYLOAD(nlmsg, sizeof(*ifi)));
+			break;
+		}
 	}
 }
 
