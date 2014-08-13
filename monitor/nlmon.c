@@ -45,6 +45,8 @@
 #include "monitor/display.h"
 #include "monitor/nlmon.h"
 
+#define COLOR_TIMESTAMP		COLOR_YELLOW
+
 #define COLOR_REQUEST		COLOR_BLUE
 #define COLOR_RESPONSE		COLOR_MAGENTA
 #define COLOR_COMPLETE		COLOR_MAGENTA
@@ -81,6 +83,14 @@ static void nlmon_req_free(void *data)
 	l_free(req);
 }
 
+static time_t time_offset = ((time_t) -1);
+
+static inline void update_time_offset(const struct timeval *tv)
+{
+	if (tv && time_offset == ((time_t) -1))
+		time_offset = tv->tv_sec;
+}
+
 #define print_indent(indent, color1, prefix, title, color2, fmt, args...) \
 do { \
 	printf("%*c%s%s%s%s" fmt "%s\n", (indent), ' ', \
@@ -103,12 +113,90 @@ do { \
 		print_indent(4 + (level) * 4, COLOR_OFF, "", "", color, \
 								fmt, ## args)
 
+#define print_space(x) printf("%*c", (x), ' ');
+
 static void print_packet(const struct timeval *tv, char ident,
 					const char *color, const char *label,
 					const char *text, const char *extra)
 {
-	printf("%s%c %s: %s%s %s\n", use_color() ? color : "", ident, label,
-				text, use_color() ? COLOR_OFF : "" ,extra);
+	int col = num_columns();
+	char line[256], ts_str[64];
+	int n, ts_len = 0, ts_pos = 0, len = 0, pos = 0;
+
+	if (tv) {
+		if (use_color()) {
+			n = sprintf(ts_str + ts_pos, "%s", COLOR_TIMESTAMP);
+			if (n > 0)
+				ts_pos += n;
+		}
+
+		n = sprintf(ts_str + ts_pos, " %lu.%06lu",
+					tv->tv_sec - time_offset, tv->tv_usec);
+		if (n > 0) {
+			ts_pos += n;
+			ts_len += n;
+		}
+	}
+
+	if (use_color()) {
+		n = sprintf(ts_str + ts_pos, "%s", COLOR_OFF);
+		if (n > 0)
+			ts_pos += n;
+	}
+
+	if (use_color()) {
+		n = sprintf(line + pos, "%s", color);
+		if (n > 0)
+			pos += n;
+	}
+
+	n = sprintf(line + pos, "%c %s", ident, label);
+	if (n > 0) {
+		pos += n;
+		len += n;
+	}
+
+	if (text) {
+		int extra_len = extra ? strlen(extra) : 0;
+		int max_len = col - len - extra_len - ts_len - 3;
+
+		n = snprintf(line + pos, max_len + 1, ": %s", text);
+		if (n > max_len) {
+			line[pos + max_len - 1] = '.';
+			line[pos + max_len - 2] = '.';
+			if (line[pos + max_len - 3] == ' ')
+				line[pos + max_len - 3] = '.';
+
+			n = max_len;
+		}
+
+		if (n > 0) {
+			pos += n;
+			len += n;
+		}
+	}
+
+	if (use_color()) {
+		n = sprintf(line + pos, "%s", COLOR_OFF);
+		if (n > 0)
+			pos += n;
+	}
+
+	if (extra) {
+		n = sprintf(line + pos, " %s", extra);
+		if (n > 0) {
+			pos += n;
+			len += n;
+		}
+	}
+
+	if (ts_len > 0) {
+		printf("%s", line);
+		if (len < col)
+			print_space(col - len - ts_len - 1);
+		printf("%s%s\n", use_color() ? COLOR_TIMESTAMP : "", ts_str);
+	} else
+		printf("%s\n", line);
 }
 
 static void print_hexdump(unsigned int level,
@@ -1554,6 +1642,8 @@ void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
 	uint32_t aligned_size = NLMSG_ALIGN(size);
 	const struct nlmsghdr *nlmsg;
 
+	update_time_offset(tv);
+
 	for (nlmsg = data; NLMSG_OK(nlmsg, aligned_size);
 				nlmsg = NLMSG_NEXT(nlmsg, aligned_size)) {
 		const struct ifinfomsg *ifi;
@@ -1637,6 +1727,8 @@ void nlmon_print_genl(struct nlmon *nlmon, const struct timeval *tv,
 					const void *data, uint32_t size)
 {
 	const struct nlmsghdr *nlmsg;
+
+	update_time_offset(tv);
 
 	for (nlmsg = data; NLMSG_OK(nlmsg, size);
 				nlmsg = NLMSG_NEXT(nlmsg, size)) {
@@ -1785,6 +1877,8 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 	uint16_t eapol_len;
 	char extra_str[16];
 	const char *str;
+
+	update_time_offset(tv);
 
 	sprintf(extra_str, "len %u", size);
 
