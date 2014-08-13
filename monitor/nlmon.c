@@ -2057,7 +2057,7 @@ static struct l_io *open_pae(void)
 	}
 
 	if (setsockopt(fd, SOL_SOCKET, SO_TIMESTAMP, &opt, sizeof(opt)) < 0) {
-		perror("Failed to enable authentication imestamps");
+		perror("Failed to enable authentication timestamps");
 		close(fd);
 		return NULL;
 	}
