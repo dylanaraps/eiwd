@@ -38,6 +38,7 @@
 #include "monitor/display.h"
 
 static struct nlmon *nlmon = NULL;
+static const char *writer_path = NULL;
 
 #define NLA_OK(nla,len)         ((len) >= (int) sizeof(struct nlattr) && \
 				(nla)->nla_len >= sizeof(struct nlattr) && \
@@ -83,7 +84,7 @@ static void genl_parse(uint16_t type, const void *data, uint32_t len,
 		return;
 
 	if (!strcmp(name, NL80211_GENL_NAME)) {
-		nlmon = nlmon_open(ifname, id);
+		nlmon = nlmon_open(ifname, id, writer_path);
 		if (!nlmon)
 			l_main_quit();
 	}
@@ -236,12 +237,14 @@ static void usage(void)
 	printf("\tiwmon [options]\n");
 	printf("Options:\n"
 		"\t-r, --read <file>      Read netlink PCAP trace files\n"
+		"\t-w, --write <file>     Write netlink PCAP trace files\n"
 		"\t-i, --interface <dev>  Use specified netlink monitor\n"
 		"\t-h, --help             Show help options\n");
 }
 
 static const struct option main_options[] = {
 	{ "read",      required_argument, NULL, 'r' },
+	{ "write",     required_argument, NULL, 'w' },
 	{ "interface", required_argument, NULL, 'i' },
 	{ "version",   no_argument,       NULL, 'v' },
 	{ "help",      no_argument,       NULL, 'h' },
@@ -260,13 +263,16 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "r:i:vh", main_options, NULL);
+		opt = getopt_long(argc, argv, "r:w:i:vh", main_options, NULL);
 		if (opt < 0)
 			break;
 
 		switch (opt) {
 		case 'r':
 			reader_path = optarg;
+			break;
+		case 'w':
+			writer_path = optarg;
 			break;
 		case 'i':
 			ifname = optarg;

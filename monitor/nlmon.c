@@ -42,6 +42,7 @@
 
 #include "linux/nl80211.h"
 #include "src/ie.h"
+#include "monitor/pcap.h"
 #include "monitor/display.h"
 #include "monitor/nlmon.h"
 
@@ -66,6 +67,7 @@ struct nlmon {
 	struct l_io *io;
 	struct l_io *pae_io;
 	struct l_queue *req_list;
+	struct pcap *pcap;
 };
 
 struct nlmon_req {
@@ -1489,10 +1491,43 @@ static bool nlmon_req_match(const void *a, const void *b)
 	return (req->seq == match->seq && req->pid == match->pid);
 }
 
-static void store_message(struct nlmon *nlmon, const struct timeval *tv,
-					const struct tpacket_auxdata *tp,
+static void store_packet(struct nlmon *nlmon, const struct timeval *tv,
+					uint16_t pkt_type,
+					uint16_t arphrd_type,
+					uint16_t proto_type,
+					const void *data, uint32_t size)
+{
+	uint8_t sll_hdr[16], *buf = sll_hdr;
+
+	if (!nlmon->pcap)
+		return;
+
+	memset(sll_hdr, 0, sizeof(sll_hdr));
+
+	pkt_type = L_CPU_TO_BE16(pkt_type);
+	L_PUT_UNALIGNED(pkt_type, (uint16_t *) buf);
+
+	arphrd_type = L_CPU_TO_BE16(arphrd_type);
+	L_PUT_UNALIGNED(arphrd_type, (uint16_t *) (buf + 2));
+
+	proto_type = L_CPU_TO_BE16(proto_type);
+	L_PUT_UNALIGNED(proto_type, (uint16_t *) (buf + 14));
+
+	pcap_write(nlmon->pcap, tv, &sll_hdr, sizeof(sll_hdr), data, size);
+}
+
+static void store_netlink(struct nlmon *nlmon, const struct timeval *tv,
+					uint16_t proto_type,
 					const struct nlmsghdr *nlmsg)
 {
+	store_packet(nlmon, tv, PACKET_HOST, ARPHRD_NETLINK, proto_type,
+						nlmsg, nlmsg->nlmsg_len);
+}
+
+static void store_message(struct nlmon *nlmon, const struct timeval *tv,
+					const struct nlmsghdr *nlmsg)
+{
+	store_netlink(nlmon, tv, NETLINK_GENERIC, nlmsg);
 }
 
 static void nlmon_message(struct nlmon *nlmon, const struct timeval *tv,
@@ -1528,7 +1563,7 @@ static void nlmon_message(struct nlmon *nlmon, const struct timeval *tv,
 				return;
 			}
 
-			store_message(nlmon, tv, tp, nlmsg);
+			store_message(nlmon, tv, nlmsg);
 			print_message(tv, type, nlmsg->nlmsg_flags, status,
 						req->cmd, req->version,
 						NULL, sizeof(status));
@@ -1537,8 +1572,11 @@ static void nlmon_message(struct nlmon *nlmon, const struct timeval *tv,
 		return;
 	}
 
-	if (nlmsg->nlmsg_type != nlmon->id)
+	if (nlmsg->nlmsg_type != nlmon->id) {
+		if (nlmsg->nlmsg_type == GENL_ID_CTRL)
+			store_message(nlmon, tv, nlmsg);
 		return;
+	}
 
 	if (nlmsg->nlmsg_flags & NLM_F_REQUEST) {
 		const struct genlmsghdr *genlmsg = NLMSG_DATA(nlmsg);
@@ -1554,7 +1592,7 @@ static void nlmon_message(struct nlmon *nlmon, const struct timeval *tv,
 
 		l_queue_push_tail(nlmon->req_list, req);
 
-		store_message(nlmon, tv, tp, nlmsg);
+		store_message(nlmon, tv, nlmsg);
 		print_message(tv, MSG_REQUEST, flags, 0,
 					req->cmd, req->version,
 					NLMSG_DATA(nlmsg) + GENL_HDRLEN,
@@ -1577,7 +1615,7 @@ static void nlmon_message(struct nlmon *nlmon, const struct timeval *tv,
 			type = MSG_RESULT;
 		}
 
-		store_message(nlmon, tv, tp, nlmsg);
+		store_message(nlmon, tv, nlmsg);
 		print_message(tv, type, nlmsg->nlmsg_flags, 0,
 					genlmsg->cmd, genlmsg->version,
 					NLMSG_DATA(nlmsg) + GENL_HDRLEN,
@@ -1752,6 +1790,7 @@ static bool nlmon_receive(struct l_io *io, void *user_data)
 	struct tpacket_auxdata copy_tp;
 	const struct timeval *tv = NULL;
 	const struct tpacket_auxdata *tp = NULL;
+	uint16_t proto_type;
 	unsigned char buf[8192];
 	unsigned char control[32];
 	ssize_t bytes_read;
@@ -1783,11 +1822,10 @@ static bool nlmon_receive(struct l_io *io, void *user_data)
 		return true;
 	}
 
-	if (sll.sll_protocol != htons(NETLINK_GENERIC))
-		return true;
-
 	if (sll.sll_hatype != ARPHRD_NETLINK)
 		return true;
+
+	proto_type = ntohs(sll.sll_protocol);
 
 	for (cmsg = CMSG_FIRSTHDR(&msg); cmsg;
 				cmsg = CMSG_NXTHDR(&msg, cmsg)) {
@@ -1806,7 +1844,14 @@ static bool nlmon_receive(struct l_io *io, void *user_data)
 
 	for (nlmsg = iov.iov_base; NLMSG_OK(nlmsg, bytes_read);
 				nlmsg = NLMSG_NEXT(nlmsg, bytes_read)) {
-		nlmon_message(nlmon, tv, tp, nlmsg);
+		switch (proto_type) {
+		case NETLINK_ROUTE:
+			store_netlink(nlmon, tv, proto_type, nlmsg);
+			break;
+		case NETLINK_GENERIC:
+			nlmon_message(nlmon, tv, tp, nlmsg);
+			break;
+		}
 	}
 
 	return true;
@@ -1989,6 +2034,9 @@ static bool pae_receive(struct l_io *io, void *user_data)
 		}
 	}
 
+	store_packet(nlmon, tv, sll.sll_pkttype, ARPHRD_ETHER, ETH_P_PAE,
+							buf, bytes_read);
+
 	nlmon_print_pae(nlmon, tv, sll.sll_pkttype, sll.sll_ifindex,
 							buf, bytes_read);
 
@@ -2020,10 +2068,11 @@ static struct l_io *open_pae(void)
 	return io;
 }
 
-struct nlmon *nlmon_open(const char *ifname, uint16_t id)
+struct nlmon *nlmon_open(const char *ifname, uint16_t id, const char *pathname)
 {
 	struct nlmon *nlmon;
 	struct l_io *io, *pae_io;
+	struct pcap *pcap;
 
 	io = open_packet(ifname);
 	if (!io)
@@ -2035,12 +2084,23 @@ struct nlmon *nlmon_open(const char *ifname, uint16_t id)
 		return NULL;
 	}
 
+	if (pathname) {
+		pcap = pcap_create(pathname);
+		if (!pcap) {
+			l_io_destroy(pae_io);
+			l_io_destroy(io);
+			return NULL;
+		}
+	} else
+		pcap = NULL;
+
 	nlmon = l_new(struct nlmon, 1);
 
 	nlmon->id = id;
 	nlmon->io = io;
 	nlmon->pae_io = pae_io;
 	nlmon->req_list = l_queue_new();
+	nlmon->pcap = pcap;
 
 	l_io_set_read_handler(nlmon->io, nlmon_receive, nlmon, NULL);
 	l_io_set_read_handler(nlmon->pae_io, pae_receive, nlmon, NULL);
@@ -2056,6 +2116,9 @@ void nlmon_close(struct nlmon *nlmon)
 	l_io_destroy(nlmon->io);
 	l_io_destroy(nlmon->pae_io);
 	l_queue_destroy(nlmon->req_list, nlmon_req_free);
+
+	if (nlmon->pcap)
+		pcap_close(nlmon->pcap);
 
 	l_free(nlmon);
 }

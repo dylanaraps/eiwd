@@ -30,7 +30,8 @@
 
 struct pcap;
 
-struct pcap *pcap_open(const char *path);
+struct pcap *pcap_open(const char *pathname);
+struct pcap *pcap_create(const char *pathname);
 void pcap_close(struct pcap *pcap);
 
 uint32_t pcap_get_type(struct pcap *pcap);
@@ -38,3 +39,7 @@ uint32_t pcap_get_snaplen(struct pcap *pcap);
 
 bool pcap_read(struct pcap *pcap, struct timeval *tv,
 		void *data, uint32_t size, uint32_t *len, uint32_t *real_len);
+
+bool pcap_write(struct pcap *pcap, const struct timeval *tv,
+					const void *phdr, uint32_t plen,
+					const void *data, uint32_t size);

@@ -25,7 +25,7 @@
 
 struct nlmon;
 
-struct nlmon *nlmon_open(const char *ifname, uint16_t id);
+struct nlmon *nlmon_open(const char *ifname, uint16_t id, const char *pathname);
 void nlmon_close(struct nlmon *nlmon);
 
 struct nlmon *nlmon_create(void);
