@@ -1847,6 +1847,7 @@ static bool nlmon_receive(struct l_io *io, void *user_data)
 		switch (proto_type) {
 		case NETLINK_ROUTE:
 			store_netlink(nlmon, tv, proto_type, nlmsg);
+			nlmon_print_rtnl(nlmon, tv, nlmsg, nlmsg->nlmsg_len);
 			break;
 		case NETLINK_GENERIC:
 			nlmon_message(nlmon, tv, tp, nlmsg);
