@@ -38,6 +38,7 @@
 #include <linux/netlink.h>
 #include <linux/genetlink.h>
 #include <linux/rtnetlink.h>
+#include <linux/filter.h>
 #include <ell/ell.h>
 
 #include "linux/nl80211.h"
@@ -2044,15 +2045,32 @@ static bool pae_receive(struct l_io *io, void *user_data)
 	return true;
 }
 
+static struct sock_filter filter[] = {
+	/* skb->protocol == 0x888e (PAE) */
+	{ 0x28, 0, 0, 0xfffff000 },	/* (000) ldh #proto		*/
+	{ 0x15, 0, 1, 0x0000888e },	/* (001) jeq #0x888e jt 2 jf 3	*/
+	{ 0x06, 0, 0, 0xffffffff },	/* (002) ret #-1		*/
+	{ 0x06, 0, 0, 0x00000000 },	/* (003) ret #0			*/
+};
+
+static const struct sock_fprog fprog = { .len = 4, .filter = filter };
+
 static struct l_io *open_pae(void)
 {
 	struct l_io *io;
 	int fd, opt = 1;
 
 	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK,
-							htons(ETH_P_PAE));
+							htons(ETH_P_ALL));
 	if (fd < 0) {
 		perror("Failed to create authentication socket");
+		return NULL;
+	}
+
+	if (setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER,
+						&fprog, sizeof(fprog)) < 0) {
+		perror("Failed to enable authentication filter");
+		close(fd);
 		return NULL;
 	}
 
