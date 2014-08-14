@@ -1859,6 +1859,16 @@ static bool nlmon_receive(struct l_io *io, void *user_data)
 	return true;
 }
 
+static struct sock_filter mon_filter[] = {
+	/* skb->dev->type == 824 (ARPHRD_NETLINK) */
+	{ 0x28, 0, 0, 0xfffff01c },	/* (000) ldh #hatype		*/
+	{ 0x15, 0, 1, 0x00000338 },	/* (001) jeq #824 jt 2 jf 3	*/
+	{ 0x06, 0, 0, 0xffffffff },	/* (002) ret #-1		*/
+	{ 0x06, 0, 0, 0x00000000 },	/* (003) ret #0			*/
+};
+
+static const struct sock_fprog mon_fprog = { .len = 4, .filter = mon_filter };
+
 static struct l_io *open_packet(const char *name)
 {
 	struct l_io *io;
@@ -1903,8 +1913,15 @@ static struct l_io *open_packet(const char *name)
 		return NULL;
 	}
 
+	if (setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER,
+					&mon_fprog, sizeof(mon_fprog)) < 0) {
+		perror("Failed to enable monitor filter");
+		close(fd);
+		return NULL;
+	}
+
 	if (setsockopt(fd, SOL_SOCKET, SO_TIMESTAMP, &opt, sizeof(opt)) < 0) {
-		perror("Failed to enable timestamps");
+		perror("Failed to enable monitor timestamps");
 		close(fd);
 		return NULL;
 	}
@@ -2045,7 +2062,7 @@ static bool pae_receive(struct l_io *io, void *user_data)
 	return true;
 }
 
-static struct sock_filter filter[] = {
+static struct sock_filter pae_filter[] = {
 	/* skb->protocol == 0x888e (PAE) */
 	{ 0x28, 0, 0, 0xfffff000 },	/* (000) ldh #proto		*/
 	{ 0x15, 0, 1, 0x0000888e },	/* (001) jeq #0x888e jt 2 jf 3	*/
@@ -2053,7 +2070,7 @@ static struct sock_filter filter[] = {
 	{ 0x06, 0, 0, 0x00000000 },	/* (003) ret #0			*/
 };
 
-static const struct sock_fprog fprog = { .len = 4, .filter = filter };
+static const struct sock_fprog pae_fprog = { .len = 4, .filter = pae_filter };
 
 static struct l_io *open_pae(void)
 {
@@ -2068,7 +2085,7 @@ static struct l_io *open_pae(void)
 	}
 
 	if (setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER,
-						&fprog, sizeof(fprog)) < 0) {
+					&pae_fprog, sizeof(pae_fprog)) < 0) {
 		perror("Failed to enable authentication filter");
 		close(fd);
 		return NULL;
