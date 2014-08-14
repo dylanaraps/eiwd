@@ -1859,15 +1859,22 @@ static bool nlmon_receive(struct l_io *io, void *user_data)
 	return true;
 }
 
+/*
+ * BPF filter to match skb->dev->type == 824 (ARPHRD_NETLINK) and
+ * either match skb->protocol == 0x0000 (NETLINK_ROUTE) or match
+ * skb->protocol == 0x0010 (NETLINK_GENERIC).
+ */
 static struct sock_filter mon_filter[] = {
-	/* skb->dev->type == 824 (ARPHRD_NETLINK) */
-	{ 0x28, 0, 0, 0xfffff01c },	/* (000) ldh #hatype		*/
-	{ 0x15, 0, 1, 0x00000338 },	/* (001) jeq #824 jt 2 jf 3	*/
-	{ 0x06, 0, 0, 0xffffffff },	/* (002) ret #-1		*/
-	{ 0x06, 0, 0, 0x00000000 },	/* (003) ret #0			*/
+	{ 0x28,  0,  0, 0xfffff01c },	/* ldh #hatype		*/
+	{ 0x15,  0,  3, 0x00000338 },	/* jne #824, drop	*/
+	{ 0x28,  0,  0, 0xfffff000 },	/* ldh #proto		*/
+	{ 0x15,  2,  0, 0000000000 },	/* jeq #0x0000, pass	*/
+	{ 0x15,  1,  0, 0x00000010 },	/* jeq #0x0010, pass	*/
+	{ 0x06,  0,  0, 0000000000 },	/* drop: ret #0		*/
+	{ 0x06,  0,  0, 0xffffffff },	/* pass: ret #-1	*/
 };
 
-static const struct sock_fprog mon_fprog = { .len = 4, .filter = mon_filter };
+static const struct sock_fprog mon_fprog = { .len = 7, .filter = mon_filter };
 
 static struct l_io *open_packet(const char *name)
 {
@@ -2062,15 +2069,20 @@ static bool pae_receive(struct l_io *io, void *user_data)
 	return true;
 }
 
+/*
+ * BPF filter to match skb->dev->type == 1 (ARPHRD_ETHER) and
+ * match skb->protocol == 0x888e (PAE).
+ */
 static struct sock_filter pae_filter[] = {
-	/* skb->protocol == 0x888e (PAE) */
-	{ 0x28, 0, 0, 0xfffff000 },	/* (000) ldh #proto		*/
-	{ 0x15, 0, 1, 0x0000888e },	/* (001) jeq #0x888e jt 2 jf 3	*/
-	{ 0x06, 0, 0, 0xffffffff },	/* (002) ret #-1		*/
-	{ 0x06, 0, 0, 0x00000000 },	/* (003) ret #0			*/
+	{ 0x28,  0,  0, 0xfffff01c },	/* ldh #hatype		*/
+	{ 0x15,  0,  3, 0x00000001 },	/* jne #1, drop		*/
+	{ 0x28,  0,  0, 0xfffff000 },	/* ldh #proto		*/
+	{ 0x15,  0,  1, 0x0000888e },	/* jne #0x888e, drop	*/
+	{ 0x06,  0,  0, 0xffffffff },	/* ret #-1		*/
+	{ 0x06,  0,  0, 0000000000 },	/* drop: ret #0		*/
 };
 
-static const struct sock_fprog pae_fprog = { .len = 4, .filter = pae_filter };
+static const struct sock_fprog pae_fprog = { .len = 6, .filter = pae_filter };
 
 static struct l_io *open_pae(void)
 {
