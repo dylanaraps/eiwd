@@ -37,6 +37,8 @@
 #include "monitor/pcap.h"
 #include "monitor/display.h"
 
+#define MAX_SNAPLEN (1024 * 16)
+
 static struct nlmon *nlmon = NULL;
 static const char *writer_path = NULL;
 
@@ -140,7 +142,173 @@ static struct l_netlink *genl_lookup(const char *ifname)
 	return genl;
 }
 
-#define MAX_SNAPLEN (1024 * 16)
+static int analyze_pcap(const char *pathname)
+{
+	struct l_queue *genl_list;
+	const struct l_queue_entry *genl_entry;
+	struct pcap *pcap;
+	struct timeval tv;
+	void *buf;
+	uint32_t snaplen, len, real_len;
+	int exit_status;
+	unsigned long pkt_count = 0;
+	unsigned long pkt_short = 0;
+	unsigned long pkt_trunc = 0;
+	unsigned long pkt_ether = 0;
+	unsigned long pkt_pae = 0;
+	unsigned long pkt_netlink = 0;
+	unsigned long pkt_rtnl = 0;
+	unsigned long pkt_genl = 0;
+	unsigned long msg_netlink = 0;
+	unsigned long msg_rtnl = 0;
+	unsigned long msg_genl = 0;
+	bool first;
+
+	pcap = pcap_open(pathname);
+	if (!pcap)
+		return EXIT_FAILURE;
+
+	if (pcap_get_type(pcap) != PCAP_TYPE_LINUX_SLL) {
+		fprintf(stderr, "Invalid packet format\n");
+		exit_status = EXIT_FAILURE;
+		goto done;
+	}
+
+	snaplen = pcap_get_snaplen(pcap);
+	if (snaplen > MAX_SNAPLEN)
+		snaplen = MAX_SNAPLEN;
+
+	buf = malloc(snaplen);
+	if (!buf) {
+		fprintf(stderr, "Failed to allocate packet buffer\n");
+		exit_status = EXIT_FAILURE;
+		goto done;
+	}
+
+	genl_list = l_queue_new();
+
+	while (pcap_read(pcap, &tv, buf, snaplen, &len, &real_len)) {
+		struct nlmsghdr *nlmsg;
+		uint32_t aligned_len;
+		uint16_t arphrd_type;
+		uint16_t proto_type;
+
+		pkt_count++;
+
+		if (len < 16) {
+			pkt_short++;
+			continue;
+		}
+
+		arphrd_type = L_GET_UNALIGNED((const uint16_t *) (buf + 2));
+		arphrd_type = L_BE16_TO_CPU(arphrd_type);
+
+		proto_type = L_GET_UNALIGNED((const uint16_t *) (buf + 14));
+		proto_type = L_BE16_TO_CPU(proto_type);
+
+		switch (arphrd_type) {
+		case ARPHRD_ETHER:
+			pkt_ether++;
+			switch (proto_type) {
+			case ETH_P_PAE:
+				pkt_pae++;
+				break;
+			}
+			break;
+		case ARPHRD_NETLINK:
+			pkt_netlink++;
+			switch (proto_type) {
+			case NETLINK_ROUTE:
+				pkt_rtnl++;
+				break;
+			case NETLINK_GENERIC:
+				pkt_genl++;
+				break;
+			}
+			break;
+		}
+
+		if (len < real_len) {
+			pkt_trunc++;
+			continue;
+		}
+
+		if (arphrd_type != ARPHRD_NETLINK)
+			continue;
+
+		aligned_len = NLMSG_ALIGN(len - 16);
+
+		for (nlmsg = buf + 16; NLMSG_OK(nlmsg, aligned_len);
+				nlmsg = NLMSG_NEXT(nlmsg, aligned_len)) {
+			uint16_t type = nlmsg->nlmsg_type;
+
+			msg_netlink++;
+			switch (proto_type) {
+			case NETLINK_ROUTE:
+				msg_rtnl++;
+				break;
+			case NETLINK_GENERIC:
+				if (type >= NLMSG_MIN_TYPE) {
+					l_queue_remove(genl_list,
+							L_UINT_TO_PTR(type));
+					l_queue_push_tail(genl_list,
+							L_UINT_TO_PTR(type));
+				}
+				msg_genl++;
+				break;
+			}
+		}
+	}
+
+	printf("\n");
+	printf("     Analyzed file: %s\n", pathname);
+	printf("\n");
+	printf(" Number of packets: %lu\n", pkt_count);
+	printf("     Short packets: %lu\n", pkt_short);
+	printf("  Tuncated packets: %lu\n", pkt_trunc);
+	printf("\n");
+	printf("  Ethernet packets: %lu\n", pkt_ether);
+	printf("       PAE packets: %lu\n", pkt_pae);
+	printf("\n");
+	printf("   Netlink packets: %lu\n", pkt_netlink);
+	printf("      RTNL packets: %lu\n", pkt_rtnl);
+	printf("      GENL packets: %lu\n", pkt_genl);
+	printf("\n");
+	printf("  Netlink messages: %lu\n", msg_netlink);
+	printf("     RTNL messages: %lu\n", msg_rtnl);
+	printf("     GENL messages: %lu\n", msg_genl);
+	printf("\n");
+	for (genl_entry = l_queue_get_entries(genl_list), first = true;
+				genl_entry;
+				genl_entry = genl_entry->next, first = false) {
+		uint16_t family = L_PTR_TO_UINT(genl_entry->data);
+		const char *label, *desc;
+
+		if (first)
+			label = "     GENL families:";
+		else
+			label = "                   ";
+
+		if (family == GENL_ID_CTRL)
+			desc = "nlctrl";
+		else
+			desc = "";
+
+		printf("%s 0x%02x (%u) %s\n", label, family, family, desc);
+	}
+	printf("\n");
+
+	l_queue_destroy(genl_list, NULL);
+
+	free(buf);
+
+	exit_status = EXIT_SUCCESS;
+
+done:
+	pcap_close(pcap);
+
+	return exit_status;
+}
 
 static int process_pcap(struct pcap *pcap)
 {
@@ -236,8 +404,9 @@ static void usage(void)
 		"Usage:\n");
 	printf("\tiwmon [options]\n");
 	printf("Options:\n"
-		"\t-r, --read <file>      Read netlink PCAP trace files\n"
-		"\t-w, --write <file>     Write netlink PCAP trace files\n"
+		"\t-r, --read <file>      Read netlink PCAP trace file\n"
+		"\t-w, --write <file>     Write netlink PCAP trace file\n"
+		"\t-a, --analyze <file>   Analyze netlink PCAP trace file\n"
 		"\t-i, --interface <dev>  Use specified netlink monitor\n"
 		"\t-h, --help             Show help options\n");
 }
@@ -245,6 +414,7 @@ static void usage(void)
 static const struct option main_options[] = {
 	{ "read",      required_argument, NULL, 'r' },
 	{ "write",     required_argument, NULL, 'w' },
+	{ "analyze",   required_argument, NULL, 'a' },
 	{ "interface", required_argument, NULL, 'i' },
 	{ "version",   no_argument,       NULL, 'v' },
 	{ "help",      no_argument,       NULL, 'h' },
@@ -254,6 +424,7 @@ static const struct option main_options[] = {
 int main(int argc, char *argv[])
 {
 	const char *reader_path = NULL;
+	const char *analyze_path = NULL;
 	const char *ifname = "nlmon";
 	struct l_signal *signal;
 	struct l_netlink *genl;
@@ -263,7 +434,8 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "r:w:i:vh", main_options, NULL);
+		opt = getopt_long(argc, argv, "r:w:a:i:vh",
+						main_options, NULL);
 		if (opt < 0)
 			break;
 
@@ -273,6 +445,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'w':
 			writer_path = optarg;
+			break;
+		case 'a':
+			analyze_path = optarg;
 			break;
 		case 'i':
 			ifname = optarg;
@@ -293,6 +468,11 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
+	if (reader_path && analyze_path) {
+		fprintf(stderr, "Display and analyze can't be combined\n");
+		return EXIT_FAILURE;
+	}
+
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGINT);
 	sigaddset(&mask, SIGTERM);
@@ -300,6 +480,11 @@ int main(int argc, char *argv[])
 	signal = l_signal_create(&mask, signal_handler, NULL, NULL);
 
 	printf("Wireless monitor ver %s\n", VERSION);
+
+	if (analyze_path) {
+		exit_status = analyze_pcap(analyze_path);
+		goto done;
+	}
 
 	if (reader_path) {
 		struct pcap *pcap;
