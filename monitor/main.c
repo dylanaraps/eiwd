@@ -25,6 +25,7 @@
 #endif
 
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <getopt.h>
 #include <sys/socket.h>
@@ -310,7 +311,7 @@ done:
 	return exit_status;
 }
 
-static int process_pcap(struct pcap *pcap)
+static int process_pcap(struct pcap *pcap, uint16_t id)
 {
 	struct nlmon *nlmon = NULL;
 	struct timeval tv;
@@ -327,7 +328,7 @@ static int process_pcap(struct pcap *pcap)
 		return EXIT_FAILURE;
 	}
 
-	nlmon = nlmon_create();
+	nlmon = nlmon_create(id);
 
 	while (pcap_read(pcap, &tv, buf, snaplen, &len, &real_len)) {
 		uint16_t arphrd_type;
@@ -415,6 +416,7 @@ static const struct option main_options[] = {
 	{ "read",      required_argument, NULL, 'r' },
 	{ "write",     required_argument, NULL, 'w' },
 	{ "analyze",   required_argument, NULL, 'a' },
+	{ "nl80211",   required_argument, NULL, 'F' },
 	{ "interface", required_argument, NULL, 'i' },
 	{ "version",   no_argument,       NULL, 'v' },
 	{ "help",      no_argument,       NULL, 'h' },
@@ -426,6 +428,7 @@ int main(int argc, char *argv[])
 	const char *reader_path = NULL;
 	const char *analyze_path = NULL;
 	const char *ifname = "nlmon";
+	uint16_t nl80211_family = GENL_ID_GENERATE;
 	struct l_signal *signal;
 	struct l_netlink *genl;
 	sigset_t mask;
@@ -434,7 +437,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "r:w:a:i:vh",
+		opt = getopt_long(argc, argv, "r:w:a:F:i:vh",
 						main_options, NULL);
 		if (opt < 0)
 			break;
@@ -448,6 +451,26 @@ int main(int argc, char *argv[])
 			break;
 		case 'a':
 			analyze_path = optarg;
+			break;
+		case 'F':
+			if (strlen(optarg) > 3) {
+				if (!strncasecmp(optarg, "0x", 2) &&
+							!isxdigit(optarg[2])) {
+					usage();
+					return EXIT_FAILURE;
+				}
+				nl80211_family = strtoul(optarg + 2, NULL, 16);
+			} else {
+				if (!isdigit(optarg[0])) {
+					usage();
+					return EXIT_FAILURE;
+				}
+				nl80211_family = strtoul(optarg, NULL, 10);
+			}
+			if (nl80211_family == GENL_ID_GENERATE) {
+				usage();
+				return EXIT_FAILURE;
+			}
 			break;
 		case 'i':
 			ifname = optarg;
@@ -501,7 +524,7 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Invalid packet format\n");
 			exit_status = EXIT_FAILURE;
 		} else
-			exit_status = process_pcap(pcap);
+			exit_status = process_pcap(pcap, nl80211_family);
 
 		pcap_close(pcap);
 

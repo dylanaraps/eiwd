@@ -1624,13 +1624,13 @@ static void nlmon_message(struct nlmon *nlmon, const struct timeval *tv,
 	}
 }
 
-struct nlmon *nlmon_create(void)
+struct nlmon *nlmon_create(uint16_t id)
 {
 	struct nlmon *nlmon;
 
 	nlmon = l_new(struct nlmon, 1);
 
-	nlmon->id = GENL_ID_GENERATE;
+	nlmon->id = id;
 	nlmon->req_list = l_queue_new();
 
 	return nlmon;

@@ -28,7 +28,7 @@ struct nlmon;
 struct nlmon *nlmon_open(const char *ifname, uint16_t id, const char *pathname);
 void nlmon_close(struct nlmon *nlmon);
 
-struct nlmon *nlmon_create(void);
+struct nlmon *nlmon_create(uint16_t id);
 void nlmon_destroy(struct nlmon *nlmon);
 void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
 					const void *data, uint32_t size);
