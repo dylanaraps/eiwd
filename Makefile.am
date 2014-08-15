@@ -103,7 +103,7 @@ ell/internal: Makefile
 	done > $@
 
 %.1: %.txt
-	$(AM_V_GEN)a2x --doctype manpage --format manpage $(srcdir)/$<
+	$(AM_V_GEN)$(A2X) --doctype manpage --format manpage $(srcdir)/$<
 
 maintainer-clean-local:
 	-rm -rf build-aux ell
