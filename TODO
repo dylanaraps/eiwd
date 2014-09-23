@@ -173,6 +173,7 @@ cfg80211 / nl80211
 
   Priority: High
   Complexity: C1
+  Owner: Tomasz Bursztyka <tomasz.bursztyka@linux.intel.com>
 
 - Fix missing NL80211_CMD_NEW_INTERFACE and NL80211_CMD_DEL_INTERFACE events
 
