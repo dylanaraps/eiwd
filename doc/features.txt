@@ -1,0 +1,14 @@
+
+Wireless monitor
+================
+
+Netlink monitor interface is created if it does not exist
+
+The iwmon utility automates netlink monitor creation by by using RTNL
+to find an existing netlink monitor interface, and in case it does not
+exist, create a new one. By default the netlink monitor interface is
+named 'nlmon'. Another name can be given with the '--interface'
+command line option.
+
+Once iwmon terminates, the netlink monitor interface is removed (in
+case iwmon created it).
