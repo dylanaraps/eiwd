@@ -155,6 +155,21 @@ static struct l_netlink *genl_lookup(const char *ifname)
 	return genl;
 }
 
+static size_t rta_add(void *rta_buf, unsigned short type, uint16_t len,
+		      const void *data)
+{
+	unsigned short rta_len = RTA_LENGTH(len);
+	struct rtattr *rta = rta_buf;
+
+	memset(RTA_DATA(rta), 0, RTA_SPACE(len));
+
+	rta->rta_len = rta_len;
+	rta->rta_type = type;
+	memcpy(RTA_DATA(rta), data, len);
+
+	return RTA_SPACE(len);
+}
+
 static bool rta_linkinfo_kind(struct rtattr *rta, unsigned short len,
 			const char* kind)
 {
@@ -181,11 +196,23 @@ static struct l_netlink *rtm_interface_send_message(struct l_netlink *rtnl,
 					void *user_data,
 					l_netlink_destroy_func_t destroy)
 {
+	size_t nlmon_type_len = strlen(NLMON_TYPE);
+	unsigned short ifname_len = 0;
 	size_t bufsize;
 	struct ifinfomsg *rtmmsg;
 	void *rta_buf;
+	struct rtattr *linkinfo_rta;
 
-	bufsize = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+	if (ifname) {
+		ifname_len = strlen(ifname) + 1;
+
+		if (ifname_len < 2 || ifname_len > IFNAMSIZ)
+			return NULL;
+	}
+
+	bufsize = NLMSG_LENGTH(sizeof(struct ifinfomsg)) +
+		RTA_SPACE(ifname_len) + RTA_SPACE(0) +
+		RTA_SPACE(nlmon_type_len);
 
 	rtmmsg = l_malloc(bufsize);
 
@@ -200,7 +227,26 @@ static struct l_netlink *rtm_interface_send_message(struct l_netlink *rtnl,
 
 	rta_buf = rtmmsg + 1;
 
+	if (ifname)
+		rta_buf += rta_add(rta_buf, IFLA_IFNAME, ifname_len, ifname);
+
+	linkinfo_rta = rta_buf;
+
+	rta_buf += rta_add(rta_buf, IFLA_LINKINFO, 0, NULL);
+	rta_buf += rta_add(rta_buf, IFLA_INFO_KIND, nlmon_type_len, NLMON_TYPE);
+
+	linkinfo_rta->rta_len = rta_buf - (void *) linkinfo_rta;
+
 	switch (rtm_msg_type) {
+
+	case RTM_NEWLINK:
+		rtmmsg->ifi_flags = IFF_UP | IFF_ALLMULTI | IFF_NOARP;
+
+		l_netlink_send(rtnl, RTM_NEWLINK, NLM_F_CREATE,
+				rtmmsg, rta_buf - (void *) rtmmsg, callback,
+				user_data, destroy);
+
+		break;
 
 	case RTM_GETLINK:
 		l_netlink_send(rtnl, RTM_GETLINK, NLM_F_DUMP, rtmmsg,
@@ -219,6 +265,35 @@ static struct l_netlink *rtm_interface_send_message(struct l_netlink *rtnl,
 	return rtnl;
 }
 
+static void iwmon_interface_enable_callback(int error, uint16_t type,
+						const void *data, uint32_t len,
+						void *user_data)
+{
+	struct iwmon_interface *monitor_interface = user_data;
+
+	if (error) {
+		fprintf(stderr, "Failed to create monitor interface %s %d\n",
+			monitor_interface->ifname, error);
+
+		l_main_quit();
+
+		return;
+	}
+
+	fprintf(stderr, "Created interface %s\n", monitor_interface->ifname);
+
+	monitor_interface->genl = genl_lookup(monitor_interface->ifname);
+}
+
+static struct l_netlink *iwmon_interface_enable(struct iwmon_interface *monitor_interface)
+{
+	return rtm_interface_send_message(monitor_interface->rtnl,
+						monitor_interface->ifname,
+						RTM_NEWLINK,
+						iwmon_interface_enable_callback,
+						monitor_interface, NULL);
+}
+
 static void iwmon_interface_lookup_done(void *user_data)
 {
 	struct iwmon_interface *monitor_interface = user_data;
@@ -233,10 +308,7 @@ static void iwmon_interface_lookup_done(void *user_data)
 	if (!monitor_interface->ifname)
 		monitor_interface->ifname = l_strdup(NLMON_TYPE);
 
-	fprintf(stderr, "Monitor interface %s not found or wrong flags\n",
-		monitor_interface->ifname);
-
-	l_main_quit();
+	iwmon_interface_enable(monitor_interface);
 }
 
 static void iwmon_interface_lookup_callback(int error, uint16_t type,
