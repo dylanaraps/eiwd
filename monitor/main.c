@@ -248,6 +248,15 @@ static struct l_netlink *rtm_interface_send_message(struct l_netlink *rtnl,
 
 		break;
 
+	case RTM_DELLINK:
+		rta_buf += rta_add(rta_buf, IFLA_IFNAME, ifname_len, ifname);
+
+		l_netlink_send(rtnl, RTM_DELLINK, 0, rtmmsg,
+				rta_buf - (void *)rtmmsg, callback, user_data,
+				destroy);
+
+		break;
+
 	case RTM_GETLINK:
 		l_netlink_send(rtnl, RTM_GETLINK, NLM_F_DUMP, rtmmsg,
 				rta_buf - (void *)rtmmsg, callback, user_data,
@@ -263,6 +272,16 @@ static struct l_netlink *rtm_interface_send_message(struct l_netlink *rtnl,
 	l_free(rtmmsg);
 
 	return rtnl;
+}
+
+static struct l_netlink *iwmon_interface_disable(struct iwmon_interface *monitor_interface)
+{
+	if (!monitor_interface->exists)
+		return rtm_interface_send_message(monitor_interface->rtnl,
+						monitor_interface->ifname,
+						RTM_DELLINK, NULL, NULL, NULL);
+
+	return monitor_interface->rtnl;
 }
 
 static void iwmon_interface_enable_callback(int error, uint16_t type,
@@ -629,13 +648,22 @@ static int process_pcap(struct pcap *pcap, uint16_t id)
 	return EXIT_SUCCESS;
 }
 
+static void main_loop_quit(struct l_timeout *timeout, void *user_data)
+{
+	l_main_quit();
+}
+
 static void signal_handler(struct l_signal *signal, uint32_t signo,
 							void *user_data)
 {
+	struct iwmon_interface *monitor_interface = user_data;
+
 	switch (signo) {
 	case SIGINT:
 	case SIGTERM:
-		l_main_quit();
+		iwmon_interface_disable(monitor_interface);
+
+		l_timeout_create(1, main_loop_quit, NULL, NULL);
 		break;
 	}
 }
@@ -741,7 +769,8 @@ int main(int argc, char *argv[])
 	sigaddset(&mask, SIGINT);
 	sigaddset(&mask, SIGTERM);
 
-	signal = l_signal_create(&mask, signal_handler, NULL, NULL);
+	signal = l_signal_create(&mask, signal_handler, &monitor_interface,
+					NULL);
 
 	printf("Wireless monitor ver %s\n", VERSION);
 
