@@ -81,17 +81,17 @@ Netlink monitoring
 
 The included iwmon utility can be used to monitor the 802.11 subsystem
 generic netlink commands and events. It uses the nlmon kernel driver
-from Linux 3.10 and later.
+from Linux 3.10 and later. On startup network monitor interface named
+named 'nlmon' is created unless another interface name is given on the
+command line. If the monitor interface was created by the iwmon utility,
+it will be removed on program exit.
 
-In order to use iwmon to create traces, the nlmon network interface
-needs to be created:
+Manually the monitor interface can be created using the following
+commands:
 
 	ip link add name nlmon type nlmon
 	ip link set dev nlmon allmulticast on
 	ip link set dev nlmon up
-
-For now it is important that the netlink monitor interace is actually
-named nlmon. Future version might relax this requirement.
 
 It is possible to create netlink traces in PCAP format using tcpdump
 and then read them via iwmon utility:
