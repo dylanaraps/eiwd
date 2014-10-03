@@ -28,8 +28,10 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include <errno.h>
 #include <sys/socket.h>
 #include <linux/genetlink.h>
+#include <linux/rtnetlink.h>
 #include <linux/if_arp.h>
 #include <ell/ell.h>
 
@@ -53,6 +55,16 @@ static const char *writer_path = NULL;
 #define NLA_LENGTH(len)		(NLA_ALIGN(sizeof(struct nlattr)) + (len))
 #define NLA_DATA(nla)		((void*)(((char*)(nla)) + NLA_LENGTH(0)))
 #define NLA_PAYLOAD(nla)	((int)((nla)->nla_len - NLA_LENGTH(0)))
+
+#define NLMON_TYPE "nlmon"
+#define NLMON_LEN  5
+
+struct iwmon_interface {
+	char *ifname;
+	bool exists;
+	struct l_netlink *rtnl;
+	struct l_netlink *genl;
+};
 
 static void genl_parse(uint16_t type, const void *data, uint32_t len,
 							const char *ifname)
@@ -141,6 +153,166 @@ static struct l_netlink *genl_lookup(const char *ifname)
 					genl_callback, (char *) ifname, NULL);
 
 	return genl;
+}
+
+static bool rta_linkinfo_kind(struct rtattr *rta, unsigned short len,
+			const char* kind)
+{
+	for (; RTA_OK(rta, len); rta = RTA_NEXT(rta, len)) {
+		if (rta->rta_type != IFLA_INFO_KIND)
+			continue;
+
+		if (rta->rta_len < NLMON_LEN)
+			continue;
+
+		if (memcmp(RTA_DATA(rta), kind, strlen(kind)))
+			continue;
+
+		return true;
+	}
+
+	return false;
+}
+
+static struct l_netlink *rtm_interface_send_message(struct l_netlink *rtnl,
+					const char *ifname,
+					uint16_t rtm_msg_type,
+					l_netlink_command_func_t callback,
+					void *user_data,
+					l_netlink_destroy_func_t destroy)
+{
+	size_t bufsize;
+	struct ifinfomsg *rtmmsg;
+	void *rta_buf;
+
+	bufsize = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+
+	rtmmsg = l_malloc(bufsize);
+
+	rtmmsg->ifi_family = AF_UNSPEC;
+	rtmmsg->ifi_change = ~0;
+
+	if (!rtnl)
+		rtnl = l_netlink_new(NETLINK_ROUTE);
+
+	if (!rtnl)
+		return NULL;
+
+	rta_buf = rtmmsg + 1;
+
+	switch (rtm_msg_type) {
+
+	case RTM_GETLINK:
+		l_netlink_send(rtnl, RTM_GETLINK, NLM_F_DUMP, rtmmsg,
+				rta_buf - (void *)rtmmsg, callback, user_data,
+				destroy);
+
+		break;
+
+	default:
+		l_netlink_destroy(rtnl);
+		l_free(rtmmsg);
+		return NULL;
+	}
+
+	l_free(rtmmsg);
+
+	return rtnl;
+}
+
+static void iwmon_interface_lookup_done(void *user_data)
+{
+	struct iwmon_interface *monitor_interface = user_data;
+
+	if (monitor_interface->exists && monitor_interface->ifname) {
+		monitor_interface->genl =
+			genl_lookup(monitor_interface->ifname);
+
+		return;
+	}
+
+	if (!monitor_interface->ifname)
+		monitor_interface->ifname = l_strdup(NLMON_TYPE);
+
+	fprintf(stderr, "Monitor interface %s not found or wrong flags\n",
+		monitor_interface->ifname);
+
+	l_main_quit();
+}
+
+static void iwmon_interface_lookup_callback(int error, uint16_t type,
+						const void *data, uint32_t len,
+						void *user_data)
+{
+	const struct ifinfomsg *rtmmsg = data;
+	struct rtattr *rta;
+	struct iwmon_interface *monitor_interface = user_data;
+	const char *ifname = NULL;
+	unsigned short ifname_len = 0;
+	bool nlmon = false;
+
+	if (error)
+		return;
+
+	if (type != RTM_NEWLINK)
+		return;
+
+	for (rta = (struct rtattr *)(rtmmsg + 1); RTA_OK(rta, len);
+			rta = RTA_NEXT(rta, len)) {
+
+		switch(rta->rta_type) {
+
+		case IFLA_IFNAME:
+			ifname = RTA_DATA(rta);
+			ifname_len = rta->rta_len;
+
+			break;
+
+		case IFLA_LINKINFO:
+			nlmon = rta_linkinfo_kind(RTA_DATA(rta), rta->rta_len,
+							NLMON_TYPE);
+
+			break;
+
+		default:
+			break;
+		}
+	}
+
+	if (!ifname)
+		return;
+
+	if (monitor_interface->ifname &&
+			strncmp(ifname, monitor_interface->ifname, ifname_len))
+		return;
+
+	if (!nlmon) {
+		if (monitor_interface->ifname) {
+			fprintf(stderr, "Interface %s already in use\n",
+				ifname);
+
+			l_main_quit();
+
+		}
+		return;
+	}
+
+	if ((rtmmsg->ifi_flags & (IFF_UP | IFF_ALLMULTI | IFF_NOARP)) !=
+			(IFF_UP | IFF_ALLMULTI | IFF_NOARP))
+		return;
+
+	monitor_interface->ifname = l_strndup(ifname, ifname_len);
+	monitor_interface->exists = true;
+}
+
+static void iwmon_interface_lookup(struct iwmon_interface *monitor_interface)
+{
+	monitor_interface->rtnl =
+		rtm_interface_send_message(monitor_interface->rtnl, NULL,
+						RTM_GETLINK,
+						iwmon_interface_lookup_callback,
+						monitor_interface,
+						iwmon_interface_lookup_done);
 }
 
 static int analyze_pcap(const char *pathname)
@@ -427,10 +599,10 @@ int main(int argc, char *argv[])
 {
 	const char *reader_path = NULL;
 	const char *analyze_path = NULL;
-	const char *ifname = "nlmon";
+	const char *ifname = NULL;
+	struct iwmon_interface monitor_interface = { };
 	uint16_t nl80211_family = GENL_ID_GENERATE;
 	struct l_signal *signal;
-	struct l_netlink *genl;
 	sigset_t mask;
 	int exit_status;
 
@@ -532,11 +704,15 @@ int main(int argc, char *argv[])
 		goto done;
 	}
 
-	genl = genl_lookup(ifname);
+	monitor_interface.ifname = l_strdup(ifname);
+	iwmon_interface_lookup(&monitor_interface);
 
 	l_main_run();
 
-	l_netlink_destroy(genl);
+	l_netlink_destroy(monitor_interface.rtnl);
+	l_netlink_destroy(monitor_interface.genl);
+	l_free(monitor_interface.ifname);
+
 	nlmon_close(nlmon);
 
 	exit_status = EXIT_SUCCESS;
