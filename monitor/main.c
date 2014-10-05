@@ -156,7 +156,7 @@ static struct l_netlink *genl_lookup(const char *ifname)
 }
 
 static size_t rta_add(void *rta_buf, unsigned short type, uint16_t len,
-		      const void *data)
+			const void *data)
 {
 	unsigned short rta_len = RTA_LENGTH(len);
 	struct rtattr *rta = rta_buf;
