@@ -206,7 +206,6 @@ static struct l_netlink *rtm_interface_send_message(struct l_netlink *rtnl,
 		l_netlink_send(rtnl, RTM_GETLINK, NLM_F_DUMP, rtmmsg,
 				rta_buf - (void *)rtmmsg, callback, user_data,
 				destroy);
-
 		break;
 
 	default:
@@ -259,19 +258,15 @@ static void iwmon_interface_lookup_callback(int error, uint16_t type,
 
 	for (rta = (struct rtattr *)(rtmmsg + 1); RTA_OK(rta, len);
 			rta = RTA_NEXT(rta, len)) {
-
 		switch(rta->rta_type) {
-
 		case IFLA_IFNAME:
 			ifname = RTA_DATA(rta);
 			ifname_len = rta->rta_len;
-
 			break;
 
 		case IFLA_LINKINFO:
 			nlmon = rta_linkinfo_kind(RTA_DATA(rta), rta->rta_len,
 							NLMON_TYPE);
-
 			break;
 
 		default:
@@ -294,6 +289,7 @@ static void iwmon_interface_lookup_callback(int error, uint16_t type,
 			l_main_quit();
 
 		}
+
 		return;
 	}
 
