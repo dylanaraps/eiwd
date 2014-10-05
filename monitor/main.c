@@ -242,7 +242,7 @@ static struct l_netlink *rtm_interface_send_message(struct l_netlink *rtnl,
 	case RTM_NEWLINK:
 		rtmmsg->ifi_flags = IFF_UP | IFF_ALLMULTI | IFF_NOARP;
 
-		l_netlink_send(rtnl, RTM_NEWLINK, NLM_F_CREATE,
+		l_netlink_send(rtnl, RTM_NEWLINK, NLM_F_CREATE|NLM_F_EXCL,
 				rtmmsg, rta_buf - (void *) rtmmsg, callback,
 				user_data, destroy);
 		break;
@@ -290,15 +290,14 @@ static void iwmon_interface_enable_callback(int error, uint16_t type,
 	struct iwmon_interface *monitor_interface = user_data;
 
 	if (error) {
-		fprintf(stderr, "Failed to create monitor interface %s %d\n",
-			monitor_interface->ifname, error);
+		fprintf(stderr, "Failed to create monitor interface %s: %s\n",
+			monitor_interface->ifname, strerror(error));
 
 		l_main_quit();
-
 		return;
 	}
 
-	fprintf(stderr, "Created interface %s\n", monitor_interface->ifname);
+	printf("Created interface %s\n", monitor_interface->ifname);
 
 	monitor_interface->genl = genl_lookup(monitor_interface->ifname);
 }
@@ -318,6 +317,9 @@ static void iwmon_interface_lookup_done(void *user_data)
 	struct iwmon_interface *monitor_interface = user_data;
 
 	if (monitor_interface->exists && monitor_interface->ifname) {
+		printf("Using %s as Monitor interface\n",
+			monitor_interface->ifname);
+
 		monitor_interface->genl =
 			genl_lookup(monitor_interface->ifname);
 
@@ -368,21 +370,8 @@ static void iwmon_interface_lookup_callback(int error, uint16_t type,
 	if (!ifname)
 		return;
 
-	if (monitor_interface->ifname &&
-			strncmp(ifname, monitor_interface->ifname, ifname_len))
+	if (!nlmon)
 		return;
-
-	if (!nlmon) {
-		if (monitor_interface->ifname) {
-			fprintf(stderr, "Interface %s already in use\n",
-				ifname);
-
-			l_main_quit();
-
-		}
-
-		return;
-	}
 
 	if ((rtmmsg->ifi_flags & (IFF_UP | IFF_ALLMULTI | IFF_NOARP)) !=
 			(IFF_UP | IFF_ALLMULTI | IFF_NOARP))
