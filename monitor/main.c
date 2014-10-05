@@ -245,7 +245,6 @@ static struct l_netlink *rtm_interface_send_message(struct l_netlink *rtnl,
 		l_netlink_send(rtnl, RTM_NEWLINK, NLM_F_CREATE,
 				rtmmsg, rta_buf - (void *) rtmmsg, callback,
 				user_data, destroy);
-
 		break;
 
 	case RTM_DELLINK:
@@ -254,7 +253,6 @@ static struct l_netlink *rtm_interface_send_message(struct l_netlink *rtnl,
 		l_netlink_send(rtnl, RTM_DELLINK, 0, rtmmsg,
 				rta_buf - (void *)rtmmsg, callback, user_data,
 				destroy);
-
 		break;
 
 	case RTM_GETLINK:
@@ -274,7 +272,8 @@ static struct l_netlink *rtm_interface_send_message(struct l_netlink *rtnl,
 	return rtnl;
 }
 
-static struct l_netlink *iwmon_interface_disable(struct iwmon_interface *monitor_interface)
+static struct l_netlink *iwmon_interface_disable(
+				struct iwmon_interface *monitor_interface)
 {
 	if (!monitor_interface->exists)
 		return rtm_interface_send_message(monitor_interface->rtnl,
@@ -304,7 +303,8 @@ static void iwmon_interface_enable_callback(int error, uint16_t type,
 	monitor_interface->genl = genl_lookup(monitor_interface->ifname);
 }
 
-static struct l_netlink *iwmon_interface_enable(struct iwmon_interface *monitor_interface)
+static struct l_netlink *iwmon_interface_enable(
+				struct iwmon_interface *monitor_interface)
 {
 	return rtm_interface_send_message(monitor_interface->rtnl,
 						monitor_interface->ifname,
