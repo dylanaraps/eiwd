@@ -297,6 +297,7 @@ static void iwmon_interface_lookup_callback(int error, uint16_t type,
 			(IFF_UP | IFF_ALLMULTI | IFF_NOARP))
 		return;
 
+	l_free(monitor_interface->ifname);
 	monitor_interface->ifname = l_strndup(ifname, ifname_len);
 	monitor_interface->exists = true;
 }
