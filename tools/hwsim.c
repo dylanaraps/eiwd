@@ -80,25 +80,25 @@ static void create_callback(struct l_genl_msg *msg, void *user_data)
 	const void *data;
 	uint32_t radio_id = 0;
 
+	/* Note that the radio id is returned in the error field of
+	 * the returned message.
+	 */
+
 	if (!l_genl_attr_init(&attr, msg)) {
-		l_warn("Failed to initialize create return attributes");
+		int err = l_genl_msg_get_error(msg);
+		if (err < 0) {
+			l_warn("Failed to initialize create return attributes"
+				" [%d/%s]", -err, strerror(-err));
+			goto done;
+		}
+
+		radio_id = err;
+
+		l_info("Created new radio with id %u", radio_id);
+	} else {
+		l_warn("Failed to get create return value");
 		goto done;
 	}
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case HWSIM_ATTR_RADIO_ID:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid radio id attribute");
-				return;
-			}
-
-			radio_id = *((uint32_t *) data);
-			break;
-		}
-	}
-
-	l_info("Created new radio with id %u", radio_id);
 
 done:
 	l_main_quit();
@@ -111,14 +111,19 @@ static void destroy_callback(struct l_genl_msg *msg, void *user_data)
 	const void *data;
 
 	if (!l_genl_attr_init(&attr, msg)) {
-		l_warn("Failed to initialize destroy return attributes");
-		goto done;
+		int err = l_genl_msg_get_error(msg);
+		if (err < 0) {
+			l_warn("Failed to destroy radio [%d/%s]",
+				-err, strerror(-err));
+			goto done;
+		}
+
+		l_info("Destroyed radio");
 	}
 
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 	}
 
-	l_info("Destroyed radio");
 
 done:
 	l_main_quit();
