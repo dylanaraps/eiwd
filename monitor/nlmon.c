@@ -1171,40 +1171,41 @@ static void print_attributes(int indent, const struct attr_entry *table,
 			break;
 		case ATTR_U8:
 			val8 = *((uint8_t *) NLA_DATA(nla));
-			print_attr(indent, "%s: %u (0x%02x)", str, val8, val8);
+			print_attr(indent, "%s: %"PRIu8" (0x%02"PRIx8")",
+							str, val8, val8);
 			if (NLA_PAYLOAD(nla) != 1)
 				printf("malformed packet\n");
 			break;
 		case ATTR_U16:
 			val16 = *((uint16_t *) NLA_DATA(nla));
-			print_attr(indent, "%s: %u (0x%04x)", str,
-							val16, val16);
+			print_attr(indent, "%s: %"PRIu16" (0x%04"PRIx16")",
+							str, val16, val16);
 			if (NLA_PAYLOAD(nla) != 2)
 				printf("malformed packet\n");
 			break;
 		case ATTR_U32:
 			val32 = *((uint32_t *) NLA_DATA(nla));
-			print_attr(indent, "%s: %u (0x%08x)", str,
-							val32, val32);
+			print_attr(indent, "%s: %"PRIu32" (0x%08"PRIx32")",
+							str, val32, val32);
 			if (NLA_PAYLOAD(nla) != 4)
 				printf("malformed packet\n");
 			break;
 		case ATTR_U64:
 			val64 = *((uint64_t *) NLA_DATA(nla));
-			print_attr(indent, "%s: %lu (0x%016lx)", str,
-							val64, val64);
+			print_attr(indent, "%s: %"PRIu64" (0x%016"PRIx64")",
+							str, val64, val64);
 			if (NLA_PAYLOAD(nla) != 8)
 				printf("malformed packet\n");
 			break;
 		case ATTR_S32:
 			val_s32 = *((int32_t *) NLA_DATA(nla));
-			print_attr(indent, "%s: %d", str, val_s32);
+			print_attr(indent, "%s: %"PRId32, str, val_s32);
 			if (NLA_PAYLOAD(nla) != 4)
 				printf("malformed packet\n");
 			break;
 		case ATTR_S64:
 			val_s64 = *((int64_t *) NLA_DATA(nla));
-			print_attr(indent, "%s: %ld", str, val_s64);
+			print_attr(indent, "%s: %"PRId64, str, val_s64);
 			if (NLA_PAYLOAD(nla) != 4)
 				printf("malformed packet\n");
 			break;
@@ -1249,8 +1250,9 @@ static void print_attributes(int indent, const struct attr_entry *table,
 				print_attr(indent, "%s: true", str);
 			else if (NLA_PAYLOAD(nla) == 2) {
 				val16 = *((uint16_t *) NLA_DATA(nla));
-				print_attr(indent, "%s: %u (0x%04x)", str,
-								val16, val16);
+				print_attr(indent,
+					"%s: %"PRIu16" (0x%04"PRIx16")",
+					str, val16, val16);
 			} else
 				printf("malformed packet\n");
 			break;
