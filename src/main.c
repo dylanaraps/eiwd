@@ -32,6 +32,7 @@
 #include "src/netdev.h"
 #include "src/wiphy.h"
 #include "src/kdbus.h"
+#include "src/dbus.h"
 
 static void signal_handler(struct l_signal *signal, uint32_t signo,
 							void *user_data)
@@ -139,6 +140,11 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	if (!dbus_init()) {
+		exit_status = EXIT_FAILURE;
+		goto destroy;
+	}
+
 	if (!netdev_init()) {
 		exit_status = EXIT_FAILURE;
 		goto destroy;
@@ -154,6 +160,7 @@ int main(int argc, char *argv[])
 
 	wiphy_exit();
 	netdev_exit();
+	dbus_exit();
 
 	exit_status = EXIT_SUCCESS;
 
