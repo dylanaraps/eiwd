@@ -26,6 +26,7 @@
 
 #include <ell/ell.h>
 #include "src/dbus.h"
+#include "src/manager.h"
 
 struct l_dbus *g_dbus = 0;
 
@@ -64,6 +65,7 @@ static void request_name_setup(struct l_dbus_message *message, void *user_data)
 static void ready_callback(void *user_data)
 {
 	l_info("ready");
+	manager_init(g_dbus);
 }
 
 static void disconnect_callback(void *user_data)
@@ -95,6 +97,7 @@ bool dbus_init(void)
 
 bool dbus_exit(void)
 {
+	manager_exit(g_dbus);
 	l_dbus_destroy(g_dbus);
 	g_dbus = NULL;
 
