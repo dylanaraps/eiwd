@@ -76,8 +76,6 @@ static void do_debug(const char *str, void *user_data)
 static void create_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
 	uint32_t radio_id = 0;
 
 	/* Note that the radio id is returned in the error field of
