@@ -78,10 +78,10 @@ static void create_callback(struct l_genl_msg *msg, void *user_data)
 	struct l_genl_attr attr;
 	uint32_t radio_id = 0;
 
-	/* Note that the radio id is returned in the error field of
+	/*
+	 * Note that the radio id is returned in the error field of
 	 * the returned message.
 	 */
-
 	if (!l_genl_attr_init(&attr, msg)) {
 		int err = l_genl_msg_get_error(msg);
 		if (err < 0) {
@@ -121,7 +121,6 @@ static void destroy_callback(struct l_genl_msg *msg, void *user_data)
 
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 	}
-
 
 done:
 	l_main_quit();
