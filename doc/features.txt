@@ -12,3 +12,12 @@ command line option.
 
 Once iwmon terminates, the netlink monitor interface is removed (in
 case iwmon created it).
+
+
+HWSIM
+=====
+
+The radio id from kernel mac80211_hwsim module is parsed properly in
+hwsim. The radio id is not returned as HWSIM_ATTR_RADIO_ID but instead
+it is returned in error message. If the error code > 0, then that means
+the radio id. If the error code < 0, then that indicates a real error.

@@ -22,9 +22,12 @@ mac80211_hwsim
 
   The HWSIM_CMD_CREATE_RADIO command should return HWSIM_CMD_CREATE_RADIO
   on success so that the radio id for the created wiphy can be mapped by
-  test tools or when having to destroy that radio again.
+  test tools or when having to destroy that radio again. Note that currently
+  the radio is is parsed properly (commit a052cb5d3c29) as it comes in
+  the error code field, but if we want to create a new attribute for the
+  radio id, then some coding is needed.
 
-  Priority: High
+  Priority: Low
   Complexity: C1
 
 - Add support for client tracking of HWSIM_CMD_CREATE_RADIO
