@@ -21,3 +21,10 @@ The radio id from kernel mac80211_hwsim module is parsed properly in
 hwsim. The radio id is not returned as HWSIM_ATTR_RADIO_ID but instead
 it is returned in error message. If the error code > 0, then that means
 the radio id. If the error code < 0, then that indicates a real error.
+
+The hwsim uses new HWSIM_ATTR_DESTROY_RADIO_ON_CLOSE flag attribute to
+tell the kernel that when the hwsim process dies, the radios it created
+should be removed. For testing tools it is beneficial if the newly
+created radio could be bound to the lifetime of the netlink socket.
+The old behaviour i.e., radio is not destroyed when hwsim quits,
+is used if one starts the hwsim with -k (--keep) command line option.

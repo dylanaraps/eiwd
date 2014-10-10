@@ -30,21 +30,6 @@ mac80211_hwsim
   Priority: Low
   Complexity: C1
 
-- Add support for client tracking of HWSIM_CMD_CREATE_RADIO
-
-  When using HWSIM_CMD_CREATE_RADIO command the newly created radio is
-  not bound to the owner of the netlink socket.  This means that the radio
-  stays around even after the client quits.  For testing tools it would
-  be beneficial if the newly created radio could be bound to the lifetime
-  of the netlink socket.
-
-  Create a new HWSIM_ATTR_DESTROY_RADIO_ON_CLOSE (netlink flag attribute)
-  that can be given to HWSIM_CMD_CREATE_RADIO to indicate this behavior.
-
-  Priority: High
-  Complexity: C1
-  Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
-
 - Rename HWSIM_CMD_CREATE_RADIO into HWSIM_CMD_NEW_RADIO
 
   Using the name HWSIM_CMD_NEW_RADIO is more fitting on how other pieces
