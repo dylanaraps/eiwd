@@ -57,12 +57,14 @@ enum {
 	HWSIM_ATTR_REG_STRICT_REG,
 	HWSIM_ATTR_SUPPORT_P2P_DEVICE,
 	HWSIM_ATTR_USE_CHANCTX,
+	HWSIM_ATTR_DESTROY_RADIO_ON_CLOSE,
 	__HWSIM_ATTR_MAX,
 };
 #define HWSIM_ATTR_MAX (__HWSIM_ATTR_MAX - 1)
 
 static struct l_genl_family *hwsim;
 
+static bool keep_radios = false;
 static bool create_action = false;
 static const char *destroy_action = NULL;
 
@@ -131,7 +133,13 @@ static void hwsim_ready(void *user_data)
 	struct l_genl_msg *msg;
 
 	if (create_action) {
-		msg = l_genl_msg_new(HWSIM_CMD_CREATE_RADIO);
+		msg = l_genl_msg_new_sized(HWSIM_CMD_CREATE_RADIO,
+					keep_radios ? 0 : 4);
+		if (!keep_radios)
+			l_genl_msg_append_attr(msg,
+					HWSIM_ATTR_DESTROY_RADIO_ON_CLOSE,
+					0, NULL);
+
 		l_genl_family_send(hwsim, msg, create_callback, NULL, NULL);
 		l_genl_msg_unref(msg);
 		return;
@@ -165,12 +173,15 @@ static void usage(void)
 	printf("Options:\n"
 		"\t-C, --create           Create new simulated radio\n"
 		"\t-D, --destroy <id>     Destroy existing radio\n"
+		"\t-k, --keep             Do not destroy radios when "
+							"program exits\n"
 		"\t-h, --help             Show help options\n");
 }
 
 static const struct option main_options[] = {
 	{ "create",    no_argument,       NULL, 'C' },
 	{ "destroy",   required_argument, NULL, 'D' },
+	{ "keep",      no_argument,       NULL, 'k' },
 	{ "version",   no_argument,       NULL, 'v' },
 	{ "help",      no_argument,       NULL, 'h' },
 	{ }
@@ -186,7 +197,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "CD:vh", main_options, NULL);
+		opt = getopt_long(argc, argv, "CD:vhk", main_options, NULL);
 		if (opt < 0)
 			break;
 
@@ -196,6 +207,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'D':
 			destroy_action = optarg;
+			break;
+		case 'k':
+			keep_radios = true;
 			break;
 		case 'v':
 			printf("%s\n", VERSION);
