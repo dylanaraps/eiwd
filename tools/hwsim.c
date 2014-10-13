@@ -135,6 +135,7 @@ static void hwsim_ready(void *user_data)
 	if (create_action) {
 		msg = l_genl_msg_new_sized(HWSIM_CMD_CREATE_RADIO,
 					keep_radios ? 0 : 4);
+
 		if (!keep_radios)
 			l_genl_msg_append_attr(msg,
 					HWSIM_ATTR_DESTROY_RADIO_ON_CLOSE,
