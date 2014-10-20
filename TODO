@@ -29,6 +29,7 @@ mac80211_hwsim
 
   Priority: Low
   Complexity: C1
+  Owner: Patrik Flykt <patrik.flykt@linux.intel.com>
 
 - Rename HWSIM_CMD_CREATE_RADIO into HWSIM_CMD_NEW_RADIO
 
