@@ -41,6 +41,7 @@ mac80211_hwsim
 
   Priority: Medium
   Complexity: C1
+  Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
 
 - Rename HWSIM_CMD_DESTROY_RADIO into HWSIM_CMD_DEL_RADIO
 
@@ -52,6 +53,7 @@ mac80211_hwsim
 
   Priority: Medium
   Complexity: C1
+  Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
 
 - Provide multicast events for HWSIM_CMD_NEW_RADIO and HWSIM_CMD_DEL_RADIO
 
@@ -65,6 +67,7 @@ mac80211_hwsim
 
   Priority: Medium
   Complexity: C1
+  Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
 
 - Add support for HWSIM_CMD_GET_RADIO command
 
