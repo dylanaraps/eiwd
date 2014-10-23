@@ -22,6 +22,8 @@
 
 #include <stdbool.h>
 
+#define IWD_MANAGER_INTERFACE "net.connman.iwd.Manager"
+
 struct l_dbus;
 
 struct l_dbus *dbus_get_bus(void);

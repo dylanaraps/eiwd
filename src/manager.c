@@ -26,8 +26,7 @@
 
 #include <ell/ell.h>
 #include "src/manager.h"
-
-#define IWD_MANAGER_INTERFACE "net.connman.iwd.Manager"
+#include "src/dbus.h"
 
 static struct l_dbus_message *manager_set_property(struct l_dbus *dbus,
 						struct l_dbus_message *message,
