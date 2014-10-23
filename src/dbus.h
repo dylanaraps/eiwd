@@ -25,6 +25,8 @@
 #define IWD_MANAGER_INTERFACE "net.connman.iwd.Manager"
 #define IWD_DEVICE_INTERFACE "net.connman.iwd.Device"
 
+#define IWD_MANAGER_PATH "/"
+
 struct l_dbus;
 
 struct l_dbus *dbus_get_bus(void);

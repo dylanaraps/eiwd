@@ -71,7 +71,8 @@ static void setup_manager_interface(struct l_dbus_interface *interface)
 
 bool manager_init(struct l_dbus *dbus)
 {
-	if (!l_dbus_register_interface(dbus, "/", IWD_MANAGER_INTERFACE,
+	if (!l_dbus_register_interface(dbus, IWD_MANAGER_PATH,
+					IWD_MANAGER_INTERFACE,
 					setup_manager_interface, NULL, NULL)) {
 		l_info("Unable to register %s interface",
 				IWD_MANAGER_INTERFACE);
@@ -83,7 +84,8 @@ bool manager_init(struct l_dbus *dbus)
 
 bool manager_exit(struct l_dbus *dbus)
 {
-	l_dbus_unregister_interface(dbus, "/", IWD_MANAGER_INTERFACE);
+	l_dbus_unregister_interface(dbus, IWD_MANAGER_PATH,
+					IWD_MANAGER_INTERFACE);
 
 	return true;
 }
