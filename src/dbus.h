@@ -23,6 +23,7 @@
 #include <stdbool.h>
 
 #define IWD_MANAGER_INTERFACE "net.connman.iwd.Manager"
+#define IWD_DEVICE_INTERFACE "net.connman.iwd.Device"
 
 struct l_dbus;
 

@@ -36,8 +36,6 @@
 #include "src/wiphy.h"
 #include "src/dbus.h"
 
-#define IWD_DEVICE_INTERFACE "net.connman.iwd.Device"
-
 static const char *network_ssid = NULL;
 
 static struct l_genl *genl = NULL;
