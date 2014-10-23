@@ -37,6 +37,17 @@ static void do_debug(const char *str, void *user_data)
 	l_info("%s%s", prefix, str);
 }
 
+void dbus_dict_append_string(struct l_dbus_message_builder *builder,
+				const char *key, const char *strval)
+{
+	l_dbus_message_builder_enter_dict(builder, "sv");
+	l_dbus_message_builder_append_basic(builder, 's', key);
+	l_dbus_message_builder_enter_variant(builder, "s");
+	l_dbus_message_builder_append_basic(builder, 's', strval);
+	l_dbus_message_builder_leave_variant(builder);
+	l_dbus_message_builder_leave_dict(builder);
+}
+
 static void request_name_callback(struct l_dbus_message *message,
 					void *user_data)
 {
