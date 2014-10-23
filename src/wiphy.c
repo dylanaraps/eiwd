@@ -25,6 +25,7 @@
 #endif
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <sys/socket.h>
 #include <linux/if.h>
 #include <linux/if_ether.h>
@@ -33,6 +34,9 @@
 #include "linux/nl80211.h"
 #include "src/ie.h"
 #include "src/wiphy.h"
+#include "src/dbus.h"
+
+#define IWD_DEVICE_INTERFACE "net.connman.iwd.Device"
 
 static const char *network_ssid = NULL;
 
@@ -69,6 +73,57 @@ static void do_debug(const char *str, void *user_data)
 	l_info("%s%s", prefix, str);
 }
 
+static void device_emit_added(struct netdev *netdev)
+{
+
+}
+
+static void device_emit_removed(struct netdev *netdev)
+{
+
+}
+
+static struct l_dbus_message *device_set_property(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	const char *property;
+	struct l_dbus_message_iter variant;
+
+	if (!l_dbus_message_get_arguments(message, "sv", &property, &variant))
+		return l_dbus_message_new_error(message,
+						"org.test.InvalidArguments",
+						"Invalid arguments");
+
+	return l_dbus_message_new_error(message, "org.test.InvalidArguments",
+					"Unknown Property %s", property);
+}
+
+static struct l_dbus_message *device_get_properties(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct l_dbus_message *reply;
+
+	reply = l_dbus_message_new_method_return(message);
+	l_dbus_message_set_arguments(reply, "a{sv}", 0);
+
+	return reply;
+}
+
+static void setup_device_interface(struct l_dbus_interface *interface)
+{
+	l_dbus_interface_method(interface, "GetProperties", 0,
+				device_get_properties,
+				"a{sv}", "", "properties");
+	l_dbus_interface_method(interface, "SetProperty", 0,
+				device_set_property,
+				"", "sv", "name", "value");
+
+	l_dbus_interface_signal(interface, "PropertyChanged", 0,
+				"sv", "name", "value");
+}
+
 static void bss_free(void *data)
 {
 	struct bss *bss = data;
@@ -84,6 +139,14 @@ static void bss_free(void *data)
 static void netdev_free(void *data)
 {
 	struct netdev *netdev = data;
+	char path[256];
+	struct l_dbus *dbus;
+
+	dbus = dbus_get_bus();
+	snprintf(path, sizeof(path), "/%u", netdev->index);
+	l_dbus_unregister_interface(dbus, path, IWD_DEVICE_INTERFACE);
+
+	device_emit_removed(netdev);
 
 	l_debug("Freeing interface %s", netdev->name);
 
@@ -414,9 +477,21 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 	netdev = l_queue_find(wiphy->netdev_list, netdev_match,
 						L_UINT_TO_PTR(ifindex));
 	if (!netdev) {
+		struct l_dbus *dbus = dbus_get_bus();
+		char path[256];
+
+		snprintf(path, sizeof(path), "/%u", ifindex);
+
 		netdev = l_new(struct netdev, 1);
 		netdev->bss_list = l_queue_new();
 		l_queue_push_head(wiphy->netdev_list, netdev);
+
+		if (!l_dbus_register_interface(dbus, path, IWD_DEVICE_INTERFACE,
+					setup_device_interface, netdev, NULL))
+			l_info("Unable to register %s interface",
+				IWD_DEVICE_INTERFACE);
+		else
+			device_emit_added(netdev);
 	}
 
 	memcpy(netdev->name, ifname, sizeof(netdev->name));
