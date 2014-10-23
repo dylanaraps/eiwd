@@ -48,6 +48,17 @@ void dbus_dict_append_string(struct l_dbus_message_builder *builder,
 	l_dbus_message_builder_leave_dict(builder);
 }
 
+void dbus_dict_append_bool(struct l_dbus_message_builder *builder,
+				const char *key, bool boolval)
+{
+	l_dbus_message_builder_enter_dict(builder, "sv");
+	l_dbus_message_builder_append_basic(builder, 's', key);
+	l_dbus_message_builder_enter_variant(builder, "b");
+	l_dbus_message_builder_append_basic(builder, 'b', &boolval);
+	l_dbus_message_builder_leave_variant(builder);
+	l_dbus_message_builder_leave_dict(builder);
+}
+
 static void request_name_callback(struct l_dbus_message *message,
 					void *user_data)
 {
