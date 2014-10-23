@@ -81,7 +81,29 @@ static const char *device_get_path(struct netdev *netdev)
 
 static void device_emit_added(struct netdev *netdev)
 {
+	struct l_dbus *dbus = dbus_get_bus();
+	struct l_dbus_message *signal;
+	struct l_dbus_message_builder *builder;
 
+	signal = l_dbus_message_new_signal(dbus, IWD_MANAGER_PATH,
+						IWD_MANAGER_INTERFACE,
+						"DeviceAdded");
+
+	if (!signal)
+		return;
+
+	builder = l_dbus_message_builder_new(signal);
+	if (!builder) {
+		l_dbus_message_unref(signal);
+		return;
+	}
+
+	l_dbus_message_builder_append_basic(builder, 'o',
+						device_get_path(netdev));
+
+	l_dbus_message_builder_finalize(builder);
+	l_dbus_message_builder_destroy(builder);
+	l_dbus_send(dbus, signal);
 }
 
 static void device_emit_removed(struct netdev *netdev)
