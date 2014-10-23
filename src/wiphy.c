@@ -79,6 +79,18 @@ static const char *device_get_path(struct netdev *netdev)
 	return path;
 }
 
+bool __iwd_device_append_properties(struct netdev *netdev,
+					struct l_dbus_message_builder *builder)
+{
+	l_dbus_message_builder_enter_array(builder, "{sv}");
+
+	dbus_dict_append_string(builder, "Name", netdev->name);
+
+	l_dbus_message_builder_leave_array(builder);
+
+	return true;
+}
+
 static void device_emit_added(struct netdev *netdev)
 {
 	struct l_dbus *dbus = dbus_get_bus();
