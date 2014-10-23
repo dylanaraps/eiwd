@@ -86,7 +86,18 @@ static void device_emit_added(struct netdev *netdev)
 
 static void device_emit_removed(struct netdev *netdev)
 {
+	struct l_dbus *dbus = dbus_get_bus();
+	struct l_dbus_message *signal;
 
+	signal = l_dbus_message_new_signal(dbus, IWD_MANAGER_PATH,
+						IWD_MANAGER_INTERFACE,
+						"DeviceRemoved");
+
+	if (!signal)
+		return;
+
+	l_dbus_message_set_arguments(signal, "o", device_get_path(netdev));
+	l_dbus_send(dbus, signal);
 }
 
 static struct l_dbus_message *device_set_property(struct l_dbus *dbus,
