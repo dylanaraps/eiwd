@@ -71,6 +71,14 @@ static void do_debug(const char *str, void *user_data)
 	l_info("%s%s", prefix, str);
 }
 
+static const char *device_get_path(struct netdev *netdev)
+{
+	static char path[256];
+
+	snprintf(path, sizeof(path), "/%u", netdev->index);
+	return path;
+}
+
 static void device_emit_added(struct netdev *netdev)
 {
 
@@ -137,12 +145,11 @@ static void bss_free(void *data)
 static void netdev_free(void *data)
 {
 	struct netdev *netdev = data;
-	char path[256];
 	struct l_dbus *dbus;
 
 	dbus = dbus_get_bus();
-	snprintf(path, sizeof(path), "/%u", netdev->index);
-	l_dbus_unregister_interface(dbus, path, IWD_DEVICE_INTERFACE);
+	l_dbus_unregister_interface(dbus, device_get_path(netdev),
+					IWD_DEVICE_INTERFACE);
 
 	device_emit_removed(netdev);
 
