@@ -71,7 +71,7 @@ static void do_debug(const char *str, void *user_data)
 	l_info("%s%s", prefix, str);
 }
 
-static const char *device_get_path(struct netdev *netdev)
+const char *iwd_device_get_path(struct netdev *netdev)
 {
 	static char path[256];
 
@@ -131,7 +131,7 @@ static void device_emit_added(struct netdev *netdev)
 	}
 
 	l_dbus_message_builder_append_basic(builder, 'o',
-						device_get_path(netdev));
+						iwd_device_get_path(netdev));
 	__iwd_device_append_properties(netdev, builder);
 
 	l_dbus_message_builder_finalize(builder);
@@ -151,7 +151,7 @@ static void device_emit_removed(struct netdev *netdev)
 	if (!signal)
 		return;
 
-	l_dbus_message_set_arguments(signal, "o", device_get_path(netdev));
+	l_dbus_message_set_arguments(signal, "o", iwd_device_get_path(netdev));
 	l_dbus_send(dbus, signal);
 }
 
@@ -223,7 +223,7 @@ static void netdev_free(void *data)
 	struct l_dbus *dbus;
 
 	dbus = dbus_get_bus();
-	l_dbus_unregister_interface(dbus, device_get_path(netdev),
+	l_dbus_unregister_interface(dbus, iwd_device_get_path(netdev),
 					IWD_DEVICE_INTERFACE);
 
 	device_emit_removed(netdev);

@@ -37,3 +37,4 @@ void wiphy_set_ssid(const char *ssid);
 bool __iwd_device_append_properties(struct netdev *netdev,
 					struct l_dbus_message_builder *builder);
 void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data);
+const char *iwd_device_get_path(struct netdev *netdev);
