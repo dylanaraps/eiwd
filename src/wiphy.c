@@ -558,26 +558,26 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 						L_UINT_TO_PTR(ifindex));
 	if (!netdev) {
 		struct l_dbus *dbus = dbus_get_bus();
-		char path[256];
-
-		snprintf(path, sizeof(path), "/%u", ifindex);
 
 		netdev = l_new(struct netdev, 1);
 		netdev->bss_list = l_queue_new();
+		memcpy(netdev->name, ifname, sizeof(netdev->name));
+		memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
+		netdev->index = ifindex;
+		netdev->type = iftype;
+
 		l_queue_push_head(wiphy->netdev_list, netdev);
 
-		if (!l_dbus_register_interface(dbus, path, IWD_DEVICE_INTERFACE,
-					setup_device_interface, netdev, NULL))
+		if (!l_dbus_register_interface(dbus,
+						iwd_device_get_path(netdev),
+						IWD_DEVICE_INTERFACE,
+						setup_device_interface,
+						netdev, NULL))
 			l_info("Unable to register %s interface",
 				IWD_DEVICE_INTERFACE);
 		else
 			device_emit_added(netdev);
 	}
-
-	memcpy(netdev->name, ifname, sizeof(netdev->name));
-	memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
-	netdev->index = ifindex;
-	netdev->type = iftype;
 
 	l_debug("Found interface %s", netdev->name);
 
