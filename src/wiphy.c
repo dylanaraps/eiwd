@@ -112,6 +112,7 @@ static void device_emit_added(struct netdev *netdev)
 
 	l_dbus_message_builder_append_basic(builder, 'o',
 						device_get_path(netdev));
+	__iwd_device_append_properties(netdev, builder);
 
 	l_dbus_message_builder_finalize(builder);
 	l_dbus_message_builder_destroy(builder);
@@ -154,10 +155,17 @@ static struct l_dbus_message *device_get_properties(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
 {
+	struct netdev *netdev = user_data;
 	struct l_dbus_message *reply;
+	struct l_dbus_message_builder *builder;
 
 	reply = l_dbus_message_new_method_return(message);
-	l_dbus_message_set_arguments(reply, "a{sv}", 0);
+
+	builder = l_dbus_message_builder_new(reply);
+
+	__iwd_device_append_properties(netdev, builder);
+	l_dbus_message_builder_finalize(builder);
+	l_dbus_message_builder_destroy(builder);
 
 	return reply;
 }
@@ -173,6 +181,8 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 
 	l_dbus_interface_signal(interface, "PropertyChanged", 0,
 				"sv", "name", "value");
+
+	l_dbus_interface_ro_property(interface, "Name", "s");
 }
 
 static void bss_free(void *data)
