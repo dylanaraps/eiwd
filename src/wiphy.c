@@ -91,6 +91,26 @@ bool __iwd_device_append_properties(struct netdev *netdev,
 	return true;
 }
 
+void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
+{
+	const struct l_queue_entry *wiphy_entry;
+
+	for (wiphy_entry = l_queue_get_entries(wiphy_list); wiphy_entry;
+					wiphy_entry = wiphy_entry->next) {
+		struct wiphy *wiphy = wiphy_entry->data;
+		const struct l_queue_entry *netdev_entry;
+
+		netdev_entry = l_queue_get_entries(wiphy->netdev_list);
+
+		while (netdev_entry) {
+			struct netdev *netdev = netdev_entry->data;
+
+			func(netdev, user_data);
+			netdev_entry = netdev_entry->next;
+		}
+	}
+}
+
 static void device_emit_added(struct netdev *netdev)
 {
 	struct l_dbus *dbus = dbus_get_bus();
