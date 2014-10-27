@@ -183,6 +183,12 @@ static void hwsim_ready(void *user_data)
 		l_main_quit();
 }
 
+static void hwsim_disappeared(void *user_data)
+{
+	l_info("MAC80211_HWSIM missing");
+	l_main_quit();
+}
+
 static void signal_handler(struct l_signal *signal, uint32_t signo,
 							void *user_data)
 {
@@ -294,7 +300,8 @@ int main(int argc, char *argv[])
 		goto done;
 	}
 
-	l_genl_family_set_watches(hwsim, hwsim_ready, NULL, NULL, NULL);
+	l_genl_family_set_watches(hwsim, hwsim_ready, hwsim_disappeared,
+					NULL, NULL);
 
 	l_main_run();
 
