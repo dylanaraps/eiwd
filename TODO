@@ -175,6 +175,7 @@ cfg80211 / nl80211
 
   Priority: High
   Complexity: C1
+  Owner: Tomasz Bursztyka <tomasz.bursztyka@linux.intel.com>
 
 - Bind NL80211_CMD_START_SCHED_SCAN to netlink socket
 
