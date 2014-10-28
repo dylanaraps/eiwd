@@ -420,11 +420,12 @@ fail:
 
 static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 {
-	struct wiphy *wiphy = user_data;
-	struct netdev *netdev = NULL;
+	struct netdev *netdev = user_data;
 	struct l_genl_attr attr, nested;
 	uint16_t type, len;
 	const void *data;
+
+	l_debug("get_scan_callback");
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -437,14 +438,12 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 				return;
 			}
 
-			netdev = l_queue_find(wiphy->netdev_list, netdev_match,
-					L_UINT_TO_PTR(*((uint32_t *) data)));
-			if (!netdev) {
-				l_warn("No interface structure found");
+			if (netdev->index != *((uint32_t *) data)) {
+				l_warn("ifindex mismatch");
 				return;
 			}
-			break;
 
+			break;
 		case NL80211_ATTR_BSS:
 			if (!netdev) {
 				l_warn("No interface structure found");
@@ -460,21 +459,21 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
-static void get_scan(struct wiphy *wiphy)
+static void get_scan_done(void *user)
 {
-	struct netdev *netdev;
+	struct netdev *netdev = user;
+
+	l_debug("get_scan_done for netdev: %p", netdev);
+}
+
+static void get_scan(struct netdev *netdev)
+{
 	struct l_genl_msg *msg;
-
-	if (!network_ssid)
-		return;
-
-	netdev = l_queue_peek_head(wiphy->netdev_list);
-	if (!netdev)
-		return;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_GET_SCAN, 8);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_family_dump(nl80211, msg, get_scan_callback, wiphy, NULL);
+	l_genl_family_dump(nl80211, msg, get_scan_callback, netdev,
+				get_scan_done);
 	l_genl_msg_unref(msg);
 }
 
@@ -689,10 +688,15 @@ static void wiphy_config_notify(struct l_genl_msg *msg, void *user_data)
 static void wiphy_scan_notify(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy = NULL;
+	struct netdev *netdev = NULL;
 	struct l_genl_attr attr;
 	uint16_t type, len;
 	const void *data;
 	uint8_t cmd;
+	uint32_t attr_ifindex;
+	bool have_ifindex;
+	uint32_t attr_wiphy;
+	bool have_wiphy;
 
 	cmd = l_genl_msg_get_command(msg);
 
@@ -709,23 +713,47 @@ static void wiphy_scan_notify(struct l_genl_msg *msg, void *user_data)
 				return;
 			}
 
-			wiphy = l_queue_find(wiphy_list, wiphy_match,
-					L_UINT_TO_PTR(*((uint32_t *) data)));
-			if (!wiphy) {
-				l_warn("No wiphy structure found");
+			have_wiphy = true;
+			attr_wiphy = *((uint32_t *) data);
+			break;
+		case NL80211_ATTR_IFINDEX:
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid interface index attribute");
 				return;
 			}
+
+			have_ifindex = true;
+			attr_ifindex = *((uint32_t *) data);
 			break;
 		}
 	}
 
+	if (!have_wiphy) {
+		l_warn("Scan results do not contain wiphy attribute");
+		return;
+	}
+
+	if (!have_ifindex) {
+		l_warn("Scan results do not contain ifindex attribute");
+		return;
+	}
+
+	wiphy = l_queue_find(wiphy_list, wiphy_match,
+				L_UINT_TO_PTR(attr_wiphy));
 	if (!wiphy) {
-		l_warn("Scan notification is missing wiphy attribute");
+		l_warn("Scan notification for unknown wiphy");
+		return;
+	}
+
+	netdev = l_queue_find(wiphy->netdev_list, netdev_match,
+					L_UINT_TO_PTR(attr_ifindex));
+	if (!netdev) {
+		l_warn("Scan notification for unknown ifindex");
 		return;
 	}
 
 	if (cmd == NL80211_CMD_NEW_SCAN_RESULTS) {
-		get_scan(wiphy);
+		get_scan(netdev);
 		return;
 	}
 }
