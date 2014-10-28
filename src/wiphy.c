@@ -53,6 +53,7 @@ struct netdev {
 	uint32_t type;
 	uint8_t addr[ETH_ALEN];
 	struct l_queue *bss_list;
+	struct l_dbus_message *pending;
 };
 
 struct wiphy {
@@ -190,6 +191,50 @@ static struct l_dbus_message *device_get_properties(struct l_dbus *dbus,
 	return reply;
 }
 
+static void device_scan_callback(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	struct l_dbus_message *reply;
+
+	if (!l_genl_attr_init(&attr, msg)) {
+		dbus_pending_reply(&netdev->pending,
+					dbus_error_failed(netdev->pending));
+		return;
+	}
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+	}
+
+	l_debug("Scan triggered for netdev %s", netdev->name);
+
+	reply = l_dbus_message_new_method_return(netdev->pending);
+	l_dbus_message_set_arguments(reply, "");
+	dbus_pending_reply(&netdev->pending, reply);
+}
+
+static struct l_dbus_message *device_scan(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct l_genl_msg *msg;
+
+	if (netdev->pending)
+		return dbus_error_busy(message);
+
+	netdev->pending = l_dbus_message_ref(message);
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN, 16);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_family_send(nl80211, msg, device_scan_callback, netdev, NULL);
+	l_genl_msg_unref(msg);
+
+	return NULL;
+}
+
 static void setup_device_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "GetProperties", 0,
@@ -198,6 +243,8 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "SetProperty", 0,
 				device_set_property,
 				"", "sv", "name", "value");
+	l_dbus_interface_method(interface, "Scan", 0,
+				device_scan, "", "");
 
 	l_dbus_interface_signal(interface, "PropertyChanged", 0,
 				"sv", "name", "value");
@@ -304,39 +351,6 @@ static void mlme_associate(struct netdev *netdev, struct bss *bss)
 	l_genl_msg_unref(msg);
 }
 
-static void trigger_scan_callback(struct l_genl_msg *msg, void *user_data)
-{
-	struct wiphy *wiphy = user_data;
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-	}
-
-	l_debug("Scan triggered for wiphy %s", wiphy->name);
-}
-
-static void trigger_scan(struct wiphy *wiphy)
-{
-	struct netdev *netdev;
-	struct l_genl_msg *msg;
-
-	if (!network_ssid)
-		return;
-
-	netdev = l_queue_peek_head(wiphy->netdev_list);
-	if (!netdev)
-		return;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN, 16);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_family_send(nl80211, msg, trigger_scan_callback, wiphy, NULL);
-	l_genl_msg_unref(msg);
-}
 
 static bool parse_ie(const void *data, uint16_t len)
 {
@@ -580,8 +594,6 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 	}
 
 	l_debug("Found interface %s", netdev->name);
-
-	trigger_scan(wiphy);
 }
 
 static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
