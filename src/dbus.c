@@ -65,6 +65,12 @@ struct l_dbus_message *dbus_error_busy(struct l_dbus_message *msg)
 					"Operation already in progress");
 }
 
+struct l_dbus_message *dbus_error_failed(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".Failed",
+					"Operation failed");
+}
+
 void dbus_pending_reply(struct l_dbus_message **msg,
 				struct l_dbus_message *reply)
 {
