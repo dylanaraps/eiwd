@@ -22,6 +22,8 @@
 
 #include <stdbool.h>
 
+#define IWD_SERVICE "net.connman.iwd"
+
 #define IWD_MANAGER_INTERFACE "net.connman.iwd.Manager"
 #define IWD_DEVICE_INTERFACE "net.connman.iwd.Device"
 
@@ -38,6 +40,8 @@ void dbus_dict_append_string(struct l_dbus_message_builder *builder,
 				const char *key, const char *strval);
 void dbus_dict_append_bool(struct l_dbus_message_builder *builder,
 				const char *key, bool boolval);
+
+struct l_dbus_message *dbus_error_busy(struct l_dbus_message *msg);
 
 bool dbus_init(void);
 bool dbus_exit(void);

@@ -59,6 +59,12 @@ void dbus_dict_append_bool(struct l_dbus_message_builder *builder,
 	l_dbus_message_builder_leave_dict(builder);
 }
 
+struct l_dbus_message *dbus_error_busy(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".InProgress",
+					"Operation already in progress");
+}
+
 void dbus_pending_reply(struct l_dbus_message **msg,
 				struct l_dbus_message *reply)
 {
