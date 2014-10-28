@@ -352,74 +352,70 @@ static void mlme_associate(struct netdev *netdev, struct bss *bss)
 }
 
 
-static bool parse_ie(const void *data, uint16_t len)
+static bool parse_ie(struct bss *bss, const void *data, uint16_t len)
 {
 	struct ie_tlv_iter iter;
-	bool result = false;
 
 	ie_tlv_iter_init(&iter, data, len);
 
 	while (ie_tlv_iter_next(&iter)) {
 		uint8_t tag = ie_tlv_iter_get_tag(&iter);
 
-		if (tag == 0) {
-			char *str;
-
-			str = l_strndup((const char *) iter.data, iter.len);
-			if (!strcmp(str, network_ssid)) {
-				l_debug("Found network SSID=%s", str);
-				result = true;
-			}
-			l_free(str);
+		switch (tag) {
+		case 0:
+			bss->ssid = l_strndup((const char *) iter.data,
+								iter.len);
+			break;
+		default:
+			break;
 		}
 	}
 
-	return result;
+	return true;
 }
 
 static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 {
 	uint16_t type, len;
 	const void *data;
-	uint8_t bssid[ETH_ALEN];
-	uint32_t frequency;
-	bool found = false;
+	struct bss *bss;
+
+	bss = l_new(struct bss, 1);
 
 	while (l_genl_attr_next(attr, &type, &len, &data)) {
 		switch (type) {
 		case NL80211_BSS_BSSID:
-			if (len != sizeof(bssid)) {
+			if (len != sizeof(bss->addr)) {
 				l_warn("Invalid BSSID attribute");
-				return;
+				goto fail;
 			}
-			memcpy(bssid, data, len);
+
+			memcpy(bss->addr, data, len);
 			break;
 		case NL80211_BSS_FREQUENCY:
 			if (len != sizeof(uint32_t)) {
 				l_warn("Invalid frequency attribute");
-				return;
+				goto fail;
 			}
-			frequency = *((uint32_t *) data);
+
+			bss->frequency = *((uint32_t *) data);
 			break;
 		case NL80211_BSS_INFORMATION_ELEMENTS:
-			found = parse_ie(data, len);
+			if (!parse_ie(bss, data, len)) {
+				l_warn("Could not parse BSS IEs");
+				goto fail;
+			}
+
 			break;
 		}
 	}
 
-	if (found) {
-		struct bss *bss;
+	l_debug("Frequency for %s is %u", bss->ssid, bss->frequency);
+	l_queue_push_head(netdev->bss_list, bss);
+	return;
 
-		l_debug("Frequency %u", frequency);
-
-		bss = l_new(struct bss, 1);
-		memcpy(bss->addr, bssid, sizeof(bss->addr));
-		bss->frequency = frequency;
-		bss->ssid = l_strdup(network_ssid);
-		l_queue_push_head(netdev->bss_list, bss);
-
-		mlme_authenticate(netdev, bss);
-	}
+fail:
+	bss_free(bss);
 }
 
 static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
