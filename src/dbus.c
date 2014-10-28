@@ -59,6 +59,16 @@ void dbus_dict_append_bool(struct l_dbus_message_builder *builder,
 	l_dbus_message_builder_leave_dict(builder);
 }
 
+void dbus_pending_reply(struct l_dbus_message **msg,
+				struct l_dbus_message *reply)
+{
+	struct l_dbus *dbus = dbus_get_bus();
+
+	l_dbus_send(dbus, reply);
+	l_dbus_message_unref(*msg);
+	*msg = NULL;
+}
+
 static void request_name_callback(struct l_dbus_message *message,
 					void *user_data)
 {

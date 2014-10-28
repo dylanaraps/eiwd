@@ -31,6 +31,9 @@ struct l_dbus;
 
 struct l_dbus *dbus_get_bus(void);
 
+void dbus_pending_reply(struct l_dbus_message **msg,
+				struct l_dbus_message *reply);
+
 void dbus_dict_append_string(struct l_dbus_message_builder *builder,
 				const char *key, const char *strval);
 void dbus_dict_append_bool(struct l_dbus_message_builder *builder,
