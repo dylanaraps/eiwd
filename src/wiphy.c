@@ -47,6 +47,11 @@ struct bss {
 	char *ssid;
 };
 
+struct network {
+	struct netdev *netdev;
+	struct bss *bss;
+};
+
 struct netdev {
 	uint32_t index;
 	char name[IFNAMSIZ];
@@ -55,6 +60,7 @@ struct netdev {
 	struct l_queue *bss_list;
 	struct l_queue *old_bss_list;
 	struct l_dbus_message *pending;
+	struct l_hashmap *networks;
 };
 
 struct wiphy {
@@ -79,6 +85,13 @@ const char *iwd_device_get_path(struct netdev *netdev)
 
 	snprintf(path, sizeof(path), "/%u", netdev->index);
 	return path;
+}
+
+static void network_free(void *data)
+{
+	struct network *network = data;
+
+	l_free(network);
 }
 
 bool __iwd_device_append_properties(struct netdev *netdev,
@@ -299,6 +312,8 @@ static void netdev_free(void *data)
 
 	l_queue_destroy(netdev->bss_list, bss_free);
 	l_queue_destroy(netdev->old_bss_list, bss_free);
+
+	l_hashmap_destroy(netdev->networks, network_free);
 	l_free(netdev);
 }
 
@@ -435,12 +450,28 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 	old_bss = l_queue_remove_if(netdev->old_bss_list, bss_match, bss);
 
 	if (!old_bss) {
+		struct network *network;
+
 		l_debug("Found new BSS '%s' with SSID: %s, freq: %u",
 				bss_address_to_string(bss),
 				bss->ssid, bss->frequency);
+
+		network = l_new(struct network, 1);
+		network->bss = bss;
+		network->netdev = netdev;
+
+		l_hashmap_insert(netdev->networks, bss_address_to_string(bss),
+					network);
 	} else {
+		struct network *network;
+
 		l_debug("Found existing BSS '%s'",
 				bss_address_to_string(bss));
+
+		network = l_hashmap_lookup(netdev->networks,
+						bss_address_to_string(bss));
+		if (network)
+			network->bss = bss;
 	}
 
 	l_queue_push_head(netdev->bss_list, bss);
@@ -506,9 +537,13 @@ static void get_scan_done(void *user)
 	for (bss_entry = l_queue_get_entries(netdev->old_bss_list); bss_entry;
 					bss_entry = bss_entry->next) {
 		struct bss *bss = bss_entry->data;
+		struct network *network;
 
 		l_debug("Lost BSS '%s' with SSID: %s",
 				bss_address_to_string(bss), bss->ssid);
+		network = l_hashmap_remove(netdev->networks,
+						bss_address_to_string(bss));
+		network_free(network);
 	}
 
 	l_queue_destroy(netdev->old_bss_list, bss_free);
@@ -619,6 +654,7 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 
 		netdev = l_new(struct netdev, 1);
 		netdev->bss_list = l_queue_new();
+		netdev->networks = l_hashmap_string_new();
 		memcpy(netdev->name, ifname, sizeof(netdev->name));
 		memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
 		netdev->index = ifindex;
