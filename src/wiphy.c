@@ -134,6 +134,35 @@ static void setup_network_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_ro_property(interface, "Name", "s");
 }
 
+static void network_emit_added(struct network *network)
+{
+	struct l_dbus *dbus = dbus_get_bus();
+	struct l_dbus_message *signal;
+	struct l_dbus_message_builder *builder;
+
+	signal = l_dbus_message_new_signal(dbus,
+					iwd_device_get_path(network->netdev),
+					IWD_DEVICE_INTERFACE,
+					"NetworkAdded");
+
+	if (!signal)
+		return;
+
+	builder = l_dbus_message_builder_new(signal);
+	if (!builder) {
+		l_dbus_message_unref(signal);
+		return;
+	}
+
+	l_dbus_message_builder_append_basic(builder, 'o',
+						iwd_network_get_path(network));
+	__iwd_network_append_properties(network, builder);
+
+	l_dbus_message_builder_finalize(builder);
+	l_dbus_message_builder_destroy(builder);
+	l_dbus_send(dbus, signal);
+}
+
 static void network_free(void *data)
 {
 	struct network *network = data;
@@ -530,6 +559,8 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 						network, NULL))
 			l_info("Unable to register %s interface",
 				IWD_NETWORK_INTERFACE);
+		else
+			network_emit_added(network);
 	} else {
 		struct network *network;
 
