@@ -53,6 +53,7 @@ struct netdev {
 	uint32_t type;
 	uint8_t addr[ETH_ALEN];
 	struct l_queue *bss_list;
+	struct l_queue *old_bss_list;
 	struct l_dbus_message *pending;
 };
 
@@ -252,6 +253,25 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_ro_property(interface, "Name", "s");
 }
 
+static const char *bss_address_to_string(const struct bss *bss)
+{
+	static char buf[32];
+
+	snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X",
+			bss->addr[0], bss->addr[1], bss->addr[2],
+			bss->addr[3], bss->addr[4], bss->addr[5]);
+
+	return buf;
+}
+
+static bool bss_match(const void *a, const void *b)
+{
+	const struct bss *bss_a = a;
+	const struct bss *bss_b = b;
+
+	return !memcmp(bss_a->addr, bss_b->addr, sizeof(bss_a->addr));
+}
+
 static void bss_free(void *data)
 {
 	struct bss *bss = data;
@@ -278,6 +298,7 @@ static void netdev_free(void *data)
 	l_debug("Freeing interface %s", netdev->name);
 
 	l_queue_destroy(netdev->bss_list, bss_free);
+	l_queue_destroy(netdev->old_bss_list, bss_free);
 	l_free(netdev);
 }
 
@@ -379,6 +400,7 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 	uint16_t type, len;
 	const void *data;
 	struct bss *bss;
+	struct bss *old_bss;
 
 	bss = l_new(struct bss, 1);
 
@@ -410,7 +432,17 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 		}
 	}
 
-	l_debug("Frequency for %s is %u", bss->ssid, bss->frequency);
+	old_bss = l_queue_remove_if(netdev->old_bss_list, bss_match, bss);
+
+	if (!old_bss) {
+		l_debug("Found new BSS '%s' with SSID: %s, freq: %u",
+				bss_address_to_string(bss),
+				bss->ssid, bss->frequency);
+	} else {
+		l_debug("Found existing BSS '%s'",
+				bss_address_to_string(bss));
+	}
+
 	l_queue_push_head(netdev->bss_list, bss);
 	return;
 
@@ -429,6 +461,11 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
+
+	if (!netdev->old_bss_list) {
+		netdev->old_bss_list = netdev->bss_list;
+		netdev->bss_list = l_queue_new();
+	}
 
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 		switch (type) {
@@ -462,8 +499,20 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 static void get_scan_done(void *user)
 {
 	struct netdev *netdev = user;
+	const struct l_queue_entry *bss_entry;
 
 	l_debug("get_scan_done for netdev: %p", netdev);
+
+	for (bss_entry = l_queue_get_entries(netdev->old_bss_list); bss_entry;
+					bss_entry = bss_entry->next) {
+		struct bss *bss = bss_entry->data;
+
+		l_debug("Lost BSS '%s' with SSID: %s",
+				bss_address_to_string(bss), bss->ssid);
+	}
+
+	l_queue_destroy(netdev->old_bss_list, bss_free);
+	netdev->old_bss_list = NULL;
 }
 
 static void get_scan(struct netdev *netdev)
