@@ -32,6 +32,7 @@
 #include <ell/ell.h>
 
 #include "linux/nl80211.h"
+#include "src/iwd.h"
 #include "src/ie.h"
 #include "src/wiphy.h"
 #include "src/dbus.h"
@@ -896,9 +897,9 @@ static void wiphy_scan_notify(struct l_genl_msg *msg, void *user_data)
 	uint16_t type, len;
 	const void *data;
 	uint8_t cmd;
-	uint32_t attr_ifindex;
+	uint32_t uninitialized_var(attr_ifindex);
 	bool have_ifindex;
-	uint32_t attr_wiphy;
+	uint32_t uninitialized_var(attr_wiphy);
 	bool have_wiphy;
 
 	cmd = l_genl_msg_get_command(msg);
