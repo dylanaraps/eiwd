@@ -26,6 +26,7 @@
 
 #define IWD_MANAGER_INTERFACE "net.connman.iwd.Manager"
 #define IWD_DEVICE_INTERFACE "net.connman.iwd.Device"
+#define IWD_NETWORK_INTERFACE "net.connman.iwd.Network"
 
 #define IWD_MANAGER_PATH "/"
 
