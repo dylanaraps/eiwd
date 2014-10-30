@@ -79,19 +79,79 @@ static void do_debug(const char *str, void *user_data)
 	l_info("%s%s", prefix, str);
 }
 
+static const char *iwd_network_get_path(struct network *network)
+{
+	static char path[256];
+
+	snprintf(path, sizeof(path), "%s/%02X%02X%02X%02X%02X%02X",
+			iwd_device_get_path(network->netdev),
+			network->bss->addr[0], network->bss->addr[1],
+			network->bss->addr[2], network->bss->addr[3],
+			network->bss->addr[4], network->bss->addr[5]);
+	return path;
+}
+
+static bool __iwd_network_append_properties(struct network *network,
+					struct l_dbus_message_builder *builder)
+{
+	l_dbus_message_builder_enter_array(builder, "{sv}");
+
+	dbus_dict_append_string(builder, "SSID", network->bss->ssid);
+
+	l_dbus_message_builder_leave_array(builder);
+
+	return true;
+}
+
+static struct l_dbus_message *network_get_properties(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct network *network = user_data;
+	struct l_dbus_message *reply;
+	struct l_dbus_message_builder *builder;
+
+	reply = l_dbus_message_new_method_return(message);
+
+	builder = l_dbus_message_builder_new(reply);
+
+	__iwd_network_append_properties(network, builder);
+	l_dbus_message_builder_finalize(builder);
+	l_dbus_message_builder_destroy(builder);
+
+	return reply;
+}
+
+static void setup_network_interface(struct l_dbus_interface *interface)
+{
+	l_dbus_interface_method(interface, "GetProperties", 0,
+				network_get_properties,
+				"a{sv}", "", "properties");
+
+	l_dbus_interface_signal(interface, "PropertyChanged", 0,
+				"sv", "name", "value");
+
+	l_dbus_interface_ro_property(interface, "Name", "s");
+}
+
+static void network_free(void *data)
+{
+	struct network *network = data;
+	struct l_dbus *dbus;
+
+	dbus = dbus_get_bus();
+	l_dbus_unregister_interface(dbus, iwd_network_get_path(network),
+					IWD_NETWORK_INTERFACE);
+
+	l_free(network);
+}
+
 const char *iwd_device_get_path(struct netdev *netdev)
 {
 	static char path[256];
 
 	snprintf(path, sizeof(path), "/%u", netdev->index);
 	return path;
-}
-
-static void network_free(void *data)
-{
-	struct network *network = data;
-
-	l_free(network);
 }
 
 bool __iwd_device_append_properties(struct netdev *netdev,
@@ -462,6 +522,14 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 
 		l_hashmap_insert(netdev->networks, bss_address_to_string(bss),
 					network);
+
+		if (!l_dbus_register_interface(dbus_get_bus(),
+						iwd_network_get_path(network),
+						IWD_NETWORK_INTERFACE,
+						setup_network_interface,
+						network, NULL))
+			l_info("Unable to register %s interface",
+				IWD_NETWORK_INTERFACE);
 	} else {
 		struct network *network;
 
