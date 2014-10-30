@@ -163,6 +163,24 @@ static void network_emit_added(struct network *network)
 	l_dbus_send(dbus, signal);
 }
 
+static void network_emit_removed(struct network *network)
+{
+	struct l_dbus *dbus = dbus_get_bus();
+	struct l_dbus_message *signal;
+
+	signal = l_dbus_message_new_signal(dbus,
+					iwd_device_get_path(network->netdev),
+					IWD_DEVICE_INTERFACE,
+					"NetworkRemoved");
+
+	if (!signal)
+		return;
+
+	l_dbus_message_set_arguments(signal, "o",
+					iwd_network_get_path(network));
+	l_dbus_send(dbus, signal);
+}
+
 static void network_free(void *data)
 {
 	struct network *network = data;
@@ -171,6 +189,7 @@ static void network_free(void *data)
 	dbus = dbus_get_bus();
 	l_dbus_unregister_interface(dbus, iwd_network_get_path(network),
 					IWD_NETWORK_INTERFACE);
+	network_emit_removed(network);
 
 	l_free(network);
 }
