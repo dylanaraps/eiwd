@@ -123,11 +123,42 @@ static struct l_dbus_message *network_get_properties(struct l_dbus *dbus,
 	return reply;
 }
 
+static struct l_dbus_message *network_connect(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct network *network = user_data;
+	struct netdev *netdev = network->netdev;
+	struct bss *bss = network->bss;
+	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
+	struct l_genl_msg *msg;
+	struct l_dbus_message *reply;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4,
+							&bss->frequency);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, strlen(bss->ssid),
+								bss->ssid);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
+	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
+	l_genl_msg_unref(msg);
+
+	reply = l_dbus_message_new_method_return(message);
+	l_dbus_message_set_arguments(reply, "");
+
+	return reply;
+}
+
 static void setup_network_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "GetProperties", 0,
 				network_get_properties,
 				"a{sv}", "", "properties");
+	l_dbus_interface_method(interface, "Connect", 0,
+				network_connect,
+				"", "");
 
 	l_dbus_interface_signal(interface, "PropertyChanged", 0,
 				"sv", "name", "value");
@@ -452,29 +483,6 @@ static bool wiphy_match(const void *a, const void *b)
 	return (wiphy->id == id);
 }
 
-static void mlme_authenticate(struct netdev *netdev, struct bss *bss)
-{
-	struct l_genl_msg *msg;
-	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
-
-	if (!bss) {
-		bss = l_queue_peek_head(netdev->bss_list);
-		if (!bss)
-			return;
-	}
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4,
-							&bss->frequency);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, strlen(bss->ssid),
-								bss->ssid);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
-	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
-	l_genl_msg_unref(msg);
-}
-
 static void mlme_associate(struct netdev *netdev, struct bss *bss)
 {
 	struct l_genl_msg *msg;
@@ -495,7 +503,6 @@ static void mlme_associate(struct netdev *netdev, struct bss *bss)
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 	l_genl_msg_unref(msg);
 }
-
 
 static bool parse_ie(struct bss *bss, const void *data, uint16_t len)
 {
