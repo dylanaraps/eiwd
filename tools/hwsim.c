@@ -34,8 +34,8 @@ enum {
 	HWSIM_CMD_REGISTER,
 	HWSIM_CMD_FRAME,
 	HWSIM_CMD_TX_INFO_FRAME,
-	HWSIM_CMD_CREATE_RADIO,
-	HWSIM_CMD_DESTROY_RADIO,
+	HWSIM_CMD_NEW_RADIO,
+	HWSIM_CMD_DEL_RADIO,
 	__HWSIM_CMD_MAX,
 };
 #define HWSIM_CMD_MAX (_HWSIM_CMD_MAX - 1)
@@ -128,12 +128,40 @@ done:
 	l_main_quit();
 }
 
+static void hwsim_config(struct l_genl_msg *msg, void *user_data)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	uint8_t cmd;
+
+	cmd = l_genl_msg_get_command(msg);
+
+	l_debug("Config changed cmd %u", cmd);
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		l_debug("\tattr type %d len %d", type, len);
+	}
+}
+
 static void hwsim_ready(void *user_data)
 {
 	struct l_genl_msg *msg;
+	int ret;
+
+	ret = l_genl_family_register(hwsim, "config", hwsim_config,
+				     NULL, NULL);
+	if (ret < 0) {
+		fprintf(stderr, "Failed to create hwsim config listener\n");
+		l_main_quit();
+		return;
+	}
 
 	if (create_action) {
-		msg = l_genl_msg_new_sized(HWSIM_CMD_CREATE_RADIO,
+		msg = l_genl_msg_new_sized(HWSIM_CMD_NEW_RADIO,
 					keep_radios ? 0 : 4);
 
 		if (!keep_radios)
@@ -147,7 +175,7 @@ static void hwsim_ready(void *user_data)
 	} else if (destroy_action) {
 		uint32_t id = atoi(destroy_action);
 
-		msg = l_genl_msg_new_sized(HWSIM_CMD_DESTROY_RADIO, 8);
+		msg = l_genl_msg_new_sized(HWSIM_CMD_DEL_RADIO, 8);
 		l_genl_msg_append_attr(msg, HWSIM_ATTR_RADIO_ID, 4, &id);
 		l_genl_family_send(hwsim, msg, destroy_callback, NULL, NULL);
 		l_genl_msg_unref(msg);
