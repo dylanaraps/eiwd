@@ -28,3 +28,10 @@ should be removed. For testing tools it is beneficial if the newly
 created radio could be bound to the lifetime of the netlink socket.
 Alternatively, using the hwsim '-k (--keep)' command line option instructs
 hwsim to not destroy the created radio automatically.
+
+The hwsim is using HWSIM_CMD_NEW_RADIO to create a new radio. When the
+radio has been created, the kernel will return the used radio id and
+parameters in a HWSIM_CMD_NEW_RADIO multicast event that is sent in
+"config" netlink multicast group. The command HWSIM_CMD_DEL_RADIO is sent
+by kernel when a hwsim radio is deleted. In this case the deleted
+radio id is sent to "config" netlink multicast group.
