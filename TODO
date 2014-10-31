@@ -188,6 +188,7 @@ cfg80211 / nl80211
 
   Priority: Medium
   Complexity: C2
+  Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
 
 - Disconnect from network / station when client crashes
 
