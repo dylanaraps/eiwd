@@ -80,7 +80,7 @@ static void do_debug(const char *str, void *user_data)
 	l_info("%s%s", prefix, str);
 }
 
-static const char *iwd_network_get_path(struct network *network)
+static const char *iwd_network_get_path(const struct network *network)
 {
 	static char path[256];
 
@@ -92,7 +92,7 @@ static const char *iwd_network_get_path(struct network *network)
 	return path;
 }
 
-static bool __iwd_network_append_properties(struct network *network,
+static bool __iwd_network_append_properties(const struct network *network,
 					struct l_dbus_message_builder *builder)
 {
 	l_dbus_message_builder_enter_array(builder, "{sv}");
