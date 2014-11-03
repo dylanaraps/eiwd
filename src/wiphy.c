@@ -389,6 +389,40 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 	return NULL;
 }
 
+static void append_network_properties(const void *key, void *value,
+					void *user_data)
+{
+	struct network *network = value;
+	struct l_dbus_message_builder *builder = user_data;
+
+	l_dbus_message_builder_enter_dict(builder, "oa{sv}");
+	l_dbus_message_builder_append_basic(builder, 'o',
+						iwd_network_get_path(network));
+	__iwd_network_append_properties(network, builder);
+	l_dbus_message_builder_leave_dict(builder);
+}
+
+static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct l_dbus_message *reply;
+	struct l_dbus_message_builder *builder;
+
+	reply = l_dbus_message_new_method_return(message);
+	builder = l_dbus_message_builder_new(reply);
+
+	l_dbus_message_builder_enter_array(builder, "{oa{sv}}");
+	l_hashmap_foreach(netdev->networks, append_network_properties, builder);
+	l_dbus_message_builder_leave_array(builder);
+
+	l_dbus_message_builder_finalize(builder);
+	l_dbus_message_builder_destroy(builder);
+
+	return reply;
+}
+
 static void setup_device_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "GetProperties", 0,
@@ -399,6 +433,9 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 				"", "sv", "name", "value");
 	l_dbus_interface_method(interface, "Scan", 0,
 				device_scan, "", "");
+	l_dbus_interface_method(interface, "GetNetworks", 0,
+				device_get_networks,
+				"a{oa{sv}}", "", "networks");
 
 	l_dbus_interface_signal(interface, "PropertyChanged", 0,
 				"sv", "name", "value");
