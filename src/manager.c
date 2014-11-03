@@ -103,6 +103,10 @@ static void setup_manager_interface(struct l_dbus_interface *interface)
 
 	l_dbus_interface_signal(interface, "PropertyChanged", 0,
 				"sv", "name", "value");
+	l_dbus_interface_signal(interface, "DeviceAdded", 0,
+				"oa{sv}", "path", "properties");
+	l_dbus_interface_signal(interface, "DeviceRemoved", 0,
+				"o", "path");
 }
 
 bool manager_init(struct l_dbus *dbus)
