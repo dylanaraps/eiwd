@@ -402,6 +402,10 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 
 	l_dbus_interface_signal(interface, "PropertyChanged", 0,
 				"sv", "name", "value");
+	l_dbus_interface_signal(interface, "NetworkAdded", 0,
+				"oa{sv}", "path", "properties");
+	l_dbus_interface_signal(interface, "NetworkRemoved", 0,
+				"o", "path");
 
 	l_dbus_interface_ro_property(interface, "Name", "s");
 }
