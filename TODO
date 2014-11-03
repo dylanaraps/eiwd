@@ -18,57 +18,6 @@ Background
 mac80211_hwsim
 ==============
 
-- Add support for returning HWSIM_ATTR_RADIO_ID from HWSIM_CMD_CREATE_RADIO
-
-  The HWSIM_CMD_CREATE_RADIO command should return HWSIM_CMD_CREATE_RADIO
-  on success so that the radio id for the created wiphy can be mapped by
-  test tools or when having to destroy that radio again. Note that currently
-  the radio is is parsed properly (commit a052cb5d3c29) as it comes in
-  the error code field, but if we want to create a new attribute for the
-  radio id, then some coding is needed.
-
-  Priority: Low
-  Complexity: C1
-  Owner: Patrik Flykt <patrik.flykt@linux.intel.com>
-
-- Rename HWSIM_CMD_CREATE_RADIO into HWSIM_CMD_NEW_RADIO
-
-  Using the name HWSIM_CMD_NEW_RADIO is more fitting on how other pieces
-  of the wireless system work.
-
-  Rename the HWSIM_CMD_CREATE_RADIO entry in the enum and provde a define
-  for source level comaptiblity.
-
-  Priority: Medium
-  Complexity: C1
-  Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
-
-- Rename HWSIM_CMD_DESTROY_RADIO into HWSIM_CMD_DEL_RADIO
-
-  Using the name HWSIM_CMD_DEL_RADIO is more fitting on how other pieces
-  of the wireless system work.
-
-  Rename the HWSIM_CMD_DESTROY_RADIO entry in the enum and provde a define
-  for source level comaptiblity.
-
-  Priority: Medium
-  Complexity: C1
-  Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
-
-- Provide multicast events for HWSIM_CMD_NEW_RADIO and HWSIM_CMD_DEL_RADIO
-
-  When adding new radios via HWSIM_CMD_NEW_RADIO then listeners on the
-  multicast group "config" should be informed.  Same as when an existing
-  radio gets removed via HWSIM_CMD_DEL_RADIO, send event to "config"
-  multicast group.
-
-  The multicast group "config" does not exist at the moment and needs
-  be introduced as well.
-
-  Priority: Medium
-  Complexity: C1
-  Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
-
 - Add support for HWSIM_CMD_GET_RADIO command
 
   Currently it is not possible to list the existing radio created by
