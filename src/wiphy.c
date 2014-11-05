@@ -26,6 +26,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 #include <sys/socket.h>
 #include <linux/if.h>
 #include <linux/if_ether.h>
@@ -41,6 +42,7 @@ static const char *network_ssid = NULL;
 
 static struct l_genl *genl = NULL;
 static struct l_genl_family *nl80211 = NULL;
+static int scheduled_scan_interval = 60;	/* in secs */
 
 struct bss {
 	uint8_t addr[ETH_ALEN];
@@ -69,6 +71,7 @@ struct wiphy {
 	char name[20];
 	uint32_t feature_flags;
 	struct l_queue *netdev_list;
+	bool support_scheduled_scan;
 };
 
 static struct l_queue *wiphy_list = NULL;
@@ -729,6 +732,59 @@ static void get_scan(struct netdev *netdev)
 	l_genl_msg_unref(msg);
 }
 
+static void sched_scan_callback(struct l_genl_msg *msg, void *user_data)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+
+	if (!l_genl_attr_init(&attr, msg)) {
+		int err = l_genl_msg_get_error(msg);
+		if (err < 0 && err != -EINPROGRESS) {
+			l_warn("Failed to setup scheduled scan [%d/%s]",
+				-err, strerror(-err));
+			goto done;
+		}
+
+		l_info("Scheduled scan started");
+	} else {
+		while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		}
+	}
+
+done:
+	return;
+}
+
+static void setup_scheduled_scan(struct wiphy *wiphy, struct netdev *netdev,
+				uint32_t scan_interval)
+{
+	struct l_genl_msg *msg;
+	uint16_t len = 4 + 4 + 4;
+
+	if (!wiphy->support_scheduled_scan) {
+		l_debug("Scheduled scan not supported for %s "
+			"iface %s ifindex %u", wiphy->name, netdev->name,
+			netdev->index);
+		return;
+	}
+
+	len += 4;
+
+	scan_interval *= 1000;	/* in kernel the interval is in msecs */
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_START_SCHED_SCAN, len);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SCHED_SCAN_INTERVAL,
+							4, &scan_interval);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SCAN_SOCKET_OWNER, 0, NULL);
+
+	if (!l_genl_family_send(nl80211, msg, sched_scan_callback, NULL, NULL))
+		l_error("Starting scheduled scan failed");
+
+	l_genl_msg_unref(msg);
+}
+
 static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy = NULL;
@@ -841,13 +897,32 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 			device_emit_added(netdev);
 	}
 
+	setup_scheduled_scan(wiphy, netdev, scheduled_scan_interval);
+
 	l_debug("Found interface %s", netdev->name);
+}
+
+static void parse_supported_commands(struct wiphy *wiphy,
+						struct l_genl_attr *attr)
+{
+	uint16_t type, len;
+	const void *data;
+
+	while (l_genl_attr_next(attr, &type, &len, &data)) {
+		uint32_t cmd = *(uint32_t *)data;
+
+		switch (cmd) {
+		case NL80211_CMD_START_SCHED_SCAN:
+			wiphy->support_scheduled_scan = true;
+			break;
+		}
+	}
 }
 
 static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy = NULL;
-	struct l_genl_attr attr;
+	struct l_genl_attr attr, nested;
 	uint16_t type, len;
 	const void *data;
 	uint32_t id;
@@ -915,6 +990,17 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 			}
 
 			wiphy->feature_flags = *((uint32_t *) data);
+			break;
+		case NL80211_ATTR_SUPPORTED_COMMANDS:
+			if (!wiphy) {
+				l_warn("No wiphy structure found");
+				return;
+			}
+
+			if (!l_genl_attr_recurse(&attr, &nested))
+				return;
+
+			parse_supported_commands(wiphy, &nested);
 			break;
 		}
 	}
@@ -1005,7 +1091,8 @@ static void wiphy_scan_notify(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	if (cmd == NL80211_CMD_NEW_SCAN_RESULTS) {
+	if (cmd == NL80211_CMD_NEW_SCAN_RESULTS ||
+				cmd == NL80211_CMD_SCHED_SCAN_RESULTS) {
 		get_scan(netdev);
 		return;
 	}
