@@ -491,10 +491,11 @@ static void netdev_free(void *data)
 
 	l_debug("Freeing interface %s", netdev->name);
 
+	l_hashmap_destroy(netdev->networks, network_free);
+
 	l_queue_destroy(netdev->bss_list, bss_free);
 	l_queue_destroy(netdev->old_bss_list, bss_free);
 
-	l_hashmap_destroy(netdev->networks, network_free);
 	l_free(netdev);
 }
 
