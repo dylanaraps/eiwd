@@ -641,6 +641,8 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 						bss_address_to_string(bss));
 		if (network)
 			network->bss = bss;
+
+		bss_free(old_bss);
 	}
 
 	l_queue_push_head(netdev->bss_list, bss);
