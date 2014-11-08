@@ -52,13 +52,11 @@ static void usage(void)
 		"Usage:\n");
 	printf("\tiwd [options]\n");
 	printf("Options:\n"
-		"\t-S, --ssid <ssid>      SSID of network\n"
 		"\t-K, --kdbus            Setup Kernel D-Bus\n"
 		"\t-h, --help             Show help options\n");
 }
 
 static const struct option main_options[] = {
-	{ "ssid",      required_argument, NULL, 'S' },
 	{ "kdbus",     no_argument,       NULL, 'K' },
 	{ "version",   no_argument,       NULL, 'v' },
 	{ "help",      no_argument,       NULL, 'h' },
@@ -80,9 +78,6 @@ int main(int argc, char *argv[])
 			break;
 
 		switch (opt) {
-		case 'S':
-			wiphy_set_ssid(optarg);
-			break;
 		case 'K':
 			enable_kdbus = true;
 			break;
