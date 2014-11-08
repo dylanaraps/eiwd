@@ -32,8 +32,6 @@ bool wiphy_exit(void);
 
 void wiphy_notify_dellink(uint32_t index);
 
-void wiphy_set_ssid(const char *ssid);
-
 bool __iwd_device_append_properties(struct netdev *netdev,
 					struct l_dbus_message_builder *builder);
 void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data);
