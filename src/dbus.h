@@ -45,5 +45,5 @@ void dbus_dict_append_bool(struct l_dbus_message_builder *builder,
 struct l_dbus_message *dbus_error_busy(struct l_dbus_message *msg);
 struct l_dbus_message *dbus_error_failed(struct l_dbus_message *msg);
 
-bool dbus_init(void);
+bool dbus_init(bool enable_debug);
 bool dbus_exit(void);
