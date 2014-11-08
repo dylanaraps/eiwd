@@ -52,20 +52,23 @@ static void usage(void)
 		"Usage:\n");
 	printf("\tiwd [options]\n");
 	printf("Options:\n"
+		"\t-B, --dbus-debug       Enable DBus debugging\n"
 		"\t-K, --kdbus            Setup Kernel D-Bus\n"
 		"\t-h, --help             Show help options\n");
 }
 
 static const struct option main_options[] = {
-	{ "kdbus",     no_argument,       NULL, 'K' },
-	{ "version",   no_argument,       NULL, 'v' },
-	{ "help",      no_argument,       NULL, 'h' },
+	{ "kdbus",      no_argument,       NULL, 'K' },
+	{ "dbus-debug", no_argument,       NULL, 'B' },
+	{ "version",    no_argument,       NULL, 'v' },
+	{ "help",       no_argument,       NULL, 'h' },
 	{ }
 };
 
 int main(int argc, char *argv[])
 {
 	bool enable_kdbus = false;
+	bool enable_dbus_debug = false;
 	struct l_signal *signal;
 	sigset_t mask;
 	int exit_status;
@@ -80,6 +83,9 @@ int main(int argc, char *argv[])
 		switch (opt) {
 		case 'K':
 			enable_kdbus = true;
+			break;
+		case 'B':
+			enable_dbus_debug = true;
 			break;
 		case 'v':
 			printf("%s\n", VERSION);
@@ -135,7 +141,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (!dbus_init()) {
+	if (!dbus_init(enable_dbus_debug)) {
 		exit_status = EXIT_FAILURE;
 		goto destroy;
 	}
