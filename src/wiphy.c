@@ -74,6 +74,23 @@ struct wiphy {
 
 static struct l_queue *wiphy_list = NULL;
 
+
+static bool _msg_append_attr(struct l_genl_msg *msg,
+			uint16_t type, const char *type_str,
+			uint16_t len, const void *value)
+{
+	bool ret;
+
+	ret = l_genl_msg_append_attr(msg, type, len, value);
+	if (!ret)
+		l_warn("Cannot append attr %s", type_str);
+
+	return ret;
+}
+
+#define msg_append_attr(msg, type, len, value) \
+	_msg_append_attr(msg, type, #type, len, value)
+
 static void do_debug(const char *str, void *user_data)
 {
 	const char *prefix = user_data;
@@ -136,13 +153,11 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	struct l_dbus_message *reply;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4,
-							&bss->frequency);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, strlen(bss->ssid),
-								bss->ssid);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
+	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
+	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
+	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(bss->ssid), bss->ssid);
+	msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 	l_genl_msg_unref(msg);
 
@@ -383,7 +398,7 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 	netdev->pending = l_dbus_message_ref(message);
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN, 16);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	l_genl_family_send(nl80211, msg, device_scan_callback, netdev, NULL);
 	l_genl_msg_unref(msg);
 
@@ -537,12 +552,10 @@ static void mlme_associate(struct netdev *netdev, struct bss *bss)
 	}
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_ASSOCIATE, 512);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4,
-							&bss->frequency);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, strlen(bss->ssid),
-								bss->ssid);
+	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
+	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
+	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(bss->ssid), bss->ssid);
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 	l_genl_msg_unref(msg);
 }
@@ -726,7 +739,7 @@ static void get_scan(struct netdev *netdev)
 	struct l_genl_msg *msg;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_GET_SCAN, 8);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	l_genl_family_dump(nl80211, msg, get_scan_callback, netdev,
 				get_scan_done);
 	l_genl_msg_unref(msg);
@@ -771,10 +784,10 @@ static void setup_scheduled_scan(struct wiphy *wiphy, struct netdev *netdev,
 	scan_interval *= 1000;	/* in kernel the interval is in msecs */
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_START_SCHED_SCAN, 32);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_SCHED_SCAN_INTERVAL,
+	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	msg_append_attr(msg, NL80211_ATTR_SCHED_SCAN_INTERVAL,
 							4, &scan_interval);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_SCAN_SOCKET_OWNER, 0, NULL);
+	msg_append_attr(msg, NL80211_ATTR_SCAN_SOCKET_OWNER, 0, NULL);
 
 	if (!l_genl_family_send(nl80211, msg, sched_scan_callback, NULL, NULL))
 		l_error("Starting scheduled scan failed");
