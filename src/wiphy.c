@@ -760,7 +760,6 @@ static void setup_scheduled_scan(struct wiphy *wiphy, struct netdev *netdev,
 				uint32_t scan_interval)
 {
 	struct l_genl_msg *msg;
-	uint16_t len = 4 + 4 + 4;
 
 	if (!wiphy->support_scheduled_scan) {
 		l_debug("Scheduled scan not supported for %s "
@@ -769,11 +768,9 @@ static void setup_scheduled_scan(struct wiphy *wiphy, struct netdev *netdev,
 		return;
 	}
 
-	len += 4;
-
 	scan_interval *= 1000;	/* in kernel the interval is in msecs */
 
-	msg = l_genl_msg_new_sized(NL80211_CMD_START_SCHED_SCAN, len);
+	msg = l_genl_msg_new_sized(NL80211_CMD_START_SCHED_SCAN, 32);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SCHED_SCAN_INTERVAL,
 							4, &scan_interval);
