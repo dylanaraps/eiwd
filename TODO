@@ -18,22 +18,6 @@ Background
 mac80211_hwsim
 ==============
 
-- Add support for HWSIM_CMD_GET_RADIO command
-
-  Currently it is not possible to list the existing radio created by
-  mac80211_hwsim.  Use the command to dump a list of radios where each
-  radio at minimum containts the HWSIM_ATTR_RADIO_ID.
-
-  For the result HWSIM_CMD_NEW_RADIO (previously HWSIM_CMD_CREATE_RADIO)
-  should be used.
-
-  The dump version should not require any attributes and list all radios
-  while otherwise the HWSIM_ATTR_RADIO_ID is required to provide details
-  of a specific radio.
-
-  Priority: Medium
-  Complexity: C1
-
 - Add support for HWSIM_CMD_SET_RADIO command
 
   To allow modifying an existing radio, add the HWSIM_CMD_SET_RADIO.  The

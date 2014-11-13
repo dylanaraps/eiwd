@@ -35,3 +35,9 @@ parameters in a HWSIM_CMD_NEW_RADIO multicast event that is sent in
 "config" netlink multicast group. The command HWSIM_CMD_DEL_RADIO is sent
 by kernel when a hwsim radio is deleted. In this case the deleted
 radio id is sent to "config" netlink multicast group.
+
+hwsim can list radios by sending a HWSIM_CMD_GET_RADIO with the attribute
+HWSIM_ATTR_RADIO_ID containing the desired radio id. If no radio id is
+given on the command line, a dump of all radios is requested from the
+kernel. The attributes returned are identical to those sent to the
+'config' multicast group when creating a radio.
