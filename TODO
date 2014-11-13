@@ -167,6 +167,7 @@ Wireless monitor
 
   Priority: Medium
   Complexity: C1
+  Owner: Patrik Flykt <patrik.flykt@linux.intel.com>
 
 - Add support for PACKET_RECV_OUTPUT socket option of AF_PACKET
 
