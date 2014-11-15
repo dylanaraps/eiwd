@@ -28,4 +28,5 @@ unit/test-prf-sha1
 unit/*.log
 unit/*.trs
 unit/test-ie
+unit/test-crypto
 test-suite.log
