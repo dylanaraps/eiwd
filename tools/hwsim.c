@@ -274,7 +274,7 @@ static void hwsim_ready(void *user_data)
 			l_genl_msg_append_attr(msg, HWSIM_ATTR_RADIO_ID,
 					4, &id);
 			l_genl_family_send(hwsim, msg, list_callback,
-						NULL, NULL);
+						NULL, list_callback_done);
 		} else {
 			l_genl_family_dump(hwsim, msg, list_callback,
 						NULL, list_callback_done);
