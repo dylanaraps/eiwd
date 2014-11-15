@@ -178,7 +178,6 @@ static void list_callback(struct l_genl_msg *msg, void *user_data)
 	}
 
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-
 		switch (type) {
 		case HWSIM_ATTR_RADIO_ID:
 			if (len == 4)
@@ -269,6 +268,7 @@ static void hwsim_ready(void *user_data)
 	} else if (list_action) {
 		msg = l_genl_msg_new_sized(HWSIM_CMD_GET_RADIO,
 					list_option ? 8: 4);
+
 		if (list_option) {
 			uint32_t id = atoi(list_option);
 			l_genl_msg_append_attr(msg, HWSIM_ATTR_RADIO_ID,
