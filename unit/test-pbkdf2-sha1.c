@@ -179,89 +179,6 @@ static const struct pbkdf2_data athena_test_vector_7 = {
 	.key		= "6b9cf26d45455a43a5b8bb276a403b39",
 };
 
-struct psk_data {
-	const char *passphrase;
-	const unsigned char *ssid;
-	size_t ssid_len;
-	const char *network;
-	const char *psk;
-};
-
-static void psk_test(const void *data)
-{
-	const struct psk_data *test = data;
-	unsigned char ssid[32];
-	size_t ssid_len;
-	unsigned char output[32];
-	char psk[65];
-	unsigned int i;
-	bool result;
-
-	if (test->network == NULL) {
-		memcpy(ssid, test->ssid, test->ssid_len);
-		ssid_len = test->ssid_len;
-	} else {
-		ssid_len = strlen(test->network);
-		memcpy(ssid, test->network, ssid_len);
-	}
-
-	printf("Passphrase  = \"%s\"\n", test->passphrase);
-	printf("SSID        = {");
-	for (i = 0; i < ssid_len; i++)
-		printf("%s'%c'", i == 0 ? " " : ", ", ssid[i]);
-	printf(" }\n");
-	printf("SSID Length = %ld\n", ssid_len);
-	printf("PSK         = %s\n", test->psk);
-
-	result = pbkdf2_sha1(test->passphrase, strlen(test->passphrase),
-						ssid, ssid_len, 4096,
-						output, sizeof(output));
-
-	assert(result == true);
-
-	for (i = 0; i < sizeof(output); i++)
-		sprintf(psk + (i * 2), "%02x", output[i]);
-
-	printf("Result      = %s\n", psk);
-
-	assert(strcmp(test->psk, psk) == 0);
-}
-
-static const unsigned char psk_test_case_1_ssid[] = { 'I', 'E', 'E', 'E' };
-
-static const struct psk_data psk_test_case_1 = {
-	.passphrase	= "password",
-	.ssid		= psk_test_case_1_ssid,
-	.ssid_len	= sizeof(psk_test_case_1_ssid),
-	.psk		= "f42c6fc52df0ebef9ebb4b90b38a5f90"
-			  "2e83fe1b135a70e23aed762e9710a12e",
-};
-
-static const unsigned char psk_test_case_2_ssid[] = { 'T', 'h', 'i', 's',
-					'I', 's', 'A', 'S', 'S', 'I', 'D' };
-
-static const struct psk_data psk_test_case_2 = {
-	.passphrase	= "ThisIsAPassword",
-	.ssid		= psk_test_case_2_ssid,
-	.ssid_len	= sizeof(psk_test_case_2_ssid),
-	.psk		= "0dc0d6eb90555ed6419756b9a15ec3e3"
-			  "209b63df707dd508d14581f8982721af",
-};
-
-static const unsigned char psk_test_case_3_ssid[] = {
-				'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z',
-				'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z',
-				'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z',
-				'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z', 'Z' };
-
-static const struct psk_data psk_test_case_3 = {
-	.passphrase	= "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-	.ssid		= psk_test_case_3_ssid,
-	.ssid_len	= sizeof(psk_test_case_3_ssid),
-	.psk		= "becb93866bb8c3832cb777c2f559807c"
-			  "8c59afcb6eae734885001300a981cc62",
-};
-
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -293,10 +210,6 @@ int main(int argc, char *argv[])
 					pbkdf2_test, &athena_test_vector_6);
 	l_test_add("/pbkdf2-sha1/ATHENA Test vector 7",
 					pbkdf2_test, &athena_test_vector_7);
-
-	l_test_add("/pbkdf2-sha1/PSK Test case 1", psk_test, &psk_test_case_1);
-	l_test_add("/pbkdf2-sha1/PSK Test case 2", psk_test, &psk_test_case_2);
-	l_test_add("/pbkdf2-sha1/PSK Test case 3", psk_test, &psk_test_case_3);
 
 	return l_test_run();
 }
