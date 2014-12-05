@@ -92,15 +92,6 @@ mac80211_hwsim
 cfg80211 / nl80211
 ==================
 
-- Fix missing NL80211_CMD_NEW_INTERFACE and NL80211_CMD_DEL_INTERFACE events
-
-  When new network interfaces added or removed ensure that the appropiate
-  events are send to the "config" multicast group.
-
-  Priority: High
-  Complexity: C1
-  Owner: Tomasz Bursztyka <tomasz.bursztyka@linux.intel.com>
-
 - Bind NL80211_CMD_START_SCHED_SCAN to netlink socket
 
   When issuing the NL80211_CMD_START_SCHED_SCAN it should be bound to the
