@@ -258,13 +258,36 @@ Wireless simulator
 Wireless daemon
 ===============
 
-- Parsing and building of 802.11 management frames
+- Parsing 802.11 authentications management frames
 
-  Multiple frames types are send around via nl80211 interface.  These
-  frames need to be parsed and build via generic infrastructure.
+  Parse authentication and deauthentication managements frames: its
+  header and content. Provide a core API to decode such frame into
+  some easily handled structure, keeping in mind other type of frames
+  will come so it has to provide a generic infrastructure which can be
+  extended for future use. Focus on open and PSK based authentication
+  networks first.
 
   Priority: High
-  Complexity: C4
+  Complexity: C2
+  Owner: Tomasz Bursztyka <tomasz.bursztyka@linux.intel.com>
+
+- Building 802.11 authentications management frames
+
+  The other way round, provide a core API to encode an authentication
+  or deauthentication frame from a generic structure representing the
+  MPDU.
+
+  Priority: High
+  Complexity: C2
+  Owner: Tomasz Bursztyka <tomasz.bursztyka@linux.intel.com>
+
+- Handle the relevant logic of the authentication management frames
+
+  When an authentication management frame is received, such frame needs
+  to be understood and handled properly.
+
+  Priority: High
+  Complexity: C2
 
 - Add support for 4-way handshake authentication and key generation
 
