@@ -310,3 +310,67 @@ Wireless daemon
 
   Priority: Low
   Complexity: C8
+
+- Create a document to doc describing general architecture and relation
+  between different objects.
+
+  Current understanding is that diffrent relation between elements
+  looks probably like this:
+      Manager->Wiphy->NetDevice->AvailableNetwork
+
+  Wiphy is the actual physical device, NetDevice is the network interface
+  and AvailableNetwork is {SSID, security} combo. Each network can have
+  a list of BSSs.
+  Consider also multi-wifi device scenarios. If user has multiple USB
+  WiFi dongles and switches between those cards, all previously configured
+  networks should still be available.
+
+  Priority: High
+  Complexity: C2
+
+- Fix SSID handling in source files to be of type uint32_t[32], also
+  add the SSID length as the SSID is not a string but can contain any
+  characters.
+
+  Priority: Medium
+  Complexity: C1
+
+- Change the SSID in DBus message to be an array of bytes. DBus does not
+  like if non UTF-8 characters are passed in strings in the messages.
+
+  Priority: Medium
+  Complexity: C1
+
+- Centralize scanning logic and handling into scan.c.
+
+  There can be passive, active, listening (P2P) scanning to handle.
+  We need to handle background scan for roaming. Also scheduled scan
+  might need to be simulated when hw does not support it.
+  All scanning operations should be cancellable.
+
+  Priority: High
+  Complexity: C4
+
+- Implement agent support in iwd.
+
+  If something needs to be asked from user, like passphrase etc.
+  a DBus agent interface can be registered by the user.
+  This is similar as what is implemented in ConnMan and BlueZ.
+
+  Priority: Medium
+  Complexity: C2
+
+Client
+======
+
+- Implement DBus missing methods for client (signal filtering mostly)
+  in ell.
+
+  Priority: Low
+  Complexity: C2
+
+- Remove kdbus left-overs, and implement the client properly with ell
+  library.
+
+  Priority: Low
+  Complexity: C1
