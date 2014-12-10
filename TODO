@@ -363,12 +363,6 @@ Wireless daemon
 Client
 ======
 
-- Implement DBus missing methods for client (signal filtering mostly)
-  in ell.
-
-  Priority: Low
-  Complexity: C2
-
 - Remove kdbus left-overs, and implement the client properly with ell
   library.
 
