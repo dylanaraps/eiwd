@@ -299,6 +299,7 @@ Wireless daemon
 
   Priority: High
   Complexity: C4
+  Owner: Denis Kenzior <denkenz@gmail.com>
 
 - Add support for EAP based authentication and key generation
 
