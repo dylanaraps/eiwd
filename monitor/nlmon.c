@@ -378,6 +378,49 @@ static void print_ie_ds(unsigned int level, const char *label,
 	print_attr(level, "%s: channel %d", label, *channel);
 }
 
+static void print_ie_tim(unsigned int level, const char *label,
+			 const void *data, uint16_t size)
+{
+	const char *dtim = data;
+	int t, len = size - 3, pos = 0;
+	uint8_t bit;
+	char str[128];
+
+	if (size < 4) {
+		print_ie_error(level, label, size, -EINVAL);
+		return;
+	}
+
+	print_attr(level, "%s:", label);
+	print_attr(level + 1, "DTIM count    %2d %s", dtim[0],
+		       dtim[0]? "beacon frame(s)": "this beacon frame is DTIM");
+	print_attr(level + 1, "DTIM period   %2d beacon frame(s)", dtim[1]);
+
+	print_attr(level + 1, "Group buffered %d offset %d",
+			!!(dtim[2] & 0x01), dtim[2] >> 1);
+
+	len = size - 3;
+	for (t = 0; t < len ; t++) {
+		if (((t + 1) % 4) == 1) {
+			pos = 0;
+			pos += snprintf(&str[pos], sizeof(str) - pos,
+					"AID  %4d - %4d ",
+					t * 8 + 1,
+					t + 4 > len? len * 8: (t + 4) * 8);
+		}
+
+		for (bit = 0x01; bit; bit <<= 1)
+			pos += snprintf(&str[pos], sizeof(str) - pos,
+					"%d", !!(dtim[t + 3] & bit));
+
+		pos += snprintf(&str[pos], sizeof(str) - pos, " ");
+
+		if ((t + 1) % 4 == 0 || t + 1 == len)
+			print_attr(level + 1, "%s", str);
+	}
+
+}
+
 static void print_ie_country(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
@@ -444,6 +487,8 @@ static struct attr_entry ie_entry[] = {
 	ATTR_CUSTOM,                        { .function = print_ie_rate } },
 	{IE_TYPE_DSSS_PARAMETER_SET,        "DSSS parameter set",
 	ATTR_CUSTOM,                        { .function = print_ie_ds } },
+	{IE_TYPE_TIM,                       "TIM",
+	ATTR_CUSTOM,                        { .function = print_ie_tim } },
 	{IE_TYPE_COUNTRY,                   "Country",
 	ATTR_CUSTOM,                        { .function = print_ie_country } },
 	{IE_TYPE_POWER_CONSTRAINT,          "Power constraint",
