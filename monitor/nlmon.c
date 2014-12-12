@@ -423,6 +423,22 @@ static void print_ie_power_constraint(unsigned int level, const char *label,
 	print_attr(level, "%s: %2d dB", label, *dB);
 }
 
+static void print_ie_erp(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	uint8_t *flags = (uint8_t *)data;
+
+	if (!size) {
+		print_ie_error(level, label, size, -EINVAL);
+		return;
+	}
+
+	print_attr(level, "%s:", label);
+	print_attr(level + 1, "non-ERP present      %d", !!(*flags & 0x01));
+	print_attr(level + 1, "use protection       %d", !!(*flags & 0x02));
+	print_attr(level + 1, "Barker preamble mode %d", !!(*flags & 0x04));
+}
+
 static struct attr_entry ie_entry[] = {
 	{IE_TYPE_SUPPORTED_RATES,           "Supported rates",
 	ATTR_CUSTOM,                        { .function = print_ie_rate } },
@@ -432,6 +448,10 @@ static struct attr_entry ie_entry[] = {
 	ATTR_CUSTOM,                        { .function = print_ie_country } },
 	{IE_TYPE_POWER_CONSTRAINT,          "Power constraint",
 	ATTR_CUSTOM,                        { .function = print_ie_power_constraint } },
+	{IE_TYPE_TPC_REPORT,                "TPC report",
+	ATTR_CUSTOM,                        { .function = print_ie_tpc } },
+	{IE_TYPE_ERP,                       "ERP Information",
+	ATTR_CUSTOM,                        { .function = print_ie_erp } },
 	{IE_TYPE_EXTENDED_SUPPORTED_RATES,  "Extended supported rates",
 	ATTR_CUSTOM,                        { .function = print_ie_rate } },
 	{IE_TYPE_VENDOR_SPECIFIC,           "Vendor specific",
