@@ -453,6 +453,27 @@ static void print_ie_country(unsigned int level, const char *label,
 	}
 }
 
+static void print_ie_bss_load(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	uint16_t stations, capacity;
+	uint8_t utilization;
+	const uint8_t *bytes = data;
+
+	if (size != 5) {
+		print_ie_error(level, label, size, -EINVAL);
+		return;
+	}
+
+	stations = bytes[0] | bytes[1] << 8;
+	utilization = bytes[2];
+	capacity = bytes[3] | bytes[4] << 8;
+
+	print_attr(level, "%s: %2d station(s) utilization %d/255 available "
+			"capacity %d 32µs/s units",
+			label, stations, utilization, capacity);
+}
+
 static void print_ie_power_constraint(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
@@ -505,6 +526,8 @@ static struct attr_entry ie_entry[] = {
 	ATTR_CUSTOM,                        { .function = print_ie_tim } },
 	{IE_TYPE_COUNTRY,                   "Country",
 	ATTR_CUSTOM,                        { .function = print_ie_country } },
+	{IE_TYPE_BSS_LOAD,                  "BSS load",
+	ATTR_CUSTOM,                        { .function = print_ie_bss_load } },
 	{IE_TYPE_POWER_CONSTRAINT,          "Power constraint",
 	ATTR_CUSTOM,                        { .function = print_ie_power_constraint } },
 	{IE_TYPE_TPC_REPORT,                "TPC report",
