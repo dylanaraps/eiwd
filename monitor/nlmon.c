@@ -466,6 +466,20 @@ static void print_ie_power_constraint(unsigned int level, const char *label,
 	print_attr(level, "%s: %2d dB", label, *dB);
 }
 
+static void print_ie_tpc(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	signed char *dB = (signed char*)data;
+
+	if (size != 2) {
+		print_ie_error(level, label, size, -EINVAL);
+		return;
+	}
+
+	print_attr(level, "%s: transmit power %2d dB link margin %2d dB",
+		   label, dB[0], dB[1]);
+}
+
 static void print_ie_erp(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
