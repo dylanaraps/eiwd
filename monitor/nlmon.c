@@ -383,6 +383,7 @@ static void print_ie_country(unsigned int level, const char *label,
 			print_attr(level + 1, "Regulatory ID %3d class %3d "
 				"coverage class %3d",
 				code[i], code[i + 1], code[i + 2]);
+
 			if (code[i + 2] < 32)
 				print_attr(level + 1, "%27c (air propagation "
 					"time %2d µs)", ' ', 3 * code[i + 2]);
