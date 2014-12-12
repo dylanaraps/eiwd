@@ -79,6 +79,37 @@ struct nlmon_req {
 	uint8_t version;
 };
 
+typedef void (*attr_func_t) (unsigned int level, const char *label,
+					const void *data, uint16_t size);
+enum attr_type {
+	ATTR_UNSPEC,
+	ATTR_FLAG,
+	ATTR_U8,
+	ATTR_U16,
+	ATTR_U32,
+	ATTR_U64,
+	ATTR_S32,
+	ATTR_S64,
+	ATTR_STRING,
+	ATTR_ADDRESS,
+	ATTR_BINARY,
+	ATTR_NESTED,
+	ATTR_ARRAY,
+	ATTR_FLAG_OR_U16,
+	ATTR_CUSTOM,
+};
+
+struct attr_entry {
+	uint16_t attr;
+	const char *str;
+	enum attr_type type;
+	union {
+		const struct attr_entry *nested;
+		enum attr_type array_type;
+		attr_func_t function;
+	};
+};
+
 static void nlmon_req_free(void *data)
 {
 	struct nlmon_req *req = data;
@@ -258,14 +289,14 @@ static const struct {
 	{ }
 };
 
-static void print_ie_vendor(unsigned int level,
-					const void *data, uint16_t size)
+static void print_ie_vendor(unsigned int level, const char *label,
+				const void *data, uint16_t size)
 {
 	const uint8_t *oui = data;
 	const char *str = NULL;
 	unsigned int i;
 
-	print_attr(level, "Vendor specific: len %u", size);
+	print_attr(level, "%s: len %u", label, size);
 
 	if (size < 3) {
 		print_hexdump(level + 1, data, size);
@@ -285,14 +316,19 @@ static void print_ie_vendor(unsigned int level,
 	else
 		print_attr(level + 1, "%02x:%02x:%02x",
 						oui[0], oui[1], oui[2]);
-
-	print_hexdump(level + 1, data + 3, size - 3);
 }
+
+static struct attr_entry ie_entry[] = {
+	{IE_TYPE_VENDOR_SPECIFIC,           "Vendor specific",
+	ATTR_CUSTOM,                        { .function = print_ie_vendor } },
+	{ },
+};
 
 static void print_ie(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
 	struct ie_tlv_iter iter;
+	int i;
 
 	print_attr(level, "%s: len %u", label, size);
 
@@ -300,16 +336,23 @@ static void print_ie(unsigned int level, const char *label,
 
 	while (ie_tlv_iter_next(&iter)) {
 		uint8_t tag = ie_tlv_iter_get_tag(&iter);
+		struct attr_entry *entry = NULL;
 
-		switch (tag) {
-		case IE_TYPE_VENDOR_SPECIFIC:
-			print_ie_vendor(level + 1, iter.data, iter.len);
-			break;
-		default:
-			print_attr(level + 1, "Tag %u: len %u", tag, iter.len);
-			print_hexdump(level + 2, iter.data, iter.len);
-			break;
+		for (i = 0; ie_entry[i].str; i++) {
+			if (ie_entry[i].attr == tag) {
+				entry = &ie_entry[i];
+				break;
+			}
 		}
+
+		if (entry && entry->function)
+			entry->function(level + 1, entry->str,
+					iter.data, iter.len);
+		else
+			print_attr(level + 1, "Tag %u: len %u", tag,
+					iter.len);
+
+		print_hexdump(level + 2, iter.data, iter.len);
 	}
 }
 
@@ -439,37 +482,6 @@ static void print_cipher_suites(unsigned int level, const char *label,
 		size -= 4;
 	}
 }
-
-typedef void (*attr_func_t) (unsigned int level, const char *label,
-					const void *data, uint16_t size);
-enum attr_type {
-	ATTR_UNSPEC,
-	ATTR_FLAG,
-	ATTR_U8,
-	ATTR_U16,
-	ATTR_U32,
-	ATTR_U64,
-	ATTR_S32,
-	ATTR_S64,
-	ATTR_STRING,
-	ATTR_ADDRESS,
-	ATTR_BINARY,
-	ATTR_NESTED,
-	ATTR_ARRAY,
-	ATTR_FLAG_OR_U16,
-	ATTR_CUSTOM,
-};
-
-struct attr_entry {
-	uint16_t attr;
-	const char *str;
-	enum attr_type type;
-	union {
-		const struct attr_entry *nested;
-		enum attr_type array_type;
-		attr_func_t function;
-	};
-};
 
 static const struct attr_entry iftype_table[] = {
 	{ NL80211_IFTYPE_ADHOC,		"Ad-hoc",	ATTR_FLAG },
