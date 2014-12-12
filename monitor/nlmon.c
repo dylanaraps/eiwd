@@ -289,6 +289,13 @@ static const struct {
 	{ }
 };
 
+static void print_ie_error(unsigned int level, const char *label,
+				uint16_t len, int err)
+{
+	print_attr(level, "Error decoding %s IE len %d: %s (%d)", label, len,
+			strerror(-err), err);
+}
+
 static void print_ie_vendor(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
@@ -318,7 +325,51 @@ static void print_ie_vendor(unsigned int level, const char *label,
 						oui[0], oui[1], oui[2]);
 }
 
+static void print_ie_rate(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	uint8_t *rate = (uint8_t *)data;
+	int pos = 0, i = 0;
+	char str[128];
+
+	if (!size) {
+		print_ie_error(level, label, size, -EINVAL);
+		return;
+	}
+
+	print_attr(level, "%s:", label);
+
+	while (i < size) {
+		bool mandatory = (rate[i] & 0x8);
+
+		if (rate[i] == 0xff) {
+			print_attr(level + 1, "BSS membership HT_PHY");
+			i++;
+			continue;
+		}
+
+		pos += snprintf(&str[pos], sizeof(str) - pos, "%.1f%s ",
+				(rate[i] & 127) * 0.5, mandatory? "(B)": "");
+
+		i++;
+
+		if (i % 8 && i != size)
+			continue;
+
+		if (pos) {
+			pos += snprintf(&str[pos], sizeof(str) - pos, "Mbit/s");
+			print_attr(level + 1, "%s", str);
+			pos = 0;
+		}
+
+	}
+}
+
 static struct attr_entry ie_entry[] = {
+	{IE_TYPE_SUPPORTED_RATES,           "Supported rates",
+	ATTR_CUSTOM,                        { .function = print_ie_rate } },
+	{IE_TYPE_EXTENDED_SUPPORTED_RATES,  "Extended supported rates",
+	ATTR_CUSTOM,                        { .function = print_ie_rate } },
 	{IE_TYPE_VENDOR_SPECIFIC,           "Vendor specific",
 	ATTR_CUSTOM,                        { .function = print_ie_vendor } },
 	{ },
