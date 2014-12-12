@@ -59,6 +59,23 @@ void dbus_dict_append_bool(struct l_dbus_message_builder *builder,
 	l_dbus_message_builder_leave_dict(builder);
 }
 
+void dbus_dict_append_bytearray(struct l_dbus_message_builder *builder,
+				const char *key, const uint8_t *arrayval,
+				const int len)
+{
+	int i;
+
+	l_dbus_message_builder_enter_dict(builder, "sv");
+	l_dbus_message_builder_append_basic(builder, 's', key);
+	l_dbus_message_builder_enter_variant(builder, "ay");
+	l_dbus_message_builder_enter_array(builder, "y");
+	for (i = 0; i < len; i++)
+		l_dbus_message_builder_append_basic(builder, 'y', &arrayval[i]);
+	l_dbus_message_builder_leave_array(builder);
+	l_dbus_message_builder_leave_variant(builder);
+	l_dbus_message_builder_leave_dict(builder);
+}
+
 struct l_dbus_message *dbus_error_busy(struct l_dbus_message *msg)
 {
 	return l_dbus_message_new_error(msg, IWD_SERVICE ".InProgress",
