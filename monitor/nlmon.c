@@ -365,9 +365,42 @@ static void print_ie_rate(unsigned int level, const char *label,
 	}
 }
 
+static void print_ie_country(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	uint8_t *code = (uint8_t *)data;
+	int i = 3;
+
+	if (size < 6 || size % 2) {
+		print_ie_error(level, label, size, -EINVAL);
+		return;
+	}
+
+	print_attr(level, "%s: %c%c%c", label, code[0], code[1], code[2]);
+
+	while (i < size) {
+		if (code[i] > 200) {
+			print_attr(level + 1, "Regulatory ID %3d class %3d "
+				"coverage class %3d",
+				code[i], code[i + 1], code[i + 2]);
+			if (code[i + 2] < 32)
+				print_attr(level + 1, "%27c (air propagation "
+					"time %2d µs)", ' ', 3 * code[i + 2]);
+		} else {
+			print_attr(level + 1, "First channel %3d number of "
+				"channels %2d max tx power %2d dBm",
+				code[i], code[i + 1], code[i + 2]);
+		}
+
+		i += 3;
+	}
+}
+
 static struct attr_entry ie_entry[] = {
 	{IE_TYPE_SUPPORTED_RATES,           "Supported rates",
 	ATTR_CUSTOM,                        { .function = print_ie_rate } },
+	{IE_TYPE_COUNTRY,                   "Country",
+	ATTR_CUSTOM,                        { .function = print_ie_country } },
 	{IE_TYPE_EXTENDED_SUPPORTED_RATES,  "Extended supported rates",
 	ATTR_CUSTOM,                        { .function = print_ie_rate } },
 	{IE_TYPE_VENDOR_SPECIFIC,           "Vendor specific",
