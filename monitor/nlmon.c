@@ -365,6 +365,19 @@ static void print_ie_rate(unsigned int level, const char *label,
 	}
 }
 
+static void print_ie_ds(unsigned int level, const char *label,
+			  const void *data, uint16_t size)
+{
+	uint8_t *channel = (uint8_t *)data;
+
+	if (!size) {
+		print_ie_error(level, label, size, -EINVAL);
+		return;
+	}
+
+	print_attr(level, "%s: channel %d", label, *channel);
+}
+
 static void print_ie_country(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
@@ -400,6 +413,8 @@ static void print_ie_country(unsigned int level, const char *label,
 static struct attr_entry ie_entry[] = {
 	{IE_TYPE_SUPPORTED_RATES,           "Supported rates",
 	ATTR_CUSTOM,                        { .function = print_ie_rate } },
+	{IE_TYPE_DSSS_PARAMETER_SET,        "DSSS parameter set",
+	ATTR_CUSTOM,                        { .function = print_ie_ds } },
 	{IE_TYPE_COUNTRY,                   "Country",
 	ATTR_CUSTOM,                        { .function = print_ie_country } },
 	{IE_TYPE_EXTENDED_SUPPORTED_RATES,  "Extended supported rates",
