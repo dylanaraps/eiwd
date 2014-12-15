@@ -366,7 +366,7 @@ static void print_ie_rate(unsigned int level, const char *label,
 }
 
 static void print_ie_ds(unsigned int level, const char *label,
-			  const void *data, uint16_t size)
+				const void *data, uint16_t size)
 {
 	uint8_t *channel = (uint8_t *)data;
 
@@ -379,7 +379,7 @@ static void print_ie_ds(unsigned int level, const char *label,
 }
 
 static void print_ie_tim(unsigned int level, const char *label,
-			 const void *data, uint16_t size)
+				const void *data, uint16_t size)
 {
 	const char *dtim = data;
 	int t, len = size - 3, pos = 0;
@@ -393,20 +393,21 @@ static void print_ie_tim(unsigned int level, const char *label,
 
 	print_attr(level, "%s:", label);
 	print_attr(level + 1, "DTIM count    %2d %s", dtim[0],
-		       dtim[0]? "beacon frame(s)": "this beacon frame is DTIM");
+			dtim[0] ? "beacon frame(s)" :
+				"this beacon frame is DTIM");
 	print_attr(level + 1, "DTIM period   %2d beacon frame(s)", dtim[1]);
-
 	print_attr(level + 1, "Group buffered %d offset %d",
 			!!(dtim[2] & 0x01), dtim[2] >> 1);
 
 	len = size - 3;
+
 	for (t = 0; t < len ; t++) {
 		if (((t + 1) % 4) == 1) {
 			pos = 0;
 			pos += snprintf(&str[pos], sizeof(str) - pos,
 					"AID  %4d - %4d ",
 					t * 8 + 1,
-					t + 4 > len? len * 8: (t + 4) * 8);
+					t + 4 > len ? len * 8 : (t + 4) * 8);
 		}
 
 		for (bit = 0x01; bit; bit <<= 1)
@@ -498,7 +499,7 @@ static void print_ie_tpc(unsigned int level, const char *label,
 	}
 
 	print_attr(level, "%s: transmit power %2d dB link margin %2d dB",
-		   label, dB[0], dB[1]);
+			label, dB[0], dB[1]);
 }
 
 static void print_ie_erp(unsigned int level, const char *label,
