@@ -55,14 +55,10 @@ static inline bool next_2bytes(const unsigned char *mpdu, int len,
 static inline bool next_data(const unsigned char *mpdu, int len,
 				int *offset, unsigned char *holder, int t_len)
 {
-	int i;
-
 	if (len < *offset + t_len)
 		return false;
 
-	for (i = 0; i < t_len; i++)
-		holder[i] = mpdu[*offset + i];
-
+	memcpy(holder, mpdu + *offset, t_len);
 	*offset += t_len;
 
 	return true;
