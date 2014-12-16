@@ -23,20 +23,24 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/* 802.11, Table 8-1 "Valid type and subtype combinations" */
 enum mpdu_type {
 	MPDU_TYPE_MANAGEMENT = 0,
 };
 
+/* 802.11, Table 8-1 "Valid type and subtype combinations" */
 enum mpdu_mgmt_type {
 	MPDU_MGMT_TYPE_AUTHENTICATION   = 0xB,
 	MPDU_MGMT_TYPE_DEAUTHENTICATION = 0xC,
 };
 
+/* 802.11, Section 8.4.1.1 Authentication Algorithm Number field */
 enum mpdu_authentication_algorithm_number {
 	MPDU_AUTH_ALGO_OPEN = 0,
 	MPDU_AUTH_ALGO_SK,
 };
 
+/* 802.11, Section 8.2.4.1.1, Figure 8-2 */
 struct mpdu_fc {
 	union {
 		struct {
@@ -56,6 +60,7 @@ struct mpdu_fc {
 	};
 };
 
+/* 802.11, Section 8.3.3.1 */
 struct mpdu_mgmt_header {
 	uint16_t duration;
 	unsigned char address_1[6];
@@ -71,6 +76,7 @@ struct mpdu_mgmt_header {
 	uint32_t ht_control; /* ToDo? */
 };
 
+/* 802.11, Section 8.3.3.11 */
 struct mpdu_authentication {
 	uint16_t algorithm;
 	uint16_t transaction_sequence;
@@ -80,6 +86,7 @@ struct mpdu_authentication {
 	/* ToDo: FT and SAE parts? */
 };
 
+/* 802.11, Section 8.3.3.12 */
 struct mpdu_deauthentication {
 	uint16_t reason_code;
 	/* ToDo: Vendor specific IE? MME? */
