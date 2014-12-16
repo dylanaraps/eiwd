@@ -43,7 +43,7 @@ static inline bool next_byte(const unsigned char *mpdu, int len,
 static inline bool next_2bytes(const unsigned char *mpdu, int len,
 					int *offset, uint16_t *holder)
 {
-	if (len == *offset || len < *offset + 2)
+	if (len < *offset + 2)
 		return false;
 
 	*holder = L_LE16_TO_CPU(*((uint16_t *) mpdu+*offset));
@@ -57,7 +57,7 @@ static inline bool next_data(const unsigned char *mpdu, int len,
 {
 	int i;
 
-	if (len == *offset || len < *offset + t_len)
+	if (len < *offset + t_len)
 		return false;
 
 	for (i = 0; i < t_len; i++)
