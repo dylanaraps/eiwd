@@ -133,7 +133,8 @@ static bool decode_mgmt_mpdu(const unsigned char *mpdu, int len,
 	case MPDU_MGMT_TYPE_AUTHENTICATION:
 		return decode_authentication_mgmt_mpdu(mpdu, len, offset, out);
 	case MPDU_MGMT_TYPE_DEAUTHENTICATION:
-		return decode_deauthentication_mgmt_mpdu(mpdu, len, offset, out);
+		return decode_deauthentication_mgmt_mpdu(mpdu, len, offset,
+								out);
 	default:
 		return false;
 	}
