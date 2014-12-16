@@ -44,6 +44,7 @@
 
 static struct nlmon *nlmon = NULL;
 static const char *writer_path = NULL;
+static struct l_timeout *timeout = NULL;
 
 #define NLA_OK(nla,len)         ((len) >= (int) sizeof(struct nlattr) && \
 				(nla)->nla_len >= sizeof(struct nlattr) && \
@@ -652,7 +653,7 @@ static void signal_handler(struct l_signal *signal, uint32_t signo,
 	case SIGTERM:
 		iwmon_interface_disable(monitor_interface);
 
-		l_timeout_create(1, main_loop_quit, NULL, NULL);
+		timeout = l_timeout_create(1, main_loop_quit, NULL, NULL);
 		break;
 	}
 }
@@ -806,6 +807,7 @@ int main(int argc, char *argv[])
 
 done:
 	l_signal_remove(signal);
+	l_free(timeout);
 
 	return exit_status;
 }
