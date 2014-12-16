@@ -46,7 +46,7 @@ static inline bool next_2bytes(const unsigned char *mpdu, int len,
 	if (len < *offset + 2)
 		return false;
 
-	*holder = L_LE16_TO_CPU(*((uint16_t *) mpdu+*offset));
+	*holder = L_LE16_TO_CPU(*((uint16_t *) mpdu + *offset));
 	*offset = *offset + 2;
 
 	return true;
@@ -61,7 +61,7 @@ static inline bool next_data(const unsigned char *mpdu, int len,
 		return false;
 
 	for (i = 0; i < t_len; i++)
-		holder[i] = mpdu[*offset+i];
+		holder[i] = mpdu[*offset + i];
 
 	*offset += t_len;
 
