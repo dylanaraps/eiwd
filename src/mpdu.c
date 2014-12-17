@@ -28,6 +28,13 @@
 
 #include "mpdu.h"
 
+static inline unsigned char bit_field(unsigned char oct, int start, int num)
+{
+	unsigned char mask = (1 << num) - 1;
+
+	return (oct >> start) & mask;
+}
+
 static inline bool next_byte(const unsigned char *mpdu, int len,
 					int *offset, unsigned char *holder)
 {
@@ -67,6 +74,8 @@ static inline bool next_data(const unsigned char *mpdu, int len,
 static bool decode_mgmt_header(const unsigned char *mpdu, int len,
 						int *offset, struct mpdu *out)
 {
+	uint16_t sequence_control;
+
 	if (!next_2bytes(mpdu, len, offset, &out->mgmt_hdr.duration))
 		return false;
 
@@ -79,8 +88,11 @@ static bool decode_mgmt_header(const unsigned char *mpdu, int len,
 	if (!next_data(mpdu, len, offset, out->mgmt_hdr.address_3, 6))
 		return false;
 
-	if (!next_2bytes(mpdu, len, offset, &out->mgmt_hdr.sequence_control))
+	if (!next_2bytes(mpdu, len, offset, &sequence_control))
 		return false;
+
+	out->mgmt_hdr.fragment_number = sequence_control & 0x0f;
+	out->mgmt_hdr.sequence_number = sequence_control >> 4;
 
 	if (out->fc.order)
 		*offset += sizeof(uint32_t); /* Skipping ht_control for now */
@@ -130,9 +142,9 @@ static bool decode_mgmt_mpdu(const unsigned char *mpdu, int len,
 		return false;
 
 	switch (out->fc.subtype) {
-	case MPDU_MGMT_TYPE_AUTHENTICATION:
+	case MPDU_MANAGEMENT_SUBTYPE_AUTHENTICATION:
 		return decode_authentication_mgmt_mpdu(mpdu, len, offset, out);
-	case MPDU_MGMT_TYPE_DEAUTHENTICATION:
+	case MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION:
 		return decode_deauthentication_mgmt_mpdu(mpdu, len, offset,
 								out);
 	default:
@@ -144,13 +156,28 @@ static bool decode_mgmt_mpdu(const unsigned char *mpdu, int len,
 
 bool mpdu_decode(const unsigned char *mpdu, int len, struct mpdu *out)
 {
-	int offset = 0;
+	int offset;
 
 	if (!mpdu || !out)
 		return false;
 
-	if (!next_2bytes(mpdu, len, &offset, &out->fc.content))
+	if (len < 2)
 		return false;
+
+	out->fc.protocol_version = bit_field(mpdu[0], 0, 2);
+	out->fc.type = bit_field(mpdu[0], 2, 2);
+	out->fc.subtype = bit_field(mpdu[0], 4, 4);
+
+	out->fc.to_ds = bit_field(mpdu[1], 0, 1);
+	out->fc.from_ds = bit_field(mpdu[1], 1, 1);
+	out->fc.more_fragments = bit_field(mpdu[1], 2, 1);
+	out->fc.retry = bit_field(mpdu[1], 3, 1);
+	out->fc.power_mgmt = bit_field(mpdu[1], 4, 1);
+	out->fc.more_data = bit_field(mpdu[1], 5, 1);
+	out->fc.protected_frame = bit_field(mpdu[1], 6, 1);
+	out->fc.order = bit_field(mpdu[1], 7, 1);
+
+	offset = 2;
 
 	switch (out->fc.type) {
 	case MPDU_TYPE_MANAGEMENT:

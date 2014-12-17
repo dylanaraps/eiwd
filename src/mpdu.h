@@ -29,9 +29,9 @@ enum mpdu_type {
 };
 
 /* 802.11, Table 8-1 "Valid type and subtype combinations" */
-enum mpdu_mgmt_type {
-	MPDU_MGMT_TYPE_AUTHENTICATION   = 0xB,
-	MPDU_MGMT_TYPE_DEAUTHENTICATION = 0xC,
+enum mpdu_management_subtype {
+	MPDU_MANAGEMENT_SUBTYPE_AUTHENTICATION   = 0xB,
+	MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION = 0xC,
 };
 
 /* 802.11, Section 8.4.1.1 Authentication Algorithm Number field */
@@ -42,23 +42,18 @@ enum mpdu_authentication_algorithm_number {
 
 /* 802.11, Section 8.2.4.1.1, Figure 8-2 */
 struct mpdu_fc {
-	union {
-		struct {
-			uint16_t protocol_version:2;
-			uint16_t type:2;
-			uint16_t subtype:4;
-			uint16_t to_ds:1;
-			uint16_t from_ds:1;
-			uint16_t more_fragments:1;
-			uint16_t retry:1;
-			uint16_t power_mgmt:1;
-			uint16_t more_data:1;
-			uint16_t protected_frame:1;
-			uint16_t order:1;
-		};
-		uint16_t content;
-	};
-};
+	uint8_t protocol_version:2;
+	uint8_t type:2;
+	uint8_t subtype:4;
+	bool to_ds:1;
+	bool from_ds:1;
+	bool more_fragments:1;
+	bool retry:1;
+	bool power_mgmt:1;
+	bool more_data:1;
+	bool protected_frame:1;
+	bool order:1;
+} __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.1 */
 struct mpdu_mgmt_header {
@@ -66,15 +61,10 @@ struct mpdu_mgmt_header {
 	unsigned char address_1[6];
 	unsigned char address_2[6];
 	unsigned char address_3[6];
-	union {
-		struct {
-			uint16_t fragment_number:4;
-			uint16_t sequence_number:12;
-		};
-		uint16_t sequence_control;
-	};
+	uint16_t fragment_number:4;
+	uint16_t sequence_number:12;
 	uint32_t ht_control; /* ToDo? */
-};
+} __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.11 */
 struct mpdu_authentication {
