@@ -63,21 +63,27 @@ static struct deauthentication_data deauthentication_test_1 = {
 static void deauthentication_test(const void *data)
 {
 	const struct deauthentication_data *test = data;
-	struct mpdu mpdu;
+	struct mpdu *mpdu;
 	bool ret;
 
-	ret = mpdu_decode(test->frame, test->frame_len, &mpdu);
+	ret = mpdu_validate(test->frame, test->frame_len);
 	assert(ret);
-	assert(mpdu.fc.type == MPDU_TYPE_MANAGEMENT);
-	assert(mpdu.fc.subtype == MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION);
-	assert(mpdu.fc.protocol_version == 0x00);
 
-	assert(mpdu.mgmt_hdr.duration == test->duration);
-	assert(!memcmp(mpdu.mgmt_hdr.address_1, test->dest, 6));
-	assert(!memcmp(mpdu.mgmt_hdr.address_2, test->src, 6));
-	assert(!memcmp(mpdu.mgmt_hdr.address_3, test->bssid, 6));
-	assert(mpdu.mgmt_hdr.fragment_number == test->fragment_number);
-	assert(mpdu.mgmt_hdr.sequence_number == test->sequence_number);
+	mpdu = (struct mpdu *)test->frame;
+
+	assert(mpdu->fc.type == MPDU_TYPE_MANAGEMENT);
+	assert(mpdu->fc.subtype == MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION);
+	assert(mpdu->fc.protocol_version == 0x00);
+
+	assert(L_LE16_TO_CPU(mpdu->mgmt_hdr.duration) == test->duration);
+	assert(!memcmp(mpdu->mgmt_hdr.address_1, test->dest, 6));
+	assert(!memcmp(mpdu->mgmt_hdr.address_2, test->src, 6));
+	assert(!memcmp(mpdu->mgmt_hdr.address_3, test->bssid, 6));
+
+	assert(L_LE16_TO_CPU(mpdu->mgmt_hdr.fragment_number) ==
+			test->fragment_number);
+	assert(L_LE16_TO_CPU(mpdu->mgmt_hdr.sequence_number) ==
+			test->sequence_number);
 }
 
 int main(int argc, char *argv[])
