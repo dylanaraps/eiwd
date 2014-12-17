@@ -68,7 +68,7 @@ noinst_PROGRAMS = tools/hwsim
 tools_hwsim_LDADD = ell/libell-internal.la
 
 unit_tests = unit/test-pbkdf2-sha1 unit/test-prf-sha1 unit/test-ie \
-		unit/test-crypto
+		unit/test-crypto unit/test-mpdu
 
 if MAINTAINER_MODE
 noinst_PROGRAMS += $(unit_tests)
@@ -89,6 +89,10 @@ unit_test_crypto_SOURCES = unit/test-crypto.c \
 				src/sha1.h src/sha1.c \
 				src/crypto.h src/crypto.c
 unit_test_crypto_LDADD = ell/libell-internal.la
+
+unit_test_mpdu_SOURCES = unit/test-mpdu.c \
+				src/mpdu.h src/mpdu.c
+unit_test_mpdu_LDADD = ell/libell-internal.la
 
 TESTS = $(unit_tests)
 
