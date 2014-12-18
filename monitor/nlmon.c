@@ -43,6 +43,7 @@
 
 #include "linux/nl80211.h"
 #include "src/ie.h"
+#include "src/util.h"
 #include "monitor/pcap.h"
 #include "monitor/display.h"
 #include "monitor/nlmon.h"
@@ -325,6 +326,12 @@ static void print_ie_vendor(unsigned int level, const char *label,
 						oui[0], oui[1], oui[2]);
 }
 
+static void print_ie_ssid(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	print_attr(level, "%s: %s", label, util_ssid_to_utf8(size, data));
+}
+
 static void print_ie_rate(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
@@ -519,6 +526,8 @@ static void print_ie_erp(unsigned int level, const char *label,
 }
 
 static struct attr_entry ie_entry[] = {
+	{IE_TYPE_SSID,                      "SSID",
+	ATTR_CUSTOM,                        { .function = print_ie_ssid } },
 	{IE_TYPE_SUPPORTED_RATES,           "Supported rates",
 	ATTR_CUSTOM,                        { .function = print_ie_rate } },
 	{IE_TYPE_DSSS_PARAMETER_SET,        "DSSS parameter set",
