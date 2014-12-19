@@ -51,6 +51,7 @@ struct eapol_key_data {
 	uint8_t key_replay_counter[8];
 	uint8_t key_nonce[32];
 	uint8_t eapol_key_iv[16];
+	uint8_t key_rsc[8];
 	uint8_t key_mic_data[16];
 	uint16_t key_data_len;
 };
@@ -92,6 +93,7 @@ static struct eapol_key_data eapol_key_test_1 = {
 			0xf4, 0xd7, 0x6f, 0x2b, 0xf7 },
 	.eapol_key_iv = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	.key_rsc = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
 	.key_mic_data = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
 	.key_data_len = 0,
@@ -127,6 +129,8 @@ static void eapol_key_test(const void *data)
 			sizeof(packet->eapol_key_iv)));
 	assert(!memcmp(packet->key_mic_data, test->key_mic_data,
 			sizeof(packet->key_mic_data)));
+	assert(!memcmp(packet->key_rsc, test->key_rsc,
+			sizeof(packet->key_rsc)));
 	assert(L_BE16_TO_CPU(packet->key_data_len) == test->key_data_len);
 }
 
