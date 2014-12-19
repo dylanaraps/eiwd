@@ -86,6 +86,8 @@ struct eapol_key {
 	uint8_t key_replay_counter[8];
 	uint8_t key_nonce[32];
 	uint8_t eapol_key_iv[16];
+	uint8_t key_rsc[8];
+	uint8_t reserved[8];
 	uint8_t key_mic_data[16];
 	__be16 key_data_len;
 	uint8_t key_data[0];
