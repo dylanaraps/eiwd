@@ -30,4 +30,5 @@ unit/*.trs
 unit/test-ie
 unit/test-crypto
 unit/test-mpdu
+unit/test-eapol
 test-suite.log
