@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
 
-	l_test_add("/Management Frame/Deathentication Frame 1",
+	l_test_add("/Management Frame/Deauthentication Frame 1",
 			deauthentication_test, &deauthentication_test_1);
 
 	return l_test_run();
