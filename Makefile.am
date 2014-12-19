@@ -70,7 +70,7 @@ noinst_PROGRAMS = tools/hwsim
 tools_hwsim_LDADD = ell/libell-internal.la
 
 unit_tests = unit/test-pbkdf2-sha1 unit/test-prf-sha1 unit/test-ie \
-		unit/test-crypto unit/test-mpdu
+		unit/test-crypto unit/test-mpdu unit/test-eapol
 
 if MAINTAINER_MODE
 noinst_PROGRAMS += $(unit_tests)
@@ -96,6 +96,9 @@ unit_test_mpdu_SOURCES = unit/test-mpdu.c \
 				src/mpdu.h src/mpdu.c
 unit_test_mpdu_LDADD = ell/libell-internal.la
 
+unit_test_eapol_SOURCES = unit/test-eapol.c \
+				src/eapol.h src/eapol.c
+unit_test_eapol_LDADD = ell/libell-internal.la
 TESTS = $(unit_tests)
 
 manual_pages = doc/iwmon.1
