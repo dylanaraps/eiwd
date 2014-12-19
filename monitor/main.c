@@ -35,6 +35,10 @@
 #include <linux/if_arp.h>
 #include <ell/ell.h>
 
+#ifndef ARPHRD_NETLINK
+#define ARPHRD_NETLINK	824
+#endif
+
 #include "linux/nl80211.h"
 #include "monitor/nlmon.h"
 #include "monitor/pcap.h"

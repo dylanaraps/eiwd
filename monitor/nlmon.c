@@ -41,6 +41,10 @@
 #include <linux/filter.h>
 #include <ell/ell.h>
 
+#ifndef ARPHRD_NETLINK
+#define ARPHRD_NETLINK	824
+#endif
+
 #include "linux/nl80211.h"
 #include "src/ie.h"
 #include "src/util.h"
