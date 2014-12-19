@@ -80,16 +80,20 @@ struct mpdu_mgmt_header {
 	unsigned char address_2[6];
 	unsigned char address_3[6];
 #if defined(__LITTLE_ENDIAN_BITFIELD)
-	__le16 fragment_number:4;
-	__le16 sequence_number:12;
+	uint8_t fragment_number:4;
+	uint8_t sequence_number_low:4;
 #elif defined (__BIG_ENDIAN_BITFIELD)
-	__le16 sequence_number:12;
-	__le16 fragment_number:4;
+	uint8_t sequence_number_low:4;
+	uint8_t fragment_number:4;
 #else
 #error  "Please fix <asm/byteorder.h>"
 #endif
+	uint8_t sequence_number_high;
 	__le32 ht_control; /* ToDo? */
 } __attribute__ ((packed));
+
+#define MPDU_MGMT_SEQUENCE_NUMBER(v)		\
+	(((v).sequence_number_high << 4) + ((v).sequence_number_low))
 
 /* 802.11, Section 8.3.3.11 */
 struct mpdu_authentication {
