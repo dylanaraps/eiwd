@@ -61,7 +61,8 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					monitor/pcap.h monitor/pcap.c \
 					monitor/display.h monitor/display.c \
 					src/ie.h src/ie.c \
-					src/util.h src/util.c
+					src/util.h src/util.c \
+					src/eapol.h src/eapol.c
 monitor_iwmon_LDADD = ell/libell-internal.la
 
 noinst_PROGRAMS = tools/hwsim
