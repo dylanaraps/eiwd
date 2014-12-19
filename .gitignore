@@ -31,4 +31,5 @@ unit/test-ie
 unit/test-crypto
 unit/test-mpdu
 unit/test-eapol
+unit/test-ssid-to-utf8
 test-suite.log
