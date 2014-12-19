@@ -82,7 +82,7 @@ static void deauthentication_test(const void *data)
 
 	assert(L_LE16_TO_CPU(mpdu->mgmt_hdr.fragment_number) ==
 			test->fragment_number);
-	assert(L_LE16_TO_CPU(mpdu->mgmt_hdr.sequence_number) ==
+	assert(MPDU_MGMT_SEQUENCE_NUMBER(mpdu->mgmt_hdr) ==
 			test->sequence_number);
 }
 
