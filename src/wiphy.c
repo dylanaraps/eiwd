@@ -787,7 +787,7 @@ static void setup_scheduled_scan(struct wiphy *wiphy, struct netdev *netdev,
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	msg_append_attr(msg, NL80211_ATTR_SCHED_SCAN_INTERVAL,
 							4, &scan_interval);
-	msg_append_attr(msg, NL80211_ATTR_SCAN_SOCKET_OWNER, 0, NULL);
+	msg_append_attr(msg, NL80211_ATTR_SOCKET_OWNER, 0, NULL);
 
 	if (!l_genl_family_send(nl80211, msg, sched_scan_callback, NULL, NULL))
 		l_error("Starting scheduled scan failed");
