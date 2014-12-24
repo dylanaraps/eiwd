@@ -55,6 +55,15 @@ bool eapol_verify(const uint8_t *data, size_t len)
 		return false;
 	}
 
+	switch (ek->key_descriptor_version) {
+	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4:
+	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
+	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
+		break;
+	default:
+		return false;
+	}
+
 	key_data_len = L_BE16_TO_CPU(ek->key_data_len);
 	if (len < sizeof(struct eapol_key) + key_data_len)
 		return false;
