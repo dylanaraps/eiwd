@@ -92,3 +92,5 @@ struct eapol_key {
 	__be16 key_data_len;
 	uint8_t key_data[0];
 } __attribute__ ((packed));
+
+bool eapol_verify(const uint8_t *data, size_t len);
