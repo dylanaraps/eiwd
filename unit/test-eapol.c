@@ -192,6 +192,8 @@ static void eapol_key_test(const void *data)
 	const struct eapol_key_data *test = data;
 	struct eapol_key *packet;
 
+	assert(eapol_verify(test->frame, test->frame_len));
+
 	packet = (struct eapol_key *)test->frame;
 
 	assert(packet->protocol_version == test->protocol_version);
