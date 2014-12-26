@@ -23,6 +23,16 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+enum crypto_cipher {
+	CRYPTO_CIPHER_WEP40,
+	CRYPTO_CIPHER_WEP104,
+	CRYPTO_CIPHER_TKIP,
+	CRYPTO_CIPHER_CCMP,
+	CRYPTO_CIPHER_BIP,
+};
+
+int crypto_cipher_key_len(enum crypto_cipher cipher);
+
 int crypto_psk_from_passphrase(const char *passphrase,
 				const unsigned char *ssid, size_t ssid_len,
 				unsigned char *out_psk);

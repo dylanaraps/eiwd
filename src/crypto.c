@@ -34,6 +34,25 @@
 #include "sha1.h"
 #include "crypto.h"
 
+/* 802.11, Section 11.6.2, Table 11-4 */
+int crypto_cipher_key_len(enum crypto_cipher cipher)
+{
+	switch (cipher) {
+	case CRYPTO_CIPHER_WEP40:
+		return 5;
+	case CRYPTO_CIPHER_WEP104:
+		return 13;
+	case CRYPTO_CIPHER_TKIP:
+		return 32;
+	case CRYPTO_CIPHER_CCMP:
+		return 16;
+	case CRYPTO_CIPHER_BIP:
+		return 16;
+	};
+
+	return 0;
+}
+
 int crypto_psk_from_passphrase(const char *passphrase,
 				const unsigned char *ssid, size_t ssid_len,
 				unsigned char *out_psk)
