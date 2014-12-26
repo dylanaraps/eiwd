@@ -38,7 +38,7 @@ int crypto_psk_from_passphrase(const char *passphrase,
 				const unsigned char *ssid, size_t ssid_len,
 				unsigned char *out_psk);
 
-bool crypto_derive_ptk(uint8_t *pmk, size_t pmk_len, const char *label,
-			uint8_t *addr1, uint8_t *addr2,
-			uint8_t *nonce1, uint8_t *nonce2,
+bool crypto_derive_ptk(const uint8_t *pmk, size_t pmk_len, const char *label,
+			const uint8_t *addr1, const uint8_t *addr2,
+			const uint8_t *nonce1, const uint8_t *nonce2,
 			uint8_t *out_ptk, size_t ptk_len);
