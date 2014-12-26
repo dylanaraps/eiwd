@@ -115,6 +115,17 @@ int crypto_psk_from_passphrase(const char *passphrase,
  * 802.11, Section 11.6.6.7:
  * PTK = PRF-X(PMK, "Pairwise key expansion", Min(AA, SA) || Max(AA, SA) ||
  *		Min(ANonce, SNonce) || Max(ANonce, SNonce))
+ *
+ * 802.11, Section 11.6.1.3:
+ * The PTK shall be derived from the PMK by
+ *  PTK ← PRF-X(PMK, “Pairwise key expansion”, Min(AA,SPA) || Max(AA,SPA) ||
+ *		Min(ANonce,SNonce) || Max(ANonce,SNonce))
+ * where X = 256 + TK_bits. The value of TK_bits is cipher-suite dependent and
+ * is defined in Table 11-4. The Min and Max operations for IEEE 802 addresses
+ * are with the address converted to a positive integer treating the first
+ * transmitted octet as the most significant octet of the integer. The Min and
+ * Max operations for nonces are with the nonces treated as positive integers
+ * converted as specified in 8.2.2.
  */
 bool crypto_derive_ptk(uint8_t *pmk, size_t pmk_len, const char *label,
 			uint8_t *addr1, uint8_t *addr2,
