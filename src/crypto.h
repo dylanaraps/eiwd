@@ -31,6 +31,12 @@ enum crypto_cipher {
 	CRYPTO_CIPHER_BIP,
 };
 
+struct crypto_ptk {
+	uint8_t kck[16];
+	uint8_t kek[16];
+	uint8_t tk[0];
+};
+
 int crypto_cipher_key_len(enum crypto_cipher cipher);
 int crypto_cipher_tk_bits(enum crypto_cipher cipher);
 
@@ -42,3 +48,8 @@ bool crypto_derive_ptk(const uint8_t *pmk, size_t pmk_len, const char *label,
 			const uint8_t *addr1, const uint8_t *addr2,
 			const uint8_t *nonce1, const uint8_t *nonce2,
 			uint8_t *out_ptk, size_t ptk_len);
+
+bool crypto_derive_pairwise_ptk(const uint8_t *pmk,
+				const uint8_t *addr1, const uint8_t *addr2,
+				const uint8_t *nonce1, const uint8_t *nonce2,
+				struct crypto_ptk *out_ptk, size_t ptk_len);
