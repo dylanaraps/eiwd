@@ -27,6 +27,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
+#include <linux/if_ether.h>
 
 #include <ell/ell.h>
 
@@ -84,4 +85,44 @@ int crypto_psk_from_passphrase(const char *passphrase,
 		memcpy(out_psk, psk, sizeof(psk));
 
 	return 0;
+}
+
+/*
+ * 802.11, Section 11.6.6.7:
+ * PTK = PRF-X(PMK, "Pairwise key expansion", Min(AA, SA) || Max(AA, SA) ||
+ *		Min(ANonce, SNonce) || Max(ANonce, SNonce))
+ */
+bool crypto_derive_ptk(uint8_t *pmk, size_t pmk_len, const char *label,
+			uint8_t *addr1, uint8_t *addr2,
+			uint8_t *nonce1, uint8_t *nonce2,
+			uint8_t *out_ptk, size_t ptk_len)
+{
+	/* Nonce length is 32 */
+	uint8_t data[ETH_ALEN * 2 + 64];
+	size_t pos = 0;
+
+	/* Address 1 is less than Address 2 */
+	if (memcmp(addr1, addr2, ETH_ALEN) < 0) {
+		memcpy(data, addr1, ETH_ALEN);
+		memcpy(data + ETH_ALEN, addr2, ETH_ALEN);
+	} else {
+		memcpy(data, addr2, ETH_ALEN);
+		memcpy(data + ETH_ALEN, addr1, ETH_ALEN);
+	}
+
+	pos += ETH_ALEN * 2;
+
+	/* Nonce1 is less than Nonce2 */
+	if (memcmp(nonce1, nonce2, 32) < 0) {
+		memcpy(data + pos, nonce1, 32);
+		memcpy(data + pos + 32, nonce2, 32);
+	} else {
+		memcpy(data + pos, nonce2, 32);
+		memcpy(data + pos + 32, nonce1, 32);
+	}
+
+	pos += 64;
+
+	return prf_sha1(pmk, pmk_len, label, strlen(label),
+			data, sizeof(data), out_ptk, ptk_len);
 }
