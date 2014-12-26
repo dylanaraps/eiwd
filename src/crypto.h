@@ -32,6 +32,7 @@ enum crypto_cipher {
 };
 
 int crypto_cipher_key_len(enum crypto_cipher cipher);
+int crypto_cipher_tk_bits(enum crypto_cipher cipher);
 
 int crypto_psk_from_passphrase(const char *passphrase,
 				const unsigned char *ssid, size_t ssid_len,

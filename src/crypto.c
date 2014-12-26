@@ -53,6 +53,11 @@ int crypto_cipher_key_len(enum crypto_cipher cipher)
 	return 0;
 }
 
+int crypto_cipher_tk_bits(enum crypto_cipher cipher)
+{
+	return crypto_cipher_key_len(cipher) * 8;
+}
+
 int crypto_psk_from_passphrase(const char *passphrase,
 				const unsigned char *ssid, size_t ssid_len,
 				unsigned char *out_psk)
