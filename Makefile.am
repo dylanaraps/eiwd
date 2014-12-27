@@ -72,7 +72,8 @@ noinst_PROGRAMS = tools/hwsim
 
 tools_hwsim_LDADD = ell/libell-internal.la
 
-unit_tests = unit/test-hmac-md5 unit/test-hmac-sha1 unit/test-hmac-sha256 \
+unit_tests = unit/test-cmac-aes \
+		unit/test-hmac-md5 unit/test-hmac-sha1 unit/test-hmac-sha256 \
 		unit/test-pbkdf2-sha1 unit/test-prf-sha1 \
 		unit/test-crypto unit/test-eapol unit/test-mpdu \
 		unit/test-ie unit/test-ssid-to-utf8
@@ -80,6 +81,10 @@ unit_tests = unit/test-hmac-md5 unit/test-hmac-sha1 unit/test-hmac-sha256 \
 if MAINTAINER_MODE
 noinst_PROGRAMS += $(unit_tests)
 endif
+
+unit_test_cmac_aes_SOURCES = unit/test-cmac-aes.c \
+					src/aes.h src/aes.c
+unit_test_cmac_aes_LDADD = ell/libell-internal.la
 
 unit_test_hmac_md5_SOURCES = unit/test-hmac-md5.c \
 					src/md5.h src/md5.c
