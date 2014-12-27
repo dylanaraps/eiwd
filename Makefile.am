@@ -43,6 +43,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h linux/kdbus.h \
 					src/kdbus.h src/kdbus.c \
 					src/netdev.h src/netdev.c \
 					src/wiphy.h src/wiphy.c \
+					src/aes.h src/aes.c \
 					src/md5.h src/md5.c \
 					src/sha1.h src/sha1.c \
 					src/sha256.h src/sha256.c \
