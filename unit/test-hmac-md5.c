@@ -62,7 +62,7 @@ static void hmac_test(const void *data)
 
 	printf("Result = %s\n", hmac);
 
-	//assert(strcmp(test->hmac, hmac) == 0);
+	assert(strcmp(test->hmac, hmac) == 0);
 }
 
 static const struct hmac_data test_case_1 = {
