@@ -174,3 +174,40 @@ bool eapol_process_ptk_2_of_4(const uint8_t *data, size_t len,
 
 	return true;
 }
+
+struct eapol_key *eapol_create_ptk_2_of_4(
+				enum eapol_protocol_version protocol,
+				enum eapol_key_descriptor_version version,
+				const uint8_t key_replay_counter[],
+				const uint8_t snonce[],
+				size_t extra_len,
+				const uint8_t *extra_data)
+{
+	size_t to_alloc = sizeof(struct eapol_key);
+	struct eapol_key *out_frame = l_malloc(to_alloc + extra_len);
+
+	memset(out_frame, 0, to_alloc + extra_len);
+
+	out_frame->protocol_version = protocol;
+	out_frame->packet_type = 0x3;
+	out_frame->packet_len = L_CPU_TO_BE16(to_alloc + extra_len - 4);
+	out_frame->descriptor_type = EAPOL_DESCRIPTOR_TYPE_80211;
+	out_frame->key_descriptor_version = version;
+	out_frame->key_type = true;
+	out_frame->install = false;
+	out_frame->key_ack = false;
+	out_frame->key_mic = true;
+	out_frame->secure = false;
+	out_frame->error = false;
+	out_frame->request = false;
+	out_frame->encrypted_key_data = false;
+	out_frame->smk_message = false;
+	out_frame->key_length = 0,
+	memcpy(out_frame->key_replay_counter, key_replay_counter,
+		sizeof(out_frame->key_replay_counter));
+	memcpy(out_frame->key_nonce, snonce, sizeof(out_frame->key_nonce));
+	out_frame->key_data_len = L_CPU_TO_BE16(extra_len);
+	memcpy(out_frame->key_data, extra_data, extra_len);
+
+	return out_frame;
+}
