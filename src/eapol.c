@@ -27,6 +27,8 @@
 #include <string.h>
 #include <ell/ell.h>
 
+#include "sha1.h"
+#include "md5.h"
 #include "eapol.h"
 
 #define VERIFY_IS_ZERO(field)					\
@@ -36,6 +38,36 @@
 			if ((field)[i] != 0)			\
 				return false;			\
 	} while (false)						\
+
+/*
+ * MIC calculation depends on the selected hash function.  The has function
+ * is given in the EAPoL Key Descriptor Version field.
+ *
+ * The MIC length is always 16 bytes for currently known Key Descriptor
+ * Versions.
+ *
+ * The input struct eapol_key *frame should have a zero-d MIC field
+ */
+bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
+				uint8_t *mic)
+{
+	size_t frame_len = sizeof(struct eapol_key);
+
+	frame_len += L_BE16_TO_CPU(frame->key_data_len);
+
+	switch (frame->key_descriptor_version) {
+	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4:
+		return hmac_md5(kck, 16, (uint8_t *) frame, frame_len,
+					mic, 16);
+	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
+		return hmac_sha1(kck, 16, (uint8_t *) frame, frame_len,
+					mic, 16);
+	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
+		return false;
+	default:
+		return false;
+	}
+}
 
 bool eapol_verify(const uint8_t *data, size_t len)
 {

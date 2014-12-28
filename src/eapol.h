@@ -93,6 +93,9 @@ struct eapol_key {
 	uint8_t key_data[0];
 } __attribute__ ((packed));
 
+bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
+				uint8_t *mic);
+
 bool eapol_verify(const uint8_t *data, size_t len);
 
 bool eapol_process_ptk_1_of_4(const uint8_t *data, size_t len,
