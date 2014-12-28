@@ -360,6 +360,35 @@ static void eapol_key_mic_test(const void *data)
 	assert(!memcmp(test->mic, mic, sizeof(mic)));
 }
 
+struct eapol_calculate_mic_test {
+	const uint8_t *frame;
+	size_t frame_len;
+	const uint8_t *kck;
+	const uint8_t *mic;
+};
+
+static const struct eapol_calculate_mic_test eapol_calculate_mic_test_1 = {
+	.frame = eapol_key_mic_data_1,
+	.frame_len = sizeof(eapol_key_mic_data_1),
+	.kck = kck_data_1,
+	.mic = eapol_key_mic_2,
+};
+
+static void eapol_calculate_mic_test(const void *data)
+{
+	const struct eapol_calculate_mic_test *test = data;
+	struct eapol_key *frame;
+	uint8_t mic[16];
+	bool ret;
+
+	memset(mic, 0, sizeof(mic));
+	frame = (struct eapol_key *) test->frame;
+
+	ret = eapol_calculate_mic(test->kck, frame, mic);
+	assert(ret);
+	assert(!memcmp(test->mic, mic, sizeof(mic)));
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -377,6 +406,9 @@ int main(int argc, char *argv[])
 			eapol_key_mic_test, &eapol_key_mic_test_1);
 	l_test_add("/EAPoL Key/MIC Test 2",
 			eapol_key_mic_test, &eapol_key_mic_test_2);
+
+	l_test_add("/EAPoL Key/Calculate MIC Test 1",
+			eapol_calculate_mic_test, &eapol_calculate_mic_test_1);
 
 	return l_test_run();
 }
