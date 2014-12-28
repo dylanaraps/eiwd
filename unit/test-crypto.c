@@ -332,6 +332,8 @@ static void ptk_test(const void *data)
 	if (test->tk)
 		assert(!memcmp(test->tk, ptk->tk,
 				crypto_cipher_key_len(test->cipher)));
+
+	l_free(ptk);
 }
 
 int main(int argc, char *argv[])
