@@ -32,8 +32,9 @@
 #define SHA256_MAC_LEN 32
 
 static void __hmac_sha256(struct l_checksum *checksum,
-			const void *key, size_t key_len,
-			const void *data, size_t data_len, void *output)
+					const void *key, size_t key_len,
+					const void *data, size_t data_len,
+					void *output, size_t size)
 {
 	unsigned char ipad[64];
 	unsigned char opad[64];
@@ -73,7 +74,8 @@ static void __hmac_sha256(struct l_checksum *checksum,
 	/* perform outer SHA256 */
 	l_checksum_update(checksum, opad, sizeof(opad));
 	l_checksum_update(checksum, digest, SHA256_MAC_LEN);
-	l_checksum_get_digest(checksum, output, SHA256_MAC_LEN);
+	l_checksum_get_digest(checksum, output,
+				size > SHA256_MAC_LEN ? SHA256_MAC_LEN : size);
 
 	l_checksum_reset(checksum);
 }
@@ -85,7 +87,7 @@ bool hmac_sha256(const void *key, size_t key_len,
 
 	checksum = l_checksum_new(L_CHECKSUM_SHA256);
 
-	__hmac_sha256(checksum, key, key_len, data, data_len, output);
+	__hmac_sha256(checksum, key, key_len, data, data_len, output, size);
 
 	l_checksum_free(checksum);
 

@@ -32,8 +32,9 @@
 #define SHA1_MAC_LEN 20
 
 static void __hmac_sha1(struct l_checksum *checksum,
-			const void *key, size_t key_len,
-			const void *data, size_t data_len, void *output)
+					const void *key, size_t key_len,
+					const void *data, size_t data_len,
+					void *output, size_t size)
 {
 	unsigned char ipad[64];
 	unsigned char opad[64];
@@ -73,7 +74,8 @@ static void __hmac_sha1(struct l_checksum *checksum,
 	/* perform outer SHA1 */
 	l_checksum_update(checksum, opad, sizeof(opad));
 	l_checksum_update(checksum, digest, SHA1_MAC_LEN);
-	l_checksum_get_digest(checksum, output, SHA1_MAC_LEN);
+	l_checksum_get_digest(checksum, output,
+				size > SHA1_MAC_LEN ? SHA1_MAC_LEN : size);
 
 	l_checksum_reset(checksum);
 }
@@ -85,7 +87,7 @@ bool hmac_sha1(const void *key, size_t key_len,
 
 	checksum = l_checksum_new(L_CHECKSUM_SHA1);
 
-	__hmac_sha1(checksum, key, key_len, data, data_len, output);
+	__hmac_sha1(checksum, key, key_len, data, data_len, output, size);
 
 	l_checksum_free(checksum);
 
@@ -110,12 +112,12 @@ static void F(struct l_checksum *checksum,
 	buf[salt_len + 3] = count & 0xff;
 
 	__hmac_sha1(checksum, password, password_len,
-					buf, salt_len + 4, tmp1);
+					buf, salt_len + 4, tmp1, SHA1_MAC_LEN);
 	memcpy(digest, tmp1, SHA1_MAC_LEN);
 
 	for (i = 1; i < iterations; i++) {
 		__hmac_sha1(checksum, password, password_len,
-						tmp1, SHA1_MAC_LEN, tmp2);
+					tmp1, SHA1_MAC_LEN, tmp2, SHA1_MAC_LEN);
 		memcpy(tmp1, tmp2, SHA1_MAC_LEN);
 
 		for (j = 0; j < SHA1_MAC_LEN; j++)
@@ -173,7 +175,7 @@ bool prf_sha1(const void *key, size_t key_len,
 
 	for (i = 0; i < (size + 19) / 20; i++) {
 		__hmac_sha1(checksum, key, key_len, input, input_len,
-							output + offset);
+						output + offset, SHA1_MAC_LEN);
 
 		offset += 20;
 		input[input_len - 1]++;

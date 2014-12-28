@@ -32,8 +32,9 @@
 #define MD5_MAC_LEN 16
 
 static void __hmac_md5(struct l_checksum *checksum,
-			const void *key, size_t key_len,
-			const void *data, size_t data_len, void *output)
+					const void *key, size_t key_len,
+					const void *data, size_t data_len,
+					void *output, size_t size)
 {
 	unsigned char ipad[64];
 	unsigned char opad[64];
@@ -73,7 +74,8 @@ static void __hmac_md5(struct l_checksum *checksum,
 	/* perform outer MD5 */
 	l_checksum_update(checksum, opad, sizeof(opad));
 	l_checksum_update(checksum, digest, MD5_MAC_LEN);
-	l_checksum_get_digest(checksum, output, MD5_MAC_LEN);
+	l_checksum_get_digest(checksum, output,
+				size > MD5_MAC_LEN ? MD5_MAC_LEN : size);
 
 	l_checksum_reset(checksum);
 }
@@ -85,7 +87,7 @@ bool hmac_md5(const void *key, size_t key_len,
 
 	checksum = l_checksum_new(L_CHECKSUM_MD5);
 
-	__hmac_md5(checksum, key, key_len, data, data_len, output);
+	__hmac_md5(checksum, key, key_len, data, data_len, output, size);
 
 	l_checksum_free(checksum);
 
