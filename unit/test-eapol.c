@@ -357,8 +357,6 @@ static void eapol_key_mic_test(const void *data)
 		assert(false);
 	}
 
-	l_util_hexdump(true, test->mic, 16, do_debug, "[EAPoL] ");
-	l_util_hexdump(true, mic, 16, do_debug, "[EAPoL] ");
 	assert(!memcmp(test->mic, mic, sizeof(mic)));
 }
 
