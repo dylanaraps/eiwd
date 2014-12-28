@@ -389,6 +389,63 @@ static void eapol_calculate_mic_test(const void *data)
 	assert(!memcmp(test->mic, mic, sizeof(mic)));
 }
 
+static void eapol_4way_test(const void *data)
+{
+	uint8_t anonce[32];
+	uint8_t snonce[32];
+	uint8_t mic[16];
+	struct eapol_key *frame;
+	uint8_t aa[] = { 0x24, 0xa2, 0xe1, 0xec, 0x17, 0x04 };
+	uint8_t spa[] = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 };
+	const char *passphrase = "EasilyGuessedPassword";
+	const char *ssid = "TestWPA";
+	const unsigned char expected_psk[] = {
+		0xbf, 0x9a, 0xa3, 0x15, 0x53, 0x00, 0x12, 0x5e,
+		0x7a, 0x5e, 0xbb, 0x2a, 0x54, 0x9f, 0x8c, 0xd4,
+		0xed, 0xab, 0x8e, 0xe1, 0x2e, 0x94, 0xbf, 0xc2,
+		0x4b, 0x33, 0x57, 0xad, 0x04, 0x96, 0x65, 0xd9 };
+	unsigned char psk[32];
+	struct crypto_ptk *ptk;
+	size_t ptk_len;
+	bool ret;
+
+	assert(eapol_process_ptk_1_of_4(eapol_key_data_3,
+					sizeof(eapol_key_data_3),
+					anonce));
+	assert(eapol_process_ptk_2_of_4(eapol_key_data_4,
+					sizeof(eapol_key_data_4),
+					snonce));
+
+	assert(!crypto_psk_from_passphrase(passphrase, (uint8_t *) ssid,
+						strlen(ssid), psk));
+	assert(!memcmp(expected_psk, psk, sizeof(psk)));
+
+	ptk_len = sizeof(struct crypto_ptk) +
+			crypto_cipher_key_len(CRYPTO_CIPHER_CCMP);
+	ptk = l_malloc(ptk_len);
+	ret = crypto_derive_pairwise_ptk(psk, aa, spa, anonce, snonce,
+						ptk, ptk_len);
+	assert(ret);
+
+	l_util_hexdump(true, eapol_key_data_4, sizeof(eapol_key_data_4),
+			do_debug, "[EAPoL] ");
+
+	frame = eapol_create_ptk_2_of_4(EAPOL_PROTOCOL_VERSION_2001,
+				EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES,
+				eapol_key_test_4.key_replay_counter,
+				snonce, eapol_key_test_4.key_data_len,
+				eapol_key_data_4 + sizeof(struct eapol_key));
+	assert(frame);
+
+	eapol_calculate_mic(ptk->kck, frame, mic);
+
+	memcpy(frame->key_mic_data, mic, sizeof(mic));
+	l_util_hexdump(true, (uint8_t *) frame, sizeof(eapol_key_data_4),
+			do_debug, "[EAPoL] ");
+
+	assert(!memcmp(frame, eapol_key_data_4, sizeof(eapol_key_data_4)));
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -409,6 +466,9 @@ int main(int argc, char *argv[])
 
 	l_test_add("/EAPoL Key/Calculate MIC Test 1",
 			eapol_calculate_mic_test, &eapol_calculate_mic_test_1);
+
+	l_test_add("EAPoL/4-Way Handshake",
+			&eapol_4way_test, NULL);
 
 	return l_test_run();
 }
