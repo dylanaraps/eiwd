@@ -174,10 +174,17 @@ bool prf_sha1(const void *key, size_t key_len,
 	input_len = prefix_len + 1 + data_len + 1;
 
 	for (i = 0; i < (size + 19) / 20; i++) {
-		__hmac_sha1(checksum, key, key_len, input, input_len,
-						output + offset, SHA1_MAC_LEN);
+		size_t len;
 
-		offset += 20;
+		if (size - offset > SHA1_MAC_LEN)
+			len = SHA1_MAC_LEN;
+		else
+			len = size - offset;
+
+		__hmac_sha1(checksum, key, key_len, input, input_len,
+							output + offset, len);
+
+		offset += len;
 		input[input_len - 1]++;
 	}
 
