@@ -444,6 +444,9 @@ static void eapol_4way_test(const void *data)
 			do_debug, "[EAPoL] ");
 
 	assert(!memcmp(frame, eapol_key_data_4, sizeof(eapol_key_data_4)));
+
+	l_free(ptk);
+	l_free(frame);
 }
 
 int main(int argc, char *argv[])
