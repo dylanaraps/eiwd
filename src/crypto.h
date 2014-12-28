@@ -35,7 +35,7 @@ struct crypto_ptk {
 	uint8_t kck[16];
 	uint8_t kek[16];
 	uint8_t tk[0];
-};
+} __attribute((packed))__;
 
 int crypto_cipher_key_len(enum crypto_cipher cipher);
 int crypto_cipher_tk_bits(enum crypto_cipher cipher);
