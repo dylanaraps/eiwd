@@ -29,6 +29,14 @@
 
 #include "eapol.h"
 
+#define VERIFY_IS_ZERO(field)					\
+	do {							\
+		unsigned int i;					\
+		for (i = 0; i < sizeof(field); i++)		\
+			if ((field)[i] != 0)			\
+				return false;			\
+	} while (false)						\
+
 bool eapol_verify(const uint8_t *data, size_t len)
 {
 	struct eapol_key *ek;
@@ -67,6 +75,54 @@ bool eapol_verify(const uint8_t *data, size_t len)
 	key_data_len = L_BE16_TO_CPU(ek->key_data_len);
 	if (len < sizeof(struct eapol_key) + key_data_len)
 		return false;
+
+	return true;
+}
+
+bool eapol_process_ptk_1_of_4(const uint8_t *data, size_t len,
+				uint8_t out_anonce[])
+{
+	struct eapol_key *ek;
+
+	if (!eapol_verify(data, len))
+		return false;
+
+	ek = (struct eapol_key *) data;
+
+	/* Verify according to 802.11, Section 11.6.6.2 */
+	if (!ek->key_type)
+		return false;
+
+	if (ek->smk_message)
+		return false;
+
+	if (ek->install)
+		return false;
+
+	if (!ek->key_ack)
+		return false;
+
+	if (ek->key_mic)
+		return false;
+
+	if (ek->secure)
+		return false;
+
+	if (ek->error)
+		return false;
+
+	if (ek->request)
+		return false;
+
+	if (ek->encrypted_key_data)
+		return false;
+
+	VERIFY_IS_ZERO(ek->eapol_key_iv);
+	VERIFY_IS_ZERO(ek->key_rsc);
+	VERIFY_IS_ZERO(ek->reserved);
+	VERIFY_IS_ZERO(ek->key_mic_data);
+
+	memcpy(out_anonce, ek->key_nonce, sizeof(ek->key_nonce));
 
 	return true;
 }

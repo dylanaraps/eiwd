@@ -94,3 +94,6 @@ struct eapol_key {
 } __attribute__ ((packed));
 
 bool eapol_verify(const uint8_t *data, size_t len);
+
+bool eapol_process_ptk_1_of_4(const uint8_t *data, size_t len,
+				uint8_t out_anonce[]);
