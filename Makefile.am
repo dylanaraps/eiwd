@@ -52,6 +52,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h linux/kdbus.h \
 					src/manager.h src/manager.c \
 					src/crypto.h src/crypto.c \
 					src/mpdu.h src/mpdu.c \
+					src/eapol.h src/eapol.c \
 					iwd.h
 src_iwd_LDADD = ell/libell-internal.la
 
@@ -65,6 +66,7 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					monitor/display.h monitor/display.c \
 					src/ie.h src/ie.c \
 					src/util.h src/util.c \
+					src/sha1.h src/sha1.c \
 					src/eapol.h src/eapol.c
 monitor_iwmon_LDADD = ell/libell-internal.la
 
