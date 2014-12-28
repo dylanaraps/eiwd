@@ -29,7 +29,17 @@
 #include <assert.h>
 #include <ell/ell.h>
 
+#include "src/md5.h"
+#include "src/sha1.h"
 #include "src/eapol.h"
+#include "src/crypto.h"
+
+static void do_debug(const char *str, void *user_data)
+{
+	const char *prefix = user_data;
+
+	l_info("%s%s", prefix, str);
+}
 
 struct eapol_key_data {
 	const unsigned char *frame;
@@ -269,6 +279,89 @@ static void eapol_key_test(const void *data)
 	assert(L_BE16_TO_CPU(packet->key_data_len) == test->key_data_len);
 }
 
+struct eapol_key_mic_test {
+	const uint8_t *frame;
+	size_t frame_len;
+	enum eapol_key_descriptor_version version;
+	const uint8_t *kck;
+	const uint8_t *mic;
+};
+
+static const uint8_t eapol_key_mic_data_1[] = {
+	0x01, 0x03, 0x00, 0x75, 0x02, 0x01, 0x0a, 0x00,
+	0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x01, 0x59, 0x16, 0x8b, 0xc3, 0xa5, 0xdf, 0x18,
+	0xd7, 0x1e, 0xfb, 0x64, 0x23, 0xf3, 0x40, 0x08,
+	0x8d, 0xab, 0x9e, 0x1b, 0xa2, 0xbb, 0xc5, 0x86,
+	0x59, 0xe0, 0x7b, 0x37, 0x64, 0xb0, 0xde, 0x85,
+	0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x16, 0x30, 0x14, 0x01, 0x00, 0x00,
+	0x0f, 0xac, 0x04, 0x01, 0x00, 0x00, 0x0f, 0xac,
+	0x04, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x02, 0x01,
+	0x00,
+};
+
+static const uint8_t eapol_key_mic_1[] = {
+	0x9c, 0xc3, 0xfa, 0xa0, 0xc6, 0x85, 0x96, 0x1d,
+	0x84, 0x06, 0xbb, 0x65, 0x77, 0x45, 0x13, 0x5d,
+};
+
+static unsigned char kck_data_1[] = {
+	0x9a, 0x75, 0xef, 0x0b, 0xde, 0x7c, 0x20, 0x9c,
+	0xca, 0xe1, 0x3f, 0x54, 0xb1, 0xb3, 0x3e, 0xa3,
+};
+
+static const struct eapol_key_mic_test eapol_key_mic_test_1 = {
+	.frame = eapol_key_mic_data_1,
+	.frame_len = sizeof(eapol_key_mic_data_1),
+	.version = EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4,
+	.kck = kck_data_1,
+	.mic = eapol_key_mic_1,
+};
+
+static const uint8_t eapol_key_mic_2[] = {
+	0x6f, 0x04, 0x89, 0xcf, 0x74, 0x06, 0xac, 0xf0,
+	0xae, 0x8f, 0xcb, 0x32, 0xbc, 0xe5, 0x7c, 0x37,
+};
+
+static const struct eapol_key_mic_test eapol_key_mic_test_2 = {
+	.frame = eapol_key_mic_data_1,
+	.frame_len = sizeof(eapol_key_mic_data_1),
+	.version = EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES,
+	.kck = kck_data_1,
+	.mic = eapol_key_mic_2,
+};
+
+static void eapol_key_mic_test(const void *data)
+{
+	const struct eapol_key_mic_test *test = data;
+	uint8_t mic[16];
+
+	memset(mic, 0, sizeof(mic));
+
+	switch (test->version) {
+	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4:
+		assert(hmac_md5(test->kck, 16, test->frame, test->frame_len,
+				mic, 16));
+		break;
+	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
+		assert(hmac_sha1(test->kck, 16, test->frame, test->frame_len,
+				mic, 16));
+		break;
+	default:
+		assert(false);
+	}
+
+	l_util_hexdump(true, test->mic, 16, do_debug, "[EAPoL] ");
+	l_util_hexdump(true, mic, 16, do_debug, "[EAPoL] ");
+	assert(!memcmp(test->mic, mic, sizeof(mic)));
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -281,6 +374,11 @@ int main(int argc, char *argv[])
 			eapol_key_test, &eapol_key_test_3);
 	l_test_add("/EAPoL Key/Key Frame 4",
 			eapol_key_test, &eapol_key_test_4);
+
+	l_test_add("/EAPoL Key/MIC Test 1",
+			eapol_key_mic_test, &eapol_key_mic_test_1);
+	l_test_add("/EAPoL Key/MIC Test 2",
+			eapol_key_mic_test, &eapol_key_mic_test_2);
 
 	return l_test_run();
 }
