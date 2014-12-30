@@ -33,4 +33,10 @@ static inline uint8_t util_bit_field(const uint8_t oct, int start, int num)
 	unsigned char mask = (1 << num) - 1;
 	return (oct >> start) & mask;
 }
+
+static inline bool util_is_bit_set(const uint8_t oct, int bit)
+{
+	int mask = 1 << bit;
+	return oct & mask ? true : false;
+}
 #endif /* __UTIL_H */
