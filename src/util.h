@@ -28,4 +28,9 @@
 
 const char *util_ssid_to_utf8(size_t len, const uint8_t *ssid);
 
+static inline uint8_t util_bit_field(const uint8_t oct, int start, int num)
+{
+	unsigned char mask = (1 << num) - 1;
+	return (oct >> start) & mask;
+}
 #endif /* __UTIL_H */
