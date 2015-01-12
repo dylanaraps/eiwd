@@ -37,6 +37,7 @@
 #include "src/ie.h"
 #include "src/wiphy.h"
 #include "src/dbus.h"
+#include "src/scan.h"
 
 static struct l_genl *genl = NULL;
 static struct l_genl_family *nl80211 = NULL;
@@ -390,17 +391,13 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 						void *user_data)
 {
 	struct netdev *netdev = user_data;
-	struct l_genl_msg *msg;
 
 	if (netdev->pending)
 		return dbus_error_busy(message);
 
 	netdev->pending = l_dbus_message_ref(message);
 
-	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN, 16);
-	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_family_send(nl80211, msg, device_scan_callback, netdev, NULL);
-	l_genl_msg_unref(msg);
+	scan_start(nl80211, netdev->index, device_scan_callback, netdev);
 
 	return NULL;
 }
