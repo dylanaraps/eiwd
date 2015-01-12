@@ -769,8 +769,6 @@ done:
 static void setup_scheduled_scan(struct wiphy *wiphy, struct netdev *netdev,
 				uint32_t scan_interval)
 {
-	struct l_genl_msg *msg;
-
 	if (!wiphy->support_scheduled_scan) {
 		l_debug("Scheduled scan not supported for %s "
 			"iface %s ifindex %u", wiphy->name, netdev->name,
@@ -778,18 +776,8 @@ static void setup_scheduled_scan(struct wiphy *wiphy, struct netdev *netdev,
 		return;
 	}
 
-	scan_interval *= 1000;	/* in kernel the interval is in msecs */
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_START_SCHED_SCAN, 32);
-	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	msg_append_attr(msg, NL80211_ATTR_SCHED_SCAN_INTERVAL,
-							4, &scan_interval);
-	msg_append_attr(msg, NL80211_ATTR_SOCKET_OWNER, 0, NULL);
-
-	if (!l_genl_family_send(nl80211, msg, sched_scan_callback, NULL, NULL))
-		l_error("Starting scheduled scan failed");
-
-	l_genl_msg_unref(msg);
+	scan_sched_start(nl80211, netdev->index, scan_interval,
+			sched_scan_callback, netdev);
 }
 
 static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)

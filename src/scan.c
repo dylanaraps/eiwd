@@ -47,3 +47,23 @@ void scan_start(struct l_genl_family *nl80211, uint32_t ifindex,
 	l_genl_family_send(nl80211, msg, callback, user_data, NULL);
 	l_genl_msg_unref(msg);
 }
+
+void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
+			uint32_t scan_interval,
+			scan_func_t callback, void *user_data)
+{
+	struct l_genl_msg *msg;
+
+	scan_interval *= 1000;	/* in kernel the interval is in msecs */
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_START_SCHED_SCAN, 32);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SCHED_SCAN_INTERVAL,
+							4, &scan_interval);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SOCKET_OWNER, 0, NULL);
+
+	if (!l_genl_family_send(nl80211, msg, callback, user_data, NULL))
+		l_error("Starting scheduled scan failed");
+
+	l_genl_msg_unref(msg);
+}
