@@ -67,3 +67,15 @@ void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
 
 	l_genl_msg_unref(msg);
 }
+
+void scan_get_results(struct l_genl_family *nl80211, uint32_t ifindex,
+			scan_func_t callback, scan_done_func_t scan_done,
+			void *user_data)
+{
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_GET_SCAN, 8);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_family_dump(nl80211, msg, callback, user_data, scan_done);
+	l_genl_msg_unref(msg);
+}

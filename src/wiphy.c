@@ -731,17 +731,6 @@ static void get_scan_done(void *user)
 	netdev->old_bss_list = NULL;
 }
 
-static void get_scan(struct netdev *netdev)
-{
-	struct l_genl_msg *msg;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_GET_SCAN, 8);
-	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_family_dump(nl80211, msg, get_scan_callback, netdev,
-				get_scan_done);
-	l_genl_msg_unref(msg);
-}
-
 static void sched_scan_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct l_genl_attr attr;
@@ -1088,7 +1077,8 @@ static void wiphy_scan_notify(struct l_genl_msg *msg, void *user_data)
 
 	if (cmd == NL80211_CMD_NEW_SCAN_RESULTS ||
 				cmd == NL80211_CMD_SCHED_SCAN_RESULTS) {
-		get_scan(netdev);
+		scan_get_results(nl80211, netdev->index, get_scan_callback,
+				get_scan_done, netdev);
 		return;
 	}
 }

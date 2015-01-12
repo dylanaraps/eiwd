@@ -21,10 +21,15 @@
  */
 
 typedef void (*scan_func_t)(struct l_genl_msg *msg, void *user_data);
+typedef void (*scan_done_func_t)(void *user_data);
 
 void scan_start(struct l_genl_family *nl80211, uint32_t ifindex,
 		scan_func_t callback, void *user_data);
 
 void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
 			uint32_t scan_interval, scan_func_t callback,
+			void *user_data);
+
+void scan_get_results(struct l_genl_family *nl80211, uint32_t ifindex,
+			scan_func_t callback, scan_done_func_t scan_done,
 			void *user_data);
