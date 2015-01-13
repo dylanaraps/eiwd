@@ -1,4 +1,14 @@
 
+IWD
+===
+
+IWD will start a scheduled scan to the interface if the hardware supports
+that feature. If the iwd closes or dies so that the kernel netlink socket
+is closed, then the scheduled scan is cancelled automatically if the kernel
+supports this. This is done by giving NL80211_ATTR_SOCKET_OWNER netlink
+attribute when initiating the scheduled scan.
+
+
 Wireless monitor
 ================
 

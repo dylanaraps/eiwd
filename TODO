@@ -92,19 +92,6 @@ mac80211_hwsim
 cfg80211 / nl80211
 ==================
 
-- Bind NL80211_CMD_START_SCHED_SCAN to netlink socket
-
-  When issuing the NL80211_CMD_START_SCHED_SCAN it should be bound to the
-  executing netlink client socket.  If the application closes that netlink
-  socket the scheduled scan operation should be canceled.
-
-  Maybe a new attribute similar to NL80211_ATTR_IFACE_SOCKET_OWNER should
-  be used for this behavior.
-
-  Priority: Medium
-  Complexity: C2
-  Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
-
 - Disconnect from network / station when client crashes
 
   When associating or connecting to a network, it should be possible to
