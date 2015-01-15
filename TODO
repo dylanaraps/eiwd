@@ -317,23 +317,6 @@ Wireless daemon
   Priority: High
   Complexity: C2
 
-- Fix SSID handling in source files to be of type uint8_t[32], also
-  add the SSID length as the SSID is not a string but can contain any
-  characters.
-
-  Priority: Medium
-  Complexity: C1
-
-- SSIDs are actually an array of bytes, not printable characters.  These days
-  most SSIDs are UTF8 compliant.  There are several possible approaches to
-  solve this issue.  One way would be to use bytearrays to represent SSIDs in
-  the DBus APIs.  Alternatively, SSIDs that are not UTF8 compliant should be
-  ignored or transformed into a UTF8 string, perhaps by using replacement
-  UTF8 characters.
-
-  Priority: Medium
-  Complexity: C1
-
 - Centralize scanning logic and handling into scan.c.
 
   There can be passive, active, listening (P2P) scanning to handle.
