@@ -178,3 +178,45 @@ void ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
 	if (out_len)
 		*out_len = len;
 }
+
+/* 802.11, Section 8.4.2.27.2 */
+static bool ie_parse_cipher_suite(const uint8_t *data,
+					enum ie_rsn_cipher_suite *out)
+{
+	static const uint8_t ieee_oui[3] = { 0x00, 0x0f, 0xac };
+
+	/*
+	 * Compare the OUI to the ones we know.  OUI Format is found in
+	 * Figure 8-187 of 802.11
+	 */
+	if (!memcmp(data, ieee_oui, 3)) {
+		/* Suite type from Table 8-99 */
+		switch (data[3]) {
+		case 0:
+			*out = IE_RSN_CIPHER_SUITE_USE_GROUP_CIPHER;
+			return true;
+		case 1:
+			*out = IE_RSN_CIPHER_SUITE_WEP40;
+			return true;
+		case 2:
+			*out = IE_RSN_CIPHER_SUITE_TKIP;
+			return true;
+		case 4:
+			*out = IE_RSN_CIPHER_SUITE_CCMP;
+			return true;
+		case 5:
+			*out = IE_RSN_CIPHER_SUITE_WEP104;
+			return true;
+		case 6:
+			*out = IE_RSN_CIPHER_SUITE_BIP;
+			return true;
+		case 7:
+			*out = IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC;
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	return false;
+}
