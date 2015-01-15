@@ -268,3 +268,28 @@ static bool ie_parse_akm_suite(const uint8_t *data,
 
 	return false;
 }
+
+static bool ie_parse_group_cipher(const uint8_t *data,
+					enum ie_rsn_cipher_suite *out)
+{
+	enum ie_rsn_cipher_suite tmp;
+
+	bool r = ie_parse_cipher_suite(data, &tmp);
+
+	if (!r)
+		return r;
+
+	switch (tmp) {
+	case IE_RSN_CIPHER_SUITE_CCMP:
+	case IE_RSN_CIPHER_SUITE_TKIP:
+	case IE_RSN_CIPHER_SUITE_WEP104:
+	case IE_RSN_CIPHER_SUITE_WEP40:
+	case IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC:
+		break;
+	default:
+		return false;
+	}
+
+	*out = tmp;
+	return true;
+}
