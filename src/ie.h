@@ -20,6 +20,9 @@
  *
  */
 
+#include <stdbool.h>
+#include <stddef.h>
+
 /*
  * Information elements, IEEE Std 802.11 ch. 8.4.2
  */
@@ -199,6 +202,26 @@ struct ie_tlv_builder {
 	unsigned int len;
 };
 
+struct ie_rsn_info {
+	enum ie_rsn_cipher_suite group_cipher;
+	uint16_t pairwise_ciphers;
+	uint16_t akm_suites;
+	bool preauthentication:1;
+	bool no_pairwise:1;
+	uint8_t ptksa_replay_counter:2;
+	uint8_t gtksa_replay_counter:2;
+	bool mfpr:1;
+	bool mfpc:1;
+	bool peerkey_enabled:1;
+	bool spp_a_msdu_capable:1;
+	bool spp_a_msdu_required:1;
+	bool pbac:1;
+	bool extended_key_id:1;
+	uint8_t num_pmkids;
+	const uint8_t *pmkids;
+	enum ie_rsn_cipher_suite group_management_cipher;
+};
+
 void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 			unsigned int len);
 void ie_tlv_iter_recurse(struct ie_tlv_iter *iter,
@@ -214,3 +237,5 @@ bool ie_tlv_builder_recurse(struct ie_tlv_builder *builder,
 			struct ie_tlv_builder *recurse);
 void ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
 			unsigned int *out_len);
+
+int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *info);

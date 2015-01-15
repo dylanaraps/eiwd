@@ -318,3 +318,107 @@ static bool ie_parse_pairwise_cipher(const uint8_t *data,
 	*out = tmp;
 	return true;
 }
+
+#define RSNE_ADVANCE(data, len, step)	\
+	data += step;			\
+	len -= step;			\
+					\
+	if (len == 0)			\
+		goto done		\
+
+int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
+{
+	const uint8_t *data = iter->data;
+	size_t len = iter->len;
+	uint16_t version;
+	struct ie_rsn_info info;
+	uint16_t count;
+	uint16_t i;
+
+	memset(&info, 0, sizeof(info));
+	info.group_cipher = IE_RSN_CIPHER_SUITE_CCMP;
+	info.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP;
+	info.akm_suites = IE_RSN_AKM_SUITE_8021X;
+
+	/* Parse Version field */
+	if (len < 2)
+		return -EMSGSIZE;
+
+	version = l_get_le16(data);
+	if (version != 0x01)
+		return -EBADMSG;
+
+	RSNE_ADVANCE(data, len, 2);
+
+	/* Parse Group Cipher Suite field */
+	if (len < 4)
+		return -EBADMSG;
+
+	if (!ie_parse_group_cipher(data, &info.group_cipher))
+		return -ERANGE;
+
+	RSNE_ADVANCE(data, len, 4);
+
+	/* Parse Pairwise Cipher Suite Count field */
+	if (len < 2)
+		return -EBADMSG;
+
+	count = l_get_le16(data);
+
+	/*
+	 * The spec doesn't seem to explicitly say what to do in this case,
+	 * so we assume this situation is invalid.
+	 */
+	if (count == 0)
+		return -EINVAL;
+
+	data += 2;
+	len -= 2;
+
+	if (len < 4 * count)
+		return -EBADMSG;
+
+	/* Parse Pairwise Cipher Suite List field */
+	for (i = 0, info.pairwise_ciphers = 0; i < count; i++) {
+		enum ie_rsn_cipher_suite suite;
+
+		if (!ie_parse_pairwise_cipher(data + i * 4, &suite))
+			return -ERANGE;
+
+		info.pairwise_ciphers |= suite;
+	}
+
+	RSNE_ADVANCE(data, len, count * 4);
+
+	/* Parse AKM Suite Count field */
+	if (len < 2)
+		return -EBADMSG;
+
+	count = l_get_le16(data);
+	if (count == 0)
+		return -EINVAL;
+
+	data += 2;
+	len -= 2;
+
+	if (len < 4 * count)
+		return -EBADMSG;
+
+	/* Parse AKM Suite List field */
+	for (i = 0, info.akm_suites = 0; i < count; i++) {
+		enum ie_rsn_akm_suite suite;
+
+		if (!ie_parse_akm_suite(data + i * 4, &suite))
+			return -ERANGE;
+
+		info.akm_suites |= suite;
+	}
+
+	RSNE_ADVANCE(data, len, count * 4);
+
+done:
+	if (out_info)
+		memcpy(out_info, &info, sizeof(info));
+
+	return 0;
+}
