@@ -239,3 +239,5 @@ void ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
 			unsigned int *out_len);
 
 int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *info);
+int ie_parse_rsne_from_data(const uint8_t *data, size_t len,
+				struct ie_rsn_info *info);

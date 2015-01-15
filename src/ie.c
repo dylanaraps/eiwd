@@ -422,3 +422,19 @@ done:
 
 	return 0;
 }
+
+int ie_parse_rsne_from_data(const uint8_t *data, size_t len,
+				struct ie_rsn_info *info)
+{
+	struct ie_tlv_iter iter;
+
+	ie_tlv_iter_init(&iter, data, len);
+
+	if (!ie_tlv_iter_next(&iter))
+		return -EMSGSIZE;
+
+	if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_RSN)
+		return -EPROTOTYPE;
+
+	return ie_parse_rsne(&iter, info);
+}
