@@ -220,3 +220,51 @@ static bool ie_parse_cipher_suite(const uint8_t *data,
 
 	return false;
 }
+
+/* 802.11, Section 8.4.2.27.2 */
+static bool ie_parse_akm_suite(const uint8_t *data,
+					enum ie_rsn_akm_suite *out)
+{
+	static const uint8_t ieee_oui[3] = { 0x00, 0x0f, 0xac };
+
+	/*
+	 * Compare the OUI to the ones we know.  OUI Format is found in
+	 * Figure 8-187 of 802.11
+	 */
+	if (!memcmp(data, ieee_oui, 3)) {
+		/* Suite type from Table 8-101 */
+		switch (data[3]) {
+		case 1:
+			*out = IE_RSN_AKM_SUITE_8021X;
+			return true;
+		case 2:
+			*out = IE_RSN_AKM_SUITE_PSK;
+			return true;
+		case 3:
+			*out = IE_RSN_AKM_SUITE_FT_OVER_8021X;
+			return true;
+		case 4:
+			*out = IE_RSN_AKM_SUITE_FT_USING_PSK;
+			return true;
+		case 5:
+			*out = IE_RSN_AKM_SUITE_8021X_SHA256;
+			return true;
+		case 6:
+			*out = IE_RSN_AKM_SUITE_PSK_SHA256;
+			return true;
+		case 7:
+			*out = IE_RSN_AKM_SUITE_TDLS;
+			return true;
+		case 8:
+			*out = IE_RSN_AKM_SUITE_SAE_SHA256;
+			return true;
+		case 9:
+			*out = IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256;
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	return false;
+}
