@@ -154,6 +154,16 @@ enum ie_type {
 	/* Reserved 222 - 255 */
 };
 
+enum ie_rsn_cipher_suite {
+	IE_RSN_CIPHER_SUITE_USE_GROUP_CIPHER	= 0x0001,
+	IE_RSN_CIPHER_SUITE_WEP40		= 0x0002,
+	IE_RSN_CIPHER_SUITE_TKIP		= 0x0004,
+	IE_RSN_CIPHER_SUITE_CCMP		= 0x0008,
+	IE_RSN_CIPHER_SUITE_WEP104		= 0x0010,
+	IE_RSN_CIPHER_SUITE_BIP			= 0x0020,
+	IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC	= 0x0040,
+};
+
 struct ie_tlv_iter {
 	unsigned int max;
 	unsigned int pos;
