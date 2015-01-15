@@ -38,6 +38,7 @@
 #include "src/wiphy.h"
 #include "src/dbus.h"
 #include "src/scan.h"
+#include "src/util.h"
 
 static struct l_genl *genl = NULL;
 static struct l_genl_family *nl80211 = NULL;
@@ -46,7 +47,8 @@ static int scheduled_scan_interval = 60;	/* in secs */
 struct bss {
 	uint8_t addr[ETH_ALEN];
 	uint32_t frequency;
-	char *ssid;
+	uint8_t *ssid;
+	size_t ssid_len;
 };
 
 struct network {
@@ -116,7 +118,8 @@ static bool __iwd_network_append_properties(const struct network *network,
 {
 	l_dbus_message_builder_enter_array(builder, "{sv}");
 
-	dbus_dict_append_string(builder, "SSID", network->bss->ssid);
+	dbus_dict_append_bytearray(builder, "SSID", network->bss->ssid,
+						network->bss->ssid_len);
 
 	l_dbus_message_builder_leave_array(builder);
 
@@ -157,7 +160,7 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
-	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(bss->ssid), bss->ssid);
+	msg_append_attr(msg, NL80211_ATTR_SSID, bss->ssid_len, bss->ssid);
 	msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 	l_genl_msg_unref(msg);
@@ -485,7 +488,8 @@ static void bss_free(void *data)
 
 	l_debug("Freeing BSS %02X:%02X:%02X:%02X:%02X:%02X [%s]",
 			bss->addr[0], bss->addr[1], bss->addr[2],
-			bss->addr[3], bss->addr[4], bss->addr[5], bss->ssid);
+			bss->addr[3], bss->addr[4], bss->addr[5],
+			util_ssid_to_utf8(bss->ssid_len, bss->ssid));
 
 	l_free(bss->ssid);
 	l_free(bss);
@@ -552,7 +556,7 @@ static void mlme_associate(struct netdev *netdev, struct bss *bss)
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
-	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(bss->ssid), bss->ssid);
+	msg_append_attr(msg, NL80211_ATTR_SSID, bss->ssid_len, bss->ssid);
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 	l_genl_msg_unref(msg);
 }
@@ -567,9 +571,15 @@ static bool parse_ie(struct bss *bss, const void *data, uint16_t len)
 		uint8_t tag = ie_tlv_iter_get_tag(&iter);
 
 		switch (tag) {
-		case 0:
-			bss->ssid = l_strndup((const char *) iter.data,
-								iter.len);
+		case IE_TYPE_SSID:
+			if (iter.len > 32) {
+				l_warn("Got SSID > 32");
+				return false;
+			}
+
+			bss->ssid_len = iter.len;
+			bss->ssid = l_malloc(bss->ssid_len);
+			memcpy(bss->ssid, iter.data, iter.len);
 			break;
 		default:
 			break;
@@ -623,7 +633,8 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 
 		l_debug("Found new BSS '%s' with SSID: %s, freq: %u",
 				bss_address_to_string(bss),
-				bss->ssid, bss->frequency);
+				util_ssid_to_utf8(bss->ssid_len, bss->ssid),
+				bss->frequency);
 
 		network = l_new(struct network, 1);
 		network->bss = bss;
@@ -721,7 +732,8 @@ static void get_scan_done(void *user)
 		struct network *network;
 
 		l_debug("Lost BSS '%s' with SSID: %s",
-				bss_address_to_string(bss), bss->ssid);
+				bss_address_to_string(bss),
+				util_ssid_to_utf8(bss->ssid_len, bss->ssid));
 		network = l_hashmap_remove(netdev->networks,
 						bss_address_to_string(bss));
 		network_free(network);
