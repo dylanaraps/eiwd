@@ -269,6 +269,41 @@ static void ie_test_writer_invalid_len(const void *data)
 	assert(!ie_tlv_builder_set_length(&builder, MAX_BUILDER_SIZE));
 }
 
+struct ie_rsne_info_test {
+	const unsigned char *data;
+	size_t data_len;
+	enum ie_rsn_cipher_suite group_cipher;
+	uint16_t pairwise_ciphers;
+	uint16_t akm_suites;
+};
+
+static const unsigned char rsne_data_1[] = {
+	0x30, 0x14, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04, 0x01, 0x00, 0x00, 0x0f,
+	0xac, 0x04, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x02, 0x00, 0x00,
+};
+
+static const struct ie_rsne_info_test ie_rsne_info_test_1 = {
+	.data = rsne_data_1,
+	.data_len = sizeof(rsne_data_1),
+	.group_cipher = IE_RSN_CIPHER_SUITE_CCMP,
+	.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP,
+	.akm_suites = IE_RSN_AKM_SUITE_PSK,
+};
+
+static void ie_test_rsne_info(const void *data)
+{
+	const struct ie_rsne_info_test *test = data;
+	int r;
+	struct ie_rsn_info info;
+
+	r = ie_parse_rsne_from_data(test->data, test->data_len, &info);
+	assert(r == 0);
+
+	assert(test->group_cipher == info.group_cipher);
+	assert(test->pairwise_ciphers == info.pairwise_ciphers);
+	assert(test->akm_suites == info.akm_suites);
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -279,6 +314,9 @@ int main(int argc, char *argv[])
 	l_test_add("/ie/writer/invalid-len", ie_test_writer_invalid_len, NULL);
 
 	l_test_add("/ie/writer/create", ie_test_writer, &beacon_frame_data);
+
+	l_test_add("/ie/RSN Info Parser/Test Case 1",
+				ie_test_rsne_info, &ie_rsne_info_test_1);
 
 	return l_test_run();
 }
