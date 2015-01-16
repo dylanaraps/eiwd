@@ -318,6 +318,20 @@ static const struct ie_rsne_info_test ie_rsne_info_test_3 = {
 	.akm_suites = IE_RSN_AKM_SUITE_8021X,
 };
 
+/* 802.11, Section 8.4.2.27.1; third example */
+static const unsigned char rsne_data_4[] = {
+	0x30, 0x12, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x01, 0x01, 0x00, 0x00, 0x0f,
+	0xac, 0x00, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x01,
+};
+
+static const struct ie_rsne_info_test ie_rsne_info_test_4 = {
+	.data = rsne_data_4,
+	.data_len = sizeof(rsne_data_4),
+	.group_cipher = IE_RSN_CIPHER_SUITE_WEP40,
+	.pairwise_ciphers = IE_RSN_CIPHER_SUITE_USE_GROUP_CIPHER,
+	.akm_suites = IE_RSN_AKM_SUITE_8021X,
+};
+
 static void ie_test_rsne_info(const void *data)
 {
 	const struct ie_rsne_info_test *test = data;
@@ -349,6 +363,8 @@ int main(int argc, char *argv[])
 				ie_test_rsne_info, &ie_rsne_info_test_2);
 	l_test_add("/ie/RSN Info Parser/Test Case 3",
 				ie_test_rsne_info, &ie_rsne_info_test_3);
+	l_test_add("/ie/RSN Info Parser/Test Case 4",
+				ie_test_rsne_info, &ie_rsne_info_test_4);
 
 	return l_test_run();
 }
