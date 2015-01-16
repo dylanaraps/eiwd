@@ -578,8 +578,7 @@ static bool parse_ie(struct bss *bss, const void *data, uint16_t len)
 			}
 
 			bss->ssid_len = iter.len;
-			bss->ssid = l_malloc(bss->ssid_len);
-			memcpy(bss->ssid, iter.data, iter.len);
+			bss->ssid = l_memdup(iter.data, iter.len);
 			break;
 		default:
 			break;
