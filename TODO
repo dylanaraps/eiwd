@@ -336,6 +336,16 @@ Wireless daemon
   Priority: Medium
   Complexity: C2
 
+- Implement ARC4 cipher in iwd
+
+  ARC4 is used to encrypt EAPoL frames that are exchanged during WPA
+  authentication.
+
+  Priority: High
+  Complexity: C1
+  Owner: Denis Kenzior <denkenz@gmail.com>
+
+
 Client
 ======
 
