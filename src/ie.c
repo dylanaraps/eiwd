@@ -26,6 +26,7 @@
 
 #include <errno.h>
 #include <ell/ell.h>
+#include "util.h"
 
 #include "ie.h"
 
@@ -415,6 +416,23 @@ int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 	}
 
 	RSNE_ADVANCE(data, len, count * 4);
+
+	if (len < 2)
+		return -EBADMSG;
+
+	info.preauthentication = util_is_bit_set(data[0], 0);
+	info.no_pairwise = util_is_bit_set(data[0], 1);
+	info.ptksa_replay_counter = util_bit_field(data[0], 2, 2);
+	info.gtksa_replay_counter = util_bit_field(data[0], 4, 2);
+	info.mfpr = util_is_bit_set(data[0], 6);
+	info.mfpc = util_is_bit_set(data[0], 7);
+	info.peerkey_enabled = util_is_bit_set(data[1], 1);
+	info.spp_a_msdu_capable = util_is_bit_set(data[1], 2);
+	info.spp_a_msdu_required = util_is_bit_set(data[1], 3);
+	info.pbac = util_is_bit_set(data[1], 4);
+	info.extended_key_id = util_is_bit_set(data[1], 5);
+
+	RSNE_ADVANCE(data, len, 2);
 
 done:
 	if (out_info)
