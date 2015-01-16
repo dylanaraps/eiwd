@@ -275,6 +275,17 @@ struct ie_rsne_info_test {
 	enum ie_rsn_cipher_suite group_cipher;
 	uint16_t pairwise_ciphers;
 	uint16_t akm_suites;
+	bool preauthentication:1;
+	bool no_pairwise:1;
+	uint8_t ptksa_replay_counter:2;
+	uint8_t gtksa_replay_counter:2;
+	bool mfpr:1;
+	bool mfpc:1;
+	bool peerkey_enabled:1;
+	bool spp_a_msdu_capable:1;
+	bool spp_a_msdu_required:1;
+	bool pbac:1;
+	bool extended_key_id:1;
 };
 
 static const unsigned char rsne_data_1[] = {
@@ -316,6 +327,7 @@ static const struct ie_rsne_info_test ie_rsne_info_test_3 = {
 	.group_cipher = IE_RSN_CIPHER_SUITE_CCMP,
 	.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP,
 	.akm_suites = IE_RSN_AKM_SUITE_8021X,
+	.preauthentication = true,
 };
 
 /* 802.11, Section 8.4.2.27.1; third example */
@@ -346,6 +358,7 @@ static const struct ie_rsne_info_test ie_rsne_info_test_5 = {
 	.group_cipher = IE_RSN_CIPHER_SUITE_CCMP,
 	.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP,
 	.akm_suites = IE_RSN_AKM_SUITE_8021X,
+	.preauthentication = true,
 };
 
 /* 802.11, Section 8.4.2.27.1; last example */
@@ -361,6 +374,7 @@ static const struct ie_rsne_info_test ie_rsne_info_test_6 = {
 	.group_cipher = IE_RSN_CIPHER_SUITE_CCMP,
 	.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP,
 	.akm_suites = IE_RSN_AKM_SUITE_8021X,
+	.mfpc = true, /* Management frame protection is enabled, not required */
 };
 
 static void ie_test_rsne_info(const void *data)
@@ -375,6 +389,18 @@ static void ie_test_rsne_info(const void *data)
 	assert(test->group_cipher == info.group_cipher);
 	assert(test->pairwise_ciphers == info.pairwise_ciphers);
 	assert(test->akm_suites == info.akm_suites);
+
+	assert(test->preauthentication == info.preauthentication);
+	assert(test->no_pairwise == info.no_pairwise);
+	assert(test->ptksa_replay_counter == info.ptksa_replay_counter);
+	assert(test->gtksa_replay_counter == info.gtksa_replay_counter);
+	assert(test->mfpr == info.mfpr);
+	assert(test->mfpc == info.mfpc);
+	assert(test->peerkey_enabled == info.peerkey_enabled);
+	assert(test->spp_a_msdu_capable == info.spp_a_msdu_capable);
+	assert(test->spp_a_msdu_required == info.spp_a_msdu_required);
+	assert(test->pbac == info.pbac);
+	assert(test->extended_key_id == info.extended_key_id);
 }
 
 int main(int argc, char *argv[])
