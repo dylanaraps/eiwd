@@ -345,6 +345,15 @@ Wireless daemon
   Complexity: C1
   Owner: Denis Kenzior <denkenz@gmail.com>
 
+- Implement AES cipher in iwd
+
+  AES is used to encrypt EAPoL frames that are exchanged during WPA2
+  authentication.
+
+  Priority: High
+  Complexity: C1
+  Owner: Denis Kenzior <denkenz@gmail.com>
+
 
 Client
 ======
