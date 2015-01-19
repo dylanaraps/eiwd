@@ -213,6 +213,7 @@ Wireless monitor
 
   Priority: Medium
   Complexity: C2
+  Owner: Ravi kumar Veeramally <ravikumar.veeramally@linux.intel.com>
 
 - Handle netlink core control messages correctly
 
