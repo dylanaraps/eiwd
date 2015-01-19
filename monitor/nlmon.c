@@ -1997,6 +1997,8 @@ void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
 		char extra_str[32];
 		const char *str;
 		bool out;
+		int status;
+		struct nlmsgerr *err;
 
 		str = nlmsg_type_to_str(nlmsg->nlmsg_type);
 		out = !!(nlmsg->nlmsg_flags & NLM_F_REQUEST);
@@ -2019,6 +2021,26 @@ void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
 			print_hexdump(0, NLMSG_DATA(nlmsg) +
 						NLMSG_ALIGN(sizeof(*ifi)),
 					NLMSG_PAYLOAD(nlmsg, sizeof(*ifi)));
+			break;
+
+		case NLMSG_NOOP:
+		case NLMSG_OVERRUN:
+			break;
+
+		case NLMSG_ERROR:
+			err = NLMSG_DATA(nlmsg);
+			status = -err->error;
+			if (status < 0)
+				print_field("Error: %d (%s)", status,
+							strerror(status));
+			else
+				print_field("ACK: %d", status);
+
+			break;
+
+		case NLMSG_DONE:
+			status = *((int *) NLMSG_DATA(nlmsg));
+			print_field("Status: %d", status);
 			break;
 		}
 	}
