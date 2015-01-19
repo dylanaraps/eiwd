@@ -1920,6 +1920,61 @@ static void genl_ctrl(struct nlmon *nlmon, const void *data, uint32_t len)
 		nlmon->id = id;
 }
 
+static const char *nlmsg_type_to_str(uint32_t msg_type)
+{
+	const char *str = NULL;
+
+	switch (msg_type) {
+	case NLMSG_NOOP:
+		str = "Noop";
+		break;
+	case NLMSG_ERROR:
+		str = "Error";
+		break;
+	case NLMSG_DONE:
+		str = "Done";
+		break;
+	case NLMSG_OVERRUN:
+		str = "Overrun";
+		break;
+	case RTM_NEWLINK:
+		str = "New Link";
+		break;
+	case RTM_DELLINK:
+		str = "Delete Link";
+		break;
+	case RTM_GETLINK:
+		str = "Get Link";
+		break;
+	case RTM_SETLINK:
+		str = "Set Link";
+		break;
+	case RTM_NEWADDR:
+		str = "New Address";
+		break;
+	case RTM_DELADDR:
+		str = "Delete Address";
+		break;
+	case RTM_GETADDR:
+		str = "Get Address";
+		break;
+	case RTM_NEWROUTE:
+		str = "New Route";
+		break;
+	case RTM_DELROUTE:
+		str = "Delete Route";
+		break;
+	case RTM_GETROUTE:
+		str = "Get Route";
+		break;
+	default:
+		str = "Reserved";
+		break;
+	}
+
+	return str;
+}
+
 void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
 					const void *data, uint32_t size)
 {
@@ -1935,54 +1990,7 @@ void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
 		const char *str;
 		bool out;
 
-		switch (nlmsg->nlmsg_type) {
-		case NLMSG_NOOP:
-			str = "Noop";
-			break;
-		case NLMSG_ERROR:
-			str = "Error";
-			break;
-		case NLMSG_DONE:
-			str = "Done";
-			break;
-		case NLMSG_OVERRUN:
-			str = "Overrun";
-			break;
-		case RTM_NEWLINK:
-			str = "New Link";
-			break;
-		case RTM_DELLINK:
-			str = "Delete Link";
-			break;
-		case RTM_GETLINK:
-			str = "Get Link";
-			break;
-		case RTM_SETLINK:
-			str = "Set Link";
-			break;
-		case RTM_NEWADDR:
-			str = "New Address";
-			break;
-		case RTM_DELADDR:
-			str = "Delete Address";
-			break;
-		case RTM_GETADDR:
-			str = "Get Address";
-			break;
-		case RTM_NEWROUTE:
-			str = "New Route";
-			break;
-		case RTM_DELROUTE:
-			str = "Delete Route";
-			break;
-		case RTM_GETROUTE:
-			str = "Get Route";
-			break;
-		default:
-			str = "Reserved";
-			break;
-		}
-
+		str = nlmsg_type_to_str(nlmsg->nlmsg_type);
 		out = !!(nlmsg->nlmsg_flags & NLM_F_REQUEST);
 
 		netlink_str(extra_str, sizeof(extra_str),
