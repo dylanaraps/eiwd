@@ -1724,6 +1724,14 @@ static void print_message(const struct timeval *tv, enum msg_type type,
 	}
 }
 
+static void print_nlmsghdr(const struct nlmsghdr *hdr)
+{
+	print_field("Flags: %d (0x%03x)", hdr->nlmsg_flags, hdr->nlmsg_flags);
+	print_field("Sequence number: %d (0x%08x)",
+					hdr->nlmsg_seq, hdr->nlmsg_seq);
+	print_field("Port ID: %d", hdr->nlmsg_pid);
+}
+
 struct nlmon_req_match {
 	uint32_t seq;
 	uint32_t pid;
@@ -2000,6 +2008,7 @@ void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
 
 		print_packet(tv, out ? '<' : '>',
 				COLOR_YELLOW, "RTNL", str, extra_str);
+		print_nlmsghdr(nlmsg);
 
 		switch (nlmsg->nlmsg_type) {
 		case RTM_SETLINK:
