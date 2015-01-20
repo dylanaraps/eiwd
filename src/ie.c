@@ -320,6 +320,27 @@ static bool ie_parse_pairwise_cipher(const uint8_t *data,
 	return true;
 }
 
+static bool ie_parse_group_management_cipher(const uint8_t *data,
+					enum ie_rsn_cipher_suite *out)
+{
+	enum ie_rsn_cipher_suite tmp;
+
+	bool r = ie_parse_cipher_suite(data, &tmp);
+
+	if (!r)
+		return r;
+
+	switch (tmp) {
+	case IE_RSN_CIPHER_SUITE_BIP:
+		break;
+	default:
+		return false;
+	}
+
+	*out = tmp;
+	return true;
+}
+
 #define RSNE_ADVANCE(data, len, step)	\
 	data += step;			\
 	len -= step;			\
@@ -434,6 +455,13 @@ int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 
 	RSNE_ADVANCE(data, len, 2);
 
+	/*
+	 * BIP—default group management cipher suite in an RSNA with
+	 * management frame protection enabled
+	 */
+	if (info.mfpc)
+		info.group_management_cipher = IE_RSN_CIPHER_SUITE_BIP;
+
 	/* Parse PMKID Count field */
 	if (len < 2)
 		return -EBADMSG;
@@ -454,6 +482,18 @@ int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 		info.pmkids = data;
 		RSNE_ADVANCE(data, len, info.num_pmkids * 16);
 	}
+
+	/* Parse Group Management Cipher Suite field */
+	if (len < 4)
+		return -EBADMSG;
+
+	if (!ie_parse_group_management_cipher(data,
+						&info.group_management_cipher))
+		return -ERANGE;
+
+	RSNE_ADVANCE(data, len, 4);
+
+	return -EBADMSG;
 
 done:
 	if (out_info)
