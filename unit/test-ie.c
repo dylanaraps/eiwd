@@ -286,6 +286,8 @@ struct ie_rsne_info_test {
 	bool spp_a_msdu_required:1;
 	bool pbac:1;
 	bool extended_key_id:1;
+	uint8_t num_pmkids;
+	uint8_t pmkids[232];
 };
 
 static const unsigned char rsne_data_1[] = {
@@ -359,6 +361,9 @@ static const struct ie_rsne_info_test ie_rsne_info_test_5 = {
 	.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP,
 	.akm_suites = IE_RSN_AKM_SUITE_8021X,
 	.preauthentication = true,
+	.num_pmkids = 1,
+	.pmkids = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a,
+			0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, },
 };
 
 /* 802.11, Section 8.4.2.27.1; last example */
@@ -401,6 +406,9 @@ static void ie_test_rsne_info(const void *data)
 	assert(test->spp_a_msdu_required == info.spp_a_msdu_required);
 	assert(test->pbac == info.pbac);
 	assert(test->extended_key_id == info.extended_key_id);
+
+	assert(test->num_pmkids == info.num_pmkids);
+	assert(!memcmp(test->pmkids, info.pmkids, 16 * test->num_pmkids));
 }
 
 int main(int argc, char *argv[])
