@@ -288,6 +288,7 @@ struct ie_rsne_info_test {
 	bool extended_key_id:1;
 	uint8_t num_pmkids;
 	uint8_t pmkids[232];
+	enum ie_rsn_cipher_suite group_management_cipher;
 };
 
 static const unsigned char rsne_data_1[] = {
@@ -380,6 +381,7 @@ static const struct ie_rsne_info_test ie_rsne_info_test_6 = {
 	.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP,
 	.akm_suites = IE_RSN_AKM_SUITE_8021X,
 	.mfpc = true, /* Management frame protection is enabled, not required */
+	.group_management_cipher = IE_RSN_CIPHER_SUITE_BIP,
 };
 
 static void ie_test_rsne_info(const void *data)
@@ -409,6 +411,8 @@ static void ie_test_rsne_info(const void *data)
 
 	assert(test->num_pmkids == info.num_pmkids);
 	assert(!memcmp(test->pmkids, info.pmkids, 16 * test->num_pmkids));
+
+	assert(test->group_management_cipher == info.group_management_cipher);
 }
 
 int main(int argc, char *argv[])
