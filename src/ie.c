@@ -434,6 +434,27 @@ int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 
 	RSNE_ADVANCE(data, len, 2);
 
+	/* Parse PMKID Count field */
+	if (len < 2)
+		return -EBADMSG;
+
+	info.num_pmkids = l_get_le16(data);
+	RSNE_ADVANCE(data, len, 2);
+
+	if (info.num_pmkids > 0) {
+		if (len < 16 * info.num_pmkids)
+			return -EBADMSG;
+
+		/*
+		 * Parse PMKID List field.
+		 *
+		 * We simply assign the pointer to the PMKIDs to the structure.
+		 * The PMKIDs are fixed size, 16 bytes each.
+		 */
+		info.pmkids = data;
+		RSNE_ADVANCE(data, len, info.num_pmkids * 16);
+	}
+
 done:
 	if (out_info)
 		memcpy(out_info, &info, sizeof(info));
