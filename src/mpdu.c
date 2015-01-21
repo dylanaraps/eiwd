@@ -136,6 +136,9 @@ static bool validate_mgmt_mpdu(const struct mpdu *mpdu, int len, int *offset)
 	case MPDU_MANAGEMENT_SUBTYPE_TIMING_ADVERTISEMENT:
 		return validate_on_ies_start_position_mgmt_mpdu(mpdu, len,
 								offset, 3);
+	case MPDU_MANAGEMENT_SUBTYPE_BEACON:
+		return validate_on_ies_start_position_mgmt_mpdu(mpdu, len,
+								offset, 5);
 	case MPDU_MANAGEMENT_SUBTYPE_ATIM:
 		return validate_atim_mgmt_mpdu(mpdu, len, offset);
 	case MPDU_MANAGEMENT_SUBTYPE_DISASSOCIATION:
