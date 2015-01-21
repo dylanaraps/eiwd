@@ -54,6 +54,8 @@ static bool validate_authentication_mgmt_mpdu(const struct mpdu *mpdu,
 	if (len < *offset + 6)
 		return false;
 
+	*offset += 6;
+
 	switch (mpdu->auth.algorithm) {
 	case MPDU_AUTH_ALGO_OPEN_SYSTEM:
 		return *offset <= len;
