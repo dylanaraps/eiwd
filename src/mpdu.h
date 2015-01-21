@@ -32,11 +32,12 @@ enum mpdu_type {
 
 /* 802.11, Table 8-1 "Valid type and subtype combinations" */
 enum mpdu_management_subtype {
-	MPDU_MANAGEMENT_SUBTYPE_ASSOCIATION_REQUEST = 0x0,
-	MPDU_MANAGEMENT_SUBTYPE_ATIM                = 0x9,
-	MPDU_MANAGEMENT_SUBTYPE_DISASSOCIATION      = 0xA,
-	MPDU_MANAGEMENT_SUBTYPE_AUTHENTICATION      = 0xB,
-	MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION    = 0xC,
+	MPDU_MANAGEMENT_SUBTYPE_ASSOCIATION_REQUEST  = 0x0,
+	MPDU_MANAGEMENT_SUBTYPE_ASSOCIATION_RESPONSE = 0x1,
+	MPDU_MANAGEMENT_SUBTYPE_ATIM                 = 0x9,
+	MPDU_MANAGEMENT_SUBTYPE_DISASSOCIATION       = 0xA,
+	MPDU_MANAGEMENT_SUBTYPE_AUTHENTICATION       = 0xB,
+	MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION     = 0xC,
 };
 
 /* 802.11, Section 8.4.1.1 Authentication Algorithm Number field */
@@ -146,6 +147,14 @@ struct mpdu_association_request {
 	uint8_t ies[0];
 } __attribute__ ((packed));
 
+/* 802.11, Section 8.3.3.6 */
+struct mpdu_association_response {
+	struct mpdu_field_capability capability;
+	__le16 status_code;
+	__le16 aid;
+	uint8_t ies[0];
+} __attribute__ ((packed));
+
 /* 802.11, Section 8.3.3.4 */
 struct mpdu_disassociation {
 	__le16 reason_code;
@@ -179,6 +188,7 @@ struct mpdu {
 	struct mpdu_mgmt_header mgmt_hdr;
 	union {
 		struct mpdu_association_request assoc_req;
+		struct mpdu_association_response assoc_resp;
 		struct mpdu_disassociation disassoc;
 		struct mpdu_authentication auth;
 		struct mpdu_deauthentication deauth;

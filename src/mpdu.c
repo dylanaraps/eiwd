@@ -118,6 +118,9 @@ static bool validate_mgmt_mpdu(const struct mpdu *mpdu, int len, int *offset)
 	case MPDU_MANAGEMENT_SUBTYPE_ASSOCIATION_REQUEST:
 		return validate_on_ies_start_position_mgmt_mpdu(mpdu, len,
 								offset, 9);
+	case MPDU_MANAGEMENT_SUBTYPE_ASSOCIATION_RESPONSE:
+		return validate_on_ies_start_position_mgmt_mpdu(mpdu, len,
+								offset, 9);
 	case MPDU_MANAGEMENT_SUBTYPE_ATIM:
 		return validate_atim_mgmt_mpdu(mpdu, len, offset);
 	case MPDU_MANAGEMENT_SUBTYPE_DISASSOCIATION:
