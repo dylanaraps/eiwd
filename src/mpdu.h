@@ -37,6 +37,7 @@ enum mpdu_management_subtype {
 	MPDU_MANAGEMENT_SUBTYPE_REASSOCIATION_REQUEST  = 0x2,
 	MPDU_MANAGEMENT_SUBTYPE_REASSOCIATION_RESPONSE = 0x3,
 	MPDU_MANAGEMENT_SUBTYPE_PROBE_REQUEST          = 0x4,
+	MPDU_MANAGEMENT_SUBTYPE_PROBE_RESPONSE         = 0x5,
 	MPDU_MANAGEMENT_SUBTYPE_ATIM                   = 0x9,
 	MPDU_MANAGEMENT_SUBTYPE_DISASSOCIATION         = 0xA,
 	MPDU_MANAGEMENT_SUBTYPE_AUTHENTICATION         = 0xB,
@@ -185,6 +186,14 @@ struct mpdu_probe_request {
 	uint8_t ies[0];
 } __attribute__ ((packed));
 
+/* 802.11, Section 8.3.3.10 */
+struct mpdu_probe_response {
+	uint8_t timestamp;
+	__le16 beacon_interval;
+	struct mpdu_field_capability capability;
+	uint8_t ies[0];
+} __attribute__ ((packed));
+
 /* 802.11, Section 8.3.3.11 */
 struct mpdu_authentication {
 	__le16 algorithm;
@@ -216,6 +225,7 @@ struct mpdu {
 		struct mpdu_reassociation_request reassoc_req;
 		struct mpdu_reassociation_response reassoc_resp;
 		struct mpdu_probe_request probe_req;
+		struct mpdu_probe_response probe_resp;
 		struct mpdu_disassociation disassoc;
 		struct mpdu_authentication auth;
 		struct mpdu_deauthentication deauth;
