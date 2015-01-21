@@ -54,6 +54,13 @@ static bool validate_atim_mgmt_mpdu(const struct mpdu *mpdu,
 	return *offset == len;
 }
 
+static bool validate_disassociation_mgmt_mpdu(const struct mpdu *mpdu,
+						int len, int *offset)
+{
+	*offset += 2;
+	return *offset <= len;
+}
+
 static bool validate_authentication_mgmt_mpdu(const struct mpdu *mpdu,
 						int len, int *offset)
 {
@@ -103,6 +110,8 @@ static bool validate_mgmt_mpdu(const struct mpdu *mpdu, int len, int *offset)
 	switch (mpdu->fc.subtype) {
 	case MPDU_MANAGEMENT_SUBTYPE_ATIM:
 		return validate_atim_mgmt_mpdu(mpdu, len, offset);
+	case MPDU_MANAGEMENT_SUBTYPE_DISASSOCIATION:
+		return validate_disassociation_mgmt_mpdu(mpdu, len, offset);
 	case MPDU_MANAGEMENT_SUBTYPE_AUTHENTICATION:
 		return validate_authentication_mgmt_mpdu(mpdu, len, offset);
 	case MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION:

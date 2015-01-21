@@ -33,6 +33,7 @@ enum mpdu_type {
 /* 802.11, Table 8-1 "Valid type and subtype combinations" */
 enum mpdu_management_subtype {
 	MPDU_MANAGEMENT_SUBTYPE_ATIM             = 0x9,
+	MPDU_MANAGEMENT_SUBTYPE_DISASSOCIATION   = 0xA,
 	MPDU_MANAGEMENT_SUBTYPE_AUTHENTICATION   = 0xB,
 	MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION = 0xC,
 };
@@ -96,6 +97,12 @@ struct mpdu_mgmt_header {
 #define MPDU_MGMT_SEQUENCE_NUMBER(v)		\
 	(((v).sequence_number_high << 4) + ((v).sequence_number_low))
 
+/* 802.11, Section 8.3.3.4 */
+struct mpdu_disassociation {
+	__le16 reason_code;
+	uint8_t ies[0];
+} __attribute__ ((packed));
+
 /* 802.11, Section 8.3.3.11 */
 struct mpdu_authentication {
 	__le16 algorithm;
@@ -122,6 +129,7 @@ struct mpdu {
 	struct mpdu_fc fc;
 	struct mpdu_mgmt_header mgmt_hdr;
 	union {
+		struct mpdu_disassociation disassoc;
 		struct mpdu_authentication auth;
 		struct mpdu_deauthentication deauth;
 	};
