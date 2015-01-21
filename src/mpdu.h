@@ -230,7 +230,7 @@ struct mpdu_authentication {
 /* 802.11, Section 8.3.3.12 */
 struct mpdu_deauthentication {
 	__le16 reason_code;
-	/* ToDo: Vendor specific IE? MME? */
+	uint8_t ies[0];
 } __attribute__ ((packed));
 
 struct mpdu {
