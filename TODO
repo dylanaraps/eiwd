@@ -247,19 +247,6 @@ Wireless simulator
 Wireless daemon
 ===============
 
-- Parsing 802.11 authentications management frames
-
-  Parse authentication and deauthentication managements frames: its
-  header and content. Provide a core API to decode such frame into
-  some easily handled structure, keeping in mind other type of frames
-  will come so it has to provide a generic infrastructure which can be
-  extended for future use. Focus on open and PSK based authentication
-  networks first.
-
-  Priority: High
-  Complexity: C2
-  Owner: Tomasz Bursztyka <tomasz.bursztyka@linux.intel.com>
-
 - Building 802.11 authentications management frames
 
   The other way round, provide a core API to encode an authentication
