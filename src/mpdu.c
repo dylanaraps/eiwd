@@ -48,6 +48,12 @@ static bool validate_mgmt_header(const struct mpdu *mpdu, int len, int *offset)
 	return true;
 }
 
+static bool validate_atim_mgmt_mpdu(const struct mpdu *mpdu,
+					int len, int *offset)
+{
+	return *offset == len;
+}
+
 static bool validate_authentication_mgmt_mpdu(const struct mpdu *mpdu,
 						int len, int *offset)
 {
@@ -95,6 +101,8 @@ static bool validate_mgmt_mpdu(const struct mpdu *mpdu, int len, int *offset)
 		return false;
 
 	switch (mpdu->fc.subtype) {
+	case MPDU_MANAGEMENT_SUBTYPE_ATIM:
+		return validate_atim_mgmt_mpdu(mpdu, len, offset);
 	case MPDU_MANAGEMENT_SUBTYPE_AUTHENTICATION:
 		return validate_authentication_mgmt_mpdu(mpdu, len, offset);
 	case MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION:

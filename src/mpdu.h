@@ -32,6 +32,7 @@ enum mpdu_type {
 
 /* 802.11, Table 8-1 "Valid type and subtype combinations" */
 enum mpdu_management_subtype {
+	MPDU_MANAGEMENT_SUBTYPE_ATIM             = 0x9,
 	MPDU_MANAGEMENT_SUBTYPE_AUTHENTICATION   = 0xB,
 	MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION = 0xC,
 };
