@@ -32,10 +32,11 @@ enum mpdu_type {
 
 /* 802.11, Table 8-1 "Valid type and subtype combinations" */
 enum mpdu_management_subtype {
-	MPDU_MANAGEMENT_SUBTYPE_ATIM             = 0x9,
-	MPDU_MANAGEMENT_SUBTYPE_DISASSOCIATION   = 0xA,
-	MPDU_MANAGEMENT_SUBTYPE_AUTHENTICATION   = 0xB,
-	MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION = 0xC,
+	MPDU_MANAGEMENT_SUBTYPE_ASSOCIATION_REQUEST = 0x0,
+	MPDU_MANAGEMENT_SUBTYPE_ATIM                = 0x9,
+	MPDU_MANAGEMENT_SUBTYPE_DISASSOCIATION      = 0xA,
+	MPDU_MANAGEMENT_SUBTYPE_AUTHENTICATION      = 0xB,
+	MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION    = 0xC,
 };
 
 /* 802.11, Section 8.4.1.1 Authentication Algorithm Number field */
@@ -97,6 +98,54 @@ struct mpdu_mgmt_header {
 #define MPDU_MGMT_SEQUENCE_NUMBER(v)		\
 	(((v).sequence_number_high << 4) + ((v).sequence_number_low))
 
+/* 802.11, Section 8.4.1.4 */
+struct mpdu_field_capability {
+#if defined(__LITTLE_ENDIAN_BITFIELD)
+	bool ess:1;
+	bool ibss:1;
+	bool cf_pollable:1;
+	bool cf_poll_req:1;
+	bool privacy:1;
+	bool preamble:1;
+	bool pbcc:1;
+	bool chanl_agility:1;
+	bool spectrum_mgmt:1;
+	bool qos:1;
+	bool short_time:1;
+	bool apsd:1;
+	bool radio_mesure:1;
+	bool dsss_ofdm:1;
+	bool delayed_ack:1;
+	bool immediate_ack:1;
+#elif defined (__BIG_ENDIAN_BITFIELD)
+	bool chanl_agility:1;
+	bool pbcc:1;
+	bool preamble:1;
+	bool privacy:1;
+	bool cf_poll_req:1;
+	bool cf_pollable:1;
+	bool ibss:1;
+	bool ess:1;
+	bool immediate_ack:1;
+	bool delayed_ack:1;
+	bool dsss_ofdm:1;
+	bool radio_mesure:1;
+	bool apsd:1;
+	bool short_time:1;
+	bool qos:1;
+	bool spectrum_mgmt:1;
+#else
+#error  "Please fix <asm/byteorder.h>"
+#endif
+} __attribute__ ((packed));
+
+/* 802.11, Section 8.3.3.5 */
+struct mpdu_association_request {
+	struct mpdu_field_capability capability;
+	__le16 listen_interval;
+	uint8_t ies[0];
+} __attribute__ ((packed));
+
 /* 802.11, Section 8.3.3.4 */
 struct mpdu_disassociation {
 	__le16 reason_code;
@@ -129,6 +178,7 @@ struct mpdu {
 	struct mpdu_fc fc;
 	struct mpdu_mgmt_header mgmt_hdr;
 	union {
+		struct mpdu_association_request assoc_req;
 		struct mpdu_disassociation disassoc;
 		struct mpdu_authentication auth;
 		struct mpdu_deauthentication deauth;
