@@ -1625,11 +1625,32 @@ static void netlink_str(char *str, size_t size,
 				uint16_t type, uint16_t flags, uint32_t len)
 {
 	int pos;
+	bool get_req = false, new_req = false;
 
 	pos = sprintf(str, "(0x%02x) len %u", type, len);
 
+	switch (type) {
+	case RTM_GETLINK:
+	case RTM_GETADDR:
+	case RTM_GETROUTE:
+		get_req = true;
+		break;
+
+	case RTM_NEWLINK:
+	case RTM_NEWADDR:
+	case RTM_NEWROUTE:
+		new_req = true;
+		break;
+	}
+
 	if (flags) {
 		pos += sprintf(str + pos, " [");
+
+		if (flags & NLM_F_REQUEST) {
+			flags &= ~NLM_F_REQUEST;
+			pos += sprintf(str + pos, "request%c",
+							flags ? ',' : ']');
+		}
 
 		if (flags & NLM_F_MULTI) {
 			flags &= ~NLM_F_MULTI;
@@ -1646,9 +1667,48 @@ static void netlink_str(char *str, size_t size,
 			pos += sprintf(str + pos, "echo%c", flags ? ',' : ']');
 		}
 
-		if ((flags & NLM_F_DUMP) == NLM_F_DUMP) {
+		if (get_req && (flags & NLM_F_DUMP) == NLM_F_DUMP) {
 			flags &= ~NLM_F_DUMP;
 			pos += sprintf(str + pos, "dump%c", flags ? ',' : ']');
+		}
+
+		if (get_req && flags & NLM_F_ROOT) {
+			flags &= ~NLM_F_ROOT;
+			pos += sprintf(str + pos, "root%c", flags ? ',' : ']');
+		}
+
+		if (get_req && flags & NLM_F_MATCH) {
+			flags &= ~NLM_F_MATCH;
+			pos += sprintf(str + pos, "match%c", flags ? ',' : ']');
+		}
+
+		if (get_req && flags & NLM_F_ATOMIC) {
+			flags &= ~NLM_F_ATOMIC;
+			pos += sprintf(str + pos, "atomic%c",
+							flags ? ',' : ']');
+		}
+
+		if (new_req && flags & NLM_F_REPLACE) {
+			flags &= ~NLM_F_REPLACE;
+			pos += sprintf(str + pos, "replace%c",
+							flags ? ',' : ']');
+		}
+
+		if (new_req && flags & NLM_F_EXCL) {
+			flags &= ~NLM_F_EXCL;
+			pos += sprintf(str + pos, "excl%c", flags ? ',' : ']');
+		}
+
+		if (new_req && flags & NLM_F_CREATE) {
+			flags &= ~NLM_F_CREATE;
+			pos += sprintf(str + pos, "create%c",
+							flags ? ',' : ']');
+		}
+
+		if (new_req && flags & NLM_F_APPEND) {
+			flags &= ~NLM_F_APPEND;
+			pos += sprintf(str + pos, "append%c",
+							flags ? ',' : ']');
 		}
 
 		if (flags)
@@ -2005,7 +2065,7 @@ void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
 
 		netlink_str(extra_str, sizeof(extra_str),
 					nlmsg->nlmsg_type,
-					nlmsg->nlmsg_flags & ~NLM_F_REQUEST,
+					nlmsg->nlmsg_flags,
 					NLMSG_PAYLOAD(nlmsg, 0));
 
 		print_packet(tv, out ? '<' : '>',
