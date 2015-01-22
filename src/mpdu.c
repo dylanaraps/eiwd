@@ -76,7 +76,7 @@ static bool validate_authentication_mgmt_mpdu(const struct mpdu *mpdu,
 
 	*offset += 6;
 
-	switch (mpdu->auth.algorithm) {
+	switch (L_LE16_TO_CPU(mpdu->auth.algorithm)) {
 	case MPDU_AUTH_ALGO_OPEN_SYSTEM:
 		return *offset <= len;
 	case MPDU_AUTH_ALGO_SHARED_KEY:
