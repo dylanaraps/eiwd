@@ -251,4 +251,4 @@ struct mpdu {
 	};
 } __attribute__ ((packed));
 
-bool mpdu_validate(const unsigned char *mpdu, int len);
+const struct mpdu *mpdu_validate(const uint8_t *frame, int len);

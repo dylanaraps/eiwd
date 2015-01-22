@@ -154,26 +154,28 @@ static bool validate_mgmt_mpdu(const struct mpdu *mpdu, int len, int *offset)
 	return true;
 }
 
-bool mpdu_validate(const unsigned char *frame, int len)
+const struct mpdu *mpdu_validate(const uint8_t *frame, int len)
 {
-	struct mpdu *mpdu;
+	const struct mpdu *mpdu;
+	bool valid;
 	int offset;
 
 	if (!frame)
-		return false;
+		return NULL;
 
 	if (len < 2)
-		return false;
+		return NULL;
 
 	offset = 2;
-	mpdu = (struct mpdu *) frame;
+	mpdu = (const struct mpdu *) frame;
 
 	switch (mpdu->fc.type) {
 	case MPDU_TYPE_MANAGEMENT:
-		return validate_mgmt_mpdu(mpdu, len, &offset);
+		valid = validate_mgmt_mpdu(mpdu, len, &offset);
+		break;
 	default:
-		return false;
+		return NULL;
 	}
 
-	return true;
+	return valid ? mpdu : NULL;
 }
