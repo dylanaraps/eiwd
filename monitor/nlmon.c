@@ -47,6 +47,7 @@
 
 #include "linux/nl80211.h"
 #include "src/ie.h"
+#include "src/mpdu.h"
 #include "src/util.h"
 #include "monitor/pcap.h"
 #include "monitor/display.h"
@@ -587,12 +588,108 @@ static void print_ie(unsigned int level, const char *label,
 	}
 }
 
+static void print_address(unsigned int level, const char *label,
+					const unsigned char address[6])
+{
+	char addr[18];
+
+	snprintf(addr, sizeof(addr), "%02X:%02X:%02X:%02X:%02X:%02X",
+					address[0], address[1], address[2],
+					address[3], address[4], address[5]);
+
+	print_attr(level, "%s %s", label, addr);
+}
+
+static void print_mpdu_frame_control(unsigned int level,
+						const struct mpdu_fc *fc)
+{
+	print_attr(level, "Frame Control: protocol: %02u type: %02u "
+			"subtype: %02u to: %02u from: %02u more_frags: %02u",
+			fc->protocol_version, fc->type, fc->subtype,
+			fc->to_ds, fc->from_ds, fc->more_fragments);
+	print_attr(level + 1, "retry: %02u power_mgmt: %02u more_data: %02u "
+				"protected: %02u order: %02u",
+				fc->retry, fc->power_mgmt, fc->more_data,
+				fc->protected_frame, fc->order);
+}
+
+static void print_mpdu_mgmt_header(unsigned int level, const struct mpdu *mpdu)
+{
+	print_attr(level, "Duration: %u", mpdu->mgmt_hdr.duration);
+
+	print_address(level, "Address 1 (RA):", mpdu->mgmt_hdr.address_1);
+	print_address(level, "Address 2 (TA):", mpdu->mgmt_hdr.address_2);
+	print_address(level, "Address 3:", mpdu->mgmt_hdr.address_3);
+
+	print_attr(level, "Fragment Number: %u",
+					mpdu->mgmt_hdr.fragment_number);
+	print_attr(level, "Sequence Number: %u",
+				MPDU_MGMT_SEQUENCE_NUMBER(mpdu->mgmt_hdr));
+}
+
+static void print_authentication_mgmt_frame(unsigned int level,
+						const struct mpdu *mpdu)
+{
+	const char *str;
+
+	if (!mpdu)
+		return;
+
+	print_attr(level, "Authentication:");
+
+	print_mpdu_frame_control(level + 1, &mpdu->fc);
+	print_mpdu_mgmt_header(level + 1, mpdu);
+
+	switch (mpdu->auth.algorithm) {
+	case MPDU_AUTH_ALGO_OPEN_SYSTEM:
+		str = "Open";
+		break;
+	case MPDU_AUTH_ALGO_SHARED_KEY:
+		str = "Shared key";
+		break;
+	default:
+		str = "Reserved";
+		break;
+	}
+
+	print_attr(level + 1, "Algorithm: %s (seq: %u, status: %u)", str,
+				L_LE16_TO_CPU(mpdu->auth.transaction_sequence),
+				L_LE16_TO_CPU(mpdu->auth.status));
+
+	if (mpdu->auth.algorithm != MPDU_AUTH_ALGO_SHARED_KEY)
+		return;
+
+	if (mpdu->auth.transaction_sequence < 2 ||
+					mpdu->auth.transaction_sequence > 3)
+		return;
+
+	print_attr(level + 1, "Challenge text: \"%s\" (%u)",
+				mpdu->auth.shared_key_23.challenge_text,
+				mpdu->auth.shared_key_23.challenge_text_len);
+}
+
+static void print_deauthentication_mgmt_frame(unsigned int level,
+						const struct mpdu *mpdu)
+{
+	if (!mpdu)
+		return;
+
+	print_attr(level, "Deauthentication:");
+
+	print_mpdu_frame_control(level + 1, &mpdu->fc);
+	print_mpdu_mgmt_header(level + 1, mpdu);
+
+	print_attr(level + 1, "Reason code: %u",
+				L_LE16_TO_CPU(mpdu->deauth.reason_code));
+}
+
 static void print_frame_type(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
 	uint16_t frame_type = *((uint16_t *) data);
 	uint8_t type = frame_type & 0x000c;
 	uint8_t subtype = (frame_type & 0x00f0) >> 4;
+	const struct mpdu *mpdu = NULL;
 	const char *str;
 
 	print_attr(level, "%s: 0x%04x", label, frame_type);
@@ -600,6 +697,7 @@ static void print_frame_type(unsigned int level, const char *label,
 	switch (type) {
 	case 0x00:
 		str = "Management";
+		mpdu = mpdu_validate(data, size);
 		break;
 	default:
 		str = "Reserved";
@@ -641,9 +739,11 @@ static void print_frame_type(unsigned int level, const char *label,
 		break;
 	case 0x0b:
 		str = "Authentication";
+		print_authentication_mgmt_frame(level + 1, mpdu);
 		break;
 	case 0x0c:
 		str = "Deauthentication";
+		print_deauthentication_mgmt_frame(level + 1, mpdu);
 		break;
 	case 0x0d:
 		str = "Action";
@@ -656,14 +756,15 @@ static void print_frame_type(unsigned int level, const char *label,
 		break;
 	}
 
-	print_attr(level + 1, "Subtype: %s (%u)", str, subtype);
+	if (!mpdu)
+		print_attr(level + 1, "Subtype: %s (%u)", str, subtype);
 }
 
 static void print_frame(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
 	print_attr(level, "%s: len %u", label, size);
-	print_frame_type(level + 1, "Frame Type", data, 2);
+	print_frame_type(level + 1, "Frame Type", data, size);
 	print_hexdump(level + 1, data, size);
 }
 
@@ -1380,7 +1481,6 @@ static void print_attributes(int indent, const struct attr_entry *table,
 		int32_t val_s32;
 		int64_t val_s64;
 		uint8_t *ptr;
-		char addr[18];
 
 		str = "Reserved";
 		type = ATTR_UNSPEC;
@@ -1458,11 +1558,7 @@ static void print_attributes(int indent, const struct attr_entry *table,
 			break;
 		case ATTR_ADDRESS:
 			ptr = NLA_DATA(nla);
-			snprintf(addr, sizeof(addr),
-					"%02X:%02X:%02X:%02X:%02X:%02X",
-					ptr[0], ptr[1], ptr[2],
-					ptr[3], ptr[4], ptr[5]);
-			print_attr(indent, "%s: %s", str, addr);
+			print_address(indent, str, ptr);
 			if (NLA_PAYLOAD(nla) != 6)
 				printf("malformed packet\n");
 			break;
