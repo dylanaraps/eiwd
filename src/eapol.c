@@ -69,22 +69,22 @@ bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 	}
 }
 
-bool eapol_verify(const uint8_t *data, size_t len)
+const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len)
 {
-	struct eapol_key *ek;
+	const struct eapol_key *ek;
 	uint16_t key_data_len;
 
 	if (len < sizeof(struct eapol_key))
-		return false;
+		return NULL;
 
-	ek = (struct eapol_key *) data;
+	ek = (const struct eapol_key *) frame;
 
 	if (ek->protocol_version != EAPOL_PROTOCOL_VERSION_2001 &&
 			ek->protocol_version != EAPOL_PROTOCOL_VERSION_2004)
-		return false;
+		return NULL;
 
 	if (ek->packet_type != 3)
-		return false;
+		return NULL;
 
 	switch (ek->descriptor_type) {
 	case EAPOL_DESCRIPTOR_TYPE_RC4:
@@ -92,7 +92,7 @@ bool eapol_verify(const uint8_t *data, size_t len)
 	case EAPOL_DESCRIPTOR_TYPE_WPA:
 		break;
 	default:
-		return false;
+		return NULL;
 	}
 
 	switch (ek->key_descriptor_version) {
@@ -101,25 +101,24 @@ bool eapol_verify(const uint8_t *data, size_t len)
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
 		break;
 	default:
-		return false;
+		return NULL;
 	}
 
 	key_data_len = L_BE16_TO_CPU(ek->key_data_len);
 	if (len < sizeof(struct eapol_key) + key_data_len)
-		return false;
+		return NULL;
 
-	return true;
+	return ek;
 }
 
-bool eapol_process_ptk_1_of_4(const uint8_t *data, size_t len,
+bool eapol_process_ptk_1_of_4(const uint8_t *frame, size_t len,
 				uint8_t out_anonce[])
 {
-	struct eapol_key *ek;
+	const struct eapol_key *ek;
 
-	if (!eapol_verify(data, len))
+	ek = eapol_key_validate(frame, len);
+	if (!ek)
 		return false;
-
-	ek = (struct eapol_key *) data;
 
 	/* Verify according to 802.11, Section 11.6.6.2 */
 	if (!ek->key_type)
@@ -159,16 +158,15 @@ bool eapol_process_ptk_1_of_4(const uint8_t *data, size_t len,
 	return true;
 }
 
-bool eapol_process_ptk_2_of_4(const uint8_t *data, size_t len,
+bool eapol_process_ptk_2_of_4(const uint8_t *frame, size_t len,
 				uint8_t out_snonce[])
 {
-	struct eapol_key *ek;
+	const struct eapol_key *ek;
 	uint16_t key_len;
 
-	if (!eapol_verify(data, len))
+	ek = eapol_key_validate(frame, len);
+	if (!ek)
 		return false;
-
-	ek = (struct eapol_key *) data;
 
 	/* Verify according to 802.11, Section 11.6.6.2 */
 	if (!ek->key_type)
