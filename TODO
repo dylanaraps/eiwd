@@ -147,8 +147,12 @@ Wireless monitor
   This would make tracing PAE / EAPoL traffic easy and provides better
   sniffing capabilities.
 
-  Priority: High
-  Complexity: C1
+  Unfortunately, PACKET_RECV_OUTPUT logic is not implemented at all in
+  the kernel. So, first implement it in the kernel, and then use it in
+  nlmon.c as a set_sockopt option.
+
+  Priority: Low
+  Complexity: C8
 
 - Subscribe to all nl80211 multicast groups at startup
 
