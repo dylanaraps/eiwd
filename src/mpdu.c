@@ -71,6 +71,8 @@ static bool validate_disassociation_mgmt_mpdu(const struct mpdu *mpdu,
 static bool validate_authentication_mgmt_mpdu(const struct mpdu *mpdu,
 						int len, int *offset)
 {
+	uint16_t transaction_sequence;
+
 	if (len < *offset + 6)
 		return false;
 
@@ -80,8 +82,10 @@ static bool validate_authentication_mgmt_mpdu(const struct mpdu *mpdu,
 	case MPDU_AUTH_ALGO_OPEN_SYSTEM:
 		return *offset <= len;
 	case MPDU_AUTH_ALGO_SHARED_KEY:
-		if (mpdu->auth.transaction_sequence < 2 ||
-				mpdu->auth.transaction_sequence > 3)
+		transaction_sequence =
+			L_LE16_TO_CPU(mpdu->auth.transaction_sequence);
+
+		if (transaction_sequence < 2 || transaction_sequence > 3)
 			return *offset == len;
 
 		if (len < *offset + 2)
