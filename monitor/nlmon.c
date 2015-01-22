@@ -615,7 +615,8 @@ static void print_mpdu_frame_control(unsigned int level,
 
 static void print_mpdu_mgmt_header(unsigned int level, const struct mpdu *mpdu)
 {
-	print_attr(level, "Duration: %u", mpdu->mgmt_hdr.duration);
+	print_attr(level, "Duration: %u",
+			L_LE16_TO_CPU(mpdu->mgmt_hdr.duration));
 
 	print_address(level, "Address 1 (RA):", mpdu->mgmt_hdr.address_1);
 	print_address(level, "Address 2 (TA):", mpdu->mgmt_hdr.address_2);
