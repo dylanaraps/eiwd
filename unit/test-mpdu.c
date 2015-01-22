@@ -63,13 +63,10 @@ static struct deauthentication_data deauthentication_test_1 = {
 static void deauthentication_test(const void *data)
 {
 	const struct deauthentication_data *test = data;
-	struct mpdu *mpdu;
-	bool ret;
+	const struct mpdu *mpdu;
 
-	ret = mpdu_validate(test->frame, test->frame_len);
-	assert(ret);
-
-	mpdu = (struct mpdu *)test->frame;
+	mpdu = mpdu_validate(test->frame, test->frame_len);
+	assert(mpdu);
 
 	assert(mpdu->fc.type == MPDU_TYPE_MANAGEMENT);
 	assert(mpdu->fc.subtype == MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION);
