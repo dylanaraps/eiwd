@@ -393,6 +393,14 @@ Wireless daemon
   Priority: High
   Complexity: C1
 
+- Add unit test for each of the mpdu management frame type
+
+  Currently, only authentication and deauthentication frames have
+  proper unit test. Update unit/test-mpdu.c to handle other frames as
+  well.
+
+  Priority: Medium
+  Complexity: C1
 
 Client
 ======
