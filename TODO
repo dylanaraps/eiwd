@@ -370,6 +370,15 @@ Wireless daemon
   Priority: High
   Complexity: C1
 
+- React to NL80211_CMD_SET_REKEY_OFFLOAD events
+
+  This command can be sent to userspace whenever a re-key transaction has
+  occurred.  The information contains the Replay Counter.  The Replay Counter
+  used by iwd needs to be updated with the new value.
+
+  Priority: Medium
+  Complexity: C1
+
 
 Client
 ======
