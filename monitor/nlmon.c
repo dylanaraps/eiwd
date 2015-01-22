@@ -641,7 +641,7 @@ static void print_authentication_mgmt_frame(unsigned int level,
 	print_mpdu_frame_control(level + 1, &mpdu->fc);
 	print_mpdu_mgmt_header(level + 1, mpdu);
 
-	switch (mpdu->auth.algorithm) {
+	switch (L_LE16_TO_CPU(mpdu->auth.algorithm)) {
 	case MPDU_AUTH_ALGO_OPEN_SYSTEM:
 		str = "Open";
 		break;
@@ -657,7 +657,7 @@ static void print_authentication_mgmt_frame(unsigned int level,
 				L_LE16_TO_CPU(mpdu->auth.transaction_sequence),
 				L_LE16_TO_CPU(mpdu->auth.status));
 
-	if (mpdu->auth.algorithm != MPDU_AUTH_ALGO_SHARED_KEY)
+	if (L_LE16_TO_CPU(mpdu->auth.algorithm) != MPDU_AUTH_ALGO_SHARED_KEY)
 		return;
 
 	if (mpdu->auth.transaction_sequence < 2 ||
