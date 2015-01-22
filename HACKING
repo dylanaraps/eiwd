@@ -1,0 +1,26 @@
+Submitting patches
+==================
+
+If you fixed a bug or you want to add support for something, patches are
+welcome! In order to ease the inclusion of your patch, it's important to follow
+some rules, otherwise it will likely be rejected by maintainers.
+
+iwd rules for submitting patches follow most of the rules used by Linux kernel
+(https://www.kernel.org/doc/Documentation/SubmittingPatches) with some remarks:
+
+1) Do *not* add "Signed-off-by" lines in your commit messages. iwd does not
+use them, so including them is actually an error.
+
+2) Be sure to follow the coding style rules of iwd. They are listed in
+doc/coding-style.txt.
+
+3) Split your patch according to the top-level directories. E.g.: if you added
+a feature that touches files under 'unit/', 'src/' and 'doc/'
+directories, split in three separated patches.  Care should be taken to
+structure patches in such a way as to not break compilation.  The patches
+should be split even if breaking the compilation is unavoidable.
+
+4) The commit message should follow 50/72 formatting which means the header
+should be limited to 50 characters and the description should be wrapped at 72
+characters except if it contains quoted information from debug tools like
+backtraces, compiler errors, etc.
