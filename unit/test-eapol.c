@@ -245,11 +245,10 @@ static struct eapol_key_data eapol_key_test_4 = {
 static void eapol_key_test(const void *data)
 {
 	const struct eapol_key_data *test = data;
-	struct eapol_key *packet;
+	const struct eapol_key *packet;
 
-	assert(eapol_verify(test->frame, test->frame_len));
-
-	packet = (struct eapol_key *)test->frame;
+	packet = eapol_key_validate(test->frame, test->frame_len);
+	assert(packet);
 
 	assert(packet->protocol_version == test->protocol_version);
 	assert(packet->packet_type == 0x03);
