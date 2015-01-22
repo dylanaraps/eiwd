@@ -361,6 +361,15 @@ Wireless daemon
   Complexity: C2
   Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
 
+- Add utility to create netlink REKEY_DATA attributes
+
+  The REKEY_DATA needs to be uploaded to the driver so that if re-keying is
+  triggered by the AP, the TK is updated properly.  Additionally, helper
+  function to send NL80211_CMD_SET_REKEY_OFFLOAD command is required.
+
+  Priority: High
+  Complexity: C1
+
 
 Client
 ======
