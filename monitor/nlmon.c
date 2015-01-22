@@ -660,8 +660,8 @@ static void print_authentication_mgmt_frame(unsigned int level,
 	if (L_LE16_TO_CPU(mpdu->auth.algorithm) != MPDU_AUTH_ALGO_SHARED_KEY)
 		return;
 
-	if (mpdu->auth.transaction_sequence < 2 ||
-					mpdu->auth.transaction_sequence > 3)
+	if (L_LE16_TO_CPU(mpdu->auth.transaction_sequence) < 2 ||
+			L_LE16_TO_CPU(mpdu->auth.transaction_sequence) > 3)
 		return;
 
 	print_attr(level + 1, "Challenge text: \"%s\" (%u)",
