@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "BS:vh", main_options, NULL);
+		opt = getopt_long(argc, argv, "Bvh", main_options, NULL);
 		if (opt < 0)
 			break;
 
