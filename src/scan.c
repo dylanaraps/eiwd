@@ -35,6 +35,7 @@
 #include "linux/nl80211.h"
 #include "src/iwd.h"
 #include "src/wiphy.h"
+#include "src/ie.h"
 #include "src/scan.h"
 
 void scan_start(struct l_genl_family *nl80211, uint32_t ifindex,
@@ -78,4 +79,22 @@ void scan_get_results(struct l_genl_family *nl80211, uint32_t ifindex,
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
 	l_genl_family_dump(nl80211, msg, callback, user_data, scan_done);
 	l_genl_msg_unref(msg);
+}
+
+enum scan_ssid_security scan_get_ssid_security(
+					enum ie_bss_capability bss_capability,
+					struct ie_rsn_info *info)
+{
+	if (bss_capability & IE_BSS_CAP_PRIVACY)
+		return SCAN_SSID_SECURITY_WEP;
+
+	if (!info)
+		return SCAN_SSID_SECURITY_NONE;
+
+	if (info->akm_suites & IE_RSN_AKM_SUITE_PSK ||
+			info->akm_suites & IE_RSN_AKM_SUITE_PSK_SHA256 ||
+			info->akm_suites & IE_RSN_AKM_SUITE_FT_USING_PSK)
+		return SCAN_SSID_SECURITY_PSK;
+
+	return SCAN_SSID_SECURITY_8021X;
 }

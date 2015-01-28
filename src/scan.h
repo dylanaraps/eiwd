@@ -20,6 +20,13 @@
  *
  */
 
+enum scan_ssid_security {
+	SCAN_SSID_SECURITY_NONE,
+	SCAN_SSID_SECURITY_WEP,
+	SCAN_SSID_SECURITY_PSK,
+	SCAN_SSID_SECURITY_8021X,
+};
+
 typedef void (*scan_func_t)(struct l_genl_msg *msg, void *user_data);
 typedef void (*scan_done_func_t)(void *user_data);
 
@@ -33,3 +40,6 @@ void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
 void scan_get_results(struct l_genl_family *nl80211, uint32_t ifindex,
 			scan_func_t callback, scan_done_func_t scan_done,
 			void *user_data);
+
+enum scan_ssid_security scan_get_ssid_security(enum ie_bss_capability bss_cap,
+						struct ie_rsn_info *info);
