@@ -44,16 +44,20 @@ static struct l_genl *genl = NULL;
 static struct l_genl_family *nl80211 = NULL;
 static int scheduled_scan_interval = 60;	/* in secs */
 
-struct bss {
-	uint8_t addr[ETH_ALEN];
-	uint32_t frequency;
-	uint8_t *ssid;
-	size_t ssid_len;
-};
-
 struct network {
 	struct netdev *netdev;
-	struct bss *bss;
+	uint8_t *ssid;
+	size_t ssid_len;
+	enum scan_ssid_security ssid_security;
+	struct l_queue *bss_list;
+};
+
+struct bss {
+	struct network *network;
+	uint8_t addr[ETH_ALEN];
+	uint32_t frequency;
+	int32_t signal_strength;
+	uint16_t capability;
 };
 
 struct netdev {
@@ -101,15 +105,54 @@ static void do_debug(const char *str, void *user_data)
 	l_info("%s%s", prefix, str);
 }
 
-static const char *iwd_network_get_path(const struct network *network)
+static const char *ssid_security_to_str(enum scan_ssid_security ssid_security)
+{
+	switch (ssid_security) {
+	case SCAN_SSID_SECURITY_NONE:
+		return "open";
+	case SCAN_SSID_SECURITY_WEP:
+		return "wep";
+	case SCAN_SSID_SECURITY_PSK:
+		return "psk";
+	case SCAN_SSID_SECURITY_8021X:
+		return "8021x";
+	}
+
+	return NULL;
+}
+
+static const char *iwd_network_get_id(uint8_t *ssid, unsigned int ssid_len,
+					enum scan_ssid_security ssid_security)
 {
 	static char path[256];
+	unsigned int i, pos = 0;
 
-	snprintf(path, sizeof(path), "%s/%02X%02X%02X%02X%02X%02X",
-			iwd_device_get_path(network->netdev),
-			network->bss->addr[0], network->bss->addr[1],
-			network->bss->addr[2], network->bss->addr[3],
-			network->bss->addr[4], network->bss->addr[5]);
+	for (i = 0; i < ssid_len && pos < sizeof(path); i++)
+		pos += snprintf(path + pos, sizeof(path) - pos, "%02x",
+				ssid[i]);
+
+	pos += snprintf(path + pos, sizeof(path) - pos, "_%s",
+			ssid_security_to_str(ssid_security));
+
+	path[pos] = '\0';
+
+	return path;
+}
+
+static char *iwd_network_get_path(struct network *network)
+{
+	static char path[256];
+	const char *id;
+	int pos;
+
+	pos = snprintf(path, sizeof(path), "%s/",
+			iwd_device_get_path(network->netdev));
+
+	id = iwd_network_get_id(network->ssid, network->ssid_len,
+				network->ssid_security);
+
+	strncpy(path + pos, id, sizeof(path) - pos);
+
 	return path;
 }
 
@@ -118,8 +161,8 @@ static bool __iwd_network_append_properties(const struct network *network,
 {
 	l_dbus_message_builder_enter_array(builder, "{sv}");
 
-	dbus_dict_append_bytearray(builder, "SSID", network->bss->ssid,
-						network->bss->ssid_len);
+	dbus_dict_append_bytearray(builder, "SSID", network->ssid,
+						network->ssid_len);
 
 	l_dbus_message_builder_leave_array(builder);
 
@@ -151,7 +194,7 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 {
 	struct network *network = user_data;
 	struct netdev *netdev = network->netdev;
-	struct bss *bss = network->bss;
+	struct bss *bss = l_queue_peek_head(network->bss_list);
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
 	struct l_dbus_message *reply;
@@ -160,7 +203,8 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
-	msg_append_attr(msg, NL80211_ATTR_SSID, bss->ssid_len, bss->ssid);
+	msg_append_attr(msg, NL80211_ATTR_SSID, network->ssid_len,
+			network->ssid);
 	msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 	l_genl_msg_unref(msg);
@@ -233,6 +277,16 @@ static void network_emit_removed(struct network *network)
 	l_dbus_send(dbus, signal);
 }
 
+static void bss_free(void *data)
+{
+	struct bss *bss = data;
+
+	l_debug("Freeing BSS %02X:%02X:%02X:%02X:%02X:%02X",
+			bss->addr[0], bss->addr[1], bss->addr[2],
+			bss->addr[3], bss->addr[4], bss->addr[5]);
+	l_free(bss);
+}
+
 static void network_free(void *data)
 {
 	struct network *network = data;
@@ -243,6 +297,8 @@ static void network_free(void *data)
 					IWD_NETWORK_INTERFACE);
 	network_emit_removed(network);
 
+	l_queue_destroy(network->bss_list, bss_free);
+	l_free(network->ssid);
 	l_free(network);
 }
 
@@ -482,19 +538,6 @@ static bool bss_match(const void *a, const void *b)
 	return !memcmp(bss_a->addr, bss_b->addr, sizeof(bss_a->addr));
 }
 
-static void bss_free(void *data)
-{
-	struct bss *bss = data;
-
-	l_debug("Freeing BSS %02X:%02X:%02X:%02X:%02X:%02X [%s]",
-			bss->addr[0], bss->addr[1], bss->addr[2],
-			bss->addr[3], bss->addr[4], bss->addr[5],
-			util_ssid_to_utf8(bss->ssid_len, bss->ssid));
-
-	l_free(bss->ssid);
-	l_free(bss);
-}
-
 static void netdev_free(void *data)
 {
 	struct netdev *netdev = data;
@@ -542,26 +585,33 @@ static bool wiphy_match(const void *a, const void *b)
 	return (wiphy->id == id);
 }
 
-static void mlme_associate(struct netdev *netdev, struct bss *bss)
+static void mlme_associate(struct netdev *netdev, struct network *network)
 {
 	struct l_genl_msg *msg;
+	struct bss *bss;
 
-	if (!bss) {
-		bss = l_queue_peek_head(netdev->bss_list);
-		if (!bss)
-			return;
+	if (!network) {
+		l_error("Network to connect to is not known.");
+		return;
 	}
+
+	bss = l_queue_peek_head(network->bss_list);
+	if (!bss)
+		return;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_ASSOCIATE, 512);
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
-	msg_append_attr(msg, NL80211_ATTR_SSID, bss->ssid_len, bss->ssid);
+	msg_append_attr(msg, NL80211_ATTR_SSID, network->ssid_len,
+			network->ssid);
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 	l_genl_msg_unref(msg);
 }
 
-static bool parse_ie(struct bss *bss, const void *data, uint16_t len)
+static bool parse_ie(struct bss *bss, uint8_t **ssid, int *ssid_len,
+			struct ie_rsn_info *rsne,
+			const void *data, uint16_t len)
 {
 	struct ie_tlv_iter iter;
 
@@ -569,6 +619,7 @@ static bool parse_ie(struct bss *bss, const void *data, uint16_t len)
 
 	while (ie_tlv_iter_next(&iter)) {
 		uint8_t tag = ie_tlv_iter_get_tag(&iter);
+		int ret;
 
 		switch (tag) {
 		case IE_TYPE_SSID:
@@ -577,8 +628,17 @@ static bool parse_ie(struct bss *bss, const void *data, uint16_t len)
 				return false;
 			}
 
-			bss->ssid_len = iter.len;
-			bss->ssid = l_memdup(iter.data, iter.len);
+			*ssid_len = iter.len;
+			*ssid = l_memdup(iter.data, iter.len);
+			break;
+		case IE_TYPE_RSN:
+			ret = ie_parse_rsne_from_data(iter.data - 2,
+						iter.len + 2, rsne);
+			if (ret < 0) {
+				l_debug("Cannot parse RSN field (%d, %s)",
+					ret, strerror(-ret));
+				return false;
+			}
 			break;
 		default:
 			break;
@@ -588,12 +648,26 @@ static bool parse_ie(struct bss *bss, const void *data, uint16_t len)
 	return true;
 }
 
+static int add_bss(const void *a, const void *b, void *user_data)
+{
+	const struct bss *new_bss = a, *bss = b;
+
+	if (new_bss->signal_strength > bss->signal_strength)
+		return 1;
+
+	return 0;
+}
+
 static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 {
 	uint16_t type, len;
 	const void *data;
 	struct bss *bss;
-	struct bss *old_bss;
+	uint8_t *ssid = NULL;
+	int ssid_len;
+	struct network *network = NULL;
+	struct ie_rsn_info rsne = { 0 };
+	enum scan_ssid_security ssid_security;
 
 	bss = l_new(struct bss, 1);
 
@@ -607,6 +681,14 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 
 			memcpy(bss->addr, data, len);
 			break;
+		case NL80211_BSS_CAPABILITY:
+			if (len != sizeof(uint16_t)) {
+				l_warn("Invalid capability attribute");
+				goto fail;
+			}
+
+			bss->capability = *((uint16_t *) data);
+			break;
 		case NL80211_BSS_FREQUENCY:
 			if (len != sizeof(uint32_t)) {
 				l_warn("Invalid frequency attribute");
@@ -615,8 +697,17 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 
 			bss->frequency = *((uint32_t *) data);
 			break;
+		case NL80211_BSS_SIGNAL_MBM:
+			if (len != sizeof(int32_t)) {
+				l_warn("Invalid signal strength attribute");
+				goto fail;
+			}
+
+			bss->signal_strength = *((int32_t *) data);
+			break;
 		case NL80211_BSS_INFORMATION_ELEMENTS:
-			if (!parse_ie(bss, data, len)) {
+			if (!parse_ie(bss, &ssid, &ssid_len, &rsne, data,
+									len)) {
 				l_warn("Could not parse BSS IEs");
 				goto fail;
 			}
@@ -625,50 +716,70 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 		}
 	}
 
-	old_bss = l_queue_remove_if(netdev->old_bss_list, bss_match, bss);
+	if (ssid) {
+		bool network_found = false;
+		const char *id;
 
-	if (!old_bss) {
-		struct network *network;
+		ssid_security = scan_get_ssid_security(bss->capability, &rsne);
 
-		l_debug("Found new BSS '%s' with SSID: %s, freq: %u",
-				bss_address_to_string(bss),
-				util_ssid_to_utf8(bss->ssid_len, bss->ssid),
-				bss->frequency);
+		id = iwd_network_get_id(ssid, ssid_len, ssid_security);
 
-		network = l_new(struct network, 1);
-		network->bss = bss;
-		network->netdev = netdev;
+		network = l_hashmap_lookup(netdev->networks, id);
+		if (!network) {
+			l_debug("Found new SSID \"%s\" security %s",
+				util_ssid_to_utf8(ssid_len, ssid),
+				ssid_security_to_str(ssid_security));
 
-		l_hashmap_insert(netdev->networks, bss_address_to_string(bss),
-					network);
+			network = l_new(struct network, 1);
+			network->netdev = netdev;
+			network->ssid = ssid;
+			network->ssid_len = ssid_len;
+			network->ssid_security = ssid_security;
+			network->bss_list = l_queue_new();
 
-		if (!l_dbus_register_interface(dbus_get_bus(),
+			network_found = true;
+
+			l_hashmap_insert(netdev->networks, id, network);
+
+			if (!l_dbus_register_interface(dbus_get_bus(),
 						iwd_network_get_path(network),
 						IWD_NETWORK_INTERFACE,
 						setup_network_interface,
 						network, NULL))
-			l_info("Unable to register %s interface",
-				IWD_NETWORK_INTERFACE);
-		else
-			network_emit_added(network);
-	} else {
-		struct network *network;
+				l_info("Unable to register %s interface",
+					IWD_NETWORK_INTERFACE);
+			else
+				network_emit_added(network);
+		}
 
-		l_debug("Found existing BSS '%s'",
+		if (!l_queue_find(network->bss_list, bss_match, bss)) {
+			struct bss *new_bss;
+
+			l_debug("Found new BSS '%s' with SSID: %s, freq: %u, "
+				"strength: %i",
+				bss_address_to_string(bss),
+				util_ssid_to_utf8(ssid_len, ssid),
+				bss->frequency, bss->signal_strength);
+
+			new_bss = l_memdup(bss, sizeof(*bss));
+			new_bss->network = network;
+
+			l_queue_insert(network->bss_list, new_bss,
+								add_bss, NULL);
+		} else {
+			l_debug("Found existing BSS '%s'",
 				bss_address_to_string(bss));
+		}
 
-		network = l_hashmap_lookup(netdev->networks,
-						bss_address_to_string(bss));
-		if (network)
-			network->bss = bss;
-
-		bss_free(old_bss);
+		if (!network_found)
+			l_free(ssid);
 	}
 
 	l_queue_push_head(netdev->bss_list, bss);
 	return;
 
 fail:
+	l_free(ssid);
 	bss_free(bss);
 }
 
@@ -721,22 +832,8 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 static void get_scan_done(void *user)
 {
 	struct netdev *netdev = user;
-	const struct l_queue_entry *bss_entry;
 
 	l_debug("get_scan_done for netdev: %p", netdev);
-
-	for (bss_entry = l_queue_get_entries(netdev->old_bss_list); bss_entry;
-					bss_entry = bss_entry->next) {
-		struct bss *bss = bss_entry->data;
-		struct network *network;
-
-		l_debug("Lost BSS '%s' with SSID: %s",
-				bss_address_to_string(bss),
-				util_ssid_to_utf8(bss->ssid_len, bss->ssid));
-		network = l_hashmap_remove(netdev->networks,
-						bss_address_to_string(bss));
-		network_free(network);
-	}
 
 	l_queue_destroy(netdev->old_bss_list, bss_free);
 	netdev->old_bss_list = NULL;
