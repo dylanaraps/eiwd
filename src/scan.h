@@ -42,4 +42,4 @@ void scan_get_results(struct l_genl_family *nl80211, uint32_t ifindex,
 			void *user_data);
 
 enum scan_ssid_security scan_get_ssid_security(enum ie_bss_capability bss_cap,
-						struct ie_rsn_info *info);
+						const struct ie_rsn_info *info);
