@@ -356,15 +356,6 @@ Wireless daemon
   Complexity: C1
   Owner: Denis Kenzior <denkenz@gmail.com>
 
-- Coalesce BSS and security parameters into Network object
-
-  Coalesce all the BSS with the same SSID and security parameters into one
-  Network object in wiphy.c
-
-  Priority: High
-  Complexity: C2
-  Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
-
 - Add utility to create netlink REKEY_DATA attributes
 
   The REKEY_DATA needs to be uploaded to the driver so that if re-keying is

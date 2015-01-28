@@ -8,6 +8,12 @@ is closed, then the scheduled scan is cancelled automatically if the kernel
 supports this. This is done by giving NL80211_ATTR_SOCKET_OWNER netlink
 attribute when initiating the scheduled scan.
 
+IWD contains a network object that will contain a list of BSS that have the
+same SSID and security setting. From user point of view, we will connect to
+a certain SSID instead of connecting directly to a BSS. IWD will then pick
+the best BSS automatically from the BSS list when connecting to a SSID.
+The "best" BSS in this context is the BSS that has the highest signal strength.
+
 
 Wireless monitor
 ================
