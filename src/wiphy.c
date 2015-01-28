@@ -121,7 +121,8 @@ static const char *ssid_security_to_str(enum scan_ssid_security ssid_security)
 	return NULL;
 }
 
-static const char *iwd_network_get_id(uint8_t *ssid, unsigned int ssid_len,
+static const char *iwd_network_get_id(const uint8_t *ssid,
+					unsigned int ssid_len,
 					enum scan_ssid_security ssid_security)
 {
 	static char path[256];
