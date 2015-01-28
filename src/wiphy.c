@@ -820,11 +820,52 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
+static void lost_bss(struct bss *bss)
+{
+	struct network *network = bss->network;
+	struct bss *old_bss;
+
+	if (!network)
+		return;
+
+	old_bss = l_queue_remove_if(network->bss_list, bss_match, bss);
+	if (old_bss) {
+		struct netdev *netdev = network->netdev;
+
+		l_debug("Lost BSS '%s' with SSID: %s",
+			bss_address_to_string(old_bss),
+			util_ssid_to_utf8(network->ssid_len, network->ssid));
+
+		if (l_queue_isempty(network->bss_list)) {
+			const char *id;
+
+			l_debug("No BSSs for SSID: %s",
+				util_ssid_to_utf8(network->ssid_len,
+						network->ssid));
+
+			id = iwd_network_get_id(network->ssid,
+						network->ssid_len,
+						network->ssid_security);
+
+			network = l_hashmap_remove(netdev->networks, id);
+			if (network)
+				network_free(network);
+		}
+
+		bss_free(old_bss);
+	}
+}
+
 static void get_scan_done(void *user)
 {
 	struct netdev *netdev = user;
+	const struct l_queue_entry *bss_entry;
 
 	l_debug("get_scan_done for netdev: %p", netdev);
+
+	for (bss_entry = l_queue_get_entries(netdev->old_bss_list); bss_entry;
+					bss_entry = bss_entry->next)
+		lost_bss(bss_entry->data);
 
 	l_queue_destroy(netdev->old_bss_list, bss_free);
 	netdev->old_bss_list = NULL;
