@@ -764,9 +764,8 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 		new_bss->network = network;
 
 		l_queue_insert(network->bss_list, new_bss, add_bss, NULL);
-	} else {
+	} else
 		l_debug("Found existing BSS '%s'", bss_address_to_string(bss));
-	}
 
 	l_queue_push_head(netdev->bss_list, bss);
 	return;
