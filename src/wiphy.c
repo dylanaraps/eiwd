@@ -610,7 +610,7 @@ static void mlme_associate(struct netdev *netdev, struct network *network)
 	l_genl_msg_unref(msg);
 }
 
-static bool parse_ie(struct bss *bss, uint8_t **ssid, int *ssid_len,
+static bool parse_ie(struct bss *bss, const uint8_t **ssid, int *ssid_len,
 			struct ie_rsn_info *rsne,
 			const void *data, uint16_t len)
 {
@@ -630,7 +630,7 @@ static bool parse_ie(struct bss *bss, uint8_t **ssid, int *ssid_len,
 			}
 
 			*ssid_len = iter.len;
-			*ssid = l_memdup(iter.data, iter.len);
+			*ssid = iter.data;
 			break;
 		case IE_TYPE_RSN:
 			ret = ie_parse_rsne_from_data(iter.data - 2,
@@ -664,7 +664,7 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 	uint16_t type, len;
 	const void *data;
 	struct bss *bss;
-	uint8_t *ssid = NULL;
+	const uint8_t *ssid = NULL;
 	int ssid_len;
 	struct network *network = NULL;
 	struct ie_rsn_info rsne = { 0 };
@@ -721,7 +721,6 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 		l_warn("Received BSS but SSID IE returned NULL -- ignoring");
 		goto fail;
 	} else {
-		bool network_found = false;
 		const char *id;
 
 		ssid_security = scan_get_ssid_security(bss->capability, &rsne);
@@ -736,12 +735,10 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 
 			network = l_new(struct network, 1);
 			network->netdev = netdev;
-			network->ssid = ssid;
+			network->ssid = l_memdup(ssid, ssid_len);
 			network->ssid_len = ssid_len;
 			network->ssid_security = ssid_security;
 			network->bss_list = l_queue_new();
-
-			network_found = true;
 
 			l_hashmap_insert(netdev->networks, id, network);
 
@@ -774,16 +771,12 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 			l_debug("Found existing BSS '%s'",
 				bss_address_to_string(bss));
 		}
-
-		if (!network_found)
-			l_free(ssid);
 	}
 
 	l_queue_push_head(netdev->bss_list, bss);
 	return;
 
 fail:
-	l_free(ssid);
 	bss_free(bss);
 }
 
