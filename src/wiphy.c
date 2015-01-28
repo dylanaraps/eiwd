@@ -669,6 +669,7 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 	struct network *network = NULL;
 	struct ie_rsn_info rsne = { 0 };
 	enum scan_ssid_security ssid_security;
+	const char *id;
 
 	bss = l_new(struct bss, 1);
 
@@ -720,57 +721,51 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 	if (!ssid) {
 		l_warn("Received BSS but SSID IE returned NULL -- ignoring");
 		goto fail;
+	}
+
+	ssid_security = scan_get_ssid_security(bss->capability, &rsne);
+	id = iwd_network_get_id(ssid, ssid_len, ssid_security);
+
+	network = l_hashmap_lookup(netdev->networks, id);
+	if (!network) {
+		l_debug("Found new SSID \"%s\" security %s",
+			util_ssid_to_utf8(ssid_len, ssid),
+			ssid_security_to_str(ssid_security));
+
+		network = l_new(struct network, 1);
+		network->netdev = netdev;
+		network->ssid = l_memdup(ssid, ssid_len);
+		network->ssid_len = ssid_len;
+		network->ssid_security = ssid_security;
+		network->bss_list = l_queue_new();
+		l_hashmap_insert(netdev->networks, id, network);
+
+		if (!l_dbus_register_interface(dbus_get_bus(),
+					iwd_network_get_path(network),
+					IWD_NETWORK_INTERFACE,
+					setup_network_interface,
+					network, NULL))
+			l_info("Unable to register %s interface",
+				IWD_NETWORK_INTERFACE);
+		else
+			network_emit_added(network);
+	}
+
+	if (!l_queue_find(network->bss_list, bss_match, bss)) {
+		struct bss *new_bss;
+
+		l_debug("Found new BSS '%s' with SSID: %s, freq: %u, "
+			"strength: %i",
+			bss_address_to_string(bss),
+			util_ssid_to_utf8(ssid_len, ssid),
+			bss->frequency, bss->signal_strength);
+
+		new_bss = l_memdup(bss, sizeof(*bss));
+		new_bss->network = network;
+
+		l_queue_insert(network->bss_list, new_bss, add_bss, NULL);
 	} else {
-		const char *id;
-
-		ssid_security = scan_get_ssid_security(bss->capability, &rsne);
-
-		id = iwd_network_get_id(ssid, ssid_len, ssid_security);
-
-		network = l_hashmap_lookup(netdev->networks, id);
-		if (!network) {
-			l_debug("Found new SSID \"%s\" security %s",
-				util_ssid_to_utf8(ssid_len, ssid),
-				ssid_security_to_str(ssid_security));
-
-			network = l_new(struct network, 1);
-			network->netdev = netdev;
-			network->ssid = l_memdup(ssid, ssid_len);
-			network->ssid_len = ssid_len;
-			network->ssid_security = ssid_security;
-			network->bss_list = l_queue_new();
-
-			l_hashmap_insert(netdev->networks, id, network);
-
-			if (!l_dbus_register_interface(dbus_get_bus(),
-						iwd_network_get_path(network),
-						IWD_NETWORK_INTERFACE,
-						setup_network_interface,
-						network, NULL))
-				l_info("Unable to register %s interface",
-					IWD_NETWORK_INTERFACE);
-			else
-				network_emit_added(network);
-		}
-
-		if (!l_queue_find(network->bss_list, bss_match, bss)) {
-			struct bss *new_bss;
-
-			l_debug("Found new BSS '%s' with SSID: %s, freq: %u, "
-				"strength: %i",
-				bss_address_to_string(bss),
-				util_ssid_to_utf8(ssid_len, ssid),
-				bss->frequency, bss->signal_strength);
-
-			new_bss = l_memdup(bss, sizeof(*bss));
-			new_bss->network = network;
-
-			l_queue_insert(network->bss_list, new_bss,
-								add_bss, NULL);
-		} else {
-			l_debug("Found existing BSS '%s'",
-				bss_address_to_string(bss));
-		}
+		l_debug("Found existing BSS '%s'", bss_address_to_string(bss));
 	}
 
 	l_queue_push_head(netdev->bss_list, bss);
