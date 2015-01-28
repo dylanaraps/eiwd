@@ -33,9 +33,10 @@
 #include "src/scan.h"
 
 struct test_data {
-	unsigned int len;
-	unsigned char *buf;
+	unsigned char *rsne;
+	unsigned int rsne_len;
 	enum ie_bss_capability capability;
+	enum scan_ssid_security expected;
 };
 
 static unsigned char ssid_security_wpa_data_1[] = {
@@ -45,9 +46,10 @@ static unsigned char ssid_security_wpa_data_1[] = {
 };
 
 static struct test_data ssid_security_wpa_test_1 = {
-	.len = sizeof(ssid_security_wpa_data_1),
-	.buf = ssid_security_wpa_data_1,
+	.rsne = ssid_security_wpa_data_1,
+	.rsne_len = sizeof(ssid_security_wpa_data_1),
 	.capability = IE_BSS_CAP_ESS,
+	.expected = SCAN_SSID_SECURITY_PSK,
 };
 
 static unsigned char ssid_security_wpa2_data_1[] = {
@@ -57,9 +59,10 @@ static unsigned char ssid_security_wpa2_data_1[] = {
 };
 
 static struct test_data ssid_security_wpa_test_2 = {
-	.len = sizeof(ssid_security_wpa2_data_1),
-	.buf = ssid_security_wpa2_data_1,
+	.rsne = ssid_security_wpa2_data_1,
+	.rsne_len = sizeof(ssid_security_wpa2_data_1),
 	.capability = IE_BSS_CAP_ESS,
+	.expected = SCAN_SSID_SECURITY_PSK,
 };
 
 static unsigned char ssid_security_8021x_data_1[] = {
@@ -69,63 +72,40 @@ static unsigned char ssid_security_8021x_data_1[] = {
 };
 
 static struct test_data ssid_security_8021x_test_1 = {
-	.len = sizeof(ssid_security_8021x_data_1),
-	.buf = ssid_security_8021x_data_1,
+	.rsne = ssid_security_8021x_data_1,
+	.rsne_len = sizeof(ssid_security_8021x_data_1),
 	.capability = IE_BSS_CAP_ESS,
+	.expected = SCAN_SSID_SECURITY_8021X,
 };
 
 static struct test_data ssid_security_wep_test_1 = {
-	.len = 0,
-	.buf = NULL,
 	.capability = IE_BSS_CAP_ESS | IE_BSS_CAP_PRIVACY,
+	.expected = SCAN_SSID_SECURITY_WEP,
 };
 
 static struct test_data ssid_security_open_test_1 = {
-	.len = 0,
-	.buf = NULL,
 	.capability = IE_BSS_CAP_ESS,
+	.expected = SCAN_SSID_SECURITY_NONE,
 };
 
-static void ssid_security_open_test(const void *data)
+static void ssid_security_test(const void *data)
 {
-	const struct test_data *test_data = data;
-
-	assert(scan_get_ssid_security(test_data->capability,
-		(struct ie_rsn_info *)test_data->buf) ==
-						SCAN_SSID_SECURITY_NONE);
-}
-
-static void ssid_security_wep_test(const void *data)
-{
-	const struct test_data *test_data = data;
-
-	assert(scan_get_ssid_security(test_data->capability,
-		(struct ie_rsn_info *)test_data->buf) ==
-						SCAN_SSID_SECURITY_WEP);
-}
-
-static void ssid_security_psk_test(const void *data)
-{
-	const struct test_data *test_data = data;
+	const struct test_data *test = data;
 	struct ie_rsn_info info;
+	const struct ie_rsn_info *infop;
 	int ret;
 
-	ret = ie_parse_rsne_from_data(test_data->buf, test_data->len, &info);
-	assert(ret == 0);
-	assert(scan_get_ssid_security(test_data->capability,
-					&info) == SCAN_SSID_SECURITY_PSK);
-}
+	if (test->rsne) {
+		ret = ie_parse_rsne_from_data(test->rsne,
+							test->rsne_len, &info);
+		assert(ret == 0);
 
-static void ssid_security_8021x_test(const void *data)
-{
-	const struct test_data *test_data = data;
-	struct ie_rsn_info info;
-	int ret;
+		infop = &info;
+	} else
+		infop = NULL;
 
-	ret = ie_parse_rsne_from_data(test_data->buf, test_data->len, &info);
-	assert(ret == 0);
-	assert(scan_get_ssid_security(test_data->capability,
-					&info) == SCAN_SSID_SECURITY_8021X);
+	assert(scan_get_ssid_security(test->capability, infop) ==
+			test->expected);
 }
 
 int main(int argc, char *argv[])
@@ -133,15 +113,15 @@ int main(int argc, char *argv[])
 	l_test_init(&argc, &argv);
 
 	l_test_add("/SSID Security/Open",
-			ssid_security_open_test, &ssid_security_open_test_1);
+			ssid_security_test, &ssid_security_open_test_1);
 	l_test_add("/SSID Security/WPA",
-			ssid_security_psk_test, &ssid_security_wpa_test_1);
+			ssid_security_test, &ssid_security_wpa_test_1);
 	l_test_add("/SSID Security/WPA2",
-			ssid_security_psk_test, &ssid_security_wpa_test_2);
+			ssid_security_test, &ssid_security_wpa_test_2);
 	l_test_add("/SSID Security/8021x",
-			ssid_security_8021x_test, &ssid_security_8021x_test_1);
+			ssid_security_test, &ssid_security_8021x_test_1);
 	l_test_add("/SSID Security/WEP",
-			ssid_security_wep_test, &ssid_security_wep_test_1);
+			ssid_security_test, &ssid_security_wep_test_1);
 
 	return l_test_run();
 }
