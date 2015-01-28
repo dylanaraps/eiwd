@@ -1148,12 +1148,12 @@ static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 	}
 
 	if (!wiphy) {
-		l_warn("Scan notification is missing wiphy attribute");
+		l_warn("MLME notification is missing wiphy attribute");
 		return;
 	}
 
 	if (!netdev) {
-		l_warn("Scan notification is missing interface attribute");
+		l_warn("MLME notification is missing interface attribute");
 		return;
 	}
 
