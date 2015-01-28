@@ -222,6 +222,13 @@ struct ie_rsn_info {
 	enum ie_rsn_cipher_suite group_management_cipher;
 };
 
+/* See chapter 8.4.1.4 for capability details */
+enum ie_bss_capability {
+	IE_BSS_CAP_ESS     = 0x0001,
+	IE_BSS_CAP_IBSS    = 0x0002,
+	IE_BSS_CAP_PRIVACY = 0x0010,
+};
+
 void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 			unsigned int len);
 void ie_tlv_iter_recurse(struct ie_tlv_iter *iter,
