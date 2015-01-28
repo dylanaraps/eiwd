@@ -717,7 +717,10 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 		}
 	}
 
-	if (ssid) {
+	if (!ssid) {
+		l_warn("Received BSS but SSID IE returned NULL -- ignoring");
+		goto fail;
+	} else {
 		bool network_found = false;
 		const char *id;
 
