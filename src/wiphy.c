@@ -298,7 +298,7 @@ static void network_free(void *data)
 					IWD_NETWORK_INTERFACE);
 	network_emit_removed(network);
 
-	l_queue_destroy(network->bss_list, bss_free);
+	l_queue_destroy(network->bss_list, NULL);
 	l_free(network->ssid);
 	l_free(network);
 }
@@ -536,6 +536,9 @@ static bool bss_match(const void *a, const void *b)
 	const struct bss *bss_a = a;
 	const struct bss *bss_b = b;
 
+	if (bss_a->network != bss_b->network)
+		return false;
+
 	return !memcmp(bss_a->addr, bss_b->addr, sizeof(bss_a->addr));
 }
 
@@ -664,6 +667,7 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 	uint16_t type, len;
 	const void *data;
 	struct bss *bss;
+	struct bss *old_bss;
 	const uint8_t *ssid = NULL;
 	int ssid_len;
 	struct network *network = NULL;
@@ -751,27 +755,34 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 			network_emit_added(network);
 	}
 
-	if (!l_queue_find(network->bss_list, bss_match, bss)) {
-		struct bss *new_bss;
+	bss->network = network;
+	old_bss = l_queue_remove_if(netdev->old_bss_list, bss_match, bss);
 
-		l_debug("Found new BSS '%s' with SSID: %s, freq: %u, "
+	l_debug("Found %s BSS '%s' with SSID: %s, freq: %u, "
 			"strength: %i",
+			old_bss ? "existing" : "new",
 			bss_address_to_string(bss),
 			util_ssid_to_utf8(ssid_len, ssid),
 			bss->frequency, bss->signal_strength);
 
-		new_bss = l_memdup(bss, sizeof(*bss));
-		new_bss->network = network;
+	if (old_bss)
+		bss_free(old_bss);
 
-		l_queue_insert(network->bss_list, new_bss, add_bss, NULL);
-	} else
-		l_debug("Found existing BSS '%s'", bss_address_to_string(bss));
-
+	l_queue_insert(network->bss_list, bss, add_bss, NULL);
 	l_queue_push_head(netdev->bss_list, bss);
 	return;
 
 fail:
 	bss_free(bss);
+}
+
+static void network_reset_bss_list(const void *key, void *value,
+					void *user_data)
+{
+	struct network *network = value;
+
+	l_queue_destroy(network->bss_list, NULL);
+	network->bss_list = l_queue_new();
 }
 
 static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
@@ -789,6 +800,8 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 	if (!netdev->old_bss_list) {
 		netdev->old_bss_list = netdev->bss_list;
 		netdev->bss_list = l_queue_new();
+		l_hashmap_foreach(netdev->networks,
+					network_reset_bss_list, NULL);
 	}
 
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
@@ -820,52 +833,56 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
-static void lost_bss(struct bss *bss)
+static void network_remove_if_lost(void *data)
 {
-	struct network *network = bss->network;
-	struct bss *old_bss;
+	struct network *network = data;
+	const char *id;
 
-	if (!network)
+	if (!l_queue_isempty(network->bss_list))
 		return;
 
-	old_bss = l_queue_remove_if(network->bss_list, bss_match, bss);
-	if (!old_bss)
-		return;
-
-	l_debug("Lost BSS '%s' with SSID: %s", bss_address_to_string(old_bss),
-		util_ssid_to_utf8(network->ssid_len, network->ssid));
-
-	if (l_queue_isempty(network->bss_list)) {
-		struct netdev *netdev = network->netdev;
-		const char *id;
-
-		l_debug("No remaining BSSs for SSID: %s -- Removing network",
+	l_debug("No remaining BSSs for SSID: %s -- Removing network",
 			util_ssid_to_utf8(network->ssid_len, network->ssid));
 
-		id = iwd_network_get_id(network->ssid, network->ssid_len,
+	id = iwd_network_get_id(network->ssid, network->ssid_len,
 					network->ssid_security);
 
-		if (!l_hashmap_remove(netdev->networks, id))
-			l_warn("Panic, trying to remove network that doesn't"
-				" exist in the networks hashmap");
+	if (!l_hashmap_remove(network->netdev->networks, id))
+		l_warn("Panic, trying to remove network that doesn't"
+			" exist in the networks hashmap");
 
-		network_free(network);
-	}
-
-	bss_free(old_bss);
+	network_free(network);
 }
 
 static void get_scan_done(void *user)
 {
 	struct netdev *netdev = user;
 	const struct l_queue_entry *bss_entry;
+	struct l_queue *lost_networks;
 
 	l_debug("get_scan_done for netdev: %p", netdev);
 
-	for (bss_entry = l_queue_get_entries(netdev->old_bss_list); bss_entry;
-					bss_entry = bss_entry->next)
-		lost_bss(bss_entry->data);
+	if (l_queue_isempty(netdev->old_bss_list))
+		goto done;
 
+	lost_networks = l_queue_new();
+
+	for (bss_entry = l_queue_get_entries(netdev->old_bss_list); bss_entry;
+					bss_entry = bss_entry->next) {
+		struct bss *old_bss = bss_entry->data;
+		struct network *network = old_bss->network;
+
+		l_debug("Lost BSS '%s' with SSID: %s",
+			bss_address_to_string(old_bss),
+			util_ssid_to_utf8(network->ssid_len, network->ssid));
+
+		l_queue_remove(lost_networks, network);
+		l_queue_push_head(lost_networks, network);
+	}
+
+	l_queue_destroy(lost_networks, network_remove_if_lost);
+
+done:
 	l_queue_destroy(netdev->old_bss_list, bss_free);
 	netdev->old_bss_list = NULL;
 }
