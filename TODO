@@ -239,6 +239,15 @@ Wireless monitor
   Priority: High
   Complexity: C1
 
+- Decode netlink BSS_CAPABILITY attribute
+
+  The BSS_CAPABILITY attribute seems to be direct copy of the 802.11
+  Capability IE.  The capability information should be decoded properly
+  and displayed.
+
+  Priority: High
+  Complexity: C1
+
 
 Wireless simulator
 ==================
