@@ -85,16 +85,20 @@ enum scan_ssid_security scan_get_ssid_security(
 					enum ie_bss_capability bss_capability,
 					const struct ie_rsn_info *info)
 {
+	if (info && (info->akm_suites & IE_RSN_AKM_SUITE_PSK ||
+			info->akm_suites & IE_RSN_AKM_SUITE_PSK_SHA256 ||
+			info->akm_suites & IE_RSN_AKM_SUITE_FT_USING_PSK ||
+			info->akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256 ||
+			info->akm_suites & IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256))
+		return SCAN_SSID_SECURITY_PSK;
+
+	if (info && (info->akm_suites & IE_RSN_AKM_SUITE_8021X ||
+			info->akm_suites & IE_RSN_AKM_SUITE_8021X_SHA256 ||
+			info->akm_suites & IE_RSN_AKM_SUITE_FT_OVER_8021X))
+		return SCAN_SSID_SECURITY_8021X;
+
 	if (bss_capability & IE_BSS_CAP_PRIVACY)
 		return SCAN_SSID_SECURITY_WEP;
 
-	if (!info)
-		return SCAN_SSID_SECURITY_NONE;
-
-	if (info->akm_suites & IE_RSN_AKM_SUITE_PSK ||
-			info->akm_suites & IE_RSN_AKM_SUITE_PSK_SHA256 ||
-			info->akm_suites & IE_RSN_AKM_SUITE_FT_USING_PSK)
-		return SCAN_SSID_SECURITY_PSK;
-
-	return SCAN_SSID_SECURITY_8021X;
+	return SCAN_SSID_SECURITY_NONE;
 }
