@@ -127,7 +127,6 @@ static void request_name_setup(struct l_dbus_message *message, void *user_data)
 
 static void ready_callback(void *user_data)
 {
-	l_info("ready");
 	manager_init(g_dbus);
 }
 
