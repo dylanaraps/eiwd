@@ -1881,14 +1881,6 @@ static void print_message(const struct timeval *tv, enum msg_type type,
 	}
 }
 
-static void print_nlmsghdr(const struct nlmsghdr *hdr)
-{
-	print_field("Flags: %d (0x%03x)", hdr->nlmsg_flags, hdr->nlmsg_flags);
-	print_field("Sequence number: %d (0x%08x)",
-					hdr->nlmsg_seq, hdr->nlmsg_seq);
-	print_field("Port ID: %d", hdr->nlmsg_pid);
-}
-
 struct nlmon_req_match {
 	uint32_t seq;
 	uint32_t pid;
@@ -2140,6 +2132,72 @@ static const char *nlmsg_type_to_str(uint32_t msg_type)
 	return str;
 }
 
+static void print_nlmsghdr(const struct timeval *tv,
+						const struct nlmsghdr *nlmsg)
+{
+	char extra_str[32];
+	const char *str;
+	bool out;
+
+	str = nlmsg_type_to_str(nlmsg->nlmsg_type);
+	out = !!(nlmsg->nlmsg_flags & NLM_F_REQUEST);
+
+	netlink_str(extra_str, sizeof(extra_str), nlmsg->nlmsg_type,
+				nlmsg->nlmsg_flags, NLMSG_PAYLOAD(nlmsg, 0));
+
+	print_packet(tv, out ? '<' : '>', COLOR_YELLOW, "RTNL", str, extra_str);
+
+	print_field("Flags: %d (0x%03x)", nlmsg->nlmsg_flags,
+							nlmsg->nlmsg_flags);
+	print_field("Sequence number: %d (0x%08x)",
+					nlmsg->nlmsg_seq, nlmsg->nlmsg_seq);
+	print_field("Port ID: %d", nlmsg->nlmsg_pid);
+}
+
+static void print_nlmsg(const struct timeval *tv, const struct nlmsghdr *nlmsg)
+{
+	struct nlmsgerr *err;
+	int status;
+
+	print_nlmsghdr(tv, nlmsg);
+
+	switch (nlmsg->nlmsg_type) {
+	case NLMSG_ERROR:
+		err = NLMSG_DATA(nlmsg);
+		status = -err->error;
+		if (status < 0)
+			print_field("Error: %d (%s)", status, strerror(status));
+		else
+			print_field("ACK: %d", status);
+		break;
+
+	case NLMSG_DONE:
+		status = *((int *) NLMSG_DATA(nlmsg));
+		print_field("Status: %d", status);
+		break;
+
+	case NLMSG_NOOP:
+	case NLMSG_OVERRUN:
+		break;
+	}
+}
+
+static void print_rtnl_msg(const struct timeval *tv,
+						const struct nlmsghdr *nlmsg)
+{
+	switch (nlmsg->nlmsg_type) {
+	case RTM_NEWLINK:
+	case RTM_DELLINK:
+	case RTM_SETLINK:
+	case RTM_GETLINK:
+	case RTM_NEWADDR:
+	case RTM_DELADDR:
+	case RTM_GETADDR:
+		print_nlmsghdr(tv, nlmsg);
+		break;
+	}
+}
+
 void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
 					const void *data, uint32_t size)
 {
@@ -2150,54 +2208,22 @@ void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
 
 	for (nlmsg = data; NLMSG_OK(nlmsg, aligned_size);
 				nlmsg = NLMSG_NEXT(nlmsg, aligned_size)) {
-		const struct ifinfomsg *ifi;
-		char extra_str[32];
-		const char *str;
-		bool out;
-		int status;
-		struct nlmsgerr *err;
-
-		str = nlmsg_type_to_str(nlmsg->nlmsg_type);
-		out = !!(nlmsg->nlmsg_flags & NLM_F_REQUEST);
-
-		netlink_str(extra_str, sizeof(extra_str),
-					nlmsg->nlmsg_type,
-					nlmsg->nlmsg_flags,
-					NLMSG_PAYLOAD(nlmsg, 0));
-
-		print_packet(tv, out ? '<' : '>',
-				COLOR_YELLOW, "RTNL", str, extra_str);
-		print_nlmsghdr(nlmsg);
-
 		switch (nlmsg->nlmsg_type) {
-		case RTM_SETLINK:
-			ifi = NLMSG_DATA(nlmsg);
-
-			print_field("Interface Index: %d", ifi->ifi_index);
-
-			print_hexdump(0, NLMSG_DATA(nlmsg) +
-						NLMSG_ALIGN(sizeof(*ifi)),
-					NLMSG_PAYLOAD(nlmsg, sizeof(*ifi)));
-			break;
-
 		case NLMSG_NOOP:
 		case NLMSG_OVERRUN:
-			break;
-
 		case NLMSG_ERROR:
-			err = NLMSG_DATA(nlmsg);
-			status = -err->error;
-			if (status < 0)
-				print_field("Error: %d (%s)", status,
-							strerror(status));
-			else
-				print_field("ACK: %d", status);
-
+		case NLMSG_DONE:
+			print_nlmsg(tv, nlmsg);
 			break;
 
-		case NLMSG_DONE:
-			status = *((int *) NLMSG_DATA(nlmsg));
-			print_field("Status: %d", status);
+		case RTM_NEWLINK:
+		case RTM_DELLINK:
+		case RTM_SETLINK:
+		case RTM_GETLINK:
+		case RTM_NEWADDR:
+		case RTM_DELADDR:
+		case RTM_GETADDR:
+			print_rtnl_msg(tv, nlmsg);
 			break;
 		}
 	}
