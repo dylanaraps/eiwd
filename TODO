@@ -356,6 +356,7 @@ Wireless daemon
 
   Priority: Medium
   Complexity: C2
+  Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
 
 - Implement ARC4 cipher in iwd
 
