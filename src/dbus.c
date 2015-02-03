@@ -114,8 +114,6 @@ static void request_name_callback(struct l_dbus_message *message,
 
 	if (!l_dbus_message_get_arguments(message, "u", &result))
 		return;
-
-	l_info("request name result=%d", result);
 }
 
 static void request_name_setup(struct l_dbus_message *message, void *user_data)
