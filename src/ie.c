@@ -515,3 +515,41 @@ int ie_parse_rsne_from_data(const uint8_t *data, size_t len,
 
 	return ie_parse_rsne(&iter, info);
 }
+
+/* 802.11, Section 8.4.2.27.2 */
+static bool ie_build_cipher_suite(uint8_t *data,
+					const enum ie_rsn_cipher_suite suite)
+{
+	switch (suite) {
+	case IE_RSN_CIPHER_SUITE_USE_GROUP_CIPHER:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 0;
+		return true;
+	case IE_RSN_CIPHER_SUITE_WEP40:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 1;
+		return true;
+	case IE_RSN_CIPHER_SUITE_TKIP:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 2;
+		return true;
+	case IE_RSN_CIPHER_SUITE_CCMP:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 4;
+		return true;
+	case IE_RSN_CIPHER_SUITE_WEP104:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 5;
+		return true;
+	case IE_RSN_CIPHER_SUITE_BIP:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 6;
+		return true;
+	case IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 7;
+		return true;
+	}
+
+	return false;
+}
