@@ -206,29 +206,6 @@ Wireless monitor
   Priority: Medium
   Complexity: C2
 
-- Track RTNL messages for wireless network interface
-
-  The RTNL messages indicate operation state changes and with are also
-  relevant for a complete picture of the userspace kernel communication.
-
-  However the complicated part is to identify which network interfaces
-  are wireless related and which are not.  Obviously the non-wireless
-  network interfaces need to be filtered out.
-
-  Priority: Medium
-  Complexity: C2
-  Owner: Ravi kumar Veeramally <ravikumar.veeramally@linux.intel.com>
-
-- Handle netlink core control messages correctly
-
-  The core control netlink messages for NLMSG_ERROR and NLMSG_DONE are
-  not decoded properly.  Add detailed decoding and also decode all the
-  flags that are related to the core control messages.
-
-  Priority: High
-  Complexity: C1
-  Owner: Ravi kumar Veeramally <ravikumar.veeramally@linux.intel.com>
-
 - Decode the RSNE field
 
   Properly decode and display the RSNE field.  This is particularly important
