@@ -30,6 +30,8 @@
 
 #include "ie.h"
 
+static const uint8_t ieee_oui[3] = { 0x00, 0x0f, 0xac };
+
 void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 			unsigned int len)
 {
@@ -184,8 +186,6 @@ void ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
 static bool ie_parse_cipher_suite(const uint8_t *data,
 					enum ie_rsn_cipher_suite *out)
 {
-	static const uint8_t ieee_oui[3] = { 0x00, 0x0f, 0xac };
-
 	/*
 	 * Compare the OUI to the ones we know.  OUI Format is found in
 	 * Figure 8-187 of 802.11
@@ -226,8 +226,6 @@ static bool ie_parse_cipher_suite(const uint8_t *data,
 static bool ie_parse_akm_suite(const uint8_t *data,
 					enum ie_rsn_akm_suite *out)
 {
-	static const uint8_t ieee_oui[3] = { 0x00, 0x0f, 0xac };
-
 	/*
 	 * Compare the OUI to the ones we know.  OUI Format is found in
 	 * Figure 8-187 of 802.11
