@@ -600,3 +600,169 @@ static bool ie_build_akm_suite(uint8_t *data,
 
 	return false;
 }
+
+/*
+ * Generate an RSNE IE based on the information found in info.
+ * The to array must be 256 bytes in size
+ *
+ * In theory it is possible to generate 257 byte IE RSNs (1 byte for IE Type,
+ * 1 byte for Length and 255 bytes of data) but we don't support this
+ * possibility.
+ */
+bool ie_build_rsne(const struct ie_rsn_info *info, uint8_t *to)
+{
+	/* These are the only valid pairwise suites */
+	static enum ie_rsn_cipher_suite pairwise_suites[] = {
+		IE_RSN_CIPHER_SUITE_CCMP,
+		IE_RSN_CIPHER_SUITE_TKIP,
+		IE_RSN_CIPHER_SUITE_WEP104,
+		IE_RSN_CIPHER_SUITE_WEP40,
+		IE_RSN_CIPHER_SUITE_USE_GROUP_CIPHER,
+	};
+	unsigned int pos;
+	unsigned int i;
+	uint8_t *countptr;
+	uint16_t count;
+	enum ie_rsn_akm_suite akm_suite;
+
+	to[0] = IE_TYPE_RSN;
+
+	/* Version field, always 1 */
+	pos = 2;
+	l_put_le16(1, to + pos);
+	pos += 2;
+
+	/* Group Data Cipher Suite */
+	if (!ie_build_cipher_suite(to + pos, info->group_cipher))
+		return false;
+
+	pos += 4;
+
+	/* Save position for Pairwise Cipher Suite Count field */
+	countptr = to + pos;
+	pos += 2;
+
+	for (i = 0, count = 0; i < L_ARRAY_SIZE(pairwise_suites); i++) {
+		enum ie_rsn_cipher_suite suite = pairwise_suites[i];
+
+		if (!(info->pairwise_ciphers & suite))
+			continue;
+
+		if (pos + 4 > 242)
+			return false;
+
+		if (!ie_build_cipher_suite(to + pos, suite))
+			return false;
+
+		pos += 4;
+		count += 1;
+	}
+
+	l_put_le16(count, countptr);
+
+	/* Save position for AKM Suite Count field */
+	countptr = to + pos;
+	pos += 2;
+
+	akm_suite = IE_RSN_AKM_SUITE_8021X;
+	count = 0;
+
+	for (count = 0, akm_suite = IE_RSN_AKM_SUITE_8021X;
+			akm_suite <= IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256;
+				akm_suite <<= 1) {
+		if (!(info->akm_suites & akm_suite))
+			continue;
+
+		if (pos + 4 > 248)
+			return false;
+
+		if (!ie_build_akm_suite(to + pos, akm_suite))
+			return false;
+
+		pos += 4;
+		count += 1;
+	}
+
+	l_put_le16(count, countptr);
+
+	/* Bits 0 - 7 of RSNE Capabilities field */
+	to[pos] = 0;
+
+	if (info->preauthentication)
+		to[pos] |= 0x1;
+
+	if (info->no_pairwise)
+		to[pos] |= 0x2;
+
+	to[pos] |= info->ptksa_replay_counter << 2;
+	to[pos] |= info->gtksa_replay_counter << 4;
+
+	if (info->mfpr)
+		to[pos] |= 0x40;
+
+	if (info->mfpc)
+		to[pos] |= 0x80;
+
+	pos += 1;
+
+	/* Bits 8 - 15 of RSNE Capabilities field */
+	to[pos] = 0;
+
+	if (info->peerkey_enabled)
+		to[pos] |= 0x2;
+
+	if (info->spp_a_msdu_capable)
+		to[pos] |= 0x4;
+
+	if (info->spp_a_msdu_required)
+		to[pos] |= 0x8;
+
+	if (info->pbac)
+		to[pos] |= 0x10;
+
+	if (info->extended_key_id)
+		to[pos] |= 0x20;
+
+	pos += 1;
+
+	/* Short hand the generated RSNE if possible */
+	if (info->num_pmkids == 0) {
+		/* No Group Management Cipher Suite */
+		if (to[pos - 2] == 0 && to[pos - 1] == 0) {
+			pos -= 2;
+			goto done;
+		} else if (!info->mfpc)
+			goto done;
+		else if (info->group_management_cipher ==
+				IE_RSN_CIPHER_SUITE_BIP)
+			goto done;
+	}
+
+	/* PMKID Count */
+	l_put_le16(info->num_pmkids, to + pos);
+	pos += 2;
+
+	if (pos + info->num_pmkids * 16 > 252)
+		return false;
+
+	/* PMKID List */
+	memcpy(to + pos, info->pmkids, 16 * info->num_pmkids);
+	pos += 16 * info->num_pmkids;
+
+	if (!info->mfpc)
+		goto done;
+
+	if (info->group_management_cipher == IE_RSN_CIPHER_SUITE_BIP)
+		goto done;
+
+	/* Group Management Cipher Suite */
+	if (!ie_build_cipher_suite(to, info->group_management_cipher))
+		return false;
+
+	pos += 4;
+
+done:
+	to[1] = pos - 2;
+
+	return true;
+}
