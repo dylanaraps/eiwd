@@ -415,6 +415,22 @@ static void ie_test_rsne_info(const void *data)
 	assert(test->group_management_cipher == info.group_management_cipher);
 }
 
+static void ie_test_rsne_build_compact_info(const void *data)
+{
+	const struct ie_rsne_info_test *test = data;
+	int r;
+	struct ie_rsn_info info;
+	uint8_t buf[256];
+
+	r = ie_parse_rsne_from_data(test->data, test->data_len, &info);
+	assert(r == 0);
+
+	r = ie_build_rsne(&info, buf);
+	assert(r);
+
+	assert(!memcmp(test->data, buf, test->data_len));
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -438,6 +454,16 @@ int main(int argc, char *argv[])
 				ie_test_rsne_info, &ie_rsne_info_test_5);
 	l_test_add("/ie/RSN Info Parser/Test Case 6",
 				ie_test_rsne_info, &ie_rsne_info_test_6);
+
+	l_test_add("/ie/RSN Info Builder/Compact Test 1",
+				ie_test_rsne_build_compact_info,
+				&ie_rsne_info_test_3);
+	l_test_add("/ie/RSN Info Builder/Compact Test 2",
+				ie_test_rsne_build_compact_info,
+				&ie_rsne_info_test_4);
+	l_test_add("/ie/RSN Info Builder/Compact Test 3",
+				ie_test_rsne_build_compact_info,
+				&ie_rsne_info_test_5);
 
 	return l_test_run();
 }
