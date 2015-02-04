@@ -553,3 +553,50 @@ static bool ie_build_cipher_suite(uint8_t *data,
 
 	return false;
 }
+
+/* 802.11, Section 8.4.2.27.2 */
+static bool ie_build_akm_suite(uint8_t *data,
+					enum ie_rsn_akm_suite suite)
+{
+
+	switch (suite) {
+	case IE_RSN_AKM_SUITE_8021X:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 1;
+		return true;
+	case IE_RSN_AKM_SUITE_PSK:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 2;
+		return true;
+	case IE_RSN_AKM_SUITE_FT_OVER_8021X:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 3;
+		return true;
+	case IE_RSN_AKM_SUITE_FT_USING_PSK:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 4;
+		return true;
+	case IE_RSN_AKM_SUITE_8021X_SHA256:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 5;
+		return true;
+	case IE_RSN_AKM_SUITE_PSK_SHA256:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 6;
+		return true;
+	case IE_RSN_AKM_SUITE_TDLS:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 7;
+		return true;
+	case IE_RSN_AKM_SUITE_SAE_SHA256:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 8;
+		return true;
+	case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
+		memcpy(data, ieee_oui, 3);
+		data[3] = 9;
+		return true;
+	}
+
+	return false;
+}
