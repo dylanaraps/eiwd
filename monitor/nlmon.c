@@ -137,6 +137,19 @@ struct flag_names {
 	const char *name;
 };
 
+struct wlan_iface {
+	int index;
+};
+
+static struct l_hashmap *wlan_iface_list = NULL;
+
+static void wlan_iface_list_free(void *data)
+{
+	struct wlan_iface *iface = data;
+
+	l_free(iface);
+}
+
 static void nlmon_req_free(void *data)
 {
 	struct nlmon_req *req = data;
@@ -2424,13 +2437,92 @@ static void print_ifaddrmsg(const struct ifaddrmsg *addr)
 	print_field("IFA Flags: %u", addr->ifa_flags);
 }
 
+static void read_uevent(const char *ifname, int index)
+{
+	char filename[30], line[128];
+	FILE *f;
+
+	sprintf(filename, "/sys/class/net/%s/uevent", ifname);
+	f = fopen(filename, "re");
+	if (!f) {
+		printf("%s do not exist\n", filename);
+		return;
+	}
+
+	while (fgets(line, sizeof(line), f)) {
+		char *pos;
+
+		pos = strchr(line, '\n');
+		if (!pos)
+			continue;
+		pos[0] = '\0';
+
+		if (strncmp(line, "DEVTYPE=", 8) != 0)
+			continue;
+
+		if (strcmp(line + 8, "wlan") == 0) {
+			struct wlan_iface *iface;
+
+			iface = l_new(struct wlan_iface, 1);
+			iface->index = index;
+
+			if (!l_hashmap_insert(wlan_iface_list,
+				L_INT_TO_PTR(index), iface))
+				l_free(iface);
+		}
+	}
+
+	fclose(f);
+}
+
+static char *rtnl_get_ifname(const struct ifinfomsg *ifi, int len)
+{
+	struct rtattr *attr;
+	char *ifname = NULL;
+
+	if (!ifi)
+		return NULL;
+
+	for (attr = IFLA_RTA(ifi); RTA_OK(attr, len);
+					attr = RTA_NEXT(attr, len))
+		if (attr->rta_type == IFLA_IFNAME)
+			ifname = (char *) RTA_DATA(attr);
+
+	return ifname;
+}
+
 static void print_rtm_link(uint16_t type, const struct ifinfomsg *info, int len)
 {
+	struct wlan_iface *iface;
+	char *ifname;
+
 	if (!info || len <= 0)
+		return;
+
+	if (type == RTM_NEWLINK) {
+		ifname = rtnl_get_ifname(info, len);
+		if (!ifname)
+			return;
+
+		read_uevent(ifname, info->ifi_index);
+	}
+
+	iface = l_hashmap_lookup(wlan_iface_list,
+						L_INT_TO_PTR(info->ifi_index));
+	if (!iface)
 		return;
 
 	print_ifinfomsg(info);
 	print_rtnl_attributes(1, info_entry, IFLA_RTA(info), len);
+
+	if (type == RTM_DELLINK) {
+		iface = l_hashmap_remove(wlan_iface_list,
+						L_INT_TO_PTR(info->ifi_index));
+		if (!iface)
+			return;
+
+		l_free(iface);
+	}
 }
 
 static const char *nlmsg_type_to_str(uint32_t msg_type)
@@ -2543,6 +2635,7 @@ static void print_rtnl_msg(const struct timeval *tv,
 {
 	struct ifinfomsg *info;
 	struct ifaddrmsg *addr;
+	struct wlan_iface *iface;
 	int len;
 
 	switch (nlmsg->nlmsg_type) {
@@ -2562,6 +2655,11 @@ static void print_rtnl_msg(const struct timeval *tv,
 		addr = (struct ifaddrmsg *) NLMSG_DATA(nlmsg);
 		len = IFA_PAYLOAD(nlmsg);
 		if (!addr || len <= 0)
+			return;
+
+		iface = l_hashmap_lookup(wlan_iface_list,
+						L_INT_TO_PTR(addr->ifa_index));
+		if (!iface)
 			return;
 
 		print_nlmsghdr(tv, nlmsg);
@@ -2993,6 +3091,8 @@ struct nlmon *nlmon_open(const char *ifname, uint16_t id, const char *pathname)
 	l_io_set_read_handler(nlmon->io, nlmon_receive, nlmon, NULL);
 	l_io_set_read_handler(nlmon->pae_io, pae_receive, nlmon, NULL);
 
+	wlan_iface_list = l_hashmap_new();
+
 	return nlmon;
 }
 
@@ -3004,6 +3104,9 @@ void nlmon_close(struct nlmon *nlmon)
 	l_io_destroy(nlmon->io);
 	l_io_destroy(nlmon->pae_io);
 	l_queue_destroy(nlmon->req_list, nlmon_req_free);
+
+	l_hashmap_destroy(wlan_iface_list, wlan_iface_list_free);
+	wlan_iface_list = NULL;
 
 	if (nlmon->pcap)
 		pcap_close(nlmon->pcap);
