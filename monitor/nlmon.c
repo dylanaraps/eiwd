@@ -1030,6 +1030,49 @@ static const struct attr_entry key_default_type_table[] = {
 	{ }
 };
 
+static void print_rekey_kek(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	print_attr(level, "%s: len %u", label, size);
+
+	if (size != NL80211_KEK_LEN)
+		printf("malformed packet");
+
+	print_hexdump(level + 1, data, size);
+}
+
+static void print_rekey_kck(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	print_attr(level, "%s: len %u", label, size);
+
+	if (size != NL80211_KCK_LEN)
+		printf("malformed packet");
+
+	print_hexdump(level + 1, data, size);
+}
+
+static void print_rekey_replay_ctr(unsigned int level, const char *label,
+						const void *data, uint16_t size)
+{
+	print_attr(level, "%s: len %u", label, size);
+
+	if (size != NL80211_REPLAY_CTR_LEN)
+		printf("malformed packet");
+
+	print_hexdump(level + 1, data, size);
+}
+
+static const struct attr_entry rekey_table[] = {
+	{ NL80211_REKEY_DATA_KEK, "KEK", ATTR_CUSTOM,
+				{ .function = print_rekey_kek } },
+	{ NL80211_REKEY_DATA_KCK, "KCK", ATTR_CUSTOM,
+				{ .function = print_rekey_kck } },
+	{ NL80211_REKEY_DATA_REPLAY_CTR, "Replay CTR", ATTR_CUSTOM,
+				{ .function = print_rekey_replay_ctr } },
+	{ }
+};
+
 static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_WIPHY,
 			"Wiphy", ATTR_U32 },
@@ -1289,7 +1332,7 @@ static const struct attr_entry attr_table[] = {
 			"Software Interface Types", ATTR_NESTED,
 							{ iftype_table } },
 	{ NL80211_ATTR_REKEY_DATA,
-			"Rekey Data" },
+			"Rekey Data", ATTR_NESTED, { rekey_table } },
 	{ NL80211_ATTR_MAX_NUM_SCHED_SCAN_SSIDS,
 			"Max Num Sched Scan SSIDs", ATTR_U8 },
 	{ NL80211_ATTR_MAX_SCHED_SCAN_IE_LEN,
