@@ -61,6 +61,21 @@
 #define COLOR_RESULT		COLOR_MAGENTA
 #define COLOR_EVENT		COLOR_CYAN
 
+/* BSS Capabilities */
+#define BSS_CAPABILITY_ESS		(1<<0)
+#define BSS_CAPABILITY_IBSS		(1<<1)
+#define BSS_CAPABILITY_CF_POLLABLE	(1<<2)
+#define BSS_CAPABILITY_CF_POLL_REQUEST	(1<<3)
+#define BSS_CAPABILITY_PRIVACY		(1<<4)
+#define BSS_CAPABILITY_SHORT_PREAMBLE	(1<<5)
+#define BSS_CAPABILITY_PBCC		(1<<6)
+#define BSS_CAPABILITY_CHANNEL_AGILITY	(1<<7)
+#define BSS_CAPABILITY_SPECTRUM_MGMT	(1<<8)
+#define BSS_CAPABILITY_QOS		(1<<9)
+#define BSS_CAPABILITY_SHORT_SLOT_TIME	(1<<10)
+#define BSS_CAPABILITY_APSD		(1<<11)
+#define BSS_CAPABILITY_DSSS_OFDM	(1<<13)
+
 enum msg_type {
 	MSG_REQUEST,
 	MSG_RESPONSE,
@@ -908,13 +923,45 @@ static const struct attr_entry sta_info_table[] = {
 	{ }
 };
 
+static void print_bss_capability(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	uint16_t cap = *(uint16_t *) data;
+
+	print_attr(level, "%s: %"PRIu16" (0x%04"PRIx16")", label, cap, cap);
+
+	if (cap & BSS_CAPABILITY_ESS)
+		print_attr(level + 1, "ESS");
+	if (cap & BSS_CAPABILITY_IBSS)
+		print_attr(level + 1, "IBSS");
+	if (cap & BSS_CAPABILITY_PRIVACY)
+		print_attr(level + 1, "Privacy");
+	if (cap & BSS_CAPABILITY_SHORT_PREAMBLE)
+		print_attr(level + 1, "ShortPreamble");
+	if (cap & BSS_CAPABILITY_PBCC)
+		print_attr(level + 1, "PBCC");
+	if (cap & BSS_CAPABILITY_CHANNEL_AGILITY)
+		print_attr(level + 1, "ChannelAgility");
+	if (cap & BSS_CAPABILITY_SPECTRUM_MGMT)
+		print_attr(level + 1, "SpectrumMgmt");
+	if (cap & BSS_CAPABILITY_QOS)
+		print_attr(level + 1, "QoS");
+	if (cap & BSS_CAPABILITY_SHORT_SLOT_TIME)
+		print_attr(level + 1, "ShortSlotTime");
+	if (cap & BSS_CAPABILITY_APSD)
+		print_attr(level + 1, "APSD");
+	if (cap & BSS_CAPABILITY_DSSS_OFDM)
+		print_attr(level + 1, "DSSS-OFDM");
+}
+
 static const struct attr_entry bss_table[] = {
 	{ NL80211_BSS_BSSID,		"BSSID",	ATTR_ADDRESS	},
 	{ NL80211_BSS_FREQUENCY,	"Frequency",	ATTR_U32	},
 	{ NL80211_BSS_TSF,		"TSF",		ATTR_U64	},
 	{ NL80211_BSS_BEACON_INTERVAL,	"Beacon Interval",
 							ATTR_U16	},
-	{ NL80211_BSS_CAPABILITY,	"Capability",	ATTR_U16	},
+	{ NL80211_BSS_CAPABILITY,	"Capability",  ATTR_CUSTOM,
+				{ .function = print_bss_capability }	},
 	{ NL80211_BSS_INFORMATION_ELEMENTS, "IEs",
 				ATTR_CUSTOM, { .function = print_ie }	},
 	{ NL80211_BSS_SIGNAL_MBM,	"Signal mBm",	ATTR_S32	},
