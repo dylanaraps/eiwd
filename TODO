@@ -229,16 +229,6 @@ Wireless monitor
   Complexity: C1
   Owner: Ravi kumar Veeramally <ravikumar.veeramally@linux.intel.com>
 
-- Decode netlink REKEY_DATA attribute
-
-  According to nl80211, NL80211_ATTR_REKEY_DATA is a 'nested attribute
-  containing the information necessary for GTK rekeying in the device'.  The
-  data seems to contain TK, GTK and Replay Counter attributes.  However, the
-  format of the 'nesting' is not specified.
-
-  Priority: High
-  Complexity: C1
-
 - Decode the RSNE field
 
   Properly decode and display the RSNE field.  This is particularly important
