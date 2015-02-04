@@ -2169,6 +2169,32 @@ static struct attr_entry info_entry[] = {
 	{ },
 };
 
+static void print_inet_addr(unsigned int indent, const char *str,
+						const void *buf, uint16_t size)
+{
+	struct in_addr addr;
+
+	if (size != sizeof(struct in_addr))
+		return;
+
+	addr = *((struct in_addr *) buf);
+	print_attr(indent, "%s: %s", str, inet_ntoa(addr));
+}
+
+static struct attr_entry addr_entry[] = {
+	{ IFA_ADDRESS,		"Interface Address", ATTR_CUSTOM,
+					{ .function = print_inet_addr } },
+	{ IFA_LOCAL,		"Local Address", ATTR_CUSTOM,
+					{ .function = print_inet_addr } },
+	{ IFA_BROADCAST,	"Broadcast Address", ATTR_CUSTOM,
+					{ .function = print_inet_addr } },
+	{ IFA_ANYCAST,		"Anycast Address", ATTR_CUSTOM,
+					{ .function = print_inet_addr } },
+	{ IFA_LABEL,		"Label",	ATTR_STRING },
+	{ IFA_CACHEINFO,	"CacheInfo",	ATTR_BINARY },
+	{ },
+};
+
 static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 						struct rtattr *rt_attr, int len)
 {
@@ -2343,6 +2369,18 @@ static void print_ifinfomsg(const struct ifinfomsg *info)
 	print_field("IFLA Flags: %s", str);
 }
 
+static void print_ifaddrmsg(const struct ifaddrmsg *addr)
+{
+	if (!addr)
+		return;
+
+	print_field("IFA Family: %u", addr->ifa_family);
+	print_field("IFA Prefixlen: %u", addr->ifa_prefixlen);
+	print_field("IFA Index: %d", addr->ifa_index);
+	print_field("IFA Scope: %u", addr->ifa_scope);
+	print_field("IFA Flags: %u", addr->ifa_flags);
+}
+
 static void print_rtm_link(uint16_t type, const struct ifinfomsg *info, int len)
 {
 	if (!info || len <= 0)
@@ -2461,6 +2499,7 @@ static void print_rtnl_msg(const struct timeval *tv,
 						const struct nlmsghdr *nlmsg)
 {
 	struct ifinfomsg *info;
+	struct ifaddrmsg *addr;
 	int len;
 
 	switch (nlmsg->nlmsg_type) {
@@ -2477,7 +2516,14 @@ static void print_rtnl_msg(const struct timeval *tv,
 	case RTM_NEWADDR:
 	case RTM_DELADDR:
 	case RTM_GETADDR:
+		addr = (struct ifaddrmsg *) NLMSG_DATA(nlmsg);
+		len = IFA_PAYLOAD(nlmsg);
+		if (!addr || len <= 0)
+			return;
+
 		print_nlmsghdr(tv, nlmsg);
+		print_ifaddrmsg(addr);
+		print_rtnl_attributes(1, addr_entry, IFA_RTA(addr), len);
 		break;
 	}
 }
