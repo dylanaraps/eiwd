@@ -32,13 +32,14 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <linux/if.h>
-#include <linux/if_arp.h>
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
 #include <linux/netlink.h>
 #include <linux/genetlink.h>
 #include <linux/rtnetlink.h>
 #include <linux/filter.h>
+#include <net/ethernet.h>
+#include <netinet/ether.h>
 #include <ell/ell.h>
 
 #ifndef ARPHRD_NETLINK
@@ -129,6 +130,11 @@ struct attr_entry {
 		enum attr_type array_type;
 		attr_func_t function;
 	};
+};
+
+struct flag_names {
+	uint16_t flag;
+	const char *name;
 };
 
 static void nlmon_req_free(void *data)
@@ -2124,6 +2130,228 @@ static void genl_ctrl(struct nlmon *nlmon, const void *data, uint32_t len)
 		nlmon->id = id;
 }
 
+static void print_ifi_addr(unsigned int indent, const char *str,
+						const void *buf, uint16_t size)
+{
+	struct ether_addr eth;
+
+	if (size != ETH_ALEN) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	memcpy(&eth, buf, ETH_ALEN);
+	print_attr(indent, "%s: %s", str, ether_ntoa(&eth));
+}
+
+static struct attr_entry info_entry[] = {
+	{ IFLA_ADDRESS,		 "Interface Address", ATTR_CUSTOM,
+					{ .function = print_ifi_addr } },
+	{ IFLA_BROADCAST,	 "Broadcast Address", ATTR_CUSTOM,
+					{ .function = print_ifi_addr } },
+	{ IFLA_IFNAME,		"IfName",	ATTR_STRING },
+	{ IFLA_MASTER,		"Master",	ATTR_U32 },
+	{ IFLA_MTU,		"MTU",		ATTR_U32 },
+	{ IFLA_TXQLEN,		"Txqlen",	ATTR_U32 },
+	{ IFLA_OPERSTATE,	"Openstate",	ATTR_U8 },
+	{ IFLA_LINKMODE,	"LinkMode",	ATTR_U8 },
+	{ IFLA_LINK,		"Link",		ATTR_S32 },
+	{ IFLA_QDISC,		"Qdisc",	ATTR_STRING },
+	{ IFLA_STATS,		"Stats",	ATTR_BINARY },
+	{ IFLA_MAP,		"Map",		ATTR_BINARY },
+	{ IFLA_WIRELESS,	"Wireless",	ATTR_BINARY },
+	{ IFLA_COST,		"Cost",		ATTR_BINARY },
+	{ IFLA_PRIORITY,	"Priority",	ATTR_BINARY },
+	{ IFLA_PROTINFO,	"ProtInfo",	ATTR_BINARY },
+	{ IFLA_WEIGHT,		"Weight",	ATTR_BINARY },
+	{ IFLA_NET_NS_PID,	"NetNSPid",	ATTR_BINARY },
+	{ IFLA_IFALIAS,		"IFAlias",	ATTR_BINARY },
+	{ },
+};
+
+static void print_rtnl_attributes(int indent, const struct attr_entry *table,
+						struct rtattr *rt_attr, int len)
+{
+	struct rtattr *attr;
+	const char *str;
+	int i;
+
+	if (!table || !rt_attr)
+		return;
+
+	for (attr = rt_attr; RTA_OK(attr, len); attr = RTA_NEXT(attr, len)) {
+		uint16_t rta_type = attr->rta_type;
+		enum attr_type type = ATTR_UNSPEC;
+		attr_func_t function;
+		uint64_t val64;
+		uint32_t val32;
+		uint16_t val16;
+		uint8_t val8;
+		int32_t val_s32;
+		int64_t val_s64;
+
+		str = "Reserved";
+
+		for (i = 0; table[i].str; i++) {
+			if (rta_type == table[i].attr) {
+				str = table[i].str;
+				type = table[i].type;
+				function = table[i].function;
+				break;
+			}
+		}
+
+		switch (type) {
+		case ATTR_CUSTOM:
+			if (function)
+				function(indent, str, RTA_DATA(attr),
+							RTA_PAYLOAD(attr));
+			else
+				printf("missing function\n");
+			break;
+		case ATTR_STRING:
+			print_attr(indent, "%s: %s", str,
+						(char *) RTA_DATA(attr));
+			break;
+		case ATTR_U8:
+			val8 = *((uint8_t *) RTA_DATA(attr));
+			print_attr(indent, "%s: %"PRIu8" (0x%02"PRIx8")", str,
+								 val8, val8);
+			if (RTA_PAYLOAD(attr) != 1)
+				printf("malformed packet\n");
+			break;
+		case ATTR_U16:
+			val16 = *((uint16_t *) RTA_DATA(attr));
+			print_attr(indent, "%s: %"PRIu16" (0x%04"PRIx16")", str,
+								 val16, val16);
+			if (RTA_PAYLOAD(attr) != 2)
+				printf("malformed packet\n");
+			break;
+		case ATTR_U32:
+			val32 = *((uint32_t *) RTA_DATA(attr));
+			print_attr(indent, "%s: %"PRIu32" (0x%08"PRIx32")", str,
+								 val32, val32);
+			if (RTA_PAYLOAD(attr) != 4)
+				printf("malformed packet\n");
+			break;
+		case ATTR_U64:
+			val64 = *((uint64_t *) RTA_DATA(attr));
+			print_attr(indent, "%s: %"PRIu64" (0x%016"PRIx64")",
+							str, val64, val64);
+			if (RTA_PAYLOAD(attr) != 8)
+				printf("malformed packet\n");
+			break;
+		case ATTR_S32:
+			val_s32 = *((int32_t *) RTA_DATA(attr));
+			print_attr(indent, "%s: %"PRId32, str, val_s32);
+			if (RTA_PAYLOAD(attr) != 4)
+				printf("malformed packet\n");
+			break;
+		case ATTR_S64:
+			val_s64 = *((int64_t *) RTA_DATA(attr));
+			print_attr(indent, "%s: %"PRId64, str, val_s64);
+			if (RTA_PAYLOAD(attr) != 8)
+				printf("malformed packet\n");
+			break;
+		case ATTR_FLAG:
+			print_attr(indent, "%s: true", str);
+			if (RTA_PAYLOAD(attr) != 0)
+				printf("malformed packet\n");
+			break;
+		case ATTR_FLAG_OR_U16:
+			if (RTA_PAYLOAD(attr) == 0)
+				print_attr(indent, "%s: true", str);
+			else if (RTA_PAYLOAD(attr) == 2) {
+				val16 = *((uint16_t *) RTA_DATA(attr));
+				print_attr(indent,
+						"%s: %"PRIu16" (0x%04"PRIx16")",
+							str, val16, val16);
+			} else
+				printf("malformed packet\n");
+			break;
+		case ATTR_BINARY:
+			print_attr(indent, "%s: len %lu", str,
+							RTA_PAYLOAD(attr));
+			print_hexdump(indent + 1,
+					RTA_DATA(attr), RTA_PAYLOAD(attr));
+			break;
+		case ATTR_ADDRESS:
+		case ATTR_NESTED:
+		case ATTR_ARRAY:
+		case ATTR_UNSPEC:
+			print_attr(indent, "%s: len %lu", str,
+							RTA_PAYLOAD(attr));
+			break;
+		}
+	}
+}
+
+static struct flag_names rtnl_flags[] = {
+	{ IFF_UP, "up" },
+	{ IFF_BROADCAST, "broadcast" },
+	{ IFF_DEBUG, "debug" },
+	{ IFF_LOOPBACK, "loopback" },
+	{ IFF_POINTOPOINT, "pointopoint"},
+	{ IFF_NOTRAILERS, "notrailers" },
+	{ IFF_RUNNING, "running" },
+	{ IFF_NOARP, "noarp" },
+	{ IFF_PROMISC, "promisc" },
+	{ IFF_ALLMULTI, "allmulti" },
+	{ IFF_MASTER, "master" },
+	{ IFF_SLAVE, "slave" },
+	{ IFF_MULTICAST, "multicast" },
+	{ IFF_PORTSEL, "portsel" },
+	{ IFF_AUTOMEDIA, "automedia" },
+	{ IFF_DYNAMIC, "dynamic" },
+	{ },
+};
+
+static void ififlags_str(char *str, size_t size, uint16_t flags)
+{
+	int pos, i;
+
+	if (!str || !flags)
+		return;
+
+	pos = sprintf(str, "(0x%02x)", flags);
+	pos += sprintf(str + pos, " [");
+
+	for (i = 0; rtnl_flags[i].name; i++) {
+		if (flags & rtnl_flags[i].flag) {
+			flags &= ~rtnl_flags[i].flag;
+			pos += sprintf(str + pos, "%s%c", rtnl_flags[i].name,
+							flags ? ',' : ']');
+		}
+	}
+
+	if (flags)
+		pos += sprintf(str + pos, "0x%x]", flags);
+}
+
+static void print_ifinfomsg(const struct ifinfomsg *info)
+{
+	char str[64];
+
+	if (!info)
+		return;
+
+	print_field("IFLA Family: %u", info->ifi_family);
+	print_field("IFLA Type: %u", info->ifi_type);
+	print_field("IFLA Index: %d", info->ifi_index);
+	print_field("IFLA ChangeMask: %u", info->ifi_change);
+	ififlags_str(str, sizeof(str), info->ifi_flags);
+	print_field("IFLA Flags: %s", str);
+}
+
+static void print_rtm_link(uint16_t type, const struct ifinfomsg *info, int len)
+{
+	if (!info || len <= 0)
+		return;
+
+	print_ifinfomsg(info);
+	print_rtnl_attributes(1, info_entry, IFLA_RTA(info), len);
+}
+
 static const char *nlmsg_type_to_str(uint32_t msg_type)
 {
 	const char *str = NULL;
@@ -2232,11 +2460,20 @@ static void print_nlmsg(const struct timeval *tv, const struct nlmsghdr *nlmsg)
 static void print_rtnl_msg(const struct timeval *tv,
 						const struct nlmsghdr *nlmsg)
 {
+	struct ifinfomsg *info;
+	int len;
+
 	switch (nlmsg->nlmsg_type) {
 	case RTM_NEWLINK:
 	case RTM_DELLINK:
 	case RTM_SETLINK:
 	case RTM_GETLINK:
+		info = (struct ifinfomsg *) NLMSG_DATA(nlmsg);
+		len = IFLA_PAYLOAD(nlmsg);
+		print_nlmsghdr(tv, nlmsg);
+		print_rtm_link(nlmsg->nlmsg_type, info, len);
+		break;
+
 	case RTM_NEWADDR:
 	case RTM_DELADDR:
 	case RTM_GETADDR:
