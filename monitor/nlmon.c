@@ -2201,9 +2201,9 @@ static void print_ifi_addr(unsigned int indent, const char *str,
 }
 
 static struct attr_entry info_entry[] = {
-	{ IFLA_ADDRESS,		 "Interface Address", ATTR_CUSTOM,
+	{ IFLA_ADDRESS,		"Interface Address", ATTR_CUSTOM,
 					{ .function = print_ifi_addr } },
-	{ IFLA_BROADCAST,	 "Broadcast Address", ATTR_CUSTOM,
+	{ IFLA_BROADCAST,	"Broadcast Address", ATTR_CUSTOM,
 					{ .function = print_ifi_addr } },
 	{ IFLA_IFNAME,		"IfName",	ATTR_STRING },
 	{ IFLA_MASTER,		"Master",	ATTR_U32 },
@@ -2298,21 +2298,21 @@ static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 		case ATTR_U8:
 			val8 = *((uint8_t *) RTA_DATA(attr));
 			print_attr(indent, "%s: %"PRIu8" (0x%02"PRIx8")", str,
-								 val8, val8);
+								val8, val8);
 			if (RTA_PAYLOAD(attr) != 1)
 				printf("malformed packet\n");
 			break;
 		case ATTR_U16:
 			val16 = *((uint16_t *) RTA_DATA(attr));
 			print_attr(indent, "%s: %"PRIu16" (0x%04"PRIx16")", str,
-								 val16, val16);
+								val16, val16);
 			if (RTA_PAYLOAD(attr) != 2)
 				printf("malformed packet\n");
 			break;
 		case ATTR_U32:
 			val32 = *((uint32_t *) RTA_DATA(attr));
 			print_attr(indent, "%s: %"PRIu32" (0x%08"PRIx32")", str,
-								 val32, val32);
+								val32, val32);
 			if (RTA_PAYLOAD(attr) != 4)
 				printf("malformed packet\n");
 			break;
