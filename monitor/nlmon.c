@@ -2467,7 +2467,7 @@ static void read_uevent(const char *ifname, int index)
 			iface->index = index;
 
 			if (!l_hashmap_insert(wlan_iface_list,
-				L_INT_TO_PTR(index), iface))
+					L_INT_TO_PTR(index), iface))
 				l_free(iface);
 		}
 	}
