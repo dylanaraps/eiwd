@@ -315,15 +315,6 @@ Wireless daemon
   Complexity: C2
   Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
 
-- Implement AES cipher in iwd
-
-  AES is used to encrypt EAPoL frames that are exchanged during WPA2
-  authentication.
-
-  Priority: High
-  Complexity: C1
-  Owner: Denis Kenzior <denkenz@gmail.com>
-
 - Add utility to create netlink REKEY_DATA attributes
 
   The REKEY_DATA needs to be uploaded to the driver so that if re-keying is
