@@ -352,18 +352,6 @@ Wireless daemon
   Priority: Medium
   Complexity: C1
 
-- Implement a Random Number Generator utility
-
-  For generating Nonces and other data that is required to be random, a RNG
-  is required.  Implement a utility function that would return a requested
-  number of random bytes.
-
-  AF_ALG can be used in order to obtain such data.  Alternatively, on newer
-  kernels the sys_getrandom() system call should be used.
-
-  Priority: High
-  Complexity: C1
-
 
 Client
 ======
