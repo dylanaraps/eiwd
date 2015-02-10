@@ -34,7 +34,8 @@ ell_sources = ell/ell.h ell/private.h \
 			ell/siphash-private.h \
 			ell/siphash.c \
 			ell/hwdb.h ell/hwdb.c \
-			ell/cipher.h ell/cipher.c
+			ell/cipher.h ell/cipher.c \
+			ell/random.h ell/random.c
 
 ell_libell_internal_la_SOURCES = $(ell_sources)
 
