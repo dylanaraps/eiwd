@@ -67,7 +67,7 @@ struct netdev {
 	uint8_t addr[ETH_ALEN];
 	struct l_queue *bss_list;
 	struct l_queue *old_bss_list;
-	struct l_dbus_message *pending;
+	struct l_dbus_message *scan_pending;
 	struct l_hashmap *networks;
 };
 
@@ -431,8 +431,8 @@ static void device_scan_callback(struct l_genl_msg *msg, void *user_data)
 	struct l_dbus_message *reply;
 
 	if (!l_genl_attr_init(&attr, msg)) {
-		dbus_pending_reply(&netdev->pending,
-					dbus_error_failed(netdev->pending));
+		dbus_pending_reply(&netdev->scan_pending,
+				dbus_error_failed(netdev->scan_pending));
 		return;
 	}
 
@@ -441,9 +441,9 @@ static void device_scan_callback(struct l_genl_msg *msg, void *user_data)
 
 	l_debug("Scan triggered for netdev %s", netdev->name);
 
-	reply = l_dbus_message_new_method_return(netdev->pending);
+	reply = l_dbus_message_new_method_return(netdev->scan_pending);
 	l_dbus_message_set_arguments(reply, "");
-	dbus_pending_reply(&netdev->pending, reply);
+	dbus_pending_reply(&netdev->scan_pending, reply);
 }
 
 static struct l_dbus_message *device_scan(struct l_dbus *dbus,
@@ -452,10 +452,10 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 {
 	struct netdev *netdev = user_data;
 
-	if (netdev->pending)
+	if (netdev->scan_pending)
 		return dbus_error_busy(message);
 
-	netdev->pending = l_dbus_message_ref(message);
+	netdev->scan_pending = l_dbus_message_ref(message);
 
 	scan_start(nl80211, netdev->index, device_scan_callback, netdev);
 
@@ -546,6 +546,10 @@ static void netdev_free(void *data)
 {
 	struct netdev *netdev = data;
 	struct l_dbus *dbus;
+
+	if (netdev->scan_pending)
+		dbus_pending_reply(&netdev->scan_pending,
+				dbus_error_aborted(netdev->scan_pending));
 
 	dbus = dbus_get_bus();
 	l_dbus_unregister_interface(dbus, iwd_device_get_path(netdev),
