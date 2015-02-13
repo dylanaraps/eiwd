@@ -197,6 +197,10 @@ const struct eapol_key *eapol_verify_ptk_2_of_4(const uint8_t *frame,
 	if (key_len != 0)
 		return NULL;
 
+	VERIFY_IS_ZERO(ek->eapol_key_iv);
+	VERIFY_IS_ZERO(ek->key_rsc);
+	VERIFY_IS_ZERO(ek->reserved);
+
 	return ek;
 }
 
