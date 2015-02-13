@@ -83,7 +83,7 @@ struct eapol_key {
 #endif
 
 	__be16 key_length;
-	uint8_t key_replay_counter[8];
+	__be64 key_replay_counter;
 	uint8_t key_nonce[32];
 	uint8_t eapol_key_iv[16];
 	uint8_t key_rsc[8];
@@ -105,7 +105,7 @@ bool eapol_process_ptk_2_of_4(const uint8_t *frame, size_t len,
 struct eapol_key *eapol_create_ptk_2_of_4(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
-				const uint8_t key_replay_counter[],
+				uint64_t key_replay_counter,
 				const uint8_t snonce[],
 				size_t extra_len,
 				const uint8_t *extra_data);

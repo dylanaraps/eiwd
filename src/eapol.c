@@ -208,7 +208,7 @@ bool eapol_process_ptk_2_of_4(const uint8_t *frame, size_t len,
 struct eapol_key *eapol_create_ptk_2_of_4(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
-				const uint8_t key_replay_counter[],
+				uint64_t key_replay_counter,
 				const uint8_t snonce[],
 				size_t extra_len,
 				const uint8_t *extra_data)
@@ -232,9 +232,8 @@ struct eapol_key *eapol_create_ptk_2_of_4(
 	out_frame->request = false;
 	out_frame->encrypted_key_data = false;
 	out_frame->smk_message = false;
-	out_frame->key_length = 0,
-	memcpy(out_frame->key_replay_counter, key_replay_counter,
-		sizeof(out_frame->key_replay_counter));
+	out_frame->key_length = 0;
+	out_frame->key_replay_counter = L_CPU_TO_BE64(key_replay_counter);
 	memcpy(out_frame->key_nonce, snonce, sizeof(out_frame->key_nonce));
 	out_frame->key_data_len = L_CPU_TO_BE16(extra_len);
 	memcpy(out_frame->key_data, extra_data, extra_len);
