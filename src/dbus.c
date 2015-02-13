@@ -90,6 +90,18 @@ struct l_dbus_message *dbus_error_failed(struct l_dbus_message *msg)
 					"Operation failed");
 }
 
+struct l_dbus_message *dbus_error_aborted(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".Aborted",
+					"Operation aborted");
+}
+
+struct l_dbus_message *dbus_error_not_available(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".NotAvailable",
+					"Operation not available");
+}
+
 void dbus_pending_reply(struct l_dbus_message **msg,
 				struct l_dbus_message *reply)
 {
