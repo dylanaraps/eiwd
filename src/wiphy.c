@@ -69,6 +69,8 @@ struct netdev {
 	struct l_queue *old_bss_list;
 	struct l_dbus_message *scan_pending;
 	struct l_hashmap *networks;
+	struct bss *connected_bss;
+	struct l_dbus_message *connect_pending;
 };
 
 struct wiphy {
@@ -198,7 +200,11 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	struct bss *bss = l_queue_peek_head(network->bss_list);
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
-	struct l_dbus_message *reply;
+
+	l_debug("");
+
+	if (netdev->connect_pending)
+		return dbus_error_busy(message);
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
@@ -210,10 +216,10 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 	l_genl_msg_unref(msg);
 
-	reply = l_dbus_message_new_method_return(message);
-	l_dbus_message_set_arguments(reply, "");
+	netdev->connected_bss = bss;
+	netdev->connect_pending = l_dbus_message_ref(message);
 
-	return reply;
+	return NULL;
 }
 
 static void setup_network_interface(struct l_dbus_interface *interface)
@@ -551,6 +557,10 @@ static void netdev_free(void *data)
 		dbus_pending_reply(&netdev->scan_pending,
 				dbus_error_aborted(netdev->scan_pending));
 
+	if (netdev->connect_pending)
+		dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_aborted(netdev->connect_pending));
+
 	dbus = dbus_get_bus();
 	l_dbus_unregister_interface(dbus, iwd_device_get_path(netdev),
 					IWD_DEVICE_INTERFACE);
@@ -593,20 +603,45 @@ static bool wiphy_match(const void *a, const void *b)
 	return (wiphy->id == id);
 }
 
-static void mlme_associate(struct netdev *netdev, struct network *network)
+static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
 {
-	struct l_genl_msg *msg;
-	struct bss *bss;
+	struct l_dbus_message *reply;
+	int err;
 
-	if (!network) {
-		l_error("Network to connect to is not known.");
+	l_debug("");
+
+	err = l_genl_msg_get_error(msg);
+	if (err < 0) {
+		l_error("association failed %s (%d)", strerror(-err), err);
+		dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_failed(netdev->connect_pending));
+		netdev->connected_bss = NULL;
 		return;
 	}
 
-	bss = l_queue_peek_head(network->bss_list);
-	if (!bss)
-		return;
+	l_info("Association completed");
+	reply = l_dbus_message_new_method_return(netdev->connect_pending);
+	l_dbus_message_set_arguments(reply, "");
+	dbus_pending_reply(&netdev->connect_pending, reply);
+}
 
+static void mlme_associate_cmd(struct netdev *netdev)
+{
+	struct l_genl_msg *msg;
+	struct bss *bss;
+	struct network *network;
+	struct l_dbus_message *error;
+
+	l_debug("");
+
+	bss = netdev->connected_bss;
+	if (!bss) {
+		error = dbus_error_not_available(netdev->connect_pending);
+		dbus_pending_reply(&netdev->connect_pending, error);
+		return;
+	}
+
+	network = bss->network;
 	msg = l_genl_msg_new_sized(NL80211_CMD_ASSOCIATE, 512);
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
@@ -615,6 +650,45 @@ static void mlme_associate(struct netdev *netdev, struct network *network)
 			network->ssid);
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 	l_genl_msg_unref(msg);
+}
+
+static void mlme_authenticate_event(struct l_genl_msg *msg,
+							struct netdev *netdev)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	int err;
+
+	l_debug("");
+
+	err = l_genl_msg_get_error(msg);
+	if (err < 0) {
+		l_error("authentication failed %s (%d)", strerror(-err), err);
+		goto error;
+	}
+
+	if (!l_genl_attr_init(&attr, msg)) {
+		l_debug("attr init failed");
+		goto error;
+	}
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_TIMED_OUT:
+			l_warn("authentication timed out");
+			goto error;
+		}
+	}
+
+	l_info("Authentication completed");
+	mlme_associate_cmd(netdev);
+	return;
+
+error:
+	dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_failed(netdev->connect_pending));
+	netdev->connected_bss = NULL;
 }
 
 static bool parse_ie(struct bss *bss, const uint8_t **ssid, int *ssid_len,
@@ -769,8 +843,13 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 			util_ssid_to_utf8(ssid_len, ssid),
 			bss->frequency, bss->signal_strength);
 
-	if (old_bss)
+	if (old_bss) {
+		if (netdev->connected_bss &&
+				bss_match(old_bss, netdev->connected_bss))
+			netdev->connected_bss = NULL;
+
 		bss_free(old_bss);
+	}
 
 	l_queue_insert(network->bss_list, bss, add_bss, NULL);
 	l_queue_push_head(netdev->bss_list, bss);
@@ -1306,9 +1385,14 @@ static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	if (cmd == NL80211_CMD_AUTHENTICATE) {
-		mlme_associate(netdev, NULL);
-		return;
+
+	switch (cmd) {
+	case NL80211_CMD_AUTHENTICATE:
+		mlme_authenticate_event(msg, netdev);
+		break;
+	case NL80211_CMD_ASSOCIATE:
+		mlme_associate_event(msg, netdev);
+		break;
 	}
 }
 
