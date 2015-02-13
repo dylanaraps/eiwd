@@ -526,7 +526,7 @@ static void eapol_4way_test(const void *data)
 				eapol_key_data_4 + sizeof(struct eapol_key));
 	assert(frame);
 
-	eapol_calculate_mic(ptk->kck, frame, mic);
+	assert(eapol_calculate_mic(ptk->kck, frame, mic));
 
 	memcpy(frame->key_mic_data, mic, sizeof(mic));
 	l_util_hexdump(true, (uint8_t *) frame, sizeof(eapol_key_data_4),
