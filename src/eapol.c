@@ -110,98 +110,94 @@ const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len)
 	return ek;
 }
 
-bool eapol_process_ptk_1_of_4(const uint8_t *frame, size_t len,
-				uint8_t out_anonce[])
+const struct eapol_key *eapol_verify_ptk_1_of_4(const uint8_t *frame,
+							size_t len)
 {
 	const struct eapol_key *ek;
 
 	ek = eapol_key_validate(frame, len);
 	if (!ek)
-		return false;
+		return NULL;
 
 	/* Verify according to 802.11, Section 11.6.6.2 */
 	if (!ek->key_type)
-		return false;
+		return NULL;
 
 	if (ek->smk_message)
-		return false;
+		return NULL;
 
 	if (ek->install)
-		return false;
+		return NULL;
 
 	if (!ek->key_ack)
-		return false;
+		return NULL;
 
 	if (ek->key_mic)
-		return false;
+		return NULL;
 
 	if (ek->secure)
-		return false;
+		return NULL;
 
 	if (ek->error)
-		return false;
+		return NULL;
 
 	if (ek->request)
-		return false;
+		return NULL;
 
 	if (ek->encrypted_key_data)
-		return false;
+		return NULL;
 
 	VERIFY_IS_ZERO(ek->eapol_key_iv);
 	VERIFY_IS_ZERO(ek->key_rsc);
 	VERIFY_IS_ZERO(ek->reserved);
 	VERIFY_IS_ZERO(ek->key_mic_data);
 
-	memcpy(out_anonce, ek->key_nonce, sizeof(ek->key_nonce));
-
-	return true;
+	return ek;
 }
 
-bool eapol_process_ptk_2_of_4(const uint8_t *frame, size_t len,
-				uint8_t out_snonce[])
+const struct eapol_key *eapol_verify_ptk_2_of_4(const uint8_t *frame,
+						size_t len)
 {
 	const struct eapol_key *ek;
 	uint16_t key_len;
 
 	ek = eapol_key_validate(frame, len);
 	if (!ek)
-		return false;
+		return NULL;
 
 	/* Verify according to 802.11, Section 11.6.6.2 */
 	if (!ek->key_type)
-		return false;
+		return NULL;
 
 	if (ek->smk_message)
-		return false;
+		return NULL;
 
 	if (ek->install)
-		return false;
+		return NULL;
 
 	if (ek->key_ack)
-		return false;
+		return NULL;
 
 	if (!ek->key_mic)
-		return false;
+		return NULL;
 
 	if (ek->secure)
-		return false;
+		return NULL;
 
 	if (ek->error)
-		return false;
+		return NULL;
 
 	if (ek->request)
-		return false;
+		return NULL;
 
 	if (ek->encrypted_key_data)
-		return false;
+		return NULL;
 
 	key_len = L_BE16_TO_CPU(ek->key_length);
 	if (key_len != 0)
-		return false;
+		return NULL;
 
-	memcpy(out_snonce, ek->key_nonce, sizeof(ek->key_nonce));
-
-	return true;
+	return ek;
 }
 
 static struct eapol_key *eapol_create_common(

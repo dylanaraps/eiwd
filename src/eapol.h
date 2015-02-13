@@ -98,10 +98,11 @@ bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 
 const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len);
 
-bool eapol_process_ptk_1_of_4(const uint8_t *frame, size_t len,
-				uint8_t out_anonce[]);
-bool eapol_process_ptk_2_of_4(const uint8_t *frame, size_t len,
-				uint8_t out_snonce[]);
+const struct eapol_key *eapol_verify_ptk_1_of_4(const uint8_t *frame,
+						size_t len);
+const struct eapol_key *eapol_verify_ptk_2_of_4(const uint8_t *frame,
+						size_t len);
+
 struct eapol_key *eapol_create_ptk_2_of_4(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
