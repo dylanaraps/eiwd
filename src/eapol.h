@@ -109,3 +109,9 @@ struct eapol_key *eapol_create_ptk_2_of_4(
 				const uint8_t snonce[],
 				size_t extra_len,
 				const uint8_t *extra_data);
+
+struct eapol_key *eapol_create_ptk_4_of_4(
+				enum eapol_protocol_version protocol,
+				enum eapol_key_descriptor_version version,
+				uint64_t key_replay_counter,
+				const uint8_t snonce[]);

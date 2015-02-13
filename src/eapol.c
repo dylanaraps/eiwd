@@ -205,9 +205,10 @@ bool eapol_process_ptk_2_of_4(const uint8_t *frame, size_t len,
 	return true;
 }
 
-struct eapol_key *eapol_create_ptk_2_of_4(
+static struct eapol_key *eapol_create_common(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
+				bool secure,
 				uint64_t key_replay_counter,
 				const uint8_t snonce[],
 				size_t extra_len,
@@ -227,7 +228,7 @@ struct eapol_key *eapol_create_ptk_2_of_4(
 	out_frame->install = false;
 	out_frame->key_ack = false;
 	out_frame->key_mic = true;
-	out_frame->secure = false;
+	out_frame->secure = secure;
 	out_frame->error = false;
 	out_frame->request = false;
 	out_frame->encrypted_key_data = false;
@@ -239,4 +240,26 @@ struct eapol_key *eapol_create_ptk_2_of_4(
 	memcpy(out_frame->key_data, extra_data, extra_len);
 
 	return out_frame;
+}
+
+struct eapol_key *eapol_create_ptk_2_of_4(
+				enum eapol_protocol_version protocol,
+				enum eapol_key_descriptor_version version,
+				uint64_t key_replay_counter,
+				const uint8_t snonce[],
+				size_t extra_len,
+				const uint8_t *extra_data)
+{
+	return eapol_create_common(protocol, version, false, key_replay_counter,
+					snonce, extra_len, extra_data);
+}
+
+struct eapol_key *eapol_create_ptk_4_of_4(
+				enum eapol_protocol_version protocol,
+				enum eapol_key_descriptor_version version,
+				uint64_t key_replay_counter,
+				const uint8_t snonce[])
+{
+	return eapol_create_common(protocol, version, true, key_replay_counter,
+					snonce, 0, NULL);
 }
