@@ -73,6 +73,7 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					src/util.h src/util.c \
 					src/sha1.h src/sha1.c \
 					src/md5.h src/md5.c \
+					src/aes.h src/aes.c \
 					src/eapol.h src/eapol.c
 monitor_iwmon_LDADD = ell/libell-internal.la
 
