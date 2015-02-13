@@ -46,8 +46,6 @@ static void __hmac_sha256(struct l_checksum *checksum,
 		l_checksum_update(checksum, key, key_len);
 		l_checksum_get_digest(checksum, digest, SHA256_MAC_LEN);
 
-		l_checksum_reset(checksum);
-
 		key = digest;
 		key_len = SHA256_MAC_LEN;
 	}
@@ -69,15 +67,11 @@ static void __hmac_sha256(struct l_checksum *checksum,
 	l_checksum_update(checksum, data, data_len);
 	l_checksum_get_digest(checksum, digest, SHA256_MAC_LEN);
 
-	l_checksum_reset(checksum);
-
 	/* perform outer SHA256 */
 	l_checksum_update(checksum, opad, sizeof(opad));
 	l_checksum_update(checksum, digest, SHA256_MAC_LEN);
 	l_checksum_get_digest(checksum, output,
 				size > SHA256_MAC_LEN ? SHA256_MAC_LEN : size);
-
-	l_checksum_reset(checksum);
 }
 
 bool hmac_sha256(const void *key, size_t key_len,
