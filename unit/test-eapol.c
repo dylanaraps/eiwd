@@ -497,13 +497,18 @@ static void eapol_4way_test(const void *data)
 	struct crypto_ptk *ptk;
 	size_t ptk_len;
 	bool ret;
+	const struct eapol_key *step1;
+	const struct eapol_key *step2;
 
-	assert(eapol_process_ptk_1_of_4(eapol_key_data_3,
-					sizeof(eapol_key_data_3),
-					anonce));
-	assert(eapol_process_ptk_2_of_4(eapol_key_data_4,
-					sizeof(eapol_key_data_4),
-					snonce));
+	step1 = eapol_verify_ptk_1_of_4(eapol_key_data_3,
+					sizeof(eapol_key_data_3));
+	assert(step1);
+	memcpy(anonce, step1->key_nonce, sizeof(step1->key_nonce));
+
+	step2 = eapol_verify_ptk_2_of_4(eapol_key_data_4,
+					sizeof(eapol_key_data_4));
+	assert(step2);
+	memcpy(snonce, step2->key_nonce, sizeof(step2->key_nonce));
 
 	assert(!crypto_psk_from_passphrase(passphrase, (uint8_t *) ssid,
 						strlen(ssid), psk));
