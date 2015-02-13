@@ -57,11 +57,9 @@ bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 
 	switch (frame->key_descriptor_version) {
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4:
-		return hmac_md5(kck, 16, (uint8_t *) frame, frame_len,
-					mic, 16);
+		return hmac_md5(kck, 16, frame, frame_len, mic, 16);
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
-		return hmac_sha1(kck, 16, (uint8_t *) frame, frame_len,
-					mic, 16);
+		return hmac_sha1(kck, 16, frame, frame_len, mic, 16);
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
 		return false;
 	default:
