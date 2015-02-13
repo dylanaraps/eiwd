@@ -499,6 +499,7 @@ static void eapol_4way_test(const void *data)
 	bool ret;
 	const struct eapol_key *step1;
 	const struct eapol_key *step2;
+	const struct eapol_key *step3;
 
 	step1 = eapol_verify_ptk_1_of_4(eapol_key_data_3,
 					sizeof(eapol_key_data_3));
@@ -538,9 +539,14 @@ static void eapol_4way_test(const void *data)
 			do_debug, "[EAPoL] ");
 
 	assert(!memcmp(frame, eapol_key_data_4, sizeof(eapol_key_data_4)));
+	l_free(frame);
+
+	step3 = eapol_verify_ptk_3_of_4(eapol_key_data_5,
+					sizeof(eapol_key_data_5));
+	assert(step3);
+	assert(!memcmp(anonce, step3->key_nonce, sizeof(step3->key_nonce)));
 
 	l_free(ptk);
-	l_free(frame);
 }
 
 int main(int argc, char *argv[])
