@@ -204,6 +204,55 @@ const struct eapol_key *eapol_verify_ptk_2_of_4(const uint8_t *frame,
 	return ek;
 }
 
+const struct eapol_key *eapol_verify_ptk_3_of_4(const uint8_t *frame,
+						size_t len)
+{
+	const struct eapol_key *ek;
+	uint16_t key_len;
+
+	ek = eapol_key_validate(frame, len);
+	if (!ek)
+		return NULL;
+
+	/* Verify according to 802.11, Section 11.6.6.4 */
+	if (!ek->key_type)
+		return NULL;
+
+	if (ek->smk_message)
+		return NULL;
+
+	if (!ek->key_ack)
+		return NULL;
+
+	if (!ek->key_mic)
+		return NULL;
+
+	if (!ek->secure)
+		return NULL;
+
+	if (ek->error)
+		return NULL;
+
+	if (ek->request)
+		return NULL;
+
+	if (!ek->encrypted_key_data)
+		return NULL;
+
+	key_len = L_BE16_TO_CPU(ek->key_length);
+	if (key_len != 16)
+		return NULL;
+
+	VERIFY_IS_ZERO(ek->reserved);
+
+	/* 0 (Version 2) or random (Version 1) */
+	if (ek->key_descriptor_version ==
+			EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4)
+		VERIFY_IS_ZERO(ek->eapol_key_iv);
+
+	return ek;
+}
+
 static struct eapol_key *eapol_create_common(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
