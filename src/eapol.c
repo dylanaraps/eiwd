@@ -29,6 +29,7 @@
 
 #include "sha1.h"
 #include "md5.h"
+#include "aes.h"
 #include "eapol.h"
 
 #define VERIFY_IS_ZERO(field)					\
@@ -61,7 +62,7 @@ bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
 		return hmac_sha1(kck, 16, frame, frame_len, mic, 16);
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
-		return false;
+		return cmac_aes(kck, 16, frame, frame_len, mic, 16);
 	default:
 		return false;
 	}
