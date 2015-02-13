@@ -165,7 +165,7 @@ const struct eapol_key *eapol_verify_ptk_2_of_4(const uint8_t *frame,
 	if (!ek)
 		return NULL;
 
-	/* Verify according to 802.11, Section 11.6.6.2 */
+	/* Verify according to 802.11, Section 11.6.6.3 */
 	if (!ek->key_type)
 		return NULL;
 
