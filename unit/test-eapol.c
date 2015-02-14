@@ -523,22 +523,14 @@ static void eapol_4way_test(const void *data)
 						ptk, ptk_len);
 	assert(ret);
 
-	l_util_hexdump(true, eapol_key_data_4, sizeof(eapol_key_data_4),
-			do_debug, "[EAPoL] ");
-
 	frame = eapol_create_ptk_2_of_4(EAPOL_PROTOCOL_VERSION_2001,
 				EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES,
 				eapol_key_test_4.key_replay_counter,
 				snonce, eapol_key_test_4.key_data_len,
 				eapol_key_data_4 + sizeof(struct eapol_key));
 	assert(frame);
-
 	assert(eapol_calculate_mic(ptk->kck, frame, mic));
-
 	memcpy(frame->key_mic_data, mic, sizeof(mic));
-	l_util_hexdump(true, (uint8_t *) frame, sizeof(eapol_key_data_4),
-			do_debug, "[EAPoL] ");
-
 	assert(!memcmp(frame, eapol_key_data_4, sizeof(eapol_key_data_4)));
 	l_free(frame);
 
