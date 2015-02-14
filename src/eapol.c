@@ -68,6 +68,39 @@ bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 	}
 }
 
+uint8_t *eapol_decrypt_key_data(const uint8_t *kek,
+				const struct eapol_key *frame)
+{
+	size_t key_data_len = L_BE16_TO_CPU(frame->key_data_len);
+	struct l_cipher *cipher;
+	uint8_t *buf;
+	bool ret;
+
+	switch (frame->key_descriptor_version) {
+	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4:
+		/* TODO: This might require an IV from frame->eapol_key_iv */
+		cipher = l_cipher_new(L_CIPHER_ARC4, kek, 16);
+		break;
+	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
+	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
+		cipher = l_cipher_new(L_CIPHER_AES, kek, 16);
+		break;
+	default:
+		return NULL;
+	};
+
+	buf = l_new(uint8_t, key_data_len);
+	ret = l_cipher_decrypt(cipher, frame->key_data, buf, key_data_len);
+	l_cipher_free(cipher);
+
+	if (!ret) {
+		l_free(buf);
+		return NULL;
+	}
+
+	return buf;
+}
+
 const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len)
 {
 	const struct eapol_key *ek;
