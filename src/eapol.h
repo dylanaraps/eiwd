@@ -104,6 +104,8 @@ const struct eapol_key *eapol_verify_ptk_2_of_4(const uint8_t *frame,
 						size_t len);
 const struct eapol_key *eapol_verify_ptk_3_of_4(const uint8_t *frame,
 						size_t len);
+const struct eapol_key *eapol_verify_ptk_4_of_4(const uint8_t *frame,
+						size_t len);
 
 struct eapol_key *eapol_create_ptk_2_of_4(
 				enum eapol_protocol_version protocol,
