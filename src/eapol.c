@@ -30,6 +30,7 @@
 #include "sha1.h"
 #include "md5.h"
 #include "aes.h"
+#include "arc4.h"
 #include "eapol.h"
 
 #define VERIFY_IS_ZERO(field)					\
@@ -72,33 +73,57 @@ uint8_t *eapol_decrypt_key_data(const uint8_t *kek,
 				const struct eapol_key *frame)
 {
 	size_t key_data_len = L_BE16_TO_CPU(frame->key_data_len);
-	struct l_cipher *cipher;
+	const uint8_t *key_data = frame->key_data;
+	size_t expected_len;
 	uint8_t *buf;
-	bool ret;
 
 	switch (frame->key_descriptor_version) {
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4:
-		/* TODO: This might require an IV from frame->eapol_key_iv */
-		cipher = l_cipher_new(L_CIPHER_ARC4, kek, 16);
+		expected_len = key_data_len;
 		break;
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
-		cipher = l_cipher_new(L_CIPHER_AES, kek, 16);
+		expected_len = key_data_len - 8;
 		break;
 	default:
 		return NULL;
 	};
 
-	buf = l_new(uint8_t, key_data_len);
-	ret = l_cipher_decrypt(cipher, frame->key_data, buf, key_data_len);
-	l_cipher_free(cipher);
+	buf = l_new(uint8_t, expected_len);
 
-	if (!ret) {
-		l_free(buf);
-		return NULL;
+	switch (frame->key_descriptor_version) {
+	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4:
+	{
+		uint8_t key[32];
+		bool ret;
+
+		memcpy(key, frame->eapol_key_iv, 16);
+		memcpy(key + 16, kek, 16);
+
+		ret = arc4_skip(key, 32, 256, key_data, key_data_len, buf);
+		memset(key, 0, sizeof(key));
+
+		if (!ret)
+			goto error;
+
+		break;
+	}
+	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
+	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
+		if (key_data_len < 8 || key_data_len % 8)
+			goto error;
+
+		if (!aes_unwrap(kek, key_data, key_data_len, buf))
+			goto error;
+
+		break;
 	}
 
 	return buf;
+
+error:
+	l_free(buf);
+	return NULL;
 }
 
 const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len)
