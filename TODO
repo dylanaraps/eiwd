@@ -173,14 +173,6 @@ Wireless monitor
   Priority: Medium
   Complexity: C1
 
-- Colorize the command, response and event packets
-
-  Use terminal colors to separate command, response and event packets
-  with different colors.
-
-  Priority: Medium
-  Complexity: C1
-
 - Add support for writing PCAP files
 
   The new -w <file> option should allow for writing PCAP files with the
