@@ -34,13 +34,6 @@
 #include "src/eapol.h"
 #include "src/crypto.h"
 
-static void do_debug(const char *str, void *user_data)
-{
-	const char *prefix = user_data;
-
-	l_info("%s%s", prefix, str);
-}
-
 struct eapol_key_data {
 	const unsigned char *frame;
 	size_t frame_len;
