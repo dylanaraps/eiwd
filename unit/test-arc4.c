@@ -1,0 +1,114 @@
+/*
+ *
+ *  Wireless daemon for Linux
+ *
+ *  Copyright (C) 2013-2014  Intel Corporation. All rights reserved.
+ *
+ *  This library is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU Lesser General Public
+ *  License as published by the Free Software Foundation; either
+ *  version 2.1 of the License, or (at your option) any later version.
+ *
+ *  This library is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *  Lesser General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this library; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ *
+ */
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
+#include <assert.h>
+#include <ell/ell.h>
+
+#include "src/arc4.h"
+
+struct arc4_skip_data {
+	const uint8_t key[16];
+	size_t offset;
+	uint8_t result[16];
+};
+
+#if 0
+DEC  496 HEX  1f0:  b6 d1 e6 c4  a5 e4 77 1c   ad 79 53 8d  f2 95 fb 11
+DEC  512 HEX  200:  c6 8c 1d 5c  55 9a 97 41   23 df 1d bc  52 a4 3b 89
+#endif
+
+static const struct arc4_skip_data test_0 = {
+	.key = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+			0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, },
+	.offset = 0,
+	.result = { 0x9a, 0xc7, 0xcc, 0x9a, 0x60, 0x9d, 0x1e, 0xf7,
+			0xb2, 0x93, 0x28, 0x99, 0xcd, 0xe4, 0x1b, 0x97 },
+};
+
+static const struct arc4_skip_data test_16 = {
+	.key = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+			0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, },
+	.offset = 16,
+	.result = { 0x52, 0x48, 0xc4, 0x95, 0x90, 0x14, 0x12, 0x6a,
+			0x6e, 0x8a, 0x84, 0xf1, 0x1d, 0x1a, 0x9e, 0x1c },
+};
+
+static const struct arc4_skip_data test_240 = {
+	.key = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+			0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, },
+	.offset = 240,
+	.result = { 0x06, 0x59, 0x02, 0xe4, 0xb6, 0x20, 0xf6, 0xcc,
+			0x36, 0xc8, 0x58, 0x9f, 0x66, 0x43, 0x2f, 0x2b },
+};
+
+static const struct arc4_skip_data test_256 = {
+	.key = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+			0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, },
+	.offset = 256,
+	.result = { 0xd3, 0x9d, 0x56, 0x6b, 0xc6, 0xbc, 0xe3, 0x01,
+			0x07, 0x68, 0x15, 0x15, 0x49, 0xf3, 0x87, 0x3f },
+};
+
+static const struct arc4_skip_data test_2032 = {
+	.key = { 0xeb, 0xb4, 0x62, 0x27, 0xc6, 0xcc, 0x8b, 0x37,
+			0x64, 0x19, 0x10, 0x83, 0x32, 0x22, 0x77, 0x2a, },
+	.offset = 2032,
+	.result = { 0x00, 0xa5, 0x42, 0xbb, 0xa0, 0x21, 0x11, 0xcc,
+			0x2c, 0x65, 0xb3, 0x8e, 0xbd, 0xba, 0x58, 0x7e },
+};
+
+static const struct arc4_skip_data test_2048 = {
+	.key = { 0xeb, 0xb4, 0x62, 0x27, 0xc6, 0xcc, 0x8b, 0x37,
+			0x64, 0x19, 0x10, 0x83, 0x32, 0x22, 0x77, 0x2a, },
+	.offset = 2048,
+	.result = { 0x58, 0x65, 0xfd, 0xbb, 0x5b, 0x48, 0x06, 0x41,
+			0x04, 0xe8, 0x30, 0xb3, 0x80, 0xf2, 0xae, 0xde },
+};
+
+static void arc4_skip_test(const void *data)
+{
+	const struct arc4_skip_data *test = data;
+	uint8_t buf[16];
+
+	memset(buf, 0, sizeof(buf));
+
+	assert(arc4_skip(test->key, 16, test->offset, buf, sizeof(buf), buf));
+	assert(!memcmp(buf, test->result, sizeof(buf)));
+}
+
+int main(int argc, char *argv[])
+{
+	l_test_init(&argc, &argv);
+
+	l_test_add("/arc4_skip/Test offset 0", arc4_skip_test, &test_0);
+	l_test_add("/arc4_skip/Test offset 16", arc4_skip_test, &test_16);
+	l_test_add("/arc4_skip/Test offset 240", arc4_skip_test, &test_240);
+	l_test_add("/arc4_skip/Test offset 256", arc4_skip_test, &test_256);
+	l_test_add("/arc4_skip/Test offset 2032", arc4_skip_test, &test_2032);
+	l_test_add("/arc4_skip/Test offset 2048", arc4_skip_test, &test_2048);
+
+	return l_test_run();
+}
