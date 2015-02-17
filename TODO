@@ -173,14 +173,6 @@ Wireless monitor
   Priority: Medium
   Complexity: C1
 
-- Add support for receiving kernel side timestamps
-
-  When packets are received from nlmon, they should be marked with an
-  appropiate timestamp.  Enable SO_TIMESTAMP socket option.
-
-  Priority: Medium
-  Complexity: C1
-
 - Colorize the command, response and event packets
 
   Use terminal colors to separate command, response and event packets
