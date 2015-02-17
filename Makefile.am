@@ -138,6 +138,7 @@ unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/sha1.h src/sha1.c \
 				src/md5.h src/md5.c \
 				src/aes.h src/aes.c \
+				src/arc4.h src/arc4.c \
 				src/crypto.h src/crypto.c \
 				src/eapol.h src/eapol.c
 unit_test_eapol_LDADD = ell/libell-internal.la
