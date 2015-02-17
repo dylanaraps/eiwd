@@ -30,6 +30,8 @@
 #include <string.h>
 #include <sys/socket.h>
 
+#include <ell/ell.h>
+
 #ifndef PF_ALG
 #include <linux/types.h>
 
@@ -127,4 +129,57 @@ done:
 	close(alg_fd);
 
 	return result;
+}
+
+/*
+ * Implements AES Key-Unwrap from RFC 3394
+ *
+ * The key is specified using @kek.  @in contains the encrypted data and @len
+ * contains its length.  @out will contain the decrypted data.  The result
+ * will be (len - 8) bytes.
+ *
+ * Returns: true on success, false if an IV mismatch has occurred.
+ *
+ * NOTE: Buffers @in and @out can overlap
+ */
+bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
+			uint8_t *out)
+{
+	uint8_t a[8], b[16];
+	uint8_t *r;
+	size_t n = (len - 8) >> 3;
+	int i, j;
+	struct l_cipher *cipher;
+
+	cipher = l_cipher_new(L_CIPHER_AES, kek, 16);
+	if (!cipher)
+		return false;
+
+	/* Set up */
+	memcpy(a, in, 8);
+	memmove(out, in + 8, n * 8);
+
+	/* Unwrap */
+	for (j = 5; j >= 0; j--) {
+		r = out + (n - 1) * 8;
+
+		for (i = n; i >= 1; i--) {
+			memcpy(b, a, 8);
+			memcpy(b + 8, r, 8);
+			b[7] ^= n * j + i;
+			l_cipher_decrypt(cipher, b, b, 16);
+			memcpy(a, b, 8);
+			memcpy(r, b + 8, 8);
+			r -= 8;
+		}
+	}
+
+	l_cipher_free(cipher);
+
+	/* Check IV */
+	for (i = 0; i < 8; i++)
+		if (a[i] != 0xA6)
+			return false;
+
+	return true;
 }

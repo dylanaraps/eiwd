@@ -21,6 +21,10 @@
  */
 
 #include <stdbool.h>
+#include <stdint.h>
 
 bool cmac_aes(const void *key, size_t key_len,
 		const void *msg, size_t msg_len, void *tag, size_t size);
+
+bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
+			uint8_t *out);
