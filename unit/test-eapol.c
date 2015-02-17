@@ -33,6 +33,7 @@
 #include "src/sha1.h"
 #include "src/eapol.h"
 #include "src/crypto.h"
+#include "src/aes.h"
 
 struct eapol_key_data {
 	const unsigned char *frame;
@@ -494,6 +495,7 @@ static void eapol_4way_test(const void *data)
 	const struct eapol_key *step2;
 	const struct eapol_key *step3;
 	const struct eapol_key *step4;
+	uint8_t *decrypted_key_data;
 
 	step1 = eapol_verify_ptk_1_of_4(eapol_key_data_3,
 					sizeof(eapol_key_data_3));
@@ -531,6 +533,10 @@ static void eapol_4way_test(const void *data)
 					sizeof(eapol_key_data_5));
 	assert(step3);
 	assert(!memcmp(anonce, step3->key_nonce, sizeof(step3->key_nonce)));
+
+	decrypted_key_data = eapol_decrypt_key_data(ptk->kek, step3);
+	assert(decrypted_key_data[0] == 48);  // RSNE
+	l_free(decrypted_key_data);
 
 	step4 = eapol_verify_ptk_4_of_4(eapol_key_data_6,
 					sizeof(eapol_key_data_6));
