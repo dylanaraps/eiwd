@@ -532,6 +532,8 @@ static void eapol_4way_test(const void *data)
 	assert(step3);
 	assert(!memcmp(anonce, step3->key_nonce, sizeof(step3->key_nonce)));
 
+	assert(!eapol_verify_mic(ptk->kek, step3));
+
 	decrypted_key_data = eapol_decrypt_key_data(ptk->kek, step3);
 	assert(decrypted_key_data[0] == 48);  // RSNE
 	l_free(decrypted_key_data);
