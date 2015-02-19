@@ -28,9 +28,9 @@
 #include <ell/ell.h>
 
 #include "sha1.h"
-#include "md5.h"
 #include "aes.h"
 #include "arc4.h"
+#include "crypto.h"
 #include "eapol.h"
 
 #define VERIFY_IS_ZERO(field)					\

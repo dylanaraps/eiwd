@@ -34,12 +34,13 @@
 #include "sha1.h"
 #include "crypto.h"
 
-bool hmac_sha256(const void *key, size_t key_len,
+static bool hmac_common(enum l_checksum_type type,
+		const void *key, size_t key_len,
                 const void *data, size_t data_len, void *output, size_t size)
 {
 	struct l_checksum *hmac;
 
-	hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, key, key_len);
+	hmac = l_checksum_new_hmac(type, key, key_len);
 	if (!hmac)
 		return false;
 
@@ -48,6 +49,20 @@ bool hmac_sha256(const void *key, size_t key_len,
 	l_checksum_free(hmac);
 
 	return true;
+}
+
+bool hmac_md5(const void *key, size_t key_len,
+		const void *data, size_t data_len, void *output, size_t size)
+{
+	return hmac_common(L_CHECKSUM_MD5, key, key_len, data, data_len,
+				output, size);
+}
+
+bool hmac_sha256(const void *key, size_t key_len,
+		const void *data, size_t data_len, void *output, size_t size)
+{
+	return hmac_common(L_CHECKSUM_SHA256, key, key_len, data, data_len,
+				output, size);
 }
 
 /* 802.11, Section 11.6.2, Table 11-4 */

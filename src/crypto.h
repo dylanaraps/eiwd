@@ -37,6 +37,8 @@ struct crypto_ptk {
 	uint8_t tk[0];
 } __attribute__ ((packed));
 
+bool hmac_md5(const void *key, size_t key_len,
+		const void *data, size_t data_len, void *output, size_t size);
 bool hmac_sha256(const void *key, size_t key_len,
 		const void *data, size_t data_len, void *output, size_t size);
 
