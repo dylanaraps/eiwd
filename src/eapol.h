@@ -95,6 +95,7 @@ struct eapol_key {
 
 bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 				uint8_t *mic);
+bool eapol_verify_mic(const uint8_t *kck, const struct eapol_key *frame);
 
 uint8_t *eapol_decrypt_key_data(const uint8_t *kek,
 				const struct eapol_key *frame);

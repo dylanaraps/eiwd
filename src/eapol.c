@@ -67,6 +67,52 @@ bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 	}
 }
 
+bool eapol_verify_mic(const uint8_t *kck, const struct eapol_key *frame)
+{
+	size_t frame_len = sizeof(struct eapol_key);
+	uint8_t mic[16];
+	struct iovec iov[3];
+	struct l_checksum *checksum = NULL;
+
+	iov[0].iov_base = (void *) frame;
+	iov[0].iov_len = offsetof(struct eapol_key, key_mic_data);
+
+	memset(mic, 0, sizeof(mic));
+	iov[1].iov_base = mic;
+	iov[1].iov_len = sizeof(mic);
+
+	iov[2].iov_base = ((void *) frame) +
+				offsetof(struct eapol_key, key_data_len);
+	iov[2].iov_len = frame_len - offsetof(struct eapol_key, key_data) +
+				L_BE16_TO_CPU(frame->key_data_len);
+
+	switch (frame->key_descriptor_version) {
+	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4:
+		checksum = l_checksum_new_hmac(L_CHECKSUM_MD5, kck, 16);
+		break;
+	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
+		checksum = l_checksum_new_hmac(L_CHECKSUM_SHA1, kck, 16);
+		break;
+	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
+		checksum = l_checksum_new_cmac_aes(kck, 16);
+		break;
+	default:
+		return false;
+	}
+
+	if (checksum == NULL)
+		return false;
+
+	l_checksum_updatev(checksum, iov, 3);
+	l_checksum_get_digest(checksum, mic, 16);
+	l_free(checksum);
+
+	if (!memcmp(frame->key_mic_data, mic, 16))
+		return true;
+
+	return false;
+}
+
 uint8_t *eapol_decrypt_key_data(const uint8_t *kek,
 				const struct eapol_key *frame)
 {
