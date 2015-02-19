@@ -34,6 +34,22 @@
 #include "sha1.h"
 #include "crypto.h"
 
+bool hmac_sha256(const void *key, size_t key_len,
+                const void *data, size_t data_len, void *output, size_t size)
+{
+	struct l_checksum *hmac;
+
+	hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, key, key_len);
+	if (!hmac)
+		return false;
+
+	l_checksum_update(hmac, data, data_len);
+	l_checksum_get_digest(hmac, output, size);
+	l_checksum_free(hmac);
+
+	return true;
+}
+
 /* 802.11, Section 11.6.2, Table 11-4 */
 int crypto_cipher_key_len(enum crypto_cipher cipher)
 {
