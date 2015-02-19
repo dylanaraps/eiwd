@@ -29,7 +29,6 @@
 #include <assert.h>
 #include <ell/ell.h>
 
-#include "src/md5.h"
 #include "src/sha1.h"
 #include "src/eapol.h"
 #include "src/crypto.h"
