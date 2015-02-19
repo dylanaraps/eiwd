@@ -27,7 +27,7 @@
 #include <assert.h>
 #include <ell/ell.h>
 
-#include "src/arc4.h"
+#include "src/crypto.h"
 
 struct arc4_skip_data {
 	const uint8_t key[16];
