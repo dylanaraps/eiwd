@@ -134,6 +134,29 @@ bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
 	return true;
 }
 
+bool arc4_skip(const uint8_t *key, size_t key_len, size_t skip,
+		const uint8_t *in, size_t len, uint8_t *out)
+{
+	char skip_buf[1024];
+	struct l_cipher *cipher;
+
+	cipher = l_cipher_new(L_CIPHER_ARC4, key, key_len);
+	if (!cipher)
+		return false;
+
+	while (skip > 0) {
+		size_t to_skip =
+			skip > sizeof(skip_buf) ? sizeof(skip_buf) : skip;
+
+		l_cipher_decrypt(cipher, skip_buf, skip_buf, to_skip);
+		skip -= to_skip;
+	}
+
+	l_cipher_decrypt(cipher, in, out, len);
+	l_cipher_free(cipher);
+
+	return true;
+}
 /* 802.11, Section 11.6.2, Table 11-4 */
 int crypto_cipher_key_len(enum crypto_cipher cipher)
 {

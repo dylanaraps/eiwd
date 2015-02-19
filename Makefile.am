@@ -45,7 +45,6 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h linux/kdbus.h \
 					src/kdbus.h src/kdbus.c \
 					src/netdev.h src/netdev.c \
 					src/wiphy.h src/wiphy.c \
-					src/arc4.h src/arc4.c \
 					src/sha1.h src/sha1.c \
 					src/ie.h src/ie.c \
 					src/dbus.h src/dbus.c \
@@ -70,7 +69,6 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					src/mpdu.h src/mpdu.c \
 					src/util.h src/util.c \
 					src/sha1.h src/sha1.c \
-					src/arc4.h src/arc4.c \
 					src/crypto.h src/crypto.c \
 					src/eapol.h src/eapol.c
 monitor_iwmon_LDADD = ell/libell-internal.la
@@ -96,7 +94,9 @@ unit_test_cmac_aes_SOURCES = unit/test-cmac-aes.c \
 unit_test_cmac_aes_LDADD = ell/libell-internal.la
 
 unit_test_arc4_SOURCES = unit/test-arc4.c \
-					src/arc4.h src/arc4.c
+					src/sha1.h src/sha1.c \
+					src/crypto.h src/crypto.c
+
 unit_test_arc4_LDADD = ell/libell-internal.la
 
 unit_test_hmac_md5_SOURCES = unit/test-hmac-md5.c \
@@ -135,7 +135,6 @@ unit_test_mpdu_LDADD = ell/libell-internal.la
 
 unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/sha1.h src/sha1.c \
-				src/arc4.h src/arc4.c \
 				src/crypto.h src/crypto.c \
 				src/eapol.h src/eapol.c
 unit_test_eapol_LDADD = ell/libell-internal.la

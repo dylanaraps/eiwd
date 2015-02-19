@@ -28,7 +28,6 @@
 #include <ell/ell.h>
 
 #include "sha1.h"
-#include "arc4.h"
 #include "crypto.h"
 #include "eapol.h"
 
