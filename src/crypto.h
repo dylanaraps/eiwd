@@ -41,6 +41,11 @@ bool hmac_md5(const void *key, size_t key_len,
 		const void *data, size_t data_len, void *output, size_t size);
 bool hmac_sha256(const void *key, size_t key_len,
 		const void *data, size_t data_len, void *output, size_t size);
+bool cmac_aes(const void *key, size_t key_len,
+		const void *data, size_t data_len, void *output, size_t size);
+
+bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
+			uint8_t *out);
 
 int crypto_cipher_key_len(enum crypto_cipher cipher);
 int crypto_cipher_tk_bits(enum crypto_cipher cipher);
