@@ -29,7 +29,7 @@
 #include <assert.h>
 #include <ell/ell.h>
 
-#include "src/aes.h"
+#include "src/crypto.h"
 
 struct cmac_data {
 	const void *key;

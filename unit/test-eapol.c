@@ -32,7 +32,6 @@
 #include "src/sha1.h"
 #include "src/eapol.h"
 #include "src/crypto.h"
-#include "src/aes.h"
 
 struct eapol_key_data {
 	const unsigned char *frame;
