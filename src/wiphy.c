@@ -502,6 +502,35 @@ static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
 	return reply;
 }
 
+static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct l_genl_msg *msg;
+	uint16_t reason_code = 3;
+
+	l_debug("");
+
+	if (netdev->connect_pending)
+		return dbus_error_failed(message);
+
+	if (!netdev->connected_bss)
+		return dbus_error_failed(message);
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_DEAUTHENTICATE, 512);
+	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
+	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
+						netdev->connected_bss->addr);
+	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
+	l_genl_msg_unref(msg);
+
+	netdev->connect_pending = l_dbus_message_ref(message);
+
+	return NULL;
+}
+
 static void setup_device_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "GetProperties", 0,
@@ -515,6 +544,8 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "GetNetworks", 0,
 				device_get_networks,
 				"a{oa{sv}}", "", "networks");
+	l_dbus_interface_method(interface, "Disconnect", 0,
+				device_disconnect, "", "");
 
 	l_dbus_interface_signal(interface, "PropertyChanged", 0,
 				"sv", "name", "value");
@@ -683,6 +714,50 @@ static void mlme_authenticate_event(struct l_genl_msg *msg,
 
 	l_info("Authentication completed");
 	mlme_associate_cmd(netdev);
+	return;
+
+error:
+	dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_failed(netdev->connect_pending));
+	netdev->connected_bss = NULL;
+}
+
+static void mlme_deauthenticate_event(struct l_genl_msg *msg,
+							struct netdev *netdev)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	struct l_dbus_message *reply;
+	int err;
+
+	l_debug("");
+
+	err = l_genl_msg_get_error(msg);
+	if (err < 0) {
+		l_error("authentication failed %s (%d)", strerror(-err), err);
+		goto error;
+	}
+
+	if (!l_genl_attr_init(&attr, msg)) {
+		l_debug("attr init failed");
+		goto error;
+	}
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_TIMED_OUT:
+			l_warn("deauthentication timed out");
+			goto error;
+		}
+	}
+
+	l_info("Deauthentication completed");
+	reply = l_dbus_message_new_method_return(netdev->connect_pending);
+	l_dbus_message_set_arguments(reply, "");
+	dbus_pending_reply(&netdev->connect_pending, reply);
+	netdev->connected_bss = NULL;
+
 	return;
 
 error:
@@ -1392,6 +1467,9 @@ static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 	case NL80211_CMD_ASSOCIATE:
 		mlme_associate_event(msg, netdev);
+		break;
+	case NL80211_CMD_DEAUTHENTICATE:
+		mlme_deauthenticate_event(msg, netdev);
 		break;
 	}
 }
