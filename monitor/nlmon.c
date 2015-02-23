@@ -651,7 +651,7 @@ static void print_ie_cipher_suites(unsigned int level, const char *label,
 	print_attr(level, "%s: len %u", label, size);
 
 	while (size >= 4) {
-		cipher = l_get_be32((uint32_t *) data);
+		cipher = l_get_be32(data);
 
 		print_ie_cipher_suite(level + 1, NULL, cipher, cipher_table);
 
@@ -734,7 +734,7 @@ static void print_ie_rsn(unsigned int level, const char *label,
 	if (end - data < 2)
 		goto end;
 
-	count = l_get_le16((uint16_t *) data) * 4;
+	count = l_get_le16(data) * 4;
 	data += 2;
 
 	if (end - data < count)
@@ -747,7 +747,7 @@ static void print_ie_rsn(unsigned int level, const char *label,
 	if (end - data < 2)
 		goto end;
 
-	count = l_get_le16((uint16_t *) data) * 4;
+	count = l_get_le16(data) * 4;
 	data += 2;
 
 	if (end - data < count)
@@ -760,7 +760,7 @@ static void print_ie_rsn(unsigned int level, const char *label,
 	if (end - data < 2)
 		goto end;
 
-	rsn_capa = l_get_le16((uint16_t *) data);
+	rsn_capa = l_get_le16(data);
 	data += 2;
 
 	print_ie_bitfield(level + 1, "RSN capabilities", rsn_capa & 0x0003,
@@ -780,7 +780,7 @@ static void print_ie_rsn(unsigned int level, const char *label,
 	if (end - data < 2)
 		goto end;
 
-	count = l_get_le16((uint16_t *) data) * 16;
+	count = l_get_le16(data) * 16;
 	data += 2;
 
 	if (end - data < count)
