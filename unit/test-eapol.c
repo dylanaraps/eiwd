@@ -495,13 +495,15 @@ static void eapol_4way_test(const void *data)
 	const struct eapol_key *step4;
 	uint8_t *decrypted_key_data;
 
-	step1 = eapol_verify_ptk_1_of_4(eapol_key_data_3,
+	step1 = eapol_key_validate(eapol_key_data_3,
 					sizeof(eapol_key_data_3));
 	assert(step1);
+	assert(eapol_verify_ptk_1_of_4(step1));
 	memcpy(anonce, step1->key_nonce, sizeof(step1->key_nonce));
 
-	step2 = eapol_verify_ptk_2_of_4(eapol_key_data_4,
+	step2 = eapol_key_validate(eapol_key_data_4,
 					sizeof(eapol_key_data_4));
+	assert(eapol_verify_ptk_2_of_4(step2));
 	assert(step2);
 	memcpy(snonce, step2->key_nonce, sizeof(step2->key_nonce));
 
@@ -527,9 +529,10 @@ static void eapol_4way_test(const void *data)
 	assert(!memcmp(frame, eapol_key_data_4, sizeof(eapol_key_data_4)));
 	l_free(frame);
 
-	step3 = eapol_verify_ptk_3_of_4(eapol_key_data_5,
+	step3 = eapol_key_validate(eapol_key_data_5,
 					sizeof(eapol_key_data_5));
 	assert(step3);
+	assert(eapol_verify_ptk_3_of_4(step3));
 	assert(!memcmp(anonce, step3->key_nonce, sizeof(step3->key_nonce)));
 
 	assert(!eapol_verify_mic(ptk->kek, step3));
@@ -538,9 +541,10 @@ static void eapol_4way_test(const void *data)
 	assert(decrypted_key_data[0] == 48);  // RSNE
 	l_free(decrypted_key_data);
 
-	step4 = eapol_verify_ptk_4_of_4(eapol_key_data_6,
+	step4 = eapol_key_validate(eapol_key_data_6,
 					sizeof(eapol_key_data_6));
 	assert(step4);
+	assert(eapol_verify_ptk_4_of_4(step4));
 
 	l_free(ptk);
 }
