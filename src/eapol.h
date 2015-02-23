@@ -102,14 +102,10 @@ uint8_t *eapol_decrypt_key_data(const uint8_t *kek,
 
 const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len);
 
-const struct eapol_key *eapol_verify_ptk_1_of_4(const uint8_t *frame,
-						size_t len);
-const struct eapol_key *eapol_verify_ptk_2_of_4(const uint8_t *frame,
-						size_t len);
-const struct eapol_key *eapol_verify_ptk_3_of_4(const uint8_t *frame,
-						size_t len);
-const struct eapol_key *eapol_verify_ptk_4_of_4(const uint8_t *frame,
-						size_t len);
+bool eapol_verify_ptk_1_of_4(const struct eapol_key *ek);
+bool eapol_verify_ptk_2_of_4(const struct eapol_key *ek);
+bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek);
+bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek);
 
 struct eapol_key *eapol_create_ptk_2_of_4(
 				enum eapol_protocol_version protocol,
