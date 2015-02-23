@@ -564,6 +564,259 @@ static void print_ie_erp(unsigned int level, const char *label,
 	print_attr(level + 1, "Barker preamble mode %d", !!(*flags & 0x04));
 }
 
+struct cipher_suites {
+	uint32_t cipher;
+	const char *str;
+};
+
+static const struct cipher_suites rsn_cipher_selectors[] = {
+	{ 0x000fac00, "Use group cipher suite"		},
+	{ 0x000fac01, "WEP-40"				},
+	{ 0x000fac02, "TKIP"				},
+	{ 0x000fac04, "CCMP"				},
+	{ 0x000fac05, "WEP-104"				},
+	{ 0x000fac06, "BIP"				},
+	{ 0x000fac07, "Group traffic not allowed"	},
+	{ 0x00147201, "WPI-SMS4"			},
+	{ },
+};
+
+static const struct cipher_suites rsn_akm_selectors[] = {
+	{ 0x000fac01, "IEEE 802.1X/PMKSA; RSNA/PMKSA caching"                                     },
+	{ 0x000fac02, "PSK; RSNA PSK"                                                             },
+	{ 0x000fac03, "IEEE 802.1X FT; FT"                                                        },
+	{ 0x000fac04, "PSK FT; FT"                                                                },
+	{ 0x000fac05, "IEEE 802.1X/PMKSA caching SHA256; RSNA/RSNA caching SHA256"                },
+	{ 0x000fac06, "PSK SHA256; RSNA PSK SHA256"                                               },
+	{ 0x000fac07, "TDLS; TPK"                                                                 },
+	{ 0x000fac08, "SAE/PMKSA caching SHA256; RSNA PMKSA caching SHA256/mesh peering exchange" },
+	{ 0x000fac09, "FT SAE SHA256; FT"                                                         },
+	{ }
+};
+
+static void print_ie_cipher_suite(unsigned int level, const char *label,
+				const uint32_t cipher,
+				const struct cipher_suites cipher_table[])
+{
+	const char *str = NULL;
+	unsigned int i;
+	unsigned char oui[] = {
+		(cipher & 0xff000000) >> 24,
+		(cipher & 0x00ff0000) >> 16,
+		(cipher & 0x0000ff00) >> 8,
+	};
+	char suite_value[32] = "";
+
+	for (i = 0; cipher_table[i].str; i++) {
+		if (cipher_table[i].cipher == cipher) {
+			str = cipher_table[i].str;
+			snprintf(suite_value, sizeof(suite_value), " %02x",
+				cipher & 0x000000ff);
+			break;
+		}
+	}
+
+	if (!str) {
+		for (i = 0; oui_table[i].str; i++) {
+			if (!memcmp(oui_table[i].oui, oui, 3)) {
+				str = oui_table[i].str;
+				snprintf(suite_value, sizeof(suite_value),
+					" %02x (vendor specific)",
+					cipher & 0x000000ff);
+				break;
+			}
+		}
+	}
+
+	if (!str) {
+		str = "unknown";
+		snprintf(suite_value, sizeof(suite_value), "%02x (unknown)",
+			cipher & 0x000000ff);
+	}
+
+	if (label)
+		print_attr(level, "%s: %s (%02x:%02x:%02x) suite %s",
+			label, str, oui[0], oui[1], oui[2], suite_value);
+	else
+		print_attr(level, "%s (%02x:%02x:%02x) suite %s",
+			str, oui[0], oui[1], oui[2], suite_value);
+}
+
+static void print_ie_cipher_suites(unsigned int level, const char *label,
+				const void *data, uint16_t size,
+				const struct cipher_suites cipher_table[])
+{
+	uint32_t cipher;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	while (size >= 4) {
+		cipher = l_get_be32((uint32_t *) data);
+
+		print_ie_cipher_suite(level + 1, NULL, cipher, cipher_table);
+
+		data += 4;
+		size -= 4;
+	}
+}
+
+static const char *rsn_capabilities_bitfield[] = {
+	"Preauthentication",
+	"No Pairwise",
+	"",
+	"",
+	"",
+	"",
+	"Management Frame Protection Required",
+	"Management Frame Protection Capable",
+	"Reserved",
+	"Peerkey Enabled",
+	"SPP A-MSDU Capable",
+	"SPP A-MSDU Required",
+	"PBAC",
+	"Extended Key ID for Individually Addressed Frames",
+	"Reserved",
+	"Reserved",
+	NULL
+};
+
+static void print_ie_bitfield(unsigned int level, const char *label,
+			uint64_t bits, const char *bitfield_table[])
+{
+	unsigned int i;
+
+	for (i = 0; bitfield_table[i]; i++) {
+		if (!(bits & 1 << i))
+			continue;
+
+		print_attr(level, "%s: bit %2d: %s", label, i,
+			bitfield_table[i]);
+	}
+}
+
+static void print_ie_rsn(unsigned int level, const char *label,
+			const void *data, uint16_t size)
+{
+	const void *end = data + size;
+
+	uint16_t version, count, rsn_capa;
+	int i;
+	const char *rsn_capabilities_replay_counter[] = {
+		"1 replay counter",
+		"2 replay counters",
+		"4 replay counters",
+		"16 replay counters"
+	};
+
+	print_attr(level, "RSN:");
+
+	if (end - data < 2) {
+		print_ie_error(level, label, size, -EINVAL);
+		return;
+	}
+
+	version = l_get_le16(data);
+	if (version != 1) {
+		print_attr(level, "Unknown RSN version %d", version);
+		return;
+	}
+
+	data += 2;
+
+	if (end - data < 4)
+		goto end;
+
+	print_ie_cipher_suites(level + 1, "Group Data Cipher Suite", data, 4,
+				rsn_cipher_selectors);
+
+	data += 4;
+
+	if (end - data < 2)
+		goto end;
+
+	count = l_get_le16((uint16_t *) data) * 4;
+	data += 2;
+
+	if (end - data < count)
+		goto end;
+
+	print_ie_cipher_suites(level + 1, "Pairwise Cipher Suite", data,
+					count, rsn_cipher_selectors);
+	data += count;
+
+	if (end - data < 2)
+		goto end;
+
+	count = l_get_le16((uint16_t *) data) * 4;
+	data += 2;
+
+	if (end - data < count)
+		goto end;
+
+	print_ie_cipher_suites(level + 1, "AKM Suite", data, count,
+				rsn_akm_selectors);
+	data += count;
+
+	if (end - data < 2)
+		goto end;
+
+	rsn_capa = l_get_le16((uint16_t *) data);
+	data += 2;
+
+	print_ie_bitfield(level + 1, "RSN capabilities", rsn_capa & 0x0003,
+			rsn_capabilities_bitfield);
+
+	count = (rsn_capa & 0x000c) >> 2;
+	print_attr(level + 1, "RSN capabilities: bits  3 - 4: %s per PTKSA",
+		rsn_capabilities_replay_counter[count]);
+
+	count = (rsn_capa & 0x0030) >> 4;
+	print_attr(level + 1, "RSN capabilities: bits  5 - 6: %s per GTKSA",
+		rsn_capabilities_replay_counter[count]);
+
+	print_ie_bitfield(level + 1, "RSN capabilities", rsn_capa & 0xffc0,
+			rsn_capabilities_bitfield);
+
+	if (end - data < 2)
+		goto end;
+
+	count = l_get_le16((uint16_t *) data) * 16;
+	data += 2;
+
+	if (end - data < count)
+		goto end;
+
+	for (i = 0; i < count; i += 16) {
+		const char *bytes = data;
+
+		print_attr(level + 1, "PKMKID: %02x:%02x:%02x:%02x:"
+			"%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:"
+			"%02x:%02x:%02x:%02x",
+			bytes[i], bytes[i + 1],
+			bytes[i + 2], bytes[i + 3],
+			bytes[i + 4], bytes[i + 5],
+			bytes[i + 6], bytes[i + 7],
+			bytes[i + 8], bytes[i + 9],
+			bytes[i + 10], bytes[i + 11],
+			bytes[i + 12], bytes[i + 13],
+			bytes[i + 14], bytes[i + 15]);
+	}
+
+	data += count;
+
+	if (end - data < 4)
+		goto end;
+
+	print_ie_cipher_suites(level + 1, "Group Management Cipher Suite",
+			data, 4, rsn_cipher_selectors);
+
+	data += 4;
+
+end:
+	if (end - data)
+		print_ie_error(level, label, size, -EINVAL);
+}
+
 static struct attr_entry ie_entry[] = {
 	{IE_TYPE_SSID,                      "SSID",
 	ATTR_CUSTOM,                        { .function = print_ie_ssid } },
@@ -583,6 +836,8 @@ static struct attr_entry ie_entry[] = {
 	ATTR_CUSTOM,                        { .function = print_ie_tpc } },
 	{IE_TYPE_ERP,                       "ERP Information",
 	ATTR_CUSTOM,                        { .function = print_ie_erp } },
+	{IE_TYPE_RSN,                       "RSN",
+	ATTR_CUSTOM,                        { .function = print_ie_rsn } },
 	{IE_TYPE_EXTENDED_SUPPORTED_RATES,  "Extended supported rates",
 	ATTR_CUSTOM,                        { .function = print_ie_rate } },
 	{IE_TYPE_VENDOR_SPECIFIC,           "Vendor specific",
@@ -803,46 +1058,20 @@ static void print_frame(unsigned int level, const char *label,
 	print_hexdump(level + 1, data, size);
 }
 
-static const struct {
-	uint32_t cipher;
-	const char *str;
-} cipher_table[] = {
-	{ 0x000fac00, "Use group cipher suite"		},
-	{ 0x000fac01, "WEP-40"				},
-	{ 0x000fac02, "TKIP"				},
-	{ 0x000fac04, "CCMP"				},
-	{ 0x000fac05, "WEP-104"				},
-	{ 0x000fac06, "BIP"				},
-	{ 0x000fac07, "Group traffic not allowed"	},
-	{ 0x00147201, "WPI-SMS4"			},
-	{ }
-};
-
 static void print_cipher_suite(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
 	uint32_t cipher = *((uint32_t *) data);
-	const char *str = "Reserved";
-	unsigned int i;
 
-	for (i = 0; cipher_table[i].str; i++) {
-		if (cipher_table[i].cipher == cipher) {
-			str = cipher_table[i].str;
-			break;
-		}
-	}
+	if (size != 4)
+		return;
 
-	if (label)
-		print_attr(level, "%s: %s (0x%08x)", label, str, cipher);
-	else
-		print_attr(level, "%s (0x%08x)", str, cipher);
+	print_ie_cipher_suite(level, label, cipher, rsn_cipher_selectors);
 }
 
 static void print_cipher_suites(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
-	print_attr(level, "%s: len %u", label, size);
-
 	while (size >= 4) {
 		print_cipher_suite(level + 1, NULL, data, 4);
 		data += 4;
