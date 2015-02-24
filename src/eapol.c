@@ -399,9 +399,11 @@ struct eapol_key *eapol_create_ptk_2_of_4(
 struct eapol_key *eapol_create_ptk_4_of_4(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
-				uint64_t key_replay_counter,
-				const uint8_t snonce[])
+				uint64_t key_replay_counter)
 {
+	uint8_t snonce[32];
+
+	memset(snonce, 0, sizeof(snonce));
 	return eapol_create_common(protocol, version, true, key_replay_counter,
 					snonce, 0, NULL);
 }
