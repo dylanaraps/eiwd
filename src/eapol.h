@@ -47,6 +47,8 @@ enum eapol_key_descriptor_version {
 	EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES	= 3,
 };
 
+struct eapol_sm;
+
 struct eapol_key {
 	uint8_t protocol_version;
 	uint8_t packet_type;
@@ -119,3 +121,6 @@ struct eapol_key *eapol_create_ptk_4_of_4(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
 				uint64_t key_replay_counter);
+
+struct eapol_sm *eapol_sm_new();
+void eapol_sm_free(struct eapol_sm *sm);
