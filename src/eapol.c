@@ -483,6 +483,11 @@ void eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 	sm->own_rsn = l_memdup(rsn_ie, len);
 }
 
+void eapol_start(int ifindex, struct eapol_sm *sm)
+{
+	l_hashmap_insert(state_machines, L_UINT_TO_PTR(ifindex), sm);
+}
+
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func)
 {
 	tx_packet = func;

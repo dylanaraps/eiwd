@@ -142,5 +142,7 @@ void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 void eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 				size_t len);
 
+void eapol_start(int ifindex, struct eapol_sm *sm);
+
 bool eapol_init();
 bool eapol_exit();
