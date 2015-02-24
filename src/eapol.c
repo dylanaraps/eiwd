@@ -451,3 +451,8 @@ void eapol_sm_set_sta_address(struct eapol_sm *sm, const uint8_t *sta_addr)
 {
 	memcpy(sm->sta_addr, sta_addr, sizeof(sm->sta_addr));
 }
+
+void eapol_sm_set_aa_address(struct eapol_sm *sm, const uint8_t *aa_addr)
+{
+	memcpy(sm->aa_addr, aa_addr, sizeof(sm->aa_addr));
+}
