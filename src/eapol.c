@@ -533,7 +533,8 @@ fail:
 
 static void eapol_handle_ptk_3_of_4(int ifindex, struct eapol_sm *sm,
 					const struct eapol_key *ek,
-					const uint8_t *decrypted_key_data)
+					const uint8_t *decrypted_key_data,
+					size_t decrypted_key_data_size)
 {
 	struct crypto_ptk *ptk = (struct crypto_ptk *) sm->ptk;
 	struct eapol_key *step4;
@@ -655,7 +656,8 @@ void __eapol_rx_packet(int ifindex, const uint8_t *sta_addr,
 	if (!ek->key_mic)
 		eapol_handle_ptk_1_of_4(ifindex, sm, ek);
 	else
-		eapol_handle_ptk_3_of_4(ifindex, sm, ek, decrypted_key_data);
+		eapol_handle_ptk_3_of_4(ifindex, sm, ek, decrypted_key_data,
+					decrypted_key_data_len);
 
 done:
 	l_free(decrypted_key_data);
