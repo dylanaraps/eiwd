@@ -119,7 +119,8 @@ bool eapol_verify_mic(const uint8_t *kck, const struct eapol_key *frame)
 }
 
 uint8_t *eapol_decrypt_key_data(const uint8_t *kek,
-				const struct eapol_key *frame)
+				const struct eapol_key *frame,
+				size_t *decrypted_size)
 {
 	size_t key_data_len = L_BE16_TO_CPU(frame->key_data_len);
 	const uint8_t *key_data = frame->key_data;
@@ -167,6 +168,9 @@ uint8_t *eapol_decrypt_key_data(const uint8_t *kek,
 
 		break;
 	}
+
+	if (decrypted_size)
+		*decrypted_size = expected_len;
 
 	return buf;
 
@@ -583,6 +587,7 @@ void __eapol_rx_packet(int ifindex, const uint8_t *sta_addr,
 	struct eapol_sm *sm;
 	struct crypto_ptk *ptk;
 	uint8_t *decrypted_key_data = NULL;
+	size_t decrypted_key_data_len;
 	uint64_t replay_counter;
 
 	ek = eapol_key_validate(frame, len);
@@ -636,7 +641,8 @@ void __eapol_rx_packet(int ifindex, const uint8_t *sta_addr,
 		if (!sm->have_snonce)
 			return;
 
-		decrypted_key_data = eapol_decrypt_key_data(ptk->kek, ek);
+		decrypted_key_data = eapol_decrypt_key_data(ptk->kek, ek,
+						&decrypted_key_data_len);
 		if (!decrypted_key_data)
 			return;
 	}
