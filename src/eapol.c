@@ -30,6 +30,7 @@
 #include "sha1.h"
 #include "crypto.h"
 #include "eapol.h"
+#include "ie.h"
 
 struct l_hashmap *state_machines;
 eapol_tx_packet_func_t tx_packet = NULL;
@@ -531,6 +532,38 @@ fail:
 	l_free(step2);
 }
 
+static const uint8_t *eapol_find_gtk_kde(const uint8_t *data, size_t data_len,
+						size_t *out_gtk_len)
+{
+	static const unsigned char gtk_oui[] = { 0x00, 0x0f, 0xac, 0x01 };
+	struct ie_tlv_iter iter;
+	const uint8_t *gtk;
+	unsigned int len;
+
+	ie_tlv_iter_init(&iter, data, data_len);
+
+	while (ie_tlv_iter_next(&iter)) {
+		if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_VENDOR_SPECIFIC)
+			continue;
+
+		len = ie_tlv_iter_get_length(&iter);
+		if (len < 4)		/* Take care of padding */
+			return NULL;
+
+		/* Check OUI */
+		gtk = ie_tlv_iter_get_data(&iter);
+		if (memcmp(gtk, gtk_oui, 4))
+			continue;
+
+		if (out_gtk_len)
+			*out_gtk_len = len - 4;
+
+		return gtk + 4;
+	}
+
+	return NULL;
+}
+
 static void eapol_handle_ptk_3_of_4(int ifindex, struct eapol_sm *sm,
 					const struct eapol_key *ek,
 					const uint8_t *decrypted_key_data,
@@ -539,6 +572,8 @@ static void eapol_handle_ptk_3_of_4(int ifindex, struct eapol_sm *sm,
 	struct crypto_ptk *ptk = (struct crypto_ptk *) sm->ptk;
 	struct eapol_key *step4;
 	uint8_t mic[16];
+	const uint8_t *gtk;
+	size_t gtk_len;
 
 	if (!eapol_verify_ptk_3_of_4(ek))
 		return;
@@ -565,6 +600,15 @@ static void eapol_handle_ptk_3_of_4(int ifindex, struct eapol_sm *sm,
 	 * Supplicant uses the pairwise cipher suite specified in the second
 	 * RSNE or deauthenticates."
 	 */
+
+	/*
+	 * TODO: If group_cipher was negotiated, find the GTK and install it
+	 */
+	gtk = eapol_find_gtk_kde(decrypted_key_data, decrypted_key_data_size,
+					&gtk_len);
+	if (!gtk)
+		return;
+
 	step4 = eapol_create_ptk_4_of_4(protocol_version,
 					ek->key_descriptor_version,
 					sm->replay_counter);

@@ -136,6 +136,7 @@ unit_test_mpdu_LDADD = ell/libell-internal.la
 unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/sha1.h src/sha1.c \
 				src/crypto.h src/crypto.c \
+				src/ie.h src/ie.c \
 				src/eapol.h src/eapol.c
 unit_test_eapol_LDADD = ell/libell-internal.la
 
