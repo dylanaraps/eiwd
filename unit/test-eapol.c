@@ -549,6 +549,94 @@ static void eapol_4way_test(const void *data)
 	l_free(ptk);
 }
 
+static bool verify_step2_called = false;
+static bool verify_step4_called = false;
+static uint8_t aa[] = { 0x24, 0xa2, 0xe1, 0xec, 0x17, 0x04 };
+static uint8_t spa[] = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 };
+
+static int verify_step2(int ifindex, const uint8_t *aa_addr,
+			const uint8_t *sta_addr,
+			const struct eapol_key *ek)
+{
+	size_t ek_len = sizeof(struct eapol_key) +
+				L_BE16_TO_CPU(ek->key_data_len);
+
+	assert(ifindex == 1);
+	assert(!memcmp(sta_addr, spa, sizeof(spa)));
+	assert(!memcmp(aa_addr, aa, sizeof(aa)));
+	assert(!memcmp(ek, eapol_key_data_4, sizeof(eapol_key_data_4)));
+
+	verify_step2_called = true;
+
+	return 0;
+}
+
+static int verify_step4(int ifindex, const uint8_t *aa_addr,
+			const uint8_t *sta_addr,
+			const struct eapol_key *ek)
+{
+	size_t ek_len = sizeof(struct eapol_key) +
+				L_BE16_TO_CPU(ek->key_data_len);
+
+	assert(ifindex == 1);
+	assert(!memcmp(sta_addr, spa, sizeof(spa)));
+	assert(!memcmp(aa_addr, aa, sizeof(aa)));
+	assert(!memcmp(ek, eapol_key_data_6, sizeof(eapol_key_data_6)));
+
+	verify_step4_called = true;
+
+	return 0;
+}
+
+static bool test_nonce(uint8_t nonce[])
+{
+	static const uint8_t snonce[] = {
+		0x32, 0x89, 0xe9, 0x15, 0x65, 0x09, 0x4f, 0x32, 0x9a,
+		0x9c, 0xd5, 0x4a, 0x4a, 0x09, 0x0d, 0x2c, 0xf4, 0x34,
+		0x46, 0x83, 0xbf, 0x50, 0xef, 0xee, 0x36, 0x08, 0xb6,
+		0x48, 0x56, 0x80, 0x0e, 0x84
+	};
+
+	memcpy(nonce, snonce, sizeof(snonce));
+
+	return true;
+}
+
+static void eapol_sm_test(const void *data)
+{
+	const unsigned char psk[] = {
+		0xbf, 0x9a, 0xa3, 0x15, 0x53, 0x00, 0x12, 0x5e,
+		0x7a, 0x5e, 0xbb, 0x2a, 0x54, 0x9f, 0x8c, 0xd4,
+		0xed, 0xab, 0x8e, 0xe1, 0x2e, 0x94, 0xbf, 0xc2,
+		0x4b, 0x33, 0x57, 0xad, 0x04, 0x96, 0x65, 0xd9 };
+	struct eapol_sm *sm;
+
+	eapol_init();
+	/* Our test data expects 2001 protocol */
+	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2001);
+	__eapol_set_get_nonce_func(test_nonce);
+
+	sm = eapol_sm_new();
+	eapol_sm_set_pmk(sm, psk);
+	eapol_sm_set_aa_address(sm, aa);
+	eapol_sm_set_sta_address(sm, spa);
+	eapol_sm_set_own_rsn(sm, eapol_key_data_4 + sizeof(struct eapol_key),
+				eapol_key_test_4.key_data_len);
+	eapol_start(1, sm);
+
+	__eapol_set_tx_packet_func(verify_step2);
+	__eapol_rx_packet(1, spa, aa, eapol_key_data_3,
+					sizeof(eapol_key_data_3));
+	assert(verify_step2_called);
+
+	__eapol_set_tx_packet_func(verify_step4);
+	__eapol_rx_packet(1, spa, aa, eapol_key_data_5,
+					sizeof(eapol_key_data_5));
+	assert(verify_step4_called);
+
+	eapol_exit();
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -576,6 +664,8 @@ int main(int argc, char *argv[])
 
 	l_test_add("EAPoL/4-Way Handshake",
 			&eapol_4way_test, NULL);
+
+	l_test_add("EAPoL/State Machine", &eapol_sm_test, NULL);
 
 	return l_test_run();
 }
