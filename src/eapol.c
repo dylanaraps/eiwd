@@ -493,6 +493,11 @@ void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func)
 	get_nonce = func;
 }
 
+void __eapol_set_protocol_version(enum eapol_protocol_version version)
+{
+	protocol_version = version;
+}
+
 bool eapol_init()
 {
 	state_machines = l_hashmap_new();

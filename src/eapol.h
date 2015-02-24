@@ -129,6 +129,7 @@ struct eapol_key *eapol_create_ptk_4_of_4(
 
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func);
 void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func);
+void __eapol_set_protocol_version(enum eapol_protocol_version version);
 
 struct eapol_sm *eapol_sm_new();
 void eapol_sm_free(struct eapol_sm *sm);
