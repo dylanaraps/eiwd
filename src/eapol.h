@@ -124,3 +124,5 @@ struct eapol_key *eapol_create_ptk_4_of_4(
 
 struct eapol_sm *eapol_sm_new();
 void eapol_sm_free(struct eapol_sm *sm);
+
+void eapol_sm_set_sta_address(struct eapol_sm *sm, const uint8_t *sta_addr);

@@ -446,3 +446,8 @@ void eapol_sm_free(struct eapol_sm *sm)
 {
 	eapol_sm_destroy(sm);
 }
+
+void eapol_sm_set_sta_address(struct eapol_sm *sm, const uint8_t *sta_addr)
+{
+	memcpy(sm->sta_addr, sta_addr, sizeof(sm->sta_addr));
+}
