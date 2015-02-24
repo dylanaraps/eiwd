@@ -488,6 +488,86 @@ void eapol_start(int ifindex, struct eapol_sm *sm)
 	l_hashmap_insert(state_machines, L_UINT_TO_PTR(ifindex), sm);
 }
 
+void __eapol_rx_packet(int ifindex, const uint8_t *sta_addr,
+			const uint8_t *aa_addr,
+			const uint8_t *frame, size_t len)
+{
+	const struct eapol_key *ek;
+	struct eapol_sm *sm;
+	struct crypto_ptk *ptk;
+	uint8_t *decrypted_key_data = NULL;
+	uint64_t replay_counter;
+
+	ek = eapol_key_validate(frame, len);
+	if (!ek)
+		return;
+
+	sm = l_hashmap_lookup(state_machines, L_UINT_TO_PTR(ifindex));
+	if (!sm)
+		return;
+
+	if (memcmp(sm->sta_addr, sta_addr, sizeof(sm->sta_addr)))
+		return;
+
+	if (memcmp(sm->aa_addr, aa_addr, sizeof(sm->aa_addr)))
+		return;
+
+	/* Wrong direction */
+	if (!ek->key_ack)
+		return;
+
+	replay_counter = L_BE64_TO_CPU(ek->key_replay_counter);
+
+	/*
+	 * 11.6.6.2: "If the Key Replay Counter field value is less than or
+	 * equal to the current local value, the Supplicant discards the
+	 * message.
+	 *
+	 * 11.6.6.4: "On reception of Message 3, the Supplicant silently
+	 * discards the message if the Key Replay Counter field value has
+	 * already been used...
+	 */
+	if (sm->have_replay && sm->replay_counter >= replay_counter)
+		return;
+
+	sm->replay_counter = replay_counter;
+	sm->have_replay = true;
+
+	ptk = (struct crypto_ptk *) sm->ptk;
+
+	if (ek->key_mic) {
+		/* Haven't received step 1 yet, so no ptk */
+		if (!sm->have_snonce)
+			return;
+
+		if (!eapol_verify_mic(ptk->kck, ek))
+			return;
+	}
+
+	if (ek->encrypted_key_data) {
+		/* Haven't received step 1 yet, so no ptk */
+		if (!sm->have_snonce)
+			return;
+
+		decrypted_key_data = eapol_decrypt_key_data(ptk->kek, ek);
+		if (!decrypted_key_data)
+			return;
+	}
+
+	/* TODO: Handle Group Key Handshake */
+	if (ek->key_type == 0)
+		goto done;
+
+	/* If no MIC, then assume packet 1, otherwise packet 3 */
+	if (!ek->key_mic)
+		eapol_handle_ptk_1_of_4(ifindex, sm, ek);
+	else
+		eapol_handle_ptk_3_of_4(ifindex, sm, ek, decrypted_key_data);
+
+done:
+	l_free(decrypted_key_data);
+}
+
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func)
 {
 	tx_packet = func;

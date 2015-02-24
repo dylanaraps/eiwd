@@ -127,6 +127,10 @@ struct eapol_key *eapol_create_ptk_4_of_4(
 				enum eapol_key_descriptor_version version,
 				uint64_t key_replay_counter);
 
+void __eapol_rx_packet(int ifindex, const uint8_t *sta_addr,
+			const uint8_t *aa_addr,
+			const uint8_t *frame, size_t len);
+
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func);
 void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func);
 void __eapol_set_protocol_version(enum eapol_protocol_version version);
