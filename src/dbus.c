@@ -102,6 +102,24 @@ struct l_dbus_message *dbus_error_not_available(struct l_dbus_message *msg)
 					"Operation not available");
 }
 
+struct l_dbus_message *dbus_error_invalid_args(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".InvalidArgs",
+					"Argument type is wrong");
+}
+
+struct l_dbus_message *dbus_error_already_exists(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".AlreadyExists",
+					"Object already exists");
+}
+
+struct l_dbus_message *dbus_error_not_found(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".NotFound",
+					"Object not found");
+}
+
 void dbus_pending_reply(struct l_dbus_message **msg,
 				struct l_dbus_message *reply)
 {
