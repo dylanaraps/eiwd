@@ -488,6 +488,45 @@ void eapol_start(int ifindex, struct eapol_sm *sm)
 	l_hashmap_insert(state_machines, L_UINT_TO_PTR(ifindex), sm);
 }
 
+static void eapol_handle_ptk_1_of_4(int ifindex, struct eapol_sm *sm,
+					const struct eapol_key *ek)
+{
+	struct crypto_ptk *ptk = (struct crypto_ptk *) sm->ptk;
+	struct eapol_key *step2;
+	uint8_t mic[16];
+
+	if (!eapol_verify_ptk_1_of_4(ek))
+		return;
+
+	if (!sm->have_snonce) {
+		if (!get_nonce(sm->snonce))
+			return;
+
+		sm->have_snonce = true;
+	}
+
+	memcpy(sm->anonce, ek->key_nonce, sizeof(ek->key_nonce));
+
+	crypto_derive_pairwise_ptk(sm->pmk, sm->sta_addr, sm->aa_addr,
+					sm->anonce, sm->snonce,
+					ptk, sizeof(sm->ptk));
+
+	step2 = eapol_create_ptk_2_of_4(protocol_version,
+					ek->key_descriptor_version,
+					sm->replay_counter,
+					sm->snonce,
+					sm->own_rsn_size, sm->own_rsn);
+
+	if (!eapol_calculate_mic(ptk->kck, step2, mic))
+		goto fail;
+
+	memcpy(step2->key_mic_data, mic, sizeof(mic));
+	tx_packet(ifindex, sm->aa_addr, sm->sta_addr, step2);
+
+fail:
+	l_free(step2);
+}
+
 void __eapol_rx_packet(int ifindex, const uint8_t *sta_addr,
 			const uint8_t *aa_addr,
 			const uint8_t *frame, size_t len)
