@@ -239,18 +239,6 @@ Wireless daemon
   Priority: High
   Complexity: C2
 
-- Add support for 4-way handshake authentication and key generation
-
-  The 4-way handshake key generation for pre-shared keys (PSK) should be
-  a standalone feature (independent from EAP).
-
-  It is also important to have extensive unit test support for 4-way
-  handshake messages and key generation itself.
-
-  Priority: High
-  Complexity: C4
-  Owner: Denis Kenzior <denkenz@gmail.com>
-
 - Add support for EAP based authentication and key generation
 
   Provide full EAP support for enterprise wireless.  However it should be
