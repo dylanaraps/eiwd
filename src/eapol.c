@@ -461,3 +461,11 @@ void eapol_sm_set_pmk(struct eapol_sm *sm, const uint8_t *pmk)
 {
 	memcpy(sm->pmk, pmk, sizeof(sm->pmk));
 }
+
+void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
+				size_t len)
+{
+	sm->ap_rsn_size = len;
+	l_free(sm->ap_rsn);
+	sm->ap_rsn = l_memdup(rsn_ie, len);
+}
