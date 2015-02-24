@@ -469,3 +469,11 @@ void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 	l_free(sm->ap_rsn);
 	sm->ap_rsn = l_memdup(rsn_ie, len);
 }
+
+void eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
+				size_t len)
+{
+	sm->own_rsn_size = len;
+	l_free(sm->own_rsn);
+	sm->own_rsn = l_memdup(rsn_ie, len);
+}

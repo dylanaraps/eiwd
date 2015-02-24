@@ -130,3 +130,5 @@ void eapol_sm_set_aa_address(struct eapol_sm *sm, const uint8_t *aa_addr);
 void eapol_sm_set_pmk(struct eapol_sm *sm, const uint8_t *pmk);
 void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 				size_t len);
+void eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
+				size_t len);
