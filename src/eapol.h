@@ -127,3 +127,4 @@ void eapol_sm_free(struct eapol_sm *sm);
 
 void eapol_sm_set_sta_address(struct eapol_sm *sm, const uint8_t *sta_addr);
 void eapol_sm_set_aa_address(struct eapol_sm *sm, const uint8_t *aa_addr);
+void eapol_sm_set_pmk(struct eapol_sm *sm, const uint8_t *pmk);
