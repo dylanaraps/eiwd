@@ -83,7 +83,7 @@ bool eapol_verify_mic(const uint8_t *kck, const struct eapol_key *frame)
 
 	iov[2].iov_base = ((void *) frame) +
 				offsetof(struct eapol_key, key_data_len);
-	iov[2].iov_len = frame_len - offsetof(struct eapol_key, key_data) +
+	iov[2].iov_len = frame_len - offsetof(struct eapol_key, key_data_len) +
 				L_BE16_TO_CPU(frame->key_data_len);
 
 	switch (frame->key_descriptor_version) {
