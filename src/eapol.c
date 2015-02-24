@@ -527,6 +527,54 @@ fail:
 	l_free(step2);
 }
 
+static void eapol_handle_ptk_3_of_4(int ifindex, struct eapol_sm *sm,
+					const struct eapol_key *ek,
+					const uint8_t *decrypted_key_data)
+{
+	struct crypto_ptk *ptk = (struct crypto_ptk *) sm->ptk;
+	struct eapol_key *step4;
+	uint8_t mic[16];
+
+	if (!eapol_verify_ptk_3_of_4(ek))
+		return;
+
+	/*
+	 * 11.6.6.4: "On reception of Message 3, the Supplicant silently
+	 * discards the message if ... or if the ANonce value in Message 3
+	 * differs from the ANonce value in Message 1"
+	 */
+	if (memcmp(sm->anonce, ek->key_nonce, sizeof(ek->key_nonce)))
+		return;
+
+	/*
+	 * TODO: Check that first RSNE matches ap_rsne
+	 * 11.6.6.4: "Verifies the RSNE. If it is part of a Fast BSS Transition
+	 * Initial Mobility Domain Association, see 12.4.2. Otherwise, if it is
+	 * not identical to that the STA received in the Beacon or Probe
+	 * Response frame, the STA shall disassociate.
+	 */
+
+	/*
+	 * TODO: Parse second RSNE
+	 * 11.6.6.4: "If a second RSNE is provided in the message, the
+	 * Supplicant uses the pairwise cipher suite specified in the second
+	 * RSNE or deauthenticates."
+	 */
+	step4 = eapol_create_ptk_4_of_4(protocol_version,
+					ek->key_descriptor_version,
+					sm->replay_counter);
+
+	if (!eapol_calculate_mic(ptk->kck, step4, mic))
+		goto fail;
+
+	memcpy(step4->key_mic_data, mic, sizeof(mic));
+	tx_packet(ifindex, sm->aa_addr, sm->sta_addr, step4);
+
+fail:
+	l_free(step4);
+
+}
+
 void __eapol_rx_packet(int ifindex, const uint8_t *sta_addr,
 			const uint8_t *aa_addr,
 			const uint8_t *frame, size_t len)
