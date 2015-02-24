@@ -233,7 +233,22 @@ void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 			unsigned int len);
 void ie_tlv_iter_recurse(struct ie_tlv_iter *iter,
 			struct ie_tlv_iter *recurse);
-unsigned int ie_tlv_iter_get_tag(struct ie_tlv_iter *iter);
+static inline unsigned int ie_tlv_iter_get_tag(struct ie_tlv_iter *iter)
+{
+	return iter->tag;
+}
+
+static inline unsigned int ie_tlv_iter_get_length(struct ie_tlv_iter *iter)
+{
+	return iter->len;
+}
+
+static inline const unsigned char *ie_tlv_iter_get_data(
+						struct ie_tlv_iter *iter)
+{
+	return iter->data;
+}
+
 bool ie_tlv_iter_next(struct ie_tlv_iter *iter);
 bool ie_tlv_builder_init(struct ie_tlv_builder *builder);
 bool ie_tlv_builder_set_length(struct ie_tlv_builder *builder,
