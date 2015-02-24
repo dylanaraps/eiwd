@@ -32,6 +32,7 @@
 #include "eapol.h"
 
 struct l_hashmap *state_machines;
+eapol_tx_packet_func_t tx_packet = NULL;
 eapol_get_nonce_func_t get_nonce = NULL;
 enum eapol_protocol_version protocol_version = EAPOL_PROTOCOL_VERSION_2004;
 
@@ -482,6 +483,10 @@ void eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 	sm->own_rsn = l_memdup(rsn_ie, len);
 }
 
+void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func)
+{
+	tx_packet = func;
+}
 
 void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func)
 {
@@ -500,6 +505,7 @@ bool eapol_exit()
 {
 	l_hashmap_destroy(state_machines, eapol_sm_destroy);
 	get_nonce = NULL;
+	tx_packet = NULL;
 
 	return true;
 }
