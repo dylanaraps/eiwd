@@ -374,6 +374,16 @@ Wireless daemon
   Priority: High
   Complexity: C1
 
+- Extract GTK from Key Data in Step 3/4 of the 4-way Handshake
+
+  GTK is carried inside a KDE.  For KDE format, refer to 802.11 Figure 11-30.
+  The GTK KDE format is given in Figure 11-31.  Care must be taken to make sure
+  that packets that contain the GTK KDE are encrypted.  If the packet is
+  not encrypted, it should be silently dropped.
+
+  Priority: High
+  Complexity: C1
+
 - Add unit test for each of the mpdu management frame type
 
   Currently, only authentication and deauthentication frames have
