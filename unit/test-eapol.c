@@ -564,6 +564,7 @@ static int verify_step2(int ifindex, const uint8_t *aa_addr,
 	assert(ifindex == 1);
 	assert(!memcmp(sta_addr, spa, sizeof(spa)));
 	assert(!memcmp(aa_addr, aa, sizeof(aa)));
+	assert(ek_len == sizeof(eapol_key_data_4));
 	assert(!memcmp(ek, eapol_key_data_4, sizeof(eapol_key_data_4)));
 
 	verify_step2_called = true;
@@ -581,6 +582,7 @@ static int verify_step4(int ifindex, const uint8_t *aa_addr,
 	assert(ifindex == 1);
 	assert(!memcmp(sta_addr, spa, sizeof(spa)));
 	assert(!memcmp(aa_addr, aa, sizeof(aa)));
+	assert(ek_len == sizeof(eapol_key_data_6));
 	assert(!memcmp(ek, eapol_key_data_6, sizeof(eapol_key_data_6)));
 
 	verify_step4_called = true;
