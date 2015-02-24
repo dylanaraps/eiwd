@@ -95,6 +95,8 @@ struct eapol_key {
 	uint8_t key_data[0];
 } __attribute__ ((packed));
 
+typedef bool (*eapol_get_nonce_func_t)(uint8_t nonce[]);
+
 bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 				uint8_t *mic);
 bool eapol_verify_mic(const uint8_t *kck, const struct eapol_key *frame);
@@ -121,6 +123,8 @@ struct eapol_key *eapol_create_ptk_4_of_4(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
 				uint64_t key_replay_counter);
+
+void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func);
 
 struct eapol_sm *eapol_sm_new();
 void eapol_sm_free(struct eapol_sm *sm);
