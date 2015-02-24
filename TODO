@@ -325,6 +325,55 @@ Wireless daemon
   Priority: High
   Complexity: C1
 
+- RSN IE Generation for WPA2 Association
+
+  When connecting to a WPA2 Network, we must provide an RSN IE that describes
+  our ciphering capabilities.  For WPA2 this generally means CCMP as the
+  pairwise cipher.  The same RSN IE is sent during step 2 of the 4-way
+  handshake to the Authenticator (AP).  The AP will match RSN IEs received
+  in the Association frame and the EAPoL 2/4 frame.  The RSN IE is included
+  as part of the Netlink Association Request.
+
+  Information Elements: len 22
+  Tag 48: len 20
+    01 00 00 0f ac 04 01 00 00 0f ac 04 01 00 00 0f  ................
+    ac 02 00 00                                      ....
+  Cipher Suites Pairwise: len 4
+  CCMP (0x000fac04)
+  Cipher Suite Group: CCMP (0x000fac04)
+  Control Port: true
+
+  Priority: High
+  Complexity: C1
+
+- Take hardware capabilities into account for RSNE generation
+
+  When generating RSNE, take hardware capabilities into account.
+
+  Priority: Medium
+  Complexity: C1
+
+- Parse & utilize the 2nd RSNE element in Step 3/4 of the 4-way Handshake
+
+  EAPoL Key Data can contain two RSN elements.  The second element contains
+  ciphering settings which were mandated by the AP and could be different
+  from settings we provided.  We should parse the 2nd RSNE and determine
+  whether the settings are acceptable.  If so, these settings should be
+  utilized for the established connection.  Otherwise, connection establishment
+  should be aborted.
+
+  Priority: High
+  Complexity: C1
+
+- Match 1st RSNE element in Step 3/4 of the 4-way Handshake
+
+  Packet 3/4 EAPoL Key Data should contain at least one RSN Element.  This RSN
+  element should be the same as was obtained during the scan or probe of the AP.
+  We need to make sure the two RSN Elements match.
+
+  Priority: High
+  Complexity: C1
+
 - Add unit test for each of the mpdu management frame type
 
   Currently, only authentication and deauthentication frames have
