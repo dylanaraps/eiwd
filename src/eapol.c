@@ -427,9 +427,7 @@ struct eapol_sm {
 	uint8_t anonce[32];
 	uint8_t ptk[64];
 	uint8_t *ap_rsn;
-	size_t ap_rsn_size;
 	uint8_t *own_rsn;
-	size_t own_rsn_size;
 	bool have_snonce:1;
 	bool have_replay:1;
 };
@@ -475,7 +473,9 @@ void eapol_sm_set_pmk(struct eapol_sm *sm, const uint8_t *pmk)
 void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 				size_t len)
 {
-	sm->ap_rsn_size = len;
+	if (rsn_ie[1] + 2u != len)
+		return;
+
 	l_free(sm->ap_rsn);
 	sm->ap_rsn = l_memdup(rsn_ie, len);
 }
@@ -483,7 +483,9 @@ void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 void eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 				size_t len)
 {
-	sm->own_rsn_size = len;
+	if (rsn_ie[1] + 2u != len)
+		return;
+
 	l_free(sm->own_rsn);
 	sm->own_rsn = l_memdup(rsn_ie, len);
 }
@@ -520,7 +522,7 @@ static void eapol_handle_ptk_1_of_4(int ifindex, struct eapol_sm *sm,
 					ek->key_descriptor_version,
 					sm->replay_counter,
 					sm->snonce,
-					sm->own_rsn_size, sm->own_rsn);
+					sm->own_rsn[1] + 2, sm->own_rsn);
 
 	if (!eapol_calculate_mic(ptk->kck, step2, mic))
 		goto fail;
