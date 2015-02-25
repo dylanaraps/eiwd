@@ -46,8 +46,8 @@ static int scheduled_scan_interval = 60;	/* in secs */
 
 struct network {
 	struct netdev *netdev;
-	uint8_t *ssid;
-	size_t ssid_len;
+	uint8_t ssid[32];
+	uint8_t ssid_len;
 	enum scan_ssid_security ssid_security;
 	struct l_queue *bss_list;
 };
@@ -305,7 +305,6 @@ static void network_free(void *data)
 	network_emit_removed(network);
 
 	l_queue_destroy(network->bss_list, NULL);
-	l_free(network->ssid);
 	l_free(network);
 }
 
@@ -891,7 +890,7 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 
 		network = l_new(struct network, 1);
 		network->netdev = netdev;
-		network->ssid = l_memdup(ssid, ssid_len);
+		memcpy(network->ssid, ssid, ssid_len);
 		network->ssid_len = ssid_len;
 		network->ssid_security = ssid_security;
 		network->bss_list = l_queue_new();
