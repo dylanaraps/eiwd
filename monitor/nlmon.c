@@ -2621,27 +2621,26 @@ static void ififlags_str(char *str, size_t size, uint16_t flags)
 {
 	int pos, i;
 
-	if (!str || !flags)
+	pos = sprintf(str, "(0x%02x)", flags);
+	if (!flags)
 		return;
 
-	pos = sprintf(str, "(0x%02x)", flags);
 	pos += sprintf(str + pos, " [");
 
 	for (i = 0; rtnl_flags[i].name; i++) {
 		if (flags & rtnl_flags[i].flag) {
 			flags &= ~rtnl_flags[i].flag;
-			pos += sprintf(str + pos, "%s%c", rtnl_flags[i].name,
-							flags ? ',' : ']');
+			pos += sprintf(str + pos, "%s%s", rtnl_flags[i].name,
+							flags ? "," : "");
 		}
 	}
 
-	if (flags)
-		pos += sprintf(str + pos, "0x%x]", flags);
+	pos += sprintf(str + pos, "]");
 }
 
 static void print_ifinfomsg(const struct ifinfomsg *info)
 {
-	char str[64];
+	char str[256];
 
 	if (!info)
 		return;
