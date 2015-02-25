@@ -564,6 +564,104 @@ static const uint8_t *eapol_find_gtk_kde(const uint8_t *data, size_t data_len,
 	return NULL;
 }
 
+static const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len)
+{
+	struct ie_tlv_iter iter;
+
+	ie_tlv_iter_init(&iter, data, data_len);
+
+	while (ie_tlv_iter_next(&iter)) {
+		if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_RSN)
+			continue;
+
+		return ie_tlv_iter_get_data(&iter) - 2;
+	}
+
+	return NULL;
+}
+
+/*
+ * This function performs a match of the RSN IE obtained from the scan
+ * results vs the RSN IE obtained as part of the 4-way handshake.  If they
+ * don't match, the EAPoL packet must be silently discarded.
+ */
+static bool eapol_ap_rsne_matches(const uint8_t *eapol_rsne,
+						const uint8_t *scan_rsne)
+{
+	struct ie_rsn_info eapol_info;
+	struct ie_rsn_info scan_info;
+
+	/*
+	 * First check that the sizes match, if they do, run a bitwise
+	 * comparison.
+	 */
+	if (eapol_rsne[1] == scan_rsne[1] &&
+			!memcmp(eapol_rsne + 2, scan_rsne + 2, eapol_rsne[1]))
+		return true;
+
+	/*
+	 * Otherwise we have to parse the RSN IEs and compare the individual
+	 * fields
+	 */
+	if (ie_parse_rsne_from_data(eapol_rsne, eapol_rsne[1] + 2,
+					&eapol_info) < 0)
+		return false;
+
+	if (ie_parse_rsne_from_data(scan_rsne, scan_rsne[1] + 2,
+					&scan_info) < 0)
+		return false;
+
+	if (eapol_info.group_cipher != scan_info.group_cipher)
+		return false;
+
+	if (eapol_info.pairwise_ciphers != scan_info.pairwise_ciphers)
+		return false;
+
+	if (eapol_info.akm_suites != scan_info.akm_suites)
+		return false;
+
+	if (eapol_info.preauthentication != scan_info.preauthentication)
+		return false;
+
+	if (eapol_info.no_pairwise != scan_info.no_pairwise)
+		return false;
+
+	if (eapol_info.ptksa_replay_counter != scan_info.ptksa_replay_counter)
+		return false;
+
+	if (eapol_info.gtksa_replay_counter != scan_info.gtksa_replay_counter)
+		return false;
+
+	if (eapol_info.mfpr != scan_info.mfpr)
+		return false;
+
+	if (eapol_info.mfpc != scan_info.mfpc)
+		return false;
+
+	if (eapol_info.peerkey_enabled != scan_info.peerkey_enabled)
+		return false;
+
+	if (eapol_info.spp_a_msdu_capable != scan_info.spp_a_msdu_capable)
+		return false;
+
+	if (eapol_info.spp_a_msdu_required != scan_info.spp_a_msdu_required)
+		return false;
+
+	if (eapol_info.pbac != scan_info.pbac)
+		return false;
+
+	if (eapol_info.extended_key_id != scan_info.extended_key_id)
+		return false;
+
+	/* We don't check the PMKIDs since these might actually be different */
+
+	if (eapol_info.group_management_cipher !=
+			scan_info.group_management_cipher)
+		return false;
+
+	return true;
+}
+
 static void eapol_handle_ptk_3_of_4(int ifindex, struct eapol_sm *sm,
 					const struct eapol_key *ek,
 					const uint8_t *decrypted_key_data,
@@ -574,6 +672,7 @@ static void eapol_handle_ptk_3_of_4(int ifindex, struct eapol_sm *sm,
 	uint8_t mic[16];
 	const uint8_t *gtk;
 	size_t gtk_len;
+	const uint8_t *rsne;
 
 	if (!eapol_verify_ptk_3_of_4(ek))
 		return;
@@ -587,12 +686,17 @@ static void eapol_handle_ptk_3_of_4(int ifindex, struct eapol_sm *sm,
 		return;
 
 	/*
-	 * TODO: Check that first RSNE matches ap_rsne
 	 * 11.6.6.4: "Verifies the RSNE. If it is part of a Fast BSS Transition
 	 * Initial Mobility Domain Association, see 12.4.2. Otherwise, if it is
 	 * not identical to that the STA received in the Beacon or Probe
 	 * Response frame, the STA shall disassociate.
 	 */
+	rsne = eapol_find_rsne(decrypted_key_data, decrypted_key_data_size);
+	if (!rsne)
+		return;
+
+	if (!eapol_ap_rsne_matches(rsne, sm->ap_rsn))
+		return;
 
 	/*
 	 * TODO: Parse second RSNE
