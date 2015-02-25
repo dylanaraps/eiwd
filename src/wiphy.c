@@ -58,6 +58,7 @@ struct bss {
 	uint32_t frequency;
 	int32_t signal_strength;
 	uint16_t capability;
+	uint8_t rsne[256];
 };
 
 struct netdev {
@@ -766,7 +767,6 @@ error:
 }
 
 static bool parse_ie(struct bss *bss, const uint8_t **ssid, int *ssid_len,
-			struct ie_rsn_info *rsne,
 			const void *data, uint16_t len)
 {
 	struct ie_tlv_iter iter;
@@ -775,7 +775,6 @@ static bool parse_ie(struct bss *bss, const uint8_t **ssid, int *ssid_len,
 
 	while (ie_tlv_iter_next(&iter)) {
 		uint8_t tag = ie_tlv_iter_get_tag(&iter);
-		int ret;
 
 		switch (tag) {
 		case IE_TYPE_SSID:
@@ -788,13 +787,7 @@ static bool parse_ie(struct bss *bss, const uint8_t **ssid, int *ssid_len,
 			*ssid = iter.data;
 			break;
 		case IE_TYPE_RSN:
-			ret = ie_parse_rsne_from_data(iter.data - 2,
-						iter.len + 2, rsne);
-			if (ret < 0) {
-				l_debug("Cannot parse RSN field (%d, %s)",
-					ret, strerror(-ret));
-				return false;
-			}
+			memcpy(bss->rsne, iter.data - 2, iter.len + 2);
 			break;
 		default:
 			break;
@@ -823,9 +816,10 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 	const uint8_t *ssid = NULL;
 	int ssid_len;
 	struct network *network = NULL;
-	struct ie_rsn_info rsne = { 0 };
+	struct ie_rsn_info rsne;
 	enum scan_ssid_security ssid_security;
 	const char *id;
+	int res;
 
 	bss = l_new(struct bss, 1);
 
@@ -864,8 +858,7 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 			bss->signal_strength = *((int32_t *) data);
 			break;
 		case NL80211_BSS_INFORMATION_ELEMENTS:
-			if (!parse_ie(bss, &ssid, &ssid_len, &rsne, data,
-									len)) {
+			if (!parse_ie(bss, &ssid, &ssid_len, data, len)) {
 				l_warn("Could not parse BSS IEs");
 				goto fail;
 			}
@@ -876,6 +869,16 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 
 	if (!ssid) {
 		l_warn("Received BSS but SSID IE returned NULL -- ignoring");
+		goto fail;
+	}
+
+	/*
+	 * Length was already validated by parse_ie, so use the one from the
+	 * IE directly.
+	 */
+	res = ie_parse_rsne_from_data(bss->rsne, bss->rsne[1] + 2, &rsne);
+	if (res < 0) {
+		l_debug("Cannot parse RSN field (%d, %s)", res, strerror(-res));
 		goto fail;
 	}
 
