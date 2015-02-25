@@ -2668,10 +2668,11 @@ static void print_ifaddrmsg(const struct ifaddrmsg *addr)
 
 static void read_uevent(const char *ifname, int index)
 {
-	char filename[30], line[128];
+	char filename[64], line[128];
 	FILE *f;
 
-	sprintf(filename, "/sys/class/net/%s/uevent", ifname);
+	snprintf(filename, sizeof(filename), "/sys/class/net/%s/uevent",
+								ifname);
 	f = fopen(filename, "re");
 	if (!f) {
 		printf("%s do not exist\n", filename);
