@@ -761,10 +761,14 @@ static void mlme_deauthenticate_event(struct l_genl_msg *msg,
 	}
 
 	l_info("Deauthentication completed");
+	netdev->connected_bss = NULL;
+
+	if (!netdev->connect_pending)
+		return;
+
 	reply = l_dbus_message_new_method_return(netdev->connect_pending);
 	l_dbus_message_set_arguments(reply, "");
 	dbus_pending_reply(&netdev->connect_pending, reply);
-	netdev->connected_bss = NULL;
 
 	return;
 
