@@ -84,7 +84,6 @@ struct wiphy {
 
 static struct l_queue *wiphy_list = NULL;
 
-
 static bool _msg_append_attr(struct l_genl_msg *msg,
 			uint16_t type, const char *type_str,
 			uint16_t len, const void *value)
