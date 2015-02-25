@@ -207,6 +207,14 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	if (netdev->connect_pending)
 		return dbus_error_busy(message);
 
+	switch (network->ssid_security) {
+	case SCAN_SSID_SECURITY_NONE:
+	case SCAN_SSID_SECURITY_PSK:
+		break;
+	default:
+		return dbus_error_not_supported(message);
+	}
+
 	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
