@@ -851,7 +851,7 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 	struct bss *old_bss;
 	const uint8_t *ssid = NULL;
 	int ssid_len;
-	struct network *network = NULL;
+	struct network *network;
 	enum scan_ssid_security ssid_security;
 	const char *id;
 
