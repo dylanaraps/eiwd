@@ -319,7 +319,7 @@ static void network_free(void *data)
 
 const char *iwd_device_get_path(struct netdev *netdev)
 {
-	static char path[256];
+	static char path[12];
 
 	snprintf(path, sizeof(path), "/%u", netdev->index);
 	return path;
