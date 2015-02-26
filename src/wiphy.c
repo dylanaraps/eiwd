@@ -58,7 +58,7 @@ struct bss {
 	uint32_t frequency;
 	int32_t signal_strength;
 	uint16_t capability;
-	uint8_t rsne[256];
+	uint8_t *rsne;
 };
 
 struct netdev {
@@ -299,6 +299,7 @@ static void bss_free(void *data)
 	l_debug("Freeing BSS %02X:%02X:%02X:%02X:%02X:%02X",
 			bss->addr[0], bss->addr[1], bss->addr[2],
 			bss->addr[3], bss->addr[4], bss->addr[5]);
+	l_free(bss->rsne);
 	l_free(bss);
 }
 
@@ -820,7 +821,9 @@ static bool parse_ie(struct bss *bss, const uint8_t **ssid, int *ssid_len,
 			*ssid = iter.data;
 			break;
 		case IE_TYPE_RSN:
-			memcpy(bss->rsne, iter.data - 2, iter.len + 2);
+			if (!bss->rsne)
+				bss->rsne = l_memdup(iter.data - 2,
+								iter.len + 2);
 			break;
 		default:
 			break;
@@ -849,10 +852,8 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 	const uint8_t *ssid = NULL;
 	int ssid_len;
 	struct network *network = NULL;
-	struct ie_rsn_info rsne;
 	enum scan_ssid_security ssid_security;
 	const char *id;
-	int res;
 
 	bss = l_new(struct bss, 1);
 
@@ -906,16 +907,28 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 	}
 
 	/*
+	 * TODO: Check whether WPA element is present
+	 *
+	 * If we have the RSN element, try to parse it and figure out the
+	 * security parameters.
+	 *
 	 * Length was already validated by parse_ie, so use the one from the
 	 * IE directly.
 	 */
-	res = ie_parse_rsne_from_data(bss->rsne, bss->rsne[1] + 2, &rsne);
-	if (res < 0) {
-		l_debug("Cannot parse RSN field (%d, %s)", res, strerror(-res));
-		goto fail;
-	}
+	if (bss->rsne) {
+		struct ie_rsn_info rsne;
+		int res = ie_parse_rsne_from_data(bss->rsne, bss->rsne[1] + 2,
+							&rsne);
+		if (res < 0) {
+			l_debug("Cannot parse RSN field (%d, %s)",
+					res, strerror(-res));
+			goto fail;
+		}
 
-	ssid_security = scan_get_ssid_security(bss->capability, &rsne);
+		ssid_security = scan_get_ssid_security(bss->capability, &rsne);
+	} else
+		ssid_security = scan_get_ssid_security(bss->capability, NULL);
+
 	id = iwd_network_get_id(ssid, ssid_len, ssid_security);
 
 	network = l_hashmap_lookup(netdev->networks, id);
