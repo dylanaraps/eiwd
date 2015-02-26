@@ -25,6 +25,13 @@
 #endif
 
 #include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/socket.h>
+#include <linux/if.h>
+#include <linux/if_packet.h>
+#include <linux/if_ether.h>
+#include <arpa/inet.h>
 #include <ell/ell.h>
 
 #include "sha1.h"
@@ -826,6 +833,43 @@ void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func)
 void __eapol_set_protocol_version(enum eapol_protocol_version version)
 {
 	protocol_version = version;
+}
+
+struct l_io *eapol_open_pae(uint32_t index)
+{
+	struct l_io *io;
+	struct sockaddr_ll sll;
+	int fd;
+
+	fd = socket(PF_PACKET, SOCK_RAW | SOCK_CLOEXEC, 0);
+	if (fd < 0) {
+		l_error("Failed to create PAE socket %s (%d)",
+						strerror(errno), errno);
+		return NULL;
+	}
+
+	memset(&sll, 0, sizeof(sll));
+	sll.sll_family = AF_PACKET;
+	sll.sll_protocol = htons(ETH_P_PAE);
+	sll.sll_ifindex = index;
+
+	if (bind(fd, (struct sockaddr *) &sll, sizeof(sll)) < 0) {
+		l_error("Failed to bind PAE socket %s (%d)",
+						strerror(errno), errno);
+		close(fd);
+		return NULL;
+	}
+
+	io = l_io_new(fd);
+	if (!io) {
+		l_error("Failed to create IO handling for PAE socket ");
+		close(fd);
+		return NULL;
+	}
+
+	l_io_set_close_on_destroy(io, true);
+
+	return io;
 }
 
 bool eapol_init()
