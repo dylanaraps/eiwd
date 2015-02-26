@@ -27,6 +27,9 @@
 #include <string.h>
 
 #include <ell/string.h>
+#include <ell/genl.h>
+#include <ell/util.h>
+#include <ell/log.h>
 
 #include "util.h"
 
@@ -73,4 +76,17 @@ no_ssid:
 	buf[pos] = '\0';
 
 	return buf;
+}
+
+bool _msg_append_attr(struct l_genl_msg *msg,
+			uint16_t type, const char *type_str,
+			uint16_t len, const void *value)
+{
+	bool ret;
+
+	ret = l_genl_msg_append_attr(msg, type, len, value);
+	if (!ret)
+		l_warn("Cannot append attr %s", type_str);
+
+	return ret;
 }
