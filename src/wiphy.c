@@ -39,6 +39,7 @@
 #include "src/dbus.h"
 #include "src/scan.h"
 #include "src/util.h"
+#include "src/eapol.h"
 
 static struct l_genl *genl = NULL;
 static struct l_genl_family *nl80211 = NULL;
@@ -72,6 +73,7 @@ struct netdev {
 	struct l_hashmap *networks;
 	struct bss *connected_bss;
 	struct l_dbus_message *connect_pending;
+	struct l_io *eapol_io;
 };
 
 struct wiphy {
@@ -612,6 +614,7 @@ static void netdev_free(void *data)
 
 	l_queue_destroy(netdev->bss_list, bss_free);
 	l_queue_destroy(netdev->old_bss_list, bss_free);
+	l_io_destroy(netdev->eapol_io);
 
 	l_free(netdev);
 }
@@ -1246,6 +1249,12 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 	setup_scheduled_scan(wiphy, netdev, scheduled_scan_interval);
 
 	l_debug("Found interface %s", netdev->name);
+
+	netdev->eapol_io = eapol_open_pae(netdev->index);
+	if (!netdev->eapol_io)
+		l_error("Failed to open PAE socket");
+
+	/* TODO: set read handler and read eapol frames */
 }
 
 static void parse_supported_commands(struct wiphy *wiphy,
