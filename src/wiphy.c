@@ -686,6 +686,28 @@ static void mlme_associate_cmd(struct netdev *netdev)
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
 	msg_append_attr(msg, NL80211_ATTR_SSID, network->ssid_len,
 			network->ssid);
+
+	if (network->ssid_security == SCAN_SSID_SECURITY_PSK) {
+		uint32_t ccmp = 0x000fac04;
+		uint8_t rsne_buf[256];
+		struct ie_rsn_info info;
+
+		memset(&info, 0, sizeof(info));
+		info.group_cipher = IE_RSN_CIPHER_SUITE_CCMP;
+		info.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP;
+		info.akm_suites = IE_RSN_AKM_SUITE_PSK;
+
+		ie_build_rsne(&info, rsne_buf);
+
+		msg_append_attr(msg, NL80211_ATTR_CIPHER_SUITES_PAIRWISE,
+				4, &ccmp);
+		msg_append_attr(msg, NL80211_ATTR_CIPHER_SUITE_GROUP,
+				4, &ccmp);
+		msg_append_attr(msg, NL80211_ATTR_CONTROL_PORT, 0, NULL);
+		msg_append_attr(msg, NL80211_ATTR_IE,
+					rsne_buf[1] + 2, rsne_buf);
+	}
+
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 	l_genl_msg_unref(msg);
 }
