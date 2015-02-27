@@ -51,6 +51,8 @@ AC_ARG_ENABLE(pie, AC_HELP_STRING([--enable-pie],
 	fi
 ])
 
+AC_CHECK_HEADERS(linux/types.h linux/if_alg.h)
+
 AC_PATH_PROG(A2X, [a2x], [], $PATH:/sbin:/usr/sbin)
 
 AC_CONFIG_FILES(Makefile)
