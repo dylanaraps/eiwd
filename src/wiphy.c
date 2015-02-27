@@ -224,7 +224,6 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 			network->ssid);
 	msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
-	l_genl_msg_unref(msg);
 
 	netdev->connected_bss = bss;
 	netdev->connect_pending = l_dbus_message_ref(message);
@@ -534,7 +533,6 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
 						netdev->connected_bss->addr);
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
-	l_genl_msg_unref(msg);
 
 	netdev->connect_pending = l_dbus_message_ref(message);
 
@@ -713,7 +711,6 @@ static void mlme_associate_cmd(struct netdev *netdev)
 	}
 
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
-	l_genl_msg_unref(msg);
 }
 
 static void mlme_authenticate_event(struct l_genl_msg *msg,
@@ -1636,24 +1633,20 @@ static void nl80211_appeared(void *user_data)
 	if (!l_genl_family_send(nl80211, msg, protocol_features_callback,
 								NULL, NULL))
 		l_error("Getting protocol features failed");
-	l_genl_msg_unref(msg);
 
 	msg = l_genl_msg_new(NL80211_CMD_GET_REG);
 	if (!l_genl_family_send(nl80211, msg, regulatory_info_callback,
 								NULL, NULL))
 		l_error("Getting regulatory info failed");
-	l_genl_msg_unref(msg);
 
 	msg = l_genl_msg_new(NL80211_CMD_GET_WIPHY);
 	if (!l_genl_family_dump(nl80211, msg, wiphy_dump_callback, NULL, NULL))
 		l_error("Getting all wiphy devices failed");
-	l_genl_msg_unref(msg);
 
 	msg = l_genl_msg_new(NL80211_CMD_GET_INTERFACE);
 	if (!l_genl_family_dump(nl80211, msg, interface_dump_callback,
 								NULL, NULL))
 		l_error("Getting all interface information failed");
-	l_genl_msg_unref(msg);
 }
 
 static void nl80211_vanished(void *user_data)
