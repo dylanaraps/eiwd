@@ -46,7 +46,6 @@ void scan_start(struct l_genl_family *nl80211, uint32_t ifindex,
 	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN, 16);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
 	l_genl_family_send(nl80211, msg, callback, user_data, NULL);
-	l_genl_msg_unref(msg);
 }
 
 void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
@@ -65,8 +64,6 @@ void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
 
 	if (!l_genl_family_send(nl80211, msg, callback, user_data, NULL))
 		l_error("Starting scheduled scan failed");
-
-	l_genl_msg_unref(msg);
 }
 
 void scan_get_results(struct l_genl_family *nl80211, uint32_t ifindex,
@@ -78,7 +75,6 @@ void scan_get_results(struct l_genl_family *nl80211, uint32_t ifindex,
 	msg = l_genl_msg_new_sized(NL80211_CMD_GET_SCAN, 8);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
 	l_genl_family_dump(nl80211, msg, callback, user_data, scan_done);
-	l_genl_msg_unref(msg);
 }
 
 enum scan_ssid_security scan_get_ssid_security(
