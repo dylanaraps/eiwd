@@ -256,7 +256,6 @@ static void hwsim_ready(void *user_data)
 					0, NULL);
 
 		l_genl_family_send(hwsim, msg, create_callback, NULL, NULL);
-		l_genl_msg_unref(msg);
 		return;
 	} else if (destroy_action) {
 		uint32_t id = atoi(destroy_action);
@@ -264,7 +263,6 @@ static void hwsim_ready(void *user_data)
 		msg = l_genl_msg_new_sized(HWSIM_CMD_DEL_RADIO, 8);
 		l_genl_msg_append_attr(msg, HWSIM_ATTR_RADIO_ID, 4, &id);
 		l_genl_family_send(hwsim, msg, destroy_callback, NULL, NULL);
-		l_genl_msg_unref(msg);
 	} else if (list_action) {
 		msg = l_genl_msg_new_sized(HWSIM_CMD_GET_RADIO,
 					list_option ? 8: 4);
@@ -279,8 +277,6 @@ static void hwsim_ready(void *user_data)
 			l_genl_family_dump(hwsim, msg, list_callback,
 						NULL, list_callback_done);
 		}
-
-		l_genl_msg_unref(msg);
 	} else
 		l_main_quit();
 }
