@@ -28,6 +28,7 @@
 #include "src/manager.h"
 #include "src/dbus.h"
 #include "src/wiphy.h"
+#include "src/agent.h"
 
 static struct l_dbus_message *manager_set_property(struct l_dbus *dbus,
 						struct l_dbus_message *message,
@@ -107,10 +108,14 @@ static void setup_manager_interface(struct l_dbus_interface *interface)
 				"oa{sv}", "path", "properties");
 	l_dbus_interface_signal(interface, "DeviceRemoved", 0,
 				"o", "path");
+
+	agent_setup(interface);
 }
 
 bool manager_init(struct l_dbus *dbus)
 {
+	agent_init();
+
 	if (!l_dbus_register_interface(dbus, IWD_MANAGER_PATH,
 					IWD_MANAGER_INTERFACE,
 					setup_manager_interface, NULL, NULL)) {
@@ -126,6 +131,8 @@ bool manager_exit(struct l_dbus *dbus)
 {
 	l_dbus_unregister_interface(dbus, IWD_MANAGER_PATH,
 					IWD_MANAGER_INTERFACE);
+
+	agent_exit();
 
 	return true;
 }
