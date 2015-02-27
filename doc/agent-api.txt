@@ -1,0 +1,36 @@
+Agent hierarchy
+===============
+
+Service		unique name
+Interface	net.connman.iwd.Agent
+Object path	freely definable
+
+Methods		void Release()
+
+			This method gets called when the service daemon
+			unregisters the agent. An agent can use it to do
+			cleanup tasks. There is no need to unregister the
+			agent, because when this method gets called it has
+			already been unregistered.
+
+		string RequestPassphrase(object network)
+
+			This method gets called when trying to connect to
+			a network and passphrase is required.
+
+			The return value should be a dictionary where the
+			keys are the field names and the values are the
+			actual fields. Alternatively an error indicating that
+			the request got canceled can be returned.
+
+			Possible Errors: net.connman.iwd.Agent.Error.Canceled
+
+		void Cancel()
+
+			This method gets called to indicate that the agent
+			request failed before a reply was returned.
+
+Examples	Requesting a passphrase for WPA2 network
+
+			RequestPassphrase("/network1")
+			==> "secret123"
