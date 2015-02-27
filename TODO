@@ -129,10 +129,16 @@ cfg80211 / nl80211
 Wireless monitor
 ================
 
-- Add support for Information Element (IE) decoding
+- Decode HT Capabilities IE element
 
-  Several netlink attributes provide binary blobs representing IEs.  Add
-  support for decoding them inline using the src/ie.c infrastructure.
+  HT Capabilities element has ID 45.
+
+  Priority: Medium
+  Complexity: C1
+
+- Decode HT Operation IE element
+
+  HT Operation element has ID 61.
 
   Priority: Medium
   Complexity: C1
