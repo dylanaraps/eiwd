@@ -1,0 +1,100 @@
+#!/usr/bin/python
+
+import gobject
+
+import dbus
+import dbus.service
+import dbus.mainloop.glib
+import sys
+from random import randrange
+
+class Canceled(dbus.DBusException):
+	_dbus_error_name = "net.connman.iwd.Error.Canceled"
+
+class Agent(dbus.service.Object):
+	passphrase = None
+
+	@dbus.service.method("net.connman.iwd.Agent",
+					in_signature='', out_signature='')
+	def Release(self):
+		print("Release")
+		mainloop.quit()
+
+	def input_passphrase(self):
+		response = {}
+
+		if not self.passphrase:
+			print "Service credentials requested, type cancel to cancel"
+			args = raw_input('Answer: ')
+
+			for arg in args.split():
+				if arg.startswith("cancel"):
+					response["Error"] = arg
+				if arg.startswith("Passphrase="):
+					passphrase = arg.replace("Passphrase=", "", 1)
+					response["Passphrase"] = passphrase
+		else:
+			if self.passphrase:
+				response["Passphrase"] = self.passphrase
+
+		return response
+
+	@dbus.service.method("net.connman.iwd.Agent",
+					in_signature='o',
+					out_signature='s')
+	def RequestPassphrase(self, path):
+		print "RequestPassphrase (%s)" % (path)
+
+		response = {}
+
+                response.update(self.input_passphrase())
+
+		if response.has_key("Error"):
+			if response["Error"] == "cancel":
+				raise Canceled("canceled")
+				return
+
+		print "returning (%s)" % (response["Passphrase"])
+
+		return response["Passphrase"]
+
+	@dbus.service.method("net.connman.iwd.Agent",
+					in_signature='', out_signature='')
+	def Cancel(self):
+		print "Cancel"
+
+
+def print_usage():
+	print "Usage:"
+	print "For WPA input:"
+	print "%s Passphrase=<passphrase>" % (sys.argv[0])
+	print "Help: %s help" % (sys.argv[0])
+	sys.exit(1)
+
+if __name__ == '__main__':
+	if len(sys.argv) == 2 and sys.argv[1] == "help":
+		print_usage()
+
+	dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+
+	bus = dbus.SystemBus()
+	manager = dbus.Interface(bus.get_object('net.connman.iwd', "/"),
+					'net.connman.iwd.Manager')
+
+	path = "/test/agent/" + str(randrange(100))
+	object = Agent(bus, path)
+
+	if len(sys.argv) >= 2:
+		for arg in sys.argv[1:]:
+			if arg.startswith("Passphrase="):
+				object.passphrase = arg.replace("Passphrase=", "", 1)
+			else:
+				print_usage()
+
+	try:
+		manager.RegisterAgent(path)
+	except:
+		print "Cannot register iwd agent."
+
+	mainloop = gobject.MainLoop()
+	mainloop.run()
