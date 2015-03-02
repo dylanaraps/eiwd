@@ -30,6 +30,12 @@
 #include "src/dbus.h"
 #include "src/agent.h"
 
+/* Agent dbus request is done from iwd towards the agent */
+struct agent_request {
+	struct l_dbus_message *message;
+	void *user_data;
+};
+
 struct agent {
 	char *owner;
 	char *path;
@@ -42,6 +48,55 @@ struct agent {
 
 static struct agent *default_agent = NULL;
 
+static void send_request(struct agent *agent, const char *request)
+{
+	struct l_dbus_message *message;
+
+	l_debug("send %s request to %s %s", request, agent->owner,
+							agent->path);
+
+	message = l_dbus_message_new_method_call(dbus_get_bus(),
+						agent->owner,
+						agent->path,
+						IWD_AGENT_INTERFACE,
+						request);
+
+	l_dbus_message_set_arguments(message, "");
+
+	l_dbus_send(dbus_get_bus(), message);
+}
+
+static void send_cancel_request(void *user_data)
+{
+	struct agent *agent = user_data;
+
+	send_request(agent, "Cancel");
+}
+
+static void agent_request_free(void *user_data)
+{
+	struct agent_request *request = user_data;
+
+	l_dbus_message_unref(request->message);
+
+	l_free(request);
+}
+
+static void agent_finalize_pending(struct agent *agent,
+						struct l_dbus_message *reply)
+{
+	struct agent_request *pending;
+
+	if (agent->timeout) {
+		l_timeout_remove(agent->timeout);
+		agent->timeout = NULL;
+	}
+
+	pending = l_queue_pop_head(agent->requests);
+
+	agent_request_free(pending);
+}
+
 static void agent_free(void *data)
 {
 	struct agent *agent = data;
@@ -51,6 +106,11 @@ static void agent_free(void *data)
 	if (agent->timeout)
 		l_timeout_remove(agent->timeout);
 
+	if (agent->pending_id)
+		l_dbus_cancel(dbus_get_bus(), agent->pending_id);
+
+	l_queue_destroy(agent->requests, agent_request_free);
+
 	if (agent->disconnect_watch)
 		l_dbus_remove_watch(dbus_get_bus(), agent->disconnect_watch);
 
@@ -59,6 +119,59 @@ static void agent_free(void *data)
 	l_free(agent);
 
 	default_agent = NULL;
+}
+
+static void agent_send_next_request(struct agent *agent);
+
+static void request_timeout(struct l_timeout *timeout, void *user_data)
+{
+	struct agent *agent = user_data;
+
+	l_dbus_cancel(dbus_get_bus(), agent->pending_id);
+
+	send_cancel_request(agent);
+
+	agent_finalize_pending(agent, NULL);
+
+	agent_send_next_request(agent);
+}
+
+static void agent_receive_reply(struct l_dbus_message *message,
+							void *user_data)
+{
+	struct agent *agent = user_data;
+
+	l_debug("agent %p request id %u", agent, agent->pending_id);
+
+	agent->pending_id = 0;
+
+	agent_finalize_pending(agent, message);
+
+	agent_send_next_request(agent);
+}
+
+static void agent_send_next_request(struct agent *agent)
+{
+	struct agent_request *pending;
+
+	pending = l_queue_peek_head(agent->requests);
+	if (!pending)
+		return;
+
+	agent->timeout = l_timeout_create(agent->timeout_secs,
+						request_timeout,
+						agent, NULL);
+
+	l_debug("send request to %s %s", agent->owner, agent->path);
+
+	agent->pending_id = l_dbus_send_with_reply(dbus_get_bus(),
+						pending->message,
+						agent_receive_reply,
+						agent, NULL);
+
+	pending->message = NULL;
+
+	return;
 }
 
 static void agent_disconnect(struct l_dbus *dbus, void *user_data)
