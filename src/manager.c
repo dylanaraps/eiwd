@@ -132,7 +132,5 @@ bool manager_exit(struct l_dbus *dbus)
 	l_dbus_unregister_interface(dbus, IWD_MANAGER_PATH,
 					IWD_MANAGER_INTERFACE);
 
-	agent_exit();
-
 	return true;
 }

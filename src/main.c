@@ -33,6 +33,14 @@
 #include "src/wiphy.h"
 #include "src/kdbus.h"
 #include "src/dbus.h"
+#include "src/agent.h"
+
+static struct l_timeout *timeout = NULL;
+
+static void main_loop_quit(struct l_timeout *timeout, void *user_data)
+{
+	l_main_quit();
+}
 
 static void signal_handler(struct l_signal *signal, uint32_t signo,
 							void *user_data)
@@ -41,7 +49,10 @@ static void signal_handler(struct l_signal *signal, uint32_t signo,
 	case SIGINT:
 	case SIGTERM:
 		l_info("Terminate");
-		l_main_quit();
+
+		agent_exit();
+
+		timeout = l_timeout_create(1, main_loop_quit, NULL, NULL);
 		break;
 	}
 }
@@ -171,6 +182,7 @@ destroy:
 
 done:
 	l_signal_remove(signal);
+	l_timeout_remove(timeout);
 
 	return exit_status;
 }
