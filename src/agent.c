@@ -273,6 +273,31 @@ unsigned int agent_request_passphrase(const char *path,
 				user_data);
 }
 
+static bool find_request(const void *a, const void *b)
+{
+	const struct agent_request *request = a;
+	unsigned int id = L_PTR_TO_UINT(b);
+
+	return request->id == id;
+}
+
+bool agent_request_cancel(unsigned int req_id)
+{
+	struct agent_request *request;
+
+	request = l_queue_remove_if(default_agent->requests, find_request,
+							L_UINT_TO_PTR(req_id));
+	if (!request)
+		return false;
+
+	if (!request->message)
+		send_cancel_request(default_agent);
+
+	agent_request_free(request);
+
+	return true;
+}
+
 static void agent_disconnect(struct l_dbus *dbus, void *user_data)
 {
 	struct agent *agent = user_data;
