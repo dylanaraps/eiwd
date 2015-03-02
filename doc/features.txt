@@ -14,6 +14,13 @@ a certain SSID instead of connecting directly to a BSS. IWD will then pick
 the best BSS automatically from the BSS list when connecting to a SSID.
 The "best" BSS in this context is the BSS that has the highest signal strength.
 
+IWD uses the DBus agent interface to query information from the user.
+The information asked include things like passphrase etc. The user can
+register only one agent to iwd. If the user does not respond in timely
+manner to the query, then the pending user request is cancelled after a
+timeout. The pending user request is also cancelled if user disconnects a
+pending connection attempt.
+
 
 Wireless monitor
 ================

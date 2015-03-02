@@ -293,16 +293,6 @@ Wireless daemon
   Priority: High
   Complexity: C4
 
-- Implement agent support in iwd.
-
-  If something needs to be asked from user, like passphrase etc.
-  a DBus agent interface can be registered by the user.
-  This is similar as what is implemented in ConnMan and BlueZ.
-
-  Priority: Medium
-  Complexity: C2
-  Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
-
 - Add utility to create netlink REKEY_DATA attributes
 
   The REKEY_DATA needs to be uploaded to the driver so that if re-keying is
