@@ -395,6 +395,13 @@ bool agent_setup(struct l_dbus_interface *interface)
 	return true;
 }
 
+static void release_agent(struct agent *agent)
+{
+	send_request(agent, "Release");
+
+	agent_free(agent);
+}
+
 bool agent_init(void)
 {
 	return true;
@@ -402,5 +409,8 @@ bool agent_init(void)
 
 void agent_exit(void)
 {
-	return;
+	if (!default_agent)
+		return;
+
+	release_agent(default_agent);
 }
