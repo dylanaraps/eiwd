@@ -30,10 +30,14 @@
 #include "src/dbus.h"
 #include "src/agent.h"
 
+static unsigned int next_request_id = 0;
+
 /* Agent dbus request is done from iwd towards the agent */
 struct agent_request {
 	struct l_dbus_message *message;
+	unsigned int id;
 	void *user_data;
+	void *user_callback;
 };
 
 struct agent {
@@ -47,6 +51,18 @@ struct agent {
 };
 
 static struct agent *default_agent = NULL;
+
+/*
+ * How long we wait for user to input things.
+ * Return value is in seconds.
+ *
+ * This should probably be configurable by user via
+ * config file/command line option/env variable.
+ */
+static unsigned int agent_timeout_input_request(void)
+{
+	return 120;
+}
 
 static void send_request(struct agent *agent, const char *request)
 {
@@ -82,6 +98,26 @@ static void agent_request_free(void *user_data)
 	l_free(request);
 }
 
+static void passphrase_reply(struct l_dbus_message *reply,
+					struct agent_request *request)
+{
+	const char *error, *text;
+	char *passphrase = NULL;
+	enum agent_result result = AGENT_RESULT_FAILED;
+	agent_request_passphrase_func_t user_callback = request->user_callback;
+
+	if (l_dbus_message_get_error(reply, &error, &text))
+		goto done;
+
+	if (!l_dbus_message_get_arguments(reply, "s", &passphrase))
+		goto done;
+
+	result = AGENT_RESULT_OK;
+
+done:
+	user_callback(result, passphrase, request->user_data);
+}
+
 static void agent_finalize_pending(struct agent *agent,
 						struct l_dbus_message *reply)
 {
@@ -93,6 +129,8 @@ static void agent_finalize_pending(struct agent *agent,
 	}
 
 	pending = l_queue_pop_head(agent->requests);
+
+	passphrase_reply(reply, pending);
 
 	agent_request_free(pending);
 }
@@ -172,6 +210,67 @@ static void agent_send_next_request(struct agent *agent)
 	pending->message = NULL;
 
 	return;
+}
+
+static unsigned int agent_queue_request(struct agent *agent,
+				struct l_dbus_message *message, int timeout,
+				agent_request_passphrase_func_t callback,
+				void *user_data)
+{
+	struct agent_request *request;
+
+	request = l_new(struct agent_request, 1);
+
+	request->message = message;
+	request->id = ++next_request_id;
+	request->user_data = user_data;
+	request->user_callback = callback;
+
+	agent->timeout_secs = timeout;
+
+	l_queue_push_tail(agent->requests, request);
+
+	if (l_queue_length(agent->requests) == 1)
+		agent_send_next_request(agent);
+
+	return request->id;
+}
+
+/**
+ * agent_request_passphrase:
+ * @path: object path related to this request (like network object path)
+ * @callback: user callback called when the request is ready
+ * @user_data: user defined data
+ *
+ * Called when a passphrase information is needed from the user. Returns an
+ * id that can be used to cancel the request.
+ */
+unsigned int agent_request_passphrase(const char *path,
+				agent_request_passphrase_func_t callback,
+				void *user_data)
+{
+	struct l_dbus_message *message;
+	struct agent *agent;
+
+	agent = default_agent;
+
+	if (!agent || !callback)
+		return 0;
+
+	l_debug("agent %p owner %s path %s", agent, agent->owner, agent->path);
+
+	message = l_dbus_message_new_method_call(dbus_get_bus(),
+						agent->owner,
+						agent->path,
+						IWD_AGENT_INTERFACE,
+						"RequestPassphrase");
+
+	l_dbus_message_set_arguments(message, "o", path);
+
+	return agent_queue_request(agent, message,
+				agent_timeout_input_request(),
+				callback,
+				user_data);
 }
 
 static void agent_disconnect(struct l_dbus *dbus, void *user_data)

@@ -22,6 +22,19 @@
 
 #include <stdbool.h>
 
+enum agent_result {
+	AGENT_RESULT_OK,
+	AGENT_RESULT_FAILED,
+};
+
+typedef void (*agent_request_passphrase_func_t) (enum agent_result result,
+					const char *passphrase,
+					void *user_data);
+
 bool agent_init(void);
 void agent_exit(void);
 bool agent_setup(struct l_dbus_interface *interface);
+
+unsigned int agent_request_passphrase(const char *path,
+				agent_request_passphrase_func_t callback,
+				void *user_data);
