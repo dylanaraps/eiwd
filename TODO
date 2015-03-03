@@ -301,6 +301,7 @@ Wireless daemon
 
   Priority: High
   Complexity: C1
+  Owner: Tomasz Bursztyka <tomasz.bursztyka@linux.intel.com>
 
 - React to NL80211_CMD_SET_REKEY_OFFLOAD events
 
@@ -320,6 +321,7 @@ Wireless daemon
 
   Priority: High
   Complexity: C1
+  Owner: Tomasz Bursztyka <tomasz.bursztyka@linux.intel.com>
 
 - RSN IE Generation for WPA2 Association
 
