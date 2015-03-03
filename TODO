@@ -361,15 +361,6 @@ Wireless daemon
   Priority: High
   Complexity: C1
 
-- Match 1st RSNE element in Step 3/4 of the 4-way Handshake
-
-  Packet 3/4 EAPoL Key Data should contain at least one RSN Element.  This RSN
-  element should be the same as was obtained during the scan or probe of the AP.
-  We need to make sure the two RSN Elements match.
-
-  Priority: High
-  Complexity: C1
-
 - Extract GTK from Key Data in Step 3/4 of the 4-way Handshake
 
   GTK is carried inside a KDE.  For KDE format, refer to 802.11 Figure 11-30.
