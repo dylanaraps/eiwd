@@ -391,6 +391,12 @@ Wireless daemon
   Priority: Medium
   Complexity: C1
 
+- Integrate EAPoL transport logic into rest of the daemon
+
+  Priority: High
+  Complexity: C1
+  Owner: Jukka Rissanen <jukka.rissanen@linux.intel.com>
+
 
 Client
 ======
