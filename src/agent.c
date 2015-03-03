@@ -214,8 +214,7 @@ static void agent_send_next_request(struct agent *agent)
 
 static unsigned int agent_queue_request(struct agent *agent,
 				struct l_dbus_message *message, int timeout,
-				agent_request_passphrase_func_t callback,
-				void *user_data)
+				void *callback, void *user_data)
 {
 	struct agent_request *request;
 
