@@ -734,7 +734,6 @@ static void eapol_handle_ptk_3_of_4(int ifindex, struct eapol_sm *sm,
 
 fail:
 	l_free(step4);
-
 }
 
 void __eapol_rx_packet(int ifindex, const uint8_t *sta_addr,
