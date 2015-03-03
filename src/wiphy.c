@@ -177,6 +177,15 @@ static struct l_dbus_message *network_get_properties(struct l_dbus *dbus,
 	return reply;
 }
 
+static void genl_connect_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	if (l_genl_msg_get_error(msg) < 0 && netdev->connect_pending)
+		dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_failed(netdev->connect_pending));
+}
+
 static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -207,7 +216,7 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	msg_append_attr(msg, NL80211_ATTR_SSID, network->ssid_len,
 			network->ssid);
 	msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
-	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
+	l_genl_family_send(nl80211, msg, genl_connect_cb, netdev, NULL);
 
 	netdev->connected_bss = bss;
 	netdev->connect_pending = l_dbus_message_ref(message);
@@ -495,6 +504,15 @@ static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
 	return reply;
 }
 
+static void genl_disconnect_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	if (l_genl_msg_get_error(msg) < 0 && netdev->connect_pending)
+		dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_failed(netdev->connect_pending));
+}
+
 static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -516,7 +534,7 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 	msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
 						netdev->connected_bss->addr);
-	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
+	l_genl_family_send(nl80211, msg, genl_disconnect_cb, netdev, NULL);
 
 	netdev->connect_pending = l_dbus_message_ref(message);
 
@@ -649,6 +667,15 @@ static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
 	dbus_pending_reply(&netdev->connect_pending, reply);
 }
 
+static void genl_associate_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	if (l_genl_msg_get_error(msg) < 0 && netdev->connect_pending)
+		dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_failed(netdev->connect_pending));
+}
+
 static void mlme_associate_cmd(struct netdev *netdev)
 {
 	struct l_genl_msg *msg;
@@ -694,7 +721,7 @@ static void mlme_associate_cmd(struct netdev *netdev)
 					rsne_buf[1] + 2, rsne_buf);
 	}
 
-	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
+	l_genl_family_send(nl80211, msg, genl_associate_cb, netdev, NULL);
 }
 
 static void mlme_authenticate_event(struct l_genl_msg *msg,
