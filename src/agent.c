@@ -284,6 +284,9 @@ bool agent_request_cancel(unsigned int req_id)
 {
 	struct agent_request *request;
 
+	if (!default_agent)
+		return false;
+
 	request = l_queue_remove_if(default_agent->requests, find_request,
 							L_UINT_TO_PTR(req_id));
 	if (!request)
