@@ -681,12 +681,16 @@ static const char *rsn_capabilities_bitfield[] = {
 };
 
 static void print_ie_bitfield(unsigned int level, const char *label,
-			uint64_t bits, const char *bitfield_table[])
+			const uint8_t *bytes, const uint8_t *mask, size_t len,
+			const char *bitfield_table[])
 {
 	unsigned int i;
 
-	for (i = 0; bitfield_table[i]; i++) {
-		if (!(bits & 1 << i))
+	for (i = 0; i < len * 8; i++) {
+		uint8_t byte = i / 8;
+		uint8_t bit = i % 8;
+
+		if (!util_is_bit_set(bytes[byte] & mask[byte], bit))
 			continue;
 
 		print_attr(level, "%s: bit %2d: %s", label, i,
@@ -699,7 +703,8 @@ static void print_ie_rsn(unsigned int level, const char *label,
 {
 	const void *end = data + size;
 
-	uint16_t version, count, rsn_capa;
+	uint16_t version, count;
+	uint8_t bytemask[2];
 	int i;
 	const char *rsn_capabilities_replay_counter[] = {
 		"1 replay counter",
@@ -760,22 +765,25 @@ static void print_ie_rsn(unsigned int level, const char *label,
 	if (end - data < 2)
 		goto end;
 
-	rsn_capa = l_get_le16(data);
 	data += 2;
 
-	print_ie_bitfield(level + 1, "RSN capabilities", rsn_capa & 0x0003,
-			rsn_capabilities_bitfield);
+	bytemask[0] = 0x03;
+	bytemask[1] = 0x00;
+	print_ie_bitfield(level + 1, "RSN capabilities", data, bytemask,
+			sizeof(bytemask), rsn_capabilities_bitfield);
 
-	count = (rsn_capa & 0x000c) >> 2;
+	count = (*((uint8_t *)data) & 0x0c) >> 2;
 	print_attr(level + 1, "RSN capabilities: bits  3 - 4: %s per PTKSA",
 		rsn_capabilities_replay_counter[count]);
 
-	count = (rsn_capa & 0x0030) >> 4;
+	count = (*((uint8_t *)data) & 0x30) >> 4;
 	print_attr(level + 1, "RSN capabilities: bits  5 - 6: %s per GTKSA",
 		rsn_capabilities_replay_counter[count]);
 
-	print_ie_bitfield(level + 1, "RSN capabilities", rsn_capa & 0xffc0,
-			rsn_capabilities_bitfield);
+	bytemask[0] = 0xc0;
+	bytemask[1] = 0xff;
+	print_ie_bitfield(level + 1, "RSN capabilities", data, bytemask,
+			sizeof(bytemask), rsn_capabilities_bitfield);
 
 	if (end - data < 2)
 		goto end;
