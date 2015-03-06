@@ -40,6 +40,8 @@
 #include "src/scan.h"
 #include "src/util.h"
 #include "src/eapol.h"
+#include "src/agent.h"
+#include "src/crypto.h"
 
 static struct l_genl *genl = NULL;
 static struct l_genl_family *nl80211 = NULL;
@@ -49,6 +51,8 @@ struct network {
 	struct netdev *netdev;
 	uint8_t ssid[32];
 	uint8_t ssid_len;
+	unsigned char *psk;
+	unsigned int agent_request;
 	enum scan_ssid_security ssid_security;
 	struct l_queue *bss_list;
 };
@@ -186,28 +190,12 @@ static void genl_connect_cb(struct l_genl_msg *msg, void *user_data)
 				dbus_error_failed(netdev->connect_pending));
 }
 
-static struct l_dbus_message *network_connect(struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data)
+static int mlme_authenticate_cmd(struct network *network)
 {
-	struct network *network = user_data;
 	struct netdev *netdev = network->netdev;
 	struct bss *bss = l_queue_peek_head(network->bss_list);
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
-
-	l_debug("");
-
-	if (netdev->connect_pending)
-		return dbus_error_busy(message);
-
-	switch (network->ssid_security) {
-	case SCAN_SSID_SECURITY_NONE:
-	case SCAN_SSID_SECURITY_PSK:
-		break;
-	default:
-		return dbus_error_not_supported(message);
-	}
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
@@ -219,6 +207,75 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	l_genl_family_send(nl80211, msg, genl_connect_cb, netdev, NULL);
 
 	netdev->connected_bss = bss;
+
+	return 0;
+}
+
+static void passphrase_callback(enum agent_result result,
+				const char *passphrase, void *user_data)
+{
+	struct network *network = user_data;
+	struct netdev *netdev = network->netdev;
+
+	l_debug("result %d", result);
+
+	network->agent_request = 0;
+
+	if (result != AGENT_RESULT_OK) {
+		dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_aborted(netdev->connect_pending));
+
+		return;
+	}
+
+	network->psk = l_malloc(32);
+
+	if (crypto_psk_from_passphrase(passphrase, network->ssid,
+					network->ssid_len, network->psk) < 0) {
+		dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_failed(netdev->connect_pending));
+
+		l_free(network->psk);
+		network->psk = NULL;
+
+		return;
+	}
+
+	mlme_authenticate_cmd(network);
+}
+
+static struct l_dbus_message *network_connect(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct network *network = user_data;
+	struct netdev *netdev = network->netdev;
+
+	l_debug("");
+
+	if (netdev->connect_pending)
+		return dbus_error_busy(message);
+
+	switch (network->ssid_security) {
+	case SCAN_SSID_SECURITY_PSK:
+		if (!network->psk) {
+			network->agent_request =
+				agent_request_passphrase(
+						iwd_network_get_path(network),
+						passphrase_callback,
+						network);
+			break;
+		}
+
+		/* fall through */
+	case SCAN_SSID_SECURITY_NONE:
+		mlme_authenticate_cmd(network);
+		break;
+
+	default:
+		return dbus_error_not_supported(message);
+	}
+
 	netdev->connect_pending = l_dbus_message_ref(message);
 
 	return NULL;
@@ -302,12 +359,15 @@ static void network_free(void *data)
 	struct network *network = data;
 	struct l_dbus *dbus;
 
+	agent_request_cancel(network->agent_request);
+
 	dbus = dbus_get_bus();
 	l_dbus_unregister_interface(dbus, iwd_network_get_path(network),
 					IWD_NETWORK_INTERFACE);
 	network_emit_removed(network);
 
 	l_queue_destroy(network->bss_list, NULL);
+	l_free(network->psk);
 	l_free(network);
 }
 
