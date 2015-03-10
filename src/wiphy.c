@@ -48,6 +48,7 @@ static struct l_genl_family *nl80211 = NULL;
 static int scheduled_scan_interval = 60;	/* in secs */
 
 struct network {
+	char *object_path;
 	struct netdev *netdev;
 	uint8_t ssid[32];
 	uint8_t ssid_len;
@@ -113,38 +114,21 @@ static const char *ssid_security_to_str(enum scan_ssid_security ssid_security)
 	return NULL;
 }
 
-static const char *iwd_network_get_id(const uint8_t *ssid,
-					unsigned int ssid_len,
+static const char *iwd_network_get_path(struct netdev *netdev,
+					const uint8_t *ssid, size_t ssid_len,
 					enum scan_ssid_security ssid_security)
 {
 	static char path[256];
-	unsigned int i, pos = 0;
+	unsigned int pos, i;
+
+	pos = snprintf(path, sizeof(path), "%s/", iwd_device_get_path(netdev));
 
 	for (i = 0; i < ssid_len && pos < sizeof(path); i++)
 		pos += snprintf(path + pos, sizeof(path) - pos, "%02x",
-				ssid[i]);
+								ssid[i]);
 
-	pos += snprintf(path + pos, sizeof(path) - pos, "_%s",
+	snprintf(path + pos, sizeof(path) - pos, "_%s",
 			ssid_security_to_str(ssid_security));
-
-	path[pos] = '\0';
-
-	return path;
-}
-
-static char *iwd_network_get_path(struct network *network)
-{
-	static char path[256];
-	const char *id;
-	int pos;
-
-	pos = snprintf(path, sizeof(path), "%s/",
-			iwd_device_get_path(network->netdev));
-
-	id = iwd_network_get_id(network->ssid, network->ssid_len,
-				network->ssid_security);
-
-	strncpy(path + pos, id, sizeof(path) - pos);
 
 	return path;
 }
@@ -261,7 +245,7 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 		if (!network->psk) {
 			network->agent_request =
 				agent_request_passphrase(
-						iwd_network_get_path(network),
+						network->object_path,
 						passphrase_callback,
 						network);
 			break;
@@ -317,7 +301,7 @@ static void network_emit_added(struct network *network)
 	}
 
 	l_dbus_message_builder_append_basic(builder, 'o',
-						iwd_network_get_path(network));
+						network->object_path);
 	__iwd_network_append_properties(network, builder);
 
 	l_dbus_message_builder_finalize(builder);
@@ -338,8 +322,7 @@ static void network_emit_removed(struct network *network)
 	if (!signal)
 		return;
 
-	l_dbus_message_set_arguments(signal, "o",
-					iwd_network_get_path(network));
+	l_dbus_message_set_arguments(signal, "o", network->object_path);
 	l_dbus_send(dbus, signal);
 }
 
@@ -362,9 +345,11 @@ static void network_free(void *data)
 	agent_request_cancel(network->agent_request);
 
 	dbus = dbus_get_bus();
-	l_dbus_unregister_interface(dbus, iwd_network_get_path(network),
+	l_dbus_unregister_interface(dbus, network->object_path,
 					IWD_NETWORK_INTERFACE);
 	network_emit_removed(network);
+
+	l_free(network->object_path);
 
 	l_queue_destroy(network->bss_list, NULL);
 	l_free(network->psk);
@@ -538,7 +523,7 @@ static void append_network_properties(const void *key, void *value,
 
 	l_dbus_message_builder_enter_dict(builder, "oa{sv}");
 	l_dbus_message_builder_append_basic(builder, 'o',
-						iwd_network_get_path(network));
+						network->object_path);
 	__iwd_network_append_properties(network, builder);
 	l_dbus_message_builder_leave_dict(builder);
 }
@@ -924,7 +909,7 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 	int ssid_len;
 	struct network *network;
 	enum scan_ssid_security ssid_security;
-	const char *id;
+	const char *path;
 
 	bss = l_new(struct bss, 1);
 
@@ -1000,9 +985,9 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 	} else
 		ssid_security = scan_get_ssid_security(bss->capability, NULL);
 
-	id = iwd_network_get_id(ssid, ssid_len, ssid_security);
+	path = iwd_network_get_path(netdev, ssid, ssid_len, ssid_security);
 
-	network = l_hashmap_lookup(netdev->networks, id);
+	network = l_hashmap_lookup(netdev->networks, path);
 	if (!network) {
 		l_debug("Found new SSID \"%s\" security %s",
 			util_ssid_to_utf8(ssid_len, ssid),
@@ -1014,10 +999,12 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 		network->ssid_len = ssid_len;
 		network->ssid_security = ssid_security;
 		network->bss_list = l_queue_new();
-		l_hashmap_insert(netdev->networks, id, network);
+		network->object_path = strdup(path);
+		l_hashmap_insert(netdev->networks,
+					network->object_path, network);
 
 		if (!l_dbus_register_interface(dbus_get_bus(),
-					iwd_network_get_path(network),
+					network->object_path,
 					IWD_NETWORK_INTERFACE,
 					setup_network_interface,
 					network, NULL))
@@ -1113,7 +1100,6 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 static void network_remove_if_lost(void *data)
 {
 	struct network *network = data;
-	const char *id;
 
 	if (!l_queue_isempty(network->bss_list))
 		return;
@@ -1121,10 +1107,7 @@ static void network_remove_if_lost(void *data)
 	l_debug("No remaining BSSs for SSID: %s -- Removing network",
 			util_ssid_to_utf8(network->ssid_len, network->ssid));
 
-	id = iwd_network_get_id(network->ssid, network->ssid_len,
-					network->ssid_security);
-
-	if (!l_hashmap_remove(network->netdev->networks, id))
+	if (!l_hashmap_remove(network->netdev->networks, network->object_path))
 		l_warn("Panic, trying to remove network that doesn't"
 			" exist in the networks hashmap");
 
@@ -1295,7 +1278,10 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 
 		netdev = l_new(struct netdev, 1);
 		netdev->bss_list = l_queue_new();
-		netdev->networks = l_hashmap_string_new();
+		netdev->networks = l_hashmap_new();
+		l_hashmap_set_hash_function(netdev->networks, l_str_hash);
+		l_hashmap_set_compare_function(netdev->networks,
+					(l_hashmap_compare_func_t) strcmp);
 		memcpy(netdev->name, ifname, sizeof(netdev->name));
 		memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
 		netdev->index = ifindex;
