@@ -478,18 +478,14 @@ static struct l_dbus_message *device_get_properties(struct l_dbus *dbus,
 static void device_scan_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
 	struct l_dbus_message *reply;
 
-	if (!l_genl_attr_init(&attr, msg)) {
+	l_debug("Scan callback");
+
+	if (l_genl_msg_get_error(msg) < 0) {
 		dbus_pending_reply(&netdev->scan_pending,
 				dbus_error_failed(netdev->scan_pending));
 		return;
-	}
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 	}
 
 	l_debug("Scan triggered for netdev %s", netdev->name);
@@ -504,6 +500,8 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 						void *user_data)
 {
 	struct netdev *netdev = user_data;
+
+	l_debug("Scan called from DBus");
 
 	if (netdev->scan_pending)
 		return dbus_error_busy(message);
