@@ -336,35 +336,6 @@ static void print_ie_error(unsigned int level, const char *label,
 			strerror(-err), err);
 }
 
-static void print_ie_vendor(unsigned int level, const char *label,
-				const void *data, uint16_t size)
-{
-	const uint8_t *oui = data;
-	const char *str = NULL;
-	unsigned int i;
-
-	print_attr(level, "%s: len %u", label, size);
-
-	if (size < 3) {
-		print_hexdump(level + 1, data, size);
-		return;
-	}
-
-	for (i = 0; oui_table[i].str; i++) {
-		if (!memcmp(oui_table[i].oui, oui, 3)) {
-			str = oui_table[i].str;
-			break;
-		}
-	}
-
-	if (str)
-		print_attr(level + 1, "%s (%02x:%02x:%02x)", str,
-						oui[0], oui[1], oui[2]);
-	else
-		print_attr(level + 1, "%02x:%02x:%02x",
-						oui[0], oui[1], oui[2]);
-}
-
 static void print_ie_ssid(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
@@ -591,6 +562,21 @@ static const struct cipher_suites rsn_akm_selectors[] = {
 	{ 0x000fac07, "TDLS; TPK"                                                                 },
 	{ 0x000fac08, "SAE/PMKSA caching SHA256; RSNA PMKSA caching SHA256/mesh peering exchange" },
 	{ 0x000fac09, "FT SAE SHA256; FT"                                                         },
+	{ }
+};
+
+static const struct cipher_suites wpa_cipher_selectors[] = {
+	{ 0x0050f200, "Use group cipher suite"		},
+	{ 0x0050f201, "WEP-40"				},
+	{ 0x0050f202, "TKIP"				},
+	{ 0x0050f204, "CCMP"				},
+	{ 0x0050f205, "WEP-104"				},
+	{ },
+};
+
+static const struct cipher_suites wpa_akm_selectors[] = {
+	{ 0x0050f201, "IEEE 802.1X/PMKSA; RSNA/PMKSA caching"	},
+	{ 0x0050f202, "PSK; RSNA PSK"				},
 	{ }
 };
 
@@ -823,6 +809,97 @@ static void print_ie_rsn(unsigned int level, const char *label,
 end:
 	if (end - data)
 		print_ie_error(level, label, size, -EINVAL);
+}
+
+static void print_ie_wpa(unsigned int level, const char *label,
+						const void *data, uint16_t size)
+{
+	uint8_t type, offset;
+	uint16_t version, count;
+
+	if (size < 3)
+		return;
+
+	offset = 0;
+	type = *((uint8_t *)data);
+	offset++;
+	version = l_get_le16(data + offset);
+	offset += 2;
+
+	if (!(type == 1 && version == 1))
+		return;
+
+	print_attr(level, "WPA:");
+	print_attr(level + 1, "Type: %d", type);
+	print_attr(level + 1, "Version: %d(%04x)", version, version);
+
+	if (offset + 4 > size)
+		goto end;
+
+	print_ie_cipher_suites(level + 1, "Group Data Cipher Suite",
+					data + offset, 4, wpa_cipher_selectors);
+
+	offset += 4;
+	if (offset + 2 > size)
+		goto end;
+
+	count = l_get_le16(data + offset) * 4;
+	offset += 2;
+
+	if (offset + count > size)
+		goto end;
+
+	print_ie_cipher_suites(level + 1, "Pairwise Cipher Suite",
+				data + offset, count, wpa_cipher_selectors);
+	offset += count;
+	if (offset + 2 > size)
+		goto end;
+
+	count = l_get_le16(data + offset) * 4;
+	offset += 2;
+	if (offset + count > size)
+		goto end;
+
+	print_ie_cipher_suites(level + 1, "AKM Suite", data + offset, count,
+							wpa_akm_selectors);
+	return;
+
+end:
+	print_ie_error(level, label, size, -EINVAL);
+}
+
+static void print_ie_vendor(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	const uint8_t *oui = data;
+	const char *str = NULL;
+	unsigned int i;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	if (size < 3)
+		return;
+
+	for (i = 0; oui_table[i].str; i++) {
+		if (!memcmp(oui_table[i].oui, oui, 3)) {
+			str = oui_table[i].str;
+			break;
+		}
+	}
+
+	if (!str) {
+		print_attr(level + 1, "OUI: %02x:%02x:%02x",
+							oui[0], oui[1], oui[2]);
+		return;
+	}
+
+	print_attr(level + 1, "%s (%02x:%02x:%02x)", str,
+							oui[0], oui[1], oui[2]);
+
+	if (!strcmp(str, "Microsoft")) {
+		print_ie_wpa(level + 2, label, data + 3, size - 3);
+		return;
+	}
 }
 
 static struct attr_entry ie_entry[] = {
