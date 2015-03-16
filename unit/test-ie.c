@@ -431,6 +431,110 @@ static void ie_test_rsne_build_compact_info(const void *data)
 	assert(!memcmp(test->data, buf, test->data_len));
 }
 
+struct ie_wpa_info_test {
+	const unsigned char *data;
+	size_t data_len;
+	enum ie_rsn_cipher_suite group_cipher;
+	uint16_t pairwise_ciphers;
+	uint16_t akm_suites;
+};
+
+static const unsigned char wpa_data_1[] = {
+	0xdd, 0x1a, 0x00, 0x50, 0xf2, 0x01, 0x01, 0x00, 0x00, 0x50, 0xf2, 0x02,
+	0x02, 0x00, 0x00, 0x50, 0xf2, 0x04, 0x00, 0x50, 0xf2, 0x02, 0x01, 0x00,
+	0x00, 0x50, 0xf2, 0x02
+};
+
+static const struct ie_wpa_info_test ie_wpa_info_test_1 = {
+	.data = wpa_data_1,
+	.data_len = sizeof(wpa_data_1),
+	.group_cipher = IE_RSN_CIPHER_SUITE_TKIP,
+	.pairwise_ciphers = IE_RSN_CIPHER_SUITE_TKIP | IE_RSN_CIPHER_SUITE_CCMP,
+};
+
+static void ie_test_wpa_info(const void *data)
+{
+	const struct ie_wpa_info_test *test = data;
+	int r;
+	struct ie_rsn_info info;
+
+	r = ie_parse_wpa_from_data(test->data, test->data_len, &info);
+	assert(r == 0);
+
+	assert(test->group_cipher == info.group_cipher);
+	assert(test->pairwise_ciphers == info.pairwise_ciphers);
+}
+
+/* Wrong OUI type*/
+static const unsigned char wpa_data_2[] = {
+	0xdd, 0x1a, 0x00, 0x50, 0xf2, 0x02, 0x01, 0x00, 0x00, 0x50, 0xf2, 0x02,
+	0x02, 0x00, 0x00, 0x50, 0xf2, 0x04, 0x00, 0x50, 0xf2, 0x02, 0x01, 0x00,
+	0x00, 0x50, 0xf2, 0x02
+};
+
+static const struct ie_wpa_info_test ie_wpa_info_test_2 = {
+	.data = wpa_data_2,
+	.data_len = sizeof(wpa_data_2),
+};
+
+/* Wrong version */
+static const unsigned char wpa_data_3[] = {
+	0xdd, 0x1a, 0x00, 0x50, 0xf2, 0x01, 0x02, 0x00, 0x00, 0x50, 0xf2, 0x02,
+	0x02, 0x00, 0x00, 0x50, 0xf2, 0x04, 0x00, 0x50, 0xf2, 0x02, 0x01, 0x00,
+	0x00, 0x50, 0xf2, 0x02
+};
+
+static const struct ie_wpa_info_test ie_wpa_info_test_3 = {
+	.data = wpa_data_3,
+	.data_len = sizeof(wpa_data_3),
+};
+
+/* Unsupported OUI */
+static const unsigned char wpa_data_4[] = {
+	0xdd, 0x1a, 0x00, 0x0f, 0xac, 0x01, 0x01, 0x00, 0x00, 0x50, 0xf2, 0x02,
+	0x02, 0x00, 0x00, 0x50, 0xf2, 0x04, 0x00, 0x50, 0xf2, 0x02, 0x01, 0x00,
+	0x00, 0x50, 0xf2, 0x02
+};
+
+static const struct ie_wpa_info_test ie_wpa_info_test_4 = {
+	.data = wpa_data_4,
+	.data_len = sizeof(wpa_data_4),
+};
+
+static void ie_test_wpa_info_fail(const void *data)
+{
+	const struct ie_wpa_info_test *test = data;
+	int r;
+	struct ie_rsn_info info;
+
+	r = ie_parse_wpa_from_data(test->data, test->data_len, &info);
+	assert(r != 0);
+}
+
+static const struct ie_wpa_info_test ie_wpa_info_test_5 = {
+	.data = wpa_data_1,
+	.data_len = sizeof(wpa_data_1),
+	.group_cipher = IE_RSN_CIPHER_SUITE_TKIP,
+	.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP | IE_RSN_CIPHER_SUITE_CCMP,
+	.akm_suites = IE_RSN_AKM_SUITE_PSK,
+};
+
+static void ie_test_wpa_build_compact_info(const void *data)
+{
+	const struct ie_wpa_info_test *test = data;
+	int r;
+	struct ie_rsn_info info;
+	uint8_t buf[256];
+
+	r = ie_parse_wpa_from_data(test->data, test->data_len, &info);
+	assert(r == 0);
+
+	r = ie_build_wpa(&info, buf);
+	assert(r);
+
+	assert(!memcmp(test->data, buf, test->data_len));
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -464,6 +568,19 @@ int main(int argc, char *argv[])
 	l_test_add("/ie/RSN Info Builder/Compact Test 3",
 				ie_test_rsne_build_compact_info,
 				&ie_rsne_info_test_5);
+
+	l_test_add("/ie/WPA Info Parser/Test Case 1",
+				ie_test_wpa_info, &ie_wpa_info_test_1);
+	l_test_add("/ie/WPA Info Parser/Test Case 2",
+			ie_test_wpa_info_fail, &ie_wpa_info_test_2);
+	l_test_add("/ie/WPA Info Parser/Test Case 3",
+			ie_test_wpa_info_fail, &ie_wpa_info_test_3);
+	l_test_add("/ie/WPA Info Parser/Test Case 4",
+			ie_test_wpa_info_fail, &ie_wpa_info_test_4);
+
+	l_test_add("/ie/WPA Info Builder/Compact Test 1",
+				ie_test_wpa_build_compact_info,
+				&ie_wpa_info_test_5);
 
 	return l_test_run();
 }
