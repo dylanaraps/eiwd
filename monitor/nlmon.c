@@ -49,6 +49,7 @@
 #include "linux/nl80211.h"
 #include "src/ie.h"
 #include "src/mpdu.h"
+#include "src/eapol.h"
 #include "src/util.h"
 #include "monitor/pcap.h"
 #include "monitor/display.h"
@@ -3196,8 +3197,7 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 					uint8_t type, int index,
 					const void *data, uint32_t size)
 {
-	uint8_t eapol_ver, eapol_type;
-	uint16_t eapol_len;
+	const struct eapol_key *ek;
 	char extra_str[16];
 	const char *str;
 
@@ -3213,14 +3213,15 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 	if (size < 4)
 		return;
 
-	eapol_ver = *((const uint8_t *) data);
-	eapol_type = *((const uint8_t *) (data + 1));
-	eapol_len = L_GET_UNALIGNED((const uint16_t *) (data + 2));
-	eapol_len = L_BE16_TO_CPU(eapol_len);
+	ek = eapol_key_validate(data, size);
+	if (!ek) {
+		print_hexdump(0, data, size);
+		return;
+	}
 
-	print_attr(0, "EAPoL: len %u", eapol_len);
+	print_attr(0, "EAPoL: len %u", size);
 
-	switch (eapol_ver) {
+	switch (ek->protocol_version) {
 	case 0x01:
 		str = "802.11X-2001";
 		break;
@@ -3232,9 +3233,9 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 		break;
 	}
 
-	print_attr(1, "Version: %s (%u)", str, eapol_ver);
+	print_attr(1, "Version: %u (%s)", ek->protocol_version, str);
 
-	switch (eapol_type) {
+	switch (ek->packet_type) {
 	case 0x00:
 		str = "Packet";
 		break;
@@ -3252,9 +3253,42 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 		break;
 	}
 
-	print_attr(1, "Type: %s (%u)", str, eapol_type);
+	print_attr(1, "Type: %u (%s)", ek->packet_type, str);
+	print_attr(1, "Lenth: %d", L_BE16_TO_CPU(ek->packet_len));
+	print_attr(1, "Descriptor Type: %u", ek->descriptor_type);
+	print_attr(1, "Key MIC: %s", ek->key_mic ? "true" : "false");
+	print_attr(1, "Secure: %s", ek->secure ? "true" : "false");
+	print_attr(1, "Error: %s", ek->error ? "true" : "false");
+	print_attr(1, "Request: %s", ek->request ? "true" : "false");
+	print_attr(1, "Encrypted Ket Data: %s",
+				ek->encrypted_key_data ? "true" : "false");
+	print_attr(1, "SMK Message: %s", ek->smk_message ? "true" : "false");
+	print_attr(1, "Key Descriptor Version: %d (%02x)",
+						ek->key_descriptor_version,
+						ek->key_descriptor_version);
+	print_attr(1, "Ket Type: %s", ek->key_type ? "true" : "false");
+	print_attr(1, "Install: %s", ek->install ? "true" : "false");
+	print_attr(1, "Key ACK: %s", ek->key_ack ? "true" : "false");
+	print_attr(1, "Key Length: %d", L_BE16_TO_CPU(ek->key_length));
+	print_attr(1, "Key Replay Counter: %ld",
+					L_BE64_TO_CPU(ek->key_replay_counter));
+	print_attr(1, "Key NONCE");
+	print_hexdump(2, ek->key_nonce, 32);
+	print_attr(1, "Key IV");
+	print_hexdump(2, ek->eapol_key_iv, 16);
+	print_attr(1, "Key RSC ");
+	print_hexdump(2, ek->key_rsc, 8);
+	print_attr(1, "Key MIC Data");
+	print_hexdump(2, ek->key_mic_data, 16);
+	print_attr(1, "Key Data: len %d", L_BE16_TO_CPU(ek->key_data_len));
+	print_hexdump(2, ek->key_data, L_BE16_TO_CPU(ek->key_data_len));
 
-	print_hexdump(1, data + 4, size - 4);
+	if (ek->key_data[0] == IE_TYPE_RSN)
+		print_ie_vendor(1, "RSN", ek->key_data + 2,
+					L_BE16_TO_CPU(ek->key_data_len) - 2);
+	else if (ek->key_data[0] == IE_TYPE_VENDOR_SPECIFIC)
+		print_ie_vendor(1, "Vendor Specific", ek->key_data + 2,
+					L_BE16_TO_CPU(ek->key_data_len) - 2);
 }
 
 static bool pae_receive(struct l_io *io, void *user_data)
