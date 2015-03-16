@@ -31,6 +31,7 @@
 #include "ie.h"
 
 static const uint8_t ieee_oui[3] = { 0x00, 0x0f, 0xac };
+static const uint8_t microsoft_oui[3] = { 0x00, 0x50, 0xf2 };
 
 void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 			unsigned int len)
@@ -760,4 +761,243 @@ done:
 	to[1] = pos - 2;
 
 	return true;
+}
+
+/* 802.11i-2004, Section 7.3.2.25.1 and WPA_80211_v3_1 Section 2.1 */
+static bool ie_parse_wpa_cipher_suite(const uint8_t *data,
+					enum ie_rsn_cipher_suite *out)
+{
+	/*
+	 * Compare the OUI to the ones we know.  OUI Format is found in
+	 * Figure 8-187 of 802.11
+	 */
+	if (!memcmp(data, microsoft_oui, 3)) {
+		/* Suite type from 802.11i-2004, Table 20da */
+		switch (data[3]) {
+		case 0:
+			*out = IE_RSN_CIPHER_SUITE_USE_GROUP_CIPHER;
+			return true;
+		case 1:
+			*out = IE_RSN_CIPHER_SUITE_WEP40;
+			return true;
+		case 2:
+			*out = IE_RSN_CIPHER_SUITE_TKIP;
+			return true;
+		case 4:
+			*out = IE_RSN_CIPHER_SUITE_CCMP;
+			return true;
+		case 5:
+			*out = IE_RSN_CIPHER_SUITE_WEP104;
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	return false;
+}
+
+/* 802.11i-2004, Section 7.3.2.25.2 and WPA_80211_v3_1 Section 2.1 */
+static bool ie_parse_wpa_akm_suite(const uint8_t *data,
+					enum ie_rsn_akm_suite *out)
+{
+	/*
+	 * Compare the OUI to the ones we know.  OUI Format is found in
+	 * Figure 8-187 of 802.11
+	 */
+	if (!memcmp(data, microsoft_oui, 3)) {
+		/* Suite type from 802.11i-2004, Table 20dc */
+		switch (data[3]) {
+		case 1:
+			*out = IE_RSN_AKM_SUITE_8021X;
+			return true;
+		case 2:
+			*out = IE_RSN_AKM_SUITE_PSK;
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	return false;
+}
+
+static bool ie_parse_wpa_group_cipher(const uint8_t *data,
+					enum ie_rsn_cipher_suite *out)
+{
+	enum ie_rsn_cipher_suite tmp;
+
+	bool r = ie_parse_wpa_cipher_suite(data, &tmp);
+
+	if (!r)
+		return r;
+
+	switch (tmp) {
+	case IE_RSN_CIPHER_SUITE_CCMP:
+	case IE_RSN_CIPHER_SUITE_TKIP:
+	case IE_RSN_CIPHER_SUITE_WEP104:
+	case IE_RSN_CIPHER_SUITE_WEP40:
+		break;
+	default:
+		return false;
+	}
+
+	*out = tmp;
+	return true;
+}
+
+static bool ie_parse_wpa_pairwise_cipher(const uint8_t *data,
+					enum ie_rsn_cipher_suite *out)
+{
+	enum ie_rsn_cipher_suite tmp;
+
+	bool r = ie_parse_wpa_cipher_suite(data, &tmp);
+
+	if (!r)
+		return r;
+
+	switch (tmp) {
+	case IE_RSN_CIPHER_SUITE_CCMP:
+	case IE_RSN_CIPHER_SUITE_TKIP:
+	case IE_RSN_CIPHER_SUITE_WEP104:
+	case IE_RSN_CIPHER_SUITE_WEP40:
+	/* TODO : not sure about GROUP_CIPHER */
+		break;
+	default:
+		return false;
+	}
+
+	*out = tmp;
+	return true;
+}
+
+bool is_ie_wpa_ie(const uint8_t *data, uint8_t len)
+{
+	if (!data || len < 6)
+		return false;
+
+	if ((!memcmp(data, microsoft_oui, 3) && data[3] == 1 &&
+						l_get_le16(data + 4) == 1))
+		return true;
+
+	return false;
+}
+
+int ie_parse_wpa(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
+{
+	const uint8_t *data = iter->data;
+	size_t len = iter->len;
+	struct ie_rsn_info info;
+	uint16_t count;
+	uint16_t i;
+
+	if (!is_ie_wpa_ie(iter->data, iter->len))
+		return -EINVAL;
+
+	info.group_cipher = IE_RSN_CIPHER_SUITE_TKIP;
+	info.pairwise_ciphers = IE_RSN_CIPHER_SUITE_TKIP;
+	info.akm_suites = IE_RSN_AKM_SUITE_PSK;
+
+	memset(&info, 0, sizeof(info));
+	RSNE_ADVANCE(data, len, 6);
+
+	/* Parse Group Cipher Suite field */
+	if (len < 4)
+		return -EBADMSG;
+
+	if (!ie_parse_wpa_group_cipher(data, &info.group_cipher))
+		return -ERANGE;
+
+	RSNE_ADVANCE(data, len, 4);
+
+	/* Parse Pairwise Cipher Suite Count field */
+	if (len < 2)
+		return -EBADMSG;
+
+	count = l_get_le16(data);
+
+	/*
+	 * The spec doesn't seem to explicitly say what to do in this case,
+	 * so we assume this situation is invalid.
+	 */
+	if (count == 0)
+		return -EINVAL;
+
+	data += 2;
+	len -= 2;
+
+	if (len < 4 * count)
+		return -EBADMSG;
+
+	/* Parse Pairwise Cipher Suite List field */
+	for (i = 0, info.pairwise_ciphers = 0; i < count; i++) {
+		enum ie_rsn_cipher_suite suite;
+
+		if (!ie_parse_wpa_pairwise_cipher(data + i * 4, &suite))
+			return -ERANGE;
+
+		info.pairwise_ciphers |= suite;
+	}
+
+	RSNE_ADVANCE(data, len, count * 4);
+
+	/* Parse AKM Suite Count field */
+	if (len < 2)
+		return -EBADMSG;
+
+	count = l_get_le16(data);
+	if (count == 0)
+		return -EINVAL;
+
+	data += 2;
+	len -= 2;
+
+	if (len < 4 * count)
+		return -EBADMSG;
+
+	/* Parse AKM Suite List field */
+	for (i = 0, info.akm_suites = 0; i < count; i++) {
+		enum ie_rsn_akm_suite suite;
+
+		if (!ie_parse_wpa_akm_suite(data + i * 4, &suite))
+			return -ERANGE;
+
+		info.akm_suites |= suite;
+	}
+
+	RSNE_ADVANCE(data, len, count * 4);
+
+	return -EBADMSG;
+
+done:
+	/*
+	 * 802.11i, Section 7.3.2.25.1
+	 * Use of CCMP as the group cipher suite with TKIP as the
+	 * pairwise cipher suite shall not be supported.
+	 */
+
+	if (info.group_cipher & IE_RSN_CIPHER_SUITE_CCMP &&
+			info.pairwise_ciphers & IE_RSN_CIPHER_SUITE_TKIP)
+		return -EBADMSG;
+
+	if (out_info)
+		memcpy(out_info, &info, sizeof(info));
+
+	return 0;
+}
+
+int ie_parse_wpa_from_data(const uint8_t *data, size_t len,
+						struct ie_rsn_info *info)
+{
+	struct ie_tlv_iter iter;
+
+	ie_tlv_iter_init(&iter, data, len);
+
+	if (!ie_tlv_iter_next(&iter))
+		return -EMSGSIZE;
+
+	if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_VENDOR_SPECIFIC)
+		return -EPROTOTYPE;
+
+	return ie_parse_wpa(&iter, info);
 }
