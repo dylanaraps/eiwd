@@ -512,37 +512,40 @@ int ie_parse_rsne_from_data(const uint8_t *data, size_t len,
 	return ie_parse_rsne(&iter, info);
 }
 
-/* 802.11, Section 8.4.2.27.2 */
-static bool ie_build_cipher_suite(uint8_t *data,
+/*
+ * 802.11, Section 8.4.2.27.2
+ * 802.11i, Section 7.3.2.25.1 and WPA_80211_v3_1 Section 2.1
+ */
+static bool ie_build_cipher_suite(uint8_t *data, const uint8_t *oui,
 					const enum ie_rsn_cipher_suite suite)
 {
 	switch (suite) {
 	case IE_RSN_CIPHER_SUITE_USE_GROUP_CIPHER:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 0;
 		return true;
 	case IE_RSN_CIPHER_SUITE_WEP40:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 1;
 		return true;
 	case IE_RSN_CIPHER_SUITE_TKIP:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 2;
 		return true;
 	case IE_RSN_CIPHER_SUITE_CCMP:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 4;
 		return true;
 	case IE_RSN_CIPHER_SUITE_WEP104:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 5;
 		return true;
 	case IE_RSN_CIPHER_SUITE_BIP:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 6;
 		return true;
 	case IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 7;
 		return true;
 	}
@@ -550,46 +553,48 @@ static bool ie_build_cipher_suite(uint8_t *data,
 	return false;
 }
 
-/* 802.11, Section 8.4.2.27.2 */
-static bool ie_build_akm_suite(uint8_t *data,
+/*
+ * 802.11, Section 8.4.2.27.2
+ * 802.11i, Section 7.3.2.25.2 and WPA_80211_v3_1 Section 2.1
+ */
+static bool ie_build_akm_suite(uint8_t *data, const uint8_t *oui,
 					enum ie_rsn_akm_suite suite)
 {
-
 	switch (suite) {
 	case IE_RSN_AKM_SUITE_8021X:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 1;
 		return true;
 	case IE_RSN_AKM_SUITE_PSK:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 2;
 		return true;
 	case IE_RSN_AKM_SUITE_FT_OVER_8021X:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 3;
 		return true;
 	case IE_RSN_AKM_SUITE_FT_USING_PSK:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 4;
 		return true;
 	case IE_RSN_AKM_SUITE_8021X_SHA256:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 5;
 		return true;
 	case IE_RSN_AKM_SUITE_PSK_SHA256:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 6;
 		return true;
 	case IE_RSN_AKM_SUITE_TDLS:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 7;
 		return true;
 	case IE_RSN_AKM_SUITE_SAE_SHA256:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 8;
 		return true;
 	case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
-		memcpy(data, ieee_oui, 3);
+		memcpy(data, oui, 3);
 		data[3] = 9;
 		return true;
 	}
@@ -629,7 +634,7 @@ bool ie_build_rsne(const struct ie_rsn_info *info, uint8_t *to)
 	pos += 2;
 
 	/* Group Data Cipher Suite */
-	if (!ie_build_cipher_suite(to + pos, info->group_cipher))
+	if (!ie_build_cipher_suite(to + pos, ieee_oui, info->group_cipher))
 		return false;
 
 	pos += 4;
@@ -647,7 +652,7 @@ bool ie_build_rsne(const struct ie_rsn_info *info, uint8_t *to)
 		if (pos + 4 > 242)
 			return false;
 
-		if (!ie_build_cipher_suite(to + pos, suite))
+		if (!ie_build_cipher_suite(to + pos, ieee_oui, suite))
 			return false;
 
 		pos += 4;
@@ -672,7 +677,7 @@ bool ie_build_rsne(const struct ie_rsn_info *info, uint8_t *to)
 		if (pos + 4 > 248)
 			return false;
 
-		if (!ie_build_akm_suite(to + pos, akm_suite))
+		if (!ie_build_akm_suite(to + pos, ieee_oui, akm_suite))
 			return false;
 
 		pos += 4;
@@ -752,7 +757,7 @@ bool ie_build_rsne(const struct ie_rsn_info *info, uint8_t *to)
 		goto done;
 
 	/* Group Management Cipher Suite */
-	if (!ie_build_cipher_suite(to, info->group_management_cipher))
+	if (!ie_build_cipher_suite(to, ieee_oui, info->group_management_cipher))
 		return false;
 
 	pos += 4;
@@ -1000,4 +1005,101 @@ int ie_parse_wpa_from_data(const uint8_t *data, size_t len,
 		return -EPROTOTYPE;
 
 	return ie_parse_wpa(&iter, info);
+}
+
+/*
+ * Generate an WPA IE based on the information found in info.
+ * The to array must be minimum of 19 bytes in size
+ */
+bool ie_build_wpa(const struct ie_rsn_info *info, uint8_t *to)
+{
+	/* These are the only valid pairwise suites */
+	static enum ie_rsn_cipher_suite pairwise_suites[] = {
+		IE_RSN_CIPHER_SUITE_CCMP,
+		IE_RSN_CIPHER_SUITE_TKIP,
+		IE_RSN_CIPHER_SUITE_WEP104,
+		IE_RSN_CIPHER_SUITE_WEP40,
+		/* TODO: not sure about USE_GROUP_CIPHER,*/
+	};
+	/* These are the only valid AKM suites */
+	static enum ie_rsn_akm_suite akm_suites[] = {
+		IE_RSN_AKM_SUITE_8021X,
+		IE_RSN_AKM_SUITE_PSK,
+	};
+	unsigned int pos;
+	unsigned int i;
+	uint8_t *countptr;
+	uint16_t count;
+
+	/*
+	 * 802.11i, Section 7.3.2.25.1
+	 * Use of CCMP as the group cipher suite with TKIP as the
+	 * pairwise cipher suite shall not be supported.
+	 */
+
+	if (info->group_cipher & IE_RSN_CIPHER_SUITE_CCMP &&
+			info->pairwise_ciphers & IE_RSN_CIPHER_SUITE_TKIP)
+		return false;
+
+	to[0] = IE_TYPE_VENDOR_SPECIFIC;
+
+	/* Vendor OUI and Type */
+	pos = 2;
+	memcpy(to + pos, microsoft_oui, 3);
+	pos += 3;
+	to[pos] = 1; /* OUI type 1 means WPA element */
+	pos++;
+
+	/* Version field, always 1 */
+	l_put_le16(1, to + pos);
+	pos += 2;
+
+	/* Group Data Cipher Suite */
+	if (!ie_build_cipher_suite(to + pos, microsoft_oui,
+							info->group_cipher))
+		return false;
+
+	pos += 4;
+
+	/* Save position for Pairwise Cipher Suite Count field */
+	countptr = to + pos;
+	pos += 2;
+
+	for (i = 0, count = 0; i < L_ARRAY_SIZE(pairwise_suites); i++) {
+		enum ie_rsn_cipher_suite suite = pairwise_suites[i];
+
+		if (!(info->pairwise_ciphers & suite))
+			continue;
+
+		if (!ie_build_cipher_suite(to + pos, microsoft_oui, suite))
+			return false;
+
+		pos += 4;
+		count += 1;
+	}
+
+	l_put_le16(count, countptr);
+
+	/* Save position for AKM Suite Count field */
+	countptr = to + pos;
+	pos += 2;
+
+	for (i = 0, count = 0; i < L_ARRAY_SIZE(akm_suites); i++) {
+		enum ie_rsn_akm_suite suite = akm_suites[i];
+
+		if (!(info->akm_suites & suite))
+			continue;
+
+		if (!ie_build_akm_suite(to + pos, microsoft_oui, suite))
+			return false;
+
+		pos += 4;
+		count += 1;
+	}
+
+	l_put_le16(count, countptr);
+
+	to[1] = pos - 2;
+
+	return true;
 }
