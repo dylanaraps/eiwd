@@ -65,6 +65,7 @@ struct bss {
 	int32_t signal_strength;
 	uint16_t capability;
 	uint8_t *rsne;
+	uint8_t *wpa;
 };
 
 struct netdev {
@@ -394,6 +395,7 @@ static void bss_free(void *data)
 			bss->addr[0], bss->addr[1], bss->addr[2],
 			bss->addr[3], bss->addr[4], bss->addr[5]);
 	l_free(bss->rsne);
+	l_free(bss->wpa);
 	l_free(bss);
 }
 
@@ -915,7 +917,7 @@ error:
 }
 
 static bool parse_ie(struct bss *bss, const uint8_t **ssid, int *ssid_len,
-			const void *data, uint16_t len)
+						const void *data, uint16_t len)
 {
 	struct ie_tlv_iter iter;
 
@@ -937,6 +939,12 @@ static bool parse_ie(struct bss *bss, const uint8_t **ssid, int *ssid_len,
 		case IE_TYPE_RSN:
 			if (!bss->rsne)
 				bss->rsne = l_memdup(iter.data - 2,
+								iter.len + 2);
+			break;
+		case IE_TYPE_VENDOR_SPECIFIC:
+			/* Interested only in WPA IE from Vendor data */
+			if (!bss->wpa && is_ie_wpa_ie(iter.data, iter.len))
+				bss->wpa = l_memdup(iter.data - 2,
 								iter.len + 2);
 			break;
 		default:
@@ -1040,6 +1048,18 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 		}
 
 		ssid_security = scan_get_ssid_security(bss->capability, &rsne);
+	} else if (bss->wpa) {
+		struct ie_rsn_info wpa;
+		int res = ie_parse_wpa_from_data(bss->wpa, bss->wpa[1] + 2,
+									&wpa);
+		if (res < 0) {
+			l_debug("Cannot parse WPA IE %s (%d, %s)",
+					util_ssid_to_utf8(ssid_len, ssid),
+						res, strerror(-res));
+			goto fail;
+		}
+
+		ssid_security = scan_get_ssid_security(bss->capability, &wpa);
 	} else
 		ssid_security = scan_get_ssid_security(bss->capability, NULL);
 
