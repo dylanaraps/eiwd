@@ -1035,7 +1035,7 @@ bool ie_build_wpa(const struct ie_rsn_info *info, uint8_t *to)
 	 * Use of CCMP as the group cipher suite with TKIP as the
 	 * pairwise cipher suite shall not be supported.
 	 */
-	if (info->group_cipher & IE_RSN_CIPHER_SUITE_CCMP &&
+	if (info->group_cipher == IE_RSN_CIPHER_SUITE_CCMP &&
 			info->pairwise_ciphers & IE_RSN_CIPHER_SUITE_TKIP)
 		return false;
 
