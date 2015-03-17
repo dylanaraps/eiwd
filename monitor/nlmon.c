@@ -3260,13 +3260,13 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 	print_attr(1, "Secure: %s", ek->secure ? "true" : "false");
 	print_attr(1, "Error: %s", ek->error ? "true" : "false");
 	print_attr(1, "Request: %s", ek->request ? "true" : "false");
-	print_attr(1, "Encrypted Ket Data: %s",
+	print_attr(1, "Encrypted Key Data: %s",
 				ek->encrypted_key_data ? "true" : "false");
 	print_attr(1, "SMK Message: %s", ek->smk_message ? "true" : "false");
 	print_attr(1, "Key Descriptor Version: %d (%02x)",
 						ek->key_descriptor_version,
 						ek->key_descriptor_version);
-	print_attr(1, "Ket Type: %s", ek->key_type ? "true" : "false");
+	print_attr(1, "Key Type: %s", ek->key_type ? "true" : "false");
 	print_attr(1, "Install: %s", ek->install ? "true" : "false");
 	print_attr(1, "Key ACK: %s", ek->key_ack ? "true" : "false");
 	print_attr(1, "Key Length: %d", L_BE16_TO_CPU(ek->key_length));
@@ -3280,15 +3280,15 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 	print_hexdump(2, ek->key_rsc, 8);
 	print_attr(1, "Key MIC Data");
 	print_hexdump(2, ek->key_mic_data, 16);
-	print_attr(1, "Key Data: len %d", L_BE16_TO_CPU(ek->key_data_len));
-	print_hexdump(2, ek->key_data, L_BE16_TO_CPU(ek->key_data_len));
 
-	if (ek->key_data[0] == IE_TYPE_RSN)
-		print_ie_vendor(1, "RSN", ek->key_data + 2,
-					L_BE16_TO_CPU(ek->key_data_len) - 2);
-	else if (ek->key_data[0] == IE_TYPE_VENDOR_SPECIFIC)
-		print_ie_vendor(1, "Vendor Specific", ek->key_data + 2,
-					L_BE16_TO_CPU(ek->key_data_len) - 2);
+	if (ek->encrypted_key_data) {
+		print_attr(1, "Key Data: len %d",
+					L_BE16_TO_CPU(ek->key_data_len));
+		print_hexdump(2, ek->key_data, L_BE16_TO_CPU(ek->key_data_len));
+		return;
+	}
+
+	print_ie(1, "Key Data", ek->key_data, L_BE16_TO_CPU(ek->key_data_len));
 }
 
 static bool pae_receive(struct l_io *io, void *user_data)
