@@ -95,9 +95,9 @@ struct eapol_key {
 	uint8_t key_data[0];
 } __attribute__ ((packed));
 
-typedef int (*eapol_tx_packet_func_t)(int ifindex, const uint8_t *aa_addr,
-			const uint8_t *sta_addr,
-			const struct eapol_key *ek);
+typedef int (*eapol_tx_packet_func_t)(uint32_t ifindex, const uint8_t *aa_addr,
+				const uint8_t *sta_addr,
+				const struct eapol_key *ek);
 typedef bool (*eapol_get_nonce_func_t)(uint8_t nonce[]);
 
 bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
@@ -128,7 +128,7 @@ struct eapol_key *eapol_create_ptk_4_of_4(
 				enum eapol_key_descriptor_version version,
 				uint64_t key_replay_counter);
 
-void __eapol_rx_packet(int ifindex, const uint8_t *sta_addr,
+void __eapol_rx_packet(uint32_t ifindex, const uint8_t *sta_addr,
 			const uint8_t *aa_addr,
 			const uint8_t *frame, size_t len);
 
@@ -148,7 +148,7 @@ void eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 				size_t len);
 struct l_io *eapol_open_pae(uint32_t index);
 
-void eapol_start(int ifindex, struct eapol_sm *sm);
+void eapol_start(uint32_t ifindex, struct eapol_sm *sm);
 
 bool eapol_init();
 bool eapol_exit();

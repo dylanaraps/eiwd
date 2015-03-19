@@ -497,12 +497,12 @@ void eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 	sm->own_rsn = l_memdup(rsn_ie, len);
 }
 
-void eapol_start(int ifindex, struct eapol_sm *sm)
+void eapol_start(uint32_t ifindex, struct eapol_sm *sm)
 {
 	l_hashmap_insert(state_machines, L_UINT_TO_PTR(ifindex), sm);
 }
 
-static void eapol_handle_ptk_1_of_4(int ifindex, struct eapol_sm *sm,
+static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 					const struct eapol_key *ek)
 {
 	struct crypto_ptk *ptk = (struct crypto_ptk *) sm->ptk;
@@ -671,7 +671,8 @@ static bool eapol_ap_rsne_matches(const uint8_t *eapol_rsne,
 	return true;
 }
 
-static void eapol_handle_ptk_3_of_4(int ifindex, struct eapol_sm *sm,
+static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
+					struct eapol_sm *sm,
 					const struct eapol_key *ek,
 					const uint8_t *decrypted_key_data,
 					size_t decrypted_key_data_size)
@@ -736,9 +737,9 @@ fail:
 	l_free(step4);
 }
 
-void __eapol_rx_packet(int ifindex, const uint8_t *sta_addr,
-			const uint8_t *aa_addr,
-			const uint8_t *frame, size_t len)
+void __eapol_rx_packet(uint32_t ifindex,
+		const uint8_t *sta_addr, const uint8_t *aa_addr,
+		const uint8_t *frame, size_t len)
 {
 	const struct eapol_key *ek;
 	struct eapol_sm *sm;
