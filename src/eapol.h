@@ -97,7 +97,8 @@ struct eapol_key {
 
 typedef int (*eapol_tx_packet_func_t)(uint32_t ifindex, const uint8_t *aa_addr,
 				const uint8_t *sta_addr,
-				const struct eapol_key *ek);
+				const struct eapol_key *ek,
+				void *user_data);
 typedef bool (*eapol_get_nonce_func_t)(uint8_t nonce[]);
 
 bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
@@ -129,7 +130,8 @@ struct eapol_key *eapol_create_ptk_4_of_4(
 				uint64_t key_replay_counter);
 
 void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
-			const uint8_t *frame, size_t len);
+			const uint8_t *frame, size_t len,
+			void *user_data);
 
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func);
 void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func);

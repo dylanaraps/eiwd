@@ -505,7 +505,8 @@ void eapol_start(uint32_t ifindex, struct eapol_sm *sm)
 }
 
 static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
-					const struct eapol_key *ek)
+					const struct eapol_key *ek,
+					void *user_data)
 {
 	struct crypto_ptk *ptk = (struct crypto_ptk *) sm->ptk;
 	struct eapol_key *step2;
@@ -537,7 +538,7 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 		goto fail;
 
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
-	tx_packet(ifindex, sm->aa, sm->spa, step2);
+	tx_packet(ifindex, sm->aa, sm->spa, step2, user_data);
 
 fail:
 	l_free(step2);
@@ -677,7 +678,8 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 					struct eapol_sm *sm,
 					const struct eapol_key *ek,
 					const uint8_t *decrypted_key_data,
-					size_t decrypted_key_data_size)
+					size_t decrypted_key_data_size,
+					void *user_data)
 {
 	struct crypto_ptk *ptk = (struct crypto_ptk *) sm->ptk;
 	struct eapol_key *step4;
@@ -733,7 +735,7 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 		goto fail;
 
 	memcpy(step4->key_mic_data, mic, sizeof(mic));
-	tx_packet(ifindex, sm->aa, sm->spa, step4);
+	tx_packet(ifindex, sm->aa, sm->spa, step4, user_data);
 
 fail:
 	l_free(step4);
@@ -766,7 +768,7 @@ static struct eapol_sm *eapol_find_sm(uint32_t ifindex,
 }
 
 void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
-			const uint8_t *frame, size_t len)
+			const uint8_t *frame, size_t len, void *user_data)
 {
 	const struct eapol_key *ek;
 	struct eapol_sm *sm;
@@ -830,10 +832,10 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 
 	/* If no MIC, then assume packet 1, otherwise packet 3 */
 	if (!ek->key_mic)
-		eapol_handle_ptk_1_of_4(ifindex, sm, ek);
+		eapol_handle_ptk_1_of_4(ifindex, sm, ek, user_data);
 	else
 		eapol_handle_ptk_3_of_4(ifindex, sm, ek, decrypted_key_data,
-					decrypted_key_data_len);
+					decrypted_key_data_len, user_data);
 
 done:
 	l_free(decrypted_key_data);
