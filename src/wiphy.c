@@ -841,6 +841,7 @@ static void mlme_associate_cmd(struct netdev *netdev)
 		uint32_t ccmp = 0x000fac04;
 		uint8_t rsne_buf[256];
 		struct ie_rsn_info info;
+		struct eapol_sm *sm = eapol_sm_new();
 
 		memset(&info, 0, sizeof(info));
 		info.group_cipher = IE_RSN_CIPHER_SUITE_CCMP;
@@ -848,6 +849,13 @@ static void mlme_associate_cmd(struct netdev *netdev)
 		info.akm_suites = IE_RSN_AKM_SUITE_PSK;
 
 		ie_build_rsne(&info, rsne_buf);
+
+		eapol_sm_set_pmk(sm, network->psk);
+		eapol_sm_set_authenticator_address(sm, bss->addr);
+		eapol_sm_set_supplicant_address(sm, netdev->addr);
+		eapol_sm_set_ap_rsn(sm, bss->rsne, bss->rsne[1] + 2);
+		eapol_sm_set_own_rsn(sm, rsne_buf, rsne_buf[1] + 2);
+		eapol_start(netdev->index, sm);
 
 		msg_append_attr(msg, NL80211_ATTR_CIPHER_SUITES_PAIRWISE,
 				4, &ccmp);
