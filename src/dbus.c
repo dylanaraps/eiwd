@@ -126,6 +126,12 @@ struct l_dbus_message *dbus_error_not_supported(struct l_dbus_message *msg)
 					"Operation not supported");
 }
 
+struct l_dbus_message *dbus_error_no_agent(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".NoAgent",
+					"No Agent registered");
+}
+
 void dbus_pending_reply(struct l_dbus_message **msg,
 				struct l_dbus_message *reply)
 {
