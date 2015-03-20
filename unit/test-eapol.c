@@ -558,7 +558,8 @@ static uint8_t spa[] = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 };
 
 static int verify_step2(uint32_t ifindex, const uint8_t *aa_addr,
 			const uint8_t *sta_addr,
-			const struct eapol_key *ek)
+			const struct eapol_key *ek,
+			void *user_data)
 {
 	size_t ek_len = sizeof(struct eapol_key) +
 				L_BE16_TO_CPU(ek->key_data_len);
@@ -576,7 +577,8 @@ static int verify_step2(uint32_t ifindex, const uint8_t *aa_addr,
 
 static int verify_step4(uint32_t ifindex, const uint8_t *aa_addr,
 			const uint8_t *sta_addr,
-			const struct eapol_key *ek)
+			const struct eapol_key *ek,
+			void *user_data)
 {
 	size_t ek_len = sizeof(struct eapol_key) +
 				L_BE16_TO_CPU(ek->key_data_len);
@@ -636,12 +638,12 @@ static void eapol_sm_test(const void *data)
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, spa, aa, eapol_key_data_3,
-					sizeof(eapol_key_data_3));
+					sizeof(eapol_key_data_3), NULL);
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__eapol_rx_packet(1, spa, aa, eapol_key_data_5,
-					sizeof(eapol_key_data_5));
+					sizeof(eapol_key_data_5), NULL);
 	assert(verify_step4_called);
 
 	eapol_exit();
