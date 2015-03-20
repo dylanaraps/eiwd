@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <sys/socket.h>
 #include <linux/if.h>
+#include <linux/if_packet.h>
 #include <linux/if_ether.h>
 #include <ell/ell.h>
 
@@ -157,6 +158,31 @@ static void do_debug(const char *str, void *user_data)
 	const char *prefix = user_data;
 
 	l_info("%s%s", prefix, str);
+}
+
+static bool eapol_read(struct l_io *io, void *user_data)
+{
+	struct netdev *netdev = user_data;
+	int fd = l_io_get_fd(io);
+	struct sockaddr_ll sll;
+	socklen_t sll_len;
+	ssize_t bytes;
+	uint8_t frame[2304]; /* IEEE Std 802.11 ch. 8.2.3 */
+
+	memset(&sll, 0, sizeof(&sll));
+	sll_len = sizeof(sll);
+
+	bytes = recvfrom(fd, frame, sizeof(frame), 0,
+				(struct sockaddr *) &sll, &sll_len);
+	if (bytes <= 0) {
+		l_error("EAPoL read socket");
+		return false;
+	}
+
+	__eapol_rx_packet(netdev->index, netdev->addr, sll.sll_addr,
+				frame, bytes, L_INT_TO_PTR(fd));
+
+	return true;
 }
 
 static const char *ssid_security_to_str(enum scan_ssid_security ssid_security)
@@ -1389,10 +1415,12 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 	l_debug("Found interface %s", netdev->name);
 
 	netdev->eapol_io = eapol_open_pae(netdev->index);
-	if (!netdev->eapol_io)
+	if (!netdev->eapol_io) {
 		l_error("Failed to open PAE socket");
+		return;
+	}
 
-	/* TODO: set read handler and read eapol frames */
+	l_io_set_read_handler(netdev->eapol_io, eapol_read, netdev, NULL);
 }
 
 static void parse_supported_commands(struct wiphy *wiphy,
