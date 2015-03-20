@@ -556,7 +556,7 @@ static bool verify_step4_called = false;
 static uint8_t aa[] = { 0x24, 0xa2, 0xe1, 0xec, 0x17, 0x04 };
 static uint8_t spa[] = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 };
 
-static int verify_step2(int ifindex, const uint8_t *aa_addr,
+static int verify_step2(uint32_t ifindex, const uint8_t *aa_addr,
 			const uint8_t *sta_addr,
 			const struct eapol_key *ek)
 {
@@ -574,7 +574,7 @@ static int verify_step2(int ifindex, const uint8_t *aa_addr,
 	return 0;
 }
 
-static int verify_step4(int ifindex, const uint8_t *aa_addr,
+static int verify_step4(uint32_t ifindex, const uint8_t *aa_addr,
 			const uint8_t *sta_addr,
 			const struct eapol_key *ek)
 {
