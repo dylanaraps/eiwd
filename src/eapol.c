@@ -534,8 +534,11 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 					sm->snonce,
 					sm->own_rsn[1] + 2, sm->own_rsn);
 
-	if (!eapol_calculate_mic(ptk->kck, step2, mic))
+	if (!eapol_calculate_mic(ptk->kck, step2, mic)) {
+		l_info("MIC calculation failed. "
+			"Ensure Kernel Crypto is available.");
 		goto fail;
+	}
 
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
 	tx_packet(ifindex, sm->aa, sm->spa, step2, user_data);
