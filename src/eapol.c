@@ -39,7 +39,7 @@
 #include "eapol.h"
 #include "ie.h"
 
-struct l_hashmap *state_machines;
+struct l_queue *state_machines;
 eapol_tx_packet_func_t tx_packet = NULL;
 eapol_get_nonce_func_t get_nonce = NULL;
 enum eapol_protocol_version protocol_version = EAPOL_PROTOCOL_VERSION_2004;
@@ -426,6 +426,7 @@ struct eapol_key *eapol_create_ptk_4_of_4(
 }
 
 struct eapol_sm {
+	uint32_t ifindex;
 	uint8_t sta_addr[6];
 	uint8_t aa_addr[6];
 	uint8_t *ap_rsn;
@@ -499,7 +500,8 @@ void eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 
 void eapol_start(uint32_t ifindex, struct eapol_sm *sm)
 {
-	l_hashmap_insert(state_machines, L_UINT_TO_PTR(ifindex), sm);
+	sm->ifindex = ifindex;
+	l_queue_push_head(state_machines, sm);
 }
 
 static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
@@ -737,6 +739,32 @@ fail:
 	l_free(step4);
 }
 
+static struct eapol_sm *eapol_find_sm(uint32_t ifindex,
+						const uint8_t *sta_addr,
+						const uint8_t *aa_addr)
+{
+	const struct l_queue_entry *entry;
+	struct eapol_sm *sm;
+
+	for (entry = l_queue_get_entries(state_machines); entry;
+					entry = entry->next) {
+		sm = entry->data;
+
+		if (sm->ifindex != ifindex)
+			continue;
+
+		if (memcmp(sm->sta_addr, sta_addr, 6))
+			continue;
+
+		if (memcmp(sm->aa_addr, aa_addr, 6))
+			continue;
+
+		return sm;
+	}
+
+	return NULL;
+}
+
 void __eapol_rx_packet(uint32_t ifindex,
 		const uint8_t *sta_addr, const uint8_t *aa_addr,
 		const uint8_t *frame, size_t len)
@@ -752,15 +780,7 @@ void __eapol_rx_packet(uint32_t ifindex,
 	if (!ek)
 		return;
 
-	sm = l_hashmap_lookup(state_machines, L_UINT_TO_PTR(ifindex));
-	if (!sm)
-		return;
-
-	if (memcmp(sm->sta_addr, sta_addr, sizeof(sm->sta_addr)))
-		return;
-
-	if (memcmp(sm->aa_addr, aa_addr, sizeof(sm->aa_addr)))
-		return;
+	sm = eapol_find_sm(ifindex, sta_addr, aa_addr);
 
 	/* Wrong direction */
 	if (!ek->key_ack)
@@ -874,7 +894,7 @@ struct l_io *eapol_open_pae(uint32_t index)
 
 bool eapol_init()
 {
-	state_machines = l_hashmap_new();
+	state_machines = l_queue_new();
 	protocol_version = EAPOL_PROTOCOL_VERSION_2004;
 
 	return true;
@@ -882,7 +902,7 @@ bool eapol_init()
 
 bool eapol_exit()
 {
-	l_hashmap_destroy(state_machines, eapol_sm_destroy);
+	l_queue_destroy(state_machines, eapol_sm_destroy);
 	get_nonce = NULL;
 	tx_packet = NULL;
 
