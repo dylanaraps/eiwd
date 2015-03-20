@@ -771,7 +771,8 @@ static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
 	if (netdev->connected_bss &&
 		netdev->connected_bss->network->ssid_security ==
 						SCAN_SSID_SECURITY_NONE) {
-		reply = l_dbus_message_new_method_return(netdev->connect_pending);
+		reply = l_dbus_message_new_method_return(
+						netdev->connect_pending);
 		l_dbus_message_set_arguments(reply, "");
 		dbus_pending_reply(&netdev->connect_pending, reply);
 	}
