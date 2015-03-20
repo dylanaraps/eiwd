@@ -338,6 +338,10 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 						network->object_path,
 						passphrase_callback,
 						network);
+
+			if (!network->agent_request)
+				return dbus_error_no_agent(message);
+
 			break;
 		}
 
