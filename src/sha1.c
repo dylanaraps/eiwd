@@ -80,6 +80,8 @@ bool hmac_sha1(const void *key, size_t key_len,
 	struct l_checksum *checksum;
 
 	checksum = l_checksum_new(L_CHECKSUM_SHA1);
+	if (!checksum)
+		return false;
 
 	__hmac_sha1(checksum, key, key_len, data, data_len, output, size);
 
