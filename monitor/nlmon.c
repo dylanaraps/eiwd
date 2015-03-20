@@ -3467,7 +3467,7 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 	}
 
 	print_attr(1, "Type: %u (%s)", ek->packet_type, str);
-	print_attr(1, "Lenth: %d", L_BE16_TO_CPU(ek->packet_len));
+	print_attr(1, "Length: %d", L_BE16_TO_CPU(ek->packet_len));
 	print_attr(1, "Descriptor Type: %u", ek->descriptor_type);
 	print_attr(1, "Key MIC: %s", ek->key_mic ? "true" : "false");
 	print_attr(1, "Secure: %s", ek->secure ? "true" : "false");
