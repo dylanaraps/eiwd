@@ -752,8 +752,6 @@ static void print_ie_rsn(unsigned int level, const char *label,
 	if (end - data < 2)
 		goto end;
 
-	data += 2;
-
 	bytemask[0] = 0x03;
 	bytemask[1] = 0x00;
 	print_ie_bitfield(level + 1, "RSN capabilities", data, bytemask,
@@ -771,6 +769,8 @@ static void print_ie_rsn(unsigned int level, const char *label,
 	bytemask[1] = 0xff;
 	print_ie_bitfield(level + 1, "RSN capabilities", data, bytemask,
 			sizeof(bytemask), rsn_capabilities_bitfield);
+
+	data += 2;
 
 	if (end - data < 2)
 		goto end;
