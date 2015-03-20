@@ -628,7 +628,7 @@ static void eapol_sm_test(const void *data)
 	sm = eapol_sm_new();
 	eapol_sm_set_pmk(sm, psk);
 	eapol_sm_set_aa_address(sm, aa);
-	eapol_sm_set_sta_address(sm, spa);
+	eapol_sm_set_supplicant_address(sm, spa);
 	eapol_sm_set_own_rsn(sm, eapol_key_data_4 + sizeof(struct eapol_key),
 				eapol_key_test_4.key_data_len);
 	eapol_sm_set_ap_rsn(sm, ap_rsne, sizeof(ap_rsne));
