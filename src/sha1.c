@@ -131,6 +131,8 @@ bool pbkdf2_sha1(const void *password, size_t password_len,
 	unsigned int i;
 
 	checksum = l_checksum_new(L_CHECKSUM_SHA1);
+	if (!checksum)
+		return false;
 
 	for (i = 1; size > 0; i++) {
 		size_t len;
@@ -160,6 +162,8 @@ bool prf_sha1(const void *key, size_t key_len,
 	unsigned int i, offset = 0;
 
 	checksum = l_checksum_new(L_CHECKSUM_SHA1);
+	if (!checksum)
+		return false;
 
 	memcpy(input, prefix, prefix_len);
 	input[prefix_len] = 0;
