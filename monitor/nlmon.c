@@ -3426,13 +3426,12 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 	if (size < 4)
 		return;
 
-	ek = eapol_key_validate(data, size);
-	if (!ek) {
-		print_hexdump(0, data, size);
-		return;
-	}
-
 	print_attr(0, "EAPoL: len %u", size);
+	print_hexdump(0, data, size);
+
+	ek = eapol_key_validate(data, size);
+	if (!ek)
+		return;
 
 	switch (ek->protocol_version) {
 	case 0x01:
