@@ -176,7 +176,7 @@ static bool eapol_read(struct l_io *io, void *user_data)
 	bytes = recvfrom(fd, frame, sizeof(frame), 0,
 				(struct sockaddr *) &sll, &sll_len);
 	if (bytes <= 0) {
-		l_error("EAPoL read socket");
+		l_error("EAPoL read socket: %s", strerror(errno));
 		return false;
 	}
 
