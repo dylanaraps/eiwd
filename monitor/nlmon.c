@@ -903,6 +903,217 @@ static void print_ie_vendor(unsigned int level, const char *label,
 	}
 }
 
+static void print_ie_mcs(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+	int i;
+	uint8_t bytemask[16];
+	uint16_t data_rate;
+	const char *mcs_set[128] = {
+		[77] = "Reserved",
+		[78] = "Reserved",
+		[79] = "Reserved",
+
+		[90] = "Reserved",
+		[91] = "Reserved",
+		[92] = "Reserved",
+		[93] = "Reserved",
+		[94] = "Reserved",
+		[95] = "Reserved",
+		[96] = "Tx MCS set defined",
+
+		[97]  = "Tx Rx MCS set not equal",
+		[100] = "Tx unequal modulation supported",
+		[101] = "Reserved",
+		[102] = "Reserved",
+		[103] = "Reserved",
+
+		[104] = "Reserved",
+		[105] = "Reserved",
+		[106] = "Reserved",
+		[107] = "Reserved",
+		[108] = "Reserved",
+		[109] = "Reserved",
+		[110] = "Reserved",
+		[111] = "Reserved",
+
+		[112] = "Reserved",
+		[113] = "Reserved",
+		[114] = "Reserved",
+		[115] = "Reserved",
+		[116] = "Reserved",
+		[117] = "Reserved",
+		[118] = "Reserved",
+		[119] = "Reserved",
+
+		[120] = "Reserved",
+		[121] = "Reserved",
+		[122] = "Reserved",
+		[123] = "Reserved",
+		[124] = "Reserved",
+		[125] = "Reserved",
+		[126] = "Reserved",
+		[127] = "Reserved",
+	};
+
+	if (size != 16)
+		return print_ie_error(level, label, size, -EINVAL);
+
+	for (i = 0; i < 77; i++) {
+		uint8_t byte = i / 8;
+		uint8_t bit = i % 8;
+
+		if (util_is_bit_set(bytes[byte], bit))
+			print_attr(level, "%s: MCS %d", label, i);
+	}
+
+	memset(bytemask, 0, sizeof(bytemask));
+
+	bytemask[9] = 0xe0;
+
+	print_ie_bitfield(level, "MCS set", bytes, bytemask, sizeof(bytemask),
+			mcs_set);
+
+	data_rate = l_get_le16(&bytes[10]) & 0x3ff;
+
+	if (data_rate)
+		print_attr(level, "MCS set: Rx Highest data rate: %d Mbit/s",
+			data_rate);
+
+	bytemask[9]  = 0x00;
+	bytemask[11] = 0xfc;
+	bytemask[12] = 0x03;
+
+	print_ie_bitfield(level, "MCS Set", bytes, bytemask, sizeof(bytemask),
+			mcs_set);
+
+	if (bytes[12] & 0x0c)
+		print_attr(level,
+			"MCS set: Tx max spatial streams supported: %d",
+			((bytes[12] & 0x0c) >> 2) + 1);
+
+	bytemask[11] = 0x00;
+	bytemask[12] = 0xf0;
+	bytemask[13] = 0xff;
+	bytemask[14] = 0xff;
+	bytemask[15] = 0xff;
+
+	print_ie_bitfield(level, "MCS set", bytes, bytemask, sizeof(bytemask),
+			mcs_set);
+}
+
+static void print_ie_ht_operation(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const char *secondary_offset[] = {
+		"no secondary channel",
+		"above primary channel",
+		"reserved",
+		"below primary channel"
+	};
+	const char *channel_width[] = {
+		"20 MHz channel width",
+		"Any supported channel width"
+	};
+	const char *ht_protection[] = {
+		"No protection",
+		"Nonmember protection mode",
+		"20 MHz protection mode",
+		"non-HT mixed mode"
+	};
+	const char *ht_ops_bitfield[] = {
+		"",
+		"",
+		"",
+		"RIFS permitted",
+		"Reserved",
+		"Reserved",
+		"Reserved",
+		"Reserved",
+
+		"",
+		"",
+		"Non-greenfield HT STAs present",
+		"Reserved",
+		"OBSS non-HT STAs present",
+		"Reserved",
+		"Reserved",
+		"Reserved",
+
+		"Reserved",
+		"Reserved",
+		"Reserved",
+		"Reserved",
+		"Reserved",
+		"Reserved",
+		"Reserved",
+
+		"Reserved",
+		"Reserved",
+		"Reserved",
+		"Reserved",
+		"Reserved",
+		"Reserved",
+		"Dual beacon",
+		"Dual CTS protection",
+
+		"STBC beacon",
+		"L-SIG TXOP protection full support",
+		"PCO active",
+		"PCO Phase",
+		"Reserved",
+		"Reserved",
+		"Reserved",
+		"Reserved",
+
+		NULL
+	};
+	uint8_t *bytes = (uint8_t *) data;
+	uint8_t bytemask[5];
+	int i;
+
+	if (size < 22) {
+		print_ie_error(level, label, size, -EINVAL);
+		return;
+	}
+
+	print_attr (level, "%s:", label);
+	print_attr (level + 1, "Primary channel %d", bytes[0]);
+
+	i = bytes[1] & 0x03;
+	print_attr (level + 1,
+		"HT Operation Information: Secondary Channel Offset: %s",
+		secondary_offset[i]);
+
+	i = (bytes[1] & 0x04) >> 2;
+	print_attr (level + 1,
+		"HT Operation Information: Channel width: bit  2: %s",
+		channel_width[i]);
+
+	memset(bytemask, 0, sizeof(bytemask));
+	bytemask[0] = 0xf8;
+
+	print_ie_bitfield(level + 1,
+			"HT Operation Information", &bytes[1], bytemask,
+			sizeof(bytemask), ht_ops_bitfield);
+
+	i = bytes[2] & 0x03;
+	print_attr(level + 1,
+		"HT Operation Information: HT Protection: bits  8 -  9: %s",
+		ht_protection[i]);
+
+	bytemask[0] = 0x00;
+	bytemask[1] = 0xfc;
+	bytemask[2] = 0xff;
+	bytemask[3] = 0xff;
+	bytemask[4] = 0xff;
+	print_ie_bitfield(level + 1, "HT Operation Information", &bytes[1],
+			bytemask, sizeof(bytemask), ht_ops_bitfield);
+
+	print_ie_mcs(level + 1, "Basic MCS set", &bytes[6], 16);
+}
+
 static struct attr_entry ie_entry[] = {
 	{IE_TYPE_SSID,                      "SSID",
 	ATTR_CUSTOM,                        { .function = print_ie_ssid } },
@@ -926,6 +1137,8 @@ static struct attr_entry ie_entry[] = {
 	ATTR_CUSTOM,                        { .function = print_ie_rsn } },
 	{IE_TYPE_EXTENDED_SUPPORTED_RATES,  "Extended supported rates",
 	ATTR_CUSTOM,                        { .function = print_ie_rate } },
+	{IE_TYPE_HT_OPERATION,              "HT Operation",
+	ATTR_CUSTOM,                        { .function = print_ie_ht_operation } },
 	{IE_TYPE_VENDOR_SPECIFIC,           "Vendor specific",
 	ATTR_CUSTOM,                        { .function = print_ie_vendor } },
 	{ },
