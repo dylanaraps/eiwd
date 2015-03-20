@@ -862,7 +862,7 @@ struct l_io *eapol_open_pae(uint32_t index)
 	struct sockaddr_ll sll;
 	int fd;
 
-	fd = socket(PF_PACKET, SOCK_RAW | SOCK_CLOEXEC, 0);
+	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, htons(ETH_P_PAE));
 	if (fd < 0) {
 		l_error("Failed to create PAE socket %s (%d)",
 						strerror(errno), errno);
