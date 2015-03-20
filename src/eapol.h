@@ -95,9 +95,8 @@ struct eapol_key {
 	uint8_t key_data[0];
 } __attribute__ ((packed));
 
-typedef int (*eapol_tx_packet_func_t)(uint32_t ifindex, const uint8_t *aa_addr,
-				const uint8_t *sta_addr,
-				const struct eapol_key *ek,
+typedef int (*eapol_tx_packet_func_t)(uint32_t ifindex, const uint8_t *aa,
+				const uint8_t *spa, const struct eapol_key *ek,
 				void *user_data);
 typedef bool (*eapol_get_nonce_func_t)(uint8_t nonce[]);
 
