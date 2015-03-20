@@ -304,6 +304,8 @@ static void passphrase_callback(enum agent_result result,
 
 	if (crypto_psk_from_passphrase(passphrase, network->ssid,
 					network->ssid_len, network->psk) < 0) {
+		l_error("PMK generation failed.  "
+			"Ensure Crypto Engine is properly configured");
 		dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_failed(netdev->connect_pending));
 
