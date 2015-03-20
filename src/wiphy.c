@@ -1860,6 +1860,8 @@ bool wiphy_init(void)
 	l_genl_family_set_watches(nl80211, nl80211_appeared, nl80211_vanished,
 								NULL, NULL);
 
+	eapol_init();
+
 	return true;
 
 failed:
@@ -1871,6 +1873,8 @@ failed:
 
 bool wiphy_exit(void)
 {
+	eapol_exit();
+
 	if (!genl)
 		return false;
 
