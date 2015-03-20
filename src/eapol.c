@@ -893,10 +893,42 @@ struct l_io *eapol_open_pae(uint32_t index)
 	return io;
 }
 
+/*
+ * Default implementation of the frame transmission function.
+ * This function expects an fd to be passed as user_data
+ */
+static int eapol_write(uint32_t ifindex, const uint8_t *aa, const uint8_t *spa,
+			const struct eapol_key *ek, void *user_data)
+{
+	int fd = L_PTR_TO_INT(user_data);
+	size_t frame_size;
+	struct sockaddr_ll sll;
+	ssize_t r;
+
+	memset(&sll, 0, sizeof(sll));
+	sll.sll_family = AF_PACKET;
+	sll.sll_ifindex = ifindex;
+	sll.sll_protocol = htons(ETH_P_PAE);
+	sll.sll_halen = ETH_ALEN;
+	memcpy(sll.sll_addr, aa, ETH_ALEN);
+
+	frame_size = sizeof(struct eapol_key) + L_BE16_TO_CPU(ek->key_data_len);
+
+	r = sendto(fd, ek, frame_size, 0,
+			(struct sockaddr *) &sll, sizeof(sll));
+	if (r < 0) {
+		l_error("EAPoL write socket: %s", strerror(errno));
+		return -errno;
+	}
+
+	return 0;
+}
+
 bool eapol_init()
 {
 	state_machines = l_queue_new();
 	protocol_version = EAPOL_PROTOCOL_VERSION_2004;
+	tx_packet = eapol_write;
 
 	return true;
 }
