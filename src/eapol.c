@@ -924,10 +924,16 @@ static int eapol_write(uint32_t ifindex, const uint8_t *aa, const uint8_t *spa,
 	return 0;
 }
 
+static bool eapol_get_nonce(uint8_t nonce[])
+{
+	return l_getrandom(nonce, 32);
+}
+
 bool eapol_init()
 {
 	state_machines = l_queue_new();
 	protocol_version = EAPOL_PROTOCOL_VERSION_2004;
+	get_nonce = eapol_get_nonce;
 	tx_packet = eapol_write;
 
 	return true;
