@@ -426,15 +426,15 @@ struct eapol_key *eapol_create_ptk_4_of_4(
 }
 
 struct eapol_sm {
-	uint8_t pmk[32];
-	uint64_t replay_counter;
 	uint8_t sta_addr[6];
-	uint8_t snonce[32];
 	uint8_t aa_addr[6];
-	uint8_t anonce[32];
-	uint8_t ptk[64];
 	uint8_t *ap_rsn;
 	uint8_t *own_rsn;
+	uint8_t pmk[32];
+	uint64_t replay_counter;
+	uint8_t snonce[32];
+	uint8_t anonce[32];
+	uint8_t ptk[64];
 	bool have_snonce:1;
 	bool have_replay:1;
 };
