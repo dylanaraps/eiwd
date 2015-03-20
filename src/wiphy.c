@@ -169,7 +169,7 @@ static bool eapol_read(struct l_io *io, void *user_data)
 	ssize_t bytes;
 	uint8_t frame[2304]; /* IEEE Std 802.11 ch. 8.2.3 */
 
-	memset(&sll, 0, sizeof(&sll));
+	memset(&sll, 0, sizeof(sll));
 	sll_len = sizeof(sll);
 
 	bytes = recvfrom(fd, frame, sizeof(frame), 0,
