@@ -140,7 +140,7 @@ struct eapol_sm *eapol_sm_new();
 void eapol_sm_free(struct eapol_sm *sm);
 
 void eapol_sm_set_supplicant_address(struct eapol_sm *sm, const uint8_t *spa);
-void eapol_sm_set_aa_address(struct eapol_sm *sm, const uint8_t *aa_addr);
+void eapol_sm_set_authenticator_address(struct eapol_sm *sm, const uint8_t *aa);
 void eapol_sm_set_pmk(struct eapol_sm *sm, const uint8_t *pmk);
 void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 				size_t len);

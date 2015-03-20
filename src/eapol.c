@@ -428,7 +428,7 @@ struct eapol_key *eapol_create_ptk_4_of_4(
 struct eapol_sm {
 	uint32_t ifindex;
 	uint8_t spa[6];
-	uint8_t aa_addr[6];
+	uint8_t aa[6];
 	uint8_t *ap_rsn;
 	uint8_t *own_rsn;
 	uint8_t pmk[32];
@@ -468,9 +468,9 @@ void eapol_sm_set_supplicant_address(struct eapol_sm *sm, const uint8_t *spa)
 	memcpy(sm->spa, spa, sizeof(sm->spa));
 }
 
-void eapol_sm_set_aa_address(struct eapol_sm *sm, const uint8_t *aa_addr)
+void eapol_sm_set_authenticator_address(struct eapol_sm *sm, const uint8_t *aa)
 {
-	memcpy(sm->aa_addr, aa_addr, sizeof(sm->aa_addr));
+	memcpy(sm->aa, aa, sizeof(sm->aa));
 }
 
 void eapol_sm_set_pmk(struct eapol_sm *sm, const uint8_t *pmk)
@@ -523,7 +523,7 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 
 	memcpy(sm->anonce, ek->key_nonce, sizeof(ek->key_nonce));
 
-	crypto_derive_pairwise_ptk(sm->pmk, sm->spa, sm->aa_addr,
+	crypto_derive_pairwise_ptk(sm->pmk, sm->spa, sm->aa,
 					sm->anonce, sm->snonce,
 					ptk, sizeof(sm->ptk));
 
@@ -537,7 +537,7 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 		goto fail;
 
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
-	tx_packet(ifindex, sm->aa_addr, sm->spa, step2);
+	tx_packet(ifindex, sm->aa, sm->spa, step2);
 
 fail:
 	l_free(step2);
@@ -733,7 +733,7 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 		goto fail;
 
 	memcpy(step4->key_mic_data, mic, sizeof(mic));
-	tx_packet(ifindex, sm->aa_addr, sm->spa, step4);
+	tx_packet(ifindex, sm->aa, sm->spa, step4);
 
 fail:
 	l_free(step4);
@@ -741,7 +741,7 @@ fail:
 
 static struct eapol_sm *eapol_find_sm(uint32_t ifindex,
 						const uint8_t *spa,
-						const uint8_t *aa_addr)
+						const uint8_t *aa)
 {
 	const struct l_queue_entry *entry;
 	struct eapol_sm *sm;
@@ -756,7 +756,7 @@ static struct eapol_sm *eapol_find_sm(uint32_t ifindex,
 		if (memcmp(sm->spa, spa, 6))
 			continue;
 
-		if (memcmp(sm->aa_addr, aa_addr, 6))
+		if (memcmp(sm->aa, aa, 6))
 			continue;
 
 		return sm;
@@ -765,9 +765,8 @@ static struct eapol_sm *eapol_find_sm(uint32_t ifindex,
 	return NULL;
 }
 
-void __eapol_rx_packet(uint32_t ifindex,
-		const uint8_t *spa, const uint8_t *aa_addr,
-		const uint8_t *frame, size_t len)
+void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
+			const uint8_t *frame, size_t len)
 {
 	const struct eapol_key *ek;
 	struct eapol_sm *sm;
@@ -780,7 +779,7 @@ void __eapol_rx_packet(uint32_t ifindex,
 	if (!ek)
 		return;
 
-	sm = eapol_find_sm(ifindex, spa, aa_addr);
+	sm = eapol_find_sm(ifindex, spa, aa);
 
 	/* Wrong direction */
 	if (!ek->key_ack)
