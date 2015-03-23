@@ -264,7 +264,7 @@ bool eapol_verify_ptk_1_of_4(const struct eapol_key *ek)
 	VERIFY_IS_ZERO(ek->reserved);
 	VERIFY_IS_ZERO(ek->key_mic_data);
 
-	return ek;
+	return true;
 }
 
 bool eapol_verify_ptk_2_of_4(const struct eapol_key *ek)
