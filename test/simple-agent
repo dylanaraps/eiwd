@@ -34,11 +34,11 @@ class Agent(dbus.service.Object):
                 if arg.startswith("Passphrase="):
                     passphrase = arg.replace("Passphrase=", "", 1)
                     response["Passphrase"] = passphrase
-                else:
-                    if self.passphrase:
-                        response["Passphrase"] = self.passphrase
+        else:
+            if self.passphrase:
+                response["Passphrase"] = self.passphrase
 
-            return response
+        return response
 
     @dbus.service.method("net.connman.iwd.Agent",
                             in_signature='o',
