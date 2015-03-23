@@ -785,6 +785,8 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 		return;
 
 	sm = eapol_find_sm(ifindex, spa, aa);
+	if (!sm)
+		return;
 
 	/* Wrong direction */
 	if (!ek->key_ack)
