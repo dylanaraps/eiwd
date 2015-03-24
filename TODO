@@ -216,7 +216,7 @@ Wireless daemon
   or deauthentication frame from a generic structure representing the
   MPDU.
 
-  Priority: High
+  Priority: Medium
   Complexity: C2
 
 - Handle the relevant logic of the authentication management frames
@@ -224,7 +224,7 @@ Wireless daemon
   When an authentication management frame is received, such frame needs
   to be understood and handled properly.
 
-  Priority: High
+  Priority: Medium
   Complexity: C2
 
 - Add support for EAP based authentication and key generation
@@ -235,7 +235,7 @@ Wireless daemon
   It is also intended that this EAP code can be utilized as shared library
   and be beneficial for systemd-networkd for wired authentication.
 
-  Priority: Low
+  Priority: Medium
   Complexity: C8
 
 - Create a document to doc describing general architecture and relation
