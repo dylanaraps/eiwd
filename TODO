@@ -196,15 +196,6 @@ Wireless monitor
   Priority: Medium
   Complexity: C2
 
-- Decode the RSNE field
-
-  Properly decode and display the RSNE field.  This is particularly important
-  to properly analyze scan results and improve the scan categorization
-  functionality.
-
-  Priority: High
-  Complexity: C1
-
 
 Wireless simulator
 ==================
