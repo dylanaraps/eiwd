@@ -218,7 +218,6 @@ Wireless daemon
 
   Priority: High
   Complexity: C2
-  Owner: Tomasz Bursztyka <tomasz.bursztyka@linux.intel.com>
 
 - Handle the relevant logic of the authentication management frames
 
