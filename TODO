@@ -323,27 +323,6 @@ Wireless daemon
   Complexity: C1
   Owner: Tomasz Bursztyka <tomasz.bursztyka@linux.intel.com>
 
-- RSN IE Generation for WPA2 Association
-
-  When connecting to a WPA2 Network, we must provide an RSN IE that describes
-  our ciphering capabilities.  For WPA2 this generally means CCMP as the
-  pairwise cipher.  The same RSN IE is sent during step 2 of the 4-way
-  handshake to the Authenticator (AP).  The AP will match RSN IEs received
-  in the Association frame and the EAPoL 2/4 frame.  The RSN IE is included
-  as part of the Netlink Association Request.
-
-  Information Elements: len 22
-  Tag 48: len 20
-    01 00 00 0f ac 04 01 00 00 0f ac 04 01 00 00 0f  ................
-    ac 02 00 00                                      ....
-  Cipher Suites Pairwise: len 4
-  CCMP (0x000fac04)
-  Cipher Suite Group: CCMP (0x000fac04)
-  Control Port: true
-
-  Priority: High
-  Complexity: C1
-
 - Take hardware capabilities into account for RSNE generation
 
   When generating RSNE, take hardware capabilities into account.
