@@ -136,14 +136,6 @@ Wireless monitor
   Priority: Medium
   Complexity: C1
 
-- Decode HT Operation IE element
-
-  HT Operation element has ID 61.
-
-  Priority: Medium
-  Complexity: C1
-  Owner: Patrik Flykt <patrik.flykt@linux.intel.com>
-
 - Add support for PACKET_RECV_OUTPUT socket option of AF_PACKET
 
   Instead of having to switch every interface manually into promiscuous
