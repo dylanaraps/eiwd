@@ -2737,7 +2737,7 @@ static struct attr_entry info_entry[] = {
 	{ IFLA_MASTER,		"Master",	ATTR_U32 },
 	{ IFLA_MTU,		"MTU",		ATTR_U32 },
 	{ IFLA_TXQLEN,		"Txqlen",	ATTR_U32 },
-	{ IFLA_OPERSTATE,	"Openstate",	ATTR_U8 },
+	{ IFLA_OPERSTATE,	"OperState",	ATTR_U8 },
 	{ IFLA_LINKMODE,	"LinkMode",	ATTR_U8 },
 	{ IFLA_LINK,		"Link",		ATTR_S32 },
 	{ IFLA_QDISC,		"Qdisc",	ATTR_STRING },
