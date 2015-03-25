@@ -2766,6 +2766,34 @@ static void print_oper_state(unsigned int indent, const char *str,
 		oper_state_to_ascii(oper_state), oper_state);
 }
 
+static const char *link_mode_to_ascii(const uint8_t mode)
+{
+	switch(mode) {
+	case 0:
+		return "kernel controlled";
+	case 1:
+		return "userspace controlled";
+	}
+
+	return NULL;
+}
+
+static void print_link_mode(unsigned int indent, const char *str,
+						const void *buf, uint16_t size)
+{
+	uint8_t link_mode;
+
+	if (size != 1) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	link_mode = ((uint8_t *)buf)[0];
+
+	print_attr(indent, "%s: %s (%d)", str,
+		link_mode_to_ascii(link_mode), link_mode);
+}
+
 static struct attr_entry info_entry[] = {
 	{ IFLA_ADDRESS,		"Interface Address", ATTR_CUSTOM,
 					{ .function = print_ifi_addr } },
@@ -2777,7 +2805,8 @@ static struct attr_entry info_entry[] = {
 	{ IFLA_TXQLEN,		"Txqlen",	ATTR_U32 },
 	{ IFLA_OPERSTATE,	"OperState",	ATTR_CUSTOM,
 					{ .function = print_oper_state } },
-	{ IFLA_LINKMODE,	"LinkMode",	ATTR_U8 },
+	{ IFLA_LINKMODE,	"LinkMode",	ATTR_CUSTOM,
+					{ .function = print_link_mode } },
 	{ IFLA_LINK,		"Link",		ATTR_S32 },
 	{ IFLA_QDISC,		"Qdisc",	ATTR_STRING },
 	{ IFLA_STATS,		"Stats",	ATTR_BINARY },
