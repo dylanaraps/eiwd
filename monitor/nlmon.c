@@ -2728,6 +2728,44 @@ static void print_ifi_addr(unsigned int indent, const char *str,
 	print_attr(indent, "%s: %s", str, ether_ntoa(&eth));
 }
 
+static const char *oper_state_to_ascii(const uint8_t state)
+{
+	switch(state) {
+	case IF_OPER_UNKNOWN:
+		return "unknown";
+	case IF_OPER_NOTPRESENT:
+		return "not present";
+	case IF_OPER_DOWN:
+		return "down";
+	case IF_OPER_LOWERLAYERDOWN:
+		return "lower layer down";
+	case IF_OPER_TESTING:
+		return "testing";
+	case IF_OPER_DORMANT:
+		return "dormant";
+	case IF_OPER_UP:
+		return "up";
+	}
+
+	return NULL;
+}
+
+static void print_oper_state(unsigned int indent, const char *str,
+						const void *buf, uint16_t size)
+{
+	uint8_t oper_state;
+
+	if (size != 1) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	oper_state = ((uint8_t *)buf)[0];
+
+	print_attr(indent, "%s: %s (%d)", str,
+		oper_state_to_ascii(oper_state), oper_state);
+}
+
 static struct attr_entry info_entry[] = {
 	{ IFLA_ADDRESS,		"Interface Address", ATTR_CUSTOM,
 					{ .function = print_ifi_addr } },
@@ -2737,7 +2775,8 @@ static struct attr_entry info_entry[] = {
 	{ IFLA_MASTER,		"Master",	ATTR_U32 },
 	{ IFLA_MTU,		"MTU",		ATTR_U32 },
 	{ IFLA_TXQLEN,		"Txqlen",	ATTR_U32 },
-	{ IFLA_OPERSTATE,	"OperState",	ATTR_U8 },
+	{ IFLA_OPERSTATE,	"OperState",	ATTR_CUSTOM,
+					{ .function = print_oper_state } },
 	{ IFLA_LINKMODE,	"LinkMode",	ATTR_U8 },
 	{ IFLA_LINK,		"Link",		ATTR_S32 },
 	{ IFLA_QDISC,		"Qdisc",	ATTR_STRING },
