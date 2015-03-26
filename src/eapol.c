@@ -38,11 +38,13 @@
 #include "crypto.h"
 #include "eapol.h"
 #include "ie.h"
+#include "util.h"
 
 struct l_queue *state_machines;
 eapol_tx_packet_func_t tx_packet = NULL;
 eapol_get_nonce_func_t get_nonce = NULL;
 eapol_install_tk_func_t install_tk = NULL;
+eapol_install_gtk_func_t install_gtk = NULL;
 enum eapol_protocol_version protocol_version = EAPOL_PROTOCOL_VERSION_2004;
 
 #define VERIFY_IS_ZERO(field)					\
@@ -697,6 +699,7 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	const uint8_t *gtk;
 	size_t gtk_len;
 	const uint8_t *rsne;
+	uint8_t gtk_key_index;
 
 	if (!eapol_verify_ptk_3_of_4(ek))
 		return;
@@ -737,6 +740,15 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	if (!gtk)
 		return;
 
+	if (gtk_len < 2)
+		return;
+
+	gtk_key_index = util_bit_field(gtk[0], 0, 2);
+	/* TODO: Handle tx bit */
+
+	gtk += 2;
+	gtk_len -= 2;
+
 	step4 = eapol_create_ptk_4_of_4(protocol_version,
 					ek->key_descriptor_version,
 					sm->replay_counter);
@@ -749,6 +761,10 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 
 	if (install_tk)
 		install_tk(sm->ifindex, sm->aa, ptk->tk, rsne, sm->user_data);
+
+	if (install_gtk)
+		install_gtk(sm->ifindex, gtk_key_index, gtk, gtk_len,
+				ek->key_rsc, 6, rsne, sm->user_data);
 
 fail:
 	l_free(step4);
@@ -874,6 +890,11 @@ void __eapol_set_protocol_version(enum eapol_protocol_version version)
 void __eapol_set_install_tk_func(eapol_install_tk_func_t func)
 {
 	install_tk = func;
+}
+
+void __eapol_set_install_gtk_func(eapol_install_gtk_func_t func)
+{
+	install_gtk = func;
 }
 
 struct l_io *eapol_open_pae(uint32_t index)
