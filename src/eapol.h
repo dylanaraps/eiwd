@@ -99,6 +99,9 @@ typedef int (*eapol_tx_packet_func_t)(uint32_t ifindex, const uint8_t *aa,
 				const uint8_t *spa, const struct eapol_key *ek,
 				void *user_data);
 typedef bool (*eapol_get_nonce_func_t)(uint8_t nonce[]);
+typedef void (*eapol_install_tk_func_t)(uint32_t ifindex, const uint8_t *aa,
+					const uint8_t *tk, const uint8_t *rsn,
+					void *user_data);
 
 bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 				uint8_t *mic);
@@ -135,6 +138,7 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func);
 void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func);
 void __eapol_set_protocol_version(enum eapol_protocol_version version);
+void __eapol_set_install_tk_func(eapol_install_tk_func_t func);
 
 struct eapol_sm *eapol_sm_new();
 void eapol_sm_free(struct eapol_sm *sm);

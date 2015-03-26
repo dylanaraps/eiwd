@@ -42,6 +42,7 @@
 struct l_queue *state_machines;
 eapol_tx_packet_func_t tx_packet = NULL;
 eapol_get_nonce_func_t get_nonce = NULL;
+eapol_install_tk_func_t install_tk = NULL;
 enum eapol_protocol_version protocol_version = EAPOL_PROTOCOL_VERSION_2004;
 
 #define VERIFY_IS_ZERO(field)					\
@@ -746,6 +747,9 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	memcpy(step4->key_mic_data, mic, sizeof(mic));
 	tx_packet(ifindex, sm->aa, sm->spa, step4, user_data);
 
+	if (install_tk)
+		install_tk(sm->ifindex, sm->aa, ptk->tk, rsne, sm->user_data);
+
 fail:
 	l_free(step4);
 }
@@ -865,6 +869,11 @@ void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func)
 void __eapol_set_protocol_version(enum eapol_protocol_version version)
 {
 	protocol_version = version;
+}
+
+void __eapol_set_install_tk_func(eapol_install_tk_func_t func)
+{
+	install_tk = func;
 }
 
 struct l_io *eapol_open_pae(uint32_t index)
