@@ -436,6 +436,7 @@ struct eapol_sm {
 	uint8_t snonce[32];
 	uint8_t anonce[32];
 	uint8_t ptk[64];
+	void *user_data;
 	bool have_snonce:1;
 	bool have_replay:1;
 };
@@ -496,6 +497,11 @@ void eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 
 	l_free(sm->own_rsn);
 	sm->own_rsn = l_memdup(rsn_ie, len);
+}
+
+void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data)
+{
+	sm->user_data = user_data;
 }
 
 void eapol_start(uint32_t ifindex, struct eapol_sm *sm)
