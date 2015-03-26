@@ -878,9 +878,85 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 	 * TODO: Save pending command ids so the commands can be canceled
 	 * in case we de-authenticate
 	 */
-	mlme_new_pairwise_key(netdev, cipher,
+	mlme_new_pairwise_key(netdev, cipher, aa,
 					tk, crypto_cipher_key_len(cipher));
 	mlme_set_pairwise_key(netdev);
+}
+
+static void mlme_new_group_key_cb(struct l_genl_msg *msg, void *data)
+{
+	/* TODO: De-authenticate */
+	if (l_genl_msg_get_error(msg) < 0)
+		return;
+}
+
+static unsigned int mlme_new_group_key(struct netdev *netdev,
+					uint32_t cipher, uint8_t key_id,
+					const uint8_t *gtk, size_t gtk_len,
+					const uint8_t *rsc, size_t rsc_len)
+{
+	struct l_genl_msg *msg;
+	unsigned int id;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_NEW_KEY, 512);
+	if (!msg)
+		return 0;
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_DATA, gtk_len, gtk);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_CIPHER, 4, &cipher);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_SEQ, rsc_len, rsc);
+
+	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY_DEFAULT_TYPES);
+	l_genl_msg_append_attr(msg, NL80211_KEY_DEFAULT_TYPE_MULTICAST,
+				0, NULL);
+	l_genl_msg_leave_nested(msg);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+
+	id = l_genl_family_send(nl80211, msg, mlme_new_group_key_cb,
+					netdev, NULL);
+	if (!id)
+		l_genl_msg_unref(msg);
+
+	return id;
+}
+
+static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
+				const uint8_t *gtk, uint8_t gtk_len,
+				const uint8_t *rsc, uint8_t rsc_len,
+				const uint8_t *rsn, void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct ie_rsn_info info;
+	enum crypto_cipher cipher;
+
+	l_debug("");
+
+	ie_parse_rsne_from_data(rsn, rsn[1] + 2, &info);
+
+	switch (info.group_cipher) {
+	case IE_RSN_CIPHER_SUITE_CCMP:
+		cipher = CRYPTO_CIPHER_CCMP;
+		break;
+	default:
+		l_error("Unexpected cipher suite: %d", info.group_cipher);
+		/* TODO: De-authenticate */
+		return;
+	}
+
+	if (crypto_cipher_key_len(cipher) != gtk_len) {
+		l_error("Unexpected key length: %d", gtk_len);
+		return;
+	}
+
+	/*
+	 * TODO: Save pending command id so the command can be canceled
+	 * in case we de-authenticate
+	 */
+	mlme_new_group_key(netdev, cipher, key_index,
+				gtk, crypto_cipher_key_len(cipher),
+				rsc, rsc_len);
 }
 
 static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
@@ -1968,6 +2044,7 @@ bool wiphy_init(void)
 
 	eapol_init();
 	__eapol_set_install_tk_func(wiphy_set_tk);
+	__eapol_set_install_gtk_func(wiphy_set_gtk);
 
 	return true;
 
