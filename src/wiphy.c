@@ -1038,6 +1038,7 @@ static void mlme_associate_cmd(struct netdev *netdev)
 		eapol_sm_set_supplicant_address(sm, netdev->addr);
 		eapol_sm_set_ap_rsn(sm, bss->rsne, bss->rsne[1] + 2);
 		eapol_sm_set_own_rsn(sm, rsne_buf, rsne_buf[1] + 2);
+		eapol_sm_set_user_data(sm, netdev);
 		eapol_start(netdev->index, sm);
 
 		msg_append_attr(msg, NL80211_ATTR_CIPHER_SUITES_PAIRWISE,
