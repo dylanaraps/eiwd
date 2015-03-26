@@ -783,6 +783,106 @@ static bool wiphy_match(const void *a, const void *b)
 	return (wiphy->id == id);
 }
 
+static void mlme_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
+{
+	/* TODO: De-authenticate */
+	if (l_genl_msg_get_error(msg) < 0)
+		return;
+}
+
+static unsigned int mlme_set_pairwise_key(struct netdev *netdev)
+{
+	uint8_t key_id = 0;
+	struct l_genl_msg *msg;
+	unsigned int id;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_SET_KEY, 512);
+	if (!msg)
+		return 0;
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_DEFAULT, 0, NULL);
+
+	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY_DEFAULT_TYPES);
+	l_genl_msg_append_attr(msg, NL80211_KEY_DEFAULT_TYPE_UNICAST, 0, NULL);
+	l_genl_msg_leave_nested(msg);
+
+	id = l_genl_family_send(nl80211, msg, mlme_set_pairwise_key_cb,
+					netdev, NULL);
+	if (!id)
+		l_genl_msg_unref(msg);
+
+	return id;
+}
+
+static void mlme_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
+{
+	/* TODO: De-authenticate */
+	if (l_genl_msg_get_error(msg) < 0)
+		return;
+}
+
+static unsigned int mlme_new_pairwise_key(struct netdev *netdev,
+							uint32_t cipher,
+							const uint8_t *aa,
+							const uint8_t *tk,
+							size_t tk_len)
+{
+	uint8_t key_id = 0;
+	struct l_genl_msg *msg;
+	unsigned int id;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_NEW_KEY, 512);
+	if (!msg)
+		return 0;
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_DATA, tk_len, tk);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_CIPHER, 4, &cipher);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, aa);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+
+	id = l_genl_family_send(nl80211, msg, mlme_new_pairwise_key_cb,
+					netdev, NULL);
+	if (!id)
+		l_genl_msg_unref(msg);
+
+	return id;
+}
+
+static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
+				const uint8_t *tk, const uint8_t *rsn,
+				void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct ie_rsn_info info;
+	enum crypto_cipher cipher;
+
+	l_debug("");
+
+	ie_parse_rsne_from_data(rsn, rsn[1] + 2, &info);
+
+	switch (info.pairwise_ciphers) {
+	case IE_RSN_CIPHER_SUITE_CCMP:
+		cipher = CRYPTO_CIPHER_CCMP;
+		break;
+	default:
+		l_error("Unexpected cipher suite: %d", info.pairwise_ciphers);
+		/* TODO: De-authenticate */
+		return;
+	}
+
+	/*
+	 * TODO: Save pending command ids so the commands can be canceled
+	 * in case we de-authenticate
+	 */
+	mlme_new_pairwise_key(netdev, cipher,
+					tk, crypto_cipher_key_len(cipher));
+	mlme_set_pairwise_key(netdev);
+}
+
 static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
 {
 	struct l_dbus_message *reply;
@@ -1867,6 +1967,7 @@ bool wiphy_init(void)
 								NULL, NULL);
 
 	eapol_init();
+	__eapol_set_install_tk_func(wiphy_set_tk);
 
 	return true;
 
