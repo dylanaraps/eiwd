@@ -44,6 +44,7 @@
 #include "src/eapol.h"
 #include "src/agent.h"
 #include "src/crypto.h"
+#include "src/netdev.h"
 
 static struct l_genl *genl = NULL;
 static struct l_genl_family *nl80211 = NULL;
@@ -754,6 +755,9 @@ static void netdev_free(void *data)
 	l_queue_destroy(netdev->old_bss_list, bss_free);
 	l_io_destroy(netdev->eapol_io);
 
+	netdev_set_linkmode_and_operstate(netdev->index, 0, IF_OPER_DOWN,
+					NULL, NULL);
+
 	l_free(netdev);
 }
 
@@ -883,10 +887,33 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 	mlme_set_pairwise_key(netdev);
 }
 
+static void operstate_cb(bool result, void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	if (!result) {
+		if (netdev->connect_pending)
+			dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_failed(netdev->connect_pending));
+
+		l_error("Setting LinkMode and OperState failed for ifindex %d",
+			netdev->index);
+		return;
+	}
+
+	if (netdev->connect_pending) {
+		struct l_dbus_message *reply;
+
+		reply = l_dbus_message_new_method_return(
+						netdev->connect_pending);
+		l_dbus_message_set_arguments(reply, "");
+		dbus_pending_reply(&netdev->connect_pending, reply);
+	}
+}
+
 static void set_station_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
-	struct l_dbus_message *reply;
 
 	if (l_genl_msg_get_error(msg) < 0) {
 		if (netdev->connect_pending)
@@ -897,9 +924,8 @@ static void set_station_cb(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	reply = l_dbus_message_new_method_return(netdev->connect_pending);
-	l_dbus_message_set_arguments(reply, "");
-	dbus_pending_reply(&netdev->connect_pending, reply);
+	netdev_set_linkmode_and_operstate(netdev->index, 1, IF_OPER_UP,
+					operstate_cb, netdev);
 }
 
 static int set_station_cmd(struct netdev *netdev)
@@ -1008,7 +1034,6 @@ static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
 
 static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
 {
-	struct l_dbus_message *reply;
 	int err;
 
 	l_debug("");
@@ -1027,10 +1052,8 @@ static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
 	if (netdev->connected_bss &&
 		netdev->connected_bss->network->ssid_security ==
 						SCAN_SSID_SECURITY_NONE) {
-		reply = l_dbus_message_new_method_return(
-						netdev->connect_pending);
-		l_dbus_message_set_arguments(reply, "");
-		dbus_pending_reply(&netdev->connect_pending, reply);
+		netdev_set_linkmode_and_operstate(netdev->index, 1, IF_OPER_UP,
+						operstate_cb, netdev);
 	}
 }
 
@@ -1647,6 +1670,9 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 				IWD_DEVICE_INTERFACE);
 		else
 			device_emit_added(netdev);
+
+		netdev_set_linkmode_and_operstate(netdev->index, 1,
+						IF_OPER_DORMANT, NULL, NULL);
 	}
 
 	setup_scheduled_scan(wiphy, netdev, scheduled_scan_interval);
