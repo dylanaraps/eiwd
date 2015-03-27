@@ -883,11 +883,58 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 	mlme_set_pairwise_key(netdev);
 }
 
+static void set_station_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct l_dbus_message *reply;
+
+	if (l_genl_msg_get_error(msg) < 0) {
+		if (netdev->connect_pending)
+			dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_failed(netdev->connect_pending));
+
+		l_error("Authorizing station failed");
+		return;
+	}
+
+	reply = l_dbus_message_new_method_return(netdev->connect_pending);
+	l_dbus_message_set_arguments(reply, "");
+	dbus_pending_reply(&netdev->connect_pending, reply);
+}
+
+static int set_station_cmd(struct netdev *netdev)
+{
+	struct bss *bss = netdev->connected_bss;
+	struct l_genl_msg *msg;
+	struct nl80211_sta_flag_update flags;
+
+	flags.mask = 1 << NL80211_STA_FLAG_AUTHORIZED;
+	flags.set = flags.mask;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_SET_STATION, 512);
+	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
+	msg_append_attr(msg, NL80211_ATTR_STA_FLAGS2,
+			sizeof(struct nl80211_sta_flag_update), &flags);
+	l_genl_family_send(nl80211, msg, set_station_cb, netdev, NULL);
+
+	return 0;
+}
+
 static void mlme_new_group_key_cb(struct l_genl_msg *msg, void *data)
 {
+	struct netdev *netdev = data;
+
 	/* TODO: De-authenticate */
-	if (l_genl_msg_get_error(msg) < 0)
+	if (l_genl_msg_get_error(msg) < 0) {
+		if (netdev->connect_pending)
+			dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_failed(netdev->connect_pending));
+
 		return;
+	}
+
+	set_station_cmd(netdev);
 }
 
 static unsigned int mlme_new_group_key(struct netdev *netdev,
