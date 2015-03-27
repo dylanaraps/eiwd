@@ -49,6 +49,71 @@ static void do_debug(const char *str, void *user_data)
 	l_info("%s%s", prefix, str);
 }
 
+static size_t rta_add_u8(void *rta_buf, unsigned short type, uint8_t value)
+{
+	struct rtattr *rta = rta_buf;
+
+	rta->rta_len = RTA_LENGTH(sizeof(uint8_t));
+	rta->rta_type = type;
+	*((uint8_t *) RTA_DATA(rta)) = value;
+
+	return RTA_SPACE(sizeof(uint8_t));
+}
+
+struct cb_data {
+	netdev_command_func_t callback;
+	void *user_data;
+};
+
+static void netlink_result(int error, uint16_t type, const void *data,
+			uint32_t len, void *user_data)
+{
+	struct cb_data *cb_data = user_data;
+
+	if (!cb_data)
+		return;
+
+	cb_data->callback(error < 0 ? false : true, cb_data->user_data);
+
+	l_free(cb_data);
+}
+
+void netdev_set_linkmode_and_operstate(uint32_t ifindex,
+				uint8_t linkmode, uint8_t operstate,
+				netdev_command_func_t callback, void *user_data)
+{
+	struct ifinfomsg *rtmmsg;
+	void *rta_buf;
+	size_t bufsize;
+	struct cb_data *cb_data = NULL;
+
+	bufsize = NLMSG_LENGTH(sizeof(struct ifinfomsg)) +
+		RTA_SPACE(sizeof(uint8_t)) + RTA_SPACE(sizeof(uint8_t));
+
+	rtmmsg = l_malloc(bufsize);
+	memset(rtmmsg, 0, bufsize);
+
+	rtmmsg->ifi_family = AF_UNSPEC;
+	rtmmsg->ifi_index = ifindex;
+
+	rta_buf = rtmmsg + 1;
+
+	rta_buf += rta_add_u8(rta_buf, IFLA_LINKMODE, linkmode);
+	rta_buf += rta_add_u8(rta_buf, IFLA_OPERSTATE, operstate);
+
+	if (callback) {
+		cb_data = l_new(struct cb_data, 1);
+		cb_data->callback = callback;
+		cb_data->user_data = user_data;
+	}
+
+	l_netlink_send(rtnl, RTM_SETLINK, 0, rtmmsg,
+					rta_buf - (void *) rtmmsg,
+					netlink_result, cb_data, NULL);
+
+	l_free(rtmmsg);
+}
+
 static void free_netdev_data(void *user_data)
 {
 	struct netdev_data *netdev = user_data;
