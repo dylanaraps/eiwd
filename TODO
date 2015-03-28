@@ -294,17 +294,6 @@ Wireless daemon
   Priority: Medium
   Complexity: C1
 
-- Add utilities to set Transient Key into the driver
-
-  Once the 4-Way handshake is complete and the TK is generated, it must be sent
-  to the kernel so that normal traffic can be encrypted and decrypted
-  appropriately.  This seems to be accomplished by NL80211_CMD_NEW_KEY
-  and NL80211_CMD_SET_KEY commands.
-
-  Priority: High
-  Complexity: C1
-  Owner: Tomasz Bursztyka <tomasz.bursztyka@linux.intel.com>
-
 - Take hardware capabilities into account for RSNE generation
 
   When generating RSNE, take hardware capabilities into account.
