@@ -313,15 +313,6 @@ Wireless daemon
   Priority: High
   Complexity: C1
 
-- Integrate key management with EAPoL
-
-  Set the transcient keys, gotten from EAPoL, into the driver via the
-  key manager.
-
-  Priority: High
-  Complexity: C1
-  Owner: Tomasz Bursztyka <tomasz.bursztyka@linux.intel.com>
-
 - Add unit test for each of the mpdu management frame type
 
   Currently, only authentication and deauthentication frames have
