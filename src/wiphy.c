@@ -732,15 +732,57 @@ static bool wiphy_match(const void *a, const void *b)
 	return (wiphy->id == id);
 }
 
+static void connect_failed_cb(struct l_genl_msg *msg,
+						void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_failed(netdev->connect_pending));
+	netdev->connected_bss = NULL;
+}
+
+static void setting_keys_failed(struct netdev *netdev, uint16_t reason_code)
+{
+	struct l_genl_msg *msg;
+
+	/*
+	 * Something went wrong with our new_key, set_key, new_key,
+	 * set_station, set_oper_state transaction
+	 *
+	 * Cancel all pending commands, then de-authenticate
+	 */
+	l_genl_family_cancel(nl80211, netdev->pairwise_new_key_cmd_id);
+	netdev->pairwise_new_key_cmd_id = 0;
+
+	l_genl_family_cancel(nl80211, netdev->pairwise_set_key_cmd_id);
+	netdev->pairwise_set_key_cmd_id = 0;
+
+	l_genl_family_cancel(nl80211, netdev->group_new_key_cmd_id);
+	netdev->group_new_key_cmd_id = 0;
+
+	eapol_cancel(netdev->index);
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_DEAUTHENTICATE, 512);
+	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
+	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
+						netdev->connected_bss->addr);
+	l_genl_family_send(nl80211, msg, connect_failed_cb, netdev, NULL);
+}
+
 static void mlme_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 {
 	struct netdev *netdev = data;
 
 	netdev->pairwise_set_key_cmd_id = 0;
 
-	/* TODO: De-authenticate */
-	if (l_genl_msg_get_error(msg) < 0)
+	if (l_genl_msg_get_error(msg) < 0) {
+		l_error("Set Key for Pairwise Key failed for ifindex: %d",
+				netdev->index);
+		setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
+	}
 }
 
 static unsigned int mlme_set_pairwise_key(struct netdev *netdev)
@@ -776,9 +818,12 @@ static void mlme_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 
 	netdev->pairwise_new_key_cmd_id = 0;
 
-	/* TODO: De-authenticate */
-	if (l_genl_msg_get_error(msg) < 0)
+	if (l_genl_msg_get_error(msg) < 0) {
+		l_error("New Key for Pairwise Key failed for ifindex: %d",
+				netdev->index);
+		setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
+	}
 }
 
 static unsigned int mlme_new_pairwise_key(struct netdev *netdev,
@@ -827,7 +872,8 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 		break;
 	default:
 		l_error("Unexpected cipher suite: %d", info.pairwise_ciphers);
-		/* TODO: De-authenticate */
+		setting_keys_failed(netdev,
+				MPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER);
 		return;
 	}
 
@@ -842,12 +888,9 @@ static void operstate_cb(bool result, void *user_data)
 	struct netdev *netdev = user_data;
 
 	if (!result) {
-		if (netdev->connect_pending)
-			dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_failed(netdev->connect_pending));
-
 		l_error("Setting LinkMode and OperState failed for ifindex %d",
 			netdev->index);
+		setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
 
@@ -866,11 +909,8 @@ static void set_station_cb(struct l_genl_msg *msg, void *user_data)
 	struct netdev *netdev = user_data;
 
 	if (l_genl_msg_get_error(msg) < 0) {
-		if (netdev->connect_pending)
-			dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_failed(netdev->connect_pending));
-
-		l_error("Authorizing station failed");
+		l_error("Set Station failed for ifindex %d", netdev->index);
+		setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
 
@@ -903,12 +943,10 @@ static void mlme_new_group_key_cb(struct l_genl_msg *msg, void *data)
 
 	netdev->group_new_key_cmd_id = 0;
 
-	/* TODO: De-authenticate */
 	if (l_genl_msg_get_error(msg) < 0) {
-		if (netdev->connect_pending)
-			dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_failed(netdev->connect_pending));
-
+		l_error("New Key for Group Key failed for ifindex: %d",
+				netdev->index);
+		setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
 
@@ -966,12 +1004,15 @@ static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
 		break;
 	default:
 		l_error("Unexpected cipher suite: %d", info.group_cipher);
-		/* TODO: De-authenticate */
+		setting_keys_failed(netdev,
+					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
 		return;
 	}
 
 	if (crypto_cipher_key_len(cipher) != gtk_len) {
 		l_error("Unexpected key length: %d", gtk_len);
+		setting_keys_failed(netdev,
+					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
 		return;
 	}
 
