@@ -514,6 +514,25 @@ void eapol_start(uint32_t ifindex, struct eapol_sm *sm)
 	l_queue_push_head(state_machines, sm);
 }
 
+static bool eapol_sm_ifindex_match(void *data, void *user_data)
+{
+	struct eapol_sm *sm = data;
+	uint32_t ifindex = L_PTR_TO_UINT(user_data);
+
+	if (sm->ifindex != ifindex)
+		return false;
+
+	eapol_sm_free(sm);
+
+	return false;
+}
+
+void eapol_cancel(uint32_t ifindex)
+{
+	l_queue_foreach_remove(state_machines, eapol_sm_ifindex_match,
+					L_UINT_TO_PTR(ifindex));
+}
+
 static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 					const struct eapol_key *ek,
 					void *user_data)

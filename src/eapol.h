@@ -164,6 +164,7 @@ void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data);
 struct l_io *eapol_open_pae(uint32_t index);
 
 void eapol_start(uint32_t ifindex, struct eapol_sm *sm);
+void eapol_cancel(uint32_t ifindex);
 
 bool eapol_init();
 bool eapol_exit();
