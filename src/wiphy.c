@@ -84,6 +84,10 @@ struct netdev {
 	struct bss *connected_bss;
 	struct l_dbus_message *connect_pending;
 	struct l_io *eapol_io;
+
+	uint32_t pairwise_new_key_cmd_id;
+	uint32_t pairwise_set_key_cmd_id;
+	uint32_t group_new_key_cmd_id;
 };
 
 struct wiphy {
@@ -730,6 +734,10 @@ static bool wiphy_match(const void *a, const void *b)
 
 static void mlme_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 {
+	struct netdev *netdev = data;
+
+	netdev->pairwise_set_key_cmd_id = 0;
+
 	/* TODO: De-authenticate */
 	if (l_genl_msg_get_error(msg) < 0)
 		return;
@@ -764,6 +772,10 @@ static unsigned int mlme_set_pairwise_key(struct netdev *netdev)
 
 static void mlme_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 {
+	struct netdev *netdev = data;
+
+	netdev->pairwise_new_key_cmd_id = 0;
+
 	/* TODO: De-authenticate */
 	if (l_genl_msg_get_error(msg) < 0)
 		return;
@@ -819,13 +831,10 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 		return;
 	}
 
-	/*
-	 * TODO: Save pending command ids so the commands can be canceled
-	 * in case we de-authenticate
-	 */
-	mlme_new_pairwise_key(netdev, cipher, aa,
+	netdev->pairwise_new_key_cmd_id =
+		mlme_new_pairwise_key(netdev, cipher, aa,
 					tk, crypto_cipher_key_len(cipher));
-	mlme_set_pairwise_key(netdev);
+	netdev->pairwise_set_key_cmd_id = mlme_set_pairwise_key(netdev);
 }
 
 static void operstate_cb(bool result, void *user_data)
@@ -891,6 +900,8 @@ static int set_station_cmd(struct netdev *netdev)
 static void mlme_new_group_key_cb(struct l_genl_msg *msg, void *data)
 {
 	struct netdev *netdev = data;
+
+	netdev->group_new_key_cmd_id = 0;
 
 	/* TODO: De-authenticate */
 	if (l_genl_msg_get_error(msg) < 0) {
@@ -964,11 +975,8 @@ static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
 		return;
 	}
 
-	/*
-	 * TODO: Save pending command id so the command can be canceled
-	 * in case we de-authenticate
-	 */
-	mlme_new_group_key(netdev, cipher, key_index,
+	netdev->group_new_key_cmd_id =
+			mlme_new_group_key(netdev, cipher, key_index,
 				gtk, crypto_cipher_key_len(cipher),
 				rsc, rsc_len);
 }
