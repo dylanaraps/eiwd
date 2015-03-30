@@ -771,6 +771,22 @@ static void setting_keys_failed(struct netdev *netdev, uint16_t reason_code)
 	l_genl_family_send(nl80211, msg, connect_failed_cb, netdev, NULL);
 }
 
+static void handshake_failed(uint32_t ifindex,
+				const uint8_t *aa, const uint8_t *spa,
+				uint16_t reason_code, void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct l_genl_msg *msg;
+
+	l_error("4-Way Handshake failed for ifindex: %d", ifindex);
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_DEAUTHENTICATE, 512);
+	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
+	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, aa);
+	l_genl_family_send(nl80211, msg, connect_failed_cb, netdev, NULL);
+}
+
 static void mlme_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 {
 	struct netdev *netdev = data;
@@ -2109,6 +2125,7 @@ bool wiphy_init(void)
 	eapol_init();
 	__eapol_set_install_tk_func(wiphy_set_tk);
 	__eapol_set_install_gtk_func(wiphy_set_gtk);
+	__eapol_set_deauthenticate_func(handshake_failed);
 
 	return true;
 
