@@ -442,6 +442,7 @@ struct eapol_sm {
 	uint8_t anonce[32];
 	uint8_t ptk[64];
 	void *user_data;
+	struct l_timeout *timeout;
 	bool have_snonce:1;
 	bool have_replay:1;
 };
@@ -452,6 +453,9 @@ static void eapol_sm_destroy(void *value)
 
 	l_free(sm->ap_rsn);
 	l_free(sm->own_rsn);
+
+	l_timeout_remove(sm->timeout);
+
 	l_free(sm);
 }
 
@@ -509,12 +513,6 @@ void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data)
 	sm->user_data = user_data;
 }
 
-void eapol_start(uint32_t ifindex, struct eapol_sm *sm)
-{
-	sm->ifindex = ifindex;
-	l_queue_push_head(state_machines, sm);
-}
-
 static bool eapol_sm_ifindex_match(void *data, void *user_data)
 {
 	struct eapol_sm *sm = data;
@@ -544,6 +542,21 @@ static inline void handshake_failed(uint32_t ifindex, struct eapol_sm *sm,
 
 	l_queue_remove(state_machines, sm);
 	eapol_sm_free(sm);
+}
+
+static void eapol_timeout(struct l_timeout *timeout, void *user_data)
+{
+	struct eapol_sm *sm = user_data;
+
+	handshake_failed(sm->ifindex, sm,
+				MPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT);
+}
+
+void eapol_start(uint32_t ifindex, struct eapol_sm *sm)
+{
+	sm->ifindex = ifindex;
+	sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);
+	l_queue_push_head(state_machines, sm);
 }
 
 static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
@@ -593,6 +606,9 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
 	tx_packet(ifindex, sm->aa, sm->spa, step2, user_data);
 	l_free(step2);
+
+	l_timeout_remove(sm->timeout);
+	sm->timeout = NULL;
 }
 
 static const uint8_t *eapol_find_gtk_kde(const uint8_t *data, size_t data_len,
