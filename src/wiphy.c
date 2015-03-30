@@ -613,6 +613,10 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 	if (!netdev->connected_bss)
 		return dbus_error_failed(message);
 
+	if (netdev->connected_bss->network->ssid_security ==
+			SCAN_SSID_SECURITY_PSK)
+		eapol_cancel(netdev->index);
+
 	msg = l_genl_msg_new_sized(NL80211_CMD_DEAUTHENTICATE, 512);
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
