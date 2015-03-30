@@ -754,6 +754,12 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 					ek->key_descriptor_version,
 					sm->replay_counter);
 
+	/*
+	 * 802.11-2012, Section 11.6.6.4, step b):
+	 * Verifies the Message 3 MIC. If the calculated MIC does not match
+	 * the MIC that the Authenticator included in the EAPOL-Key frame,
+	 * the Supplicant silently discards Message 3.
+	 */
 	if (!eapol_calculate_mic(ptk->kck, step4, mic))
 		goto fail;
 
