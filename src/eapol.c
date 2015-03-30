@@ -45,6 +45,7 @@ eapol_tx_packet_func_t tx_packet = NULL;
 eapol_get_nonce_func_t get_nonce = NULL;
 eapol_install_tk_func_t install_tk = NULL;
 eapol_install_gtk_func_t install_gtk = NULL;
+eapol_deauthenticate_func_t deauthenticate = NULL;
 enum eapol_protocol_version protocol_version = EAPOL_PROTOCOL_VERSION_2004;
 
 #define VERIFY_IS_ZERO(field)					\
@@ -895,6 +896,11 @@ void __eapol_set_install_tk_func(eapol_install_tk_func_t func)
 void __eapol_set_install_gtk_func(eapol_install_gtk_func_t func)
 {
 	install_gtk = func;
+}
+
+void __eapol_set_deauthenticate_func(eapol_deauthenticate_func_t func)
+{
+	deauthenticate = func;
 }
 
 struct l_io *eapol_open_pae(uint32_t index)
