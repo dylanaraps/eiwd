@@ -39,6 +39,7 @@
 #include "eapol.h"
 #include "ie.h"
 #include "util.h"
+#include "mpdu.h"
 
 struct l_queue *state_machines;
 eapol_tx_packet_func_t tx_packet = NULL;
@@ -533,6 +534,18 @@ void eapol_cancel(uint32_t ifindex)
 					L_UINT_TO_PTR(ifindex));
 }
 
+static inline void handshake_failed(uint32_t ifindex, struct eapol_sm *sm,
+					uint16_t reason_code)
+{
+	if (!deauthenticate)
+		return;
+
+	deauthenticate(ifindex, sm->aa, sm->spa, reason_code, sm->user_data);
+
+	l_queue_remove(state_machines, sm);
+	eapol_sm_free(sm);
+}
+
 static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 					const struct eapol_key *ek,
 					void *user_data)
@@ -541,12 +554,17 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 	struct eapol_key *step2;
 	uint8_t mic[16];
 
-	if (!eapol_verify_ptk_1_of_4(ek))
+	if (!eapol_verify_ptk_1_of_4(ek)) {
+		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
+	}
 
 	if (!sm->have_snonce) {
-		if (!get_nonce(sm->snonce))
+		if (!get_nonce(sm->snonce)) {
+			handshake_failed(ifindex, sm,
+						MPDU_REASON_CODE_UNSPECIFIED);
 			return;
+		}
 
 		sm->have_snonce = true;
 	}
@@ -566,13 +584,14 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 	if (!eapol_calculate_mic(ptk->kck, step2, mic)) {
 		l_info("MIC calculation failed. "
 			"Ensure Kernel Crypto is available.");
-		goto fail;
+		l_free(step2);
+		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
+
+		return;
 	}
 
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
 	tx_packet(ifindex, sm->aa, sm->spa, step2, user_data);
-
-fail:
 	l_free(step2);
 }
 
@@ -721,8 +740,10 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	const uint8_t *rsne;
 	uint8_t gtk_key_index;
 
-	if (!eapol_verify_ptk_3_of_4(ek))
+	if (!eapol_verify_ptk_3_of_4(ek)) {
+		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
+	}
 
 	/*
 	 * 11.6.6.4: "On reception of Message 3, the Supplicant silently
@@ -739,11 +760,15 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	 * Response frame, the STA shall disassociate.
 	 */
 	rsne = eapol_find_rsne(decrypted_key_data, decrypted_key_data_size);
-	if (!rsne)
+	if (!rsne) {
+		handshake_failed(ifindex, sm, MPDU_REASON_CODE_IE_DIFFERENT);
 		return;
+	}
 
-	if (!eapol_ap_rsne_matches(rsne, sm->ap_rsn))
+	if (!eapol_ap_rsne_matches(rsne, sm->ap_rsn)) {
+		handshake_failed(ifindex, sm, MPDU_REASON_CODE_IE_DIFFERENT);
 		return;
+	}
 
 	/*
 	 * TODO: Parse second RSNE
@@ -757,11 +782,10 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	 */
 	gtk = eapol_find_gtk_kde(decrypted_key_data, decrypted_key_data_size,
 					&gtk_len);
-	if (!gtk)
+	if (!gtk || gtk_len < 2) {
+		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
-
-	if (gtk_len < 2)
-		return;
+	}
 
 	gtk_key_index = util_bit_field(gtk[0], 0, 2);
 	/* TODO: Handle tx bit */
