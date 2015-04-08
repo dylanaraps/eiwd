@@ -54,8 +54,7 @@ static int scheduled_scan_interval = 60;	/* in secs */
 struct network {
 	char *object_path;
 	struct netdev *netdev;
-	uint8_t ssid[32];
-	uint8_t ssid_len;
+	char ssid[33];
 	unsigned char *psk;
 	unsigned int agent_request;
 	enum scan_ssid_security ssid_security;
@@ -172,8 +171,7 @@ static bool __iwd_network_append_properties(const struct network *network,
 {
 	l_dbus_message_builder_enter_array(builder, "{sv}");
 
-	dbus_dict_append_bytearray(builder, "SSID", network->ssid,
-						network->ssid_len);
+	dbus_dict_append_string(builder, "Name", network->ssid);
 
 	l_dbus_message_builder_leave_array(builder);
 
@@ -219,7 +217,7 @@ static int mlme_authenticate_cmd(struct network *network)
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
-	msg_append_attr(msg, NL80211_ATTR_SSID, network->ssid_len,
+	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(network->ssid),
 			network->ssid);
 	msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
 	l_genl_family_send(nl80211, msg, genl_connect_cb, netdev, NULL);
@@ -248,8 +246,9 @@ static void passphrase_callback(enum agent_result result,
 
 	network->psk = l_malloc(32);
 
-	if (crypto_psk_from_passphrase(passphrase, network->ssid,
-					network->ssid_len, network->psk) < 0) {
+	if (crypto_psk_from_passphrase(passphrase, (uint8_t *) network->ssid,
+					strlen(network->ssid),
+					network->psk) < 0) {
 		l_error("PMK generation failed.  "
 			"Ensure Crypto Engine is properly configured");
 		dbus_pending_reply(&netdev->connect_pending,
@@ -1097,7 +1096,7 @@ static void mlme_associate_cmd(struct netdev *netdev)
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
-	msg_append_attr(msg, NL80211_ATTR_SSID, network->ssid_len,
+	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(network->ssid),
 			network->ssid);
 
 	if (network->ssid_security == SCAN_SSID_SECURITY_PSK) {
@@ -1332,6 +1331,12 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 		goto fail;
 	}
 
+	if (!util_ssid_is_utf8(ssid_len, ssid)) {
+		l_warn("Ignoring Network with non-UTF8 SSID '%s'",
+			util_ssid_to_utf8(ssid_len, ssid));
+		goto fail;
+	}
+
 	/*
 	 * TODO: Check whether WPA element is present
 	 *
@@ -1371,19 +1376,17 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 
 	network = l_hashmap_lookup(netdev->networks, path);
 	if (!network) {
-		l_debug("Found new SSID \"%s\" security %s",
-			util_ssid_to_utf8(ssid_len, ssid),
-			ssid_security_to_str(ssid_security));
-
 		network = l_new(struct network, 1);
 		network->netdev = netdev;
 		memcpy(network->ssid, ssid, ssid_len);
-		network->ssid_len = ssid_len;
 		network->ssid_security = ssid_security;
 		network->bss_list = l_queue_new();
 		network->object_path = strdup(path);
 		l_hashmap_insert(netdev->networks,
 					network->object_path, network);
+
+		l_debug("Found new SSID \"%s\" security %s", network->ssid,
+			ssid_security_to_str(ssid_security));
 
 		if (!l_dbus_register_interface(dbus_get_bus(),
 					network->object_path,
@@ -1487,7 +1490,7 @@ static void network_remove_if_lost(void *data)
 		return;
 
 	l_debug("No remaining BSSs for SSID: %s -- Removing network",
-			util_ssid_to_utf8(network->ssid_len, network->ssid));
+			network->ssid);
 
 	if (!l_hashmap_remove(network->netdev->networks, network->object_path))
 		l_warn("Panic, trying to remove network that doesn't"
@@ -1515,8 +1518,7 @@ static void get_scan_done(void *user)
 		struct network *network = old_bss->network;
 
 		l_debug("Lost BSS '%s' with SSID: %s",
-			bss_address_to_string(old_bss),
-			util_ssid_to_utf8(network->ssid_len, network->ssid));
+			bss_address_to_string(old_bss), network->ssid);
 
 		l_queue_remove(lost_networks, network);
 		l_queue_push_head(lost_networks, network);
