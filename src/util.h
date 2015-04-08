@@ -27,6 +27,7 @@
 #include <unistd.h>
 
 const char *util_ssid_to_utf8(size_t len, const uint8_t *ssid);
+bool util_ssid_is_utf8(size_t len, const uint8_t *ssid);
 
 static inline uint8_t util_bit_field(const uint8_t oct, int start, int num)
 {

@@ -78,6 +78,14 @@ no_ssid:
 	return buf;
 }
 
+bool util_ssid_is_utf8(size_t len, const uint8_t *ssid)
+{
+	if (len > 32)
+		return false;
+
+	return l_utf8_validate((const char *)ssid, len, NULL);
+}
+
 bool _msg_append_attr(struct l_genl_msg *msg,
 			uint16_t type, const char *type_str,
 			uint16_t len, const void *value)
