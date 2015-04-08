@@ -1182,48 +1182,54 @@ error:
 static void mlme_deauthenticate_event(struct l_genl_msg *msg,
 							struct netdev *netdev)
 {
+	l_debug("");
+}
+
+static void mlme_disconnect_event(struct l_genl_msg *msg,
+					struct netdev *netdev)
+{
 	struct l_genl_attr attr;
 	uint16_t type, len;
 	const void *data;
-	struct l_dbus_message *reply;
-	int err;
+	uint16_t reason_code = 0;
+	bool disconnect_by_ap = false;
 
 	l_debug("");
 
-	err = l_genl_msg_get_error(msg);
-	if (err < 0) {
-		l_error("authentication failed %s (%d)", strerror(-err), err);
-		goto error;
-	}
-
 	if (!l_genl_attr_init(&attr, msg)) {
-		l_debug("attr init failed");
-		goto error;
+		l_error("attr init failed");
+		return;
 	}
 
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 		switch (type) {
-		case NL80211_ATTR_TIMED_OUT:
-			l_warn("deauthentication timed out");
-			goto error;
+		case NL80211_ATTR_REASON_CODE:
+			if (len != sizeof(uint16_t))
+				l_warn("Invalid reason code attribute");
+			else
+				reason_code = *((uint16_t *) data);
+
+			break;
+
+		case NL80211_ATTR_DISCONNECTED_BY_AP:
+			disconnect_by_ap = true;
+			break;
 		}
 	}
 
-	l_info("Deauthentication completed");
-	netdev->connected_bss = NULL;
+	l_info("Received Deauthentication event, reason: %hu, from_ap: %s",
+			reason_code, disconnect_by_ap ? "true" : "false");
 
-	if (!netdev->connect_pending)
+	if (!disconnect_by_ap)
 		return;
 
-	reply = l_dbus_message_new_method_return(netdev->connect_pending);
-	l_dbus_message_set_arguments(reply, "");
-	dbus_pending_reply(&netdev->connect_pending, reply);
+	if (netdev->connect_pending) {
+		struct network *network = netdev->connected_bss->network;
 
-	return;
-
-error:
-	dbus_pending_reply(&netdev->connect_pending,
+		dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_failed(netdev->connect_pending));
+	}
+
 	netdev->connected_bss = NULL;
 }
 
@@ -1978,6 +1984,9 @@ static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 	case NL80211_CMD_DEAUTHENTICATE:
 		mlme_deauthenticate_event(msg, netdev);
+		break;
+	case NL80211_CMD_DISCONNECT:
+		mlme_disconnect_event(msg, netdev);
 		break;
 	}
 }
