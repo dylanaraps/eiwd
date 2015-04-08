@@ -82,6 +82,7 @@ struct netdev {
 	struct l_hashmap *networks;
 	struct bss *connected_bss;
 	struct l_dbus_message *connect_pending;
+	struct l_dbus_message *disconnect_pending;
 	struct l_io *eapol_io;
 
 	uint32_t pairwise_new_key_cmd_id;
@@ -590,10 +591,17 @@ static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
 static void genl_disconnect_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
+	struct l_dbus_message *reply;
 
-	if (l_genl_msg_get_error(msg) < 0 && netdev->connect_pending)
-		dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_failed(netdev->connect_pending));
+	if (l_genl_msg_get_error(msg) < 0) {
+		dbus_pending_reply(&netdev->disconnect_pending,
+				dbus_error_failed(netdev->disconnect_pending));
+		return;
+	}
+
+	reply = l_dbus_message_new_method_return(netdev->disconnect_pending);
+	l_dbus_message_set_arguments(reply, "");
+	dbus_pending_reply(&netdev->disconnect_pending, reply);
 }
 
 static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
@@ -623,7 +631,7 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 						netdev->connected_bss->addr);
 	l_genl_family_send(nl80211, msg, genl_disconnect_cb, netdev, NULL);
 
-	netdev->connect_pending = l_dbus_message_ref(message);
+	netdev->disconnect_pending = l_dbus_message_ref(message);
 
 	return NULL;
 }
