@@ -1228,6 +1228,15 @@ static void mlme_disconnect_event(struct l_genl_msg *msg,
 
 		dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_failed(netdev->connect_pending));
+
+		/*
+		 * Connection failed, if PSK try asking for the passphrase
+		 * once more
+		 */
+		if (network->ssid_security == SCAN_SSID_SECURITY_PSK) {
+			l_free(network->psk);
+			network->psk = NULL;
+		}
 	}
 
 	netdev->connected_bss = NULL;
