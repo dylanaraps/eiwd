@@ -3179,7 +3179,7 @@ static const char *nlmsg_type_to_str(uint32_t msg_type)
 static void print_nlmsghdr(const struct timeval *tv,
 						const struct nlmsghdr *nlmsg)
 {
-	char extra_str[32];
+	char extra_str[256];
 	const char *str;
 	bool out;
 
