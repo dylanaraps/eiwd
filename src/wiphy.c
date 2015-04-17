@@ -95,7 +95,7 @@ struct wiphy {
 	char name[20];
 	uint32_t feature_flags;
 	struct l_queue *netdev_list;
-	bool support_scheduled_scan;
+	bool support_scheduled_scan:1;
 };
 
 static struct l_queue *wiphy_list = NULL;
