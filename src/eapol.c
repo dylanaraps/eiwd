@@ -548,7 +548,7 @@ static bool eapol_sm_ifindex_match(void *data, void *user_data)
 
 	eapol_sm_free(sm);
 
-	return false;
+	return true;
 }
 
 void eapol_cancel(uint32_t ifindex)
