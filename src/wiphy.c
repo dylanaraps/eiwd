@@ -96,6 +96,7 @@ struct wiphy {
 	uint32_t feature_flags;
 	struct l_queue *netdev_list;
 	bool support_scheduled_scan:1;
+	uint16_t pairwise_ciphers;
 };
 
 static struct l_queue *wiphy_list = NULL;
@@ -1740,6 +1741,45 @@ static void parse_supported_commands(struct wiphy *wiphy,
 	}
 }
 
+static void parse_supported_ciphers(struct wiphy *wiphy, const void *data,
+						uint16_t len)
+{
+	bool s;
+
+	while (len >= 4) {
+		uint32_t cipher = *(uint32_t *)data;
+
+		switch (cipher) {
+		case CRYPTO_CIPHER_CCMP:
+			wiphy->pairwise_ciphers |= IE_RSN_CIPHER_SUITE_CCMP;
+			break;
+		case CRYPTO_CIPHER_TKIP:
+			wiphy->pairwise_ciphers |= IE_RSN_CIPHER_SUITE_TKIP;
+			break;
+		case CRYPTO_CIPHER_WEP40:
+			wiphy->pairwise_ciphers |= IE_RSN_CIPHER_SUITE_WEP40;
+			break;
+		case CRYPTO_CIPHER_WEP104:
+			wiphy->pairwise_ciphers |= IE_RSN_CIPHER_SUITE_WEP104;
+			break;
+		case CRYPTO_CIPHER_BIP:
+			wiphy->pairwise_ciphers |= IE_RSN_CIPHER_SUITE_BIP;
+			break;
+		default:	/* TODO: Support other ciphers */
+			break;
+		}
+
+		len -= 4;
+		data += 4;
+	}
+
+	s = wiphy->pairwise_ciphers & IE_RSN_CIPHER_SUITE_CCMP;
+	l_info("Wiphy supports CCMP: %s", s ? "true" : "false");
+
+	s = wiphy->pairwise_ciphers & IE_RSN_CIPHER_SUITE_TKIP;
+	l_info("Wiphy supports TKIP: %s", s ? "true" : "false");
+}
+
 static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy = NULL;
@@ -1822,6 +1862,14 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 				return;
 
 			parse_supported_commands(wiphy, &nested);
+			break;
+		case NL80211_ATTR_CIPHER_SUITES:
+			if (!wiphy) {
+				l_warn("No wiphy structure found");
+				return;
+			}
+
+			parse_supported_ciphers(wiphy, data, len);
 			break;
 		}
 	}
