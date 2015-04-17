@@ -125,6 +125,7 @@ static void destroy_callback(struct l_genl_msg *msg, void *user_data)
 		}
 
 		l_info("Destroyed radio");
+		goto done;
 	}
 
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
