@@ -1371,6 +1371,8 @@ static void print_cipher_suite(unsigned int level, const char *label,
 static void print_cipher_suites(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
+	print_attr(level, "%s:", label);
+
 	while (size >= 4) {
 		print_cipher_suite(level + 1, NULL, data, 4);
 		data += 4;
