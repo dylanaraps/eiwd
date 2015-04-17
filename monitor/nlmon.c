@@ -1380,6 +1380,20 @@ static void print_cipher_suites(unsigned int level, const char *label,
 	}
 }
 
+static void print_akm_suites(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	print_attr(level, "%s:", label);
+
+	while (size >= 4) {
+		uint32_t akm = *((uint32_t *) data);
+
+		print_ie_cipher_suite(level, NULL, akm, rsn_akm_selectors);
+		data += 4;
+		size -= 4;
+	}
+}
+
 static const struct attr_entry iftype_table[] = {
 	{ NL80211_IFTYPE_ADHOC,		"Ad-hoc",	ATTR_FLAG },
 	{ NL80211_IFTYPE_STATION,	"Station",	ATTR_FLAG },
@@ -1778,7 +1792,8 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_WPA_VERSIONS,
 			"WPA Versions", ATTR_U32 },
 	{ NL80211_ATTR_AKM_SUITES,
-			"AKM Suites" },
+			"AKM Suites", ATTR_CUSTOM,
+					{ .function = print_akm_suites } },
 	{ NL80211_ATTR_REQ_IE,
 			"Request IE", ATTR_CUSTOM, { .function = print_ie } },
 	{ NL80211_ATTR_RESP_IE,
