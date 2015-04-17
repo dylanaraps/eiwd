@@ -39,7 +39,7 @@ enum {
 	HWSIM_CMD_GET_RADIO,
 	__HWSIM_CMD_MAX,
 };
-#define HWSIM_CMD_MAX (_HWSIM_CMD_MAX - 1)
+#define HWSIM_CMD_MAX (__HWSIM_CMD_MAX - 1)
 
 enum {
 	HWSIM_ATTR_UNSPEC,
