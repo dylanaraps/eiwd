@@ -255,15 +255,13 @@ Wireless daemon
   Priority: High
   Complexity: C2
 
-- Implement D-Bus API to Disconnect from an AP
+- Allow Disconnect() method call to abort pending connections.
 
-  If we are currently connected to an AP, the Disconnect() method call should
-  trigger a disassociation.  If we are in the process of connecting to an AP,
-  the connection attempt should be aborted and a disassociation procedure
-  should be triggered.
+  If we are in the process of connecting to an AP, the connection attempt
+  should be aborted and a de-authentication procedure should be triggered.
 
   Priority: High
-  Complexity: C2
+  Complexity: C1
 
 - Centralize scanning logic and handling into scan.c.
 
