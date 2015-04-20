@@ -293,10 +293,12 @@ Wireless daemon
 
 - Take hardware capabilities into account for RSNE generation
 
-  When generating RSNE, take hardware capabilities into account.
+  When generating RSNE or WPA elements, take hardware capabilities into
+  account.
 
   Priority: Medium
   Complexity: C1
+  Owner: Denis Kenzior <denkenz@gmail.com>
 
 - Parse & utilize the 2nd RSNE element in Step 3/4 of the 4-way Handshake
 
