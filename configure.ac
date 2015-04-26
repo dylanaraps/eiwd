@@ -51,6 +51,23 @@ AC_ARG_ENABLE(pie, AC_HELP_STRING([--enable-pie],
 	fi
 ])
 
+if (test "${prefix}" = "NONE"); then
+	dnl no prefix and no localstatedir, so default to /var
+	if (test "$localstatedir" = '${prefix}/var'); then
+		AC_SUBST([localstatedir], ['/var'])
+	fi
+
+	prefix="${ac_default_prefix}"
+fi
+
+if (test "$localstatedir" = '${prefix}/var'); then
+	storagedir="${prefix}/var/lib/iwd"
+else
+	storagedir="${localstatedir}/lib/iwd"
+fi
+
+AC_DEFINE_UNQUOTED(STORAGEDIR, "${storagedir}",
+			[Directory for the storage files])
 AC_CHECK_HEADERS(linux/types.h linux/if_alg.h)
 
 AC_PATH_PROG(A2X, [a2x], [], $PATH:/sbin:/usr/sbin)
