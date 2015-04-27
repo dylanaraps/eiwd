@@ -46,6 +46,7 @@
 #include "src/crypto.h"
 #include "src/netdev.h"
 #include "src/mpdu.h"
+#include "src/storage.h"
 
 static struct l_genl *genl = NULL;
 static struct l_genl_family *nl80211 = NULL;
@@ -59,6 +60,9 @@ struct network {
 	unsigned int agent_request;
 	enum scan_ssid_security ssid_security;
 	struct l_queue *bss_list;
+	struct l_settings *settings;
+	bool update_psk:1;  /* Whether PSK should be written to storage */
+	bool ask_psk:1; /* Whether we should force-ask agent for PSK */
 };
 
 struct bss {
@@ -199,13 +203,27 @@ static struct l_dbus_message *network_get_properties(struct l_dbus *dbus,
 	return reply;
 }
 
+static void netdev_disassociated(struct netdev *netdev)
+{
+	struct network *network = netdev->connected_bss->network;
+
+	l_settings_free(network->settings);
+	network->settings = NULL;
+
+	netdev->connected_bss = NULL;
+}
+
 static void genl_connect_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
 
-	if (l_genl_msg_get_error(msg) < 0 && netdev->connect_pending)
-		dbus_pending_reply(&netdev->connect_pending,
+	if (l_genl_msg_get_error(msg) < 0) {
+		if (netdev->connect_pending)
+			dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_failed(netdev->connect_pending));
+
+		netdev_disassociated(netdev);
+	}
 }
 
 static int mlme_authenticate_cmd(struct network *network)
@@ -242,10 +260,12 @@ static void passphrase_callback(enum agent_result result,
 	if (result != AGENT_RESULT_OK) {
 		dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_aborted(netdev->connect_pending));
-
+		l_settings_free(network->settings);
+		network->settings = NULL;
 		return;
 	}
 
+	l_free(network->psk);
 	network->psk = l_malloc(32);
 
 	if (crypto_psk_from_passphrase(passphrase, (uint8_t *) network->ssid,
@@ -255,6 +275,8 @@ static void passphrase_callback(enum agent_result result,
 			"Ensure Crypto Engine is properly configured");
 		dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_failed(netdev->connect_pending));
+		l_settings_free(network->settings);
+		network->settings = NULL;
 
 		l_free(network->psk);
 		network->psk = NULL;
@@ -262,7 +284,60 @@ static void passphrase_callback(enum agent_result result,
 		return;
 	}
 
+	/*
+	 * We need to store the PSK in our permanent store.  However, before
+	 * we do that, make sure the PSK works.  We write to the store only
+	 * when we are connected
+	 */
+	network->update_psk = true;
+
 	mlme_authenticate_cmd(network);
+}
+
+static struct l_dbus_message *network_connect_psk(struct network *network,
+					struct l_dbus_message *message)
+{
+	struct netdev *netdev = network->netdev;
+	const char *psk;
+
+	l_debug("");
+
+	network->settings = storage_network_open("psk", network->ssid);
+	psk = l_settings_get_value(network->settings, "Security",
+					"PreSharedKey");
+
+	if (psk) {
+		size_t len;
+
+		l_debug("psk: %s", psk);
+		network->psk = l_util_from_hexstring(psk, &len);
+
+		l_debug("len: %zd", len);
+
+		if (network->psk && len != 32) {
+			l_debug("Can't parse PSK");
+			l_free(network->psk);
+			network->psk = NULL;
+		}
+	}
+
+	l_debug("ask_psk: %s", network->ask_psk ? "true" : "false");
+
+	if (network->ask_psk || !network->psk) {
+		network->ask_psk = false;
+
+		network->agent_request =
+			agent_request_passphrase(network->object_path,
+						passphrase_callback,
+						network);
+
+		if (!network->agent_request)
+			return dbus_error_no_agent(message);
+	} else
+		mlme_authenticate_cmd(network);
+
+	netdev->connect_pending = l_dbus_message_ref(message);
+	return NULL;
 }
 
 static struct l_dbus_message *network_connect(struct l_dbus *dbus,
@@ -279,31 +354,14 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 
 	switch (network->ssid_security) {
 	case SCAN_SSID_SECURITY_PSK:
-		if (!network->psk) {
-			network->agent_request =
-				agent_request_passphrase(
-						network->object_path,
-						passphrase_callback,
-						network);
-
-			if (!network->agent_request)
-				return dbus_error_no_agent(message);
-
-			break;
-		}
-
-		/* fall through */
+		return network_connect_psk(network, message);
 	case SCAN_SSID_SECURITY_NONE:
 		mlme_authenticate_cmd(network);
-		break;
-
+		netdev->connect_pending = l_dbus_message_ref(message);
+		return NULL;
 	default:
 		return dbus_error_not_supported(message);
 	}
-
-	netdev->connect_pending = l_dbus_message_ref(message);
-
-	return NULL;
 }
 
 static void setup_network_interface(struct l_dbus_interface *interface)
@@ -751,7 +809,8 @@ static void connect_failed_cb(struct l_genl_msg *msg,
 
 	dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_failed(netdev->connect_pending));
-	netdev->connected_bss = NULL;
+
+	netdev_disassociated(netdev);
 }
 
 static void setting_keys_failed(struct netdev *netdev, uint16_t reason_code)
@@ -887,6 +946,7 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 				void *user_data)
 {
 	struct netdev *netdev = user_data;
+	struct network *network = netdev->connected_bss->network;
 	struct ie_rsn_info info;
 	enum crypto_cipher cipher;
 
@@ -903,6 +963,18 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 		setting_keys_failed(netdev,
 				MPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER);
 		return;
+	}
+
+	/* If we got here, then our PSK works.  Save if required */
+	if (network->update_psk) {
+		char *hex;
+
+		network->update_psk = false;
+		hex = l_util_hexstring(network->psk, 32);
+		l_settings_set_value(network->settings, "Security",
+					"PreSharedKey", hex);
+		l_free(hex);
+		storage_network_sync("psk", network->ssid, network->settings);
 	}
 
 	netdev->pairwise_new_key_cmd_id =
@@ -1061,7 +1133,7 @@ static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
 		l_error("association failed %s (%d)", strerror(-err), err);
 		dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_failed(netdev->connect_pending));
-		netdev->connected_bss = NULL;
+		netdev_disassociated(netdev);
 		return;
 	}
 
@@ -1097,6 +1169,8 @@ static void mlme_associate_cmd(struct netdev *netdev)
 	if (!bss) {
 		error = dbus_error_not_available(netdev->connect_pending);
 		dbus_pending_reply(&netdev->connect_pending, error);
+
+		netdev_disassociated(netdev);
 		return;
 	}
 
@@ -1177,7 +1251,7 @@ static void mlme_authenticate_event(struct l_genl_msg *msg,
 error:
 	dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_failed(netdev->connect_pending));
-	netdev->connected_bss = NULL;
+	netdev_disassociated(netdev);
 }
 
 static void mlme_deauthenticate_event(struct l_genl_msg *msg,
@@ -1235,12 +1309,12 @@ static void mlme_disconnect_event(struct l_genl_msg *msg,
 		 * once more
 		 */
 		if (network->ssid_security == SCAN_SSID_SECURITY_PSK) {
-			l_free(network->psk);
-			network->psk = NULL;
+			network->update_psk = false;
+			network->ask_psk = true;
 		}
 	}
 
-	netdev->connected_bss = NULL;
+	netdev_disassociated(netdev);
 }
 
 static bool parse_ie(struct bss *bss, const uint8_t **ssid, int *ssid_len,
