@@ -560,10 +560,9 @@ void eapol_cancel(uint32_t ifindex)
 static inline void handshake_failed(uint32_t ifindex, struct eapol_sm *sm,
 					uint16_t reason_code)
 {
-	if (!deauthenticate)
-		return;
-
-	deauthenticate(ifindex, sm->aa, sm->spa, reason_code, sm->user_data);
+	if (deauthenticate)
+		deauthenticate(ifindex, sm->aa, sm->spa, reason_code,
+				sm->user_data);
 
 	l_queue_remove(state_machines, sm);
 	eapol_sm_free(sm);
