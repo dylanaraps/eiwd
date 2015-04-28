@@ -332,7 +332,7 @@ bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek)
 
 	/* 0 (Version 2) or random (Version 1) */
 	if (ek->key_descriptor_version ==
-			EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4)
+			EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES)
 		VERIFY_IS_ZERO(ek->eapol_key_iv);
 
 	return true;
