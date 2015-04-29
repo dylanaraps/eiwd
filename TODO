@@ -321,6 +321,23 @@ Wireless daemon
   Priority: Medium
   Complexity: C1
 
+- Handle "Use group cipher suite" option for pairwise ciphers
+
+  If the AP specifies "Use group cipher suite" as its only pairwise suite, then
+  handle this appropriately inside EAPoL handshaking code.  The install_gtk
+  callback might need to be modified to handle this case.
+
+  Priority: Low
+  Complexity: C1
+
+- Handle "Group addressed traffic not allowed" option for group ciphers
+
+  If the AP specifies "Group addressed traffic not allowed" as its group cipher
+  suite, then make sure that install_gtk callback is not used.
+
+  Priority: Low
+  Complexity: C1
+
 
 Client
 ======
