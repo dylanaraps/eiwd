@@ -1578,6 +1578,7 @@ static const struct attr_entry cqm_table[] = {
 	{ NL80211_ATTR_CQM_TXE_RATE,	"TX error rate",	ATTR_U32 },
 	{ NL80211_ATTR_CQM_TXE_PKTS,	"TX error packets",	ATTR_U32 },
 	{ NL80211_ATTR_CQM_TXE_INTVL,	"TX error interval",	ATTR_U32 },
+	{ NL80211_ATTR_CQM_BEACON_LOSS_EVENT, "Beacon Loss Event", ATTR_FLAG },
 	{ }
 };
 
