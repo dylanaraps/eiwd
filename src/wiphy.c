@@ -66,7 +66,6 @@ struct network {
 };
 
 struct bss {
-	struct network *network;
 	uint8_t addr[ETH_ALEN];
 	uint32_t frequency;
 	int32_t signal_strength;
@@ -85,6 +84,7 @@ struct netdev {
 	struct l_dbus_message *scan_pending;
 	struct l_hashmap *networks;
 	struct bss *connected_bss;
+	struct network *connected_network;
 	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
 	struct l_io *eapol_io;
@@ -205,12 +205,13 @@ static struct l_dbus_message *network_get_properties(struct l_dbus *dbus,
 
 static void netdev_disassociated(struct netdev *netdev)
 {
-	struct network *network = netdev->connected_bss->network;
+	struct network *network = netdev->connected_network;
 
 	l_settings_free(network->settings);
 	network->settings = NULL;
 
 	netdev->connected_bss = NULL;
+	netdev->connected_network = NULL;
 }
 
 static void genl_connect_cb(struct l_genl_msg *msg, void *user_data)
@@ -243,6 +244,7 @@ static int mlme_authenticate_cmd(struct network *network)
 	l_genl_family_send(nl80211, msg, genl_connect_cb, netdev, NULL);
 
 	netdev->connected_bss = bss;
+	netdev->connected_network = network;
 
 	return 0;
 }
@@ -680,7 +682,7 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 	if (!netdev->connected_bss)
 		return dbus_error_failed(message);
 
-	if (netdev->connected_bss->network->ssid_security ==
+	if (netdev->connected_network->ssid_security ==
 			SCAN_SSID_SECURITY_PSK)
 		eapol_cancel(netdev->index);
 
@@ -737,9 +739,6 @@ static bool bss_match(const void *a, const void *b)
 {
 	const struct bss *bss_a = a;
 	const struct bss *bss_b = b;
-
-	if (bss_a->network != bss_b->network)
-		return false;
 
 	return !memcmp(bss_a->addr, bss_b->addr, sizeof(bss_a->addr));
 }
@@ -947,7 +946,7 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 				void *user_data)
 {
 	struct netdev *netdev = user_data;
-	struct network *network = netdev->connected_bss->network;
+	struct network *network = netdev->connected_network;
 	struct ie_rsn_info info;
 	enum crypto_cipher cipher;
 
@@ -1141,7 +1140,7 @@ static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
 	l_info("Association completed");
 
 	if (netdev->connected_bss &&
-		netdev->connected_bss->network->ssid_security ==
+		netdev->connected_network->ssid_security ==
 						SCAN_SSID_SECURITY_NONE) {
 		netdev_set_linkmode_and_operstate(netdev->index, 1, IF_OPER_UP,
 						operstate_cb, netdev);
@@ -1161,7 +1160,7 @@ static void mlme_associate_cmd(struct netdev *netdev)
 {
 	struct l_genl_msg *msg;
 	struct bss *bss;
-	struct network *network;
+	struct network *network = netdev->connected_network;
 	struct l_dbus_message *error;
 
 	l_debug("");
@@ -1175,7 +1174,6 @@ static void mlme_associate_cmd(struct netdev *netdev)
 		return;
 	}
 
-	network = bss->network;
 	msg = l_genl_msg_new_sized(NL80211_CMD_ASSOCIATE, 512);
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
@@ -1300,7 +1298,7 @@ static void mlme_disconnect_event(struct l_genl_msg *msg,
 		return;
 
 	if (netdev->connect_pending) {
-		struct network *network = netdev->connected_bss->network;
+		struct network *network = netdev->connected_network;
 
 		dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_failed(netdev->connect_pending));
@@ -1498,7 +1496,6 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 			network_emit_added(network);
 	}
 
-	bss->network = network;
 	old_bss = l_queue_remove_if(netdev->old_bss_list, bss_match, bss);
 
 	l_debug("Found %s BSS '%s' with SSID: %s, freq: %u, "
