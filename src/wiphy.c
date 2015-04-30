@@ -214,6 +214,15 @@ static void netdev_disassociated(struct netdev *netdev)
 	netdev->connected_network = NULL;
 }
 
+static void netdev_lost_beacon(struct netdev *netdev)
+{
+	if (netdev->connect_pending)
+		dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_failed(netdev->connect_pending));
+
+	netdev_disassociated(netdev);
+}
+
 static void genl_connect_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
@@ -1308,6 +1317,37 @@ static void mlme_disconnect_event(struct l_genl_msg *msg,
 	netdev_disassociated(netdev);
 }
 
+static void mlme_cqm_event(struct l_genl_msg *msg, struct netdev *netdev)
+{
+	struct l_genl_attr attr;
+	struct l_genl_attr nested;
+	uint16_t type, len;
+	const void *data;
+
+	l_debug("");
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_CQM:
+			if (!l_genl_attr_recurse(&attr, &nested))
+				return;
+
+			while (l_genl_attr_next(&nested, &type, &len, &data)) {
+				switch (type) {
+				case NL80211_ATTR_CQM_BEACON_LOSS_EVENT:
+					netdev_lost_beacon(netdev);
+					break;
+				}
+			}
+
+			break;
+		}
+	}
+}
+
 static bool parse_ie(struct bss *bss, const uint8_t **ssid, int *ssid_len,
 						const void *data, uint16_t len)
 {
@@ -2092,6 +2132,9 @@ static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 	case NL80211_CMD_DISCONNECT:
 		mlme_disconnect_event(msg, netdev);
+		break;
+	case NL80211_CMD_NOTIFY_CQM:
+		mlme_cqm_event(msg, netdev);
 		break;
 	}
 }
