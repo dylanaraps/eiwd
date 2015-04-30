@@ -663,6 +663,8 @@ static void genl_disconnect_cb(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
+	netdev_disassociated(netdev);
+
 	reply = l_dbus_message_new_method_return(netdev->disconnect_pending);
 	l_dbus_message_set_arguments(reply, "");
 	dbus_pending_reply(&netdev->disconnect_pending, reply);
