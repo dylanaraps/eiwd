@@ -312,6 +312,8 @@ static struct l_dbus_message *network_connect_psk(struct network *network,
 		size_t len;
 
 		l_debug("psk: %s", psk);
+
+		l_free(network->psk);
 		network->psk = l_util_from_hexstring(psk, &len);
 
 		l_debug("len: %zd", len);
