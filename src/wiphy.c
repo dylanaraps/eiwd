@@ -1581,50 +1581,31 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
-static void network_remove_if_lost(void *data)
+static bool network_remove_if_lost(const void *key, void *data, void *user_data)
 {
 	struct network *network = data;
 
 	if (!l_queue_isempty(network->bss_list))
-		return;
+		return false;
 
 	l_debug("No remaining BSSs for SSID: %s -- Removing network",
 			network->ssid);
-
-	if (!l_hashmap_remove(network->netdev->networks, network->object_path))
-		l_warn("Panic, trying to remove network that doesn't"
-			" exist in the networks hashmap");
-
 	network_free(network);
+
+	return true;
 }
 
 static void get_scan_done(void *user)
 {
 	struct netdev *netdev = user;
-	const struct l_queue_entry *bss_entry;
-	struct l_queue *lost_networks;
 
 	l_debug("get_scan_done for netdev: %p", netdev);
 
 	if (l_queue_isempty(netdev->old_bss_list))
 		goto done;
 
-	lost_networks = l_queue_new();
-
-	for (bss_entry = l_queue_get_entries(netdev->old_bss_list); bss_entry;
-					bss_entry = bss_entry->next) {
-		struct bss *old_bss = bss_entry->data;
-		struct network *network = old_bss->network;
-
-		l_debug("Lost BSS '%s' with SSID: %s",
-			bss_address_to_string(old_bss), network->ssid);
-
-		l_queue_remove(lost_networks, network);
-		l_queue_push_head(lost_networks, network);
-	}
-
-	l_queue_destroy(lost_networks, network_remove_if_lost);
-
+	l_hashmap_foreach_remove(netdev->networks,
+					network_remove_if_lost, NULL);
 done:
 	l_queue_destroy(netdev->old_bss_list, bss_free);
 	netdev->old_bss_list = NULL;
