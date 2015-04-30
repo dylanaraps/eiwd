@@ -690,10 +690,10 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 	l_debug("");
 
 	if (netdev->connect_pending)
-		return dbus_error_failed(message);
+		return dbus_error_busy(message);
 
 	if (!netdev->connected_bss)
-		return dbus_error_failed(message);
+		return dbus_error_not_connected(message);
 
 	if (netdev->connected_network->ssid_security ==
 			SCAN_SSID_SECURITY_PSK)
