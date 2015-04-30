@@ -443,6 +443,7 @@ static void network_free(void *data)
 	struct l_dbus *dbus;
 
 	agent_request_cancel(network->agent_request);
+	l_settings_free(network->settings);
 
 	dbus = dbus_get_bus();
 	l_dbus_unregister_interface(dbus, network->object_path,
