@@ -132,6 +132,12 @@ struct l_dbus_message *dbus_error_no_agent(struct l_dbus_message *msg)
 					"No Agent registered");
 }
 
+struct l_dbus_message *dbus_error_not_connected(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".NotConnected",
+					"Not connected");
+}
+
 void dbus_pending_reply(struct l_dbus_message **msg,
 				struct l_dbus_message *reply)
 {
