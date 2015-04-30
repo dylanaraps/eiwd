@@ -188,6 +188,15 @@ Wireless monitor
   Priority: Medium
   Complexity: C2
 
+- Print the 'group' of the decoded message
+
+  Whenever an event / message is received, iwmon should print the genl
+  group of the message (e.g. mlme, scan, config, regulatory).  This will
+  make it easier to add handling of such events / commands inside iwd.
+
+  Priority: Medium
+  Complexity: C1
+
 
 Wireless simulator
 ==================
