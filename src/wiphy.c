@@ -1139,12 +1139,10 @@ static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
 
 	l_info("Association completed");
 
-	if (netdev->connected_bss &&
-		netdev->connected_network->ssid_security ==
-						SCAN_SSID_SECURITY_NONE) {
+	if (netdev->connected_network->ssid_security ==
+						SCAN_SSID_SECURITY_NONE)
 		netdev_set_linkmode_and_operstate(netdev->index, 1, IF_OPER_UP,
 						operstate_cb, netdev);
-	}
 }
 
 static void genl_associate_cb(struct l_genl_msg *msg, void *user_data)
@@ -1159,20 +1157,10 @@ static void genl_associate_cb(struct l_genl_msg *msg, void *user_data)
 static void mlme_associate_cmd(struct netdev *netdev)
 {
 	struct l_genl_msg *msg;
-	struct bss *bss;
+	struct bss *bss = netdev->connected_bss;
 	struct network *network = netdev->connected_network;
-	struct l_dbus_message *error;
 
 	l_debug("");
-
-	bss = netdev->connected_bss;
-	if (!bss) {
-		error = dbus_error_not_available(netdev->connect_pending);
-		dbus_pending_reply(&netdev->connect_pending, error);
-
-		netdev_disassociated(netdev);
-		return;
-	}
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_ASSOCIATE, 512);
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
@@ -1370,7 +1358,6 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 	uint16_t type, len;
 	const void *data;
 	struct bss *bss;
-	struct bss *old_bss;
 	const uint8_t *ssid = NULL;
 	int ssid_len;
 	struct network *network;
@@ -1496,22 +1483,11 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 			network_emit_added(network);
 	}
 
-	old_bss = l_queue_remove_if(netdev->old_bss_list, bss_match, bss);
-
-	l_debug("Found %s BSS '%s' with SSID: %s, freq: %u, "
+	l_debug("Found BSS '%s' with SSID: %s, freq: %u, "
 			"strength: %i",
-			old_bss ? "existing" : "new",
 			bss_address_to_string(bss),
 			util_ssid_to_utf8(ssid_len, ssid),
 			bss->frequency, bss->signal_strength);
-
-	if (old_bss) {
-		if (netdev->connected_bss &&
-				bss_match(old_bss, netdev->connected_bss))
-			netdev->connected_bss = NULL;
-
-		bss_free(old_bss);
-	}
 
 	l_queue_insert(network->bss_list, bss, add_bss, NULL);
 	l_queue_push_head(netdev->bss_list, bss);
@@ -1598,12 +1574,27 @@ static void get_scan_done(void *user)
 
 	l_debug("get_scan_done for netdev: %p", netdev);
 
-	if (l_queue_isempty(netdev->old_bss_list))
-		goto done;
+	if (netdev->connected_bss) {
+		struct bss *bss;
+
+		bss = l_queue_find(netdev->bss_list, bss_match,
+						netdev->connected_bss);
+
+		if (!bss) {
+			l_warn("Connected BSS not in scan results!");
+			l_queue_push_tail(netdev->bss_list,
+						netdev->connected_bss);
+			l_queue_push_tail(netdev->connected_network->bss_list,
+						netdev->connected_bss);
+			l_queue_remove(netdev->old_bss_list,
+						netdev->connected_bss);
+		} else
+			netdev->connected_bss = bss;
+	}
 
 	l_hashmap_foreach_remove(netdev->networks,
 					network_remove_if_lost, NULL);
-done:
+
 	l_queue_destroy(netdev->old_bss_list, bss_free);
 	netdev->old_bss_list = NULL;
 }
