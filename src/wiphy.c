@@ -436,9 +436,8 @@ static void bss_free(void *data)
 	l_debug("Freeing BSS %02X:%02X:%02X:%02X:%02X:%02X",
 			bss->addr[0], bss->addr[1], bss->addr[2],
 			bss->addr[3], bss->addr[4], bss->addr[5]);
-	l_free(bss->rsne);
-	l_free(bss->wpa);
-	l_free(bss);
+
+	scan_bss_free(bss);
 }
 
 static void network_free(void *data)

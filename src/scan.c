@@ -98,3 +98,10 @@ enum scan_ssid_security scan_get_ssid_security(
 
 	return SCAN_SSID_SECURITY_NONE;
 }
+
+void scan_bss_free(struct scan_bss *bss)
+{
+	l_free(bss->rsne);
+	l_free(bss->wpa);
+	l_free(bss);
+}
