@@ -99,6 +99,160 @@ enum scan_ssid_security scan_get_ssid_security(
 	return SCAN_SSID_SECURITY_NONE;
 }
 
+static bool scan_parse_bss_information_elements(struct scan_bss *bss,
+					const uint8_t **ssid, uint8_t *ssid_len,
+					const void *data, uint16_t len)
+{
+	struct ie_tlv_iter iter;
+
+	ie_tlv_iter_init(&iter, data, len);
+
+	while (ie_tlv_iter_next(&iter)) {
+		uint8_t tag = ie_tlv_iter_get_tag(&iter);
+
+		switch (tag) {
+		case IE_TYPE_SSID:
+			if (iter.len > 32)
+				return false;
+
+			*ssid_len = iter.len;
+			*ssid = iter.data;
+			break;
+		case IE_TYPE_RSN:
+			if (!bss->rsne)
+				bss->rsne = l_memdup(iter.data - 2,
+								iter.len + 2);
+			break;
+		case IE_TYPE_VENDOR_SPECIFIC:
+			/* Interested only in WPA IE from Vendor data */
+			if (!bss->wpa && is_ie_wpa_ie(iter.data, iter.len))
+				bss->wpa = l_memdup(iter.data - 2,
+								iter.len + 2);
+			break;
+		}
+	}
+
+	return true;
+}
+
+static struct scan_bss *scan_parse_attr_bss(struct l_genl_attr *attr,
+						const uint8_t **ssid,
+						uint8_t *ssid_len)
+{
+	uint16_t type, len;
+	const void *data;
+	struct scan_bss *bss;
+
+	bss = l_new(struct scan_bss, 1);
+
+	while (l_genl_attr_next(attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_BSS_BSSID:
+			if (len != sizeof(bss->addr))
+				goto fail;
+
+			memcpy(bss->addr, data, len);
+			break;
+		case NL80211_BSS_CAPABILITY:
+			if (len != sizeof(uint16_t))
+				goto fail;
+
+			bss->capability = *((uint16_t *) data);
+			break;
+		case NL80211_BSS_FREQUENCY:
+			if (len != sizeof(uint32_t))
+				goto fail;
+
+			bss->frequency = *((uint32_t *) data);
+			break;
+		case NL80211_BSS_SIGNAL_MBM:
+			if (len != sizeof(int32_t))
+				goto fail;
+
+			bss->signal_strength = *((int32_t *) data);
+			break;
+		case NL80211_BSS_INFORMATION_ELEMENTS:
+			if (!scan_parse_bss_information_elements(bss,
+						ssid, ssid_len, data, len))
+				goto fail;
+
+			break;
+		}
+	}
+
+	return bss;
+
+fail:
+	scan_bss_free(bss);
+	return NULL;
+}
+
+struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
+					uint32_t *out_ifindex,
+					uint64_t *out_wdev,
+					const uint8_t **out_ssid,
+					uint8_t *out_ssid_len)
+{
+	struct l_genl_attr attr, nested;
+	uint16_t type, len;
+	const void *data;
+	uint32_t ifindex;
+	uint64_t wdev;
+	struct scan_bss *bss = NULL;
+	const uint8_t *ssid = NULL;
+	uint8_t ssid_len = 0;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return NULL;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_IFINDEX:
+			if (len != sizeof(uint32_t))
+				return NULL;
+
+			ifindex = *((uint32_t *) data);
+			break;
+
+		case NL80211_ATTR_WDEV:
+			if (len != sizeof(uint64_t))
+				return NULL;
+
+			wdev = *((uint64_t *) data);
+			break;
+
+		case NL80211_ATTR_BSS:
+			if (!l_genl_attr_recurse(&attr, &nested))
+				return NULL;
+
+			bss = scan_parse_attr_bss(&nested, &ssid, &ssid_len);
+			break;
+		}
+	}
+
+	if (!bss)
+		return NULL;
+
+	if (!ssid) {
+		scan_bss_free(bss);
+		return NULL;
+	}
+
+	if (out_ifindex)
+		*out_ifindex = ifindex;
+
+	if (out_wdev)
+		*out_wdev = wdev;
+
+	if (out_ssid_len)
+		*out_ssid_len = ssid_len;
+
+	if (out_ssid)
+		*out_ssid = ssid;
+
+	return bss;
+}
+
 void scan_bss_free(struct scan_bss *bss)
 {
 	l_free(bss->rsne);

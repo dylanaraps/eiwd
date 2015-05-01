@@ -1338,45 +1338,6 @@ static void mlme_cqm_event(struct l_genl_msg *msg, struct netdev *netdev)
 	}
 }
 
-static bool parse_ie(struct scan_bss *bss, const uint8_t **ssid, int *ssid_len,
-						const void *data, uint16_t len)
-{
-	struct ie_tlv_iter iter;
-
-	ie_tlv_iter_init(&iter, data, len);
-
-	while (ie_tlv_iter_next(&iter)) {
-		uint8_t tag = ie_tlv_iter_get_tag(&iter);
-
-		switch (tag) {
-		case IE_TYPE_SSID:
-			if (iter.len > 32) {
-				l_warn("Got SSID > 32");
-				return false;
-			}
-
-			*ssid_len = iter.len;
-			*ssid = iter.data;
-			break;
-		case IE_TYPE_RSN:
-			if (!bss->rsne)
-				bss->rsne = l_memdup(iter.data - 2,
-								iter.len + 2);
-			break;
-		case IE_TYPE_VENDOR_SPECIFIC:
-			/* Interested only in WPA IE from Vendor data */
-			if (!bss->wpa && is_ie_wpa_ie(iter.data, iter.len))
-				bss->wpa = l_memdup(iter.data - 2,
-								iter.len + 2);
-			break;
-		default:
-			break;
-		}
-	}
-
-	return true;
-}
-
 static int add_bss(const void *a, const void *b, void *user_data)
 {
 	const struct scan_bss *new_bss = a, *bss = b;
@@ -1387,67 +1348,41 @@ static int add_bss(const void *a, const void *b, void *user_data)
 	return 0;
 }
 
-static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
+static void network_reset_bss_list(const void *key, void *value,
+					void *user_data)
 {
-	uint16_t type, len;
-	const void *data;
+	struct network *network = value;
+
+	l_queue_destroy(network->bss_list, NULL);
+	network->bss_list = l_queue_new();
+}
+
+static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = user_data;
 	struct scan_bss *bss;
-	const uint8_t *ssid = NULL;
-	int ssid_len;
+	uint32_t ifindex;
+	const uint8_t *ssid;
+	uint8_t ssid_len;
 	struct network *network;
 	enum scan_ssid_security ssid_security;
 	const char *path;
 
-	bss = l_new(struct scan_bss, 1);
+	l_debug("get_scan_callback");
 
-	while (l_genl_attr_next(attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_BSS_BSSID:
-			if (len != sizeof(bss->addr)) {
-				l_warn("Invalid BSSID attribute");
-				goto fail;
-			}
-
-			memcpy(bss->addr, data, len);
-			break;
-		case NL80211_BSS_CAPABILITY:
-			if (len != sizeof(uint16_t)) {
-				l_warn("Invalid capability attribute");
-				goto fail;
-			}
-
-			bss->capability = *((uint16_t *) data);
-			break;
-		case NL80211_BSS_FREQUENCY:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid frequency attribute");
-				goto fail;
-			}
-
-			bss->frequency = *((uint32_t *) data);
-			break;
-		case NL80211_BSS_SIGNAL_MBM:
-			if (len != sizeof(int32_t)) {
-				l_warn("Invalid signal strength attribute");
-				goto fail;
-			}
-
-			bss->signal_strength = *((int32_t *) data);
-			break;
-		case NL80211_BSS_INFORMATION_ELEMENTS:
-			if (!parse_ie(bss, &ssid, &ssid_len, data, len)) {
-				l_warn("Could not parse BSS IEs");
-				goto fail;
-			}
-
-			break;
-		}
+	if (!netdev->old_bss_list) {
+		netdev->old_bss_list = netdev->bss_list;
+		netdev->bss_list = l_queue_new();
+		l_hashmap_foreach(netdev->networks,
+					network_reset_bss_list, NULL);
 	}
 
-	if (!ssid) {
-		l_warn("Received BSS but SSID IE returned NULL -- ignoring");
+	bss = scan_parse_result(msg, &ifindex, NULL, &ssid, &ssid_len);
+	if (!bss)
+		return;
+
+	if (ifindex != netdev->index)
 		goto fail;
-	}
 
 	if (!util_ssid_is_utf8(ssid_len, ssid)) {
 		l_warn("Ignoring Network with non-UTF8 SSID '%s'",
@@ -1455,15 +1390,6 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 		goto fail;
 	}
 
-	/*
-	 * TODO: Check whether WPA element is present
-	 *
-	 * If we have the RSN element, try to parse it and figure out the
-	 * security parameters.
-	 *
-	 * Length was already validated by parse_ie, so use the one from the
-	 * IE directly.
-	 */
 	if (bss->rsne) {
 		struct ie_rsn_info rsne;
 		int res = ie_parse_rsne_from_data(bss->rsne, bss->rsne[1] + 2,
@@ -1529,63 +1455,7 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 
 fail:
 	bss_free(bss);
-}
 
-static void network_reset_bss_list(const void *key, void *value,
-					void *user_data)
-{
-	struct network *network = value;
-
-	l_queue_destroy(network->bss_list, NULL);
-	network->bss_list = l_queue_new();
-}
-
-static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
-{
-	struct netdev *netdev = user_data;
-	struct l_genl_attr attr, nested;
-	uint16_t type, len;
-	const void *data;
-
-	l_debug("get_scan_callback");
-
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	if (!netdev->old_bss_list) {
-		netdev->old_bss_list = netdev->bss_list;
-		netdev->bss_list = l_queue_new();
-		l_hashmap_foreach(netdev->networks,
-					network_reset_bss_list, NULL);
-	}
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_IFINDEX:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid interface index attribute");
-				return;
-			}
-
-			if (netdev->index != *((uint32_t *) data)) {
-				l_warn("ifindex mismatch");
-				return;
-			}
-
-			break;
-		case NL80211_ATTR_BSS:
-			if (!netdev) {
-				l_warn("No interface structure found");
-				return;
-			}
-
-			if (!l_genl_attr_recurse(&attr, &nested))
-				return;
-
-			parse_bss(netdev, &nested);
-			break;
-		}
-	}
 }
 
 static bool network_remove_if_lost(const void *key, void *data, void *user_data)
