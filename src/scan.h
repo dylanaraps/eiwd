@@ -30,6 +30,15 @@ enum scan_ssid_security {
 typedef void (*scan_func_t)(struct l_genl_msg *msg, void *user_data);
 typedef void (*scan_done_func_t)(void *user_data);
 
+struct scan_bss {
+	uint8_t addr[6];
+	uint32_t frequency;
+	int32_t signal_strength;
+	uint16_t capability;
+	uint8_t *rsne;
+	uint8_t *wpa;
+};
+
 void scan_start(struct l_genl_family *nl80211, uint32_t ifindex,
 		scan_func_t callback, void *user_data);
 

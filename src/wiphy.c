@@ -65,15 +65,6 @@ struct network {
 	bool ask_psk:1; /* Whether we should force-ask agent for PSK */
 };
 
-struct bss {
-	uint8_t addr[ETH_ALEN];
-	uint32_t frequency;
-	int32_t signal_strength;
-	uint16_t capability;
-	uint8_t *rsne;
-	uint8_t *wpa;
-};
-
 struct netdev {
 	uint32_t index;
 	char name[IFNAMSIZ];
@@ -83,7 +74,7 @@ struct netdev {
 	struct l_queue *old_bss_list;
 	struct l_dbus_message *scan_pending;
 	struct l_hashmap *networks;
-	struct bss *connected_bss;
+	struct scan_bss *connected_bss;
 	struct network *connected_network;
 	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
@@ -239,7 +230,7 @@ static void genl_connect_cb(struct l_genl_msg *msg, void *user_data)
 static int mlme_authenticate_cmd(struct network *network)
 {
 	struct netdev *netdev = network->netdev;
-	struct bss *bss = l_queue_peek_head(network->bss_list);
+	struct scan_bss *bss = l_queue_peek_head(network->bss_list);
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
 
@@ -440,7 +431,7 @@ static void network_emit_removed(struct network *network)
 
 static void bss_free(void *data)
 {
-	struct bss *bss = data;
+	struct scan_bss *bss = data;
 
 	l_debug("Freeing BSS %02X:%02X:%02X:%02X:%02X:%02X",
 			bss->addr[0], bss->addr[1], bss->addr[2],
@@ -737,7 +728,7 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_ro_property(interface, "Name", "s");
 }
 
-static const char *bss_address_to_string(const struct bss *bss)
+static const char *bss_address_to_string(const struct scan_bss *bss)
 {
 	static char buf[32];
 
@@ -750,8 +741,8 @@ static const char *bss_address_to_string(const struct bss *bss)
 
 static bool bss_match(const void *a, const void *b)
 {
-	const struct bss *bss_a = a;
-	const struct bss *bss_b = b;
+	const struct scan_bss *bss_a = a;
+	const struct scan_bss *bss_b = b;
 
 	return !memcmp(bss_a->addr, bss_b->addr, sizeof(bss_a->addr));
 }
@@ -1033,7 +1024,7 @@ static void set_station_cb(struct l_genl_msg *msg, void *user_data)
 
 static int set_station_cmd(struct netdev *netdev)
 {
-	struct bss *bss = netdev->connected_bss;
+	struct scan_bss *bss = netdev->connected_bss;
 	struct l_genl_msg *msg;
 	struct nl80211_sta_flag_update flags;
 
@@ -1170,7 +1161,7 @@ static void genl_associate_cb(struct l_genl_msg *msg, void *user_data)
 static void mlme_associate_cmd(struct netdev *netdev)
 {
 	struct l_genl_msg *msg;
-	struct bss *bss = netdev->connected_bss;
+	struct scan_bss *bss = netdev->connected_bss;
 	struct network *network = netdev->connected_network;
 
 	l_debug("");
@@ -1348,7 +1339,7 @@ static void mlme_cqm_event(struct l_genl_msg *msg, struct netdev *netdev)
 	}
 }
 
-static bool parse_ie(struct bss *bss, const uint8_t **ssid, int *ssid_len,
+static bool parse_ie(struct scan_bss *bss, const uint8_t **ssid, int *ssid_len,
 						const void *data, uint16_t len)
 {
 	struct ie_tlv_iter iter;
@@ -1389,7 +1380,7 @@ static bool parse_ie(struct bss *bss, const uint8_t **ssid, int *ssid_len,
 
 static int add_bss(const void *a, const void *b, void *user_data)
 {
-	const struct bss *new_bss = a, *bss = b;
+	const struct scan_bss *new_bss = a, *bss = b;
 
 	if (new_bss->signal_strength > bss->signal_strength)
 		return 1;
@@ -1401,14 +1392,14 @@ static void parse_bss(struct netdev *netdev, struct l_genl_attr *attr)
 {
 	uint16_t type, len;
 	const void *data;
-	struct bss *bss;
+	struct scan_bss *bss;
 	const uint8_t *ssid = NULL;
 	int ssid_len;
 	struct network *network;
 	enum scan_ssid_security ssid_security;
 	const char *path;
 
-	bss = l_new(struct bss, 1);
+	bss = l_new(struct scan_bss, 1);
 
 	while (l_genl_attr_next(attr, &type, &len, &data)) {
 		switch (type) {
@@ -1619,7 +1610,7 @@ static void get_scan_done(void *user)
 	l_debug("get_scan_done for netdev: %p", netdev);
 
 	if (netdev->connected_bss) {
-		struct bss *bss;
+		struct scan_bss *bss;
 
 		bss = l_queue_find(netdev->bss_list, bss_match,
 						netdev->connected_bss);
