@@ -64,7 +64,7 @@ struct eapol_key {
 	uint8_t reserved2:2;
 	uint8_t key_descriptor_version:3;
 	bool key_type:1;
-	uint8_t reserved1:2;
+	uint8_t wpa_key_id:2; /* Bits 4-5 reserved in RSN, Key ID in WPA */
 	bool install:1;
 	bool key_ack:1;
 #elif defined (__BIG_ENDIAN_BITFIELD)
@@ -77,7 +77,7 @@ struct eapol_key {
 	bool key_mic:1;
 	bool key_ack:1;
 	bool install:1;
-	uint8_t reserved1:2;
+	uint8_t wpa_key_id:2; /* Bits 4-5 reserved in RSN, Key ID in WPA */
 	bool key_type:1;
 	uint8_t key_descriptor_version:3;
 #else
@@ -125,6 +125,7 @@ bool eapol_verify_ptk_1_of_4(const struct eapol_key *ek);
 bool eapol_verify_ptk_2_of_4(const struct eapol_key *ek);
 bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek);
 bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek);
+bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa);
 
 struct eapol_key *eapol_create_ptk_2_of_4(
 				enum eapol_protocol_version protocol,

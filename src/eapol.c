@@ -369,6 +369,50 @@ bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek)
 	return true;
 }
 
+bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa)
+{
+	uint16_t key_len;
+
+	if (ek->key_type)
+		return false;
+	if (ek->smk_message)
+		return false;
+	if (ek->request)
+		return false;
+	if (ek->error)
+		return false;
+
+	if (!ek->key_ack)
+		return false;
+
+	if (!ek->key_mic)
+		return false;
+
+	if (!ek->secure)
+		return false;
+
+	/* Must be encrypted when GTK is present but reserved in WPA */
+	if (!ek->encrypted_key_data && !is_wpa)
+		return false;
+
+	key_len = L_BE16_TO_CPU(ek->key_length);
+	if (key_len == 0)
+		return false;
+
+	VERIFY_IS_ZERO(ek->reserved);
+
+	/* 0 (Version 2) or random (Version 1) */
+	if (ek->key_descriptor_version ==
+			EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES)
+		VERIFY_IS_ZERO(ek->eapol_key_iv);
+
+	/* Key ID shall not be 0 */
+	if (is_wpa && !ek->wpa_key_id)
+		return false;
+
+	return true;
+}
+
 static struct eapol_key *eapol_create_common(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
@@ -376,7 +420,8 @@ static struct eapol_key *eapol_create_common(
 				uint64_t key_replay_counter,
 				const uint8_t snonce[],
 				size_t extra_len,
-				const uint8_t *extra_data)
+				const uint8_t *extra_data,
+				int key_type)
 {
 	size_t to_alloc = sizeof(struct eapol_key);
 	struct eapol_key *out_frame = l_malloc(to_alloc + extra_len);
@@ -388,7 +433,7 @@ static struct eapol_key *eapol_create_common(
 	out_frame->packet_len = L_CPU_TO_BE16(to_alloc + extra_len - 4);
 	out_frame->descriptor_type = EAPOL_DESCRIPTOR_TYPE_80211;
 	out_frame->key_descriptor_version = version;
-	out_frame->key_type = true;
+	out_frame->key_type = key_type;
 	out_frame->install = false;
 	out_frame->key_ack = false;
 	out_frame->key_mic = true;
@@ -415,7 +460,7 @@ struct eapol_key *eapol_create_ptk_2_of_4(
 				const uint8_t *extra_data)
 {
 	return eapol_create_common(protocol, version, false, key_replay_counter,
-					snonce, extra_len, extra_data);
+					snonce, extra_len, extra_data, 1);
 }
 
 struct eapol_key *eapol_create_ptk_4_of_4(
@@ -427,7 +472,20 @@ struct eapol_key *eapol_create_ptk_4_of_4(
 
 	memset(snonce, 0, sizeof(snonce));
 	return eapol_create_common(protocol, version, true, key_replay_counter,
-					snonce, 0, NULL);
+					snonce, 0, NULL, 1);
+}
+
+static struct eapol_key *eapol_create_gtk_2_of_2(
+				enum eapol_protocol_version protocol,
+				enum eapol_key_descriptor_version version,
+				uint64_t key_replay_counter)
+{
+	uint8_t snonce[32];
+
+	memset(snonce, 0, sizeof(snonce));
+	return eapol_create_common(protocol, version, true,
+					key_replay_counter, snonce, 0, NULL,
+					0);
 }
 
 struct eapol_sm {
@@ -860,6 +918,61 @@ fail:
 	l_free(step4);
 }
 
+static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
+					struct eapol_sm *sm,
+					const struct eapol_key *ek,
+					const uint8_t *decrypted_key_data,
+					size_t decrypted_key_data_size,
+					void *user_data)
+{
+	struct crypto_ptk *ptk = (struct crypto_ptk *) sm->ptk;
+	struct eapol_key *step2;
+	uint8_t mic[16];
+	const uint8_t *gtk;
+	size_t gtk_len;
+	uint8_t gtk_key_index;
+
+	if (!eapol_verify_gtk_1_of_2(ek, sm->wpa_ie)) {
+		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
+		return;
+	}
+
+	gtk = eapol_find_gtk_kde(decrypted_key_data,
+					decrypted_key_data_size,
+					&gtk_len);
+
+	if (!gtk || gtk_len < 8)
+		return;
+
+	gtk_key_index = util_bit_field(gtk[0], 0, 2);
+	gtk += 2;
+	gtk_len -= 2;
+
+	step2 = eapol_create_gtk_2_of_2(protocol_version,
+					ek->key_descriptor_version,
+					sm->replay_counter);
+
+	/*
+	 * 802.11-2012, Section 11.6.7.3, step b):
+	 * Verifies that the MIC is valid, i.e., it uses the KCK that is
+	 * part of the PTK to verify that there is no data integrity error.
+	 */
+	ptk = (struct crypto_ptk *) sm->ptk;
+
+	if (!eapol_calculate_mic(ptk->kck, step2, mic))
+		goto done;
+
+	memcpy(step2->key_mic_data, mic, sizeof(mic));
+	tx_packet(ifindex, sm->aa, sm->spa, step2, user_data);
+
+	if (install_gtk)
+		install_gtk(sm->ifindex, gtk_key_index, gtk, gtk_len,
+				ek->key_rsc, 6, sm->ap_ie, sm->user_data);
+
+done:
+	l_free(step2);
+}
+
 static struct eapol_sm *eapol_find_sm(uint32_t ifindex,
 						const uint8_t *spa,
 						const uint8_t *aa)
@@ -947,9 +1060,15 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 			return;
 	}
 
-	/* TODO: Handle Group Key Handshake */
-	if (ek->key_type == 0)
+	/* Check if this is the group key handshake */
+	if (ek->key_type == 0) {
+		if (!ek->key_mic || !ek->secure)
+			goto done;
+
+		eapol_handle_gtk_1_of_2(ifindex, sm, ek, decrypted_key_data,
+					decrypted_key_data_len, user_data);
 		goto done;
+	}
 
 	/* If no MIC, then assume packet 1, otherwise packet 3 */
 	if (!ek->key_mic)
