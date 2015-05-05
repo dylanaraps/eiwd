@@ -805,12 +805,14 @@ static bool wiphy_match(const void *a, const void *b)
 	return (wiphy->id == id);
 }
 
-static void connect_failed_cb(struct l_genl_msg *msg,
+static void deauthenticate_cb(struct l_genl_msg *msg,
 						void *user_data)
 {
 	struct netdev *netdev = user_data;
 
-	dbus_pending_reply(&netdev->connect_pending,
+	/* If we were inside a .Connect(), it has failed */
+	if (netdev->connect_pending)
+		dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_failed(netdev->connect_pending));
 
 	netdev_disassociated(netdev);
@@ -842,7 +844,7 @@ static void setting_keys_failed(struct netdev *netdev, uint16_t reason_code)
 	msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
 						netdev->connected_bss->addr);
-	l_genl_family_send(nl80211, msg, connect_failed_cb, netdev, NULL);
+	l_genl_family_send(nl80211, msg, deauthenticate_cb, netdev, NULL);
 }
 
 static void handshake_failed(uint32_t ifindex,
@@ -858,7 +860,7 @@ static void handshake_failed(uint32_t ifindex,
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
 	msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, aa);
-	l_genl_family_send(nl80211, msg, connect_failed_cb, netdev, NULL);
+	l_genl_family_send(nl80211, msg, deauthenticate_cb, netdev, NULL);
 }
 
 static void mlme_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
