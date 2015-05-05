@@ -664,15 +664,13 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 		return;
 	}
 
-	if (!sm->have_snonce) {
-		if (!get_nonce(sm->snonce)) {
-			handshake_failed(ifindex, sm,
-						MPDU_REASON_CODE_UNSPECIFIED);
-			return;
-		}
-
-		sm->have_snonce = true;
+	if (!get_nonce(sm->snonce)) {
+		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
+		return;
 	}
+
+	sm->have_snonce = true;
+	sm->ptk_complete = false;
 
 	memcpy(sm->anonce, ek->key_nonce, sizeof(ek->key_nonce));
 
