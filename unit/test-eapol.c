@@ -523,7 +523,8 @@ static void eapol_4way_test(const void *data)
 				EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES,
 				eapol_key_test_4.key_replay_counter,
 				snonce, eapol_key_test_4.key_data_len,
-				eapol_key_data_4 + sizeof(struct eapol_key));
+				eapol_key_data_4 + sizeof(struct eapol_key),
+				false);
 	assert(frame);
 	assert(eapol_calculate_mic(ptk->kck, frame, mic));
 	memcpy(frame->key_mic_data, mic, sizeof(mic));
@@ -533,7 +534,7 @@ static void eapol_4way_test(const void *data)
 	step3 = eapol_key_validate(eapol_key_data_5,
 					sizeof(eapol_key_data_5));
 	assert(step3);
-	assert(eapol_verify_ptk_3_of_4(step3));
+	assert(eapol_verify_ptk_3_of_4(step3, false));
 	assert(!memcmp(anonce, step3->key_nonce, sizeof(step3->key_nonce)));
 
 	assert(eapol_verify_mic(ptk->kck, step3));
@@ -546,7 +547,7 @@ static void eapol_4way_test(const void *data)
 	step4 = eapol_key_validate(eapol_key_data_6,
 					sizeof(eapol_key_data_6));
 	assert(step4);
-	assert(eapol_verify_ptk_4_of_4(step4));
+	assert(eapol_verify_ptk_4_of_4(step4, false));
 
 	l_free(ptk);
 }
