@@ -504,8 +504,8 @@ static void eapol_4way_test(const void *data)
 
 	step2 = eapol_key_validate(eapol_key_data_4,
 					sizeof(eapol_key_data_4));
-	assert(eapol_verify_ptk_2_of_4(step2));
 	assert(step2);
+	assert(eapol_verify_ptk_2_of_4(step2));
 	memcpy(snonce, step2->key_nonce, sizeof(step2->key_nonce));
 
 	assert(!crypto_psk_from_passphrase(passphrase, (uint8_t *) ssid,
