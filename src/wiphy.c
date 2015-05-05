@@ -955,7 +955,11 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 
 	l_debug("");
 
-	ie_parse_rsne_from_data(rsn, rsn[1] + 2, &info);
+	/* If we have the RSN element we must be in WPA2 mode */
+	if (netdev->connected_bss->rsne)
+		ie_parse_rsne_from_data(rsn, rsn[1] + 2, &info);
+	else
+		ie_parse_wpa_from_data(rsn, rsn[1] + 2, &info);
 
 	switch (info.pairwise_ciphers) {
 	case IE_RSN_CIPHER_SUITE_CCMP:
@@ -1099,7 +1103,11 @@ static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
 
 	l_debug("");
 
-	ie_parse_rsne_from_data(rsn, rsn[1] + 2, &info);
+	/* If we have the RSN element we must be in WPA2 mode */
+	if (netdev->connected_bss->rsne)
+		ie_parse_rsne_from_data(rsn, rsn[1] + 2, &info);
+	else
+		ie_parse_wpa_from_data(rsn, rsn[1] + 2, &info);
 
 	switch (info.group_cipher) {
 	case IE_RSN_CIPHER_SUITE_CCMP:
@@ -1183,13 +1191,23 @@ static void mlme_associate_cmd(struct netdev *netdev)
 		info.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP;
 		info.akm_suites = IE_RSN_AKM_SUITE_PSK;
 
-		ie_build_rsne(&info, rsne_buf);
+		/* RSN takes priority */
+		if (bss->rsne) {
+			ie_build_rsne(&info, rsne_buf);
+		} else {
+			ie_build_wpa(&info, rsne_buf);
+		}
 
 		eapol_sm_set_pmk(sm, network->psk);
 		eapol_sm_set_authenticator_address(sm, bss->addr);
 		eapol_sm_set_supplicant_address(sm, netdev->addr);
-		eapol_sm_set_ap_rsn(sm, bss->rsne, bss->rsne[1] + 2);
-		eapol_sm_set_own_rsn(sm, rsne_buf, rsne_buf[1] + 2);
+		if (bss->rsne) {
+			eapol_sm_set_ap_rsn(sm, bss->rsne, bss->rsne[1] + 2);
+			eapol_sm_set_own_rsn(sm, rsne_buf, rsne_buf[1] + 2);
+		} else {
+			eapol_sm_set_ap_wpa(sm, bss->wpa, bss->wpa[1] + 2);
+			eapol_sm_set_own_wpa(sm, rsne_buf, rsne_buf[1] + 2);
+		}
 		eapol_sm_set_user_data(sm, netdev);
 		eapol_start(netdev->index, sm);
 
@@ -1390,6 +1408,10 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 		goto fail;
 	}
 
+	/*
+	 * If both an RSN and a WPA elements are present currently
+	 * RSN takes priority and the WPA IE is ignored.
+	 */
 	if (bss->rsne) {
 		struct ie_rsn_info rsne;
 		int res = ie_parse_rsne_from_data(bss->rsne, bss->rsne[1] + 2,
