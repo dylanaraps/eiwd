@@ -305,7 +305,7 @@ bool eapol_verify_ptk_2_of_4(const struct eapol_key *ek)
 	return true;
 }
 
-bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek)
+bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek, bool is_wpa)
 {
 	uint16_t key_len;
 
@@ -318,10 +318,11 @@ bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek)
 	if (!ek->key_mic)
 		return false;
 
-	if (!ek->secure)
+	if (ek->secure != !is_wpa)
 		return false;
 
-	if (!ek->encrypted_key_data)
+	/* Must be encrypted when GTK is present but reserved in WPA */
+	if (!ek->encrypted_key_data && !is_wpa)
 		return false;
 
 	key_len = L_BE16_TO_CPU(ek->key_length);
@@ -338,7 +339,7 @@ bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek)
 	return true;
 }
 
-bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek)
+bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek, bool is_wpa)
 {
 	uint16_t key_len;
 
@@ -351,10 +352,10 @@ bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek)
 	if (!ek->key_mic)
 		return false;
 
-	if (!ek->secure)
+	if (ek->secure != !is_wpa)
 		return false;
 
-	if (ek->encrypted_key_data)
+	if (ek->encrypted_key_data && !is_wpa)
 		return false;
 
 	key_len = L_BE16_TO_CPU(ek->key_length);
@@ -421,7 +422,8 @@ static struct eapol_key *eapol_create_common(
 				const uint8_t snonce[],
 				size_t extra_len,
 				const uint8_t *extra_data,
-				int key_type)
+				int key_type,
+				bool is_wpa)
 {
 	size_t to_alloc = sizeof(struct eapol_key);
 	struct eapol_key *out_frame = l_malloc(to_alloc + extra_len);
@@ -431,7 +433,8 @@ static struct eapol_key *eapol_create_common(
 	out_frame->protocol_version = protocol;
 	out_frame->packet_type = 0x3;
 	out_frame->packet_len = L_CPU_TO_BE16(to_alloc + extra_len - 4);
-	out_frame->descriptor_type = EAPOL_DESCRIPTOR_TYPE_80211;
+	out_frame->descriptor_type = is_wpa ? EAPOL_DESCRIPTOR_TYPE_WPA :
+		EAPOL_DESCRIPTOR_TYPE_80211;
 	out_frame->key_descriptor_version = version;
 	out_frame->key_type = key_type;
 	out_frame->install = false;
@@ -457,35 +460,41 @@ struct eapol_key *eapol_create_ptk_2_of_4(
 				uint64_t key_replay_counter,
 				const uint8_t snonce[],
 				size_t extra_len,
-				const uint8_t *extra_data)
+				const uint8_t *extra_data,
+				bool is_wpa)
 {
 	return eapol_create_common(protocol, version, false, key_replay_counter,
-					snonce, extra_len, extra_data, 1);
+					snonce, extra_len, extra_data, 1,
+					is_wpa);
 }
 
 struct eapol_key *eapol_create_ptk_4_of_4(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
-				uint64_t key_replay_counter)
+				uint64_t key_replay_counter,
+				bool is_wpa)
 {
 	uint8_t snonce[32];
 
 	memset(snonce, 0, sizeof(snonce));
-	return eapol_create_common(protocol, version, true, key_replay_counter,
-					snonce, 0, NULL, 1);
+	return eapol_create_common(protocol, version,
+					is_wpa ? false : true,
+					key_replay_counter, snonce, 0, NULL,
+					1, is_wpa);
 }
 
-static struct eapol_key *eapol_create_gtk_2_of_2(
+struct eapol_key *eapol_create_gtk_2_of_2(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
-				uint64_t key_replay_counter)
+				uint64_t key_replay_counter,
+				bool is_wpa)
 {
 	uint8_t snonce[32];
 
 	memset(snonce, 0, sizeof(snonce));
 	return eapol_create_common(protocol, version, true,
 					key_replay_counter, snonce, 0, NULL,
-					0);
+					0, is_wpa);
 }
 
 struct eapol_sm {
@@ -503,6 +512,7 @@ struct eapol_sm {
 	struct l_timeout *timeout;
 	bool have_snonce:1;
 	bool have_replay:1;
+	bool ptk_complete:1;
 	bool wpa_ie:1;
 };
 
@@ -674,7 +684,8 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 					ek->key_descriptor_version,
 					sm->replay_counter,
 					sm->snonce,
-					sm->own_ie[1] + 2, sm->own_ie);
+					sm->own_ie[1] + 2, sm->own_ie,
+					sm->wpa_ie);
 
 	if (!eapol_calculate_mic(ptk->kck, step2, mic)) {
 		l_info("MIC calculation failed. "
@@ -741,13 +752,31 @@ static const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len)
 	return NULL;
 }
 
+static const uint8_t *eapol_find_wpa_ie(const uint8_t *data, size_t data_len)
+{
+	struct ie_tlv_iter iter;
+
+	ie_tlv_iter_init(&iter, data, data_len);
+
+	while (ie_tlv_iter_next(&iter)) {
+		if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_VENDOR_SPECIFIC)
+			continue;
+
+		if (is_ie_wpa_ie(ie_tlv_iter_get_data(&iter),
+				ie_tlv_iter_get_length(&iter)))
+			return ie_tlv_iter_get_data(&iter) - 2;
+	}
+
+	return NULL;
+}
+
 /*
- * This function performs a match of the RSN IE obtained from the scan
- * results vs the RSN IE obtained as part of the 4-way handshake.  If they
+ * This function performs a match of the RSN/WPA IE obtained from the scan
+ * results vs the RSN/WPA IE obtained as part of the 4-way handshake.  If they
  * don't match, the EAPoL packet must be silently discarded.
  */
-static bool eapol_ap_rsne_matches(const uint8_t *eapol_rsne,
-						const uint8_t *scan_rsne)
+static bool eapol_ap_ie_matches(const uint8_t *eapol_ie,
+				const uint8_t *scan_ie, bool is_wpa)
 {
 	struct ie_rsn_info eapol_info;
 	struct ie_rsn_info scan_info;
@@ -756,21 +785,31 @@ static bool eapol_ap_rsne_matches(const uint8_t *eapol_rsne,
 	 * First check that the sizes match, if they do, run a bitwise
 	 * comparison.
 	 */
-	if (eapol_rsne[1] == scan_rsne[1] &&
-			!memcmp(eapol_rsne + 2, scan_rsne + 2, eapol_rsne[1]))
+	if (eapol_ie[1] == scan_ie[1] &&
+			!memcmp(eapol_ie + 2, scan_ie + 2, eapol_ie[1]))
 		return true;
 
 	/*
-	 * Otherwise we have to parse the RSN IEs and compare the individual
+	 * Otherwise we have to parse the IEs and compare the individual
 	 * fields
 	 */
-	if (ie_parse_rsne_from_data(eapol_rsne, eapol_rsne[1] + 2,
-					&eapol_info) < 0)
-		return false;
+	if (!is_wpa) {
+		if (ie_parse_rsne_from_data(eapol_ie, eapol_ie[1] + 2,
+						&eapol_info) < 0)
+			return false;
 
-	if (ie_parse_rsne_from_data(scan_rsne, scan_rsne[1] + 2,
-					&scan_info) < 0)
-		return false;
+		if (ie_parse_rsne_from_data(scan_ie, scan_ie[1] + 2,
+						&scan_info) < 0)
+			return false;
+	} else {
+		if (ie_parse_wpa_from_data(eapol_ie, eapol_ie[1] + 2,
+						&eapol_info) < 0)
+			return false;
+
+		if (ie_parse_wpa_from_data(scan_ie, scan_ie[1] + 2,
+						&scan_info) < 0)
+			return false;
+	}
 
 	if (eapol_info.group_cipher != scan_info.group_cipher)
 		return false;
@@ -838,7 +877,7 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	const uint8_t *rsne;
 	uint8_t gtk_key_index;
 
-	if (!eapol_verify_ptk_3_of_4(ek)) {
+	if (!eapol_verify_ptk_3_of_4(ek, sm->wpa_ie)) {
 		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
@@ -857,13 +896,18 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	 * not identical to that the STA received in the Beacon or Probe
 	 * Response frame, the STA shall disassociate.
 	 */
-	rsne = eapol_find_rsne(decrypted_key_data, decrypted_key_data_size);
+	if (!sm->wpa_ie)
+		rsne = eapol_find_rsne(decrypted_key_data,
+					decrypted_key_data_size);
+	else
+		rsne = eapol_find_wpa_ie(decrypted_key_data,
+					decrypted_key_data_size);
 	if (!rsne) {
 		handshake_failed(ifindex, sm, MPDU_REASON_CODE_IE_DIFFERENT);
 		return;
 	}
 
-	if (!eapol_ap_rsne_matches(rsne, sm->ap_ie)) {
+	if (!eapol_ap_ie_matches(rsne, sm->ap_ie, sm->wpa_ie)) {
 		handshake_failed(ifindex, sm, MPDU_REASON_CODE_IE_DIFFERENT);
 		return;
 	}
@@ -878,22 +922,27 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	/*
 	 * TODO: If group_cipher was negotiated, find the GTK and install it
 	 */
-	gtk = eapol_find_gtk_kde(decrypted_key_data, decrypted_key_data_size,
-					&gtk_len);
-	if (!gtk || gtk_len < 2) {
-		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
-		return;
-	}
+	if (!sm->wpa_ie) {
+		gtk = eapol_find_gtk_kde(decrypted_key_data,
+						decrypted_key_data_size,
+						&gtk_len);
+		if (!gtk || gtk_len < 8) {
+			handshake_failed(ifindex, sm,
+						MPDU_REASON_CODE_UNSPECIFIED);
+			return;
+		}
 
-	gtk_key_index = util_bit_field(gtk[0], 0, 2);
-	/* TODO: Handle tx bit */
+		/* TODO: Handle tx bit */
 
-	gtk += 2;
-	gtk_len -= 2;
+		gtk_key_index = util_bit_field(gtk[0], 0, 2);
+		gtk += 2;
+		gtk_len -= 2;
+	} else
+		gtk = NULL;
 
 	step4 = eapol_create_ptk_4_of_4(protocol_version,
 					ek->key_descriptor_version,
-					sm->replay_counter);
+					sm->replay_counter, sm->wpa_ie);
 
 	/*
 	 * 802.11-2012, Section 11.6.6.4, step b):
@@ -907,10 +956,12 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	memcpy(step4->key_mic_data, mic, sizeof(mic));
 	tx_packet(ifindex, sm->aa, sm->spa, step4, user_data);
 
+	sm->ptk_complete = true;
+
 	if (install_tk)
 		install_tk(sm->ifindex, sm->aa, ptk->tk, rsne, sm->user_data);
 
-	if (install_gtk)
+	if (gtk && install_gtk)
 		install_gtk(sm->ifindex, gtk_key_index, gtk, gtk_len,
 				ek->key_rsc, 6, rsne, sm->user_data);
 
@@ -937,20 +988,31 @@ static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
 		return;
 	}
 
-	gtk = eapol_find_gtk_kde(decrypted_key_data,
-					decrypted_key_data_size,
-					&gtk_len);
+	if (!sm->wpa_ie) {
+		gtk = eapol_find_gtk_kde(decrypted_key_data,
+						decrypted_key_data_size,
+						&gtk_len);
 
-	if (!gtk || gtk_len < 8)
-		return;
+		if (!gtk || gtk_len < 8)
+			return;
+	} else {
+		gtk = decrypted_key_data;
+		gtk_len = decrypted_key_data_size;
 
-	gtk_key_index = util_bit_field(gtk[0], 0, 2);
-	gtk += 2;
-	gtk_len -= 2;
+		if (!gtk || gtk_len < 6)
+			return;
+	}
+
+	if (!sm->wpa_ie) {
+		gtk_key_index = util_bit_field(gtk[0], 0, 2);
+		gtk += 2;
+		gtk_len -= 2;
+	} else
+		gtk_key_index = ek->wpa_key_id;
 
 	step2 = eapol_create_gtk_2_of_2(protocol_version,
 					ek->key_descriptor_version,
-					sm->replay_counter);
+					sm->replay_counter, sm->wpa_ie);
 
 	/*
 	 * 802.11-2012, Section 11.6.7.3, step b):
@@ -1006,7 +1068,7 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 	struct eapol_sm *sm;
 	struct crypto_ptk *ptk;
 	uint8_t *decrypted_key_data = NULL;
-	size_t decrypted_key_data_len;
+	size_t key_data_len = 0;
 	uint64_t replay_counter;
 
 	ek = eapol_key_validate(frame, len);
@@ -1019,6 +1081,12 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 
 	/* Wrong direction */
 	if (!ek->key_ack)
+		return;
+
+	/* Further Descriptor Type check */
+	if (!sm->wpa_ie && ek->descriptor_type != EAPOL_DESCRIPTOR_TYPE_80211)
+		return;
+	else if (sm->wpa_ie && ek->descriptor_type != EAPOL_DESCRIPTOR_TYPE_WPA)
 		return;
 
 	replay_counter = L_BE64_TO_CPU(ek->key_replay_counter);
@@ -1049,33 +1117,47 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 			return;
 	}
 
-	if (ek->encrypted_key_data) {
+	if ((ek->encrypted_key_data && !sm->wpa_ie) ||
+			(ek->key_type == 0 && sm->wpa_ie)) {
 		/* Haven't received step 1 yet, so no ptk */
 		if (!sm->have_snonce)
 			return;
 
 		decrypted_key_data = eapol_decrypt_key_data(ptk->kek, ek,
-						&decrypted_key_data_len);
+						&key_data_len);
 		if (!decrypted_key_data)
 			return;
-	}
+	} else
+		key_data_len = L_BE16_TO_CPU(ek->key_data_len);
 
-	/* Check if this is the group key handshake */
 	if (ek->key_type == 0) {
-		if (!ek->key_mic || !ek->secure)
+		/* Only GTK handshake allowed after PTK handshake complete */
+		if (!sm->ptk_complete)
 			goto done;
 
-		eapol_handle_gtk_1_of_2(ifindex, sm, ek, decrypted_key_data,
-					decrypted_key_data_len, user_data);
+		if (!decrypted_key_data)
+			goto done;
+
+		eapol_handle_gtk_1_of_2(ifindex, sm, ek,
+					decrypted_key_data,
+					key_data_len, user_data);
 		goto done;
 	}
 
 	/* If no MIC, then assume packet 1, otherwise packet 3 */
 	if (!ek->key_mic)
 		eapol_handle_ptk_1_of_4(ifindex, sm, ek, user_data);
-	else
-		eapol_handle_ptk_3_of_4(ifindex, sm, ek, decrypted_key_data,
-					decrypted_key_data_len, user_data);
+	else {
+		if (sm->ptk_complete)
+			goto done;
+
+		if (!key_data_len)
+			goto done;
+
+		eapol_handle_ptk_3_of_4(ifindex, sm, ek,
+					decrypted_key_data ?: ek->key_data,
+					key_data_len, user_data);
+	}
 
 done:
 	l_free(decrypted_key_data);

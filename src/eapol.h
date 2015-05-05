@@ -123,8 +123,8 @@ const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len);
 
 bool eapol_verify_ptk_1_of_4(const struct eapol_key *ek);
 bool eapol_verify_ptk_2_of_4(const struct eapol_key *ek);
-bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek);
-bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek);
+bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek, bool is_wpa);
+bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek, bool is_wpa);
 bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa);
 
 struct eapol_key *eapol_create_ptk_2_of_4(
@@ -133,12 +133,20 @@ struct eapol_key *eapol_create_ptk_2_of_4(
 				uint64_t key_replay_counter,
 				const uint8_t snonce[],
 				size_t extra_len,
-				const uint8_t *extra_data);
+				const uint8_t *extra_data,
+				bool is_wpa);
 
 struct eapol_key *eapol_create_ptk_4_of_4(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
-				uint64_t key_replay_counter);
+				uint64_t key_replay_counter,
+				bool is_wpa);
+
+struct eapol_key *eapol_create_gtk_2_of_2(
+				enum eapol_protocol_version protocol,
+				enum eapol_key_descriptor_version version,
+				uint64_t key_replay_counter,
+				bool is_wpa);
 
 void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 			const uint8_t *frame, size_t len,
