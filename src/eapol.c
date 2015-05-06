@@ -382,21 +382,23 @@ bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek, bool is_wpa)
 	return true;
 }
 
+#define VERIFY_GTK_COMMON(ek)	\
+	if (ek->key_type)	\
+		return false;	\
+	if (ek->smk_message)	\
+		return false;	\
+	if (ek->request)	\
+		return false;	\
+	if (ek->error)		\
+		return false;	\
+	if (ek->install)	\
+		return false	\
+
 bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa)
 {
 	uint16_t key_len;
 
-	if (ek->key_type)
-		return false;
-	if (ek->smk_message)
-		return false;
-	if (ek->request)
-		return false;
-	if (ek->error)
-		return false;
-
-	if (ek->install)
-		return false;
+	VERIFY_GTK_COMMON(ek);
 
 	if (!ek->key_ack)
 		return false;
@@ -425,6 +427,37 @@ bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa)
 	/* Key ID shall not be 0 */
 	if (is_wpa && !ek->wpa_key_id)
 		return false;
+
+	return true;
+}
+
+bool eapol_verify_gtk_2_of_2(const struct eapol_key *ek, bool is_wpa)
+{
+	uint16_t key_len;
+
+	/* Verify according to 802.11, Section 11.6.7.3 */
+	VERIFY_GTK_COMMON(ek);
+
+	if (ek->key_ack)
+		return false;
+
+	if (!ek->key_mic)
+		return false;
+
+	if (ek->secure != !is_wpa)
+		return false;
+
+	if (ek->encrypted_key_data)
+		return false;
+
+	key_len = L_BE16_TO_CPU(ek->key_length);
+	if (key_len != 0)
+		return false;
+
+	VERIFY_IS_ZERO(ek->key_nonce);
+	VERIFY_IS_ZERO(ek->eapol_key_iv);
+	VERIFY_IS_ZERO(ek->key_rsc);
+	VERIFY_IS_ZERO(ek->reserved);
 
 	return true;
 }
