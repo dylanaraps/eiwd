@@ -1750,6 +1750,16 @@ static const struct {
 	{ NL80211_CMD_CHANNEL_SWITCH,		"Channel Switch"	},
 	{ NL80211_CMD_VENDOR,			"Vendor"		},
 	{ NL80211_CMD_SET_QOS_MAP,		"Set QoS Map"		},
+	{ NL80211_CMD_ADD_TX_TS,		"Add Traffic Stream"	},
+	{ NL80211_CMD_DEL_TX_TS,		"Delete Traffic Stream" },
+	{ NL80211_CMD_GET_MPP,			"Get Mesh Proxy Path"	},
+	{ NL80211_CMD_JOIN_OCB,			"Join OCB Network"	},
+	{ NL80211_CMD_LEAVE_OCB,		"Leave OCB Network"	},
+	{ NL80211_CMD_CH_SWITCH_STARTED_NOTIFY, "Channel Switch Notify"	},
+	{ NL80211_CMD_TDLS_CHANNEL_SWITCH,	"TDLS Channel Switch"	},
+	{ NL80211_CMD_TDLS_CANCEL_CHANNEL_SWITCH,
+						"Cancel TLDS Channel Switch" },
+	{ NL80211_CMD_WIPHY_REG_CHANGE,		"Wiphy Reg Change"	},
 	{ }
 };
 
