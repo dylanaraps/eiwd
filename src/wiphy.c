@@ -91,6 +91,7 @@ struct wiphy {
 	uint32_t feature_flags;
 	struct l_queue *netdev_list;
 	bool support_scheduled_scan:1;
+	bool support_rekey_offload:1;
 	uint16_t pairwise_ciphers;
 };
 
@@ -1709,6 +1710,8 @@ static void parse_supported_commands(struct wiphy *wiphy,
 		case NL80211_CMD_START_SCHED_SCAN:
 			wiphy->support_scheduled_scan = true;
 			break;
+		case NL80211_CMD_SET_REKEY_OFFLOAD:
+			wiphy->support_rekey_offload = true;
 		}
 	}
 }
