@@ -264,6 +264,9 @@ bool eapol_verify_ptk_1_of_4(const struct eapol_key *ek)
 	if (ek->encrypted_key_data)
 		return false;
 
+	if (ek->wpa_key_id)
+		return false;
+
 	VERIFY_IS_ZERO(ek->eapol_key_iv);
 	VERIFY_IS_ZERO(ek->key_rsc);
 	VERIFY_IS_ZERO(ek->reserved);
@@ -292,6 +295,9 @@ bool eapol_verify_ptk_2_of_4(const struct eapol_key *ek)
 		return false;
 
 	if (ek->encrypted_key_data)
+		return false;
+
+	if (ek->wpa_key_id)
 		return false;
 
 	key_len = L_BE16_TO_CPU(ek->key_length);
@@ -334,6 +340,9 @@ bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek, bool is_wpa)
 	if (!ek->encrypted_key_data && !is_wpa)
 		return false;
 
+	if (ek->wpa_key_id)
+		return false;
+
 	key_len = L_BE16_TO_CPU(ek->key_length);
 	if (key_len != 16)
 		return false;
@@ -368,6 +377,9 @@ bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek, bool is_wpa)
 		return false;
 
 	if (ek->encrypted_key_data)
+		return false;
+
+	if (ek->wpa_key_id)
 		return false;
 
 	key_len = L_BE16_TO_CPU(ek->key_length);
@@ -424,7 +436,18 @@ bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa)
 			EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES)
 		VERIFY_IS_ZERO(ek->eapol_key_iv);
 
-	/* Key ID shall not be 0 */
+	/*
+	 * WPA_80211_v3_1, Section 2.2.4:
+	 * "Key Index (bits 4 and 5): specifies the key id of the temporal
+	 * key of the key derived from the message. The value of this shall be
+	 * zero (0) if the value of Key Type (bit 4) is Pairwise (1). The Key
+	 * Type and Key Index shall not both be 0 in the same message.
+	 *
+	 * Group keys shall not use key id 0. This means that key ids 1 to 3
+	 * are available to be used to identify Group keys. This document
+	 * recommends that implementations reserve key ids 1 and 2 for Group
+	 * Keys, and that key id 3 is not used.
+	 */
 	if (is_wpa && !ek->wpa_key_id)
 		return false;
 
