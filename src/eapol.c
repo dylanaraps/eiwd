@@ -367,7 +367,7 @@ bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek, bool is_wpa)
 	if (ek->secure != !is_wpa)
 		return false;
 
-	if (ek->encrypted_key_data && !is_wpa)
+	if (ek->encrypted_key_data)
 		return false;
 
 	key_len = L_BE16_TO_CPU(ek->key_length);
