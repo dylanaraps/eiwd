@@ -933,6 +933,7 @@ static void eapol_wpa2_handshake_test(const void *data)
 	gtk_step2 = eapol_key_validate(eapol_key_data_12,
 					sizeof(eapol_key_data_12));
 	assert(gtk_step2);
+	assert(eapol_verify_gtk_2_of_2(gtk_step2, false));
 
 	frame = eapol_create_gtk_2_of_2(EAPOL_PROTOCOL_VERSION_2004,
 				EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES,
