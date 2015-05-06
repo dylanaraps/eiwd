@@ -948,6 +948,7 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	else
 		rsne = eapol_find_wpa_ie(decrypted_key_data,
 					decrypted_key_data_size);
+
 	if (!rsne) {
 		handshake_failed(ifindex, sm, MPDU_REASON_CODE_IE_DIFFERENT);
 		return;
