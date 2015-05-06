@@ -967,7 +967,7 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	 */
 
 	/*
-	 * TODO: If group_cipher was negotiated, find the GTK and install it
+	 * TODO: Handle IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC case
 	 */
 	if (!sm->wpa_ie) {
 		gtk = eapol_find_gtk_kde(decrypted_key_data,
