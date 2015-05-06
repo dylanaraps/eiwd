@@ -312,6 +312,15 @@ bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek, bool is_wpa)
 	/* Verify according to 802.11, Section 11.6.6.4 */
 	VERIFY_PTK_COMMON(ek);
 
+	/*
+	 * TODO: Handle cases where install might be 0:
+	 * For PTK generation, 0 only if the AP does not support key mapping
+	 * keys, or if the STA has the No Pairwise bit (in the RSN Capabilities
+	 * field) equal to 1 and only the group key is used.
+	 */
+	if (!ek->install)
+		return false;
+
 	if (!ek->key_ack)
 		return false;
 
@@ -345,6 +354,9 @@ bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek, bool is_wpa)
 
 	/* Verify according to 802.11, Section 11.6.6.5 */
 	VERIFY_PTK_COMMON(ek);
+
+	if (ek->install)
+		return false;
 
 	if (ek->key_ack)
 		return false;
@@ -381,6 +393,9 @@ bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa)
 	if (ek->request)
 		return false;
 	if (ek->error)
+		return false;
+
+	if (ek->install)
 		return false;
 
 	if (!ek->key_ack)
