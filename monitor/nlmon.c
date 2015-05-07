@@ -1114,6 +1114,102 @@ static void print_ie_ht_operation(unsigned int level, const char *label,
 	print_ie_mcs(level + 1, "Basic MCS set", &bytes[6], 16);
 }
 
+static const char *extended_capabilities_bitfield[64] = {
+	[0] = "20/40 BSS coexistence management support",
+	[1] = "Reserved",
+	[2] = "Extended channel switching",
+	[3] = "Reserved",
+	[4] = "PSMP capability",
+	[5] = "Reserved",
+	[6] = "S-PSMP support",
+	[7] = "Event",
+	[8] = "Diagnostics",
+	[9] = "Multicast diagnostics",
+	[10] = "Location tracking",
+	[11] = "FMS",
+	[12] = "Proxy ARP service",
+	[13] = "Collocated interference reporting",
+	[14] = "Civic location",
+	[15] = "Geospatial location",
+	[16] = "TFS",
+	[17] = "WNM-Sleep mode",
+	[18] = "TIM broadcast",
+	[19] = "BSS transition",
+	[20] = "QoS traffic capability",
+	[21] = "AC station count",
+	[22] = "Multiple BSSID",
+	[23] = "Timing measurement",
+	[24] = "Channel usage",
+	[25] = "SSID list",
+	[26] = "DMS",
+	[27] = "UTC TSF offset",
+	[28] = "TDLS Peer U-APSD buffer STA support",
+	[29] = "TDLS Peer PSM support",
+	[30] = "TDLS channel switching",
+	[31] = "Interworking",
+	[32] = "QoS Map",
+	[33] = "EBR",
+	[34] = "SSPN Interface",
+	[35] = "Reserved",
+	[36] = "MSGCF Capability",
+	[37] = "TDLS Support",
+	[38] = "TDLS Prohibited",
+	[39] = "TDLS Channel Switching Prohibited",
+	[40] = "Reject Unadmitted Frame",
+	[41 ... 43] = "Reserved",
+	[44] = "Identifier Location",
+	[45] = "U-APSD Coexistence",
+	[46] = "WNM- Notification",
+	[47] = "Reserved",
+	[48] = "UTF-8 SSID",
+	[49 ... 61] = "Reserved",
+	[62] = "Opmode Notification",
+	[63] = "TDLS Wide Bandwidth support",
+};
+
+static void print_ie_extended_capabilities(unsigned int level,
+					const char *label,
+					const void *data, uint16_t size)
+{
+	uint8_t bytemask1[] = { 0xff, 0xff, 0xff, 0xff,
+				0xff, 0x01 };
+	uint8_t bytemask2[] = { 0x00, 0x00, 0x00, 0x00,
+				0x00, 0xf0, 0xff, 0xff };
+	uint8_t interval;
+	size_t bytes;
+	bool spsmp;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	if (size == 0)
+		return;
+
+	spsmp = util_is_bit_set(*((uint8_t *) data), 6);
+
+	bytes = size < sizeof(bytemask1) ? size : sizeof(bytemask1);
+
+	/* Print first 40 bits */
+	print_ie_bitfield(level + 1, "Capability", data, bytemask1,
+				bytes, extended_capabilities_bitfield);
+
+	if (size <= bytes)
+		return;
+
+	/* Print Service Interval Granularity */
+	if (spsmp) {
+		interval = util_bit_field(*((uint8_t *) data + 5), 1, 3);
+		print_attr(level + 1,
+			"Shortest Service Interval Granularity: %d ms",
+			interval * 5 + 5);
+	}
+
+	bytes = size < sizeof(bytemask2) ? size : sizeof(bytemask2);
+
+	/* Print remainder */
+	print_ie_bitfield(level + 1, "Capability", data, bytemask2,
+			bytes, extended_capabilities_bitfield);
+}
+
 static struct attr_entry ie_entry[] = {
 	{IE_TYPE_SSID,                      "SSID",
 	ATTR_CUSTOM,                        { .function = print_ie_ssid } },
@@ -2142,7 +2238,8 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_RADAR_EVENT,
 			"Radar Event" },
 	{ NL80211_ATTR_EXT_CAPA,
-			"Extended Capabilities" },
+			"Extended Capabilities", ATTR_CUSTOM,
+			{ .function = print_ie_extended_capabilities } },
 	{ NL80211_ATTR_EXT_CAPA_MASK,
 			"Extended Capabilities Mask" },
 	{ NL80211_ATTR_STA_CAPABILITY,
