@@ -1237,6 +1237,8 @@ static struct attr_entry ie_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_ie_ht_operation } },
 	{ IE_TYPE_VENDOR_SPECIFIC,		"Vendor specific",
 		ATTR_CUSTOM,	{ .function = print_ie_vendor } },
+	{ IE_TYPE_EXTENDED_CAPABILITIES,	"Extended Capabilities",
+		ATTR_CUSTOM,	{ .function = print_ie_extended_capabilities } },
 	{ },
 };
 
