@@ -129,13 +129,6 @@ cfg80211 / nl80211
 Wireless monitor
 ================
 
-- Decode HT Capabilities IE element
-
-  HT Capabilities element has ID 45.
-
-  Priority: Medium
-  Complexity: C1
-
 - Add support for PACKET_RECV_OUTPUT socket option of AF_PACKET
 
   Instead of having to switch every interface manually into promiscuous
