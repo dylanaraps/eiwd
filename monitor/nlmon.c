@@ -1210,6 +1210,122 @@ static void print_ie_extended_capabilities(unsigned int level,
 			bytes, extended_capabilities_bitfield);
 }
 
+static void print_ie_ht_capabilities(unsigned int level,
+					const char *label,
+					const void *data, uint16_t size)
+{
+	static const char *ht_capabilities_info_bitfield[16] = {
+		[0] = "LDPC Coding Capability",
+		[1] = "Supported Channel Width Set",
+		[2] = "SM Power Save",
+		[3] = "SM Power Save",
+		[4] = "HT-Greenfield",
+		[5] = "Short GI for 20Mhz",
+		[6] = "Short GI for 40Mhz",
+		[7] = "Tx STBC",
+		[8] = "Rx STBC",
+		[9] = "Rx STBC",
+		[10] = "HT-Delayed Block Ack",
+		[11] = "Maximum A-MSDU Length",
+		[12] = "DSSS/CCK Mode in 40Mhz",
+		[13] = "Reserved",
+		[14] = "40 Mhz Intolerant",
+		[15] = "L-SIG TXOP Protection Support",
+	};
+	static const char *ht_capabilities_sm_power_save[4] = {
+		"Static", "Dynamic", "Reserved", "Disabled",
+	};
+	static const char *ht_capabilities_rx_stbc[4] = {
+		"Disabled", "One spatial stream", "One and two spatial streams",
+		"One, two and three spatial streams"
+	};
+	static const char *ht_capabilities_min_mpdu_start_spacing[8] = {
+		"No restriction", "1/4 us", "1/2 us", "1 us", "2 us",
+		"4 us", "8 us", "16 us",
+	};
+	static const char *ht_capabilities_pco_transition_time[4] = {
+		"No transition", "400 us", "1.5 ms", "5 ms",
+	};
+	static const char *ht_capabilities_mcs_feedback[4] = {
+		"No feedback", "Reserved", "Unsolicited", "Both",
+	};
+	uint8_t info_mask[] = { 0x03, 0xfc };
+	const uint8_t *htc = data;
+	uint8_t sm_power_save;
+	uint8_t rx_stbc;
+	uint8_t ampdu_exponent;
+	bool pco;
+	bool plus_htc;
+	bool rd_responder;
+	uint8_t bits;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	if (size != 26)
+		return;
+
+	/* Print bits 0-1 */
+	print_ie_bitfield(level + 1, "HT Capabilities Info", data, info_mask,
+				1, ht_capabilities_info_bitfield);
+
+	/* Print SM Power Save */
+	sm_power_save = util_bit_field(htc[0], 2, 2);
+	print_attr(level + 1, "HT Capabilities Info: bits 2-3: %s",
+			ht_capabilities_sm_power_save[sm_power_save]);
+
+	/* Print bits 4-7 */
+	info_mask[0] = 0xf0;
+	print_ie_bitfield(level + 1, "HT Capabilities Info", data, info_mask,
+				1, ht_capabilities_info_bitfield);
+
+	rx_stbc = util_bit_field(htc[1], 0, 2);
+	print_attr(level + 1, "HT Capabilities Info: bits 8-9: %s",
+			ht_capabilities_rx_stbc[rx_stbc]);
+
+	/* Print bits 10-15 */
+	info_mask[0] = 0x00;
+	print_ie_bitfield(level + 1, "HT Capabilities Info", data, info_mask,
+				2, ht_capabilities_info_bitfield);
+
+	ampdu_exponent = util_bit_field(htc[2], 0, 2);
+	print_attr(level + 1, "A-MPDU Parameters: "
+			"Maximum A-MPDU Length Exponent: %d", ampdu_exponent);
+
+	bits = util_bit_field(htc[2], 2, 3);
+	print_attr(level + 1, "A-MPDU Parameters: "
+			"Minimum MPDU Start Spacing: %s",
+			ht_capabilities_min_mpdu_start_spacing[bits]);
+
+	print_ie_mcs(level + 1, "Suppored MCS", htc + 3, 16);
+
+	pco = util_is_bit_set(htc[18], 0);
+	print_attr(level + 1, "HT Extended Capabilities: PCO: %s",
+			bits ? "supported" : "not supported");
+
+	if (pco) {
+		bits = util_bit_field(htc[18], 1, 2);
+		print_attr(level + 1, "HT Extended Capabilities: "
+				"PCO Transition Time: %s",
+				ht_capabilities_pco_transition_time[bits]);
+	}
+
+	bits = util_bit_field(htc[19], 0, 2);
+	print_attr(level + 1, "HT Extended Capabilities: "
+			"MCS Feedback: %s", ht_capabilities_mcs_feedback[bits]);
+
+	plus_htc = util_is_bit_set(htc[19], 2);
+	print_attr(level + 1, "HT Extended Capabilities: "
+			"+HTC: %s", plus_htc ? "supported" : "not supported");
+
+	rd_responder = util_is_bit_set(htc[19], 3);
+	print_attr(level + 1, "HT Extended Capabilities: "
+			"RD Responder: %s",
+			rd_responder ? "supported" : "not supported");
+
+	/* TODO: Transmit Beamforming Capabilities field */
+	/* TODO: ASEL Capability field */
+}
+
 static struct attr_entry ie_entry[] = {
 	{ IE_TYPE_SSID,				"SSID",
 		ATTR_CUSTOM,	{ .function = print_ie_ssid } },
@@ -1239,6 +1355,8 @@ static struct attr_entry ie_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_ie_vendor } },
 	{ IE_TYPE_EXTENDED_CAPABILITIES,	"Extended Capabilities",
 		ATTR_CUSTOM,	{ .function = print_ie_extended_capabilities } },
+	{ IE_TYPE_HT_CAPABILITIES,		"HT Capabilities",
+		ATTR_CUSTOM,	{ .function = print_ie_ht_capabilities } },
 	{ },
 };
 
@@ -1946,8 +2064,8 @@ static const struct attr_entry attr_table[] = {
 			"BSS Short Preamble", ATTR_U8 },
 	{ NL80211_ATTR_BSS_SHORT_SLOT_TIME,
 			"BSS Short Slot Time", ATTR_U8 },
-	{ NL80211_ATTR_HT_CAPABILITY,
-			"HT Capability" },
+	{ NL80211_ATTR_HT_CAPABILITY, "HT Capability",
+			ATTR_CUSTOM, { .function = print_ie_ht_capabilities } },
 	{ NL80211_ATTR_SUPPORTED_IFTYPES,
 			"Supported Interface Types", ATTR_NESTED,
 							{ iftype_table } },
