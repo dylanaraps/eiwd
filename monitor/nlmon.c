@@ -1083,24 +1083,24 @@ static void print_ie_ht_operation(unsigned int level, const char *label,
 
 	i = bytes[1] & 0x03;
 	print_attr (level + 1,
-		"HT Operation Information: Secondary Channel Offset: %s",
+		"Information: Secondary Channel Offset: %s",
 		secondary_offset[i]);
 
 	i = (bytes[1] & 0x04) >> 2;
 	print_attr (level + 1,
-		"HT Operation Information: Channel width: bit  2: %s",
+		"Information: Channel width: bit  2: %s",
 		channel_width[i]);
 
 	memset(bytemask, 0, sizeof(bytemask));
 	bytemask[0] = 0xf8;
 
 	print_ie_bitfield(level + 1,
-			"HT Operation Information", &bytes[1], bytemask,
+			"Information", &bytes[1], bytemask,
 			sizeof(bytemask), ht_ops_bitfield);
 
 	i = bytes[2] & 0x03;
 	print_attr(level + 1,
-		"HT Operation Information: HT Protection: bits  8 -  9: %s",
+		"Information: HT Protection: bits  8 -  9: %s",
 		ht_protection[i]);
 
 	bytemask[0] = 0x00;
@@ -1108,7 +1108,7 @@ static void print_ie_ht_operation(unsigned int level, const char *label,
 	bytemask[2] = 0xff;
 	bytemask[3] = 0xff;
 	bytemask[4] = 0xff;
-	print_ie_bitfield(level + 1, "HT Operation Information", &bytes[1],
+	print_ie_bitfield(level + 1, "Information", &bytes[1],
 			bytemask, sizeof(bytemask), ht_ops_bitfield);
 
 	print_ie_mcs(level + 1, "Basic MCS set", &bytes[6], 16);
