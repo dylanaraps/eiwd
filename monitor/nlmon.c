@@ -3815,6 +3815,10 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 						ek->key_descriptor_version,
 						ek->key_descriptor_version);
 	print_attr(1, "Key Type: %s", ek->key_type ? "true" : "false");
+
+	if (ek->descriptor_type == EAPOL_DESCRIPTOR_TYPE_WPA)
+		print_attr(1, "Key Id: %u", ek->wpa_key_id);
+
 	print_attr(1, "Install: %s", ek->install ? "true" : "false");
 	print_attr(1, "Key ACK: %s", ek->key_ack ? "true" : "false");
 	print_attr(1, "Key Length: %d", L_BE16_TO_CPU(ek->key_length));
