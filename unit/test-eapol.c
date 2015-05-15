@@ -34,7 +34,31 @@
 #include "src/crypto.h"
 #include "src/ie.h"
 
+/* Our nonce to use + its size */
 static const uint8_t *snonce;
+
+/* Whether step2 was called with the right info */
+static bool verify_step2_called;
+/* PTK Handshake 2-of-4 frame we are expected to generate + its size */
+static const uint8_t *expected_step2_frame;
+static size_t expected_step2_frame_size;
+
+/* Whether step4 was called with the right info */
+static bool verify_step4_called;
+/* PTK Handshake 4-of-4 frame we are expected to generate + its size */
+static const uint8_t *expected_step4_frame;
+static size_t expected_step4_frame_size;
+
+/* Whether GTK step2 was called with the right info */
+static bool verify_gtk_step2_called;
+/* GTK Handshake 2-of-2 frame we are expected to generate + its size */
+static const uint8_t *expected_gtk_step2_frame;
+static size_t expected_gtk_step2_frame_size;
+
+/* Authenticator Address */
+static uint8_t *aa;
+/* Supplicant Address */
+static uint8_t *spa;
 
 struct eapol_key_data {
 	const unsigned char *frame;
@@ -1613,12 +1637,6 @@ static void eapol_wpa_handshake_test(const void *data)
 	l_free(ptk);
 }
 
-static bool verify_step2_called;
-static bool verify_step4_called;
-static bool verify_gtk_step2_called;
-static uint8_t aa[] = { 0x24, 0xa2, 0xe1, 0xec, 0x17, 0x04 };
-static uint8_t spa[] = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 };
-
 static int verify_step2(uint32_t ifindex, const uint8_t *aa_addr,
 			const uint8_t *sta_addr,
 			const struct eapol_key *ek,
@@ -1628,10 +1646,10 @@ static int verify_step2(uint32_t ifindex, const uint8_t *aa_addr,
 				L_BE16_TO_CPU(ek->key_data_len);
 
 	assert(ifindex == 1);
-	assert(!memcmp(sta_addr, spa, sizeof(spa)));
-	assert(!memcmp(aa_addr, aa, sizeof(aa)));
-	assert(ek_len == sizeof(eapol_key_data_4));
-	assert(!memcmp(ek, eapol_key_data_4, sizeof(eapol_key_data_4)));
+	assert(!memcmp(sta_addr, spa, 6));
+	assert(!memcmp(aa_addr, aa, 6));
+	assert(ek_len == expected_step2_frame_size);
+	assert(!memcmp(ek, expected_step2_frame, expected_step2_frame_size));
 
 	verify_step2_called = true;
 
@@ -1647,12 +1665,32 @@ static int verify_step4(uint32_t ifindex, const uint8_t *aa_addr,
 				L_BE16_TO_CPU(ek->key_data_len);
 
 	assert(ifindex == 1);
-	assert(!memcmp(sta_addr, spa, sizeof(spa)));
-	assert(!memcmp(aa_addr, aa, sizeof(aa)));
-	assert(ek_len == sizeof(eapol_key_data_6));
-	assert(!memcmp(ek, eapol_key_data_6, sizeof(eapol_key_data_6)));
+	assert(!memcmp(sta_addr, spa, 6));
+	assert(!memcmp(aa_addr, aa, 6));
+	assert(ek_len == expected_step4_frame_size);
+	assert(!memcmp(ek, expected_step4_frame, expected_step4_frame_size));
 
 	verify_step4_called = true;
+
+	return 0;
+}
+
+static int verify_step2_gtk(uint32_t ifindex, const uint8_t *aa_addr,
+				const uint8_t *sta_addr,
+				const struct eapol_key *ek,
+				void *user_data)
+{
+	size_t ek_len = sizeof(struct eapol_key) +
+				L_BE16_TO_CPU(ek->key_data_len);
+
+	assert(ifindex == 1);
+	assert(!memcmp(sta_addr, spa, 6));
+	assert(!memcmp(aa_addr, aa, 6));
+	assert(ek_len == expected_gtk_step2_frame_size);
+	assert(!memcmp(ek, expected_gtk_step2_frame,
+			expected_gtk_step2_frame_size));
+
+	verify_gtk_step2_called = true;
 
 	return 0;
 }
@@ -1675,6 +1713,8 @@ static void eapol_sm_test_ptk(const void *data)
 		0x30, 0x14, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04,
 		0x01, 0x00, 0x00, 0x0f, 0xac, 0x04, 0x01, 0x00,
 		0x00, 0x0f, 0xac, 0x02, 0x00, 0x00 };
+	static uint8_t ap_address[] = { 0x24, 0xa2, 0xe1, 0xec, 0x17, 0x04 };
+	static uint8_t sta_address[] = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 };
 
 	struct eapol_sm *sm;
 
@@ -1685,8 +1725,14 @@ static void eapol_sm_test_ptk(const void *data)
 	snonce = eapol_key_test_4.key_nonce;
 	__eapol_set_get_nonce_func(test_nonce);
 
+	aa = ap_address;
+	spa = sta_address;
 	verify_step2_called = false;
+	expected_step2_frame = eapol_key_data_4;
+	expected_step2_frame_size = sizeof(eapol_key_data_4);
 	verify_step4_called = false;
+	expected_step4_frame = eapol_key_data_6;
+	expected_step4_frame_size = sizeof(eapol_key_data_6);
 
 	sm = eapol_sm_new();
 	eapol_sm_set_pmk(sm, psk);
@@ -1710,66 +1756,6 @@ static void eapol_sm_test_ptk(const void *data)
 	eapol_exit();
 }
 
-static uint8_t aa_ptk_gtk[] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 };
-static uint8_t spa_ptk_gtk[] = { 0x02, 0x00, 0x00, 0x00, 0x01, 0x00 };
-
-static int verify_step2_ptk(uint32_t ifindex, const uint8_t *aa_addr,
-				const uint8_t *sta_addr,
-				const struct eapol_key *ek,
-				void *user_data)
-{
-	size_t ek_len = sizeof(struct eapol_key) +
-				L_BE16_TO_CPU(ek->key_data_len);
-
-	assert(ifindex == 1);
-	assert(!memcmp(sta_addr, spa_ptk_gtk, sizeof(spa_ptk_gtk)));
-	assert(!memcmp(aa_addr, aa_ptk_gtk, sizeof(aa_ptk_gtk)));
-	assert(ek_len == sizeof(eapol_key_data_8));
-	assert(!memcmp(ek, eapol_key_data_8, sizeof(eapol_key_data_8)));
-
-	verify_step2_called = true;
-
-	return 0;
-}
-
-static int verify_step4_ptk(uint32_t ifindex, const uint8_t *aa_addr,
-				const uint8_t *sta_addr,
-				const struct eapol_key *ek,
-				void *user_data)
-{
-	size_t ek_len = sizeof(struct eapol_key) +
-				L_BE16_TO_CPU(ek->key_data_len);
-
-	assert(ifindex == 1);
-	assert(!memcmp(sta_addr, spa_ptk_gtk, sizeof(spa_ptk_gtk)));
-	assert(!memcmp(aa_addr, aa_ptk_gtk, sizeof(aa_ptk_gtk)));
-	assert(ek_len == sizeof(eapol_key_data_10));
-	assert(!memcmp(ek, eapol_key_data_10, sizeof(eapol_key_data_10)));
-
-	verify_step4_called = true;
-
-	return 0;
-}
-
-static int verify_step2_gtk(uint32_t ifindex, const uint8_t *aa_addr,
-				const uint8_t *sta_addr,
-				const struct eapol_key *ek,
-				void *user_data)
-{
-	size_t ek_len = sizeof(struct eapol_key) +
-				L_BE16_TO_CPU(ek->key_data_len);
-
-	assert(ifindex == 1);
-	assert(!memcmp(sta_addr, spa_ptk_gtk, sizeof(spa_ptk_gtk)));
-	assert(!memcmp(aa_addr, aa_ptk_gtk, sizeof(aa_ptk_gtk)));
-	assert(ek_len == sizeof(eapol_key_data_12));
-	assert(!memcmp(ek, eapol_key_data_12, sizeof(eapol_key_data_12)));
-
-	verify_gtk_step2_called = true;
-
-	return 0;
-}
-
 static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 {
 	const unsigned char psk[] = {
@@ -1781,6 +1767,8 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 		0x30, 0x12, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04,
 		0x01, 0x00, 0x00, 0x0f, 0xac, 0x04, 0x01, 0x00,
 		0x00, 0x0f, 0xac, 0x02 };
+	static uint8_t ap_address[] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	static uint8_t sta_address[] = { 0x02, 0x00, 0x00, 0x00, 0x01, 0x00 };
 
 	struct eapol_sm *sm;
 
@@ -1790,92 +1778,43 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 	snonce = eapol_key_test_8.key_nonce;
 	__eapol_set_get_nonce_func(test_nonce);
 
+	aa = ap_address;
+	spa = sta_address;
 	verify_step2_called = false;
+	expected_step2_frame = eapol_key_data_8;
+	expected_step2_frame_size = sizeof(eapol_key_data_8);
 	verify_step4_called = false;
+	expected_step4_frame = eapol_key_data_10;
+	expected_step4_frame_size = sizeof(eapol_key_data_10);
 	verify_gtk_step2_called = false;
+	expected_gtk_step2_frame = eapol_key_data_12;
+	expected_gtk_step2_frame_size = sizeof(eapol_key_data_12);
 
 	sm = eapol_sm_new();
 	eapol_sm_set_pmk(sm, psk);
-	eapol_sm_set_authenticator_address(sm, aa_ptk_gtk);
-	eapol_sm_set_supplicant_address(sm, spa_ptk_gtk);
+	eapol_sm_set_authenticator_address(sm, aa);
+	eapol_sm_set_supplicant_address(sm, spa);
 	eapol_sm_set_own_rsn(sm, eapol_key_data_8 + sizeof(struct eapol_key),
 				eapol_key_test_8.key_data_len);
 	eapol_sm_set_ap_rsn(sm, ap_rsne, sizeof(ap_rsne));
 	eapol_start(1, sm);
 
-	__eapol_set_tx_packet_func(verify_step2_ptk);
-	__eapol_rx_packet(1, spa_ptk_gtk, aa_ptk_gtk, eapol_key_data_7,
-					sizeof(eapol_key_data_7), NULL);
+	__eapol_set_tx_packet_func(verify_step2);
+	__eapol_rx_packet(1, spa, aa, eapol_key_data_7,
+				sizeof(eapol_key_data_7), NULL);
 	assert(verify_step2_called);
 
-	__eapol_set_tx_packet_func(verify_step4_ptk);
-	__eapol_rx_packet(1, spa_ptk_gtk, aa_ptk_gtk, eapol_key_data_9,
+	__eapol_set_tx_packet_func(verify_step4);
+	__eapol_rx_packet(1, spa, aa, eapol_key_data_9,
 					sizeof(eapol_key_data_9), NULL);
 	assert(verify_step4_called);
 
 	__eapol_set_tx_packet_func(verify_step2_gtk);
-	__eapol_rx_packet(1, spa_ptk_gtk, aa_ptk_gtk, eapol_key_data_11,
+	__eapol_rx_packet(1, spa, aa, eapol_key_data_11,
 					sizeof(eapol_key_data_11), NULL);
 	assert(verify_gtk_step2_called);
 
 	eapol_exit();
-}
-
-static int verify_wpa_step2_ptk(uint32_t ifindex, const uint8_t *aa_addr,
-				const uint8_t *sta_addr,
-				const struct eapol_key *ek,
-				void *user_data)
-{
-	size_t ek_len = sizeof(struct eapol_key) +
-				L_BE16_TO_CPU(ek->key_data_len);
-
-	assert(ifindex == 1);
-	assert(!memcmp(sta_addr, spa_ptk_gtk, sizeof(spa_ptk_gtk)));
-	assert(!memcmp(aa_addr, aa_ptk_gtk, sizeof(aa_ptk_gtk)));
-	assert(ek_len == sizeof(eapol_key_data_14));
-	assert(!memcmp(ek, eapol_key_data_14, sizeof(eapol_key_data_14)));
-
-	verify_step2_called = true;
-
-	return 0;
-}
-
-static int verify_wpa_step4_ptk(uint32_t ifindex, const uint8_t *aa_addr,
-				const uint8_t *sta_addr,
-				const struct eapol_key *ek,
-				void *user_data)
-{
-	size_t ek_len = sizeof(struct eapol_key) +
-				L_BE16_TO_CPU(ek->key_data_len);
-
-	assert(ifindex == 1);
-	assert(!memcmp(sta_addr, spa_ptk_gtk, sizeof(spa_ptk_gtk)));
-	assert(!memcmp(aa_addr, aa_ptk_gtk, sizeof(aa_ptk_gtk)));
-	assert(ek_len == sizeof(eapol_key_data_16));
-	assert(!memcmp(ek, eapol_key_data_16, sizeof(eapol_key_data_16)));
-
-	verify_step4_called = true;
-
-	return 0;
-}
-
-static int verify_wpa_step2_gtk(uint32_t ifindex, const uint8_t *aa_addr,
-				const uint8_t *sta_addr,
-				const struct eapol_key *ek,
-				void *user_data)
-{
-	size_t ek_len = sizeof(struct eapol_key) +
-				L_BE16_TO_CPU(ek->key_data_len);
-
-	assert(ifindex == 1);
-	assert(!memcmp(sta_addr, spa_ptk_gtk, sizeof(spa_ptk_gtk)));
-	assert(!memcmp(aa_addr, aa_ptk_gtk, sizeof(aa_ptk_gtk)));
-	assert(ek_len == sizeof(eapol_key_data_18));
-	assert(!memcmp(ek, eapol_key_data_18, sizeof(eapol_key_data_18)));
-
-	verify_gtk_step2_called = true;
-
-	return 0;
 }
 
 static void eapol_sm_test_wpa_ptk_gtk(const void *data)
@@ -1889,6 +1828,8 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 		0xdd, 0x16, 0x00, 0x50, 0xf2, 0x01, 0x01, 0x00,
 		0x00, 0x50, 0xf2, 0x02, 0x01, 0x00, 0x00, 0x50,
 		0xf2, 0x02, 0x01, 0x00, 0x00, 0x50, 0xf2, 0x02 };
+	static uint8_t ap_address[] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	static uint8_t sta_address[] = { 0x02, 0x00, 0x00, 0x00, 0x01, 0x00 };
 
 	struct eapol_sm *sm;
 
@@ -1896,31 +1837,40 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2004);
 	snonce = eapol_key_test_14.key_nonce;
 	__eapol_set_get_nonce_func(test_nonce);
+
+	aa = ap_address;
+	spa = sta_address;
 	verify_step2_called = false;
+	expected_step2_frame = eapol_key_data_14;
+	expected_step2_frame_size = sizeof(eapol_key_data_14);
 	verify_step4_called = false;
+	expected_step4_frame = eapol_key_data_16;
+	expected_step4_frame_size = sizeof(eapol_key_data_16);
 	verify_gtk_step2_called = false;
+	expected_gtk_step2_frame = eapol_key_data_18;
+	expected_gtk_step2_frame_size = sizeof(eapol_key_data_18);
 
 	sm = eapol_sm_new();
 	eapol_sm_set_pmk(sm, psk);
-	eapol_sm_set_authenticator_address(sm, aa_ptk_gtk);
-	eapol_sm_set_supplicant_address(sm, spa_ptk_gtk);
+	eapol_sm_set_authenticator_address(sm, ap_address);
+	eapol_sm_set_supplicant_address(sm, sta_address);
 	eapol_sm_set_own_wpa(sm, eapol_key_data_14 + sizeof(struct eapol_key),
 				eapol_key_test_14.key_data_len);
 	eapol_sm_set_ap_wpa(sm, ap_wpa_ie, sizeof(ap_wpa_ie));
 	eapol_start(1, sm);
 
-	__eapol_set_tx_packet_func(verify_wpa_step2_ptk);
-	__eapol_rx_packet(1, spa_ptk_gtk, aa_ptk_gtk, eapol_key_data_13,
+	__eapol_set_tx_packet_func(verify_step2);
+	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_13,
 					sizeof(eapol_key_data_13), NULL);
 	assert(verify_step2_called);
 
-	__eapol_set_tx_packet_func(verify_wpa_step4_ptk);
-	__eapol_rx_packet(1, spa_ptk_gtk, aa_ptk_gtk, eapol_key_data_15,
+	__eapol_set_tx_packet_func(verify_step4);
+	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_15,
 					sizeof(eapol_key_data_15), NULL);
 	assert(verify_step4_called);
 
-	__eapol_set_tx_packet_func(verify_wpa_step2_gtk);
-	__eapol_rx_packet(1, spa_ptk_gtk, aa_ptk_gtk, eapol_key_data_17,
+	__eapol_set_tx_packet_func(verify_step2_gtk);
+	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_17,
 					sizeof(eapol_key_data_17), NULL);
 	assert(verify_gtk_step2_called);
 
