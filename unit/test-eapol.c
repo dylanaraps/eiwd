@@ -34,6 +34,8 @@
 #include "src/crypto.h"
 #include "src/ie.h"
 
+static const uint8_t *snonce;
+
 struct eapol_key_data {
 	const unsigned char *frame;
 	size_t frame_len;
@@ -1657,14 +1659,7 @@ static int verify_step4(uint32_t ifindex, const uint8_t *aa_addr,
 
 static bool test_nonce(uint8_t nonce[])
 {
-	static const uint8_t snonce[] = {
-		0x32, 0x89, 0xe9, 0x15, 0x65, 0x09, 0x4f, 0x32, 0x9a,
-		0x9c, 0xd5, 0x4a, 0x4a, 0x09, 0x0d, 0x2c, 0xf4, 0x34,
-		0x46, 0x83, 0xbf, 0x50, 0xef, 0xee, 0x36, 0x08, 0xb6,
-		0x48, 0x56, 0x80, 0x0e, 0x84
-	};
-
-	memcpy(nonce, snonce, sizeof(snonce));
+	memcpy(nonce, snonce, 32);
 
 	return true;
 }
@@ -1686,7 +1681,10 @@ static void eapol_sm_test_ptk(const void *data)
 	eapol_init();
 	/* Our test data expects 2001 protocol */
 	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2001);
+
+	snonce = eapol_key_test_4.key_nonce;
 	__eapol_set_get_nonce_func(test_nonce);
+
 	verify_step2_called = false;
 	verify_step4_called = false;
 
@@ -1772,20 +1770,6 @@ static int verify_step2_gtk(uint32_t ifindex, const uint8_t *aa_addr,
 	return 0;
 }
 
-static bool test_nonce_ptk(uint8_t nonce[])
-{
-	static const uint8_t snonce[] = {
-		0x72, 0x7c, 0x65, 0x6c, 0x5e, 0xd6, 0x42, 0xd7, 0xf4,
-		0x7f, 0x48, 0x43, 0x51, 0xd8, 0x08, 0x94, 0x51, 0x18,
-		0xda, 0x6a, 0x49, 0x33, 0xac, 0x7e, 0x29, 0x3f, 0x2f,
-		0x2a, 0xc0, 0x88, 0x34, 0x8c
-	};
-
-	memcpy(nonce, snonce, sizeof(snonce));
-
-	return true;
-}
-
 static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 {
 	const unsigned char psk[] = {
@@ -1802,7 +1786,10 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 
 	eapol_init();
 	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2004);
-	__eapol_set_get_nonce_func(test_nonce_ptk);
+
+	snonce = eapol_key_test_8.key_nonce;
+	__eapol_set_get_nonce_func(test_nonce);
+
 	verify_step2_called = false;
 	verify_step4_called = false;
 	verify_gtk_step2_called = false;
@@ -1891,20 +1878,6 @@ static int verify_wpa_step2_gtk(uint32_t ifindex, const uint8_t *aa_addr,
 	return 0;
 }
 
-static bool test_wpa_nonce_ptk(uint8_t nonce[])
-{
-	static const uint8_t snonce[] = {
-		0x3b, 0x7f, 0x85, 0x0a, 0x03, 0x9c, 0xa4, 0x71,
-		0x42, 0x9d, 0x0f, 0xc3, 0xce, 0x9f, 0xff, 0x48,
-		0xdb, 0x89, 0x2e, 0xf7, 0xa7, 0xff, 0x80, 0xf6,
-		0x22, 0xc4, 0x6e, 0x32, 0x97, 0x05, 0xc3, 0x7d
-	};
-
-	memcpy(nonce, snonce, sizeof(snonce));
-
-	return true;
-}
-
 static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 {
 	const unsigned char psk[] = {
@@ -1921,7 +1894,8 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 
 	eapol_init();
 	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2004);
-	__eapol_set_get_nonce_func(test_wpa_nonce_ptk);
+	snonce = eapol_key_test_14.key_nonce;
+	__eapol_set_get_nonce_func(test_nonce);
 	verify_step2_called = false;
 	verify_step4_called = false;
 	verify_gtk_step2_called = false;
