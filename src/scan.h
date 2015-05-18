@@ -59,3 +59,7 @@ struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
 					uint64_t *out_wdev,
 					const uint8_t **out_ssid,
 					uint8_t *out_ssid_len);
+
+void bss_get_supported_ciphers(struct scan_bss *bss,
+				uint16_t *pairwise_ciphers,
+				uint16_t *group_ciphers);

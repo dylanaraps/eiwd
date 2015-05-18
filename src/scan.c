@@ -259,3 +259,35 @@ void scan_bss_free(struct scan_bss *bss)
 	l_free(bss->wpa);
 	l_free(bss);
 }
+
+void bss_get_supported_ciphers(struct scan_bss *bss,
+				uint16_t *pairwise_ciphers,
+				uint16_t *group_ciphers)
+{
+	struct ie_rsn_info ie;
+
+	*pairwise_ciphers = 0;
+	*group_ciphers = 0;
+
+	if (bss->rsne) {
+		int res = ie_parse_rsne_from_data(bss->rsne, bss->rsne[1] + 2,
+							&ie);
+		if (res < 0) {
+			l_debug("Cannot parse RSN field (%d, %s)",
+					res, strerror(-res));
+			return;
+		}
+	} else if (bss->wpa) {
+		int res = ie_parse_wpa_from_data(bss->wpa, bss->wpa[1] + 2,
+							&ie);
+		if (res < 0) {
+			l_debug("Cannot parse WPA IE (%d, %s)",
+					res, strerror(-res));
+			return;
+		}
+	} else
+		return;
+
+	*pairwise_ciphers = ie.pairwise_ciphers;
+	*group_ciphers = ie.group_cipher;
+}
