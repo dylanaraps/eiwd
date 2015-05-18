@@ -1878,6 +1878,66 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 	eapol_exit();
 }
 
+static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
+{
+	const unsigned char psk[] = {
+		0xbf, 0x9a, 0xa3, 0x15, 0x53, 0x00, 0x12, 0x5e,
+		0x7a, 0x5e, 0xbb, 0x2a, 0x54, 0x9f, 0x8c, 0xd4,
+		0xed, 0xab, 0x8e, 0xe1, 0x2e, 0x94, 0xbf, 0xc2,
+		0x4b, 0x33, 0x57, 0xad, 0x04, 0x96, 0x65, 0xd9 };
+	const unsigned char ap_wpa_ie[] = {
+		0xdd, 0x16, 0x00, 0x50, 0xf2, 0x01, 0x01, 0x00,
+		0x00, 0x50, 0xf2, 0x02, 0x01, 0x00, 0x00, 0x50,
+		0xf2, 0x02, 0x01, 0x00, 0x00, 0x50, 0xf2, 0x02 };
+	static uint8_t ap_address[] = { 0x24, 0xa2, 0xe1, 0xec, 0x17, 0x04 };
+	static uint8_t sta_address[] = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 };
+
+	struct eapol_sm *sm;
+
+	eapol_init();
+	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2001);
+	snonce = eapol_key_test_20.key_nonce;
+	__eapol_set_get_nonce_func(test_nonce);
+
+	aa = ap_address;
+	spa = sta_address;
+	verify_step2_called = false;
+	expected_step2_frame = eapol_key_data_20;
+	expected_step2_frame_size = sizeof(eapol_key_data_20);
+	verify_step4_called = false;
+	expected_step4_frame = eapol_key_data_22;
+	expected_step4_frame_size = sizeof(eapol_key_data_22);
+	verify_gtk_step2_called = false;
+	expected_gtk_step2_frame = eapol_key_data_24;
+	expected_gtk_step2_frame_size = sizeof(eapol_key_data_24);
+
+	sm = eapol_sm_new();
+	eapol_sm_set_pmk(sm, psk);
+	eapol_sm_set_authenticator_address(sm, ap_address);
+	eapol_sm_set_supplicant_address(sm, sta_address);
+	eapol_sm_set_own_wpa(sm, eapol_key_data_20 + sizeof(struct eapol_key),
+				eapol_key_test_20.key_data_len);
+	eapol_sm_set_ap_wpa(sm, ap_wpa_ie, sizeof(ap_wpa_ie));
+	eapol_start(1, sm);
+
+	__eapol_set_tx_packet_func(verify_step2);
+	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_19,
+					sizeof(eapol_key_data_19), NULL);
+	assert(verify_step2_called);
+
+	__eapol_set_tx_packet_func(verify_step4);
+	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_21,
+					sizeof(eapol_key_data_21), NULL);
+	assert(verify_step4_called);
+
+	__eapol_set_tx_packet_func(verify_step2_gtk);
+	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_23,
+					sizeof(eapol_key_data_23), NULL);
+	assert(verify_gtk_step2_called);
+
+	eapol_exit();
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -1953,8 +2013,11 @@ int main(int argc, char *argv[])
 	l_test_add("EAPoL/WPA2 PTK & GTK State Machine",
 			&eapol_sm_test_wpa2_ptk_gtk, NULL);
 
-	l_test_add("EAPoL/WPA PTK & GTK State Machine",
+	l_test_add("EAPoL/WPA PTK & GTK State Machine Test 1",
 			&eapol_sm_test_wpa_ptk_gtk, NULL);
+
+	l_test_add("EAPoL/WPA PTK & GTK State Machine Test 2",
+			&eapol_sm_test_wpa_ptk_gtk_2, NULL);
 
 	return l_test_run();
 }
