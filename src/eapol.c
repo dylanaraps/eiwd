@@ -467,7 +467,7 @@ bool eapol_verify_gtk_2_of_2(const struct eapol_key *ek, bool is_wpa)
 	if (!ek->key_mic)
 		return false;
 
-	if (ek->secure != !is_wpa)
+	if (!ek->secure)
 		return false;
 
 	if (ek->encrypted_key_data)
