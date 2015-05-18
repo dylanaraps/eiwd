@@ -147,7 +147,7 @@ struct eapol_key *eapol_create_gtk_2_of_2(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
 				uint64_t key_replay_counter,
-				bool is_wpa);
+				bool is_wpa, uint8_t wpa_key_id);
 
 void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 			const uint8_t *frame, size_t len,

@@ -558,14 +558,30 @@ struct eapol_key *eapol_create_gtk_2_of_2(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
 				uint64_t key_replay_counter,
-				bool is_wpa)
+				bool is_wpa, uint8_t wpa_key_id)
 {
 	uint8_t snonce[32];
+	struct eapol_key *step2;
 
 	memset(snonce, 0, sizeof(snonce));
-	return eapol_create_common(protocol, version, true,
+	step2 = eapol_create_common(protocol, version, true,
 					key_replay_counter, snonce, 0, NULL,
 					0, is_wpa);
+
+	if (!step2)
+		return step2;
+
+	/*
+	 * WPA_80211_v3_1, Section 2.2.4:
+	 * "The Key Type and Key Index shall not both be 0 in the same message"
+	 *
+	 * The above means that even though sending the key index back to the
+	 * AP has no practical value, we must still do so.
+	 */
+	if (is_wpa)
+		step2->wpa_key_id = wpa_key_id;
+
+	return step2;
 }
 
 struct eapol_sm {
@@ -1082,7 +1098,8 @@ static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
 
 	step2 = eapol_create_gtk_2_of_2(protocol_version,
 					ek->key_descriptor_version,
-					sm->replay_counter, sm->wpa_ie);
+					sm->replay_counter, sm->wpa_ie,
+					ek->wpa_key_id);
 
 	/*
 	 * 802.11-2012, Section 11.6.7.3, step b):
