@@ -955,14 +955,22 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 	struct network *network = netdev->connected_network;
 	struct ie_rsn_info info;
 	enum crypto_cipher cipher;
+	int result;
 
 	l_debug("");
 
-	/* If we have the RSN element we must be in WPA2 mode */
-	if (netdev->connected_bss->rsne)
-		ie_parse_rsne_from_data(rsn, rsn[1] + 2, &info);
+	if (rsn[0] == IE_TYPE_RSN)
+		result = ie_parse_rsne_from_data(rsn, rsn[1] + 2, &info);
+	else if (rsn[0] == IE_TYPE_VENDOR_SPECIFIC)
+		result = ie_parse_wpa_from_data(rsn, rsn[1] + 2, &info);
 	else
-		ie_parse_wpa_from_data(rsn, rsn[1] + 2, &info);
+		result = -1;
+
+	if (result) {
+		l_error("Can't parse the RSN");
+		setting_keys_failed(netdev, MPDU_REASON_CODE_INVALID_IE);
+		return;
+	}
 
 	switch (info.pairwise_ciphers) {
 	case IE_RSN_CIPHER_SUITE_CCMP:
@@ -1103,14 +1111,22 @@ static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
 	struct netdev *netdev = user_data;
 	struct ie_rsn_info info;
 	enum crypto_cipher cipher;
+	int result;
 
 	l_debug("");
 
-	/* If we have the RSN element we must be in WPA2 mode */
-	if (netdev->connected_bss->rsne)
-		ie_parse_rsne_from_data(rsn, rsn[1] + 2, &info);
+	if (rsn[0] == IE_TYPE_RSN)
+		result = ie_parse_rsne_from_data(rsn, rsn[1] + 2, &info);
+	else if (rsn[0] == IE_TYPE_VENDOR_SPECIFIC)
+		result = ie_parse_wpa_from_data(rsn, rsn[1] + 2, &info);
 	else
-		ie_parse_wpa_from_data(rsn, rsn[1] + 2, &info);
+		result = -1;
+
+	if (result) {
+		l_error("Can't parse the RSN");
+		setting_keys_failed(netdev, MPDU_REASON_CODE_INVALID_IE);
+		return;
+	}
 
 	switch (info.group_cipher) {
 	case IE_RSN_CIPHER_SUITE_CCMP:
