@@ -1218,6 +1218,123 @@ static void eapol_wpa2_handshake_test(const void *data)
 	l_free(ptk);
 }
 
+static void eapol_wpa_handshake_test(const void *data)
+{
+	uint8_t anonce[32];
+	uint8_t snonce[32];
+	uint8_t mic[16];
+	struct eapol_key *frame;
+	uint8_t aa[] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	uint8_t spa[] = { 0x02, 0x00, 0x00, 0x00, 0x01, 0x00 };
+	const char *passphrase = "EasilyGuessedPassword";
+	const char *ssid = "TestWPA";
+	const unsigned char expected_psk[] = {
+		0xbf, 0x9a, 0xa3, 0x15, 0x53, 0x00, 0x12, 0x5e,
+		0x7a, 0x5e, 0xbb, 0x2a, 0x54, 0x9f, 0x8c, 0xd4,
+		0xed, 0xab, 0x8e, 0xe1, 0x2e, 0x94, 0xbf, 0xc2,
+		0x4b, 0x33, 0x57, 0xad, 0x04, 0x96, 0x65, 0xd9 };
+	unsigned char psk[32];
+	struct crypto_ptk *ptk;
+	size_t ptk_len;
+	bool ret;
+	const struct eapol_key *ptk_step1;
+	const struct eapol_key *ptk_step2;
+	const struct eapol_key *ptk_step3;
+	const struct eapol_key *ptk_step4;
+	const struct eapol_key *gtk_step1;
+	const struct eapol_key *gtk_step2;
+	uint8_t *decrypted_key_data;
+	size_t decrypted_key_data_len;
+
+	ptk_step1 = eapol_key_validate(eapol_key_data_13,
+					sizeof(eapol_key_data_13));
+	assert(ptk_step1);
+	assert(eapol_verify_ptk_1_of_4(ptk_step1));
+	memcpy(anonce, ptk_step1->key_nonce, sizeof(ptk_step1->key_nonce));
+
+	ptk_step2 = eapol_key_validate(eapol_key_data_14,
+					sizeof(eapol_key_data_14));
+	assert(ptk_step2);
+	assert(eapol_verify_ptk_2_of_4(ptk_step2));
+	memcpy(snonce, ptk_step2->key_nonce, sizeof(ptk_step2->key_nonce));
+
+	assert(!crypto_psk_from_passphrase(passphrase, (uint8_t *) ssid,
+						strlen(ssid), psk));
+	assert(!memcmp(expected_psk, psk, sizeof(psk)));
+
+	ptk_len = sizeof(struct crypto_ptk) +
+			crypto_cipher_key_len(CRYPTO_CIPHER_TKIP);
+	ptk = l_malloc(ptk_len);
+	ret = crypto_derive_pairwise_ptk(psk, aa, spa, anonce, snonce,
+						ptk, ptk_len);
+	assert(ret);
+
+	frame = eapol_create_ptk_2_of_4(EAPOL_PROTOCOL_VERSION_2004,
+				EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4,
+				eapol_key_test_14.key_replay_counter,
+				snonce, eapol_key_test_14.key_data_len,
+				eapol_key_data_14 + sizeof(struct eapol_key),
+				true);
+	assert(frame);
+	assert(eapol_calculate_mic(ptk->kck, frame, mic));
+	memcpy(frame->key_mic_data, mic, sizeof(mic));
+	assert(!memcmp(frame, eapol_key_data_14, sizeof(eapol_key_data_14)));
+	l_free(frame);
+
+	ptk_step3 = eapol_key_validate(eapol_key_data_15,
+					sizeof(eapol_key_data_15));
+	assert(ptk_step3);
+	assert(eapol_verify_ptk_3_of_4(ptk_step3, true));
+	assert(!memcmp(anonce, ptk_step3->key_nonce,
+				sizeof(ptk_step3->key_nonce)));
+
+	assert(eapol_verify_mic(ptk->kck, ptk_step3));
+
+	assert(ptk_step3->key_data[0] == IE_TYPE_VENDOR_SPECIFIC);
+	assert(is_ie_wpa_ie(ptk_step3->key_data + 2,
+				ptk_step3->key_data_len - 2));
+
+	ptk_step4 = eapol_key_validate(eapol_key_data_16,
+					sizeof(eapol_key_data_16));
+	assert(ptk_step4);
+	assert(eapol_verify_ptk_4_of_4(ptk_step4, true));
+
+	frame = eapol_create_ptk_4_of_4(EAPOL_PROTOCOL_VERSION_2004,
+				EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4,
+				eapol_key_test_16.key_replay_counter, true);
+	assert(frame);
+	assert(eapol_calculate_mic(ptk->kck, frame, mic));
+	memcpy(frame->key_mic_data, mic, sizeof(mic));
+	assert(!memcmp(frame, eapol_key_data_16, sizeof(eapol_key_data_16)));
+	l_free(frame);
+
+	gtk_step1 = eapol_key_validate(eapol_key_data_17,
+					sizeof(eapol_key_data_17));
+	assert(gtk_step1);
+	assert(eapol_verify_gtk_1_of_2(gtk_step1, true));
+
+	decrypted_key_data = eapol_decrypt_key_data(ptk->kek, gtk_step1,
+						&decrypted_key_data_len);
+	assert(decrypted_key_data_len == 32);
+	l_free(decrypted_key_data);
+
+	gtk_step2 = eapol_key_validate(eapol_key_data_18,
+					sizeof(eapol_key_data_18));
+	assert(gtk_step2);
+	assert(eapol_verify_gtk_2_of_2(gtk_step2, true));
+
+	frame = eapol_create_gtk_2_of_2(EAPOL_PROTOCOL_VERSION_2004,
+				EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4,
+				eapol_key_test_18.key_replay_counter, true);
+	assert(frame);
+	assert(eapol_calculate_mic(ptk->kck, frame, mic));
+	memcpy(frame->key_mic_data, mic, sizeof(mic));
+	assert(!memcmp(frame, eapol_key_data_18, sizeof(eapol_key_data_18)));
+	l_free(frame);
+
+	l_free(ptk);
+}
+
 static bool verify_step2_called;
 static bool verify_step4_called;
 static bool verify_gtk_step2_called;
@@ -1441,6 +1558,125 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 	eapol_exit();
 }
 
+static int verify_wpa_step2_ptk(uint32_t ifindex, const uint8_t *aa_addr,
+				const uint8_t *sta_addr,
+				const struct eapol_key *ek,
+				void *user_data)
+{
+	size_t ek_len = sizeof(struct eapol_key) +
+				L_BE16_TO_CPU(ek->key_data_len);
+
+	assert(ifindex == 1);
+	assert(!memcmp(sta_addr, spa_ptk_gtk, sizeof(spa_ptk_gtk)));
+	assert(!memcmp(aa_addr, aa_ptk_gtk, sizeof(aa_ptk_gtk)));
+	assert(ek_len == sizeof(eapol_key_data_14));
+	assert(!memcmp(ek, eapol_key_data_14, sizeof(eapol_key_data_14)));
+
+	verify_step2_called = true;
+
+	return 0;
+}
+
+static int verify_wpa_step4_ptk(uint32_t ifindex, const uint8_t *aa_addr,
+				const uint8_t *sta_addr,
+				const struct eapol_key *ek,
+				void *user_data)
+{
+	size_t ek_len = sizeof(struct eapol_key) +
+				L_BE16_TO_CPU(ek->key_data_len);
+
+	assert(ifindex == 1);
+	assert(!memcmp(sta_addr, spa_ptk_gtk, sizeof(spa_ptk_gtk)));
+	assert(!memcmp(aa_addr, aa_ptk_gtk, sizeof(aa_ptk_gtk)));
+	assert(ek_len == sizeof(eapol_key_data_16));
+	assert(!memcmp(ek, eapol_key_data_16, sizeof(eapol_key_data_16)));
+
+	verify_step4_called = true;
+
+	return 0;
+}
+
+static int verify_wpa_step2_gtk(uint32_t ifindex, const uint8_t *aa_addr,
+				const uint8_t *sta_addr,
+				const struct eapol_key *ek,
+				void *user_data)
+{
+	size_t ek_len = sizeof(struct eapol_key) +
+				L_BE16_TO_CPU(ek->key_data_len);
+
+	assert(ifindex == 1);
+	assert(!memcmp(sta_addr, spa_ptk_gtk, sizeof(spa_ptk_gtk)));
+	assert(!memcmp(aa_addr, aa_ptk_gtk, sizeof(aa_ptk_gtk)));
+	assert(ek_len == sizeof(eapol_key_data_18));
+	assert(!memcmp(ek, eapol_key_data_18, sizeof(eapol_key_data_18)));
+
+	verify_gtk_step2_called = true;
+
+	return 0;
+}
+
+static bool test_wpa_nonce_ptk(uint8_t nonce[])
+{
+	static const uint8_t snonce[] = {
+		0x3b, 0x7f, 0x85, 0x0a, 0x03, 0x9c, 0xa4, 0x71,
+		0x42, 0x9d, 0x0f, 0xc3, 0xce, 0x9f, 0xff, 0x48,
+		0xdb, 0x89, 0x2e, 0xf7, 0xa7, 0xff, 0x80, 0xf6,
+		0x22, 0xc4, 0x6e, 0x32, 0x97, 0x05, 0xc3, 0x7d
+	};
+
+	memcpy(nonce, snonce, sizeof(snonce));
+
+	return true;
+}
+
+static void eapol_sm_test_wpa_ptk_gtk(const void *data)
+{
+	const unsigned char psk[] = {
+		0xbf, 0x9a, 0xa3, 0x15, 0x53, 0x00, 0x12, 0x5e,
+		0x7a, 0x5e, 0xbb, 0x2a, 0x54, 0x9f, 0x8c, 0xd4,
+		0xed, 0xab, 0x8e, 0xe1, 0x2e, 0x94, 0xbf, 0xc2,
+		0x4b, 0x33, 0x57, 0xad, 0x04, 0x96, 0x65, 0xd9 };
+	const unsigned char ap_wpa_ie[] = {
+		0xdd, 0x16, 0x00, 0x50, 0xf2, 0x01, 0x01, 0x00,
+		0x00, 0x50, 0xf2, 0x02, 0x01, 0x00, 0x00, 0x50,
+		0xf2, 0x02, 0x01, 0x00, 0x00, 0x50, 0xf2, 0x02 };
+
+	struct eapol_sm *sm;
+
+	eapol_init();
+	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2004);
+	__eapol_set_get_nonce_func(test_wpa_nonce_ptk);
+	verify_step2_called = false;
+	verify_step4_called = false;
+	verify_gtk_step2_called = false;
+
+	sm = eapol_sm_new();
+	eapol_sm_set_pmk(sm, psk);
+	eapol_sm_set_authenticator_address(sm, aa_ptk_gtk);
+	eapol_sm_set_supplicant_address(sm, spa_ptk_gtk);
+	eapol_sm_set_own_wpa(sm, eapol_key_data_14 + sizeof(struct eapol_key),
+				eapol_key_test_14.key_data_len);
+	eapol_sm_set_ap_wpa(sm, ap_wpa_ie, sizeof(ap_wpa_ie));
+	eapol_start(1, sm);
+
+	__eapol_set_tx_packet_func(verify_wpa_step2_ptk);
+	__eapol_rx_packet(1, spa_ptk_gtk, aa_ptk_gtk, eapol_key_data_13,
+					sizeof(eapol_key_data_13), NULL);
+	assert(verify_step2_called);
+
+	__eapol_set_tx_packet_func(verify_wpa_step4_ptk);
+	__eapol_rx_packet(1, spa_ptk_gtk, aa_ptk_gtk, eapol_key_data_15,
+					sizeof(eapol_key_data_15), NULL);
+	assert(verify_step4_called);
+
+	__eapol_set_tx_packet_func(verify_wpa_step2_gtk);
+	__eapol_rx_packet(1, spa_ptk_gtk, aa_ptk_gtk, eapol_key_data_17,
+					sizeof(eapol_key_data_17), NULL);
+	assert(verify_gtk_step2_called);
+
+	eapol_exit();
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -1496,10 +1732,16 @@ int main(int argc, char *argv[])
 	l_test_add("EAPoL/WPA2 4-Way & GTK Handshake",
 			&eapol_wpa2_handshake_test, NULL);
 
+	l_test_add("EAPoL/WPA 4-Way & GTK Handshake",
+			&eapol_wpa_handshake_test, NULL);
+
 	l_test_add("EAPoL/WPA2 PTK State Machine", &eapol_sm_test_ptk, NULL);
 
 	l_test_add("EAPoL/WPA2 PTK & GTK State Machine",
 			&eapol_sm_test_wpa2_ptk_gtk, NULL);
+
+	l_test_add("EAPoL/WPA PTK & GTK State Machine",
+			&eapol_sm_test_wpa_ptk_gtk, NULL);
 
 	return l_test_run();
 }
