@@ -83,6 +83,8 @@ struct netdev {
 	uint32_t pairwise_new_key_cmd_id;
 	uint32_t pairwise_set_key_cmd_id;
 	uint32_t group_new_key_cmd_id;
+
+	struct wiphy *wiphy;
 };
 
 struct wiphy {
@@ -295,6 +297,21 @@ static void passphrase_callback(enum agent_result result,
 	network->update_psk = true;
 
 	mlme_authenticate_cmd(network);
+}
+
+static enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy,
+							uint16_t mask)
+{
+	mask &= wiphy->pairwise_ciphers;
+
+	/* CCMP is our first choice, TKIP second */
+	if (mask & IE_RSN_CIPHER_SUITE_CCMP)
+		return IE_RSN_CIPHER_SUITE_CCMP;
+
+	if (mask & IE_RSN_CIPHER_SUITE_TKIP)
+		return IE_RSN_CIPHER_SUITE_TKIP;
+
+	return 0;
 }
 
 static struct l_dbus_message *network_connect_psk(struct network *network,
@@ -953,9 +970,11 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 {
 	struct netdev *netdev = user_data;
 	struct network *network = netdev->connected_network;
+	struct wiphy *wiphy = netdev->wiphy;
 	struct ie_rsn_info info;
 	enum crypto_cipher cipher;
 	int result;
+	uint8_t tk_buf[32];
 
 	l_debug("");
 
@@ -972,9 +991,27 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 		return;
 	}
 
-	switch (info.pairwise_ciphers) {
+	switch (wiphy_select_cipher(wiphy, info.pairwise_ciphers)) {
 	case IE_RSN_CIPHER_SUITE_CCMP:
 		cipher = CRYPTO_CIPHER_CCMP;
+		memcpy(tk_buf, tk, 16);
+		break;
+	case IE_RSN_CIPHER_SUITE_TKIP:
+		cipher = CRYPTO_CIPHER_TKIP;
+		/*
+		 * Swap the TX and RX MIC key portions for supplicant.
+		 * WPA_80211_v3_1_090922 doc's 3.3.4:
+		 *   The MIC key used on the Client for transmit (TX) is in
+		 *   bytes 24-31, and the MIC key used on the Client for
+		 *   receive (RX) is in bytes 16-23 of the PTK.  That is,
+		 *   assume that TX MIC and RX MIC referred to in Clause 8.7
+		 *   are referenced to the Authenticator. Similarly, on the AP,
+		 *   the MIC used for TX is in bytes 16-23, and the MIC key
+		 *   used for RX is in bytes 24-31 of the PTK.
+		 */
+		memcpy(tk_buf, tk, 16);
+		memcpy(tk_buf + 16, tk + 24, 8);
+		memcpy(tk_buf + 24, tk + 16, 8);
 		break;
 	default:
 		l_error("Unexpected cipher suite: %d", info.pairwise_ciphers);
@@ -997,7 +1034,7 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 
 	netdev->pairwise_new_key_cmd_id =
 		mlme_new_pairwise_key(netdev, cipher, aa,
-					tk, crypto_cipher_key_len(cipher));
+					tk_buf, crypto_cipher_key_len(cipher));
 	netdev->pairwise_set_key_cmd_id = mlme_set_pairwise_key(netdev);
 }
 
@@ -1112,6 +1149,7 @@ static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
 	struct ie_rsn_info info;
 	enum crypto_cipher cipher;
 	int result;
+	uint8_t gtk_buf[32];
 
 	l_debug("");
 
@@ -1131,6 +1169,26 @@ static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
 	switch (info.group_cipher) {
 	case IE_RSN_CIPHER_SUITE_CCMP:
 		cipher = CRYPTO_CIPHER_CCMP;
+		memcpy(gtk_buf, gtk, 16);
+		break;
+	case IE_RSN_CIPHER_SUITE_TKIP:
+		cipher = CRYPTO_CIPHER_TKIP;
+		/*
+		 * Swap the TX and RX MIC key portions for supplicant.
+		 * WPA_80211_v3_1_090922 doc's 3.3.4:
+		 *   The MIC key used on the Client for transmit (TX) is in
+		 *   bytes 24-31, and the MIC key used on the Client for
+		 *   receive (RX) is in bytes 16-23 of the PTK.  That is,
+		 *   assume that TX MIC and RX MIC referred to in Clause 8.7
+		 *   are referenced to the Authenticator. Similarly, on the AP,
+		 *   the MIC used for TX is in bytes 16-23, and the MIC key
+		 *   used for RX is in bytes 24-31 of the PTK.
+		 *
+		 * Here apply this to the GTK instead of the PTK.
+		 */
+		memcpy(gtk_buf, gtk, 16);
+		memcpy(gtk_buf + 16, gtk + 24, 8);
+		memcpy(gtk_buf + 24, gtk + 16, 8);
 		break;
 	default:
 		l_error("Unexpected cipher suite: %d", info.group_cipher);
@@ -1148,8 +1206,7 @@ static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
 
 	netdev->group_new_key_cmd_id =
 			mlme_new_group_key(netdev, cipher, key_index,
-				gtk, crypto_cipher_key_len(cipher),
-				rsc, rsc_len);
+					gtk_buf, gtk_len, rsc, rsc_len);
 }
 
 static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
@@ -1189,6 +1246,7 @@ static void mlme_associate_cmd(struct netdev *netdev)
 	struct l_genl_msg *msg;
 	struct scan_bss *bss = netdev->connected_bss;
 	struct network *network = netdev->connected_network;
+	struct wiphy *wiphy = netdev->wiphy;
 
 	l_debug("");
 
@@ -1200,15 +1258,31 @@ static void mlme_associate_cmd(struct netdev *netdev)
 			network->ssid);
 
 	if (network->ssid_security == SCAN_SSID_SECURITY_PSK) {
-		uint32_t ccmp = 0x000fac04;
+		uint16_t pairwise_ciphers, group_ciphers;
+		uint32_t pairwise_cipher_attr;
+		uint32_t group_cipher_attr;
 		uint8_t rsne_buf[256];
 		struct ie_rsn_info info;
 		struct eapol_sm *sm = eapol_sm_new();
 
 		memset(&info, 0, sizeof(info));
-		info.group_cipher = IE_RSN_CIPHER_SUITE_CCMP;
-		info.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP;
 		info.akm_suites = IE_RSN_AKM_SUITE_PSK;
+
+		bss_get_supported_ciphers(bss, &pairwise_ciphers,
+						&group_ciphers);
+
+		info.pairwise_ciphers = wiphy_select_cipher(wiphy,
+							pairwise_ciphers);
+		if (info.pairwise_ciphers == IE_RSN_CIPHER_SUITE_CCMP)
+			pairwise_cipher_attr = CRYPTO_CIPHER_CCMP;
+		else
+			pairwise_cipher_attr = CRYPTO_CIPHER_TKIP;
+
+		info.group_cipher = wiphy_select_cipher(wiphy, group_ciphers);
+		if (info.group_cipher == IE_RSN_CIPHER_SUITE_CCMP)
+			group_cipher_attr = CRYPTO_CIPHER_CCMP;
+		else
+			group_cipher_attr = CRYPTO_CIPHER_TKIP;
 
 		/* RSN takes priority */
 		if (bss->rsne) {
@@ -1231,9 +1305,10 @@ static void mlme_associate_cmd(struct netdev *netdev)
 		eapol_start(netdev->index, sm);
 
 		msg_append_attr(msg, NL80211_ATTR_CIPHER_SUITES_PAIRWISE,
-				4, &ccmp);
+				4, &pairwise_cipher_attr);
 		msg_append_attr(msg, NL80211_ATTR_CIPHER_SUITE_GROUP,
-				4, &ccmp);
+				4, &group_cipher_attr);
+
 		msg_append_attr(msg, NL80211_ATTR_CONTROL_PORT, 0, NULL);
 		msg_append_attr(msg, NL80211_ATTR_IE,
 					rsne_buf[1] + 2, rsne_buf);
@@ -1637,10 +1712,6 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 
 			wiphy = l_queue_find(wiphy_list, wiphy_match,
 					L_UINT_TO_PTR(*((uint32_t *) data)));
-			if (!wiphy) {
-				l_warn("No wiphy structure found");
-				return;
-			}
 			break;
 
 		case NL80211_ATTR_IFTYPE:
@@ -1663,6 +1734,11 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 		}
 	}
 
+	if (!wiphy) {
+		l_warn("Missing wiphy attribute or wiphy not found");
+		return;
+	}
+
 	if (!ifindex) {
 		l_warn("Missing interface index attribute");
 		return;
@@ -1683,6 +1759,7 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 		memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
 		netdev->index = ifindex;
 		netdev->type = iftype;
+		netdev->wiphy = wiphy;
 
 		l_queue_push_head(wiphy->netdev_list, netdev);
 
