@@ -590,6 +590,8 @@ struct eapol_sm {
 	uint8_t aa[6];
 	uint8_t *ap_ie;
 	uint8_t *own_ie;
+	enum ie_rsn_cipher_suite pairwise_cipher;
+	enum ie_rsn_cipher_suite group_cipher;
 	uint8_t pmk[32];
 	uint64_t replay_counter;
 	uint8_t snonce[32];
@@ -671,10 +673,32 @@ void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie, size_t len)
 	eapol_sm_set_ap_ie(sm, rsn_ie, len, false);
 }
 
-void eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
+static bool eapol_sm_setup_own_ciphers(struct eapol_sm *sm,
+				const struct ie_rsn_info *info)
+{
+	if (__builtin_popcount(info->pairwise_ciphers) != 1)
+		return false;
+
+	if (__builtin_popcount(info->akm_suites) != 1)
+		return false;
+
+	sm->pairwise_cipher = info->pairwise_ciphers;
+	sm->group_cipher = info->group_cipher;
+
+	return true;
+}
+
+bool eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 				size_t len)
 {
+	struct ie_rsn_info info;
+
 	eapol_sm_set_own_ie(sm, rsn_ie, len, false);
+
+	if (ie_parse_rsne_from_data(rsn_ie, rsn_ie[1] + 2, &info) < 0)
+		return false;
+
+	return eapol_sm_setup_own_ciphers(sm, &info);
 }
 
 void eapol_sm_set_ap_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie, size_t len)
@@ -682,10 +706,17 @@ void eapol_sm_set_ap_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie, size_t len)
 	eapol_sm_set_ap_ie(sm, wpa_ie, len, true);
 }
 
-void eapol_sm_set_own_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie,
+bool eapol_sm_set_own_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie,
 				size_t len)
 {
+	struct ie_rsn_info info;
+
 	eapol_sm_set_own_ie(sm, wpa_ie, len, true);
+
+	if (ie_parse_wpa_from_data(wpa_ie, wpa_ie[1] + 2, &info) < 0)
+		return false;
+
+	return eapol_sm_setup_own_ciphers(sm, &info);
 }
 
 void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data)
