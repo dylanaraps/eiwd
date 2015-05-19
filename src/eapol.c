@@ -821,9 +821,11 @@ static const uint8_t *eapol_find_gtk_kde(const uint8_t *data, size_t data_len,
 	return NULL;
 }
 
-static const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len)
+static const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len,
+					const uint8_t **optional)
 {
 	struct ie_tlv_iter iter;
+	const uint8_t *first = NULL;
 
 	ie_tlv_iter_init(&iter, data, data_len);
 
@@ -831,10 +833,18 @@ static const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len)
 		if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_RSN)
 			continue;
 
-		return ie_tlv_iter_get_data(&iter) - 2;
+		if (!first) {
+			first = ie_tlv_iter_get_data(&iter) - 2;
+			continue;
+		}
+
+		if (optional)
+			*optional = ie_tlv_iter_get_data(&iter) - 2;
+
+		return first;
 	}
 
-	return NULL;
+	return first;
 }
 
 static const uint8_t *eapol_find_wpa_ie(const uint8_t *data, size_t data_len)
@@ -960,6 +970,7 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	const uint8_t *gtk;
 	size_t gtk_len;
 	const uint8_t *rsne;
+	const uint8_t *optional_rsne = NULL;
 	uint8_t gtk_key_index;
 
 	if (!eapol_verify_ptk_3_of_4(ek, sm->wpa_ie)) {
@@ -983,7 +994,8 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	 */
 	if (!sm->wpa_ie)
 		rsne = eapol_find_rsne(decrypted_key_data,
-					decrypted_key_data_size);
+					decrypted_key_data_size,
+					&optional_rsne);
 	else
 		rsne = eapol_find_wpa_ie(decrypted_key_data,
 					decrypted_key_data_size);
@@ -1004,6 +1016,60 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	 * Supplicant uses the pairwise cipher suite specified in the second
 	 * RSNE or deauthenticates."
 	 */
+	if (optional_rsne) {
+		struct ie_rsn_info info1;
+		struct ie_rsn_info info2;
+		uint16_t override;
+
+		if (ie_parse_rsne_from_data(rsne, rsne[1] + 2, &info1) < 0) {
+			handshake_failed(ifindex, sm,
+						MPDU_REASON_CODE_IE_DIFFERENT);
+			return;
+		}
+
+		if (ie_parse_rsne_from_data(optional_rsne, optional_rsne[1] + 2,
+						&info2) < 0) {
+			handshake_failed(ifindex, sm,
+						MPDU_REASON_CODE_IE_DIFFERENT);
+			return;
+		}
+
+		/*
+		 * 11.6.2:
+		 * It may happen, for example, that a Supplicant selects a
+		 * pairwise cipher suite which is advertised by an AP, but
+		 * which policy disallows for this particular STA. An
+		 * Authenticator may, therefore, insert a second RSNE to
+		 * overrule the STA’s selection. An Authenticator’s SME shall
+		 * insert the second RSNE, after the first RSNE, only for this
+		 * purpose. The pairwise cipher suite in the second RSNE
+		 * included shall be one of the ciphers advertised by the
+		 * Authenticator. All other fields in the second RSNE shall be
+		 * identical to the first RSNE.
+		 *
+		 * - Check that akm_suites and group_cipher are the same
+		 *   between rsne1 and rsne2
+		 * - Check that pairwise_ciphers is not the same between rsne1
+		 *   and rsne2
+		 * - Check that rsne2 pairwise_ciphers is a subset of rsne
+		 */
+		if (info1.akm_suites != info2.akm_suites ||
+				info1.group_cipher != info2.group_cipher) {
+			handshake_failed(ifindex, sm,
+						MPDU_REASON_CODE_IE_DIFFERENT);
+			return;
+		}
+
+		override = info2.pairwise_ciphers;
+
+		if (override == info1.pairwise_ciphers ||
+				!(info1.pairwise_ciphers & override) ||
+				__builtin_popcount(override) != 1) {
+			handshake_failed(ifindex, sm,
+				MPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER);
+			return;
+		}
+	}
 
 	/*
 	 * TODO: Handle IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC case
