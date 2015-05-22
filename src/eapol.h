@@ -105,7 +105,7 @@ typedef void (*eapol_install_tk_func_t)(uint32_t ifindex, const uint8_t *aa,
 typedef void (*eapol_install_gtk_func_t)(uint32_t ifindex, uint8_t key_index,
 					const uint8_t *gtk, uint8_t gtk_len,
 					const uint8_t *rsc, uint8_t rsc_len,
-					const uint8_t *rsn, void *user_data);
+					uint32_t cipher, void *user_data);
 typedef void (*eapol_deauthenticate_func_t)(uint32_t ifindex, const uint8_t *aa,
 						const uint8_t *spa,
 						uint16_t reason_code,

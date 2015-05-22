@@ -1143,36 +1143,18 @@ static unsigned int mlme_new_group_key(struct netdev *netdev,
 static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
 				const uint8_t *gtk, uint8_t gtk_len,
 				const uint8_t *rsc, uint8_t rsc_len,
-				const uint8_t *rsn, void *user_data)
+				uint32_t cipher, void *user_data)
 {
 	struct netdev *netdev = user_data;
-	struct ie_rsn_info info;
-	enum crypto_cipher cipher;
-	int result;
 	uint8_t gtk_buf[32];
 
 	l_debug("");
 
-	if (rsn[0] == IE_TYPE_RSN)
-		result = ie_parse_rsne_from_data(rsn, rsn[1] + 2, &info);
-	else if (rsn[0] == IE_TYPE_VENDOR_SPECIFIC)
-		result = ie_parse_wpa_from_data(rsn, rsn[1] + 2, &info);
-	else
-		result = -1;
-
-	if (result) {
-		l_error("Can't parse the RSN");
-		setting_keys_failed(netdev, MPDU_REASON_CODE_INVALID_IE);
-		return;
-	}
-
-	switch (info.group_cipher) {
-	case IE_RSN_CIPHER_SUITE_CCMP:
-		cipher = CRYPTO_CIPHER_CCMP;
+	switch (cipher) {
+	case CRYPTO_CIPHER_CCMP:
 		memcpy(gtk_buf, gtk, 16);
 		break;
-	case IE_RSN_CIPHER_SUITE_TKIP:
-		cipher = CRYPTO_CIPHER_TKIP;
+	case CRYPTO_CIPHER_TKIP:
 		/*
 		 * Swap the TX and RX MIC key portions for supplicant.
 		 * WPA_80211_v3_1_090922 doc's 3.3.4:
@@ -1191,7 +1173,7 @@ static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
 		memcpy(gtk_buf + 24, gtk + 16, 8);
 		break;
 	default:
-		l_error("Unexpected cipher suite: %d", info.group_cipher);
+		l_error("Unexpected cipher: %x", cipher);
 		setting_keys_failed(netdev,
 					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
 		return;

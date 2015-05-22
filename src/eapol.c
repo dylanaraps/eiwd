@@ -1144,9 +1144,13 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	if (install_tk)
 		install_tk(sm->ifindex, sm->aa, ptk->tk, rsne, sm->user_data);
 
-	if (gtk && install_gtk)
+	if (gtk && install_gtk) {
+		uint32_t cipher =
+			ie_rsn_cipher_suite_to_cipher(sm->group_cipher);
+
 		install_gtk(sm->ifindex, gtk_key_index, gtk, gtk_len,
-				ek->key_rsc, 6, rsne, sm->user_data);
+				ek->key_rsc, 6, cipher, sm->user_data);
+	}
 
 fail:
 	l_free(step4);
@@ -1211,9 +1215,13 @@ static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
 	tx_packet(ifindex, sm->aa, sm->spa, step2, user_data);
 
-	if (install_gtk)
+	if (install_gtk) {
+		uint32_t cipher =
+			ie_rsn_cipher_suite_to_cipher(sm->group_cipher);
+
 		install_gtk(sm->ifindex, gtk_key_index, gtk, gtk_len,
-				ek->key_rsc, 6, sm->ap_ie, sm->user_data);
+				ek->key_rsc, 6, cipher, sm->user_data);
+	}
 
 done:
 	l_free(step2);
