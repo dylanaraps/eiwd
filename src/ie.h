@@ -249,6 +249,7 @@ static inline const unsigned char *ie_tlv_iter_get_data(
 	return iter->data;
 }
 
+uint32_t ie_rsn_cipher_suite_to_cipher(enum ie_rsn_cipher_suite suite);
 bool ie_tlv_iter_next(struct ie_tlv_iter *iter);
 bool ie_tlv_builder_init(struct ie_tlv_builder *builder);
 bool ie_tlv_builder_set_length(struct ie_tlv_builder *builder,

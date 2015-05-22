@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <ell/ell.h>
 #include "util.h"
+#include "crypto.h"
 
 #include "ie.h"
 
@@ -176,6 +177,30 @@ void ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
 
 	if (out_len)
 		*out_len = len;
+}
+
+/*
+ * Converts RSN cipher suite into an unsigned integer suitable to be used
+ * by nl80211.  The enumeration is the same as found in crypto.h
+ *
+ * If the suite value is invalid, this function returns 0.
+ */
+uint32_t ie_rsn_cipher_suite_to_cipher(enum ie_rsn_cipher_suite suite)
+{
+	switch (suite) {
+	case IE_RSN_CIPHER_SUITE_CCMP:
+		return CRYPTO_CIPHER_CCMP;
+	case IE_RSN_CIPHER_SUITE_TKIP:
+		return CRYPTO_CIPHER_TKIP;
+	case IE_RSN_CIPHER_SUITE_WEP40:
+		return CRYPTO_CIPHER_WEP40;
+	case IE_RSN_CIPHER_SUITE_WEP104:
+		return CRYPTO_CIPHER_WEP104;
+	case IE_RSN_CIPHER_SUITE_BIP:
+		return CRYPTO_CIPHER_BIP;
+	default:
+		return 0;
+	}
 }
 
 /* 802.11, Section 8.4.2.27.2 */
