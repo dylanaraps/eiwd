@@ -100,7 +100,7 @@ typedef int (*eapol_tx_packet_func_t)(uint32_t ifindex, const uint8_t *aa,
 				void *user_data);
 typedef bool (*eapol_get_nonce_func_t)(uint8_t nonce[]);
 typedef void (*eapol_install_tk_func_t)(uint32_t ifindex, const uint8_t *aa,
-					const uint8_t *tk, const uint8_t *rsn,
+					const uint8_t *tk, uint32_t cipher,
 					void *user_data);
 typedef void (*eapol_install_gtk_func_t)(uint32_t ifindex, uint8_t key_index,
 					const uint8_t *gtk, uint8_t gtk_len,

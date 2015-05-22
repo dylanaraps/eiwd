@@ -1003,6 +1003,7 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	const uint8_t *rsne;
 	const uint8_t *optional_rsne = NULL;
 	uint8_t gtk_key_index;
+	enum ie_rsn_cipher_suite pairwise = sm->pairwise_cipher;
 
 	if (!eapol_verify_ptk_3_of_4(ek, sm->wpa_ie)) {
 		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
@@ -1100,6 +1101,8 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 				MPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER);
 			return;
 		}
+
+		pairwise = override;
 	}
 
 	/*
@@ -1141,8 +1144,11 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 
 	sm->ptk_complete = true;
 
-	if (install_tk)
-		install_tk(sm->ifindex, sm->aa, ptk->tk, rsne, sm->user_data);
+	if (install_tk) {
+		uint32_t cipher = ie_rsn_cipher_suite_to_cipher(pairwise);
+
+		install_tk(sm->ifindex, sm->aa, ptk->tk, cipher, sm->user_data);
+	}
 
 	if (gtk && install_gtk) {
 		uint32_t cipher =

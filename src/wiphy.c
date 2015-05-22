@@ -965,39 +965,20 @@ static unsigned int mlme_new_pairwise_key(struct netdev *netdev,
 }
 
 static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
-				const uint8_t *tk, const uint8_t *rsn,
+				const uint8_t *tk, uint32_t cipher,
 				void *user_data)
 {
 	struct netdev *netdev = user_data;
 	struct network *network = netdev->connected_network;
-	struct wiphy *wiphy = netdev->wiphy;
-	struct ie_rsn_info info;
-	enum crypto_cipher cipher;
-	int result;
 	uint8_t tk_buf[32];
 
 	l_debug("");
 
-	if (rsn[0] == IE_TYPE_RSN)
-		result = ie_parse_rsne_from_data(rsn, rsn[1] + 2, &info);
-	else if (rsn[0] == IE_TYPE_VENDOR_SPECIFIC)
-		result = ie_parse_wpa_from_data(rsn, rsn[1] + 2, &info);
-	else
-		result = -1;
-
-	if (result) {
-		l_error("Can't parse the RSN");
-		setting_keys_failed(netdev, MPDU_REASON_CODE_INVALID_IE);
-		return;
-	}
-
-	switch (wiphy_select_cipher(wiphy, info.pairwise_ciphers)) {
-	case IE_RSN_CIPHER_SUITE_CCMP:
-		cipher = CRYPTO_CIPHER_CCMP;
+	switch (cipher) {
+	case CRYPTO_CIPHER_CCMP:
 		memcpy(tk_buf, tk, 16);
 		break;
-	case IE_RSN_CIPHER_SUITE_TKIP:
-		cipher = CRYPTO_CIPHER_TKIP;
+	case CRYPTO_CIPHER_TKIP:
 		/*
 		 * Swap the TX and RX MIC key portions for supplicant.
 		 * WPA_80211_v3_1_090922 doc's 3.3.4:
@@ -1014,7 +995,7 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 		memcpy(tk_buf + 24, tk + 16, 8);
 		break;
 	default:
-		l_error("Unexpected cipher suite: %d", info.pairwise_ciphers);
+		l_error("Unexpected cipher: %x", cipher);
 		setting_keys_failed(netdev,
 				MPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER);
 		return;
