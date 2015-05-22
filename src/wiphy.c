@@ -1287,20 +1287,17 @@ static void mlme_associate_cmd(struct netdev *netdev)
 		/* RSN takes priority */
 		if (bss->rsne) {
 			ie_build_rsne(&info, rsne_buf);
+			eapol_sm_set_ap_rsn(sm, bss->rsne, bss->rsne[1] + 2);
+			eapol_sm_set_own_rsn(sm, rsne_buf, rsne_buf[1] + 2);
 		} else {
 			ie_build_wpa(&info, rsne_buf);
+			eapol_sm_set_ap_wpa(sm, bss->wpa, bss->wpa[1] + 2);
+			eapol_sm_set_own_wpa(sm, rsne_buf, rsne_buf[1] + 2);
 		}
 
 		eapol_sm_set_pmk(sm, network->psk);
 		eapol_sm_set_authenticator_address(sm, bss->addr);
 		eapol_sm_set_supplicant_address(sm, netdev->addr);
-		if (bss->rsne) {
-			eapol_sm_set_ap_rsn(sm, bss->rsne, bss->rsne[1] + 2);
-			eapol_sm_set_own_rsn(sm, rsne_buf, rsne_buf[1] + 2);
-		} else {
-			eapol_sm_set_ap_wpa(sm, bss->wpa, bss->wpa[1] + 2);
-			eapol_sm_set_own_wpa(sm, rsne_buf, rsne_buf[1] + 2);
-		}
 		eapol_sm_set_user_data(sm, netdev);
 		eapol_start(netdev->index, sm);
 
