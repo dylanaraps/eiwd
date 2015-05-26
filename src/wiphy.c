@@ -230,10 +230,60 @@ static void genl_connect_cb(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
-static int mlme_authenticate_cmd(struct network *network)
+static enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy,
+							uint16_t mask)
+{
+	mask &= wiphy->pairwise_ciphers;
+
+	/* CCMP is our first choice, TKIP second */
+	if (mask & IE_RSN_CIPHER_SUITE_CCMP)
+		return IE_RSN_CIPHER_SUITE_CCMP;
+
+	if (mask & IE_RSN_CIPHER_SUITE_TKIP)
+		return IE_RSN_CIPHER_SUITE_TKIP;
+
+	return 0;
+}
+
+static struct scan_bss *network_select_bss(struct wiphy *wiphy,
+						struct network *network)
+{
+	struct l_queue *bss_list = network->bss_list;
+	const struct l_queue_entry *bss_entry;
+
+	/* TODO: sort the list by RSSI, potentially other criteria. */
+
+	switch (network->ssid_security) {
+	case SCAN_SSID_SECURITY_NONE:
+		/* Pick the first bss (strongest signal) */
+		return l_queue_peek_head(bss_list);
+
+	case SCAN_SSID_SECURITY_PSK:
+		/* Pick the first bss that advertises any cipher we support. */
+		for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
+				bss_entry = bss_entry->next) {
+			struct scan_bss *bss = bss_entry->data;
+			uint16_t pairwise_ciphers, group_ciphers;
+
+			bss_get_supported_ciphers(bss, &pairwise_ciphers,
+							&group_ciphers);
+
+			if (wiphy_select_cipher(wiphy, pairwise_ciphers) &&
+					wiphy_select_cipher(wiphy,
+							group_ciphers))
+				return bss;
+		}
+
+		return NULL;
+
+	default:
+		return NULL;
+	}
+}
+
+static int mlme_authenticate_cmd(struct network *network, struct scan_bss *bss)
 {
 	struct netdev *netdev = network->netdev;
-	struct scan_bss *bss = l_queue_peek_head(network->bss_list);
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
 
@@ -257,6 +307,8 @@ static void passphrase_callback(enum agent_result result,
 {
 	struct network *network = user_data;
 	struct netdev *netdev = network->netdev;
+	struct wiphy *wiphy = netdev->wiphy;
+	struct scan_bss *bss;
 
 	l_debug("result %d", result);
 
@@ -265,9 +317,16 @@ static void passphrase_callback(enum agent_result result,
 	if (result != AGENT_RESULT_OK) {
 		dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_aborted(netdev->connect_pending));
-		l_settings_free(network->settings);
-		network->settings = NULL;
-		return;
+		goto err;
+	}
+
+	bss = network_select_bss(wiphy, network);
+
+	/* Did all good BSSes go away while we waited */
+	if (!bss) {
+		dbus_pending_reply(&netdev->connect_pending,
+				dbus_error_failed(netdev->connect_pending));
+		goto err;
 	}
 
 	l_free(network->psk);
@@ -280,13 +339,8 @@ static void passphrase_callback(enum agent_result result,
 			"Ensure Crypto Engine is properly configured");
 		dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_failed(netdev->connect_pending));
-		l_settings_free(network->settings);
-		network->settings = NULL;
 
-		l_free(network->psk);
-		network->psk = NULL;
-
-		return;
+		goto err;
 	}
 
 	/*
@@ -296,25 +350,19 @@ static void passphrase_callback(enum agent_result result,
 	 */
 	network->update_psk = true;
 
-	mlme_authenticate_cmd(network);
-}
+	mlme_authenticate_cmd(network, bss);
+	return;
 
-static enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy,
-							uint16_t mask)
-{
-	mask &= wiphy->pairwise_ciphers;
+err:
+	l_settings_free(network->settings);
+	network->settings = NULL;
 
-	/* CCMP is our first choice, TKIP second */
-	if (mask & IE_RSN_CIPHER_SUITE_CCMP)
-		return IE_RSN_CIPHER_SUITE_CCMP;
-
-	if (mask & IE_RSN_CIPHER_SUITE_TKIP)
-		return IE_RSN_CIPHER_SUITE_TKIP;
-
-	return 0;
+	l_free(network->psk);
+	network->psk = NULL;
 }
 
 static struct l_dbus_message *network_connect_psk(struct network *network,
+					struct scan_bss *bss,
 					struct l_dbus_message *message)
 {
 	struct netdev *netdev = network->netdev;
@@ -356,7 +404,7 @@ static struct l_dbus_message *network_connect_psk(struct network *network,
 		if (!network->agent_request)
 			return dbus_error_no_agent(message);
 	} else
-		mlme_authenticate_cmd(network);
+		mlme_authenticate_cmd(network, bss);
 
 	netdev->connect_pending = l_dbus_message_ref(message);
 	return NULL;
@@ -368,17 +416,29 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 {
 	struct network *network = user_data;
 	struct netdev *netdev = network->netdev;
+	struct scan_bss *bss;
 
 	l_debug("");
 
 	if (netdev->connect_pending)
 		return dbus_error_busy(message);
 
+	/*
+	 * Select the best BSS to use at this time.  If we have to query the
+	 * agent this may not be the final choice because BSS visibility can
+	 * change while we wait for the agent.
+	 */
+	bss = network_select_bss(netdev->wiphy, network);
+
+	/* None of the BSSes is compatible with our stack */
+	if (!bss)
+		return dbus_error_not_supported(message);
+
 	switch (network->ssid_security) {
 	case SCAN_SSID_SECURITY_PSK:
-		return network_connect_psk(network, message);
+		return network_connect_psk(network, bss, message);
 	case SCAN_SSID_SECURITY_NONE:
-		mlme_authenticate_cmd(network);
+		mlme_authenticate_cmd(network, bss);
 		netdev->connect_pending = l_dbus_message_ref(message);
 		return NULL;
 	default:
