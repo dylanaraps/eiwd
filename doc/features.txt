@@ -2,24 +2,27 @@
 IWD
 ===
 
-IWD will start a scheduled scan to the interface if the hardware supports
+- IWD will start a scheduled scan to the interface if the hardware supports
 that feature. If the iwd closes or dies so that the kernel netlink socket
 is closed, then the scheduled scan is cancelled automatically if the kernel
 supports this. This is done by giving NL80211_ATTR_SOCKET_OWNER netlink
 attribute when initiating the scheduled scan.
 
-IWD contains a network object that will contain a list of BSS that have the
+- IWD contains a network object that will contain a list of BSS that have the
 same SSID and security setting. From user point of view, we will connect to
 a certain SSID instead of connecting directly to a BSS. IWD will then pick
 the best BSS automatically from the BSS list when connecting to a SSID.
 The "best" BSS in this context is the BSS that has the highest signal strength.
 
-IWD uses the DBus agent interface to query information from the user.
+- IWD uses the DBus agent interface to query information from the user.
 The information asked include things like passphrase etc. The user can
 register only one agent to iwd. If the user does not respond in timely
 manner to the query, then the pending user request is cancelled after a
 timeout. The pending user request is also cancelled if user disconnects a
 pending connection attempt.
+
+- IWD supports the full RSN 4-Way Handshake for PTK generation.  Support for
+handling the optional (second) RSN element from the AP is included.
 
 
 Wireless monitor

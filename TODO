@@ -293,18 +293,6 @@ Wireless daemon
   Priority: Medium
   Complexity: C1
 
-- Parse & utilize the 2nd RSNE element in Step 3/4 of the 4-way Handshake
-
-  EAPoL Key Data can contain two RSN elements.  The second element contains
-  ciphering settings which were mandated by the AP and could be different
-  from settings we provided.  We should parse the 2nd RSNE and determine
-  whether the settings are acceptable.  If so, these settings should be
-  utilized for the established connection.  Otherwise, connection establishment
-  should be aborted.
-
-  Priority: High
-  Complexity: C1
-
 - Add unit test for each of the mpdu management frame type
 
   Currently, only authentication and deauthentication frames have
