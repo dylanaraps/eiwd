@@ -50,7 +50,6 @@
 
 static struct l_genl *genl = NULL;
 static struct l_genl_family *nl80211 = NULL;
-static int scheduled_scan_interval = 60;	/* in secs */
 
 struct network {
 	char *object_path;
@@ -1639,44 +1638,6 @@ static void get_scan_done(void *user)
 	netdev->old_bss_list = NULL;
 }
 
-static void sched_scan_callback(struct l_genl_msg *msg, void *user_data)
-{
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-
-	if (!l_genl_attr_init(&attr, msg)) {
-		int err = l_genl_msg_get_error(msg);
-		if (err < 0 && err != -EINPROGRESS) {
-			l_warn("Failed to setup scheduled scan [%d/%s]",
-				-err, strerror(-err));
-			goto done;
-		}
-
-		l_info("Scheduled scan started");
-	} else {
-		while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		}
-	}
-
-done:
-	return;
-}
-
-static void setup_scheduled_scan(struct wiphy *wiphy, struct netdev *netdev,
-				uint32_t scan_interval)
-{
-	if (!wiphy->support_scheduled_scan) {
-		l_debug("Scheduled scan not supported for %s "
-			"iface %s ifindex %u", wiphy->name, netdev->name,
-			netdev->index);
-		return;
-	}
-
-	scan_sched_start(nl80211, netdev->index, scan_interval,
-			sched_scan_callback, netdev);
-}
-
 static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy = NULL;
@@ -1796,8 +1757,6 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 		netdev_set_linkmode_and_operstate(netdev->index, 1,
 						IF_OPER_DORMANT, NULL, NULL);
 	}
-
-	setup_scheduled_scan(wiphy, netdev, scheduled_scan_interval);
 
 	l_debug("Found interface %s", netdev->name);
 
