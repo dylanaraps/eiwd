@@ -1488,111 +1488,6 @@ static void network_reset_bss_list(const void *key, void *value,
 	network->bss_list = l_queue_new();
 }
 
-static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
-{
-	struct netdev *netdev = user_data;
-	struct scan_bss *bss;
-	uint32_t ifindex;
-	const uint8_t *ssid;
-	uint8_t ssid_len;
-	struct network *network;
-	enum scan_ssid_security ssid_security;
-	const char *path;
-
-	l_debug("get_scan_callback");
-
-	if (!netdev->old_bss_list) {
-		netdev->old_bss_list = netdev->bss_list;
-		netdev->bss_list = l_queue_new();
-		l_hashmap_foreach(netdev->networks,
-					network_reset_bss_list, NULL);
-	}
-
-	bss = scan_parse_result(msg, &ifindex, NULL, &ssid, &ssid_len);
-	if (!bss)
-		return;
-
-	if (ifindex != netdev->index)
-		goto fail;
-
-	if (!util_ssid_is_utf8(ssid_len, ssid)) {
-		l_warn("Ignoring Network with non-UTF8 SSID '%s'",
-			util_ssid_to_utf8(ssid_len, ssid));
-		goto fail;
-	}
-
-	/*
-	 * If both an RSN and a WPA elements are present currently
-	 * RSN takes priority and the WPA IE is ignored.
-	 */
-	if (bss->rsne) {
-		struct ie_rsn_info rsne;
-		int res = ie_parse_rsne_from_data(bss->rsne, bss->rsne[1] + 2,
-							&rsne);
-		if (res < 0) {
-			l_debug("Cannot parse RSN field (%d, %s)",
-					res, strerror(-res));
-			goto fail;
-		}
-
-		ssid_security = scan_get_ssid_security(bss->capability, &rsne);
-	} else if (bss->wpa) {
-		struct ie_rsn_info wpa;
-		int res = ie_parse_wpa_from_data(bss->wpa, bss->wpa[1] + 2,
-									&wpa);
-		if (res < 0) {
-			l_debug("Cannot parse WPA IE %s (%d, %s)",
-					util_ssid_to_utf8(ssid_len, ssid),
-						res, strerror(-res));
-			goto fail;
-		}
-
-		ssid_security = scan_get_ssid_security(bss->capability, &wpa);
-	} else
-		ssid_security = scan_get_ssid_security(bss->capability, NULL);
-
-	path = iwd_network_get_path(netdev, ssid, ssid_len, ssid_security);
-
-	network = l_hashmap_lookup(netdev->networks, path);
-	if (!network) {
-		network = l_new(struct network, 1);
-		network->netdev = netdev;
-		memcpy(network->ssid, ssid, ssid_len);
-		network->ssid_security = ssid_security;
-		network->bss_list = l_queue_new();
-		network->object_path = strdup(path);
-		l_hashmap_insert(netdev->networks,
-					network->object_path, network);
-
-		l_debug("Found new SSID \"%s\" security %s", network->ssid,
-			ssid_security_to_str(ssid_security));
-
-		if (!l_dbus_register_interface(dbus_get_bus(),
-					network->object_path,
-					IWD_NETWORK_INTERFACE,
-					setup_network_interface,
-					network, NULL))
-			l_info("Unable to register %s interface",
-				IWD_NETWORK_INTERFACE);
-		else
-			network_emit_added(network);
-	}
-
-	l_debug("Found BSS '%s' with SSID: %s, freq: %u, "
-			"strength: %i",
-			bss_address_to_string(bss),
-			util_ssid_to_utf8(ssid_len, ssid),
-			bss->frequency, bss->signal_strength);
-
-	l_queue_insert(network->bss_list, bss, add_bss, NULL);
-	l_queue_push_head(netdev->bss_list, bss);
-	return;
-
-fail:
-	bss_free(bss);
-
-}
-
 static bool network_remove_if_lost(const void *key, void *data, void *user_data)
 {
 	struct network *network = data;
@@ -1607,11 +1502,114 @@ static bool network_remove_if_lost(const void *key, void *data, void *user_data)
 	return true;
 }
 
-static void get_scan_done(void *user)
+static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 {
-	struct netdev *netdev = user;
+	struct network *network;
+	enum scan_ssid_security ssid_security;
+	const char *path;
 
-	l_debug("get_scan_done for netdev: %p", netdev);
+	l_debug("Found BSS '%s' with SSID: %s, freq: %u, "
+			"strength: %i",
+			bss_address_to_string(bss),
+			util_ssid_to_utf8(bss->ssid_len, bss->ssid),
+			bss->frequency, bss->signal_strength);
+
+	if (!util_ssid_is_utf8(bss->ssid_len, bss->ssid)) {
+		l_warn("Ignoring BSS with non-UTF8 SSID");
+		return;
+	}
+
+	/*
+	 * If both an RSN and a WPA elements are present currently
+	 * RSN takes priority and the WPA IE is ignored.
+	 */
+	if (bss->rsne) {
+		struct ie_rsn_info rsne;
+		int res = ie_parse_rsne_from_data(bss->rsne, bss->rsne[1] + 2,
+							&rsne);
+		if (res < 0) {
+			l_debug("Cannot parse RSN field (%d, %s)",
+					res, strerror(-res));
+			return;
+		}
+
+		ssid_security = scan_get_ssid_security(bss->capability, &rsne);
+	} else if (bss->wpa) {
+		struct ie_rsn_info wpa;
+		int res = ie_parse_wpa_from_data(bss->wpa, bss->wpa[1] + 2,
+									&wpa);
+		if (res < 0) {
+			l_debug("Cannot parse WPA IE (%d, %s)",
+						res, strerror(-res));
+			return;
+		}
+
+		ssid_security = scan_get_ssid_security(bss->capability, &wpa);
+	} else
+		ssid_security = scan_get_ssid_security(bss->capability, NULL);
+
+	path = iwd_network_get_path(netdev, bss->ssid, bss->ssid_len,
+					ssid_security);
+
+	network = l_hashmap_lookup(netdev->networks, path);
+	if (!network) {
+		network = l_new(struct network, 1);
+		network->netdev = netdev;
+		memcpy(network->ssid, bss->ssid, bss->ssid_len);
+		network->ssid_security = ssid_security;
+		network->bss_list = l_queue_new();
+		network->object_path = strdup(path);
+		l_hashmap_insert(netdev->networks,
+					network->object_path, network);
+
+		l_debug("Added new Network \"%s\" security %s", network->ssid,
+			ssid_security_to_str(ssid_security));
+
+		if (!l_dbus_register_interface(dbus_get_bus(),
+					network->object_path,
+					IWD_NETWORK_INTERFACE,
+					setup_network_interface,
+					network, NULL))
+			l_info("Unable to register %s interface",
+				IWD_NETWORK_INTERFACE);
+		else
+			network_emit_added(network);
+	}
+
+	l_queue_insert(network->bss_list, bss, add_bss, NULL);
+}
+
+static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
+				struct l_queue *bss_list)
+{
+	struct wiphy *wiphy;
+	struct netdev *netdev;
+	const struct l_queue_entry *bss_entry;
+
+	wiphy = l_queue_find(wiphy_list, wiphy_match,
+				L_UINT_TO_PTR(wiphy_id));
+	if (!wiphy) {
+		l_warn("Scan notification for unknown wiphy");
+		return false;
+	}
+
+	netdev = l_queue_find(wiphy->netdev_list, netdev_match,
+					L_UINT_TO_PTR(ifindex));
+	if (!netdev) {
+		l_warn("Scan notification for unknown ifindex");
+		return false;
+	}
+
+	netdev->old_bss_list = netdev->bss_list;
+	netdev->bss_list = bss_list;
+	l_hashmap_foreach(netdev->networks, network_reset_bss_list, NULL);
+
+	for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
+				bss_entry = bss_entry->next) {
+		struct scan_bss *bss = bss_entry->data;
+
+		process_bss(netdev, bss);
+	}
 
 	if (netdev->connected_bss) {
 		struct scan_bss *bss;
@@ -1636,6 +1634,8 @@ static void get_scan_done(void *user)
 
 	l_queue_destroy(netdev->old_bss_list, bss_free);
 	netdev->old_bss_list = NULL;
+
+	return true;
 }
 
 static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
@@ -1940,81 +1940,6 @@ static void wiphy_config_notify(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
-static void wiphy_scan_notify(struct l_genl_msg *msg, void *user_data)
-{
-	struct wiphy *wiphy = NULL;
-	struct netdev *netdev = NULL;
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-	uint8_t cmd;
-	uint32_t uninitialized_var(attr_ifindex);
-	bool have_ifindex;
-	uint32_t uninitialized_var(attr_wiphy);
-	bool have_wiphy;
-
-	cmd = l_genl_msg_get_command(msg);
-
-	l_debug("Scan notification %u", cmd);
-
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_WIPHY:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid wiphy attribute");
-				return;
-			}
-
-			have_wiphy = true;
-			attr_wiphy = *((uint32_t *) data);
-			break;
-		case NL80211_ATTR_IFINDEX:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid interface index attribute");
-				return;
-			}
-
-			have_ifindex = true;
-			attr_ifindex = *((uint32_t *) data);
-			break;
-		}
-	}
-
-	if (!have_wiphy) {
-		l_warn("Scan results do not contain wiphy attribute");
-		return;
-	}
-
-	if (!have_ifindex) {
-		l_warn("Scan results do not contain ifindex attribute");
-		return;
-	}
-
-	wiphy = l_queue_find(wiphy_list, wiphy_match,
-				L_UINT_TO_PTR(attr_wiphy));
-	if (!wiphy) {
-		l_warn("Scan notification for unknown wiphy");
-		return;
-	}
-
-	netdev = l_queue_find(wiphy->netdev_list, netdev_match,
-					L_UINT_TO_PTR(attr_ifindex));
-	if (!netdev) {
-		l_warn("Scan notification for unknown ifindex");
-		return;
-	}
-
-	if (cmd == NL80211_CMD_NEW_SCAN_RESULTS ||
-				cmd == NL80211_CMD_SCHED_SCAN_RESULTS) {
-		scan_get_results(nl80211, netdev->index, get_scan_callback,
-				get_scan_done, netdev);
-		return;
-	}
-}
-
 static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy = NULL;
@@ -2185,10 +2110,6 @@ static void nl80211_appeared(void *user_data)
 								NULL, NULL))
 		l_error("Registering for config notification failed");
 
-	if (!l_genl_family_register(nl80211, "scan", wiphy_scan_notify,
-								NULL, NULL))
-		l_error("Registering for scan notification failed");
-
 	if (!l_genl_family_register(nl80211, "mlme", wiphy_mlme_notify,
 								NULL, NULL))
 		l_error("Registering for MLME notification failed");
@@ -2196,6 +2117,9 @@ static void nl80211_appeared(void *user_data)
 	if (!l_genl_family_register(nl80211, "regulatory",
 					wiphy_regulatory_notify, NULL, NULL))
 		l_error("Registering for regulatory notification failed");
+
+	if (!scan_init(nl80211, new_scan_results))
+		l_error("Unable to init scan functionality");
 
 	wiphy_list = l_queue_new();
 

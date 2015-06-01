@@ -38,6 +38,17 @@
 #include "src/ie.h"
 #include "src/scan.h"
 
+struct l_genl_family *nl80211 = NULL;
+uint32_t scan_id = 0;
+
+scan_notify_func_t notify = NULL;
+
+struct scan_results {
+	uint32_t wiphy;
+	uint32_t ifindex;
+	struct l_queue *bss_list;
+};
+
 void scan_start(struct l_genl_family *nl80211, uint32_t ifindex,
 		scan_func_t callback, void *user_data)
 {
@@ -66,17 +77,6 @@ void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
 		l_error("Starting scheduled scan failed");
 }
 
-void scan_get_results(struct l_genl_family *nl80211, uint32_t ifindex,
-			scan_func_t callback, scan_done_func_t scan_done,
-			void *user_data)
-{
-	struct l_genl_msg *msg;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_GET_SCAN, 8);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
-	l_genl_family_dump(nl80211, msg, callback, user_data, scan_done);
-}
-
 enum scan_ssid_security scan_get_ssid_security(
 					enum ie_bss_capability bss_capability,
 					const struct ie_rsn_info *info)
@@ -100,10 +100,10 @@ enum scan_ssid_security scan_get_ssid_security(
 }
 
 static bool scan_parse_bss_information_elements(struct scan_bss *bss,
-					const uint8_t **ssid, uint8_t *ssid_len,
 					const void *data, uint16_t len)
 {
 	struct ie_tlv_iter iter;
+	bool have_ssid = false;
 
 	ie_tlv_iter_init(&iter, data, len);
 
@@ -115,8 +115,9 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 			if (iter.len > 32)
 				return false;
 
-			*ssid_len = iter.len;
-			*ssid = iter.data;
+			memcpy(bss->ssid, iter.data, iter.len);
+			bss->ssid_len = iter.len;
+			have_ssid = true;
 			break;
 		case IE_TYPE_RSN:
 			if (!bss->rsne)
@@ -132,12 +133,10 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 		}
 	}
 
-	return true;
+	return have_ssid;
 }
 
-static struct scan_bss *scan_parse_attr_bss(struct l_genl_attr *attr,
-						const uint8_t **ssid,
-						uint8_t *ssid_len)
+static struct scan_bss *scan_parse_attr_bss(struct l_genl_attr *attr)
 {
 	uint16_t type, len;
 	const void *data;
@@ -173,7 +172,7 @@ static struct scan_bss *scan_parse_attr_bss(struct l_genl_attr *attr,
 			break;
 		case NL80211_BSS_INFORMATION_ELEMENTS:
 			if (!scan_parse_bss_information_elements(bss,
-						ssid, ssid_len, data, len))
+								data, len))
 				goto fail;
 
 			break;
@@ -187,11 +186,9 @@ fail:
 	return NULL;
 }
 
-struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
+static struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
 					uint32_t *out_ifindex,
-					uint64_t *out_wdev,
-					const uint8_t **out_ssid,
-					uint8_t *out_ssid_len)
+					uint64_t *out_wdev)
 {
 	struct l_genl_attr attr, nested;
 	uint16_t type, len;
@@ -199,8 +196,6 @@ struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
 	uint32_t ifindex;
 	uint64_t wdev;
 	struct scan_bss *bss = NULL;
-	const uint8_t *ssid = NULL;
-	uint8_t ssid_len = 0;
 
 	if (!l_genl_attr_init(&attr, msg))
 		return NULL;
@@ -225,7 +220,7 @@ struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
 			if (!l_genl_attr_recurse(&attr, &nested))
 				return NULL;
 
-			bss = scan_parse_attr_bss(&nested, &ssid, &ssid_len);
+			bss = scan_parse_attr_bss(&nested);
 			break;
 		}
 	}
@@ -233,22 +228,11 @@ struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
 	if (!bss)
 		return NULL;
 
-	if (!ssid) {
-		scan_bss_free(bss);
-		return NULL;
-	}
-
 	if (out_ifindex)
 		*out_ifindex = ifindex;
 
 	if (out_wdev)
 		*out_wdev = wdev;
-
-	if (out_ssid_len)
-		*out_ssid_len = ssid_len;
-
-	if (out_ssid)
-		*out_ssid = ssid;
 
 	return bss;
 }
@@ -290,4 +274,151 @@ void bss_get_supported_ciphers(struct scan_bss *bss,
 
 	*pairwise_ciphers = ie.pairwise_ciphers;
 	*group_ciphers = ie.group_cipher;
+}
+
+static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
+{
+	struct scan_results *results = user_data;
+	struct scan_bss *bss;
+	uint32_t ifindex;
+
+	l_debug("get_scan_callback");
+
+	if (!results->bss_list)
+		results->bss_list = l_queue_new();
+
+	bss = scan_parse_result(msg, &ifindex, NULL);
+	if (!bss)
+		return;
+
+	if (ifindex != results->ifindex) {
+		l_warn("ifindex mismatch in get_scan_callback");
+		scan_bss_free(bss);
+		return;
+	}
+
+	l_queue_push_tail(results->bss_list, bss);
+}
+
+static void get_scan_done(void *user)
+{
+	struct scan_results *results = user;
+	bool new_owner = false;
+
+	l_debug("get_scan_done");
+
+	if (!results->bss_list)
+		goto done;
+
+	if (notify)
+		new_owner = notify(results->wiphy, results->ifindex,
+					results->bss_list);
+
+	if (!new_owner)
+		l_queue_destroy(results->bss_list,
+				(l_queue_destroy_func_t) scan_bss_free);
+
+done:
+	l_free(results);
+}
+
+static void scan_notify(struct l_genl_msg *msg, void *user_data)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	uint8_t cmd;
+	uint32_t uninitialized_var(attr_ifindex);
+	bool have_ifindex;
+	uint32_t uninitialized_var(attr_wiphy);
+	bool have_wiphy;
+
+	cmd = l_genl_msg_get_command(msg);
+
+	l_debug("Scan notification %u", cmd);
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_WIPHY:
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid wiphy attribute");
+				return;
+			}
+
+			have_wiphy = true;
+			attr_wiphy = *((uint32_t *) data);
+			break;
+		case NL80211_ATTR_IFINDEX:
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid interface index attribute");
+				return;
+			}
+
+			have_ifindex = true;
+			attr_ifindex = *((uint32_t *) data);
+			break;
+		}
+	}
+
+	if (!have_wiphy) {
+		l_warn("Scan results do not contain wiphy attribute");
+		return;
+	}
+
+	if (!have_ifindex) {
+		l_warn("Scan results do not contain ifindex attribute");
+		return;
+	}
+
+	if (!notify)
+		return;
+
+	switch (cmd) {
+	case NL80211_CMD_NEW_SCAN_RESULTS:
+	case NL80211_CMD_SCHED_SCAN_RESULTS:
+	{
+		struct l_genl_msg *msg;
+		struct scan_results *results;
+
+		results = l_new(struct scan_results, 1);
+		results->wiphy = attr_wiphy;
+		results->ifindex = attr_ifindex;
+
+		msg = l_genl_msg_new_sized(NL80211_CMD_GET_SCAN, 8);
+		l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4,
+						&attr_ifindex);
+		l_genl_family_dump(nl80211, msg, get_scan_callback, results,
+					get_scan_done);
+		return;
+	}
+	}
+}
+
+bool scan_init(struct l_genl_family *in, scan_notify_func_t func)
+{
+	nl80211 = in;
+	scan_id = l_genl_family_register(nl80211, "scan", scan_notify,
+						NULL, NULL);
+
+	if (!scan_id) {
+		l_error("Registering for scan notification failed");
+		return false;
+	}
+
+	notify = func;
+
+	return true;
+}
+
+bool scan_free()
+{
+	if (!nl80211)
+		return false;
+
+	notify = NULL;
+
+	return l_genl_family_unregister(nl80211, scan_id);
 }
