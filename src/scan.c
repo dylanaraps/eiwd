@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <sys/socket.h>
+#include <limits.h>
 #include <linux/if.h>
 #include <linux/if_ether.h>
 #include <ell/ell.h>
@@ -353,6 +354,55 @@ static struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
 	return bss;
 }
 
+void scan_bss_compute_rank(struct scan_bss *bss)
+{
+	double RANK_RSNE_FACTOR = 1.2;
+	double RANK_WPA_FACTOR = 1.0;
+	double RANK_OPEN_FACTOR = 0.5;
+	double RANK_NO_PRIVACY_FACTOR = 0.5;
+	double RANK_5G_FACTOR = 1.1;
+	double rank;
+	uint32_t irank;
+
+	/*
+	 * Signal strength is in mBm (100 * dBm) and is negative.
+	 * WiFi range is -0 to -100 dBm
+	 */
+
+	/* Heavily slanted towards signal strength */
+	rank = 10000 - bss->signal_strength;
+
+	/*
+	 * Prefer RSNE first, WPA second.  Open networks are much less
+	 * desirable.
+	 */
+	if (bss->rsne)
+		rank *= RANK_RSNE_FACTOR;
+	else if (bss->wpa)
+		rank *= RANK_WPA_FACTOR;
+	else
+		rank *= RANK_OPEN_FACTOR;
+
+	/* We prefer networks with CAP PRIVACY */
+	if (!(bss->capability & IE_BSS_CAP_PRIVACY))
+		rank *= RANK_NO_PRIVACY_FACTOR;
+
+	/* Prefer 5G networks over 2.4G */
+	if (bss->frequency > 4000)
+		rank *= RANK_5G_FACTOR;
+
+	/* TODO: Take BSS Load into consideration */
+
+	/* TODO: Take maximum supported rate into consideration */
+
+	irank = rank;
+
+	if (irank > USHRT_MAX)
+		bss->rank = USHRT_MAX;
+	else
+		bss->rank = irank;
+}
+
 void scan_bss_free(struct scan_bss *bss)
 {
 	l_free(bss->rsne);
@@ -412,6 +462,9 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 		scan_bss_free(bss);
 		return;
 	}
+
+	scan_bss_compute_rank(bss);
+	l_debug("computed rank: %u", bss->rank);
 
 	l_queue_push_tail(results->bss_list, bss);
 }

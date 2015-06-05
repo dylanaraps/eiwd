@@ -40,6 +40,7 @@ struct scan_bss {
 	uint8_t *wpa;
 	uint8_t ssid[32];
 	uint8_t ssid_len;
+	uint16_t rank;
 };
 
 void scan_start(struct l_genl_family *nl80211, uint32_t ifindex,
@@ -54,6 +55,7 @@ void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
 enum scan_ssid_security scan_get_ssid_security(enum ie_bss_capability bss_cap,
 						const struct ie_rsn_info *info);
 void scan_bss_free(struct scan_bss *bss);
+void scan_bss_compute_rank(struct scan_bss *bss);
 
 void bss_get_supported_ciphers(struct scan_bss *bss,
 				uint16_t *pairwise_ciphers,
