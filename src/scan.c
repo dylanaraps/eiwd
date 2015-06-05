@@ -38,6 +38,11 @@
 #include "src/ie.h"
 #include "src/scan.h"
 
+#define SCAN_MAX_INTERVAL 320
+#define SCAN_INIT_INTERVAL 10
+
+struct l_queue *periodic_scans = NULL;
+
 struct l_genl_family *nl80211 = NULL;
 uint32_t scan_id = 0;
 
@@ -47,6 +52,13 @@ struct scan_results {
 	uint32_t wiphy;
 	uint32_t ifindex;
 	struct l_queue *bss_list;
+};
+
+struct scan_periodic {
+	uint32_t ifindex;
+	struct l_timeout *timeout;
+	uint16_t interval;
+	bool triggered:1;
 };
 
 void scan_start(struct l_genl_family *nl80211, uint32_t ifindex,
@@ -75,6 +87,110 @@ void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
 
 	if (!l_genl_family_send(nl80211, msg, callback, user_data, NULL))
 		l_error("Starting scheduled scan failed");
+}
+
+static struct scan_periodic *scan_periodic_new(uint32_t ifindex)
+{
+	struct scan_periodic *sp;
+
+	sp = l_new(struct scan_periodic, 1);
+
+	sp->ifindex = ifindex;
+	sp->interval = SCAN_INIT_INTERVAL;
+
+	return sp;
+}
+
+static void scan_periodic_free(struct scan_periodic *sp)
+{
+	if (sp->timeout)
+		l_timeout_remove(sp->timeout);
+
+	l_free(sp);
+}
+
+static void scan_periodic_done(struct l_genl_msg *msg, void *user_data)
+{
+	struct scan_periodic *sp = user_data;
+	int err;
+
+	l_debug("");
+
+	err = l_genl_msg_get_error(msg);
+	if (err < 0) {
+		/* Scan already in progress */
+		if (err != -EBUSY)
+			sp->triggered = true;
+		else
+			l_warn("Periodic scan could not be triggered: %s (%d)",
+				strerror(-err), -err);
+		return;
+	}
+
+	sp->triggered = true;
+	l_debug("Periodic scan triggered for ifindex: %u", sp->ifindex);
+}
+
+static bool scan_periodic_match(const void *a, const void *b)
+{
+	const struct scan_periodic *sp = a;
+	uint32_t ifindex = L_PTR_TO_UINT(b);
+
+	return (sp->ifindex == ifindex);
+}
+
+void scan_periodic_start(uint32_t ifindex)
+{
+	struct scan_periodic *sp;
+
+	sp = l_queue_find(periodic_scans, scan_periodic_match,
+				L_UINT_TO_PTR(ifindex));
+
+	if (sp)
+		return;
+
+	l_debug("Starting periodic scan for ifindex: %u", ifindex);
+
+	sp = scan_periodic_new(ifindex);
+	l_queue_push_head(periodic_scans, sp);
+	scan_start(nl80211, ifindex, scan_periodic_done, sp);
+}
+
+bool scan_periodic_stop(uint32_t ifindex)
+{
+	struct scan_periodic *sp;
+
+	sp = l_queue_remove_if(periodic_scans, scan_periodic_match,
+				L_UINT_TO_PTR(ifindex));
+
+	if (!sp)
+		return false;
+
+	l_debug("Stopping periodic scan for ifindex: %u", ifindex);
+
+	scan_periodic_free(sp);
+	return true;
+}
+
+static void scan_periodic_timeout(struct l_timeout *timeout, void *user_data)
+{
+	struct scan_periodic *sp = user_data;
+
+	l_debug("scan_periodic_timeout: %u", sp->ifindex);
+
+	sp->interval *= 2;
+	scan_start(nl80211, sp->ifindex, scan_periodic_done, sp);
+}
+
+static void scan_periodic_rearm(struct scan_periodic *sp)
+{
+	l_debug("Arming periodic scan timer: %u", sp->interval);
+
+	if (sp->timeout)
+		l_timeout_modify(sp->timeout, sp->interval);
+	else
+		sp->timeout = l_timeout_create(sp->interval,
+					scan_periodic_timeout, sp, NULL);
 }
 
 enum scan_ssid_security scan_get_ssid_security(
@@ -382,6 +498,7 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 	{
 		struct l_genl_msg *msg;
 		struct scan_results *results;
+		struct scan_periodic *sp;
 
 		results = l_new(struct scan_results, 1);
 		results->wiphy = attr_wiphy;
@@ -392,6 +509,18 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 						&attr_ifindex);
 		l_genl_family_dump(nl80211, msg, get_scan_callback, results,
 					get_scan_done);
+
+		sp = l_queue_find(periodic_scans, scan_periodic_match,
+					L_UINT_TO_PTR(attr_ifindex));
+		if (sp) {
+			if (!sp->triggered) {
+				l_debug("Resetting periodic timeout");
+				sp->interval = SCAN_INIT_INTERVAL;
+			}
+
+			scan_periodic_rearm(sp);
+		}
+
 		return;
 	}
 	}
@@ -409,16 +538,25 @@ bool scan_init(struct l_genl_family *in, scan_notify_func_t func)
 	}
 
 	notify = func;
+	periodic_scans = l_queue_new();
 
 	return true;
 }
 
 bool scan_free()
 {
+	bool r;
+
 	if (!nl80211)
 		return false;
 
 	notify = NULL;
+	l_queue_destroy(periodic_scans,
+				(l_queue_destroy_func_t) scan_periodic_free);
+	periodic_scans = NULL;
 
-	return l_genl_family_unregister(nl80211, scan_id);
+	r = l_genl_family_unregister(nl80211, scan_id);
+	scan_id = 0;
+
+	return r;
 }

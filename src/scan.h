@@ -44,6 +44,8 @@ struct scan_bss {
 
 void scan_start(struct l_genl_family *nl80211, uint32_t ifindex,
 		scan_func_t callback, void *user_data);
+void scan_periodic_start(uint32_t ifindex);
+bool scan_periodic_stop(uint32_t ifindex);
 
 void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
 			uint32_t scan_interval, scan_func_t callback,
