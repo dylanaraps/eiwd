@@ -1043,7 +1043,6 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	}
 
 	/*
-	 * TODO: Parse second RSNE
 	 * 11.6.6.4: "If a second RSNE is provided in the message, the
 	 * Supplicant uses the pairwise cipher suite specified in the second
 	 * RSNE or deauthenticates."
