@@ -302,6 +302,15 @@ Wireless daemon
   Priority: Medium
   Complexity: C1
 
+- Add unit test data with 2nd RSNE in Authenticator 3/4 message
+
+  The specification allows the AP to send a second RSN element in its 4-way
+  handshake message 3/4.  Find some test data for this case and create a unit
+  test case.
+
+  Priority: Low
+  Complexity: C1
+
 - Handle "Use group cipher suite" option for pairwise ciphers
 
   If the AP specifies "Use group cipher suite" as its only pairwise suite, then
