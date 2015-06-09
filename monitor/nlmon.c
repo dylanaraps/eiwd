@@ -111,6 +111,7 @@ enum attr_type {
 	ATTR_U16,
 	ATTR_U32,
 	ATTR_U64,
+	ATTR_S8,
 	ATTR_S32,
 	ATTR_S64,
 	ATTR_STRING,
@@ -1672,14 +1673,14 @@ static const struct attr_entry sta_info_table[] = {
 	{ NL80211_STA_INFO_TX_BYTES,	"Total TX bytes",	ATTR_U32 },
 	{ NL80211_STA_INFO_RX_BYTES64,	"Total RX bytes",	ATTR_U64 },
 	{ NL80211_STA_INFO_TX_BYTES64,	"Total TX bytes",	ATTR_U64 },
-	{ NL80211_STA_INFO_SIGNAL,	"Signal strength",	ATTR_U8  },
 	{ NL80211_STA_INFO_TX_BITRATE,	"TX bitrate" },
+	{ NL80211_STA_INFO_SIGNAL,	"Signal strength",	ATTR_S8  },
 	{ NL80211_STA_INFO_RX_PACKETS,	"RX packets",		ATTR_U32 },
 	{ NL80211_STA_INFO_TX_PACKETS,	"TX packets",		ATTR_U32 },
 	{ NL80211_STA_INFO_TX_RETRIES,	"TX retries",		ATTR_U32 },
 	{ NL80211_STA_INFO_TX_FAILED,	"TX failed",		ATTR_U32 },
 	{ NL80211_STA_INFO_SIGNAL_AVG,	"Signal strength average",
-								ATTR_U8  },
+								ATTR_S8  },
 	{ NL80211_STA_INFO_LLID,	"Mesh LLID",		ATTR_U16 },
 	{ NL80211_STA_INFO_PLID,	"Mesh PLID",		ATTR_U16 },
 	{ NL80211_STA_INFO_PLINK_STATE, "P-Link state" },
@@ -2495,6 +2496,7 @@ static void print_attributes(int indent, const struct attr_entry *table,
 		uint32_t val32;
 		uint16_t val16;
 		uint8_t val8;
+		int8_t val_s8;
 		int32_t val_s32;
 		int64_t val_s64;
 		uint8_t *ptr;
@@ -2555,6 +2557,12 @@ static void print_attributes(int indent, const struct attr_entry *table,
 			print_attr(indent, "%s: %"PRIu64" (0x%016"PRIx64")",
 							str, val64, val64);
 			if (NLA_PAYLOAD(nla) != 8)
+				printf("malformed packet\n");
+			break;
+		case ATTR_S8:
+			val_s8 = *((int8_t *) NLA_DATA(nla));
+			print_attr(indent, "%s: %"PRId8, str, val_s8);
+			if (NLA_PAYLOAD(nla) != 1)
 				printf("malformed packet\n");
 			break;
 		case ATTR_S32:
@@ -3133,6 +3141,7 @@ static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 		uint32_t val32;
 		uint16_t val16;
 		uint8_t val8;
+		int8_t val_s8;
 		int32_t val_s32;
 		int64_t val_s64;
 
@@ -3185,6 +3194,12 @@ static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 			print_attr(indent, "%s: %"PRIu64" (0x%016"PRIx64")",
 							str, val64, val64);
 			if (RTA_PAYLOAD(attr) != 8)
+				printf("malformed packet\n");
+			break;
+		case ATTR_S8:
+			val_s8 = *((int8_t *) RTA_DATA(attr));
+			print_attr(indent, "%s: %"PRId8, str, val_s8);
+			if (RTA_PAYLOAD(attr) != 1)
 				printf("malformed packet\n");
 			break;
 		case ATTR_S32:
