@@ -1666,6 +1666,20 @@ static void print_sta_flag_update(unsigned int level, const char *label,
 	}
 }
 
+static const struct attr_entry rate_info_table[] = {
+	{ NL80211_RATE_INFO_BITRATE,	"Bit Rate (Legacy)",	ATTR_U16 },
+	{ NL80211_RATE_INFO_MCS,	"MCS Index",		ATTR_U8 },
+	{ NL80211_RATE_INFO_40_MHZ_WIDTH, "40 Mhz Width",	ATTR_FLAG },
+	{ NL80211_RATE_INFO_SHORT_GI,	"Short GI",		ATTR_FLAG },
+	{ NL80211_RATE_INFO_BITRATE32,	"Bit Rate",		ATTR_U32 },
+	{ NL80211_RATE_INFO_VHT_MCS,	"VHT MCS Index",	ATTR_U8 },
+	{ NL80211_RATE_INFO_VHT_NSS,	"# VHT Streams",	ATTR_U8 },
+	{ NL80211_RATE_INFO_80_MHZ_WIDTH, "80 Mhz Width",	ATTR_FLAG },
+	{ NL80211_RATE_INFO_80P80_MHZ_WIDTH, "80P80 Mhz Width", ATTR_FLAG },
+	{ NL80211_RATE_INFO_160_MHZ_WIDTH, "160 Mhz Width",	ATTR_FLAG },
+	{ }
+};
+
 static const struct attr_entry sta_info_table[] = {
 	{ NL80211_STA_INFO_INACTIVE_TIME,
 					"Inactivity time",	ATTR_U32 },
@@ -1673,8 +1687,9 @@ static const struct attr_entry sta_info_table[] = {
 	{ NL80211_STA_INFO_TX_BYTES,	"Total TX bytes",	ATTR_U32 },
 	{ NL80211_STA_INFO_RX_BYTES64,	"Total RX bytes",	ATTR_U64 },
 	{ NL80211_STA_INFO_TX_BYTES64,	"Total TX bytes",	ATTR_U64 },
-	{ NL80211_STA_INFO_TX_BITRATE,	"TX bitrate" },
 	{ NL80211_STA_INFO_SIGNAL,	"Signal strength",	ATTR_S8  },
+	{ NL80211_STA_INFO_TX_BITRATE,	"TX bitrate",
+					ATTR_NESTED, { rate_info_table } },
 	{ NL80211_STA_INFO_RX_PACKETS,	"RX packets",		ATTR_U32 },
 	{ NL80211_STA_INFO_TX_PACKETS,	"TX packets",		ATTR_U32 },
 	{ NL80211_STA_INFO_TX_RETRIES,	"TX retries",		ATTR_U32 },
@@ -1684,7 +1699,8 @@ static const struct attr_entry sta_info_table[] = {
 	{ NL80211_STA_INFO_LLID,	"Mesh LLID",		ATTR_U16 },
 	{ NL80211_STA_INFO_PLID,	"Mesh PLID",		ATTR_U16 },
 	{ NL80211_STA_INFO_PLINK_STATE, "P-Link state" },
-	{ NL80211_STA_INFO_RX_BITRATE,	"RX bitrate" },
+	{ NL80211_STA_INFO_RX_BITRATE,	"RX bitrate",
+					ATTR_NESTED, { rate_info_table } },
 	{ NL80211_STA_INFO_BSS_PARAM,	"BSS parameters",
 					ATTR_NESTED, { bss_param_table } },
 	{ NL80211_STA_INFO_CONNECTED_TIME,
