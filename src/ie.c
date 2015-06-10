@@ -1168,3 +1168,51 @@ int ie_parse_bss_load_from_data(const uint8_t *data, uint8_t len,
 	return ie_parse_bss_load(&iter, out_sta_count,
 			out_channel_utilization, out_admission_capacity);
 }
+
+int ie_parse_supported_rates(struct ie_tlv_iter *iter,
+				struct l_uintset **set)
+{
+	const uint8_t *rates;
+	unsigned int len;
+	unsigned int i;
+
+	len = ie_tlv_iter_get_length(iter);
+
+	if (ie_tlv_iter_get_tag(iter) == IE_TYPE_SUPPORTED_RATES &&
+			len != 8)
+		return -EINVAL;
+
+	rates = ie_tlv_iter_get_data(iter);
+
+	if (!*set)
+		*set = l_uintset_new(108);
+
+	for (i = 0; i < len; i++) {
+		if (rates[i] == 0xff)
+			continue;
+
+		l_uintset_put(*set, rates[i] & 0x7f);
+	}
+
+	return 0;
+}
+
+int ie_parse_supported_rates_from_data(const uint8_t *data, uint8_t len,
+				struct l_uintset **set)
+{
+	struct ie_tlv_iter iter;
+	uint8_t tag;
+
+	ie_tlv_iter_init(&iter, data, len);
+
+	if (!ie_tlv_iter_next(&iter))
+		return -EMSGSIZE;
+
+	tag = ie_tlv_iter_get_tag(&iter);
+
+	if (tag != IE_TYPE_SUPPORTED_RATES &&
+			tag != IE_TYPE_EXTENDED_SUPPORTED_RATES)
+		return -EPROTOTYPE;
+
+	return ie_parse_supported_rates(&iter, set);
+}

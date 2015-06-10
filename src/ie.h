@@ -279,3 +279,8 @@ int ie_parse_bss_load_from_data(const uint8_t *data, uint8_t len,
 				uint16_t *out_sta_count,
 				uint8_t *out_channel_utilization,
 				uint16_t *out_admission_capacity);
+
+int ie_parse_supported_rates(struct ie_tlv_iter *iter,
+				struct l_uintset **set);
+int ie_parse_supported_rates_from_data(const uint8_t *data, uint8_t len,
+				struct l_uintset **set);
