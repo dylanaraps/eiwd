@@ -241,6 +241,14 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 				bss->rsne = l_memdup(iter.data - 2,
 								iter.len + 2);
 			break;
+		case IE_TYPE_BSS_LOAD:
+			if (ie_parse_bss_load(&iter, NULL, &bss->utilization,
+						NULL) < 0)
+				l_warn("Unable to parse BSS Load IE");
+			else
+				l_debug("Load: %u/255", bss->utilization);
+
+			break;
 		case IE_TYPE_VENDOR_SPECIFIC:
 			/* Interested only in WPA IE from Vendor data */
 			if (!bss->wpa && is_ie_wpa_ie(iter.data, iter.len))
@@ -260,6 +268,7 @@ static struct scan_bss *scan_parse_attr_bss(struct l_genl_attr *attr)
 	struct scan_bss *bss;
 
 	bss = l_new(struct scan_bss, 1);
+	bss->utilization = 127;
 
 	while (l_genl_attr_next(attr, &type, &len, &data)) {
 		switch (type) {
@@ -361,6 +370,8 @@ void scan_bss_compute_rank(struct scan_bss *bss)
 	static const double RANK_OPEN_FACTOR = 0.5;
 	static const double RANK_NO_PRIVACY_FACTOR = 0.5;
 	static const double RANK_5G_FACTOR = 1.1;
+	static const double RANK_HIGH_UTILIZATION_FACTOR = 0.8;
+	static const double RANK_LOW_UTILIZATION_FACTOR = 1.2;
 	double rank;
 	uint32_t irank;
 
@@ -391,7 +402,11 @@ void scan_bss_compute_rank(struct scan_bss *bss)
 	if (bss->frequency > 4000)
 		rank *= RANK_5G_FACTOR;
 
-	/* TODO: Take BSS Load into consideration */
+	/* Rank loaded APs lower and lighly loaded APs higher */
+	if (bss->utilization >= 192)
+		rank *= RANK_HIGH_UTILIZATION_FACTOR;
+	else if (bss->utilization <= 63)
+		rank *= RANK_LOW_UTILIZATION_FACTOR;
 
 	/* TODO: Take maximum supported rate into consideration */
 
