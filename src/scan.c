@@ -370,7 +370,7 @@ void scan_bss_compute_rank(struct scan_bss *bss)
 	 */
 
 	/* Heavily slanted towards signal strength */
-	rank = 10000 - bss->signal_strength;
+	rank = 10000 + bss->signal_strength;
 
 	/*
 	 * Prefer RSNE first, WPA second.  Open networks are much less
