@@ -2147,6 +2147,8 @@ static void nl80211_vanished(void *user_data)
 {
 	l_debug("Lost nl80211 interface");
 
+	scan_exit();
+
 	l_queue_destroy(wiphy_list, wiphy_free);
 	wiphy_list = NULL;
 }
@@ -2198,6 +2200,8 @@ bool wiphy_exit(void)
 		return false;
 
 	l_debug("Closing nl80211 interface");
+
+	scan_exit();
 
 	/*
 	 * The generic netlink master object keeps track of all families
