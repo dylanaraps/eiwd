@@ -36,6 +36,8 @@ typedef void (*scan_func_t)(struct l_genl_msg *msg, void *user_data);
 typedef bool (*scan_notify_func_t)(uint32_t wiphy, uint32_t ifindex,
 					struct l_queue *bss_list);
 
+struct scan_freq_set;
+
 struct scan_bss {
 	uint8_t addr[6];
 	uint32_t frequency;
@@ -69,6 +71,11 @@ void bss_get_supported_ciphers(struct scan_bss *bss,
 				uint16_t *group_ciphers);
 
 uint8_t scan_freq_to_channel(uint32_t freq, enum scan_band *out_band);
+
+struct scan_freq_set *scan_freq_set_new(void);
+void scan_freq_set_free(struct scan_freq_set *freqs);
+bool scan_freq_set_add(struct scan_freq_set *freqs, uint32_t freq);
+bool scan_freq_set_contains(struct scan_freq_set *freqs, uint32_t freq);
 
 bool scan_init(struct l_genl_family *in, scan_notify_func_t func);
 bool scan_free();

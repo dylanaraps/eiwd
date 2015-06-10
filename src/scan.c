@@ -664,6 +664,66 @@ uint8_t scan_freq_to_channel(uint32_t freq, enum scan_band *out_band)
 	return 0;
 }
 
+struct scan_freq_set {
+	uint16_t channels_2ghz;
+	struct l_uintset *channels_5ghz;
+};
+
+struct scan_freq_set *scan_freq_set_new(void)
+{
+	struct scan_freq_set *ret = l_new(struct scan_freq_set, 1);
+
+	/* 802.11-2012, 8.4.2.10 hints that 200 is the largest channel number */
+	ret->channels_5ghz = l_uintset_new_from_range(1, 200);
+
+	return ret;
+}
+
+void scan_freq_set_free(struct scan_freq_set *freqs)
+{
+	l_free(freqs->channels_5ghz);
+	l_free(freqs);
+}
+
+bool scan_freq_set_add(struct scan_freq_set *freqs, uint32_t freq)
+{
+	enum scan_band band;
+	uint8_t channel;
+
+	channel = scan_freq_to_channel(freq, &band);
+	if (!channel)
+		return false;
+
+	switch (band) {
+	case SCAN_BAND_2_4_GHZ:
+		freqs->channels_2ghz |= 1 << (channel - 1);
+		return true;
+	case SCAN_BAND_5_GHZ:
+		return l_uintset_put(freqs->channels_5ghz, channel);
+	}
+
+	return false;
+}
+
+bool scan_freq_set_contains(struct scan_freq_set *freqs, uint32_t freq)
+{
+	enum scan_band band;
+	uint8_t channel;
+
+	channel = scan_freq_to_channel(freq, &band);
+	if (!channel)
+		return false;
+
+	switch (band) {
+	case SCAN_BAND_2_4_GHZ:
+		return freqs->channels_2ghz & (1 << (channel - 1));
+	case SCAN_BAND_5_GHZ:
+		return l_uintset_contains(freqs->channels_5ghz, channel);
+	}
+
+	return false;
+}
+
 bool scan_init(struct l_genl_family *in, scan_notify_func_t func)
 {
 	nl80211 = in;
