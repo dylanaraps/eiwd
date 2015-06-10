@@ -356,11 +356,11 @@ static struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
 
 void scan_bss_compute_rank(struct scan_bss *bss)
 {
-	double RANK_RSNE_FACTOR = 1.2;
-	double RANK_WPA_FACTOR = 1.0;
-	double RANK_OPEN_FACTOR = 0.5;
-	double RANK_NO_PRIVACY_FACTOR = 0.5;
-	double RANK_5G_FACTOR = 1.1;
+	static const double RANK_RSNE_FACTOR = 1.2;
+	static const double RANK_WPA_FACTOR = 1.0;
+	static const double RANK_OPEN_FACTOR = 0.5;
+	static const double RANK_NO_PRIVACY_FACTOR = 0.5;
+	static const double RANK_5G_FACTOR = 1.1;
 	double rank;
 	uint32_t irank;
 
