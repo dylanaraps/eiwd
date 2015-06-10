@@ -78,4 +78,4 @@ bool scan_freq_set_add(struct scan_freq_set *freqs, uint32_t freq);
 bool scan_freq_set_contains(struct scan_freq_set *freqs, uint32_t freq);
 
 bool scan_init(struct l_genl_family *in, scan_notify_func_t func);
-bool scan_free();
+bool scan_exit();

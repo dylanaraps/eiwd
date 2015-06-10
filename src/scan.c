@@ -794,7 +794,7 @@ bool scan_init(struct l_genl_family *in, scan_notify_func_t func)
 	return true;
 }
 
-bool scan_free()
+bool scan_exit()
 {
 	bool r;
 
