@@ -27,6 +27,11 @@ enum scan_ssid_security {
 	SCAN_SSID_SECURITY_8021X,
 };
 
+enum scan_band {
+	SCAN_BAND_2_4_GHZ,
+	SCAN_BAND_5_GHZ,
+};
+
 typedef void (*scan_func_t)(struct l_genl_msg *msg, void *user_data);
 typedef bool (*scan_notify_func_t)(uint32_t wiphy, uint32_t ifindex,
 					struct l_queue *bss_list);
@@ -62,6 +67,8 @@ void scan_bss_compute_rank(struct scan_bss *bss);
 void bss_get_supported_ciphers(struct scan_bss *bss,
 				uint16_t *pairwise_ciphers,
 				uint16_t *group_ciphers);
+
+uint8_t scan_freq_to_channel(uint32_t freq, enum scan_band *out_band);
 
 bool scan_init(struct l_genl_family *in, scan_notify_func_t func);
 bool scan_free();

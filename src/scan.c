@@ -615,6 +615,55 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
+uint8_t scan_freq_to_channel(uint32_t freq, enum scan_band *out_band)
+{
+	uint32_t channel = 0;
+
+	if (freq >= 2412 && freq <= 2484) {
+		if (freq == 2484)
+			channel = 14;
+		else {
+			channel = freq - 2407;
+
+			if (channel % 5)
+				return 0;
+
+			channel /= 5;
+		}
+
+		if (out_band)
+			*out_band = SCAN_BAND_2_4_GHZ;
+
+		return channel;
+	}
+
+	if (freq >= 5005 && freq < 5900) {
+		if (channel % 5)
+			return 0;
+
+		channel = (freq - 5000) / 5;
+
+		if (out_band)
+			*out_band = SCAN_BAND_5_GHZ;
+
+		return channel;
+	}
+
+	if (freq >= 4905 && freq < 5000) {
+		if (channel % 5)
+			return 0;
+
+		channel = (freq - 4000) / 5;
+
+		if (out_band)
+			*out_band = SCAN_BAND_5_GHZ;
+
+		return channel;
+	}
+
+	return 0;
+}
+
 bool scan_init(struct l_genl_family *in, scan_notify_func_t func)
 {
 	nl80211 = in;
