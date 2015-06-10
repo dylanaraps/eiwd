@@ -236,6 +236,13 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 			bss->ssid_len = iter.len;
 			have_ssid = true;
 			break;
+		case IE_TYPE_SUPPORTED_RATES:
+		case IE_TYPE_EXTENDED_SUPPORTED_RATES:
+			if (ie_parse_supported_rates(&iter,
+						&bss->supported_rates) < 0)
+				l_warn("Unable to parse [Extended] "
+					"Supported Rates IE");
+			break;
 		case IE_TYPE_RSN:
 			if (!bss->rsne)
 				bss->rsne = l_memdup(iter.data - 2,
@@ -420,6 +427,7 @@ void scan_bss_compute_rank(struct scan_bss *bss)
 
 void scan_bss_free(struct scan_bss *bss)
 {
+	l_uintset_free(bss->supported_rates);
 	l_free(bss->rsne);
 	l_free(bss->wpa);
 	l_free(bss);

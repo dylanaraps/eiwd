@@ -40,6 +40,7 @@ struct scan_bss {
 	uint8_t *wpa;
 	uint8_t ssid[32];
 	uint8_t ssid_len;
+	struct l_uintset *supported_rates;
 	uint8_t utilization;
 	uint16_t rank;
 };
