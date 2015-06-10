@@ -53,6 +53,7 @@ struct scan_results {
 	uint32_t wiphy;
 	uint32_t ifindex;
 	struct l_queue *bss_list;
+	struct scan_freq_set *freqs;
 };
 
 struct scan_periodic {
@@ -319,6 +320,28 @@ fail:
 	return NULL;
 }
 
+static struct scan_freq_set *scan_parse_attr_scan_frequencies(
+						struct l_genl_attr *attr)
+{
+	uint16_t type, len;
+	const void *data;
+	struct scan_freq_set *set;
+
+	set = scan_freq_set_new();
+
+	while (l_genl_attr_next(attr, &type, &len, &data)) {
+		uint32_t freq;
+
+		if (len != sizeof(uint32_t))
+			continue;
+
+		freq = *((uint32_t *) data);
+		scan_freq_set_add(set, freq);
+	}
+
+	return set;
+}
+
 static struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
 					uint32_t *out_ifindex,
 					uint64_t *out_wdev)
@@ -524,7 +547,35 @@ static void get_scan_done(void *user)
 				(l_queue_destroy_func_t) scan_bss_free);
 
 done:
+	if (results->freqs)
+		scan_freq_set_free(results->freqs);
+
 	l_free(results);
+}
+
+static void scan_parse_new_scan_results(struct l_genl_msg *msg,
+					struct scan_results *results)
+{
+	struct l_genl_attr attr, nested;
+	uint16_t type, len;
+	const void *data;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_SCAN_FREQUENCIES:
+			if (!l_genl_attr_recurse(&attr, &nested)) {
+				l_warn("Failed to parse ATTR_SCAN_FREQUENCIES");
+				break;
+			}
+
+			results->freqs =
+				scan_parse_attr_scan_frequencies(&nested);
+			break;
+		}
+	}
 }
 
 static void scan_notify(struct l_genl_msg *msg, void *user_data)
@@ -585,7 +636,7 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 	case NL80211_CMD_NEW_SCAN_RESULTS:
 	case NL80211_CMD_SCHED_SCAN_RESULTS:
 	{
-		struct l_genl_msg *msg;
+		struct l_genl_msg *scan_msg;
 		struct scan_results *results;
 		struct scan_periodic *sp;
 
@@ -593,11 +644,13 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		results->wiphy = attr_wiphy;
 		results->ifindex = attr_ifindex;
 
-		msg = l_genl_msg_new_sized(NL80211_CMD_GET_SCAN, 8);
-		l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4,
+		scan_parse_new_scan_results(msg, results);
+
+		scan_msg = l_genl_msg_new_sized(NL80211_CMD_GET_SCAN, 8);
+		l_genl_msg_append_attr(scan_msg, NL80211_ATTR_IFINDEX, 4,
 						&attr_ifindex);
-		l_genl_family_dump(nl80211, msg, get_scan_callback, results,
-					get_scan_done);
+		l_genl_family_dump(nl80211, scan_msg, get_scan_callback,
+					results, get_scan_done);
 
 		sp = l_queue_find(periodic_scans, scan_periodic_match,
 					L_UINT_TO_PTR(attr_ifindex));
@@ -681,7 +734,7 @@ struct scan_freq_set *scan_freq_set_new(void)
 
 void scan_freq_set_free(struct scan_freq_set *freqs)
 {
-	l_free(freqs->channels_5ghz);
+	l_uintset_free(freqs->channels_5ghz);
 	l_free(freqs);
 }
 
