@@ -271,3 +271,11 @@ int ie_parse_wpa_from_data(const uint8_t *data, size_t len,
 						struct ie_rsn_info *info);
 bool is_ie_wpa_ie(const uint8_t *data, uint8_t len);
 bool ie_build_wpa(const struct ie_rsn_info *info, uint8_t *to);
+
+int ie_parse_bss_load(struct ie_tlv_iter *iter, uint16_t *out_sta_count,
+			uint8_t *out_channel_utilization,
+			uint16_t *out_admission_capacity);
+int ie_parse_bss_load_from_data(const uint8_t *data, uint8_t len,
+				uint16_t *out_sta_count,
+				uint8_t *out_channel_utilization,
+				uint16_t *out_admission_capacity);

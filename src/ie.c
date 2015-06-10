@@ -1126,3 +1126,45 @@ bool ie_build_wpa(const struct ie_rsn_info *info, uint8_t *to)
 
 	return true;
 }
+
+int ie_parse_bss_load(struct ie_tlv_iter *iter, uint16_t *out_sta_count,
+			uint8_t *out_channel_utilization,
+			uint16_t *out_admission_capacity)
+{
+	const uint8_t *data;
+
+	if (ie_tlv_iter_get_length(iter) != 5)
+		return -EINVAL;
+
+	data = ie_tlv_iter_get_data(iter);
+
+	if (out_sta_count)
+		*out_sta_count = data[0] | data[1] << 8;
+
+	if (out_channel_utilization)
+		*out_channel_utilization = data[2];
+
+	if (out_admission_capacity)
+		*out_admission_capacity = data[3] | data[4] << 8;
+
+	return 0;
+}
+
+int ie_parse_bss_load_from_data(const uint8_t *data, uint8_t len,
+				uint16_t *out_sta_count,
+				uint8_t *out_channel_utilization,
+				uint16_t *out_admission_capacity)
+{
+	struct ie_tlv_iter iter;
+
+	ie_tlv_iter_init(&iter, data, len);
+
+	if (!ie_tlv_iter_next(&iter))
+		return -EMSGSIZE;
+
+	if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_BSS_LOAD)
+		return -EPROTOTYPE;
+
+	return ie_parse_bss_load(&iter, out_sta_count,
+			out_channel_utilization, out_admission_capacity);
+}
