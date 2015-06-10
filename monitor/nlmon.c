@@ -359,7 +359,7 @@ static void print_ie_rate(unsigned int level, const char *label,
 	print_attr(level, "%s:", label);
 
 	while (i < size) {
-		bool mandatory = (rate[i] & 0x8);
+		bool mandatory = (rate[i] & 0x80);
 
 		if (rate[i] == 0xff) {
 			print_attr(level + 1, "BSS membership HT_PHY");
