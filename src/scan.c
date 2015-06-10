@@ -379,6 +379,8 @@ void scan_bss_compute_rank(struct scan_bss *bss)
 	static const double RANK_5G_FACTOR = 1.1;
 	static const double RANK_HIGH_UTILIZATION_FACTOR = 0.8;
 	static const double RANK_LOW_UTILIZATION_FACTOR = 1.2;
+	static const double RANK_MIN_SUPPORTED_RATE_FACTOR = 0.8;
+	static const double RANK_MAX_SUPPORTED_RATE_FACTOR = 1.1;
 	double rank;
 	uint32_t irank;
 
@@ -415,7 +417,18 @@ void scan_bss_compute_rank(struct scan_bss *bss)
 	else if (bss->utilization <= 63)
 		rank *= RANK_LOW_UTILIZATION_FACTOR;
 
-	/* TODO: Take maximum supported rate into consideration */
+	if (bss->supported_rates) {
+		uint8_t max = l_uintset_find_max(bss->supported_rates);
+		double factor = RANK_MAX_SUPPORTED_RATE_FACTOR -
+					RANK_MIN_SUPPORTED_RATE_FACTOR;
+
+		/*
+		 * Maximum rate is 54 Mbps, see DATA_RATE in 802.11-2012,
+		 * Section 6.5.5.2
+		 */
+		factor = factor * max / 108 + RANK_MIN_SUPPORTED_RATE_FACTOR;
+		bss->rank *= factor;
+	}
 
 	irank = rank;
 
