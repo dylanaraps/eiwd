@@ -1767,6 +1767,8 @@ static const struct attr_entry bss_table[] = {
 	{ NL80211_BSS_BEACON_IES, "Beacon IEs",
 				ATTR_CUSTOM, { .function = print_ie }	},
 	{ NL80211_BSS_CHAN_WIDTH,	"Chan Width",	ATTR_U32	},
+	{ NL80211_BSS_BEACON_TSF,	"Beacon TSF",	ATTR_U64	},
+	{ NL80211_BSS_PRESP_DATA,	"Probe Response", ATTR_FLAG	},
 	{ }
 };
 
