@@ -1327,6 +1327,67 @@ static void print_ie_ht_capabilities(unsigned int level,
 	/* TODO: ASEL Capability field */
 }
 
+static void print_ie_rm_enabled_caps(unsigned int level,
+					const char *label,
+					const void *data, uint16_t size)
+{
+	static const char *capabilities[40] = {
+		[0] = "Link Measurement",
+		[1] = "Neighbor Report",
+		[2] = "Parallel Measurements",
+		[3] = "Repeated Measurements",
+		[4] = "Beacon Passive Measurement",
+		[5] = "Beacon Active Measurement",
+		[6] = "Beacon Table Measurement",
+		[7] = "Beacon Measurement Reporting Conditions",
+		[8] = "Frame Measurement",
+		[9] = "Channel Load Measurement",
+		[10] = "Noise Histogram Measurement",
+		[11] = "Statistics Measurement",
+		[12] = "LCI Measurement",
+		[13] = "LCI Azimuth",
+		[14] = "Transmit Stream / Category Measurement",
+		[15] = "Triggered Transmit Stream / Category Measurement",
+		[16] = "AP Channel Report",
+		[17] = "RM MIB",
+		[27] = "Measurement Pilot Transmission Information",
+		[28] = "Neighbor Report TSF Offset",
+		[29] = "RCPI Measurement capability enabled",
+		[30] = "RSNI Measurement",
+		[31] = "BSS Average Access Delay",
+		[32] = "BSS Available Admission Capacity",
+		[33] = "Antenna capability",
+	};
+	const uint8_t *bytes;
+	uint8_t bytemask1[3] = { 0xff, 0xff, 0x03 };
+	uint8_t bytemask2[2] = { 0xf8, 0x03 };
+	uint8_t byte;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	if (size != 5)
+		return;
+
+	bytes = data;
+
+	print_ie_bitfield(level + 1, "Enabled", bytes,
+				bytemask1, sizeof(bytemask1), capabilities);
+
+	byte = util_bit_field(bytes[2], 2, 3);
+	print_attr(level + 1, "Operating Channel Max Measurement Duration: %u",
+			byte);
+
+	byte = util_bit_field(bytes[2], 5, 3);
+	print_attr(level + 1, "Non-Operating Channel Max Measurement "
+			"Duration: %u", byte);
+
+	byte = util_bit_field(bytes[3], 0, 3);
+	print_attr(level + 1, "Measurement Pilot Capability: %u", byte);
+
+	print_ie_bitfield(level + 1, "Enabled", bytes + sizeof(bytemask1),
+				bytemask2, sizeof(bytemask2), capabilities);
+}
+
 static struct attr_entry ie_entry[] = {
 	{ IE_TYPE_SSID,				"SSID",
 		ATTR_CUSTOM,	{ .function = print_ie_ssid } },
@@ -1358,6 +1419,8 @@ static struct attr_entry ie_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_ie_extended_capabilities } },
 	{ IE_TYPE_HT_CAPABILITIES,		"HT Capabilities",
 		ATTR_CUSTOM,	{ .function = print_ie_ht_capabilities } },
+	{ IE_TYPE_RM_ENABLED_CAPABILITIES,	"RM Enabled Capabilities",
+		ATTR_CUSTOM,	{ .function = print_ie_rm_enabled_caps } },
 	{ },
 };
 
