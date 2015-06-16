@@ -1498,11 +1498,11 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 	enum scan_ssid_security ssid_security;
 	const char *path;
 
-	l_debug("Found BSS '%s' with SSID: %s, freq: %u, "
+	l_debug("Found BSS '%s' with SSID: %s, freq: %u, rank: %u, "
 			"strength: %i",
 			bss_address_to_string(bss),
 			util_ssid_to_utf8(bss->ssid_len, bss->ssid),
-			bss->frequency, bss->signal_strength);
+			bss->frequency, bss->rank, bss->signal_strength);
 
 	if (!util_ssid_is_utf8(bss->ssid_len, bss->ssid)) {
 		l_warn("Ignoring BSS with non-UTF8 SSID");
