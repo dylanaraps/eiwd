@@ -501,6 +501,13 @@ void bss_get_supported_ciphers(struct scan_bss *bss,
 	*group_ciphers = ie.group_cipher;
 }
 
+int scan_bss_rank_compare(const void *a, const void *b, void *user_data)
+{
+	const struct scan_bss *new_bss = a, *bss = b;
+
+	return bss->rank - new_bss->rank;
+}
+
 static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct scan_results *results = user_data;
@@ -523,9 +530,7 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 	}
 
 	scan_bss_compute_rank(bss);
-	l_debug("computed rank: %u", bss->rank);
-
-	l_queue_push_tail(results->bss_list, bss);
+	l_queue_insert(results->bss_list, bss, scan_bss_rank_compare, NULL);
 }
 
 static void get_scan_done(void *user)

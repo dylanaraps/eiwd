@@ -65,6 +65,7 @@ enum scan_ssid_security scan_get_ssid_security(enum ie_bss_capability bss_cap,
 						const struct ie_rsn_info *info);
 void scan_bss_free(struct scan_bss *bss);
 void scan_bss_compute_rank(struct scan_bss *bss);
+int scan_bss_rank_compare(const void *a, const void *b, void *user);
 
 void bss_get_supported_ciphers(struct scan_bss *bss,
 				uint16_t *pairwise_ciphers,
