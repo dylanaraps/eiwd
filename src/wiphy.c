@@ -1469,16 +1469,6 @@ static void mlme_cqm_event(struct l_genl_msg *msg, struct netdev *netdev)
 	}
 }
 
-static int add_bss(const void *a, const void *b, void *user_data)
-{
-	const struct scan_bss *new_bss = a, *bss = b;
-
-	if (new_bss->signal_strength > bss->signal_strength)
-		return 1;
-
-	return 0;
-}
-
 static void network_reset_bss_list(const void *key, void *value,
 					void *user_data)
 {
@@ -1576,7 +1566,7 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 			network_emit_added(network);
 	}
 
-	l_queue_insert(network->bss_list, bss, add_bss, NULL);
+	l_queue_insert(network->bss_list, bss, scan_bss_rank_compare, NULL);
 }
 
 static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
