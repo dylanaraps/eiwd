@@ -31,5 +31,6 @@ ssize_t write_file(const void *buffer, size_t len, const char *path_fmt, ...)
 	__attribute__((format(printf, 3, 4)));
 
 struct l_settings *storage_network_open(const char *type, const char *ssid);
+int storage_network_touch(const char *type, const char *ssid);
 void storage_network_sync(const char *type, const char *ssid,
 				struct l_settings *settings);

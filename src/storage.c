@@ -185,6 +185,24 @@ struct l_settings *storage_network_open(const char *type, const char *ssid)
 	return settings;
 }
 
+int storage_network_touch(const char *type, const char *ssid)
+{
+	char *path;
+	int ret;
+
+	if (ssid == NULL || type == NULL)
+		return -EINVAL;
+
+	path = l_strdup_printf(STORAGEDIR "/%s.%s", ssid, type);
+	ret = utimensat(0, path, NULL, 0);
+	l_free(path);
+
+	if (!ret)
+		return 0;
+
+	return -errno;
+}
+
 void storage_network_sync(const char *type, const char *ssid,
 				struct l_settings *settings)
 {
