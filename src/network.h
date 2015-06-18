@@ -24,6 +24,7 @@
 
 bool network_seen(uint32_t type, const char *ssid);
 bool network_connected(uint32_t type, const char *ssid);
+double network_rankmod(uint32_t type, const char *ssid);
 
 void network_init();
 void network_exit();
