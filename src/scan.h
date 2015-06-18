@@ -37,6 +37,8 @@ typedef bool (*scan_notify_func_t)(uint32_t wiphy, uint32_t ifindex,
 					struct l_queue *bss_list);
 
 struct scan_freq_set;
+struct ie_rsn_info;
+enum ie_bss_capability;
 
 struct scan_bss {
 	uint8_t addr[6];
