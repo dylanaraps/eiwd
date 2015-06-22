@@ -34,6 +34,7 @@
 #include "src/kdbus.h"
 #include "src/dbus.h"
 #include "src/agent.h"
+#include "src/network.h"
 
 static struct l_timeout *timeout = NULL;
 
@@ -168,8 +169,11 @@ int main(int argc, char *argv[])
 		goto destroy;
 	}
 
+	network_init();
+
 	l_main_run();
 
+	network_exit();
 	wiphy_exit();
 	netdev_exit();
 	dbus_exit();
