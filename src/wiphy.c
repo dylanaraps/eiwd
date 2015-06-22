@@ -47,6 +47,7 @@
 #include "src/netdev.h"
 #include "src/mpdu.h"
 #include "src/storage.h"
+#include "src/network.h"
 
 static struct l_genl *genl = NULL;
 static struct l_genl_family *nl80211 = NULL;
@@ -84,6 +85,7 @@ struct netdev {
 	struct l_hashmap *networks;
 	struct scan_bss *connected_bss;
 	struct network *connected_network;
+	struct l_queue *autoconnect_list;
 	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
 	struct l_io *eapol_io;
@@ -103,6 +105,12 @@ struct wiphy {
 	bool support_scheduled_scan:1;
 	bool support_rekey_offload:1;
 	uint16_t pairwise_ciphers;
+};
+
+struct autoconnect_entry {
+	uint16_t rank;
+	struct network *network;
+	struct scan_bss *bss;
 };
 
 static struct l_queue *wiphy_list = NULL;
@@ -907,6 +915,7 @@ static void netdev_free(void *data)
 
 	l_queue_destroy(netdev->bss_list, bss_free);
 	l_queue_destroy(netdev->old_bss_list, bss_free);
+	l_queue_destroy(netdev->autoconnect_list, l_free);
 	l_io_destroy(netdev->eapol_io);
 
 	netdev_set_linkmode_and_operstate(netdev->index, 0, IF_OPER_DOWN,
@@ -1555,11 +1564,21 @@ static bool network_remove_if_lost(const void *key, void *data, void *user_data)
 	return true;
 }
 
+static int autoconnect_rank_compare(const void *a, const void *b, void *user)
+{
+	const struct autoconnect_entry *new_ae = a;
+	const struct autoconnect_entry *ae = b;
+
+	return ae->rank - new_ae->rank;
+}
+
 static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 {
 	struct network *network;
 	enum scan_ssid_security ssid_security;
 	const char *path;
+	double rankmod;
+	struct autoconnect_entry *entry;
 
 	l_debug("Found BSS '%s' with SSID: %s, freq: %u, rank: %u, "
 			"strength: %i",
@@ -1627,9 +1646,22 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 				IWD_NETWORK_INTERFACE);
 		else
 			network_emit_added(network);
+
+		network_seen(network->ssid_security, network->ssid);
 	}
 
 	l_queue_insert(network->bss_list, bss, scan_bss_rank_compare, NULL);
+
+	rankmod = network_rankmod(network->ssid_security, network->ssid);
+	if (rankmod == 0.0)
+		return;
+
+	entry = l_new(struct autoconnect_entry, 1);
+	entry->network = network;
+	entry->bss = bss;
+	entry->rank = bss->rank * rankmod;
+	l_queue_insert(netdev->autoconnect_list, entry,
+				autoconnect_rank_compare, NULL);
 }
 
 static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
@@ -1656,6 +1688,9 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 	netdev->old_bss_list = netdev->bss_list;
 	netdev->bss_list = bss_list;
 	l_hashmap_foreach(netdev->networks, network_reset_bss_list, NULL);
+
+	l_queue_destroy(netdev->autoconnect_list, l_free);
+	netdev->autoconnect_list = l_queue_new();
 
 	for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
 				bss_entry = bss_entry->next) {
