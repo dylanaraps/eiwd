@@ -393,7 +393,7 @@ static struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
 	return bss;
 }
 
-void scan_bss_compute_rank(struct scan_bss *bss)
+static void scan_bss_compute_rank(struct scan_bss *bss)
 {
 	static const double RANK_RSNE_FACTOR = 1.2;
 	static const double RANK_WPA_FACTOR = 1.0;
