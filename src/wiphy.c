@@ -1442,8 +1442,10 @@ static void mlme_authenticate_event(struct l_genl_msg *msg,
 	return;
 
 error:
-	dbus_pending_reply(&netdev->connect_pending,
+	if (netdev->connect_pending)
+		dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_failed(netdev->connect_pending));
+
 	netdev_disassociated(netdev);
 }
 
