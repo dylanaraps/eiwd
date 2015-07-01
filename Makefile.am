@@ -59,6 +59,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h linux/kdbus.h \
 					src/agent.h src/agent.c \
 					src/storage.h src/storage.c \
 					src/network.h src/network.c \
+					src/wsc.h \
 					iwd.h
 src_iwd_LDADD = ell/libell-internal.la
 
