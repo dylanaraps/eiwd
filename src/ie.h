@@ -233,6 +233,7 @@ void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 			unsigned int len);
 void ie_tlv_iter_recurse(struct ie_tlv_iter *iter,
 			struct ie_tlv_iter *recurse);
+
 static inline unsigned int ie_tlv_iter_get_tag(struct ie_tlv_iter *iter)
 {
 	return iter->tag;
