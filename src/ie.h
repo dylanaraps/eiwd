@@ -249,6 +249,9 @@ static inline const unsigned char *ie_tlv_iter_get_data(
 	return iter->data;
 }
 
+void *ie_tlv_extract_wsc_payload(const unsigned char *ies, unsigned int len,
+							ssize_t *out_len);
+
 uint32_t ie_rsn_cipher_suite_to_cipher(enum ie_rsn_cipher_suite suite);
 bool ie_tlv_iter_next(struct ie_tlv_iter *iter);
 bool ie_tlv_builder_init(struct ie_tlv_builder *builder);

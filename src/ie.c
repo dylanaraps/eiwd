@@ -75,6 +75,102 @@ bool ie_tlv_iter_next(struct ie_tlv_iter *iter)
 	return true;
 }
 
+/*
+ * Concatenate all vendor IEs with a given OUI + type.
+ *
+ * Returns a newly allocated buffer with the contents of the matching ies
+ * copied into it.  @out_len is set to the overall size of the contents.
+ * If no matching elements were found, NULL is returned and @out_len is
+ * set to -ENOENT.
+ */
+static void *ie_tlv_vendor_ie_concat(const unsigned char oui[],
+					unsigned char type,
+					const unsigned char *ies,
+					unsigned int len,
+					ssize_t *out_len)
+{
+	struct ie_tlv_iter iter;
+	const unsigned char *data;
+	unsigned int ie_len;
+	unsigned int concat_len = 0;
+	unsigned char *ret;
+
+	ie_tlv_iter_init(&iter, ies, len);
+
+	while (ie_tlv_iter_next(&iter)) {
+		if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_VENDOR_SPECIFIC)
+			continue;
+
+		ie_len = ie_tlv_iter_get_length(&iter);
+		if (ie_len < 4)
+			continue;
+
+		data = ie_tlv_iter_get_data(&iter);
+
+		if (memcmp(data, oui, 3))
+			continue;
+
+		if (data[3] != type)
+			continue;
+
+		concat_len += ie_len - 4;
+	}
+
+	if (concat_len == 0) {
+		if (out_len)
+			*out_len = -ENOENT;
+
+		return NULL;
+	}
+
+	ie_tlv_iter_init(&iter, ies, len);
+	ret = l_malloc(concat_len);
+
+	concat_len = 0;
+
+	while (ie_tlv_iter_next(&iter)) {
+		if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_VENDOR_SPECIFIC)
+			continue;
+
+		ie_len = ie_tlv_iter_get_length(&iter);
+		if (ie_len < 4)
+			continue;
+
+		data = ie_tlv_iter_get_data(&iter);
+
+		if (memcmp(data, oui, 3))
+			continue;
+
+		if (data[3] != type)
+			continue;
+
+		memcpy(ret + concat_len, data + 4, ie_len - 4);
+		concat_len += ie_len - 4;
+	}
+
+	if (out_len)
+		*out_len = concat_len;
+
+	return ret;
+}
+
+/*
+ * Wi-Fi Simple Configuration v2.0.5, Section 8.2:
+ * "There may be more than one instance of the Wi-Fi Simple Configuration
+ * Information Element in a single 802.11 management frame. If multiple
+ * Information Elements are present, the Wi-Fi Simple Configuration data
+ * consists of the concatenation of the Data components of those Information
+ * Elements (the order of these elements in the original packet shall be
+ * preserved when concatenating Data components)."
+ */
+void *ie_tlv_extract_wsc_payload(const unsigned char *ies, unsigned int len,
+							ssize_t *out_len)
+{
+	static unsigned char oui[3] = { 0x00, 0x50, 0xf2 };
+
+	return ie_tlv_vendor_ie_concat(oui, 0x04, ies, len, out_len);
+}
+
 #define TLV_HEADER_LEN 2
 
 static bool ie_tlv_builder_init_recurse(struct ie_tlv_builder *builder,
