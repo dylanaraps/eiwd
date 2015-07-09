@@ -816,23 +816,20 @@ end:
 static void print_ie_wpa(unsigned int level, const char *label,
 						const void *data, uint16_t size)
 {
-	uint8_t type, offset;
+	uint8_t offset;
 	uint16_t version, count;
 
-	if (size < 3)
+	if (size < 2)
 		return;
 
 	offset = 0;
-	type = *((uint8_t *)data);
-	offset++;
 	version = l_get_le16(data + offset);
 	offset += 2;
 
-	if (!(type == 1 && version == 1))
+	if (version != 1)
 		return;
 
 	print_attr(level, "WPA:");
-	print_attr(level + 1, "Type: %d", type);
 	print_attr(level + 1, "Version: %d(%04x)", version, version);
 
 	if (offset + 4 > size)
@@ -873,13 +870,14 @@ end:
 static void print_ie_vendor(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
+	static const unsigned char wfa_oui[3] = { 0x00, 0x50, 0xf2 };
 	const uint8_t *oui = data;
 	const char *str = NULL;
 	unsigned int i;
 
 	print_attr(level, "%s: len %u", label, size);
 
-	if (size < 3)
+	if (size < 4)
 		return;
 
 	for (i = 0; oui_table[i].str; i++) {
@@ -890,17 +888,27 @@ static void print_ie_vendor(unsigned int level, const char *label,
 	}
 
 	if (!str) {
-		print_attr(level + 1, "OUI: %02x:%02x:%02x",
-							oui[0], oui[1], oui[2]);
+		print_attr(level + 1, "OUI: %02x:%02x:%02x type:%02x",
+							oui[0], oui[1], oui[2],
+							oui[3]);
 		return;
 	}
 
-	print_attr(level + 1, "%s (%02x:%02x:%02x)", str,
-							oui[0], oui[1], oui[2]);
+	print_attr(level + 1, "%s (%02x:%02x:%02x) type: %02x", str,
+							oui[0], oui[1], oui[2],
+							oui[3]);
 
-	if (!strcmp(str, "Microsoft")) {
-		print_ie_wpa(level + 2, label, data + 3, size - 3);
-		return;
+	data += 4;
+	size -= 4;
+
+	if (!memcmp(oui, wfa_oui, 3)) {
+		switch (oui[3]) {
+		case 1:		/* WFA WPA IE */
+			print_ie_wpa(level + 2, label, data, size);
+			return;
+		default:
+			return;
+		}
 	}
 }
 
