@@ -233,6 +233,7 @@ void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 			unsigned int len);
 void ie_tlv_iter_recurse(struct ie_tlv_iter *iter,
 			struct ie_tlv_iter *recurse);
+bool ie_tlv_iter_next(struct ie_tlv_iter *iter);
 
 static inline unsigned int ie_tlv_iter_get_tag(struct ie_tlv_iter *iter)
 {
@@ -253,8 +254,6 @@ static inline const unsigned char *ie_tlv_iter_get_data(
 void *ie_tlv_extract_wsc_payload(const unsigned char *ies, unsigned int len,
 							ssize_t *out_len);
 
-uint32_t ie_rsn_cipher_suite_to_cipher(enum ie_rsn_cipher_suite suite);
-bool ie_tlv_iter_next(struct ie_tlv_iter *iter);
 bool ie_tlv_builder_init(struct ie_tlv_builder *builder);
 bool ie_tlv_builder_set_length(struct ie_tlv_builder *builder,
 			unsigned int new_len);
@@ -264,6 +263,8 @@ bool ie_tlv_builder_recurse(struct ie_tlv_builder *builder,
 			struct ie_tlv_builder *recurse);
 void ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
 			unsigned int *out_len);
+
+uint32_t ie_rsn_cipher_suite_to_cipher(enum ie_rsn_cipher_suite suite);
 
 int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *info);
 int ie_parse_rsne_from_data(const uint8_t *data, size_t len,
