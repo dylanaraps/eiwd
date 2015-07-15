@@ -257,6 +257,37 @@ enum wsc_config_state {
 	WSC_CONFIG_STATE_CONFIGURED		= 0x02,
 };
 
+struct wsc_wfa_ext_iter {
+	unsigned short max;
+	unsigned short pos;
+	const unsigned char *pdu;
+	unsigned char type;
+	unsigned char len;
+	const unsigned char *data;
+};
+
+void wsc_wfa_ext_iter_init(struct wsc_wfa_ext_iter *iter,
+				const unsigned char *pdu, unsigned short len);
+bool wsc_wfa_ext_iter_next(struct wsc_wfa_ext_iter *iter);
+
+static inline unsigned char wsc_wfa_ext_iter_get_type(
+						struct wsc_wfa_ext_iter *iter)
+{
+	return iter->type;
+}
+
+static inline unsigned char wsc_wfa_ext_iter_get_length(
+						struct wsc_wfa_ext_iter *iter)
+{
+	return iter->len;
+}
+
+static inline const unsigned char *wsc_wfa_ext_iter_get_data(
+						struct wsc_wfa_ext_iter *iter)
+{
+	return iter->data;
+}
+
 struct wsc_attr_iter {
 	unsigned int max;
 	unsigned int pos;
@@ -269,6 +300,8 @@ struct wsc_attr_iter {
 void wsc_attr_iter_init(struct wsc_attr_iter *iter, const unsigned char *pdu,
 			unsigned int len);
 bool wsc_attr_iter_next(struct wsc_attr_iter *iter);
+bool wsc_attr_iter_recurse_wfa_ext(struct wsc_attr_iter *iter,
+					struct wsc_wfa_ext_iter *wfa_iter);
 
 static inline unsigned int wsc_attr_iter_get_type(struct wsc_attr_iter *iter)
 {
