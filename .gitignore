@@ -38,4 +38,5 @@ unit/test-mpdu
 unit/test-eapol
 unit/test-ssid-to-utf8
 unit/test-ssid-security
+unit/test-wsc
 test-suite.log
