@@ -256,3 +256,32 @@ enum wsc_config_state {
 	WSC_CONFIG_STATE_NOT_CONFIGURED		= 0x01,
 	WSC_CONFIG_STATE_CONFIGURED		= 0x02,
 };
+
+struct wsc_attr_iter {
+	unsigned int max;
+	unsigned int pos;
+	const unsigned char *pdu;
+	unsigned short type;
+	unsigned short len;
+	const unsigned char *data;
+};
+
+void wsc_attr_iter_init(struct wsc_attr_iter *iter, const unsigned char *pdu,
+			unsigned int len);
+bool wsc_attr_iter_next(struct wsc_attr_iter *iter);
+
+static inline unsigned int wsc_attr_iter_get_type(struct wsc_attr_iter *iter)
+{
+	return iter->type;
+}
+
+static inline unsigned int wsc_attr_iter_get_length(struct wsc_attr_iter *iter)
+{
+	return iter->len;
+}
+
+static inline const unsigned char *wsc_attr_iter_get_data(
+						struct wsc_attr_iter *iter)
+{
+	return iter->data;
+}
