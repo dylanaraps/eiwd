@@ -55,6 +55,7 @@ static const unsigned char wsc_attrs1[] = {
 static void wsc_test_iter_sanity_check(const void *data)
 {
 	struct wsc_attr_iter iter;
+	struct wsc_wfa_ext_iter wfa_iter;
 	unsigned short len;
 	enum wsc_attr type;
 
@@ -124,6 +125,18 @@ static void wsc_test_iter_sanity_check(const void *data)
 	assert(wsc_attr_iter_next(&iter));
 	assert(wsc_attr_iter_get_type(&iter) == WSC_ATTR_VENDOR_EXTENSION);
 	assert(wsc_attr_iter_get_length(&iter) == 14);
+
+	assert(wsc_attr_iter_recurse_wfa_ext(&iter, &wfa_iter));
+
+	assert(wsc_wfa_ext_iter_next(&wfa_iter));
+	assert(wsc_wfa_ext_iter_get_type(&wfa_iter) ==
+			WSC_WFA_EXTENSION_VERSION2);
+	assert(wsc_wfa_ext_iter_get_length(&wfa_iter) == 1);
+
+	assert(wsc_wfa_ext_iter_next(&wfa_iter));
+	assert(wsc_wfa_ext_iter_get_type(&wfa_iter) ==
+			WSC_WFA_EXTENSION_AUTHORIZED_MACS);
+	assert(wsc_wfa_ext_iter_get_length(&wfa_iter) == 6);
 
 	assert(!wsc_attr_iter_next(&iter));
 }
