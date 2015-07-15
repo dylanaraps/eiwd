@@ -88,7 +88,7 @@ unit_tests = unit/test-cmac-aes \
 		unit/test-pbkdf2-sha1 unit/test-prf-sha1 \
 		unit/test-crypto unit/test-eapol unit/test-mpdu \
 		unit/test-ie unit/test-ssid-to-utf8 unit/test-ssid-security \
-		unit/test-arc4
+		unit/test-arc4 unit/test-wsc
 
 if MAINTAINER_MODE
 noinst_PROGRAMS += $(unit_tests)
@@ -153,6 +153,9 @@ unit_test_ssid_to_utf8_LDADD = ell/libell-internal.la
 unit_test_ssid_security_SOURCES = unit/test-ssid-security.c src/ie.h src/ie.c \
 				src/scan.h src/scan.c
 unit_test_ssid_security_LDADD = ell/libell-internal.la
+
+unit_test_wsc_SOURCES = unit/test-wsc.c src/wsc.h src/wsc.c
+unit_test_wsc_LDADD = ell/libell-internal.la
 
 TESTS = $(unit_tests)
 
