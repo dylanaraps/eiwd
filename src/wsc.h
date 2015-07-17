@@ -319,3 +319,34 @@ static inline const unsigned char *wsc_attr_iter_get_data(
 {
 	return iter->data;
 }
+
+struct wsc_primary_device_type {
+	uint16_t category;
+	uint8_t oui[3];
+	uint8_t oui_type;
+	uint16_t subcategory;
+};
+
+struct wsc_probe_response {
+	bool version2;
+	enum wsc_config_state config_state;
+	bool ap_setup_locked;
+	bool selected_registrar;
+	enum wsc_device_password_id device_password_id;
+	uint16_t selected_reg_config_methods;
+	enum wsc_response_type response_type;
+	uint8_t uuid_e[16];
+	char manufacturer[65];
+	char model_name[33];
+	char model_number[33];
+	char serial_number[33];
+	struct wsc_primary_device_type primary_device_type;
+	char device_name[33];
+	uint16_t config_methods;
+	uint8_t rf_bands;
+	uint8_t authorized_macs[30];
+	uint16_t reg_config_methods;
+};
+
+int wsc_parse_probe_response(const unsigned char *pdu, unsigned int len,
+				struct wsc_probe_response *out);
