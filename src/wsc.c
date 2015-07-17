@@ -132,9 +132,256 @@ enum attr_flag {
 
 typedef bool (*attr_handler)(struct wsc_attr_iter *, void *);
 
+static bool extract_uint8(struct wsc_attr_iter *iter, void *data)
+{
+	uint8_t *to = data;
+
+	if (wsc_attr_iter_get_length(iter) != 1)
+		return false;
+
+	*to = *wsc_attr_iter_get_data(iter);
+
+	return true;
+}
+
+static bool extract_uint16(struct wsc_attr_iter *iter, void *data)
+{
+	uint16_t *to = data;
+
+	if (wsc_attr_iter_get_length(iter) != 2)
+		return false;
+
+	*to = l_get_be16(wsc_attr_iter_get_data(iter));
+
+	return true;
+}
+
+static bool extract_bool(struct wsc_attr_iter *iter, void *data)
+{
+	bool *to = data;
+
+	if (wsc_attr_iter_get_length(iter) != 1)
+		return false;
+
+	*to = *wsc_attr_iter_get_data(iter) ? true : false;
+
+	return true;
+}
+
+static bool extract_ascii_string(struct wsc_attr_iter *iter, void *data,
+					unsigned int max_len)
+{
+	char *out = data;
+	const uint8_t *p;
+	unsigned int len;
+	unsigned int i;
+
+	len = wsc_attr_iter_get_length(iter);
+	if (len > max_len)
+		return false;
+
+	p = wsc_attr_iter_get_data(iter);
+
+	for (i = 0; i < len; i++) {
+		if (!p[i])
+			break;
+
+		if (!l_ascii_isprint(p[i]))
+			return false;
+	}
+
+	memcpy(out, p, i);
+	out[i] = '\0';
+	return true;
+}
+
+static bool extract_utf8_string(struct wsc_attr_iter *iter, void *data,
+					unsigned int max_len)
+{
+	char *out = data;
+	const uint8_t *p;
+	unsigned int len;
+	unsigned int i;
+
+	len = wsc_attr_iter_get_length(iter);
+	if (len > max_len)
+		return false;
+
+	p = wsc_attr_iter_get_data(iter);
+
+	for (i = 0; i < len; i++) {
+		if (!p[i])
+			break;
+	}
+
+	if (!l_utf8_validate(p, i, NULL))
+		return false;
+
+	memcpy(out, p, i);
+	out[i] = '\0';
+	return true;
+}
+
+static bool extract_device_name(struct wsc_attr_iter *iter, void *data)
+{
+	return extract_utf8_string(iter, data, 32);
+}
+
+static bool extract_device_password_id(struct wsc_attr_iter *iter, void *data)
+{
+	uint16_t v;
+	enum wsc_device_password_id *out = data;
+
+	if (wsc_attr_iter_get_length(iter) != 2)
+		return false;
+
+	v = l_get_be16(wsc_attr_iter_get_data(iter));
+	if (v > 0x0008)
+		return false;
+
+	*out = v;
+	return true;
+}
+
+static bool extract_manufacturer(struct wsc_attr_iter *iter, void *data)
+{
+	return extract_ascii_string(iter, data, 64);
+}
+
+static bool extract_model_name(struct wsc_attr_iter *iter, void *data)
+{
+	return extract_ascii_string(iter, data, 32);
+}
+
+static bool extract_model_number(struct wsc_attr_iter *iter, void *data)
+{
+	return extract_ascii_string(iter, data, 32);
+}
+
+static bool extract_primary_device_type(struct wsc_attr_iter *iter, void *data)
+{
+	struct wsc_primary_device_type *out = data;
+	const uint8_t *p;
+	uint16_t category;
+
+	if (wsc_attr_iter_get_length(iter) != 8)
+		return false;
+
+	p = wsc_attr_iter_get_data(iter);
+	category = l_get_be16(p);
+
+	if (category > 12 && category != 255)
+		return false;
+
+	out->category = category;
+	memcpy(out->oui, p + 2, 3);
+	out->oui_type = p[5];
+	out->subcategory = l_get_be16(p + 6);
+	return true;
+}
+
+static bool extract_response_type(struct wsc_attr_iter *iter, void *data)
+{
+	enum wsc_response_type *out = data;
+	uint8_t rt;
+
+	if (!extract_uint8(iter, &rt))
+		return false;
+
+	/* WSC 2.0.5: Table 43 */
+	if (rt > 3)
+		return false;
+
+	*out = rt;
+	return true;
+}
+
+static bool extract_serial_number(struct wsc_attr_iter *iter, void *data)
+{
+	return extract_ascii_string(iter, data, 32);
+}
+
+static bool extract_version(struct wsc_attr_iter *iter, void *data)
+{
+	uint8_t *out = data;
+	uint8_t v;
+
+	if (!extract_uint8(iter, &v))
+		return false;
+
+	/*
+	 * "This attribute is always set to value 0x10 (version 1.0)
+	 * for backwards compatibility"
+	 */
+	if (v != 0x10)
+		return false;
+
+	*out = v;
+	return true;
+}
+
+static bool extract_wsc_state(struct wsc_attr_iter *iter, void *data)
+{
+	uint8_t *out = data;
+	uint8_t st;
+
+	if (!extract_uint8(iter, &st))
+		return false;
+
+	if (st < 1 || st > 2)
+		return false;
+
+	*out = st;
+	return true;
+}
+
+static bool extract_uuid(struct wsc_attr_iter *iter, void *data)
+{
+	uint8_t *out = data;
+
+	if (wsc_attr_iter_get_length(iter) != 16)
+		return false;
+
+	memcpy(out, wsc_attr_iter_get_data(iter), 16);
+
+	return true;
+}
+
 static attr_handler handler_for_type(enum wsc_attr type)
 {
 	switch (type) {
+	case WSC_ATTR_AP_SETUP_LOCKED:
+		return extract_bool;
+	case WSC_ATTR_CONFIGURATION_METHODS:
+		return extract_uint16;
+	case WSC_ATTR_DEVICE_NAME:
+		return extract_device_name;
+	case WSC_ATTR_DEVICE_PASSWORD_ID:
+		return extract_device_password_id;
+	case WSC_ATTR_MANUFACTURER:
+		return extract_manufacturer;
+	case WSC_ATTR_MODEL_NAME:
+		return extract_model_name;
+	case WSC_ATTR_MODEL_NUMBER:
+		return extract_model_number;
+	case WSC_ATTR_PRIMARY_DEVICE_TYPE:
+		return extract_primary_device_type;
+	case WSC_ATTR_RF_BANDS:
+		return extract_uint8;
+	case WSC_ATTR_RESPONSE_TYPE:
+		return extract_response_type;
+	case WSC_ATTR_SELECTED_REGISTRAR:
+		return extract_bool;
+	case WSC_ATTR_SELECTED_REGISTRAR_CONFIGURATION_METHODS:
+		return extract_uint16;
+	case WSC_ATTR_SERIAL_NUMBER:
+		return extract_serial_number;
+	case WSC_ATTR_VERSION:
+		return extract_version;
+	case WSC_ATTR_WSC_STATE:
+		return extract_wsc_state;
+	case WSC_ATTR_UUID_E:
+		return extract_uuid;
 	default:
 		break;
 	}
