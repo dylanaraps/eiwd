@@ -141,11 +141,90 @@ static void wsc_test_iter_sanity_check(const void *data)
 	assert(!wsc_attr_iter_next(&iter));
 }
 
+struct probe_response_data {
+	struct wsc_probe_response expected;
+	const void *pdu;
+	unsigned int len;
+};
+
+static const struct probe_response_data probe_response_data_1 = {
+	.pdu = wsc_attrs1,
+	.len = sizeof(wsc_attrs1),
+	.expected = {
+		.version2 = true,
+		.config_state = WSC_CONFIG_STATE_CONFIGURED,
+		.ap_setup_locked = false,
+		.selected_registrar = true,
+		.device_password_id = WSC_DEVICE_PASSWORD_ID_PUSH_BUTTON,
+		.selected_reg_config_methods =
+				WSC_CONFIGURATION_METHOD_VIRTUAL_DISPLAY_PIN |
+				WSC_CONFIGURATION_METHOD_VIRTUAL_PUSH_BUTTON |
+				WSC_CONFIGURATION_METHOD_PHYSICAL_PUSH_BUTTON,
+		.response_type = WSC_RESPONSE_TYPE_AP,
+		.uuid_e = { 0xc4, 0x4a, 0xad, 0x8d, 0x25, 0x2f, 0x52, 0xc6,
+			0xf9, 0x6b, 0x38, 0x5d, 0xcb, 0x23, 0x31, 0xae },
+		.manufacturer = "ASUSTeK Computer Inc.",
+		.model_name = "Wi-Fi Protected Setup Router",
+		.model_number = "RT-AC68U",
+		.serial_number = "10:c3:7b:54:74:d0",
+		.primary_device_type = {
+			.category = 6,
+			.oui = { 0x00, 0x50, 0xf2 },
+			.oui_type = 0x04,
+			.subcategory = 1, },
+		.device_name = "RT-AC68U",
+		.config_methods = WSC_CONFIGURATION_METHOD_VIRTUAL_DISPLAY_PIN,
+		.rf_bands = WSC_RF_BAND_2_4_GHZ | WSC_RF_BAND_5_0_GHZ,
+	},
+};
+
+static void wsc_test_parse_probe_response(const void *data)
+{
+	const struct probe_response_data *test = data;
+	struct wsc_probe_response probe_response;
+	const struct wsc_probe_response *expected = &test->expected;
+	int r;
+
+	r = wsc_parse_probe_response(test->pdu, test->len, &probe_response);
+	assert(r == 0);
+
+	assert(expected->version2 == probe_response.version2);
+	assert(expected->config_state == probe_response.config_state);
+	assert(expected->ap_setup_locked == probe_response.ap_setup_locked);
+	assert(expected->selected_registrar ==
+					probe_response.selected_registrar);
+	assert(expected->device_password_id ==
+					probe_response.device_password_id);
+	assert(expected->selected_reg_config_methods ==
+				probe_response.selected_reg_config_methods);
+	assert(expected->response_type == probe_response.response_type);
+	assert(!memcmp(expected->uuid_e, probe_response.uuid_e, 16));
+	assert(!strcmp(expected->manufacturer, probe_response.manufacturer));
+	assert(!strcmp(expected->model_name, probe_response.model_name));
+	assert(!strcmp(expected->model_number, probe_response.model_number));
+	assert(!strcmp(expected->serial_number, probe_response.serial_number));
+
+	assert(expected->primary_device_type.category ==
+				probe_response.primary_device_type.category);
+	assert(!memcmp(expected->primary_device_type.oui,
+				probe_response.primary_device_type.oui, 3));
+	assert(expected->primary_device_type.oui_type ==
+				probe_response.primary_device_type.oui_type);
+	assert(expected->primary_device_type.subcategory ==
+				probe_response.primary_device_type.subcategory);
+
+	assert(!strcmp(expected->device_name, probe_response.device_name));
+	assert(expected->config_methods == probe_response.config_methods);
+	assert(expected->rf_bands == probe_response.rf_bands);
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
 
 	l_test_add("/wsc/iter/sanity-check", wsc_test_iter_sanity_check, NULL);
+	l_test_add("/wsc/parse/probe response 1", wsc_test_parse_probe_response,
+					&probe_response_data_1);
 
 	return l_test_run();
 }
