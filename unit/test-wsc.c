@@ -56,8 +56,6 @@ static void wsc_test_iter_sanity_check(const void *data)
 {
 	struct wsc_attr_iter iter;
 	struct wsc_wfa_ext_iter wfa_iter;
-	unsigned short len;
-	enum wsc_attr type;
 
 	wsc_attr_iter_init(&iter, wsc_attrs1, sizeof(wsc_attrs1));
 
