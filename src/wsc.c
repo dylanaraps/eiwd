@@ -214,7 +214,7 @@ static bool extract_utf8_string(struct wsc_attr_iter *iter, void *data,
 			break;
 	}
 
-	if (!l_utf8_validate(p, i, NULL))
+	if (!l_utf8_validate((const char *) p, i, NULL))
 		return false;
 
 	memcpy(out, p, i);
