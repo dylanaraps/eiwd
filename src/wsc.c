@@ -503,6 +503,12 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 	}
 
 check:
+	/*
+	 * Check for Version 2.0 required attributes.
+	 * If version2 attribute is present in the WFA Vendor field,
+	 * then check the required attributes are present.  Mostly relevant
+	 * for Probe Request messages according to 8.2.4 in WSC 2.0.5
+	 */
 	if (version2) {
 		struct attr_handler_entry *entry;
 
