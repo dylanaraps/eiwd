@@ -561,6 +561,36 @@ done:
 	return 0;
 }
 
+static bool wfa_extract_authorized_macs(struct wsc_wfa_ext_iter *iter,
+								void *data)
+{
+	uint8_t *to = data;
+	unsigned int len = wsc_wfa_ext_iter_get_length(iter);
+	unsigned int mod;
+
+	if (!len || len > 30)
+		return false;
+
+	mod = len % 6;
+	if (mod)
+		return false;
+
+	memcpy(to, wsc_wfa_ext_iter_get_data(iter), len);
+	return true;
+}
+
+static bool wfa_extract_registrar_configuration_methods(
+				struct wsc_wfa_ext_iter *iter, void *data)
+{
+	uint16_t *to = data;
+
+	if (wsc_wfa_ext_iter_get_length(iter) != 2)
+		return false;
+
+	*to = l_get_be16(wsc_wfa_ext_iter_get_data(iter));
+	return true;
+}
+
 int wsc_parse_probe_response(const unsigned char *pdu, unsigned int len,
 				struct wsc_probe_response *out)
 {
@@ -596,5 +626,30 @@ int wsc_parse_probe_response(const unsigned char *pdu, unsigned int len,
 	if (r < 0)
 		return r;
 
+	if (!wsc_wfa_ext_iter_next(&iter))
+		goto done;
+
+	if (wsc_wfa_ext_iter_get_type(&iter) ==
+					WSC_WFA_EXTENSION_AUTHORIZED_MACS) {
+		if (!wfa_extract_authorized_macs(&iter, &out->authorized_macs))
+			return -EBADMSG;
+
+		if (!wsc_wfa_ext_iter_next(&iter))
+			goto done;
+	}
+
+	if (wsc_wfa_ext_iter_get_type(&iter) ==
+			WSC_WFA_EXTENSION_REGISTRAR_CONFIGRATION_METHODS) {
+		if (!wfa_extract_registrar_configuration_methods(&iter,
+						&out->reg_config_methods))
+			return -EBADMSG;
+
+		if (!wsc_wfa_ext_iter_next(&iter))
+			goto done;
+	}
+
+	return -EINVAL;
+
+done:
 	return 0;
 }
