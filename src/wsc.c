@@ -420,6 +420,7 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 	const struct l_queue_entry *e;
 	va_list args;
 	bool version2 = false;
+	bool sr = false;
 	bool have_required = true;
 	bool parse_error = false;
 
@@ -481,6 +482,9 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 			goto check;
 		}
 
+		if (entry->type == WSC_ATTR_SELECTED_REGISTRAR)
+			sr = true;
+
 		handler = handler_for_type(entry->type);
 
 		if (!handler(&iter, entry->data)) {
@@ -516,7 +520,27 @@ check:
 		}
 	}
 
-	/* TODO: Check Selected Registrar attributes */
+	/*
+	 * If Selected Registrar is present and true, then certain attributes
+	 * must also be present.
+	 */
+	if (sr) {
+		struct attr_handler_entry *entry;
+
+		for (e = l_queue_get_entries(entries); e; e = e->next) {
+			entry = e->data;
+
+			if (!(entry->flags & ATTR_FLAG_REGISTRAR))
+				continue;
+
+			if (entry->present)
+				continue;
+
+			parse_error = true;
+			goto done;
+		}
+
+	}
 
 done:
 	l_queue_destroy(entries, l_free);
