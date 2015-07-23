@@ -173,6 +173,7 @@ static const struct probe_response_data probe_response_data_1 = {
 		.device_name = "RT-AC68U",
 		.config_methods = WSC_CONFIGURATION_METHOD_VIRTUAL_DISPLAY_PIN,
 		.rf_bands = WSC_RF_BAND_2_4_GHZ | WSC_RF_BAND_5_0_GHZ,
+		.authorized_macs = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, },
 	},
 };
 
@@ -214,6 +215,12 @@ static void wsc_test_parse_probe_response(const void *data)
 	assert(!strcmp(expected->device_name, probe_response.device_name));
 	assert(expected->config_methods == probe_response.config_methods);
 	assert(expected->rf_bands == probe_response.rf_bands);
+
+	assert(!memcmp(expected->authorized_macs,
+				probe_response.authorized_macs,
+				sizeof(probe_response.authorized_macs)));
+	assert(expected->reg_config_methods ==
+				probe_response.reg_config_methods);
 }
 
 int main(int argc, char *argv[])
