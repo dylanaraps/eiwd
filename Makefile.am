@@ -72,6 +72,7 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					monitor/pcap.h monitor/pcap.c \
 					monitor/display.h monitor/display.c \
 					src/ie.h src/ie.c \
+					src/wsc.h src/wsc.c \
 					src/mpdu.h src/mpdu.c \
 					src/util.h src/util.c \
 					src/sha1.h src/sha1.c \

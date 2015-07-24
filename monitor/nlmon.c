@@ -51,6 +51,7 @@
 #include "src/mpdu.h"
 #include "src/eapol.h"
 #include "src/util.h"
+#include "src/wsc.h"
 #include "monitor/pcap.h"
 #include "monitor/display.h"
 #include "monitor/nlmon.h"
@@ -1464,6 +1465,130 @@ static void print_ie(unsigned int level, const char *label,
 	}
 }
 
+static void print_wsc_byte(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	if (size != 1) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	print_attr(level, "%s: %u", label, bytes[0]);
+}
+
+static void print_wsc_bool(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	if (size != 1) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	print_attr(level, "%s: %s", label, bytes[0] ? "True" : "False");
+}
+
+static void print_wsc_version(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	if (size != 1) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	print_attr(level, "%s: %x", label, bytes[0]);
+}
+
+static struct attr_entry wsc_attr_entry[] = {
+	{ WSC_ATTR_8021X_ENABLED,		"802.1X Enabled",
+		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_AP_SETUP_LOCKED,		"AP Setup Locked",
+		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_KEY_PROVIDED_AUTOMATICALLY,	"Key Provided Automatically",
+		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_NETWORK_INDEX,		"Network Index",
+		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
+	{ WSC_ATTR_NETWORK_KEY_INDEX,		"Network Key Index (Reserved)",
+		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
+	{ WSC_ATTR_PORTABLE_DEVICE,		"Portable Device",
+		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_PSK_CURRENT,			"PSK Current",
+		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
+	{ WSC_ATTR_PSK_MAX,			"PSK Max",
+		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
+	{ WSC_ATTR_RADIO_ENABLED,		"Radio Enabled",
+		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_REBOOT,			"Reboot",
+		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_REGISTRAR_CURRENT,		"Registrar Current",
+		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
+	{ WSC_ATTR_REGISTRAR_ESTABLISHED,	"Registrar Established",
+		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_REGISTRAR_MAX,		"Registrar Max",
+		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
+	{ WSC_ATTR_SELECTED_REGISTRAR,		"Selected Registrar",
+		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_TOTAL_NETWORKS,		"Total Networks",
+		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
+	{ WSC_ATTR_VERSION,			"Version",
+		ATTR_CUSTOM,	{ .function = print_wsc_version } },
+	{ },
+};
+
+static void print_wsc_attributes(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	struct wsc_attr_iter iter;
+	int i;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	wsc_attr_iter_init(&iter, data, size);
+
+	while (wsc_attr_iter_next(&iter)) {
+		uint16_t type = wsc_attr_iter_get_type(&iter);
+		uint16_t len = wsc_attr_iter_get_length(&iter);
+		const void *attr = wsc_attr_iter_get_data(&iter);
+		struct attr_entry *entry = NULL;
+
+		for (i = 0; wsc_attr_entry[i].str; i++) {
+			if (wsc_attr_entry[i].attr == type) {
+				entry = &wsc_attr_entry[i];
+				break;
+			}
+		}
+
+		if (entry && entry->function)
+			entry->function(level + 1, entry->str, attr, len);
+		else {
+			print_attr(level + 1, "Type: 0x%02x: len %u",
+								type, len);
+			print_hexdump(level + 2, attr, len);
+		}
+	}
+}
+
+static void print_management_ies(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	void *wsc_data;
+	ssize_t wsc_len;
+
+	print_ie(level, label, data, size);
+
+	wsc_data = ie_tlv_extract_wsc_payload(data, size, &wsc_len);
+	if (!wsc_data)
+		return;
+
+	print_wsc_attributes(level + 1, "WSC Payload", wsc_data, wsc_len);
+	l_free(wsc_data);
+}
+
 static void print_address(unsigned int level, const char *label,
 					const unsigned char address[6])
 {
@@ -1830,13 +1955,13 @@ static const struct attr_entry bss_table[] = {
 	{ NL80211_BSS_CAPABILITY,	"Capability",  ATTR_CUSTOM,
 				{ .function = print_bss_capability }	},
 	{ NL80211_BSS_INFORMATION_ELEMENTS, "IEs",
-				ATTR_CUSTOM, { .function = print_ie }	},
+		ATTR_CUSTOM, { .function = print_management_ies }	},
 	{ NL80211_BSS_SIGNAL_MBM,	"Signal mBm",	ATTR_S32	},
 	{ NL80211_BSS_SIGNAL_UNSPEC,	"Signal Unspec",ATTR_U8		},
 	{ NL80211_BSS_STATUS,		"Status",	ATTR_U32	},
 	{ NL80211_BSS_SEEN_MS_AGO,	"Seen ms ago",	ATTR_U32	},
 	{ NL80211_BSS_BEACON_IES, "Beacon IEs",
-				ATTR_CUSTOM, { .function = print_ie }	},
+		ATTR_CUSTOM, { .function = print_management_ies }	},
 	{ NL80211_BSS_CHAN_WIDTH,	"Chan Width",	ATTR_U32	},
 	{ NL80211_BSS_BEACON_TSF,	"Beacon TSF",	ATTR_U64	},
 	{ NL80211_BSS_PRESP_DATA,	"Probe Response", ATTR_FLAG	},
