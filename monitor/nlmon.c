@@ -1491,6 +1491,25 @@ static void print_wsc_bool(unsigned int level, const char *label,
 	print_attr(level, "%s: %s", label, bytes[0] ? "True" : "False");
 }
 
+static void print_wsc_uuid(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	if (size != 16) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	print_attr(level, "%s: %02x%02x%02x%02x-%02x%02x-%02x%02x-"
+				"%02x%02x-%02x%02x%02x%02x%02x%02x",
+				label,
+				bytes[0], bytes[1], bytes[2], bytes[3],
+				bytes[4], bytes[5], bytes[6], bytes[7],
+				bytes[8], bytes[9], bytes[10], bytes[11],
+				bytes[12], bytes[13], bytes[14], bytes[15]);
+}
+
 static void print_wsc_device_password_id(unsigned int level, const char *label,
 						const void *data, uint16_t size)
 {
@@ -1606,6 +1625,10 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_response_type } },
 	{ WSC_ATTR_TOTAL_NETWORKS,		"Total Networks",
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
+	{ WSC_ATTR_UUID_E,			"UUID-E",
+		ATTR_CUSTOM,	{ .function = print_wsc_uuid } },
+	{ WSC_ATTR_UUID_R,			"UUID-R",
+		ATTR_CUSTOM,	{ .function = print_wsc_uuid } },
 	{ WSC_ATTR_VERSION,			"Version",
 		ATTR_CUSTOM,	{ .function = print_wsc_version } },
 	{ WSC_ATTR_WSC_STATE,			"WSC State",
