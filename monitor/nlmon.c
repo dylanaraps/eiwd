@@ -1504,6 +1504,24 @@ static void print_wsc_version(unsigned int level, const char *label,
 	print_attr(level, "%s: %x", label, bytes[0]);
 }
 
+static void print_wsc_state(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+	static const char *state_table[3] = {
+		"Reserved",
+		"Not Configured",
+		"Configured"
+	};
+
+	if (size != 1 || bytes[0] == 0 || bytes[0] > 2) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	print_attr(level, "%s: %s", label, state_table[bytes[0]]);
+}
+
 static struct attr_entry wsc_attr_entry[] = {
 	{ WSC_ATTR_8021X_ENABLED,		"802.1X Enabled",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
@@ -1537,6 +1555,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
 	{ WSC_ATTR_VERSION,			"Version",
 		ATTR_CUSTOM,	{ .function = print_wsc_version } },
+	{ WSC_ATTR_WSC_STATE,			"WSC State",
+		ATTR_CUSTOM,	{ .function = print_wsc_state } },
 	{ },
 };
 
