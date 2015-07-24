@@ -1521,6 +1521,25 @@ static void print_wsc_device_password_id(unsigned int level, const char *label,
 		print_attr(level, "%s: Random via OOB (%02x)", label, v);
 }
 
+static void print_wsc_response_type(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+	static const char *response_type_table[] = {
+		"Enrollee Info",
+		"Enrollee Open 802.1X",
+		"Registrar",
+		"AP",
+	};
+
+	if (size != 1 || bytes[0] > 3) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	print_attr(level, "%s: %s", label, response_type_table[bytes[0]]);
+}
+
 static void print_wsc_version(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
@@ -1583,6 +1602,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
 	{ WSC_ATTR_SELECTED_REGISTRAR,		"Selected Registrar",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_RESPONSE_TYPE,		"Response Type",
+		ATTR_CUSTOM,	{ .function = print_wsc_response_type } },
 	{ WSC_ATTR_TOTAL_NETWORKS,		"Total Networks",
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
 	{ WSC_ATTR_VERSION,			"Version",
