@@ -1605,6 +1605,12 @@ static void print_wsc_response_type(unsigned int level, const char *label,
 	print_attr(level, "%s: %s", label, response_type_table[bytes[0]]);
 }
 
+static void print_wsc_serial_number(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	print_wsc_ascii_string(level, label, data, size, 32);
+}
+
 static void print_wsc_version(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
@@ -1675,6 +1681,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_RESPONSE_TYPE,		"Response Type",
 		ATTR_CUSTOM,	{ .function = print_wsc_response_type } },
+	{ WSC_ATTR_SERIAL_NUMBER,		"Serial Number",
+		ATTR_CUSTOM,	{ .function = print_wsc_serial_number } },
 	{ WSC_ATTR_TOTAL_NETWORKS,		"Total Networks",
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
 	{ WSC_ATTR_UUID_E,			"UUID-E",
