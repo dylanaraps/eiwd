@@ -139,6 +139,56 @@ static void wsc_test_iter_sanity_check(const void *data)
 	assert(!wsc_attr_iter_next(&iter));
 }
 
+
+static const unsigned char beacon1[] = {
+	0x10, 0x4a, 0x00, 0x01, 0x10, 0x10, 0x44, 0x00, 0x01, 0x02, 0x10, 0x49,
+	0x00, 0x06, 0x00, 0x37, 0x2a, 0x00, 0x01, 0x20
+};
+
+struct beacon_data {
+	struct wsc_beacon expected;
+	const void *pdu;
+	unsigned int len;
+};
+
+static const struct beacon_data beacon_data_1 = {
+	.pdu = beacon1,
+	.len = sizeof(beacon1),
+	.expected = {
+		.version2 = true,
+		.config_state = WSC_CONFIG_STATE_CONFIGURED,
+		.ap_setup_locked = false,
+		.selected_registrar = false,
+	},
+};
+
+static void wsc_test_parse_beacon(const void *data)
+{
+	const struct beacon_data *test = data;
+	struct wsc_beacon beacon;
+	const struct wsc_beacon *expected = &test->expected;
+	int r;
+
+	r = wsc_parse_beacon(test->pdu, test->len, &beacon);
+	assert(r == 0);
+
+	assert(expected->version2 == beacon.version2);
+	assert(expected->config_state == beacon.config_state);
+	assert(expected->ap_setup_locked == beacon.ap_setup_locked);
+	assert(expected->selected_registrar == beacon.selected_registrar);
+	assert(expected->device_password_id == beacon.device_password_id);
+	assert(expected->selected_reg_config_methods ==
+				beacon.selected_reg_config_methods);
+	assert(!memcmp(expected->uuid_e, beacon.uuid_e, 16));
+	assert(expected->rf_bands == beacon.rf_bands);
+
+	assert(!memcmp(expected->authorized_macs,
+				beacon.authorized_macs,
+				sizeof(beacon.authorized_macs)));
+	assert(expected->reg_config_methods ==
+				beacon.reg_config_methods);
+}
+
 struct probe_response_data {
 	struct wsc_probe_response expected;
 	const void *pdu;
@@ -228,6 +278,10 @@ int main(int argc, char *argv[])
 	l_test_init(&argc, &argv);
 
 	l_test_add("/wsc/iter/sanity-check", wsc_test_iter_sanity_check, NULL);
+
+	l_test_add("/wsc/parse/beacon 1", wsc_test_parse_beacon,
+					&beacon_data_1);
+
 	l_test_add("/wsc/parse/probe response 1", wsc_test_parse_probe_response,
 					&probe_response_data_1);
 
