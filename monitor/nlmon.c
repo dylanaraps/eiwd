@@ -1574,6 +1574,12 @@ static void print_wsc_manufacturer(unsigned int level, const char *label,
 	print_wsc_ascii_string(level, label, data, size, 64);
 }
 
+static void print_wsc_model_name(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	print_wsc_ascii_string(level, label, data, size, 32);
+}
+
 static void print_wsc_response_type(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
@@ -1635,6 +1641,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_MANUFACTURER,		"Manufacturer",
 		ATTR_CUSTOM,	{ .function = print_wsc_manufacturer } },
+	{ WSC_ATTR_MODEL_NAME,			"Model Name",
+		ATTR_CUSTOM,	{ .function = print_wsc_model_name } },
 	{ WSC_ATTR_NETWORK_INDEX,		"Network Index",
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
 	{ WSC_ATTR_NETWORK_KEY_INDEX,		"Network Key Index (Reserved)",
