@@ -1491,6 +1491,34 @@ static void print_wsc_bool(unsigned int level, const char *label,
 	print_attr(level, "%s: %s", label, bytes[0] ? "True" : "False");
 }
 
+static void print_wsc_ascii_string(unsigned int level, const char *label,
+					const void *data, uint16_t size,
+					uint16_t max_len)
+{
+	const char *p = data;
+	unsigned int i;
+
+	if (size >= max_len) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	for (i = 0; i < size; i++) {
+		if (!p[i])
+			break;
+
+		if (!l_ascii_isprint(p[i]))
+			goto invalid_ascii;
+	}
+
+	print_attr(level, "%s: %.*s", label, i, p);
+	return;
+
+invalid_ascii:
+	print_attr(level, "%s: (Non-Ascii, len: %d)", label, size);
+	print_hexdump(level + 1, data, size);
+}
+
 static void print_wsc_uuid(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
@@ -1538,6 +1566,12 @@ static void print_wsc_device_password_id(unsigned int level, const char *label,
 		print_attr(level, "%s: Reserved (%02x)", label, v);
 	else
 		print_attr(level, "%s: Random via OOB (%02x)", label, v);
+}
+
+static void print_wsc_manufacturer(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	print_wsc_ascii_string(level, label, data, size, 64);
 }
 
 static void print_wsc_response_type(unsigned int level, const char *label,
@@ -1599,6 +1633,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_device_password_id } },
 	{ WSC_ATTR_KEY_PROVIDED_AUTOMATICALLY,	"Key Provided Automatically",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_MANUFACTURER,		"Manufacturer",
+		ATTR_CUSTOM,	{ .function = print_wsc_manufacturer } },
 	{ WSC_ATTR_NETWORK_INDEX,		"Network Index",
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
 	{ WSC_ATTR_NETWORK_KEY_INDEX,		"Network Key Index (Reserved)",
