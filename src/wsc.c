@@ -591,6 +591,59 @@ static bool wfa_extract_registrar_configuration_methods(
 	return true;
 }
 
+int wsc_parse_beacon(const unsigned char *pdu, unsigned int len,
+				struct wsc_beacon *out)
+{
+	int r;
+	struct wsc_wfa_ext_iter iter;
+	uint8_t version;
+
+	memset(out, 0, sizeof(struct wsc_beacon));
+
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
+		WSC_ATTR_VERSION, ATTR_FLAG_REQUIRED, &version,
+		WSC_ATTR_WSC_STATE, ATTR_FLAG_REQUIRED, &out->config_state,
+		WSC_ATTR_AP_SETUP_LOCKED, 0, &out->ap_setup_locked,
+		WSC_ATTR_SELECTED_REGISTRAR, 0, &out->selected_registrar,
+		WSC_ATTR_DEVICE_PASSWORD_ID,
+			ATTR_FLAG_REGISTRAR, &out->device_password_id,
+		WSC_ATTR_SELECTED_REGISTRAR_CONFIGURATION_METHODS,
+			ATTR_FLAG_REGISTRAR, &out->selected_reg_config_methods,
+		WSC_ATTR_UUID_E, ATTR_FLAG_REQUIRED, &out->uuid_e,
+		WSC_ATTR_RF_BANDS, 0, &out->rf_bands,
+		WSC_ATTR_INVALID);
+
+	if (r < 0)
+		return r;
+
+	if (!wsc_wfa_ext_iter_next(&iter))
+		goto done;
+
+	if (wsc_wfa_ext_iter_get_type(&iter) ==
+					WSC_WFA_EXTENSION_AUTHORIZED_MACS) {
+		if (!wfa_extract_authorized_macs(&iter, &out->authorized_macs))
+			return -EBADMSG;
+
+		if (!wsc_wfa_ext_iter_next(&iter))
+			goto done;
+	}
+
+	if (wsc_wfa_ext_iter_get_type(&iter) ==
+			WSC_WFA_EXTENSION_REGISTRAR_CONFIGRATION_METHODS) {
+		if (!wfa_extract_registrar_configuration_methods(&iter,
+						&out->reg_config_methods))
+			return -EBADMSG;
+
+		if (!wsc_wfa_ext_iter_next(&iter))
+			goto done;
+	}
+
+	return -EINVAL;
+
+done:
+	return 0;
+}
+
 int wsc_parse_probe_response(const unsigned char *pdu, unsigned int len,
 				struct wsc_probe_response *out)
 {

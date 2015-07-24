@@ -327,6 +327,19 @@ struct wsc_primary_device_type {
 	uint16_t subcategory;
 };
 
+struct wsc_beacon {
+	bool version2;
+	enum wsc_config_state config_state;
+	bool ap_setup_locked;
+	bool selected_registrar;
+	enum wsc_device_password_id device_password_id;
+	uint16_t selected_reg_config_methods;
+	uint8_t uuid_e[16];
+	uint8_t rf_bands;
+	uint8_t authorized_macs[30];
+	uint16_t reg_config_methods;
+};
+
 struct wsc_probe_response {
 	bool version2;
 	enum wsc_config_state config_state;
@@ -348,5 +361,7 @@ struct wsc_probe_response {
 	uint16_t reg_config_methods;
 };
 
+int wsc_parse_beacon(const unsigned char *pdu, unsigned int len,
+				struct wsc_beacon *out);
 int wsc_parse_probe_response(const unsigned char *pdu, unsigned int len,
 				struct wsc_probe_response *out);
