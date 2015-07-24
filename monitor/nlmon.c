@@ -1491,6 +1491,36 @@ static void print_wsc_bool(unsigned int level, const char *label,
 	print_attr(level, "%s: %s", label, bytes[0] ? "True" : "False");
 }
 
+static void print_wsc_device_password_id(unsigned int level, const char *label,
+						const void *data, uint16_t size)
+{
+	uint16_t v;
+	static const char *device_password_id_table[] = {
+		"Default (PIN)",
+		"User-specified",
+		"Machine-specified",
+		"Rekey",
+		"PushButton",
+		"Registrar-specified",
+		"Reserved (for IBSS with WPS)",
+		"NFC-Connection-Handover",
+		"P2Ps (Reserved for WPS P2P Services Specification",
+	};
+
+	if (size != 2) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	v = l_get_be16(data);
+	if (v <= 0x0008)
+		print_attr(level, "%s: %s", label, device_password_id_table[v]);
+	else if (v <= 0x000F)
+		print_attr(level, "%s: Reserved (%02x)", label, v);
+	else
+		print_attr(level, "%s: Random via OOB (%02x)", label, v);
+}
+
 static void print_wsc_version(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
@@ -1527,6 +1557,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_AP_SETUP_LOCKED,		"AP Setup Locked",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_DEVICE_PASSWORD_ID,		"Device Password Id",
+		ATTR_CUSTOM,	{ .function = print_wsc_device_password_id } },
 	{ WSC_ATTR_KEY_PROVIDED_AUTOMATICALLY,	"Key Provided Automatically",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_NETWORK_INDEX,		"Network Index",
