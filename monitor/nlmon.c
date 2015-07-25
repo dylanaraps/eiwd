@@ -1586,6 +1586,53 @@ static void print_wsc_model_number(unsigned int level, const char *label,
 	print_wsc_ascii_string(level, label, data, size, 32);
 }
 
+static void print_wsc_primary_device_type(unsigned int level, const char *label,
+						const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+	uint16_t category;
+	uint16_t subcategory;
+	uint8_t oui[4];
+	static const char *category_table[256] = {
+		[0] = "Reserved",
+		[1] = "Computer",
+		[2] = "Input Device",
+		[3] = "Printer/Scanner/Fax/Copier",
+		[4] = "Camera",
+		[5] = "Storage",
+		[6] = "Network Infrastructure",
+		[7] = "Displays",
+		[8] = "Multimedia Devices",
+		[9] = "Gaming Devices",
+		[10] = "Telephony",
+		[11] = "Audio Devices",
+		[12] = "Docking Devices",
+		[13 ... 254] = "Reserved",
+		[255] = "Others",
+	};
+
+	if (size != 8) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	category = l_get_be16(bytes);
+	subcategory = l_get_be16(bytes + 6);
+	memcpy(oui, bytes + 2, 4);
+
+	if (category > 255) {
+		print_attr(level, "%s: %04x-%02x%02x%02x%02x-%04x",
+				label, category, oui[0], oui[1], oui[2], oui[3],
+				subcategory);
+		return;
+	}
+
+	print_attr(level, "%s: %s", label, category_table[category]);
+	print_attr(level + 1, "OUI: %02x%02x%02x%02x",
+			oui[0], oui[1], oui[2], oui[3]);
+	print_attr(level + 1, "SubCategory: %02x", subcategory);
+}
+
 static void print_wsc_response_type(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
@@ -1663,6 +1710,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
 	{ WSC_ATTR_PORTABLE_DEVICE,		"Portable Device",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_PRIMARY_DEVICE_TYPE,		"Primary Device Type",
+		ATTR_CUSTOM,	{ .function = print_wsc_primary_device_type } },
 	{ WSC_ATTR_PSK_CURRENT,			"PSK Current",
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
 	{ WSC_ATTR_PSK_MAX,			"PSK Max",
@@ -1677,10 +1726,10 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_REGISTRAR_MAX,		"Registrar Max",
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
-	{ WSC_ATTR_SELECTED_REGISTRAR,		"Selected Registrar",
-		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_RESPONSE_TYPE,		"Response Type",
 		ATTR_CUSTOM,	{ .function = print_wsc_response_type } },
+	{ WSC_ATTR_SELECTED_REGISTRAR,		"Selected Registrar",
+		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_SERIAL_NUMBER,		"Serial Number",
 		ATTR_CUSTOM,	{ .function = print_wsc_serial_number } },
 	{ WSC_ATTR_TOTAL_NETWORKS,		"Total Networks",
