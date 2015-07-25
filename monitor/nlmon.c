@@ -1519,6 +1519,34 @@ invalid_ascii:
 	print_hexdump(level + 1, data, size);
 }
 
+static void print_wsc_utf8_string(unsigned int level, const char *label,
+					const void *data, uint16_t size,
+					uint16_t max_len)
+{
+	const char *p = data;
+	unsigned int i;
+
+	if (size >= max_len) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	for (i = 0; i < size; i++) {
+		if (!p[i])
+			break;
+	}
+
+	if (!l_utf8_validate((const char *) p, i, NULL))
+		goto invalid_utf8;
+
+	print_attr(level, "%s: %.*s", label, i, p);
+	return;
+
+invalid_utf8:
+	print_attr(level, "%s: (Non-utf8, len: %d)", label, size);
+	print_hexdump(level + 1, data, size);
+}
+
 static void print_wsc_uuid(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
@@ -1536,6 +1564,12 @@ static void print_wsc_uuid(unsigned int level, const char *label,
 				bytes[4], bytes[5], bytes[6], bytes[7],
 				bytes[8], bytes[9], bytes[10], bytes[11],
 				bytes[12], bytes[13], bytes[14], bytes[15]);
+}
+
+static void print_wsc_device_name(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	print_wsc_utf8_string(level, label, data, size, 32);
 }
 
 static void print_wsc_device_password_id(unsigned int level, const char *label,
@@ -1694,6 +1728,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_AP_SETUP_LOCKED,		"AP Setup Locked",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_DEVICE_NAME,			"Device Name",
+		ATTR_CUSTOM,	{ .function = print_wsc_device_name } },
 	{ WSC_ATTR_DEVICE_PASSWORD_ID,		"Device Password Id",
 		ATTR_CUSTOM,	{ .function = print_wsc_device_password_id } },
 	{ WSC_ATTR_KEY_PROVIDED_AUTOMATICALLY,	"Key Provided Automatically",
