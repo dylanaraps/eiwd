@@ -1776,6 +1776,36 @@ static void print_wsc_response_type(unsigned int level, const char *label,
 	print_attr(level, "%s: %s", label, response_type_table[bytes[0]]);
 }
 
+static void print_wsc_rf_bands(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+	char bands[256];
+	uint16_t pos = 0;
+
+	if (size != 1) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	if (bytes[0] >= 0x08) {
+		print_attr(level, "%s: %02x", label, bytes[0]);
+		return;
+	}
+
+	if (bytes[0] & WSC_RF_BAND_2_4_GHZ)
+		pos += sprintf(bands + pos, " 2.4 GHz,");
+
+	if (bytes[0] & WSC_RF_BAND_5_0_GHZ)
+		pos += sprintf(bands + pos, " 5 GHz,");
+
+	if (bytes[0] & WSC_RF_BAND_60_GHZ)
+		pos += sprintf(bands + pos, " 60 GHz,");
+
+	bands[pos - 1] = '\0';
+	print_attr(level, "%s: %s", label, bands);
+}
+
 static void print_wsc_serial_number(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
@@ -1856,6 +1886,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
 	{ WSC_ATTR_RESPONSE_TYPE,		"Response Type",
 		ATTR_CUSTOM,	{ .function = print_wsc_response_type } },
+	{ WSC_ATTR_RF_BANDS,			"RF Bands",
+		ATTR_CUSTOM,	{ .function = print_wsc_rf_bands } },
 	{ WSC_ATTR_SELECTED_REGISTRAR,		"Selected Registrar",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_SERIAL_NUMBER,		"Serial Number",
