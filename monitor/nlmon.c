@@ -1566,6 +1566,96 @@ static void print_wsc_uuid(unsigned int level, const char *label,
 				bytes[12], bytes[13], bytes[14], bytes[15]);
 }
 
+static void print_wsc_config_methods(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	uint16_t v;
+	uint16_t flags;
+
+	if (size != 2) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	v = l_get_be16(data);
+	print_attr(level, "%s:", label);
+
+	if (v & WSC_CONFIGURATION_METHOD_PHYSICAL_DISPLAY_PIN)
+		print_attr(level + 1, "Physical Display PIN");
+
+	if (v & WSC_CONFIGURATION_METHOD_VIRTUAL_DISPLAY_PIN)
+		print_attr(level + 1, "Virtual Display PIN");
+
+	flags = WSC_CONFIGURATION_METHOD_PHYSICAL_DISPLAY_PIN |
+			WSC_CONFIGURATION_METHOD_VIRTUAL_DISPLAY_PIN;
+	if (v & flags)
+		v &= ~flags;
+
+	if (v & WSC_CONFIGURATION_METHOD_P2P) {
+		print_attr(level + 1, "P2P");
+		v &= ~WSC_CONFIGURATION_METHOD_P2P;
+	}
+
+	if (v & WSC_CONFIGURATION_METHOD_PHYSICAL_PUSH_BUTTON)
+		print_attr(level + 1, "Physical PushButton");
+
+	if (v & WSC_CONFIGURATION_METHOD_VIRTUAL_PUSH_BUTTON)
+		print_attr(level + 1, "Virtual PushButton");
+
+	flags = WSC_CONFIGURATION_METHOD_PHYSICAL_PUSH_BUTTON |
+			WSC_CONFIGURATION_METHOD_VIRTUAL_PUSH_BUTTON;
+	if (v & flags)
+		v &= ~flags;
+
+	if (v & WSC_CONFIGURATION_METHOD_KEYPAD) {
+		print_attr(level + 1, "Keypad");
+		v &= ~WSC_CONFIGURATION_METHOD_KEYPAD;
+	}
+
+	if (v & WSC_CONFIGURATION_METHOD_PUSH_BUTTON) {
+		print_attr(level + 1, "PushButton");
+		v &= ~WSC_CONFIGURATION_METHOD_PUSH_BUTTON;
+	}
+
+	if (v & WSC_CONFIGURATION_METHOD_NFC_INTERFACE) {
+		print_attr(level + 1, "NFC Interface");
+		v &= ~WSC_CONFIGURATION_METHOD_NFC_INTERFACE;
+	}
+
+	if (v & WSC_CONFIGURATION_METHOD_INTEGRATED_NFC_TOKEN) {
+		print_attr(level + 1, "Integrated NFC Token");
+		v &= ~WSC_CONFIGURATION_METHOD_INTEGRATED_NFC_TOKEN;
+	}
+
+	if (v & WSC_CONFIGURATION_METHOD_EXTERNAL_NFC_TOKEN) {
+		print_attr(level + 1, "External NFC Token");
+		v &= ~WSC_CONFIGURATION_METHOD_EXTERNAL_NFC_TOKEN;
+	}
+
+	if (v & WSC_CONFIGURATION_METHOD_DISPLAY) {
+		print_attr(level + 1, "Display");
+		v &= ~WSC_CONFIGURATION_METHOD_DISPLAY;
+	}
+
+	if (v & WSC_CONFIGURATION_METHOD_LABEL) {
+		print_attr(level + 1, "Label");
+		v &= ~WSC_CONFIGURATION_METHOD_LABEL;
+	}
+
+	if (v & WSC_CONFIGURATION_METHOD_ETHERNET) {
+		print_attr(level + 1, "Ethernet");
+		v &= ~WSC_CONFIGURATION_METHOD_ETHERNET;
+	}
+
+	if (v & WSC_CONFIGURATION_METHOD_USBA) {
+		print_attr(level + 1, "USBA");
+		v &= ~WSC_CONFIGURATION_METHOD_USBA;
+	}
+
+	if (v)
+		print_attr(level + 1, "Unknown: %04x", v);
+}
+
 static void print_wsc_device_name(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
@@ -1728,6 +1818,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_AP_SETUP_LOCKED,		"AP Setup Locked",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_CONFIGURATION_METHODS,	"Configuration Methods",
+		ATTR_CUSTOM,	{ .function = print_wsc_config_methods } },
 	{ WSC_ATTR_DEVICE_NAME,			"Device Name",
 		ATTR_CUSTOM,	{ .function = print_wsc_device_name } },
 	{ WSC_ATTR_DEVICE_PASSWORD_ID,		"Device Password Id",
