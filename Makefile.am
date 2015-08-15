@@ -10,6 +10,7 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/test.h ell/test.c \
 			ell/queue.h ell/queue.c \
 			ell/hashmap.h ell/hashmap.c \
+			ell/ringbuf.h ell/ringbuf.c \
 			ell/string.h ell/string.c \
 			ell/settings.h ell/settings.c \
 			ell/main.h ell/main.c \
