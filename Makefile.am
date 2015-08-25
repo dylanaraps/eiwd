@@ -43,7 +43,8 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/base64.h ell/base64.c \
 			ell/pem.h ell/pem.c \
 			ell/tls-private.h \
-			ell/tls.h ell/tls.c
+			ell/tls.h ell/tls.c \
+			ell/tls-record.c
 
 ell_libell_internal_la_SOURCES = $(ell_sources)
 
