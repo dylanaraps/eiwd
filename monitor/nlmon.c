@@ -1757,6 +1757,25 @@ static void print_wsc_primary_device_type(unsigned int level, const char *label,
 	print_attr(level + 1, "SubCategory: %02x", subcategory);
 }
 
+static void print_wsc_request_type(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+	static const char *request_type_table[] = {
+		"Enrollee Info",
+		"Enrollee Open 802.1X",
+		"Registrar",
+		"WLAN Manager Registrar",
+	};
+
+	if (size != 1 || bytes[0] > 3) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	print_attr(level, "%s: %s", label, request_type_table[bytes[0]]);
+}
+
 static void print_wsc_response_type(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
@@ -1884,6 +1903,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_REGISTRAR_MAX,		"Registrar Max",
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
+	{ WSC_ATTR_REQUEST_TYPE,		"Request Type",
+		ATTR_CUSTOM,	{ .function = print_wsc_request_type } },
 	{ WSC_ATTR_RESPONSE_TYPE,		"Response Type",
 		ATTR_CUSTOM,	{ .function = print_wsc_response_type } },
 	{ WSC_ATTR_RF_BANDS,			"RF Bands",
