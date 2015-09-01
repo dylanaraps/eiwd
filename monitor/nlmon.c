@@ -1566,6 +1566,31 @@ static void print_wsc_uuid(unsigned int level, const char *label,
 				bytes[12], bytes[13], bytes[14], bytes[15]);
 }
 
+static void print_wsc_association_state(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	uint16_t state;
+	static const char *state_table[] = {
+		"Not Associated",
+		"Connection Success",
+		"Configuration Failure",
+		"Association Failure",
+		"IP Failure",
+	};
+
+	if (size != 2) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	state = l_get_be16(data);
+
+	if (state > 4)
+		print_attr(level, "%s: Reserved", label);
+	else
+		print_attr(level, "%s: %s", label, state_table[state]);
+}
+
 static void print_wsc_config_methods(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
@@ -1867,6 +1892,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_AP_SETUP_LOCKED,		"AP Setup Locked",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_ASSOCIATION_STATE,		"Association State",
+		ATTR_CUSTOM,	{ .function = print_wsc_association_state } },
 	{ WSC_ATTR_CONFIGURATION_METHODS,	"Configuration Methods",
 		ATTR_CUSTOM,	{ .function = print_wsc_config_methods } },
 	{ WSC_ATTR_DEVICE_NAME,			"Device Name",
