@@ -1591,6 +1591,47 @@ static void print_wsc_association_state(unsigned int level, const char *label,
 		print_attr(level, "%s: %s", label, state_table[state]);
 }
 
+static void print_wsc_configuration_error(unsigned int level, const char *label,
+						const void *data, uint16_t size)
+{
+	uint16_t error;
+	static const char *error_table[] = {
+		"No Error",
+		"OOB Interface Read Error",
+		"Decryption CRC Failure",
+		"2.4 channel not supported",
+		"5.0 channel not supported",
+		"Signal too weak",
+		"Network auth failure",
+		"Network association failure",
+		"No DHCP response",
+		"Failed DHCP config",
+		"IP Address conflict",
+		"Couldn't connect to Registrar",
+		"Multiple PBC sessions detected",
+		"Rogue activity suspected",
+		"Device busy",
+		"Setup locked",
+		"Message timeout",
+		"Registration session timeout",
+		"Device Password Auth Failure",
+		"60 Ghz channel not supported",
+		"Public Key Hash Mismatch",
+	};
+
+	if (size != 2) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	error = l_get_be16(data);
+
+	if (error > 20)
+		print_attr(level, "%s: Reserved", label);
+	else
+		print_attr(level, "%s: %s", label, error_table[error]);
+}
+
 static void print_wsc_config_methods(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
@@ -1894,6 +1935,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_ASSOCIATION_STATE,		"Association State",
 		ATTR_CUSTOM,	{ .function = print_wsc_association_state } },
+	{ WSC_ATTR_CONFIGURATION_ERROR,		"Configuration Error",
+		ATTR_CUSTOM,	{ .function = print_wsc_configuration_error } },
 	{ WSC_ATTR_CONFIGURATION_METHODS,	"Configuration Methods",
 		ATTR_CUSTOM,	{ .function = print_wsc_config_methods } },
 	{ WSC_ATTR_DEVICE_NAME,			"Device Name",
