@@ -1944,6 +1944,11 @@ static void print_wsc_wfa_ext_version2(unsigned int level, const char *label,
 static struct attr_entry wsc_wfa_ext_attr_entry[] = {
 	{ WSC_WFA_EXTENSION_VERSION2,			"Version2",
 		ATTR_CUSTOM,	{ .function = print_wsc_wfa_ext_version2 } },
+	{ WSC_WFA_EXTENSION_NETWORK_KEY_SHAREABLE,
+						"Network Key Shareable",
+		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_WFA_EXTENSION_REQUEST_TO_ENROLL,		"Request to Enroll",
+		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ },
 };
 
