@@ -1928,6 +1928,79 @@ static void print_wsc_state(unsigned int level, const char *label,
 	print_attr(level, "%s: %s", label, state_table[bytes[0]]);
 }
 
+static void print_wsc_wfa_ext_version2(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	if (size != 1) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	print_attr(level, "%s: %x.%x", label, bytes[0] >> 4, bytes[0] & 0xf);
+}
+
+static struct attr_entry wsc_wfa_ext_attr_entry[] = {
+	{ WSC_WFA_EXTENSION_VERSION2,			"Version2",
+		ATTR_CUSTOM,	{ .function = print_wsc_wfa_ext_version2 } },
+	{ },
+};
+
+static void print_wsc_wfa_ext_attributes(unsigned int level, const char *label,
+						const void *data, uint16_t size)
+{
+	struct wsc_wfa_ext_iter iter;
+	int i;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	wsc_wfa_ext_iter_init(&iter, data, size);
+
+	while (wsc_wfa_ext_iter_next(&iter)) {
+		uint8_t type = wsc_wfa_ext_iter_get_type(&iter);
+		uint8_t len = wsc_wfa_ext_iter_get_length(&iter);
+		const void *attr = wsc_wfa_ext_iter_get_data(&iter);
+		struct attr_entry *entry = NULL;
+
+		for (i = 0; wsc_wfa_ext_attr_entry[i].str; i++) {
+			if (wsc_wfa_ext_attr_entry[i].attr == type) {
+				entry = &wsc_wfa_ext_attr_entry[i];
+				break;
+			}
+		}
+
+		if (entry && entry->function)
+			entry->function(level + 1, entry->str, attr, len);
+		else {
+			print_attr(level + 1, "Type: 0x%02x: len %u",
+								type, len);
+			print_hexdump(level + 2, attr, len);
+		}
+	}
+}
+
+static void print_wsc_vendor_extension(unsigned int level, const char *label,
+						const void *data, uint16_t size){
+	static const unsigned char wfa_ext[3] = { 0x00, 0x37, 0x2a };
+	const uint8_t *bytes = data;
+
+	if (size < 3) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	if (memcmp(data, wfa_ext, sizeof(wfa_ext))) {
+		print_attr(level, "%s: OUI: 0x%02x 0x%02x 0x%02x: len %u",
+				label, bytes[0], bytes[1], bytes[2], size);
+		print_hexdump(level + 1, data + 3, size - 3);
+		return;
+	}
+
+	print_wsc_wfa_ext_attributes(level, "WFA Vendor Extension",
+							data + 3, size - 3);
+}
+
 static struct attr_entry wsc_attr_entry[] = {
 	{ WSC_ATTR_8021X_ENABLED,		"802.1X Enabled",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
@@ -1989,6 +2062,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_uuid } },
 	{ WSC_ATTR_UUID_R,			"UUID-R",
 		ATTR_CUSTOM,	{ .function = print_wsc_uuid } },
+	{ WSC_ATTR_VENDOR_EXTENSION,		"Vendor Extension",
+		ATTR_CUSTOM,	{ .function = print_wsc_vendor_extension } },
 	{ WSC_ATTR_VERSION,			"Version",
 		ATTR_CUSTOM,	{ .function = print_wsc_version } },
 	{ WSC_ATTR_WSC_STATE,			"WSC State",
