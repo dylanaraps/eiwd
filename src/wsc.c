@@ -422,6 +422,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_uint8;
 	case WSC_ATTR_REQUEST_TYPE:
 		return extract_request_type;
+	case WSC_ATTR_REQUESTED_DEVICE_TYPE:
+		return extract_primary_device_type;
 	case WSC_ATTR_RESPONSE_TYPE:
 		return extract_response_type;
 	case WSC_ATTR_SELECTED_REGISTRAR:
