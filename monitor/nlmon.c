@@ -1646,10 +1646,12 @@ static void print_wsc_config_methods(unsigned int level, const char *label,
 	v = l_get_be16(data);
 	print_attr(level, "%s:", label);
 
-	if (v & WSC_CONFIGURATION_METHOD_PHYSICAL_DISPLAY_PIN)
+	if ((v & WSC_CONFIGURATION_METHOD_PHYSICAL_DISPLAY_PIN) ==
+			WSC_CONFIGURATION_METHOD_PHYSICAL_DISPLAY_PIN)
 		print_attr(level + 1, "Physical Display PIN");
 
-	if (v & WSC_CONFIGURATION_METHOD_VIRTUAL_DISPLAY_PIN)
+	if ((v & WSC_CONFIGURATION_METHOD_VIRTUAL_DISPLAY_PIN) ==
+			WSC_CONFIGURATION_METHOD_VIRTUAL_DISPLAY_PIN)
 		print_attr(level + 1, "Virtual Display PIN");
 
 	flags = WSC_CONFIGURATION_METHOD_PHYSICAL_DISPLAY_PIN |
@@ -1662,10 +1664,12 @@ static void print_wsc_config_methods(unsigned int level, const char *label,
 		v &= ~WSC_CONFIGURATION_METHOD_P2P;
 	}
 
-	if (v & WSC_CONFIGURATION_METHOD_PHYSICAL_PUSH_BUTTON)
+	if ((v & WSC_CONFIGURATION_METHOD_PHYSICAL_PUSH_BUTTON) ==
+			WSC_CONFIGURATION_METHOD_PHYSICAL_PUSH_BUTTON)
 		print_attr(level + 1, "Physical PushButton");
 
-	if (v & WSC_CONFIGURATION_METHOD_VIRTUAL_PUSH_BUTTON)
+	if ((v & WSC_CONFIGURATION_METHOD_VIRTUAL_PUSH_BUTTON) ==
+			WSC_CONFIGURATION_METHOD_VIRTUAL_PUSH_BUTTON)
 		print_attr(level + 1, "Virtual PushButton");
 
 	flags = WSC_CONFIGURATION_METHOD_PHYSICAL_PUSH_BUTTON |
