@@ -222,6 +222,22 @@ static bool extract_utf8_string(struct wsc_attr_iter *iter, void *data,
 	return true;
 }
 
+static bool extract_association_state(struct wsc_attr_iter *iter, void *data)
+{
+	enum wsc_association_state *out = data;
+	uint16_t as;
+
+	if (!extract_uint16(iter, &as))
+		return false;
+
+	/* WSC 2.0.5: Table 31 */
+	if (as > 4)
+		return false;
+
+	*out = as;
+	return true;
+}
+
 static bool extract_device_name(struct wsc_attr_iter *iter, void *data)
 {
 	return extract_utf8_string(iter, data, 32);
@@ -368,6 +384,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 	switch (type) {
 	case WSC_ATTR_AP_SETUP_LOCKED:
 		return extract_bool;
+	case WSC_ATTR_ASSOCIATION_STATE:
+		return extract_association_state;
 	case WSC_ATTR_CONFIGURATION_METHODS:
 		return extract_uint16;
 	case WSC_ATTR_DEVICE_NAME:
