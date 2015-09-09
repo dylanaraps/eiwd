@@ -369,6 +369,20 @@ static void wsc_test_parse_probe_request(const void *data)
 			probe_request.requested_device_type.subcategory);
 }
 
+static void wsc_test_build_probe_request(const void *data)
+{
+	const struct probe_request_data *test = data;
+	uint8_t *pr;
+	size_t prlen;
+
+	pr = wsc_build_probe_request(&test->expected, &prlen);
+	assert(pr);
+
+	assert(!memcmp(test->pdu, pr, test->len));
+
+	l_free(pr);
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -383,5 +397,9 @@ int main(int argc, char *argv[])
 
 	l_test_add("/wsc/parse/probe request 1", wsc_test_parse_probe_request,
 					&probe_request_data_1);
+
+	l_test_add("/wsc/build/probe request 1", wsc_test_build_probe_request,
+					&probe_request_data_1);
+
 	return l_test_run();
 }
