@@ -280,6 +280,22 @@ static bool extract_primary_device_type(struct wsc_attr_iter *iter, void *data)
 	return true;
 }
 
+static bool extract_request_type(struct wsc_attr_iter *iter, void *data)
+{
+	enum wsc_request_type *out = data;
+	uint8_t rt;
+
+	if (!extract_uint8(iter, &rt))
+		return false;
+
+	/* WSC 2.0.5: Table 42 */
+	if (rt > 3)
+		return false;
+
+	*out = rt;
+	return true;
+}
+
 static bool extract_response_type(struct wsc_attr_iter *iter, void *data)
 {
 	enum wsc_response_type *out = data;
@@ -368,6 +384,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_primary_device_type;
 	case WSC_ATTR_RF_BANDS:
 		return extract_uint8;
+	case WSC_ATTR_REQUEST_TYPE:
+		return extract_request_type;
 	case WSC_ATTR_RESPONSE_TYPE:
 		return extract_response_type;
 	case WSC_ATTR_SELECTED_REGISTRAR:
