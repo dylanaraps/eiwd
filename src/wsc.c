@@ -238,6 +238,22 @@ static bool extract_association_state(struct wsc_attr_iter *iter, void *data)
 	return true;
 }
 
+static bool extract_configuration_error(struct wsc_attr_iter *iter, void *data)
+{
+	enum wsc_configuration_error *out = data;
+	uint16_t ce;
+
+	if (!extract_uint16(iter, &ce))
+		return false;
+
+	/* WSC 2.0.5: Table 34 */
+	if (ce > 20)
+		return false;
+
+	*out = ce;
+	return true;
+}
+
 static bool extract_device_name(struct wsc_attr_iter *iter, void *data)
 {
 	return extract_utf8_string(iter, data, 32);
@@ -386,6 +402,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_bool;
 	case WSC_ATTR_ASSOCIATION_STATE:
 		return extract_association_state;
+	case WSC_ATTR_CONFIGURATION_ERROR:
+		return extract_configuration_error;
 	case WSC_ATTR_CONFIGURATION_METHODS:
 		return extract_uint16;
 	case WSC_ATTR_DEVICE_NAME:
