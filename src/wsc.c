@@ -32,6 +32,8 @@
 
 #include "wsc.h"
 
+static const unsigned char wfa_ext[3] = { 0x00, 0x37, 0x2a };
+
 void wsc_wfa_ext_iter_init(struct wsc_wfa_ext_iter *iter,
 				const unsigned char *pdu, unsigned short len)
 {
@@ -108,8 +110,6 @@ bool wsc_attr_iter_next(struct wsc_attr_iter *iter)
 bool wsc_attr_iter_recurse_wfa_ext(struct wsc_attr_iter *iter,
 					struct wsc_wfa_ext_iter *wfa_iter)
 {
-	static const unsigned char wfa_ext[3] = { 0x00, 0x37, 0x2a };
-
 	if (iter->type != WSC_ATTR_VENDOR_EXTENSION)
 		return false;
 
@@ -823,4 +823,287 @@ int wsc_parse_probe_request(const unsigned char *pdu, unsigned int len,
 
 done:
 	return 0;
+}
+
+struct wsc_attr_builder {
+	size_t capacity;
+	uint8_t *buf;
+	size_t offset;
+	uint16_t curlen;
+};
+
+static void wsc_attr_builder_grow(struct wsc_attr_builder *builder)
+{
+	builder->buf = l_realloc(builder->buf, builder->capacity * 2);
+	builder->capacity *= 2;
+}
+
+static bool wsc_attr_builder_start_attr(struct wsc_attr_builder *builder,
+						enum wsc_attr type)
+{
+	uint8_t *bytes;
+
+	/* TLVs must be length > 0 */
+	if (builder->curlen == 0 && builder->offset != 0)
+		return false;
+
+	/* Record previous attribute's length */
+	if (builder->curlen > 0) {
+		bytes = builder->buf + builder->offset;
+		l_put_be16(builder->curlen, bytes + 2);
+		builder->offset += 4 + builder->curlen;
+		builder->curlen = 0;
+	}
+
+	if (builder->offset + 4 >= builder->capacity)
+		wsc_attr_builder_grow(builder);
+
+	bytes = builder->buf + builder->offset;
+	l_put_be16(type, bytes);
+
+	return true;
+}
+
+static bool wsc_attr_builder_put_u8(struct wsc_attr_builder *builder, uint8_t v)
+{
+	if (builder->offset + 4 + builder->curlen + 1 >= builder->capacity)
+		wsc_attr_builder_grow(builder);
+
+	builder->buf[builder->offset + 4 + builder->curlen] = v;
+	builder->curlen += 1;
+
+	return true;
+}
+
+static bool wsc_attr_builder_put_u16(struct wsc_attr_builder *builder,
+								uint16_t v)
+{
+	if (builder->offset + 4 + builder->curlen + 2 >= builder->capacity)
+		wsc_attr_builder_grow(builder);
+
+	l_put_be16(v, builder->buf + builder->offset + 4 + builder->curlen);
+	builder->curlen += 2;
+
+	return true;
+}
+
+static bool wsc_attr_builder_put_bytes(struct wsc_attr_builder *builder,
+					const void *bytes, size_t size)
+{
+	while (builder->offset + 4 + builder->curlen + size >=
+							builder->capacity)
+		wsc_attr_builder_grow(builder);
+
+	memcpy(builder->buf + builder->offset + 4 + builder->curlen,
+								bytes, size);
+	builder->curlen += size;
+
+	return true;
+}
+
+static bool wsc_attr_builder_put_oui(struct wsc_attr_builder *builder,
+							const uint8_t *oui)
+{
+	if (builder->offset + 4 + builder->curlen + 3 >= builder->capacity)
+		wsc_attr_builder_grow(builder);
+
+	memcpy(builder->buf + builder->offset + 4 + builder->curlen, oui, 3);
+	builder->curlen += 3;
+
+	return true;
+}
+
+static bool wsc_attr_builder_put_string(struct wsc_attr_builder *builder,
+							const char *string)
+{
+	size_t len;
+
+	len = string ? strlen(string) : 0;
+
+	if (len == 0) {
+		string = " ";
+		len = 1;
+	}
+
+	if (builder->offset + 4 + builder->curlen + len >= builder->capacity)
+		wsc_attr_builder_grow(builder);
+
+	memcpy(builder->buf + builder->offset + 4 + builder->curlen,
+								string, len);
+	builder->curlen += len;
+
+	return true;
+}
+
+static struct wsc_attr_builder *wsc_attr_builder_new(size_t initial_capacity)
+{
+	struct wsc_attr_builder *builder;
+
+	if (initial_capacity == 0)
+		return NULL;
+
+	builder = l_new(struct wsc_attr_builder, 1);
+	builder->buf = l_malloc(initial_capacity);
+	builder->capacity = initial_capacity;
+
+	return builder;
+}
+
+static uint8_t *wsc_attr_builder_free(struct wsc_attr_builder *builder,
+					bool free_contents,
+					size_t *out_size)
+{
+	uint8_t *ret;
+
+	if (builder->curlen > 0) {
+		uint8_t *bytes = builder->buf + builder->offset;
+		l_put_be16(builder->curlen, bytes + 2);
+		builder->offset += 4 + builder->curlen;
+		builder->curlen = 0;
+	}
+
+	if (free_contents) {
+		l_free(builder->buf);
+		builder->buf = NULL;
+	}
+
+	ret = builder->buf;
+
+	if (out_size)
+		*out_size = builder->offset;
+
+	l_free(builder);
+
+	return ret;
+}
+
+static void build_association_state(struct wsc_attr_builder *builder,
+					enum wsc_association_state state)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_ASSOCIATION_STATE);
+	wsc_attr_builder_put_u16(builder, state);
+}
+
+static void build_configuration_error(struct wsc_attr_builder *builder,
+					enum wsc_configuration_error error)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_CONFIGURATION_ERROR);
+	wsc_attr_builder_put_u16(builder, error);
+}
+
+static void build_configuration_methods(struct wsc_attr_builder *builder,
+						uint16_t config_methods)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_CONFIGURATION_METHODS);
+	wsc_attr_builder_put_u16(builder, config_methods);
+}
+
+static void build_device_name(struct wsc_attr_builder *builder,
+						const char *device_name)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_DEVICE_NAME);
+	wsc_attr_builder_put_string(builder, device_name);
+}
+
+static void build_device_password_id(struct wsc_attr_builder *builder,
+					enum wsc_device_password_id id)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_DEVICE_PASSWORD_ID);
+	wsc_attr_builder_put_u16(builder, id);
+}
+
+static void build_manufacturer(struct wsc_attr_builder *builder,
+						const char *manufacturer)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_MANUFACTURER);
+	wsc_attr_builder_put_string(builder, manufacturer);
+}
+
+static void build_model_name(struct wsc_attr_builder *builder,
+						const char *model_name)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_MODEL_NAME);
+	wsc_attr_builder_put_string(builder, model_name);
+}
+
+static void build_model_number(struct wsc_attr_builder *builder,
+						const char *model_number)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_MODEL_NUMBER);
+	wsc_attr_builder_put_string(builder, model_number);
+}
+
+static void build_primary_device_type(struct wsc_attr_builder *builder,
+				const struct wsc_primary_device_type *pdt)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_PRIMARY_DEVICE_TYPE);
+	wsc_attr_builder_put_u16(builder, pdt->category);
+	wsc_attr_builder_put_oui(builder, pdt->oui);
+	wsc_attr_builder_put_u8(builder, pdt->oui_type);
+	wsc_attr_builder_put_u16(builder, pdt->subcategory);
+}
+
+static void build_request_type(struct wsc_attr_builder *builder,
+						enum wsc_request_type type)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_REQUEST_TYPE);
+	wsc_attr_builder_put_u8(builder, type);
+}
+
+static void build_rf_bands(struct wsc_attr_builder *builder, uint8_t rf_bands)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_RF_BANDS);
+	wsc_attr_builder_put_u8(builder, rf_bands);
+}
+
+static void build_uuid_e(struct wsc_attr_builder *builder, const uint8_t *uuid)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_UUID_E);
+	wsc_attr_builder_put_bytes(builder, uuid, 16);
+}
+
+static void build_version(struct wsc_attr_builder *builder, uint8_t version)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_VERSION);
+	wsc_attr_builder_put_u8(builder, version);
+}
+
+uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
+							size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+	uint8_t *ret;
+
+	builder = wsc_attr_builder_new(512);
+	build_version(builder, 0x10);
+	build_request_type(builder, probe_request->request_type);
+	build_configuration_methods(builder, probe_request->config_methods);
+	build_uuid_e(builder, probe_request->uuid_e);
+	build_primary_device_type(builder, &probe_request->primary_device_type);
+	build_rf_bands(builder, probe_request->rf_bands);
+	build_association_state(builder, probe_request->association_state);
+	build_configuration_error(builder, probe_request->configuration_error);
+	build_device_password_id(builder, probe_request->device_password_id);
+
+	if (!probe_request->version2)
+		goto done;
+
+	build_manufacturer(builder, probe_request->manufacturer);
+	build_model_name(builder, probe_request->model_name);
+	build_model_number(builder, probe_request->model_number);
+	build_device_name(builder, probe_request->device_name);
+
+	/* Put in the WFA Vendor Extension */
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_VENDOR_EXTENSION);
+	wsc_attr_builder_put_oui(builder, wfa_ext);
+	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_VERSION2);
+	wsc_attr_builder_put_u8(builder, 1);
+	wsc_attr_builder_put_u8(builder, 0x20);
+	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_REQUEST_TO_ENROLL);
+	wsc_attr_builder_put_u8(builder, 1);
+	wsc_attr_builder_put_u8(builder, 1);
+
+done:
+	ret = wsc_attr_builder_free(builder, false, out_len);
+	return ret;
 }
