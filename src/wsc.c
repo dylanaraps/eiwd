@@ -535,7 +535,7 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 			}
 
 			version2 = true;
-			goto check;
+			continue;
 		}
 
 		if (entry->type == WSC_ATTR_SELECTED_REGISTRAR)
@@ -558,7 +558,6 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 			parse_error = true;
 	}
 
-check:
 	/*
 	 * Check for Version 2.0 required attributes.
 	 * If version2 attribute is present in the WFA Vendor field,
@@ -615,6 +614,17 @@ done:
 	*out_version2 = version2;
 
 	return 0;
+}
+
+static bool wfa_extract_bool(struct wsc_wfa_ext_iter *iter, void *data)
+{
+	bool *to = data;
+
+	if (wsc_wfa_ext_iter_get_length(iter) != 1)
+		return false;
+
+	*to = *wsc_wfa_ext_iter_get_data(iter);
+	return true;
 }
 
 static bool wfa_extract_authorized_macs(struct wsc_wfa_ext_iter *iter,
@@ -751,6 +761,58 @@ int wsc_parse_probe_response(const unsigned char *pdu, unsigned int len,
 			WSC_WFA_EXTENSION_REGISTRAR_CONFIGRATION_METHODS) {
 		if (!wfa_extract_registrar_configuration_methods(&iter,
 						&out->reg_config_methods))
+			return -EBADMSG;
+
+		if (!wsc_wfa_ext_iter_next(&iter))
+			goto done;
+	}
+
+	return -EINVAL;
+
+done:
+	return 0;
+}
+
+int wsc_parse_probe_request(const unsigned char *pdu, unsigned int len,
+				struct wsc_probe_request *out)
+{
+	int r;
+	struct wsc_wfa_ext_iter iter;
+	uint8_t version;
+
+	memset(out, 0, sizeof(struct wsc_probe_request));
+
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
+		WSC_ATTR_VERSION, ATTR_FLAG_REQUIRED, &version,
+		WSC_ATTR_REQUEST_TYPE, ATTR_FLAG_REQUIRED, &out->request_type,
+		WSC_ATTR_CONFIGURATION_METHODS,
+			ATTR_FLAG_REQUIRED, &out->config_methods,
+		WSC_ATTR_UUID_E, ATTR_FLAG_REQUIRED, &out->uuid_e,
+		WSC_ATTR_PRIMARY_DEVICE_TYPE,
+			ATTR_FLAG_REQUIRED, &out->primary_device_type,
+		WSC_ATTR_RF_BANDS, ATTR_FLAG_REQUIRED, &out->rf_bands,
+		WSC_ATTR_ASSOCIATION_STATE,
+			ATTR_FLAG_REQUIRED, &out->association_state,
+		WSC_ATTR_CONFIGURATION_ERROR,
+			ATTR_FLAG_REQUIRED, &out->configuration_error,
+		WSC_ATTR_DEVICE_PASSWORD_ID,
+			ATTR_FLAG_REQUIRED, &out->device_password_id,
+		WSC_ATTR_MANUFACTURER, ATTR_FLAG_VERSION2, &out->manufacturer,
+		WSC_ATTR_MODEL_NAME, ATTR_FLAG_VERSION2, &out->model_name,
+		WSC_ATTR_MODEL_NUMBER, ATTR_FLAG_VERSION2, &out->model_number,
+		WSC_ATTR_DEVICE_NAME, ATTR_FLAG_VERSION2, &out->device_name,
+		WSC_ATTR_REQUESTED_DEVICE_TYPE, 0, &out->requested_device_type,
+		WSC_ATTR_INVALID);
+
+	if (r < 0)
+		return r;
+
+	if (!wsc_wfa_ext_iter_next(&iter))
+		goto done;
+
+	if (wsc_wfa_ext_iter_get_type(&iter) ==
+					WSC_WFA_EXTENSION_REQUEST_TO_ENROLL) {
+		if (!wfa_extract_bool(&iter, &out->request_to_enroll))
 			return -EBADMSG;
 
 		if (!wsc_wfa_ext_iter_next(&iter))

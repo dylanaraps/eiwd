@@ -361,7 +361,28 @@ struct wsc_probe_response {
 	uint16_t reg_config_methods;
 };
 
+struct wsc_probe_request {
+	bool version2;
+	enum wsc_request_type request_type;
+	uint16_t config_methods;
+	uint8_t uuid_e[16];
+	struct wsc_primary_device_type primary_device_type;
+	uint8_t rf_bands;
+	enum wsc_association_state association_state;
+	enum wsc_configuration_error configuration_error;
+	enum wsc_device_password_id device_password_id;
+	char manufacturer[65];
+	char model_name[33];
+	char model_number[33];
+	char serial_number[33];
+	char device_name[33];
+	bool request_to_enroll;
+	struct wsc_primary_device_type requested_device_type;
+};
+
 int wsc_parse_beacon(const unsigned char *pdu, unsigned int len,
 				struct wsc_beacon *out);
 int wsc_parse_probe_response(const unsigned char *pdu, unsigned int len,
 				struct wsc_probe_response *out);
+int wsc_parse_probe_request(const unsigned char *pdu, unsigned int len,
+				struct wsc_probe_request *out);
