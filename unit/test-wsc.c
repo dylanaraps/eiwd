@@ -273,6 +273,102 @@ static void wsc_test_parse_probe_response(const void *data)
 				probe_response.reg_config_methods);
 }
 
+static const unsigned char probe_request1[] = {
+	0x10, 0x4a, 0x00, 0x01, 0x10, 0x10, 0x3a, 0x00, 0x01, 0x01, 0x10, 0x08,
+	0x00, 0x02, 0x21, 0x48, 0x10, 0x47, 0x00, 0x10, 0x79, 0x0c, 0x1f, 0x80,
+	0x4f, 0x2b, 0x52, 0xb7, 0xbe, 0x30, 0xc0, 0xe9, 0x72, 0x92, 0x08, 0x8d,
+	0x10, 0x54, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x10, 0x3c, 0x00, 0x01, 0x03, 0x10, 0x02, 0x00, 0x02, 0x00, 0x00, 0x10,
+	0x09, 0x00, 0x02, 0x00, 0x00, 0x10, 0x12, 0x00, 0x02, 0x00, 0x04, 0x10,
+	0x21, 0x00, 0x01, 0x20, 0x10, 0x23, 0x00, 0x01, 0x20, 0x10, 0x24, 0x00,
+	0x01, 0x20, 0x10, 0x11, 0x00, 0x01, 0x20, 0x10, 0x49, 0x00, 0x09, 0x00,
+	0x37, 0x2a, 0x00, 0x01, 0x20, 0x03, 0x01, 0x01,
+};
+
+struct probe_request_data {
+	struct wsc_probe_request expected;
+	const void *pdu;
+	unsigned int len;
+};
+
+static const struct probe_request_data probe_request_data_1 = {
+	.pdu = probe_request1,
+	.len = sizeof(probe_request1),
+	.expected = {
+		.version2 = true,
+		.request_type = WSC_REQUEST_TYPE_ENROLLEE_OPEN_8021X,
+		.config_methods =
+				WSC_CONFIGURATION_METHOD_VIRTUAL_DISPLAY_PIN |
+				WSC_CONFIGURATION_METHOD_NFC_INTERFACE |
+				WSC_CONFIGURATION_METHOD_KEYPAD,
+		.uuid_e = { 0x79, 0x0c, 0x1f, 0x80, 0x4f, 0x2b, 0x52, 0xb7,
+			0xbe, 0x30, 0xc0, 0xe9, 0x72, 0x92, 0x08, 0x8d },
+		.primary_device_type = {
+			.category = 0,
+			.oui = { 0x00, 0x00, 0x00 },
+			.oui_type = 0x00,
+			.subcategory = 0, },
+		.rf_bands = WSC_RF_BAND_2_4_GHZ | WSC_RF_BAND_5_0_GHZ,
+		.association_state = WSC_ASSOCIATION_STATE_NOT_ASSOCIATED,
+		.configuration_error = WSC_CONFIGURATION_ERROR_NO_ERROR,
+		.device_password_id = WSC_DEVICE_PASSWORD_ID_PUSH_BUTTON,
+		.manufacturer = " ",
+		.model_name = " ",
+		.model_number = " ",
+		.device_name = " ",
+		.request_to_enroll = true,
+	},
+};
+
+static void wsc_test_parse_probe_request(const void *data)
+{
+	const struct probe_request_data *test = data;
+	struct wsc_probe_request probe_request;
+	const struct wsc_probe_request *expected = &test->expected;
+	int r;
+
+	r = wsc_parse_probe_request(test->pdu, test->len, &probe_request);
+	assert(r == 0);
+
+	assert(expected->version2 == probe_request.version2);
+	assert(expected->request_type == probe_request.request_type);
+
+	assert(expected->config_methods == probe_request.config_methods);
+	assert(!memcmp(expected->uuid_e, probe_request.uuid_e, 16));
+
+	assert(expected->primary_device_type.category ==
+				probe_request.primary_device_type.category);
+	assert(!memcmp(expected->primary_device_type.oui,
+				probe_request.primary_device_type.oui, 3));
+	assert(expected->primary_device_type.oui_type ==
+				probe_request.primary_device_type.oui_type);
+	assert(expected->primary_device_type.subcategory ==
+				probe_request.primary_device_type.subcategory);
+
+	assert(expected->rf_bands == probe_request.rf_bands);
+	assert(expected->association_state == probe_request.association_state);
+	assert(expected->configuration_error ==
+				probe_request.configuration_error);
+	assert(expected->device_password_id ==
+					probe_request.device_password_id);
+
+	assert(!strcmp(expected->manufacturer, probe_request.manufacturer));
+	assert(!strcmp(expected->model_name, probe_request.model_name));
+	assert(!strcmp(expected->model_number, probe_request.model_number));
+	assert(!strcmp(expected->device_name, probe_request.device_name));
+
+	assert(expected->request_to_enroll == probe_request.request_to_enroll);
+
+	assert(expected->requested_device_type.category ==
+				probe_request.requested_device_type.category);
+	assert(!memcmp(expected->requested_device_type.oui,
+				probe_request.requested_device_type.oui, 3));
+	assert(expected->requested_device_type.oui_type ==
+				probe_request.requested_device_type.oui_type);
+	assert(expected->requested_device_type.subcategory ==
+			probe_request.requested_device_type.subcategory);
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -285,5 +381,7 @@ int main(int argc, char *argv[])
 	l_test_add("/wsc/parse/probe response 1", wsc_test_parse_probe_response,
 					&probe_response_data_1);
 
+	l_test_add("/wsc/parse/probe request 1", wsc_test_parse_probe_request,
+					&probe_request_data_1);
 	return l_test_run();
 }
