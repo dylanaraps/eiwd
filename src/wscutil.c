@@ -30,7 +30,7 @@
 
 #include <ell/ell.h>
 
-#include "wsc.h"
+#include "wscutil.h"
 
 static const unsigned char wfa_ext[3] = { 0x00, 0x37, 0x2a };
 

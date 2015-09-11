@@ -67,7 +67,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h linux/kdbus.h \
 					src/agent.h src/agent.c \
 					src/storage.h src/storage.c \
 					src/network.h src/network.c \
-					src/wsc.h src/wsc.c \
+					src/wscutil.h src/wscutil.c \
 					iwd.h
 src_iwd_LDADD = ell/libell-internal.la
 
@@ -80,7 +80,7 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					monitor/pcap.h monitor/pcap.c \
 					monitor/display.h monitor/display.c \
 					src/ie.h src/ie.c \
-					src/wsc.h src/wsc.c \
+					src/wscutil.h src/wscutil.c \
 					src/mpdu.h src/mpdu.c \
 					src/util.h src/util.c \
 					src/sha1.h src/sha1.c \
@@ -163,7 +163,7 @@ unit_test_ssid_security_SOURCES = unit/test-ssid-security.c src/ie.h src/ie.c \
 				src/scan.h src/scan.c
 unit_test_ssid_security_LDADD = ell/libell-internal.la
 
-unit_test_wsc_SOURCES = unit/test-wsc.c src/wsc.h src/wsc.c
+unit_test_wsc_SOURCES = unit/test-wsc.c src/wscutil.h src/wscutil.c
 unit_test_wsc_LDADD = ell/libell-internal.la
 
 TESTS = $(unit_tests)

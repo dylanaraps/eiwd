@@ -51,7 +51,7 @@
 #include "src/mpdu.h"
 #include "src/eapol.h"
 #include "src/util.h"
-#include "src/wsc.h"
+#include "src/wscutil.h"
 #include "monitor/pcap.h"
 #include "monitor/display.h"
 #include "monitor/nlmon.h"
