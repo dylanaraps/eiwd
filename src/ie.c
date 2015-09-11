@@ -163,7 +163,7 @@ static void *ie_tlv_vendor_ie_concat(const unsigned char oui[],
  * Elements (the order of these elements in the original packet shall be
  * preserved when concatenating Data components)."
  */
-void *ie_tlv_extract_wsc_payload(const unsigned char *ies, unsigned int len,
+void *ie_tlv_extract_wsc_payload(const unsigned char *ies, size_t len,
 							ssize_t *out_len)
 {
 	static unsigned char oui[3] = { 0x00, 0x50, 0xf2 };
