@@ -624,6 +624,35 @@ static void ie_test_concat_wsc(const void *data)
 	l_free(res);
 }
 
+static void ie_test_encapsulate_wsc(const void *data)
+{
+	const struct ie_tlv_concat_test *test = data;
+	void *extracted;
+	void *packed;
+	ssize_t extracted_len;
+	size_t packed_len;
+
+	extracted = ie_tlv_extract_wsc_payload(test->ies, test->len,
+								&extracted_len);
+
+	assert(extracted_len == test->expected_len);
+
+	if (extracted_len > 0)
+		assert(!memcmp(extracted, test->expected_data, extracted_len));
+	else
+		assert(extracted == NULL);
+
+	packed = ie_tlv_encapsulate_wsc_payload(extracted, extracted_len,
+								&packed_len);
+
+	assert(packed);
+	assert(packed_len == test->len);
+	assert(!memcmp(packed, test->ies, test->len));
+
+	l_free(extracted);
+	l_free(packed);
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -677,6 +706,10 @@ int main(int argc, char *argv[])
 				ie_test_concat_wsc, &ie_tlv_concat_test_data_2);
 	l_test_add("/ie/Concatentation/WSC/Test Case 3",
 				ie_test_concat_wsc, &ie_tlv_concat_test_data_3);
+
+	l_test_add("/ie/Encapsulation/WSC/Test Case 1",
+				ie_test_encapsulate_wsc,
+				&ie_tlv_concat_test_data_1);
 
 	return l_test_run();
 }
