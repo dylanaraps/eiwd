@@ -253,6 +253,8 @@ static inline const unsigned char *ie_tlv_iter_get_data(
 
 void *ie_tlv_extract_wsc_payload(const uint8_t *ies, size_t len,
 							ssize_t *out_len);
+void *ie_tlv_encapsulate_wsc_payload(const uint8_t *data, size_t len,
+							size_t *out_len);
 
 bool ie_tlv_builder_init(struct ie_tlv_builder *builder);
 bool ie_tlv_builder_set_length(struct ie_tlv_builder *builder,

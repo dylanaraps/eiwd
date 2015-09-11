@@ -166,9 +166,59 @@ static void *ie_tlv_vendor_ie_concat(const unsigned char oui[],
 void *ie_tlv_extract_wsc_payload(const unsigned char *ies, size_t len,
 							ssize_t *out_len)
 {
-	static unsigned char oui[3] = { 0x00, 0x50, 0xf2 };
+	return ie_tlv_vendor_ie_concat(microsoft_oui, 0x04, ies, len, out_len);
+}
 
-	return ie_tlv_vendor_ie_concat(oui, 0x04, ies, len, out_len);
+/*
+ * Encapsulate & Fragment data into Vendor IE with a given OUI + type
+ *
+ * Returns a newly allocated buffer with the contents of encapsulated into
+ * multiple vendor IE.  @out_len is set to the overall size of the contents.
+ */
+static void *ie_tlv_vendor_ie_encapsulate(const unsigned char oui[],
+					uint8_t type,
+					const void *data, size_t len,
+					size_t *out_len)
+{
+	size_t overhead;
+	size_t ie_len;
+	size_t offset;
+	uint8_t *ret;
+
+	/*
+	 * Each Vendor IE can contain up to 251 bytes of data.
+	 * 255 byte maximum length - 3 for oui and 1 for type
+	 */
+	overhead = (len + 250) / 251 * 6;
+
+	ret = l_malloc(len + overhead);
+
+	if (out_len)
+		*out_len = len + overhead;
+
+	offset = 0;
+
+	while (len) {
+		ie_len = len <= 251 ? len : 251;
+		ret[offset++] = IE_TYPE_VENDOR_SPECIFIC;
+		ret[offset++] = ie_len + 4;
+		memcpy(ret + offset, oui, 3);
+		offset += 3;
+		ret[offset++] = type;
+		memcpy(ret + offset, data, ie_len);
+
+		data += ie_len;
+		len -= ie_len;
+	}
+
+	return ret;
+}
+
+void *ie_tlv_encapsulate_wsc_payload(const uint8_t *data, size_t len,
+								size_t *out_len)
+{
+	return ie_tlv_vendor_ie_encapsulate(microsoft_oui, 0x04,
+							data, len, out_len);
 }
 
 #define TLV_HEADER_LEN 2
