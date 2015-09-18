@@ -1107,3 +1107,14 @@ done:
 	ret = wsc_attr_builder_free(builder, false, out_len);
 	return ret;
 }
+
+bool wsc_uuid_from_addr(const uint8_t addr[], uint8_t *out_uuid)
+{
+	/* Reuse the NSID from WPA Supplicant for compatibility */
+	static const uint8_t nsid[] = {
+		0x52, 0x64, 0x80, 0xf8, 0xc9, 0x9b, 0x4b, 0xe5,
+		0xa6, 0x55, 0x58, 0xed, 0x5f, 0x5d, 0x60, 0x84,
+	};
+
+	return l_uuid_v5(nsid, addr, 6, out_uuid);
+}

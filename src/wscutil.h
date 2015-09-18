@@ -389,3 +389,5 @@ int wsc_parse_probe_request(const unsigned char *pdu, unsigned int len,
 
 uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
 				size_t *out_len);
+
+bool wsc_uuid_from_addr(const uint8_t addr[], uint8_t *out_uuid);
