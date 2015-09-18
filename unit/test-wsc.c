@@ -383,6 +383,27 @@ static void wsc_test_build_probe_request(const void *data)
 	l_free(pr);
 }
 
+struct uuid_from_addr_data {
+	uint8_t addr[6];
+	uint8_t expected_uuid[16];
+};
+
+static const struct uuid_from_addr_data uuid_from_addr_data_1 = {
+	.addr = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 },
+	.expected_uuid = { 0x79, 0x0c, 0x1f, 0x80, 0x4f, 0x2b, 0x52, 0xb7,
+			0xbe, 0x30, 0xc0, 0xe9, 0x72, 0x92, 0x08, 0x8d },
+};
+
+static void wsc_test_uuid_from_addr(const void *data)
+{
+	const struct uuid_from_addr_data *test = data;
+	uint8_t uuid[16];
+
+	assert(wsc_uuid_from_addr(test->addr, uuid));
+
+	assert(!memcmp(test->expected_uuid, uuid, 16));
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -400,6 +421,9 @@ int main(int argc, char *argv[])
 
 	l_test_add("/wsc/build/probe request 1", wsc_test_build_probe_request,
 					&probe_request_data_1);
+
+	l_test_add("/wsc/gen_uuid/1", wsc_test_uuid_from_addr,
+					&uuid_from_addr_data_1);
 
 	return l_test_run();
 }
