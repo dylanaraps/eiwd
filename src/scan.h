@@ -32,9 +32,16 @@ enum scan_band {
 	SCAN_BAND_5_GHZ,
 };
 
+enum scan_state {
+	SCAN_STATE_NOT_RUNNING,
+	SCAN_STATE_PASSIVE,
+	SCAN_STATE_ACTIVE,
+};
+
 typedef void (*scan_func_t)(struct l_genl_msg *msg, void *user_data);
 typedef bool (*scan_notify_func_t)(uint32_t wiphy, uint32_t ifindex,
-					struct l_queue *bss_list);
+					struct l_queue *bss_list,
+					void *userdata);
 
 struct scan_freq_set;
 struct ie_rsn_info;
@@ -56,7 +63,8 @@ struct scan_bss {
 
 void scan_start(struct l_genl_family *nl80211, uint32_t ifindex,
 		scan_func_t callback, void *user_data);
-void scan_periodic_start(uint32_t ifindex);
+void scan_periodic_start(uint32_t ifindex, scan_notify_func_t func,
+								void *userdata);
 bool scan_periodic_stop(uint32_t ifindex);
 
 void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
@@ -79,5 +87,8 @@ void scan_freq_set_free(struct scan_freq_set *freqs);
 bool scan_freq_set_add(struct scan_freq_set *freqs, uint32_t freq);
 bool scan_freq_set_contains(struct scan_freq_set *freqs, uint32_t freq);
 
-bool scan_init(struct l_genl_family *in, scan_notify_func_t func);
+bool scan_ifindex_add(uint32_t ifindex);
+bool scan_ifindex_remove(uint32_t ifindex);
+
+bool scan_init(struct l_genl_family *in);
 bool scan_exit();

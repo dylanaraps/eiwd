@@ -115,6 +115,9 @@ struct autoconnect_entry {
 
 static struct l_queue *wiphy_list = NULL;
 
+static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
+				struct l_queue *bss_list, void *userdata);
+
 static void do_debug(const char *str, void *user_data)
 {
 	const char *prefix = user_data;
@@ -239,7 +242,7 @@ static void netdev_enter_state(struct netdev *netdev, enum netdev_state state)
 
 	switch (state) {
 	case NETDEV_STATE_AUTOCONNECT:
-		scan_periodic_start(netdev->index);
+		scan_periodic_start(netdev->index, new_scan_results, netdev);
 		break;
 	case NETDEV_STATE_DISCONNECTED:
 		scan_periodic_stop(netdev->index);
@@ -918,6 +921,7 @@ static void netdev_free(void *data)
 	l_queue_destroy(netdev->autoconnect_list, l_free);
 	l_io_destroy(netdev->eapol_io);
 
+	scan_ifindex_remove(netdev->index);
 	netdev_set_linkmode_and_operstate(netdev->index, 0, IF_OPER_DOWN,
 					NULL, NULL);
 
@@ -1742,25 +1746,10 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 }
 
 static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
-				struct l_queue *bss_list)
+				struct l_queue *bss_list, void *userdata)
 {
-	struct wiphy *wiphy;
-	struct netdev *netdev;
+	struct netdev *netdev = userdata;
 	const struct l_queue_entry *bss_entry;
-
-	wiphy = l_queue_find(wiphy_list, wiphy_match,
-				L_UINT_TO_PTR(wiphy_id));
-	if (!wiphy) {
-		l_warn("Scan notification for unknown wiphy");
-		return false;
-	}
-
-	netdev = l_queue_find(wiphy->netdev_list, netdev_match,
-					L_UINT_TO_PTR(ifindex));
-	if (!netdev) {
-		l_warn("Scan notification for unknown ifindex");
-		return false;
-	}
 
 	netdev->old_bss_list = netdev->bss_list;
 	netdev->bss_list = bss_list;
@@ -1925,6 +1914,7 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 		netdev_set_linkmode_and_operstate(netdev->index, 1,
 						IF_OPER_DORMANT, NULL, NULL);
 
+		scan_ifindex_add(netdev->index);
 		netdev_enter_state(netdev, NETDEV_STATE_AUTOCONNECT);
 	}
 
@@ -2288,7 +2278,7 @@ static void nl80211_appeared(void *user_data)
 					wiphy_regulatory_notify, NULL, NULL))
 		l_error("Registering for regulatory notification failed");
 
-	if (!scan_init(nl80211, new_scan_results))
+	if (!scan_init(nl80211))
 		l_error("Unable to init scan functionality");
 
 	wiphy_list = l_queue_new();
