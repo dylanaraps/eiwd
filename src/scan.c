@@ -1050,5 +1050,7 @@ bool scan_exit()
 	r = l_genl_family_unregister(nl80211, scan_id);
 	scan_id = 0;
 
+	nl80211 = 0;
+
 	return r;
 }
