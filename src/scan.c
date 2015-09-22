@@ -1040,6 +1040,8 @@ bool scan_exit()
 {
 	bool r;
 
+	l_debug("");
+
 	if (!nl80211)
 		return false;
 
