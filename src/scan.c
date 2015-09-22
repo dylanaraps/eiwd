@@ -52,12 +52,24 @@ struct scan_periodic {
 	uint16_t interval;
 	scan_notify_func_t callback;
 	void *userdata;
+	bool rearm:1;
+	bool retry:1;
+};
+
+struct scan_request {
+	scan_trigger_func_t trigger;
+	scan_notify_func_t callback;
+	void *userdata;
+	scan_destroy_func_t destroy;
+	bool passive:1; /* Active or Passive scan? */
+	bool triggered:1;
 };
 
 struct scan_context {
 	uint32_t ifindex;
 	enum scan_state state;
 	struct scan_periodic sp;
+	struct l_queue *requests;
 };
 
 struct scan_results {
@@ -67,7 +79,10 @@ struct scan_results {
 	struct scan_freq_set *freqs;
 	scan_notify_func_t callback;
 	void *userdata;
+	scan_destroy_func_t destroy;
 };
+
+static void scan_done(struct l_genl_msg *msg, void *userdata);
 
 static bool scan_context_match(const void *a, const void *b)
 {
@@ -75,6 +90,13 @@ static bool scan_context_match(const void *a, const void *b)
 	uint32_t ifindex = L_PTR_TO_UINT(b);
 
 	return (sc->ifindex == ifindex);
+}
+
+static void scan_request_free(void *data)
+{
+	struct scan_request *sr = data;
+
+	free(sr);
 }
 
 static struct scan_context *scan_context_new(uint32_t ifindex)
@@ -85,6 +107,7 @@ static struct scan_context *scan_context_new(uint32_t ifindex)
 
 	sc->ifindex = ifindex;
 	sc->state = SCAN_STATE_NOT_RUNNING;
+	sc->requests = l_queue_new();
 
 	return sc;
 }
@@ -92,6 +115,8 @@ static struct scan_context *scan_context_new(uint32_t ifindex)
 static void scan_context_free(struct scan_context *sc)
 {
 	l_debug("sc: %p", sc);
+
+	l_queue_destroy(sc->requests, scan_request_free);
 
 	if (sc->sp.timeout)
 		l_timeout_remove(sc->sp.timeout);
@@ -131,14 +156,127 @@ bool scan_ifindex_remove(uint32_t ifindex)
 	return true;
 }
 
-void scan_start(struct l_genl_family *nl80211, uint32_t ifindex,
-		scan_func_t callback, void *user_data)
+static bool __scan_passive_start(struct l_genl_family *nl80211,
+					uint32_t ifindex,
+					scan_func_t callback, void *user_data)
 {
 	struct l_genl_msg *msg;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN, 16);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
-	l_genl_family_send(nl80211, msg, callback, user_data, NULL);
+
+	if (!l_genl_family_send(nl80211, msg, callback, user_data, NULL)) {
+		l_error("Starting scheduled scan failed");
+		return false;
+	}
+
+	return true;
+}
+
+static void start_next_scan_request(void *userdata)
+{
+	uint32_t ifindex = L_PTR_TO_UINT(userdata);
+	struct scan_context *sc;
+	struct scan_request *sr;
+	bool r;
+
+	sc = l_queue_find(scan_contexts, scan_context_match,
+				L_UINT_TO_PTR(ifindex));
+
+	if (!sc)
+		return;
+
+	sr = l_queue_peek_head(sc->requests);
+
+	r = __scan_passive_start(nl80211, ifindex, scan_done, sc);
+
+	if (!r) {
+		l_error("Could not send CMD_TRIGGER_SCAN");
+
+		if (sr->destroy)
+			sr->destroy(sr->userdata);
+
+		sr = l_queue_pop_head(sc->requests);
+		scan_request_free(sr);
+
+		if (!l_queue_isempty(sc->requests))
+			l_idle_oneshot(start_next_scan_request,
+					L_UINT_TO_PTR(sc->ifindex), NULL);
+	}
+}
+
+static void scan_done(struct l_genl_msg *msg, void *userdata)
+{
+	struct scan_context *sc = userdata;
+	struct scan_request *sr = l_queue_peek_head(sc->requests);
+	int err;
+
+	l_debug("");
+
+	err = l_genl_msg_get_error(msg);
+	if (err < 0) {
+		/* Scan in progress, defer */
+		if (err == -EBUSY)
+			return;
+
+		if (sr->trigger)
+			sr->trigger(err, sr->userdata);
+
+		if (sr->destroy)
+			sr->destroy(sr->userdata);
+
+		l_queue_pop_head(sc->requests);
+		scan_request_free(sr);
+
+		l_error("Received an error during CMD_TRIGGER_SCAN");
+
+		if (!l_queue_isempty(sc->requests))
+			l_idle_oneshot(start_next_scan_request,
+					L_UINT_TO_PTR(sc->ifindex), NULL);
+
+		return;
+	}
+
+	sc->state = sr->passive ? SCAN_STATE_PASSIVE : SCAN_STATE_ACTIVE;
+	l_debug("Passive scan triggered for ifindex: %u", sc->ifindex);
+	sr->triggered = true;
+}
+
+bool scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
+			scan_notify_func_t notify, void *userdata,
+			scan_destroy_func_t destroy)
+{
+	struct scan_context *sc;
+	struct scan_request *sr;
+
+	sc = l_queue_find(scan_contexts, scan_context_match,
+				L_UINT_TO_PTR(ifindex));
+
+	if (!sc)
+		return false;
+
+	sr = l_new(struct scan_request, 1);
+	sr->trigger = trigger;
+	sr->callback = notify;
+	sr->userdata = userdata;
+	sr->destroy = destroy;
+	sr->passive = true;
+
+	if (l_queue_length(sc->requests) > 0)
+		goto done;
+
+	if (sc->state != SCAN_STATE_NOT_RUNNING)
+		goto done;
+
+	if (!__scan_passive_start(nl80211, ifindex, scan_done, sc)) {
+		scan_request_free(sr);
+		return false;
+	}
+
+done:
+	l_queue_push_tail(sc->requests, sr);
+
+	return true;
 }
 
 void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
@@ -165,6 +303,7 @@ static void scan_periodic_done(struct l_genl_msg *msg, void *user_data)
 	int err;
 
 	l_debug("");
+	sc->sp.rearm = true;
 
 	err = l_genl_msg_get_error(msg);
 	if (err < 0) {
@@ -172,6 +311,8 @@ static void scan_periodic_done(struct l_genl_msg *msg, void *user_data)
 		if (err != -EBUSY)
 			l_warn("Periodic scan could not be triggered: %s (%d)",
 				strerror(-err), -err);
+
+		sc->sp.retry = true;
 
 		return;
 	}
@@ -201,8 +342,10 @@ void scan_periodic_start(uint32_t ifindex, scan_notify_func_t func,
 	sc->sp.interval = SCAN_INIT_INTERVAL;
 	sc->sp.callback = func;
 	sc->sp.userdata = userdata;
+	sc->sp.retry = false;
+	sc->sp.rearm = false;
 
-	scan_start(nl80211, ifindex, scan_periodic_done, sc);
+	__scan_passive_start(nl80211, ifindex, scan_periodic_done, sc);
 }
 
 bool scan_periodic_stop(uint32_t ifindex)
@@ -224,6 +367,8 @@ bool scan_periodic_stop(uint32_t ifindex)
 	sc->sp.interval = 0;
 	sc->sp.callback = NULL;
 	sc->sp.userdata = NULL;
+	sc->sp.rearm = false;
+	sc->sp.retry = false;
 
 	return true;
 }
@@ -235,7 +380,7 @@ static void scan_periodic_timeout(struct l_timeout *timeout, void *user_data)
 	l_debug("scan_periodic_timeout: %u", sc->ifindex);
 
 	sc->sp.interval *= 2;
-	scan_start(nl80211, sc->ifindex, scan_periodic_done, sc);
+	__scan_passive_start(nl80211, sc->ifindex, scan_periodic_done, sc);
 }
 
 static void scan_periodic_rearm(struct scan_context *sc)
@@ -247,6 +392,8 @@ static void scan_periodic_rearm(struct scan_context *sc)
 	else
 		sc->sp.timeout = l_timeout_create(sc->sp.interval,
 					scan_periodic_timeout, sc, NULL);
+
+	sc->sp.rearm = false;
 }
 
 enum scan_ssid_security scan_get_ssid_security(
@@ -706,6 +853,7 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 	{
 		struct l_genl_msg *scan_msg;
 		struct scan_results *results;
+		struct scan_request *sr;
 
 		results = l_new(struct scan_results, 1);
 		results->wiphy = attr_wiphy;
@@ -713,11 +861,20 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 
 		scan_parse_new_scan_results(msg, results);
 
-		/*
-		 * Can't use active_scan here, since NEW_SCAN_RESULTS always
-		 * contains this attribute
-		 */
-		if (sc->state == SCAN_STATE_PASSIVE) {
+		sr = l_queue_peek_head(sc->requests);
+		if (sr && sr->triggered) {
+			results->callback = sr->callback;
+			results->userdata = sr->userdata;
+			results->destroy = sr->destroy;
+
+			scan_request_free(sr);
+			l_queue_pop_head(sc->requests);
+		} else if (sc->state == SCAN_STATE_PASSIVE &&
+						sc->sp.interval != 0) {
+			/*
+			 * Can't use active_scan here, since
+			 * NEW_SCAN_RESULTS always contains this attribute
+			 */
 			results->callback = sc->sp.callback;
 			results->userdata = sc->sp.userdata;
 		}
@@ -728,10 +885,18 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		l_genl_family_dump(nl80211, scan_msg, get_scan_callback,
 					results, get_scan_done);
 
-		if (sc->state == SCAN_STATE_PASSIVE && sc->sp.interval != 0)
-			scan_periodic_rearm(sc);
-
 		sc->state = SCAN_STATE_NOT_RUNNING;
+
+		if (!l_queue_isempty(sc->requests)) {
+			l_idle_oneshot(start_next_scan_request,
+					L_UINT_TO_PTR(sc->ifindex), NULL);
+		} else if (sc->sp.retry) {
+			__scan_passive_start(nl80211, sc->ifindex,
+							scan_periodic_done, sc);
+			sc->sp.retry = false;
+		} else if (sc->sp.rearm) {
+			scan_periodic_rearm(sc);
+		}
 
 		break;
 	}

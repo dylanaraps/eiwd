@@ -723,14 +723,14 @@ static struct l_dbus_message *device_get_properties(struct l_dbus *dbus,
 	return reply;
 }
 
-static void device_scan_callback(struct l_genl_msg *msg, void *user_data)
+static void device_scan_triggered(int err, void *user_data)
 {
 	struct netdev *netdev = user_data;
 	struct l_dbus_message *reply;
 
-	l_debug("Scan callback");
+	l_debug("device_scan_triggered: %i", err);
 
-	if (l_genl_msg_get_error(msg) < 0) {
+	if (err < 0) {
 		dbus_pending_reply(&netdev->scan_pending,
 				dbus_error_failed(netdev->scan_pending));
 		return;
@@ -756,7 +756,9 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 
 	netdev->scan_pending = l_dbus_message_ref(message);
 
-	scan_start(nl80211, netdev->index, device_scan_callback, netdev);
+	if (!scan_passive(netdev->index, device_scan_triggered,
+				new_scan_results, netdev, NULL))
+		return dbus_error_failed(message);
 
 	return NULL;
 }

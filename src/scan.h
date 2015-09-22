@@ -39,9 +39,11 @@ enum scan_state {
 };
 
 typedef void (*scan_func_t)(struct l_genl_msg *msg, void *user_data);
+typedef void (*scan_trigger_func_t)(int, void *);
 typedef bool (*scan_notify_func_t)(uint32_t wiphy, uint32_t ifindex,
 					struct l_queue *bss_list,
 					void *userdata);
+typedef void (*scan_destroy_func_t)(void *userdata);
 
 struct scan_freq_set;
 struct ie_rsn_info;
@@ -61,8 +63,9 @@ struct scan_bss {
 	uint16_t rank;
 };
 
-void scan_start(struct l_genl_family *nl80211, uint32_t ifindex,
-		scan_func_t callback, void *user_data);
+bool scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
+			scan_notify_func_t notify, void *userdata,
+			scan_destroy_func_t destroy);
 void scan_periodic_start(uint32_t ifindex, scan_notify_func_t func,
 								void *userdata);
 bool scan_periodic_stop(uint32_t ifindex);
