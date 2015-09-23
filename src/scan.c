@@ -510,6 +510,9 @@ static struct scan_bss *scan_parse_attr_bss(struct l_genl_attr *attr)
 								data, len))
 				goto fail;
 
+			bss->wsc = ie_tlv_extract_wsc_payload(data, len,
+								&bss->wsc_size);
+
 			break;
 		}
 	}
@@ -667,6 +670,7 @@ void scan_bss_free(struct scan_bss *bss)
 	l_uintset_free(bss->supported_rates);
 	l_free(bss->rsne);
 	l_free(bss->wpa);
+	l_free(bss->wsc);
 	l_free(bss);
 }
 
