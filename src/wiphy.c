@@ -789,7 +789,7 @@ static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
 	return reply;
 }
 
-static void genl_disconnect_cb(struct l_genl_msg *msg, void *user_data)
+static void device_disconnect_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
 	struct l_dbus_message *reply;
@@ -833,7 +833,7 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 	msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
 						netdev->connected_bss->addr);
-	l_genl_family_send(nl80211, msg, genl_disconnect_cb, netdev, NULL);
+	l_genl_family_send(nl80211, msg, device_disconnect_cb, netdev, NULL);
 
 	netdev_enter_state(netdev, NETDEV_STATE_DISCONNECTING);
 
