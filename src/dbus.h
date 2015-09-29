@@ -28,6 +28,7 @@
 #define IWD_DEVICE_INTERFACE "net.connman.iwd.Device"
 #define IWD_NETWORK_INTERFACE "net.connman.iwd.Network"
 #define IWD_AGENT_INTERFACE "net.connman.iwd.Agent"
+#define IWD_WSC_INTERFACE "net.connman.iwd.WiFiSimpleConfiguration"
 
 #define IWD_MANAGER_PATH "/"
 
