@@ -34,6 +34,8 @@
 
 #define WALK_TIME 120
 
+static struct l_genl_family *nl80211 = NULL;
+
 struct wsc_sm {
 	uint8_t *wsc_ies;
 	size_t wsc_ies_size;
@@ -97,4 +99,22 @@ struct wsc_sm *wsc_sm_new_pushbutton(uint32_t ifindex, const uint8_t *addr,
 void wsc_sm_free(struct wsc_sm *sm)
 {
 	l_free(sm);
+}
+
+bool wsc_init(struct l_genl_family *in)
+{
+	nl80211 = in;
+	return true;
+}
+
+bool wsc_exit()
+{
+	l_debug("");
+
+	if (!nl80211)
+		return false;
+
+	nl80211 = 0;
+
+	return true;
 }
