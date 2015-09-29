@@ -892,6 +892,8 @@ static void netdev_free(void *data)
 		dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_aborted(netdev->connect_pending));
 
+	__netdev_watch_call_removed(netdev);
+
 	dbus = dbus_get_bus();
 	l_dbus_unregister_interface(dbus, iwd_device_get_path(netdev),
 					IWD_DEVICE_INTERFACE);
@@ -1894,8 +1896,10 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 						netdev, NULL))
 			l_info("Unable to register %s interface",
 				IWD_DEVICE_INTERFACE);
-		else
+		else {
+			__netdev_watch_call_added(netdev);
 			device_emit_added(netdev);
+		}
 
 		netdev_set_linkmode_and_operstate(netdev->index, 1,
 						IF_OPER_DORMANT, NULL, NULL);
