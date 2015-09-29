@@ -44,7 +44,7 @@
 
 struct l_queue *scan_contexts = NULL;
 
-struct l_genl_family *nl80211 = NULL;
+static struct l_genl_family *nl80211 = NULL;
 uint32_t scan_id = 0;
 
 struct scan_periodic {
