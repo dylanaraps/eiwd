@@ -29,12 +29,17 @@
 #include <getopt.h>
 #include <ell/ell.h>
 
+#include "linux/nl80211.h"
+
 #include "src/netdev.h"
 #include "src/wiphy.h"
 #include "src/kdbus.h"
 #include "src/dbus.h"
 #include "src/agent.h"
 #include "src/network.h"
+#include "src/eapol.h"
+#include "src/scan.h"
+#include "src/wsc.h"
 
 static struct l_timeout *timeout = NULL;
 
@@ -77,6 +82,38 @@ static const struct option main_options[] = {
 	{ }
 };
 
+static void do_debug(const char *str, void *user_data)
+{
+	const char *prefix = user_data;
+
+	l_info("%s%s", prefix, str);
+}
+
+static void nl80211_appeared(void *user_data)
+{
+	struct l_genl_family *nl80211 = user_data;
+
+	l_debug("Found nl80211 interface");
+
+	if (!wiphy_init(nl80211))
+		l_error("Unable to init wiphy functionality");
+
+	if (!scan_init(nl80211))
+		l_error("Unable to init scan functionality");
+
+	if (!wsc_init(nl80211))
+		l_error("Unable to init WSC functionality");
+}
+
+static void nl80211_vanished(void *user_data)
+{
+	l_debug("Lost nl80211 interface");
+
+	wsc_exit();
+	scan_exit();
+	wiphy_exit();
+}
+
 int main(int argc, char *argv[])
 {
 	bool enable_kdbus = false;
@@ -84,6 +121,8 @@ int main(int argc, char *argv[])
 	struct l_signal *signal;
 	sigset_t mask;
 	int exit_status;
+	struct l_genl *genl;
+	struct l_genl_family *nl80211;
 
 	for (;;) {
 		int opt;
@@ -138,7 +177,7 @@ int main(int argc, char *argv[])
 		bus_name = kdbus_lookup_bus();
 		if (!bus_name) {
 			exit_status = EXIT_FAILURE;
-			goto destroy;
+			goto fail_dbus;
 		}
 
 		l_debug("Bus location: %s", bus_name);
@@ -149,38 +188,63 @@ int main(int argc, char *argv[])
 
 		if (!result) {
 			exit_status = EXIT_FAILURE;
-			goto destroy;
+			goto fail_dbus;
 		}
 	}
 
 	if (!dbus_init(enable_dbus_debug)) {
 		exit_status = EXIT_FAILURE;
-		goto destroy;
+		goto fail_dbus;
 	}
+
+	genl = l_genl_new_default();
+	if (!genl) {
+		l_error("Failed to open generic netlink socket");
+		exit_status = EXIT_FAILURE;
+		goto fail_genl;
+	}
+
+	if (getenv("IWD_GENL_DEBUG"))
+		l_genl_set_debug(genl, do_debug, "[GENL] ", NULL);
+
+	l_debug("Opening nl80211 interface");
+
+	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
+	if (!nl80211) {
+		l_error("Failed to open nl80211 interface");
+		exit_status = EXIT_FAILURE;
+		goto fail_nl80211;
+	}
+
+	l_genl_family_set_watches(nl80211, nl80211_appeared, nl80211_vanished,
+								nl80211, NULL);
 
 	if (!netdev_init()) {
 		exit_status = EXIT_FAILURE;
-		goto destroy;
+		goto fail_netdev;
 	}
 
-	if (!wiphy_init()) {
-		netdev_exit();
-		exit_status = EXIT_FAILURE;
-		goto destroy;
-	}
-
+	eapol_init();
 	network_init();
 
+	exit_status = EXIT_SUCCESS;
 	l_main_run();
 
 	network_exit();
-	wiphy_exit();
+	eapol_exit();
+
 	netdev_exit();
+
+fail_netdev:
+	l_genl_family_unref(nl80211);
+
+fail_nl80211:
+	l_genl_unref(genl);
+
+fail_genl:
 	dbus_exit();
 
-	exit_status = EXIT_SUCCESS;
-
-destroy:
+fail_dbus:
 	if (enable_kdbus)
 		kdbus_destroy_bus();
 

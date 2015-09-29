@@ -49,7 +49,6 @@
 #include "src/storage.h"
 #include "src/network.h"
 
-static struct l_genl *genl = NULL;
 static struct l_genl_family *nl80211 = NULL;
 
 struct network {
@@ -109,13 +108,6 @@ static struct l_queue *wiphy_list = NULL;
 
 static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 				struct l_queue *bss_list, void *userdata);
-
-static void do_debug(const char *str, void *user_data)
-{
-	const char *prefix = user_data;
-
-	l_info("%s%s", prefix, str);
-}
 
 static bool eapol_read(struct l_io *io, void *user_data)
 {
@@ -2245,11 +2237,9 @@ static void protocol_features_callback(struct l_genl_msg *msg, void *user_data)
 		l_debug("Found split wiphy dump support");
 }
 
-static void nl80211_appeared(void *user_data)
+bool wiphy_init(struct l_genl_family *in)
 {
 	struct l_genl_msg *msg;
-
-	l_debug("Found nl80211 interface");
 
 	/*
 	 * This is an extra sanity check so that no memory is leaked
@@ -2259,6 +2249,8 @@ static void nl80211_appeared(void *user_data)
 		l_warn("Destroying existing list of wiphy devices");
 		l_queue_destroy(wiphy_list, NULL);
 	}
+
+	nl80211 = in;
 
 	if (!l_genl_family_register(nl80211, "config", wiphy_config_notify,
 								NULL, NULL))
@@ -2272,8 +2264,9 @@ static void nl80211_appeared(void *user_data)
 					wiphy_regulatory_notify, NULL, NULL))
 		l_error("Registering for regulatory notification failed");
 
-	if (!scan_init(nl80211))
-		l_error("Unable to init scan functionality");
+	__eapol_set_install_tk_func(wiphy_set_tk);
+	__eapol_set_install_gtk_func(wiphy_set_gtk);
+	__eapol_set_deauthenticate_func(handshake_failed);
 
 	wiphy_list = l_queue_new();
 
@@ -2295,85 +2288,16 @@ static void nl80211_appeared(void *user_data)
 	if (!l_genl_family_dump(nl80211, msg, interface_dump_callback,
 								NULL, NULL))
 		l_error("Getting all interface information failed");
-}
-
-static void nl80211_vanished(void *user_data)
-{
-	l_debug("Lost nl80211 interface");
-
-	scan_exit();
-
-	l_queue_destroy(wiphy_list, wiphy_free);
-	wiphy_list = NULL;
-}
-
-bool wiphy_init(void)
-{
-	if (genl)
-		return false;
-
-	genl = l_genl_new_default();
-	if (!genl) {
-		l_error("Failed to open generic netlink socket");
-		return false;
-	}
-
-	if (getenv("IWD_GENL_DEBUG"))
-		l_genl_set_debug(genl, do_debug, "[GENL] ", NULL);
-
-	l_debug("Opening nl80211 interface");
-
-	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
-	if (!nl80211) {
-		l_error("Failed to open nl80211 interface");
-		goto failed;
-	}
-
-	l_genl_family_set_watches(nl80211, nl80211_appeared, nl80211_vanished,
-								NULL, NULL);
-
-	eapol_init();
-	__eapol_set_install_tk_func(wiphy_set_tk);
-	__eapol_set_install_gtk_func(wiphy_set_gtk);
-	__eapol_set_deauthenticate_func(handshake_failed);
 
 	return true;
-
-failed:
-	l_genl_unref(genl);
-	genl = NULL;
-
-	return false;
 }
 
 bool wiphy_exit(void)
 {
-	eapol_exit();
+	l_queue_destroy(wiphy_list, wiphy_free);
+	wiphy_list = NULL;
 
-	if (!genl)
-		return false;
-
-	l_debug("Closing nl80211 interface");
-
-	scan_exit();
-
-	/*
-	 * The generic netlink master object keeps track of all families
-	 * and closing it will take care of freeing all associated resources.
-	 */
-	l_genl_unref(genl);
-	genl = NULL;
-
-	/*
-	 * This is an extra sanity check so that no memory is leaked
-	 * in case the generic netlink handling forgets to call the
-	 * vanished callback.
-	 */
-	if (wiphy_list) {
-		l_warn("Found leftover list of wiphy devices");
-		l_queue_destroy(wiphy_list, wiphy_free);
-		wiphy_list = NULL;
-	}
+	nl80211 = NULL;
 
 	return true;
 }

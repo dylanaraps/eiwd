@@ -27,7 +27,7 @@ struct netdev;
 
 typedef void (*iwd_device_foreach_func)(struct netdev *, void *data);
 
-bool wiphy_init(void);
+bool wiphy_init(struct l_genl_family *in);
 bool wiphy_exit(void);
 
 void wiphy_notify_dellink(uint32_t index);
