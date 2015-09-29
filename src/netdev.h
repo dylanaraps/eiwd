@@ -22,6 +22,11 @@
 
 #include <stdbool.h>
 
+struct netdev;
+
+typedef void (*netdev_watch_func_t)(struct netdev *netdev, void *userdata);
+typedef void (*netdev_destroy_func_t)(void *userdata);
+
 typedef void (*netdev_command_func_t) (bool result, void *user_data);
 
 enum netdev_state {
@@ -35,6 +40,14 @@ enum netdev_state {
 void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 				uint8_t linkmode, uint8_t operstate,
 				netdev_command_func_t cb, void *user_data);
+
+uint32_t netdev_watch_add(netdev_watch_func_t added,
+				netdev_watch_func_t removed,
+				void *userdata, netdev_destroy_func_t destroy);
+bool netdev_watch_remove(uint32_t id);
+
+void __netdev_watch_call_added(struct netdev *netdev);
+void __netdev_watch_call_removed(struct netdev *netdev);
 
 bool netdev_init(void);
 bool netdev_exit(void);

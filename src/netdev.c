@@ -39,8 +39,19 @@ struct netdev_data {
 	char ifname[IF_NAMESIZE];
 };
 
+struct netdev_watchlist_item {
+	uint32_t id;
+	netdev_watch_func_t added;
+	netdev_watch_func_t removed;
+	void *userdata;
+	netdev_destroy_func_t destroy;
+};
+
 static struct l_netlink *rtnl = NULL;
 static struct l_hashmap *netdev_list = NULL;
+
+static struct l_queue *netdev_watches = NULL;
+static uint32_t netdev_next_watch_id = 0;
 
 static void do_debug(const char *str, void *user_data)
 {
@@ -188,6 +199,79 @@ static void link_notify(uint16_t type, const void *data, uint32_t len,
 	}
 }
 
+static void netdev_watchlist_item_free(void *userdata)
+{
+	struct netdev_watchlist_item *item = userdata;
+
+	if (item->destroy)
+		item->destroy(item->userdata);
+
+	l_free(item);
+}
+
+static bool netdev_watchlist_item_match(const void *a, const void *b)
+{
+	const struct netdev_watchlist_item *item = a;
+	uint32_t id = L_PTR_TO_UINT(b);
+
+	return item->id == id;
+}
+
+uint32_t netdev_watch_add(netdev_watch_func_t added,
+				netdev_watch_func_t removed,
+				void *userdata, netdev_destroy_func_t destroy)
+{
+	struct netdev_watchlist_item *item;
+
+	item = l_new(struct netdev_watchlist_item, 1);
+	item->id = ++netdev_next_watch_id;
+	item->added = added;
+	item->removed = removed;
+	item->userdata = userdata;
+	item->destroy = destroy;
+
+	l_queue_push_tail(netdev_watches, item);
+
+	return item->id;
+}
+
+bool netdev_watch_remove(uint32_t id)
+{
+	struct netdev_watchlist_item *item;
+
+	item = l_queue_remove_if(netdev_watches, netdev_watchlist_item_match,
+							L_UINT_TO_PTR(id));
+	if (!item)
+		return false;
+
+	netdev_watchlist_item_free(item);
+	return true;
+}
+
+void __netdev_watch_call_added(struct netdev *netdev)
+{
+	const struct l_queue_entry *e;
+
+	for (e = l_queue_get_entries(netdev_watches); e; e = e->next) {
+		struct netdev_watchlist_item *item = e->data;
+
+		if (item->added)
+			item->added(netdev, item->userdata);
+	}
+}
+
+void __netdev_watch_call_removed(struct netdev *netdev)
+{
+	const struct l_queue_entry *e;
+
+	for (e = l_queue_get_entries(netdev_watches); e; e = e->next) {
+		struct netdev_watchlist_item *item = e->data;
+
+		if (item->removed)
+			item->removed(netdev, item->userdata);
+	}
+}
+
 static void netdev_destroy(void)
 {
 	/*
@@ -225,6 +309,8 @@ bool netdev_init(void)
 		goto destroy;
 	}
 
+	netdev_watches = l_queue_new();
+
 	return true;
 
 destroy:
@@ -241,6 +327,8 @@ bool netdev_exit(void)
 	l_debug("Closing route netlink socket");
 
 	netdev_destroy();
+
+	l_queue_destroy(netdev_watches, netdev_watchlist_item_free);
 
 	return true;
 }
