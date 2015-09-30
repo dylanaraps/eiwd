@@ -215,7 +215,12 @@ static void start_next_scan_request(void *userdata)
 
 	sr = l_queue_peek_head(sc->requests);
 
-	r = __scan_passive_start(nl80211, ifindex, scan_done, sc);
+	if (sr->passive)
+		r = __scan_passive_start(nl80211, ifindex, scan_done, sc);
+	else
+		r = __scan_active_start(nl80211, ifindex,
+						sr->extra_ie, sr->extra_ie_size,
+						scan_done, sc);
 
 	if (!r) {
 		l_error("Could not send CMD_TRIGGER_SCAN");
@@ -265,7 +270,8 @@ static void scan_done(struct l_genl_msg *msg, void *userdata)
 	}
 
 	sc->state = sr->passive ? SCAN_STATE_PASSIVE : SCAN_STATE_ACTIVE;
-	l_debug("Passive scan triggered for ifindex: %u", sc->ifindex);
+	l_debug("%s scan triggered for ifindex: %u",
+		sr->passive ? "Passive" : "Active", sc->ifindex);
 	sr->triggered = true;
 }
 
