@@ -63,6 +63,8 @@ struct scan_request {
 	scan_destroy_func_t destroy;
 	bool passive:1; /* Active or Passive scan? */
 	bool triggered:1;
+	uint8_t *extra_ie;
+	size_t extra_ie_size;
 };
 
 struct scan_context {
@@ -166,7 +168,32 @@ static bool __scan_passive_start(struct l_genl_family *nl80211,
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
 
 	if (!l_genl_family_send(nl80211, msg, callback, user_data, NULL)) {
-		l_error("Starting scheduled scan failed");
+		l_error("Starting passive scan failed");
+		return false;
+	}
+
+	return true;
+}
+
+static bool __scan_active_start(struct l_genl_family *nl80211,
+					uint32_t ifindex,
+					uint8_t *extra_ie, size_t extra_ie_size,
+					scan_func_t callback, void *user_data)
+{
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN,
+							32 + extra_ie_size);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_enter_nested(msg, NL80211_ATTR_SCAN_SSIDS);
+	l_genl_msg_leave_nested(msg);
+
+	if (extra_ie && extra_ie_size)
+		l_genl_msg_append_attr(msg, NL80211_ATTR_IE, extra_ie_size,
+						extra_ie);
+
+	if (!l_genl_family_send(nl80211, msg, callback, user_data, NULL)) {
+		l_error("Starting active scan failed");
 		return false;
 	}
 
@@ -242,12 +269,15 @@ static void scan_done(struct l_genl_msg *msg, void *userdata)
 	sr->triggered = true;
 }
 
-bool scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
-			scan_notify_func_t notify, void *userdata,
-			scan_destroy_func_t destroy)
+static bool scan_common(uint32_t ifindex, bool passive,
+				uint8_t *extra_ie, size_t extra_ie_size,
+				scan_trigger_func_t trigger,
+				scan_notify_func_t notify, void *userdata,
+				scan_destroy_func_t destroy)
 {
 	struct scan_context *sc;
 	struct scan_request *sr;
+	bool r;
 
 	sc = l_queue_find(scan_contexts, scan_context_match,
 				L_UINT_TO_PTR(ifindex));
@@ -260,7 +290,9 @@ bool scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
 	sr->callback = notify;
 	sr->userdata = userdata;
 	sr->destroy = destroy;
-	sr->passive = true;
+	sr->passive = passive;
+	sr->extra_ie = extra_ie;
+	sr->extra_ie_size = extra_ie_size;
 
 	if (l_queue_length(sc->requests) > 0)
 		goto done;
@@ -268,7 +300,14 @@ bool scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
 	if (sc->state != SCAN_STATE_NOT_RUNNING)
 		goto done;
 
-	if (!__scan_passive_start(nl80211, ifindex, scan_done, sc)) {
+	if (passive)
+		r = __scan_passive_start(nl80211, ifindex, scan_done, sc);
+	else
+		r = __scan_active_start(nl80211, ifindex,
+						extra_ie, extra_ie_size,
+						scan_done, sc);
+
+	if (!r) {
 		scan_request_free(sr);
 		return false;
 	}
@@ -277,6 +316,27 @@ done:
 	l_queue_push_tail(sc->requests, sr);
 
 	return true;
+}
+
+bool scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
+			scan_notify_func_t notify, void *userdata,
+			scan_destroy_func_t destroy)
+{
+	return scan_common(ifindex, true, NULL, 0, trigger, notify,
+							userdata, destroy);
+}
+
+/*
+ * @extra_ie data is passed by reference.  So it must be valid at least until
+ * the @trigger callback is called.
+ */
+bool scan_active(uint32_t ifindex, uint8_t *extra_ie, size_t extra_ie_size,
+			scan_trigger_func_t trigger,
+			scan_notify_func_t notify, void *userdata,
+			scan_destroy_func_t destroy)
+{
+	return scan_common(ifindex, false, extra_ie, extra_ie_size,
+					trigger, notify, userdata, destroy);
 }
 
 void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
