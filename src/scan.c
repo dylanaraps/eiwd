@@ -740,6 +740,17 @@ void scan_bss_free(struct scan_bss *bss)
 	l_free(bss);
 }
 
+const char *scan_bss_address_to_string(const struct scan_bss *bss)
+{
+	static char buf[32];
+
+	snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X",
+			bss->addr[0], bss->addr[1], bss->addr[2],
+			bss->addr[3], bss->addr[4], bss->addr[5]);
+
+	return buf;
+}
+
 void bss_get_supported_ciphers(struct scan_bss *bss,
 				uint16_t *pairwise_ciphers,
 				uint16_t *group_ciphers)

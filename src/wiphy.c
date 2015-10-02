@@ -860,17 +860,6 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_ro_property(interface, "Name", "s");
 }
 
-static const char *bss_address_to_string(const struct scan_bss *bss)
-{
-	static char buf[32];
-
-	snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X",
-			bss->addr[0], bss->addr[1], bss->addr[2],
-			bss->addr[3], bss->addr[4], bss->addr[5]);
-
-	return buf;
-}
-
 static bool bss_match(const void *a, const void *b)
 {
 	const struct scan_bss *bss_a = a;
@@ -986,7 +975,7 @@ static void netdev_autoconnect_next(struct netdev *netdev)
 	while ((entry = l_queue_pop_head(netdev->autoconnect_list))) {
 		l_debug("Considering autoconnecting to BSS '%s' with SSID: %s,"
 			" freq: %u, rank: %u, strength: %i",
-			bss_address_to_string(entry->bss),
+			scan_bss_address_to_string(entry->bss),
 			entry->network->ssid,
 			entry->bss->frequency, entry->rank,
 			entry->bss->signal_strength);
@@ -1651,7 +1640,7 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 
 	l_debug("Found BSS '%s' with SSID: %s, freq: %u, rank: %u, "
 			"strength: %i",
-			bss_address_to_string(bss),
+			scan_bss_address_to_string(bss),
 			util_ssid_to_utf8(bss->ssid_len, bss->ssid),
 			bss->frequency, bss->rank, bss->signal_strength);
 
