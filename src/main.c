@@ -207,6 +207,11 @@ int main(int argc, char *argv[])
 	if (getenv("IWD_GENL_DEBUG"))
 		l_genl_set_debug(genl, do_debug, "[GENL] ", NULL);
 
+	if (!netdev_init()) {
+		exit_status = EXIT_FAILURE;
+		goto fail_netdev;
+	}
+
 	l_debug("Opening nl80211 interface");
 
 	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
@@ -219,11 +224,6 @@ int main(int argc, char *argv[])
 	l_genl_family_set_watches(nl80211, nl80211_appeared, nl80211_vanished,
 								nl80211, NULL);
 
-	if (!netdev_init()) {
-		exit_status = EXIT_FAILURE;
-		goto fail_netdev;
-	}
-
 	eapol_init();
 	network_init();
 
@@ -233,12 +233,12 @@ int main(int argc, char *argv[])
 	network_exit();
 	eapol_exit();
 
-	netdev_exit();
-
-fail_netdev:
 	l_genl_family_unref(nl80211);
 
 fail_nl80211:
+	netdev_exit();
+
+fail_netdev:
 	l_genl_unref(genl);
 
 fail_genl:
