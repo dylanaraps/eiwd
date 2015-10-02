@@ -49,5 +49,8 @@ bool netdev_watch_remove(uint32_t id);
 void __netdev_watch_call_added(struct netdev *netdev);
 void __netdev_watch_call_removed(struct netdev *netdev);
 
+uint32_t netdev_get_ifindex(struct netdev *netdev);
+const uint8_t *netdev_get_address(struct netdev *netdev);
+
 bool netdev_init(void);
 bool netdev_exit(void);

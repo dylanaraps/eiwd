@@ -218,6 +218,16 @@ static const char *netdev_state_to_string(enum netdev_state state)
 	return "invalid";
 }
 
+uint32_t netdev_get_ifindex(struct netdev *netdev)
+{
+	return netdev->index;
+}
+
+const uint8_t *netdev_get_address(struct netdev *netdev)
+{
+	return netdev->addr;
+}
+
 static void netdev_enter_state(struct netdev *netdev, enum netdev_state state)
 {
 	l_debug("Old State: %s, new state: %s",
