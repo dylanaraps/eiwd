@@ -1144,6 +1144,22 @@ bool scan_freq_set_contains(struct scan_freq_set *freqs, uint32_t freq)
 	return false;
 }
 
+uint32_t scan_freq_set_get_bands(struct scan_freq_set *freqs)
+{
+	uint32_t bands = 0;
+	uint32_t max;
+
+	if (freqs->channels_2ghz)
+		bands |= SCAN_BAND_2_4_GHZ;
+
+	max = l_uintset_get_max(freqs->channels_5ghz);
+
+	if (l_uintset_find_min(freqs->channels_5ghz) <= max)
+		bands |= SCAN_BAND_5_GHZ;
+
+	return bands;
+}
+
 bool scan_init(struct l_genl_family *in)
 {
 	nl80211 = in;

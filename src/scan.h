@@ -28,8 +28,8 @@ enum scan_ssid_security {
 };
 
 enum scan_band {
-	SCAN_BAND_2_4_GHZ,
-	SCAN_BAND_5_GHZ,
+	SCAN_BAND_2_4_GHZ =	0x1,
+	SCAN_BAND_5_GHZ =	0x2,
 };
 
 enum scan_state {
@@ -98,6 +98,7 @@ struct scan_freq_set *scan_freq_set_new(void);
 void scan_freq_set_free(struct scan_freq_set *freqs);
 bool scan_freq_set_add(struct scan_freq_set *freqs, uint32_t freq);
 bool scan_freq_set_contains(struct scan_freq_set *freqs, uint32_t freq);
+uint32_t scan_freq_set_get_bands(struct scan_freq_set *freqs);
 
 bool scan_ifindex_add(uint32_t ifindex);
 bool scan_ifindex_remove(uint32_t ifindex);
