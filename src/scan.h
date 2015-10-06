@@ -65,13 +65,14 @@ struct scan_bss {
 	uint16_t rank;
 };
 
-bool scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
+uint32_t scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
 			scan_notify_func_t notify, void *userdata,
 			scan_destroy_func_t destroy);
-bool scan_active(uint32_t ifindex, uint8_t *extra_ie, size_t extra_ie_size,
+uint32_t scan_active(uint32_t ifindex, uint8_t *extra_ie, size_t extra_ie_size,
 			scan_trigger_func_t trigger,
 			scan_notify_func_t notify, void *userdata,
 			scan_destroy_func_t destroy);
+bool scan_cancel(uint32_t ifindex, uint32_t id);
 
 void scan_periodic_start(uint32_t ifindex, scan_notify_func_t func,
 								void *userdata);
