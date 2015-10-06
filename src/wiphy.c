@@ -96,6 +96,7 @@ struct wiphy {
 	bool support_scheduled_scan:1;
 	bool support_rekey_offload:1;
 	uint16_t pairwise_ciphers;
+	struct scan_freq_set *supported_freqs;
 };
 
 struct autoconnect_entry {
@@ -1004,6 +1005,7 @@ static void wiphy_free(void *data)
 
 	l_debug("Freeing wiphy %s", wiphy->name);
 
+	scan_freq_set_free(wiphy->supported_freqs);
 	l_queue_destroy(wiphy->netdev_list, netdev_free);
 	l_free(wiphy);
 }
@@ -1976,6 +1978,66 @@ static void parse_supported_ciphers(struct wiphy *wiphy, const void *data,
 	l_info("Wiphy supports TKIP: %s", s ? "true" : "false");
 }
 
+static void parse_supported_frequencies(struct wiphy *wiphy,
+						struct l_genl_attr *freqs)
+{
+	uint16_t type, len;
+	const void *data;
+	struct l_genl_attr attr;
+
+	l_debug("");
+
+	while (l_genl_attr_next(freqs, NULL, NULL, NULL)) {
+		if (!l_genl_attr_recurse(freqs, &attr))
+			continue;
+
+		while (l_genl_attr_next(&attr, &type, &len, &data)) {
+			uint32_t u32;
+
+			switch (type) {
+			case NL80211_FREQUENCY_ATTR_FREQ:
+				u32 = *((uint32_t *) data);
+				scan_freq_set_add(wiphy->supported_freqs, u32);
+				break;
+			}
+		}
+	}
+}
+
+static void parse_supported_bands(struct wiphy *wiphy,
+						struct l_genl_attr *bands)
+{
+	uint16_t type, len;
+	const void *data;
+	struct l_genl_attr attr;
+
+	l_debug("");
+
+	while (l_genl_attr_next(bands, NULL, NULL, NULL)) {
+		if (!l_genl_attr_recurse(bands, &attr))
+			continue;
+
+		while (l_genl_attr_next(&attr, &type, &len, &data)) {
+			struct l_genl_attr freqs;
+
+			switch (type) {
+			case NL80211_BAND_ATTR_FREQS:
+				if (!l_genl_attr_recurse(&attr, &freqs))
+					continue;
+
+				parse_supported_frequencies(wiphy, &freqs);
+				break;
+			}
+		}
+	}
+}
+
+#define FAIL_NO_WIPHY()					\
+	if (!wiphy) {					\
+		l_warn("No wiphy structure found");	\
+		return;					\
+	}						\
+
 static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy = NULL;
@@ -2017,15 +2079,13 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 				wiphy = l_new(struct wiphy, 1);
 				wiphy->id = id;
 				wiphy->netdev_list = l_queue_new();
+				wiphy->supported_freqs = scan_freq_set_new();
 				l_queue_push_head(wiphy_list, wiphy);
 			}
 			break;
 
 		case NL80211_ATTR_WIPHY_NAME:
-			if (!wiphy) {
-				l_warn("No wiphy structure found");
-				return;
-			}
+			FAIL_NO_WIPHY();
 
 			if (len > sizeof(wiphy->name)) {
 				l_warn("Invalid wiphy name attribute");
@@ -2036,10 +2096,7 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 			break;
 
 		case NL80211_ATTR_FEATURE_FLAGS:
-			if (!wiphy) {
-				l_warn("No wiphy structure found");
-				return;
-			}
+			FAIL_NO_WIPHY();
 
 			if (len != sizeof(uint32_t)) {
 				l_warn("Invalid feature flags attribute");
@@ -2049,10 +2106,7 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 			wiphy->feature_flags = *((uint32_t *) data);
 			break;
 		case NL80211_ATTR_SUPPORTED_COMMANDS:
-			if (!wiphy) {
-				l_warn("No wiphy structure found");
-				return;
-			}
+			FAIL_NO_WIPHY();
 
 			if (!l_genl_attr_recurse(&attr, &nested))
 				return;
@@ -2060,14 +2114,41 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 			parse_supported_commands(wiphy, &nested);
 			break;
 		case NL80211_ATTR_CIPHER_SUITES:
-			if (!wiphy) {
-				l_warn("No wiphy structure found");
-				return;
-			}
+			FAIL_NO_WIPHY();
 
 			parse_supported_ciphers(wiphy, data, len);
 			break;
+		case NL80211_ATTR_WIPHY_BANDS:
+			FAIL_NO_WIPHY();
+
+			if (!l_genl_attr_recurse(&attr, &nested))
+				return;
+
+			parse_supported_bands(wiphy, &nested);
+			break;
 		}
+	}
+}
+
+static void wiphy_dump_done(void *user)
+{
+	const struct l_queue_entry *wiphy_entry;
+
+	for (wiphy_entry = l_queue_get_entries(wiphy_list); wiphy_entry;
+					wiphy_entry = wiphy_entry->next) {
+		struct wiphy *wiphy = wiphy_entry->data;
+		uint32_t bands;
+
+		l_info("Wiphy: %d, Name: %s", wiphy->id, wiphy->name);
+		l_info("Bands:");
+
+		bands = scan_freq_set_get_bands(wiphy->supported_freqs);
+
+		if (bands & SCAN_BAND_2_4_GHZ)
+			l_info("\t2.4 Ghz");
+
+		if (bands & SCAN_BAND_5_GHZ)
+			l_info("\t5.0 Ghz");
 	}
 }
 
@@ -2284,7 +2365,8 @@ bool wiphy_init(struct l_genl_family *in)
 		l_error("Getting regulatory info failed");
 
 	msg = l_genl_msg_new(NL80211_CMD_GET_WIPHY);
-	if (!l_genl_family_dump(nl80211, msg, wiphy_dump_callback, NULL, NULL))
+	if (!l_genl_family_dump(nl80211, msg, wiphy_dump_callback,
+						NULL, wiphy_dump_done))
 		l_error("Getting all wiphy devices failed");
 
 	msg = l_genl_msg_new(NL80211_CMD_GET_INTERFACE);
