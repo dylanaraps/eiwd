@@ -283,6 +283,14 @@ static void wsc_free(void *userdata)
 {
 	struct wsc *wsc = userdata;
 
+	if (wsc->pending) {
+		dbus_pending_reply(&wsc->pending,
+					dbus_error_not_available(wsc->pending));
+
+		wsc_sm_free(wsc->sm);
+		wsc->sm = NULL;
+	}
+
 	l_free(wsc);
 }
 
