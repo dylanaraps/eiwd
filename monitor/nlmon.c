@@ -135,6 +135,9 @@ struct attr_entry {
 	};
 };
 
+static void print_attributes(int indent, const struct attr_entry *table,
+						const void *buf, uint32_t len);
+
 struct flag_names {
 	uint16_t flag;
 	const char *name;
@@ -2879,6 +2882,78 @@ static void print_supported_commands(unsigned int level, const char *label,
 	}
 }
 
+static const struct attr_entry frequency_attr_table[] = {
+	{ NL80211_FREQUENCY_ATTR_FREQ, "Frequency", ATTR_U32 },
+	{ NL80211_FREQUENCY_ATTR_DISABLED, "Disabled", ATTR_FLAG },
+	{ NL80211_FREQUENCY_ATTR_NO_IR, "No IR", ATTR_FLAG },
+	{ __NL80211_FREQUENCY_ATTR_NO_IBSS, "No IBSS", ATTR_FLAG },
+	{ NL80211_FREQUENCY_ATTR_RADAR, "Radar Detection", ATTR_FLAG },
+	{ NL80211_FREQUENCY_ATTR_MAX_TX_POWER, "Max TX Power", ATTR_U32 },
+	{ NL80211_FREQUENCY_ATTR_DFS_STATE, "DFS State", ATTR_U32 },
+	{ NL80211_FREQUENCY_ATTR_DFS_TIME, "DFS Time", ATTR_U32 },
+	{ NL80211_FREQUENCY_ATTR_NO_HT40_MINUS, "No HT40-", ATTR_FLAG },
+	{ NL80211_FREQUENCY_ATTR_NO_HT40_PLUS, "No HT40+", ATTR_FLAG },
+	{ NL80211_FREQUENCY_ATTR_NO_80MHZ, "No 80 Mhz", ATTR_FLAG },
+	{ NL80211_FREQUENCY_ATTR_NO_160MHZ, "No 160 Mhz", ATTR_FLAG },
+	{ NL80211_FREQUENCY_ATTR_DFS_CAC_TIME, "DFS CAC Time", ATTR_U32 },
+	{ NL80211_FREQUENCY_ATTR_INDOOR_ONLY, "Indoor only", ATTR_FLAG },
+	{ NL80211_FREQUENCY_ATTR_GO_CONCURRENT, "Go Concurrent", ATTR_FLAG },
+	{ NL80211_FREQUENCY_ATTR_NO_20MHZ, "No 20 Mhz", ATTR_FLAG },
+	{ NL80211_FREQUENCY_ATTR_NO_10MHZ, "No 10 Mhz", ATTR_FLAG },
+	{ }
+};
+
+static void print_band_frequencies(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const struct nlattr *nla;
+	uint32_t band;
+	uint16_t nla_type;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	for (nla = data; NLA_OK(nla, size); nla = NLA_NEXT(nla, size)) {
+		nla_type = nla->nla_type & NLA_TYPE_MASK;
+		print_attr(level + 1, "Frequency %u: len %u", nla_type,
+							NLA_PAYLOAD(nla));
+
+		print_attributes(level + 2, frequency_attr_table,
+					NLA_DATA(nla), NLA_PAYLOAD(nla));
+	}
+}
+
+static const struct attr_entry wiphy_bands_table[] = {
+	{ NL80211_BAND_ATTR_FREQS, "Frequencies",
+			ATTR_CUSTOM, { .function = print_band_frequencies } },
+	{ NL80211_BAND_ATTR_RATES, "Rates" },
+	{ NL80211_BAND_ATTR_HT_MCS_SET, "HT MCS Set" },
+	{ NL80211_BAND_ATTR_HT_CAPA, "HT Capabilities" },
+	{ NL80211_BAND_ATTR_HT_AMPDU_FACTOR, "AMPDU Factor" },
+	{ NL80211_BAND_ATTR_HT_AMPDU_DENSITY, "AMPDU Density" },
+	{ NL80211_BAND_ATTR_VHT_MCS_SET, "VHT MCS Set" },
+	{ NL80211_BAND_ATTR_VHT_CAPA, "VHT Capabilities" },
+	{ }
+};
+
+static void print_wiphy_bands(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const struct nlattr *nla;
+	uint32_t band;
+	uint16_t nla_type;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	for (nla = data; NLA_OK(nla, size); nla = NLA_NEXT(nla, size)) {
+		nla_type = nla->nla_type & NLA_TYPE_MASK;
+		print_attr(level + 1, "Band %u: len %u", nla_type,
+							NLA_PAYLOAD(nla));
+
+		print_attributes(level + 2, wiphy_bands_table,
+					NLA_DATA(nla), NLA_PAYLOAD(nla));
+	}
+}
+
 static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_WIPHY,
 			"Wiphy", ATTR_U32 },
@@ -2924,7 +2999,8 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_STA_INFO,
 			"Station Info", ATTR_NESTED, { sta_info_table } },
 	{ NL80211_ATTR_WIPHY_BANDS,
-			"Wiphy Bands" },
+			"Wiphy Bands", ATTR_CUSTOM,
+				{ .function = print_wiphy_bands } },
 	{ NL80211_ATTR_MNTR_FLAGS,
 			"MNTR Flags" },
 	{ NL80211_ATTR_MESH_ID,
