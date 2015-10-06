@@ -2907,7 +2907,6 @@ static void print_band_frequencies(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
 	const struct nlattr *nla;
-	uint32_t band;
 	uint16_t nla_type;
 
 	print_attr(level, "%s: len %u", label, size);
@@ -2939,7 +2938,6 @@ static void print_wiphy_bands(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
 	const struct nlattr *nla;
-	uint32_t band;
 	uint16_t nla_type;
 
 	print_attr(level, "%s: len %u", label, size);
