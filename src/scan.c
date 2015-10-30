@@ -280,6 +280,9 @@ static void scan_done(struct l_genl_msg *msg, void *userdata)
 	l_debug("%s scan triggered for ifindex: %u",
 		sr->passive ? "Passive" : "Active", sc->ifindex);
 	sr->triggered = true;
+
+	if (sr->trigger)
+		sr->trigger(0, sr->userdata);
 }
 
 static uint32_t scan_common(uint32_t ifindex, bool passive,
