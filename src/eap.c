@@ -415,9 +415,106 @@ int eap_unregister_method(struct eap_method *method)
 void eap_init(void) {
 	eap_methods = l_queue_new();
 
+	eap_register_method(&eap_md5);
 	eap_register_method(&eap_tls);
 }
 
 void eap_exit(void) {
 	l_queue_destroy(eap_methods, NULL);
 }
+
+struct eap_md5_state {
+	char *secret;
+};
+
+static int eap_md5_probe(struct eap_state *eap, const char *name)
+{
+	if (strcasecmp(name, "MD5"))
+		return -ENOTSUP;
+
+	eap->method_state = l_new(struct eap_md5_state, 1);
+
+	return 0;
+}
+
+static void eap_md5_remove(struct eap_state *eap)
+{
+	struct eap_md5_state *md5 = eap_get_data(eap);
+
+	eap_set_data(eap, NULL);
+
+	l_free(md5->secret);
+	l_free(md5);
+}
+
+static void eap_md5_handle_request(struct eap_state *eap,
+					const uint8_t *pkt, size_t len)
+{
+	struct eap_md5_state *md5 = eap_get_data(eap);
+	const uint8_t *value;
+	struct l_checksum *hash;
+	uint8_t identifier, response[5 + 1 + 16];
+
+	if (len < 1 || len < (size_t) pkt[0] + 1 || pkt[0] < 1) {
+		l_error("EAP-MD5 request too short");
+		goto err;
+	}
+
+	value = pkt + 1;
+
+	hash = l_checksum_new(L_CHECKSUM_MD5);
+	if (!hash) {
+		l_error("Can't create the MD5 checksum");
+		goto err;
+	}
+
+	eap_save_last_id(eap, &identifier);
+	l_checksum_update(hash, &identifier, 1);
+	l_checksum_update(hash, md5->secret, strlen(md5->secret));
+	l_checksum_update(hash, value, pkt[0]);
+
+	response[5] = 16;
+	l_checksum_get_digest(hash, response + 6, 16);
+	l_checksum_free(hash);
+
+	eap_send_response(eap, EAP_TYPE_MD5_CHALLENGE,
+				response, sizeof(response));
+
+	/* We have no choice but to call it a success */
+	eap_method_success(eap);
+
+	return;
+
+err:
+	eap_method_error(eap);
+}
+
+static bool eap_md5_load_settings(struct eap_state *eap,
+					struct l_settings *settings,
+					const char *prefix)
+{
+	struct eap_md5_state *md5 = eap_get_data(eap);
+	char setting[64];
+
+	snprintf(setting, sizeof(setting), "%sMD5-Secret", prefix);
+	md5->secret = l_strdup(l_settings_get_value(settings,
+						"Security", setting));
+
+	if (!md5->secret) {
+		l_error("EAP-MD5 secret is missing");
+		return false;
+	}
+
+	return true;
+}
+
+struct eap_method eap_md5 = {
+	.request_type = EAP_TYPE_MD5_CHALLENGE,
+	.exports_msk = false,
+	.name = "MD5",
+
+	.probe = eap_md5_probe,
+	.remove = eap_md5_remove,
+	.handle_request = eap_md5_handle_request,
+	.load_settings = eap_md5_load_settings,
+};
