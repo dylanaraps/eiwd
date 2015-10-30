@@ -2348,6 +2348,92 @@ static void eapol_sm_test_eap_tls(const void *data)
 	eapol_sm_test_tls(&s, eapol_8021x_config);
 }
 
+static const uint8_t eap_ttls_eap_identity_avp[] = {
+	0x00, 0x00, 0x00, 0x4f, 0x40, 0x00, 0x00, 0x1c, 0x02, 0x00, 0x00, 0x14,
+	0x01, 0x61, 0x62, 0x63, 0x40, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65,
+	0x2e, 0x63, 0x6f, 0x6d
+};
+
+static const uint8_t eap_ttls_eap_md5_challenge_avp[] = {
+	0x00, 0x00, 0x00, 0x4f, 0x40, 0x00, 0x00, 0x1e, 0x01, 0xbb, 0x00, 0x16,
+	0x04, 0x10, 0x3a, 0x34, 0x58, 0xc4, 0xf1, 0xa3, 0xdc, 0x45, 0xd0, 0xca,
+	0x96, 0x33, 0x9b, 0x95, 0xb8, 0xd6, 0x00, 0x00
+};
+
+static const uint8_t eap_ttls_eap_md5_response_avp[] = {
+	0x00, 0x00, 0x00, 0x4f, 0x40, 0x00, 0x00, 0x1e, 0x02, 0xbb, 0x00, 0x16,
+	0x04, 0x10, 0x10, 0xcc, 0x62, 0x4c, 0x98, 0x2b, 0x82, 0xbd, 0x13, 0x4a,
+	0x81, 0xcb, 0x70, 0x78, 0xcd, 0xc2, 0x00, 0x00
+};
+
+struct eapol_8021x_eap_ttls_test_state {
+	struct eapol_8021x_tls_test_state tls;
+	bool challenge_sent;
+};
+
+static void eapol_sm_test_eap_ttls_new_data(const uint8_t *data, size_t len,
+						void *user_data)
+{
+	struct eapol_8021x_eap_ttls_test_state *s = user_data;
+
+	if (!s->challenge_sent) {
+		assert(len == sizeof(eap_ttls_eap_identity_avp));
+		assert(!memcmp(data, eap_ttls_eap_identity_avp, len));
+
+		l_tls_write(s->tls.tls, eap_ttls_eap_md5_challenge_avp,
+				sizeof(eap_ttls_eap_md5_challenge_avp));
+
+		s->challenge_sent = true;
+	} else {
+		assert(len == sizeof(eap_ttls_eap_md5_response_avp));
+		assert(!memcmp(data, eap_ttls_eap_md5_response_avp, len));
+
+		s->tls.success = true;
+	}
+}
+
+static void eapol_sm_test_eap_ttls_test_ready(const char *peer_identity,
+						void *user_data)
+{
+	struct eapol_8021x_eap_ttls_test_state *s = user_data;
+	uint8_t seed[64];
+
+	assert(!s->tls.tx_ack);
+	/* TODO: require the right peer_identity */
+
+	memcpy(seed +  0, s->tls.tls->pending.client_random, 32);
+	memcpy(seed + 32, s->tls.tls->pending.server_random, 32);
+
+	tls_prf_get_bytes(s->tls.tls, L_CHECKSUM_SHA256, 32,
+				s->tls.tls->pending.master_secret,
+				sizeof(s->tls.tls->pending.master_secret),
+				"ttls keying material", seed, 64,
+				s->tls.pmk, 32);
+
+	s->challenge_sent = false;
+}
+
+static void eapol_sm_test_eap_ttls_md5(const void *data)
+{
+	static const char *eapol_8021x_config = "[Security]\n"
+		"EAP-Method=TTLS\n"
+		"EAP-Identity=abc@example.com\n"
+		"EAP-TTLS-CACert=ell/unit/cert-ca.pem\n"
+		"EAP-TTLS-ClientCert=ell/unit/cert-client.pem\n"
+		"EAP-TTLS-ClientKey=ell/unit/cert-client-key.pem\n"
+		"EAP-TTLS-Phase2-Method=MD5\n"
+		"EAP-TTLS-Phase2-Identity=abc@example.com\n"
+		"EAP-TTLS-Phase2-MD5-Secret=testpasswd";
+	struct eapol_8021x_eap_ttls_test_state s;
+
+	s.tls.app_data_cb = eapol_sm_test_eap_ttls_new_data;
+	s.tls.ready_cb = eapol_sm_test_eap_ttls_test_ready;
+	s.tls.disconnect_cb = eapol_sm_test_tls_test_disconnected;
+	s.tls.method = EAP_TYPE_TTLS;
+
+	eapol_sm_test_tls(&s.tls, eapol_8021x_config);
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -2431,6 +2517,9 @@ int main(int argc, char *argv[])
 
 	l_test_add("EAPoL/8021x EAP-TLS & 4-Way Handshake",
 			&eapol_sm_test_eap_tls, NULL);
+
+	l_test_add("EAPoL/8021x EAP-TTLS+EAP-MD5 & 4-Way Handshake",
+			&eapol_sm_test_eap_ttls_md5, NULL);
 
 	return l_test_run();
 }
