@@ -160,8 +160,7 @@ struct eapol_key *eapol_create_gtk_2_of_2(
 				bool is_wpa, uint8_t wpa_key_id);
 
 void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
-			const uint8_t *frame, size_t len,
-			void *user_data);
+			const uint8_t *frame, size_t len);
 
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func);
 void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func);
@@ -185,6 +184,7 @@ void eapol_sm_set_ap_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie,
 bool eapol_sm_set_own_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie,
 				size_t len);
 void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data);
+void eapol_sm_set_tx_user_data(struct eapol_sm *sm, void *user_data);
 struct l_io *eapol_open_pae(uint32_t index);
 
 void eapol_start(uint32_t ifindex, struct eapol_sm *sm);

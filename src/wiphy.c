@@ -130,7 +130,7 @@ static bool eapol_read(struct l_io *io, void *user_data)
 	}
 
 	__eapol_rx_packet(netdev->index, netdev->addr, sll.sll_addr,
-				frame, bytes, L_INT_TO_PTR(fd));
+				frame, bytes);
 
 	return true;
 }
@@ -1461,6 +1461,8 @@ static void mlme_associate_cmd(struct netdev *netdev)
 		eapol_sm_set_authenticator_address(sm, bss->addr);
 		eapol_sm_set_supplicant_address(sm, netdev->addr);
 		eapol_sm_set_user_data(sm, netdev);
+		eapol_sm_set_tx_user_data(sm,
+				L_INT_TO_PTR(l_io_get_fd(netdev->eapol_io)));
 		eapol_start(netdev->index, sm);
 
 		msg_append_attr(msg, NL80211_ATTR_CIPHER_SUITES_PAIRWISE,

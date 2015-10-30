@@ -1750,12 +1750,12 @@ static void eapol_sm_test_ptk(const void *data)
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, spa, aa, eapol_key_data_3,
-					sizeof(eapol_key_data_3), NULL);
+					sizeof(eapol_key_data_3));
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__eapol_rx_packet(1, spa, aa, eapol_key_data_5,
-					sizeof(eapol_key_data_5), NULL);
+					sizeof(eapol_key_data_5));
 	assert(verify_step4_called);
 
 	eapol_exit();
@@ -1810,17 +1810,17 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, spa, aa, eapol_key_data_7,
-				sizeof(eapol_key_data_7), NULL);
+				sizeof(eapol_key_data_7));
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__eapol_rx_packet(1, spa, aa, eapol_key_data_9,
-					sizeof(eapol_key_data_9), NULL);
+					sizeof(eapol_key_data_9));
 	assert(verify_step4_called);
 
 	__eapol_set_tx_packet_func(verify_step2_gtk);
 	__eapol_rx_packet(1, spa, aa, eapol_key_data_11,
-					sizeof(eapol_key_data_11), NULL);
+					sizeof(eapol_key_data_11));
 	assert(verify_gtk_step2_called);
 
 	eapol_exit();
@@ -1873,17 +1873,17 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_13,
-					sizeof(eapol_key_data_13), NULL);
+					sizeof(eapol_key_data_13));
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_15,
-					sizeof(eapol_key_data_15), NULL);
+					sizeof(eapol_key_data_15));
 	assert(verify_step4_called);
 
 	__eapol_set_tx_packet_func(verify_step2_gtk);
 	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_17,
-					sizeof(eapol_key_data_17), NULL);
+					sizeof(eapol_key_data_17));
 	assert(verify_gtk_step2_called);
 
 	eapol_exit();
@@ -1937,17 +1937,17 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_19,
-					sizeof(eapol_key_data_19), NULL);
+					sizeof(eapol_key_data_19));
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_21,
-					sizeof(eapol_key_data_21), NULL);
+					sizeof(eapol_key_data_21));
 	assert(verify_step4_called);
 
 	__eapol_set_tx_packet_func(verify_step2_gtk);
 	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_23,
-					sizeof(eapol_key_data_23), NULL);
+					sizeof(eapol_key_data_23));
 	assert(verify_gtk_step2_called);
 
 	eapol_exit();
