@@ -28,11 +28,13 @@
 #include <string.h>
 #include <assert.h>
 #include <ell/ell.h>
+#include <ell/tls-private.h>
 
 #include "src/sha1.h"
 #include "src/eapol.h"
 #include "src/crypto.h"
 #include "src/ie.h"
+#include "src/eap.h"
 
 /* Our nonce to use + its size */
 static const uint8_t *snonce;
@@ -45,6 +47,8 @@ static size_t expected_step2_frame_size;
 
 /* Whether step4 was called with the right info */
 static bool verify_step4_called;
+/* Whether install_tk was called with the right info */
+static bool verify_install_tk_called;
 /* PTK Handshake 4-of-4 frame we are expected to generate + its size */
 static const uint8_t *expected_step4_frame;
 static size_t expected_step4_frame_size;
@@ -1953,6 +1957,397 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 	eapol_exit();
 }
 
+static const uint8_t eap_identity_req[] = {
+	0x02, 0x00, 0x00, 0x05, 0x01, 0x01, 0x00, 0x05, 0x01
+};
+static const uint8_t eap_identity_resp[] = {
+	0x02, 0x00, 0x00, 0x14, 0x02, 0x01, 0x00, 0x14, 0x01, 0x61, 0x62, 0x63,
+	0x40, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2e, 0x63, 0x6f, 0x6d
+};
+
+struct eapol_8021x_tls_test_state {
+	l_tls_write_cb_t app_data_cb;
+	l_tls_ready_cb_t ready_cb;
+	l_tls_disconnect_cb_t disconnect_cb;
+
+	uint8_t method;
+
+	struct l_tls *tls;
+	uint8_t last_id;
+
+	bool success;
+	bool pending_req;
+	bool tx_ack;
+
+	uint8_t tx_buf[16384];
+	unsigned int tx_buf_len, tx_buf_offset;
+
+	uint8_t pmk[32];
+};
+
+static int verify_8021x_identity_resp(uint32_t ifindex, const uint8_t *aa_addr,
+					const uint8_t *sta_addr,
+					const struct eapol_frame *ef,
+					void *user_data)
+{
+	struct eapol_8021x_tls_test_state *s = user_data;
+	size_t len = sizeof(struct eapol_header) +
+		L_BE16_TO_CPU(ef->header.packet_len);
+
+	assert(ifindex == 1);
+	assert(!memcmp(sta_addr, spa, 6));
+	assert(!memcmp(aa_addr, aa, 6));
+	assert(len == sizeof(eap_identity_resp));
+	assert(!memcmp(ef, eap_identity_resp, sizeof(eap_identity_resp)));
+
+	assert(s->pending_req);
+	s->pending_req = 0;
+
+	return 0;
+}
+
+static int verify_8021x_tls_resp(uint32_t ifindex, const uint8_t *aa_addr,
+					const uint8_t *sta_addr,
+					const struct eapol_frame *ef,
+					void *user_data)
+{
+	struct eapol_8021x_tls_test_state *s = user_data;
+	size_t len = sizeof(struct eapol_header) +
+		L_BE16_TO_CPU(ef->header.packet_len);
+	size_t fragment_len, header_len;
+
+	assert(ifindex == 1);
+	assert(!memcmp(sta_addr, spa, 6));
+	assert(!memcmp(aa_addr, aa, 6));
+	assert(len >= 10);
+	assert(ef->header.protocol_version == EAPOL_PROTOCOL_VERSION_2004);
+	assert(ef->header.packet_type == 0x00); /* EAPoL-EAP */
+
+	assert(ef->data[0] == EAP_CODE_RESPONSE);
+	assert(ef->data[1] == s->last_id);
+	assert(ef->data[4] == s->method);
+	assert((ef->data[5] & 0x3f) == 0); /* Flags */
+
+	/* Expecting an ACK? */
+	if (s->tx_buf_len || s->success) {
+		assert(ef->data[5] == 0);
+		assert(len == 10);
+	}
+
+	header_len = 6;
+	if (ef->data[5] & 0x80) { /* L flag */
+		assert(len >= 14);
+		header_len += 4;
+		assert(ef->data[5] & 0x40); /* M flag */
+		assert(l_get_be32(ef->data + 6) > fragment_len);
+	}
+	s->tx_ack = !!(ef->data[5] & 0x40); /* M flag */
+
+	fragment_len = l_get_be16(ef->data + 2) - header_len;
+	assert(len == 4 + header_len + fragment_len);
+
+	assert(s->pending_req);
+	s->pending_req = 0;
+
+	if (fragment_len)
+		l_tls_handle_rx(s->tls, ef->data + header_len, fragment_len);
+
+	return 0;
+}
+
+static void eapol_sm_test_tls_new_data(const uint8_t *data, size_t len,
+						void *user_data)
+{
+	assert(false);
+}
+
+static void eapol_sm_test_tls_test_write(const uint8_t *data, size_t len,
+						void *user_data)
+{
+	struct eapol_8021x_tls_test_state *s = user_data;
+
+	assert(!s->tx_ack);
+	assert(!s->tx_buf_offset);
+
+	memcpy(s->tx_buf + s->tx_buf_len, data, len);
+	s->tx_buf_len += len;
+}
+
+static void eapol_sm_test_tls_test_ready(const char *peer_identity,
+						void *user_data)
+{
+	struct eapol_8021x_tls_test_state *s = user_data;
+	uint8_t seed[64];
+
+	assert(!s->tx_ack);
+	/* TODO: require the right peer_identity */
+
+	s->success = true;
+
+	memcpy(seed +  0, s->tls->pending.client_random, 32);
+	memcpy(seed + 32, s->tls->pending.server_random, 32);
+
+	tls_prf_get_bytes(s->tls, L_CHECKSUM_SHA256, 32,
+				s->tls->pending.master_secret,
+				sizeof(s->tls->pending.master_secret),
+				"client EAP encryption", seed, 64, s->pmk, 32);
+}
+
+static void eapol_sm_test_tls_test_disconnected(enum l_tls_alert_desc reason,
+							bool remote, void *user_data)
+{
+	assert(false);
+}
+
+static void verify_deauthenticate(uint32_t ifindex, const uint8_t *aa,
+					const uint8_t *spa, uint16_t reason_code,
+					void *user_data)
+{
+	assert(false);
+}
+
+static void verify_install_tk(uint32_t ifindex, const uint8_t *aa_addr,
+				const uint8_t *tk, uint32_t cipher,
+				void *user_data)
+{
+	assert(ifindex == 1);
+	assert(!memcmp(aa_addr, aa, 6));
+	assert(!memcmp(tk, user_data, 32));
+	assert(cipher == CRYPTO_CIPHER_TKIP);
+
+	assert(!verify_install_tk_called);
+	verify_install_tk_called = true;
+}
+
+static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
+				const char *config)
+{
+	static const unsigned char ap_wpa_ie[] = {
+		0xdd, 0x16, 0x00, 0x50, 0xf2, 0x01, 0x01, 0x00,
+		0x00, 0x50, 0xf2, 0x02, 0x01, 0x00, 0x00, 0x50,
+		0xf2, 0x02, 0x01, 0x00, 0x00, 0x50, 0xf2, 0x02 };
+	static uint8_t ap_address[] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	static uint8_t sta_address[] = { 0x02, 0x00, 0x00, 0x00, 0x01, 0x00 };
+	bool r;
+	struct eapol_sm *sm;
+	struct l_settings *settings;
+	uint8_t tx_buf[2000];
+	size_t header_len, data_len, tx_len;
+	bool start;
+	uint8_t step1_buf[256], step2_buf[256], step3_buf[256], step4_buf[256];
+	struct eapol_key *step1, *step2, *step3, *step4;
+	uint8_t ptk_buf[64];
+	struct crypto_ptk *ptk;
+
+	aa = ap_address;
+	spa = sta_address;
+
+	eapol_init();
+	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2004);
+	__eapol_set_get_nonce_func(test_nonce);
+	__eapol_set_deauthenticate_func(verify_deauthenticate);
+
+	sm = eapol_sm_new();
+	eapol_sm_set_authenticator_address(sm, ap_address);
+	eapol_sm_set_supplicant_address(sm, sta_address);
+	eapol_sm_set_tx_user_data(sm, s);
+
+	settings = l_settings_new();
+	l_settings_load_from_data(settings, config, strlen(config));
+	eapol_sm_set_8021x_config(sm, settings);
+	l_settings_free(settings);
+
+	r = eapol_sm_set_own_wpa(sm,
+				eapol_key_data_20 + sizeof(struct eapol_key),
+				eapol_key_test_20.key_data_len);
+	assert(r);
+
+	eapol_sm_set_ap_wpa(sm, ap_wpa_ie, sizeof(ap_wpa_ie));
+	eapol_start(1, sm);
+
+	__eapol_set_tx_packet_func(verify_8021x_identity_resp);
+	s->pending_req = 1;
+	__eapol_rx_packet(1, sta_address, ap_address, eap_identity_req,
+				sizeof(eap_identity_req));
+	assert(!s->pending_req);
+
+	s->tls = l_tls_new(true, s->app_data_cb, eapol_sm_test_tls_test_write,
+				s->ready_cb, s->disconnect_cb, s);
+	assert(s->tls);
+
+	s->last_id = 1;
+	s->success = false;
+	s->tx_buf_len = 0;
+	s->tx_buf_offset = 0;
+
+	l_tls_set_auth_data(s->tls, "ell/unit/cert-server.pem",
+				"ell/unit/cert-server-key.pem", NULL);
+	l_tls_set_cacert(s->tls, "ell/unit/cert-ca.pem");
+
+	start = 1;
+	__eapol_set_tx_packet_func(verify_8021x_tls_resp);
+	while (!s->success || s->tx_buf_len) {
+		tx_len = 0;
+		data_len = 1024 < s->tx_buf_len ? 1024 : s->tx_buf_len;
+		header_len = 6;
+		if (data_len < s->tx_buf_len && !s->tx_buf_offset)
+			header_len += 4;
+		tx_buf[tx_len++] = EAPOL_PROTOCOL_VERSION_2004;
+		tx_buf[tx_len++] = 0x00; /* EAPoL-EAP */
+		tx_buf[tx_len++] = (data_len + header_len) >> 8;
+		tx_buf[tx_len++] = (data_len + header_len) >> 0;
+
+		tx_buf[tx_len++] = EAP_CODE_REQUEST;
+		tx_buf[tx_len++] = ++s->last_id;
+		tx_buf[tx_len++] = (data_len + header_len) >> 8;
+		tx_buf[tx_len++] = (data_len + header_len) >> 0;
+		tx_buf[tx_len++] = s->method;
+		tx_buf[tx_len++] = 0x00; /* Flags */
+
+		if (start) {
+			tx_buf[tx_len - 1] |= 0x20; /* S flag */
+			start = 0;
+		}
+
+		if (data_len < s->tx_buf_len)
+			tx_buf[tx_len - 1] |= 0x40; /* M flag */
+
+		if (data_len < s->tx_buf_len && !s->tx_buf_offset) {
+			tx_buf[tx_len - 1] |= 0x80; /* L flag */
+
+			tx_buf[tx_len++] = s->tx_buf_len >> 24;
+			tx_buf[tx_len++] = s->tx_buf_len >> 16;
+			tx_buf[tx_len++] = s->tx_buf_len >>  8;
+			tx_buf[tx_len++] = s->tx_buf_len >>  0;
+		}
+
+		memcpy(tx_buf + tx_len, s->tx_buf + s->tx_buf_offset, data_len);
+		tx_len += data_len;
+		s->tx_buf_offset += data_len;
+		s->tx_buf_len -= data_len;
+
+		if (!s->tx_buf_len)
+			s->tx_buf_offset = 0;
+
+		s->pending_req = 1;
+
+		__eapol_rx_packet(1, sta_address, ap_address, tx_buf, tx_len);
+
+		assert(!s->pending_req);
+
+		while (s->tx_ack) {
+			tx_len = 0;
+			tx_buf[tx_len++] = EAPOL_PROTOCOL_VERSION_2004;
+			tx_buf[tx_len++] = 0x00; /* EAPoL-EAP */
+			tx_buf[tx_len++] = 0x00;
+			tx_buf[tx_len++] = 0x06; /* Length */
+
+			tx_buf[tx_len++] = EAP_CODE_REQUEST;
+			tx_buf[tx_len++] = ++s->last_id;
+			tx_buf[tx_len++] = 0x00;
+			tx_buf[tx_len++] = 0x06; /* Length */
+			tx_buf[tx_len++] = s->method;
+			tx_buf[tx_len++] = 0x00; /* Flags */
+
+			s->pending_req = 1;
+
+			__eapol_rx_packet(1, sta_address, ap_address,
+						tx_buf, tx_len);
+
+			assert(!s->pending_req);
+		}
+	}
+
+	l_tls_free(s->tls);
+
+	tx_len = 0;
+	tx_buf[tx_len++] = EAPOL_PROTOCOL_VERSION_2004;
+	tx_buf[tx_len++] = 0x00; /* EAPoL-EAP */
+	tx_buf[tx_len++] = 0x00;
+	tx_buf[tx_len++] = 0x04; /* Length */
+
+	tx_buf[tx_len++] = EAP_CODE_SUCCESS;
+	tx_buf[tx_len++] = s->last_id;
+	tx_buf[tx_len++] = 0x00;
+	tx_buf[tx_len++] = 0x04; /* Length */
+
+	__eapol_rx_packet(1, sta_address, ap_address, tx_buf, tx_len);
+
+	memcpy(step1_buf, eapol_key_data_13, sizeof(eapol_key_data_13));
+	step1 = (struct eapol_key *)
+		eapol_key_validate(step1_buf, sizeof(eapol_key_data_13));
+
+	memcpy(step2_buf, eapol_key_data_14, sizeof(eapol_key_data_14));
+	step2 = (struct eapol_key *)
+		eapol_key_validate(step2_buf, sizeof(eapol_key_data_14));
+
+	memcpy(step3_buf, eapol_key_data_15, sizeof(eapol_key_data_15));
+	step3 = (struct eapol_key *)
+		eapol_key_validate(step3_buf, sizeof(eapol_key_data_15));
+
+	memcpy(step4_buf, eapol_key_data_16, sizeof(eapol_key_data_16));
+	step4 = (struct eapol_key *)
+		eapol_key_validate(step4_buf, sizeof(eapol_key_data_16));
+
+	ptk = (struct crypto_ptk *) ptk_buf;
+	crypto_derive_pairwise_ptk(s->pmk, sta_address, ap_address,
+					step1->key_nonce, step2->key_nonce,
+					ptk, 64);
+
+	memset(step2->key_mic_data, 0, 16);
+	assert(eapol_calculate_mic(ptk->kck, step2, step2->key_mic_data));
+
+	memset(step3->key_mic_data, 0, 16);
+	assert(eapol_calculate_mic(ptk->kck, step3, step3->key_mic_data));
+
+	memset(step4->key_mic_data, 0, 16);
+	assert(eapol_calculate_mic(ptk->kck, step4, step4->key_mic_data));
+
+	snonce = step2->key_nonce;
+
+	verify_step2_called = false;
+	expected_step2_frame = step2_buf;
+	expected_step2_frame_size = sizeof(eapol_key_data_14);
+
+	__eapol_set_tx_packet_func(verify_step2);
+	__eapol_rx_packet(1, sta_address, ap_address, step1_buf,
+				sizeof(eapol_key_data_13));
+	assert(verify_step2_called);
+
+	verify_step4_called = false;
+	verify_install_tk_called = false;
+	expected_step4_frame = step4_buf;
+	expected_step4_frame_size = sizeof(eapol_key_data_16);
+
+	__eapol_set_tx_packet_func(verify_step4);
+	__eapol_set_install_tk_func(verify_install_tk);
+	eapol_sm_set_user_data(sm, ptk->tk);
+	__eapol_rx_packet(1, sta_address, ap_address, step3_buf,
+				sizeof(eapol_key_data_15));
+	assert(verify_step4_called);
+	assert(verify_install_tk_called);
+
+	eapol_exit();
+}
+
+static void eapol_sm_test_eap_tls(const void *data)
+{
+	static const char *eapol_8021x_config = "[Security]\n"
+		"EAP-Method=TLS\n"
+		"EAP-Identity=abc@example.com\n"
+		"EAP-TLS-CACert=ell/unit/cert-ca.pem\n"
+		"EAP-TLS-ClientCert=ell/unit/cert-client.pem\n"
+		"EAP-TLS-ClientKey=ell/unit/cert-client-key.pem";
+	struct eapol_8021x_tls_test_state s;
+
+	s.app_data_cb = eapol_sm_test_tls_new_data;
+	s.ready_cb = eapol_sm_test_tls_test_ready;
+	s.disconnect_cb = eapol_sm_test_tls_test_disconnected;
+	s.method = EAP_TYPE_TLS_EAP;
+
+	eapol_sm_test_tls(&s, eapol_8021x_config);
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -2033,6 +2428,9 @@ int main(int argc, char *argv[])
 
 	l_test_add("EAPoL/WPA PTK & GTK State Machine Test 2",
 			&eapol_sm_test_wpa_ptk_gtk_2, NULL);
+
+	l_test_add("EAPoL/8021x EAP-TLS & 4-Way Handshake",
+			&eapol_sm_test_eap_tls, NULL);
 
 	return l_test_run();
 }
