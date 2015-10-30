@@ -69,6 +69,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h linux/kdbus.h \
 					src/network.h src/network.c \
 					src/wscutil.h src/wscutil.c \
 					src/wsc.h src/wsc.c \
+					src/eap.h src/eap.c \
 					src/iwd.h
 src_iwd_LDADD = ell/libell-internal.la
 
@@ -86,7 +87,8 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					src/util.h src/util.c \
 					src/sha1.h src/sha1.c \
 					src/crypto.h src/crypto.c \
-					src/eapol.h src/eapol.c
+					src/eapol.h src/eapol.c \
+					src/eap.h src/eap.c
 monitor_iwmon_LDADD = ell/libell-internal.la
 
 noinst_PROGRAMS = tools/hwsim
@@ -153,7 +155,8 @@ unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/sha1.h src/sha1.c \
 				src/crypto.h src/crypto.c \
 				src/ie.h src/ie.c \
-				src/eapol.h src/eapol.c
+				src/eapol.h src/eapol.c \
+				src/eap.h src/eap.c
 unit_test_eapol_LDADD = ell/libell-internal.la
 
 unit_test_ssid_to_utf8_SOURCES = src/util.h src/util.c \
