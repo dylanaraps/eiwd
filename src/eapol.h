@@ -175,6 +175,8 @@ void eapol_sm_free(struct eapol_sm *sm);
 void eapol_sm_set_supplicant_address(struct eapol_sm *sm, const uint8_t *spa);
 void eapol_sm_set_authenticator_address(struct eapol_sm *sm, const uint8_t *aa);
 void eapol_sm_set_pmk(struct eapol_sm *sm, const uint8_t *pmk);
+void eapol_sm_set_8021x_config(struct eapol_sm *sm,
+				struct l_settings *settings);
 void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 				size_t len);
 bool eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,

@@ -40,6 +40,7 @@
 #include "ie.h"
 #include "util.h"
 #include "mpdu.h"
+#include "eap.h"
 
 struct l_queue *state_machines;
 eapol_tx_packet_func_t tx_packet = NULL;
@@ -605,6 +606,8 @@ struct eapol_sm {
 	bool have_replay:1;
 	bool ptk_complete:1;
 	bool wpa_ie:1;
+	bool have_pmk:1;
+	struct eap_state *eap;
 };
 
 static void eapol_sm_destroy(void *value)
@@ -615,6 +618,9 @@ static void eapol_sm_destroy(void *value)
 	l_free(sm->own_ie);
 
 	l_timeout_remove(sm->timeout);
+
+	if (sm->eap)
+		eap_free(sm->eap);
 
 	l_free(sm);
 }
@@ -646,6 +652,7 @@ void eapol_sm_set_authenticator_address(struct eapol_sm *sm, const uint8_t *aa)
 void eapol_sm_set_pmk(struct eapol_sm *sm, const uint8_t *pmk)
 {
 	memcpy(sm->pmk, pmk, sizeof(sm->pmk));
+	sm->have_pmk = true;
 }
 
 static void eapol_sm_set_ap_ie(struct eapol_sm *sm, const uint8_t *ie,
@@ -1265,11 +1272,10 @@ static struct eapol_sm *eapol_find_sm(uint32_t ifindex,
 	return NULL;
 }
 
-void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
-			const uint8_t *frame, size_t len)
+static void eapol_key_handle(struct eapol_sm *sm, uint32_t ifindex,
+				const uint8_t *frame, size_t len)
 {
 	const struct eapol_key *ek;
-	struct eapol_sm *sm;
 	struct crypto_ptk *ptk;
 	uint8_t *decrypted_key_data = NULL;
 	size_t key_data_len = 0;
@@ -1277,10 +1283,6 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 
 	ek = eapol_key_validate(frame, len);
 	if (!ek)
-		return;
-
-	sm = eapol_find_sm(ifindex, spa, aa);
-	if (!sm)
 		return;
 
 	/* Wrong direction */
@@ -1365,6 +1367,136 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 
 done:
 	l_free(decrypted_key_data);
+}
+
+/* This respresentes the eapMsg message in 802.1X Figure 8-1 */
+static void eapol_eap_msg_cb(const uint8_t *eap_data, size_t len,
+					void *user_data)
+{
+	struct eapol_sm *sm = user_data;
+	uint8_t buf[sizeof(struct eapol_frame) + len];
+	struct eapol_frame *frame = (struct eapol_frame *) buf;
+
+	frame->header.protocol_version = EAPOL_PROTOCOL_VERSION_2004;
+	frame->header.packet_type = 0;
+	l_put_be16(len, &frame->header.packet_len);
+
+	memcpy(frame->data, eap_data, len);
+
+	tx_packet(sm->ifindex, sm->aa, sm->spa, frame, sm->tx_user_data);
+}
+
+/* This respresentes the eapTimout, eapFail and eapSuccess messages */
+static void eapol_eap_complete_cb(enum eap_result result, void *user_data)
+{
+	struct eapol_sm *sm = user_data;
+
+	l_info("EAP completed with %s", result == EAP_RESULT_SUCCESS ?
+			"eapSuccess" : (result == EAP_RESULT_FAIL ?
+				"eapFail" : "eapTimeout"));
+
+	eap_free(sm->eap);
+	sm->eap = NULL;
+
+	if (result != EAP_RESULT_SUCCESS)
+		handshake_failed(sm->ifindex, sm,
+					MPDU_REASON_CODE_IEEE8021X_FAILED);
+}
+
+/* This respresentes the eapResults message */
+static void eapol_eap_results_cb(const uint8_t *msk_data, size_t msk_len,
+				const uint8_t *emsk_data, size_t emsk_len,
+				const uint8_t *iv, size_t iv_len,
+				void *user_data)
+{
+	struct eapol_sm *sm = user_data;
+
+	l_debug("EAP key material received");
+
+	/*
+	 * 802.11i 8.5.1.2:
+	 *    "When not using a PSK, the PMK is derived from the AAA key.
+	 *    The PMK shall be computed as the first 256 bits (bits 0–255)
+	 *    of the AAA key: PMK ← L(PTK, 0, 256)."
+	 * 802.11 11.6.1.3:
+	 *    "When not using a PSK, the PMK is derived from the MSK.
+	 *    The PMK shall be computed as the first 256 bits (bits 0–255)
+	 *    of the MSK: PMK ← L(MSK, 0, 256)."
+	 * RFC5247 explains AAA-Key refers to the MSK and confirms the
+	 * first 32 bytes of the MSK are used.  MSK is at least 64 octets
+	 * long per RFC3748.  Note WEP derives the PTK from MSK differently.
+	 */
+
+	eapol_sm_set_pmk(sm, msk_data);
+}
+
+void eapol_sm_set_8021x_config(struct eapol_sm *sm, struct l_settings *settings)
+{
+	sm->eap = eap_new(eapol_eap_msg_cb, eapol_eap_complete_cb, sm);
+
+	if (!sm->eap)
+		return;
+
+	eap_set_key_material_func(sm->eap, eapol_eap_results_cb);
+
+	eap_load_settings(sm->eap, settings, "EAP-");
+}
+
+void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
+			const uint8_t *frame, size_t len)
+{
+	const struct eapol_header *eh;
+	struct eapol_sm *sm;
+
+	/* Validate Header */
+
+	if (len < sizeof(struct eapol_header))
+		return;
+
+	eh = (const struct eapol_header *) frame;
+
+	if (eh->protocol_version != EAPOL_PROTOCOL_VERSION_2001 &&
+			eh->protocol_version != EAPOL_PROTOCOL_VERSION_2004)
+		return;
+
+	if (len < (size_t) 4 + L_BE16_TO_CPU(eh->packet_len))
+		return;
+
+	sm = eapol_find_sm(ifindex, spa, aa);
+	if (!sm)
+		return;
+
+	switch (eh->packet_type) {
+	case 0: /* EAPOL-EAP */
+		if (!sm->eap) {
+			sm->eap = eap_new(eapol_eap_msg_cb,
+						eapol_eap_complete_cb, sm);
+
+			if (!sm->eap)
+				return;
+
+			eap_set_key_material_func(sm->eap,
+							eapol_eap_results_cb);
+		}
+
+		eap_rx_packet(sm->eap, frame + 4,
+				L_BE16_TO_CPU(eh->packet_len));
+
+		break;
+
+	case 3: /* EAPOL-Key */
+		if (sm->eap) /* An EAP negotiation in progress? */
+			return;
+
+		if (!sm->have_pmk)
+			return;
+
+		eapol_key_handle(sm, ifindex, frame, len);
+		break;
+
+	default:
+		return;
+	}
 }
 
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func)
@@ -1478,6 +1610,8 @@ bool eapol_init()
 	get_nonce = eapol_get_nonce;
 	tx_packet = eapol_write;
 
+	eap_init();
+
 	return true;
 }
 
@@ -1486,6 +1620,8 @@ bool eapol_exit()
 	l_queue_destroy(state_machines, eapol_sm_destroy);
 	get_nonce = NULL;
 	tx_packet = NULL;
+
+	eap_exit();
 
 	return true;
 }
