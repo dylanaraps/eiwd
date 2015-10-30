@@ -202,11 +202,12 @@ const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len)
 
 	ek = (const struct eapol_key *) frame;
 
-	if (ek->protocol_version != EAPOL_PROTOCOL_VERSION_2001 &&
-			ek->protocol_version != EAPOL_PROTOCOL_VERSION_2004)
+	if (ek->header.protocol_version != EAPOL_PROTOCOL_VERSION_2001 &&
+			ek->header.protocol_version !=
+			EAPOL_PROTOCOL_VERSION_2004)
 		return NULL;
 
-	if (ek->packet_type != 3)
+	if (ek->header.packet_type != 3)
 		return NULL;
 
 	switch (ek->descriptor_type) {
@@ -501,9 +502,9 @@ static struct eapol_key *eapol_create_common(
 
 	memset(out_frame, 0, to_alloc + extra_len);
 
-	out_frame->protocol_version = protocol;
-	out_frame->packet_type = 0x3;
-	out_frame->packet_len = L_CPU_TO_BE16(to_alloc + extra_len - 4);
+	out_frame->header.protocol_version = protocol;
+	out_frame->header.packet_type = 0x3;
+	out_frame->header.packet_len = L_CPU_TO_BE16(to_alloc + extra_len - 4);
 	out_frame->descriptor_type = is_wpa ? EAPOL_DESCRIPTOR_TYPE_WPA :
 		EAPOL_DESCRIPTOR_TYPE_80211;
 	out_frame->key_descriptor_version = version;
@@ -813,7 +814,8 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 	}
 
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
-	tx_packet(ifindex, sm->aa, sm->spa, step2, user_data);
+	tx_packet(ifindex, sm->aa, sm->spa,
+			(struct eapol_frame *) step2, user_data);
 	l_free(step2);
 
 	l_timeout_remove(sm->timeout);
@@ -1139,7 +1141,8 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 		goto fail;
 
 	memcpy(step4->key_mic_data, mic, sizeof(mic));
-	tx_packet(ifindex, sm->aa, sm->spa, step4, user_data);
+	tx_packet(ifindex, sm->aa, sm->spa,
+			(struct eapol_frame *) step4, user_data);
 
 	sm->ptk_complete = true;
 
@@ -1218,7 +1221,8 @@ static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
 		goto done;
 
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
-	tx_packet(ifindex, sm->aa, sm->spa, step2, user_data);
+	tx_packet(ifindex, sm->aa, sm->spa,
+			(struct eapol_frame *) step2, user_data);
 
 	if (install_gtk) {
 		uint32_t cipher =
@@ -1432,7 +1436,7 @@ struct l_io *eapol_open_pae(uint32_t index)
  * This function expects an fd to be passed as user_data
  */
 static int eapol_write(uint32_t ifindex, const uint8_t *aa, const uint8_t *spa,
-			const struct eapol_key *ek, void *user_data)
+			const struct eapol_frame *ef, void *user_data)
 {
 	int fd = L_PTR_TO_INT(user_data);
 	size_t frame_size;
@@ -1446,9 +1450,10 @@ static int eapol_write(uint32_t ifindex, const uint8_t *aa, const uint8_t *spa,
 	sll.sll_halen = ETH_ALEN;
 	memcpy(sll.sll_addr, aa, ETH_ALEN);
 
-	frame_size = sizeof(struct eapol_key) + L_BE16_TO_CPU(ek->key_data_len);
+	frame_size = sizeof(struct eapol_header) +
+			L_BE16_TO_CPU(ef->header.packet_len);
 
-	r = sendto(fd, ek, frame_size, 0,
+	r = sendto(fd, ef, frame_size, 0,
 			(struct sockaddr *) &sll, sizeof(sll));
 	if (r < 0) {
 		l_error("EAPoL write socket: %s", strerror(errno));

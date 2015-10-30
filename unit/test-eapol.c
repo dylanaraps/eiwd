@@ -1177,9 +1177,9 @@ static void eapol_key_test(const void *data)
 	packet = eapol_key_validate(test->frame, test->frame_len);
 	assert(packet);
 
-	assert(packet->protocol_version == test->protocol_version);
-	assert(packet->packet_type == 0x03);
-	assert(L_BE16_TO_CPU(packet->packet_len) == test->packet_len);
+	assert(packet->header.protocol_version == test->protocol_version);
+	assert(packet->header.packet_type == 0x03);
+	assert(L_BE16_TO_CPU(packet->header.packet_len) == test->packet_len);
 	assert(packet->descriptor_type == test->descriptor_type);
 	assert(packet->key_descriptor_version == test->key_descriptor_version);
 	assert(packet->key_type == test->key_type);
@@ -1640,9 +1640,9 @@ static void eapol_wpa_handshake_test(const void *data)
 
 static int verify_step2(uint32_t ifindex, const uint8_t *aa_addr,
 			const uint8_t *sta_addr,
-			const struct eapol_key *ek,
-			void *user_data)
+			const struct eapol_frame *ef, void *user_data)
 {
+	const struct eapol_key *ek = (const struct eapol_key *) ef;
 	size_t ek_len = sizeof(struct eapol_key) +
 				L_BE16_TO_CPU(ek->key_data_len);
 
@@ -1659,9 +1659,9 @@ static int verify_step2(uint32_t ifindex, const uint8_t *aa_addr,
 
 static int verify_step4(uint32_t ifindex, const uint8_t *aa_addr,
 			const uint8_t *sta_addr,
-			const struct eapol_key *ek,
-			void *user_data)
+			const struct eapol_frame *ef, void *user_data)
 {
+	const struct eapol_key *ek = (const struct eapol_key *) ef;
 	size_t ek_len = sizeof(struct eapol_key) +
 				L_BE16_TO_CPU(ek->key_data_len);
 
@@ -1678,9 +1678,9 @@ static int verify_step4(uint32_t ifindex, const uint8_t *aa_addr,
 
 static int verify_step2_gtk(uint32_t ifindex, const uint8_t *aa_addr,
 				const uint8_t *sta_addr,
-				const struct eapol_key *ek,
-				void *user_data)
+				const struct eapol_frame *ef, void *user_data)
 {
+	const struct eapol_key *ek = (const struct eapol_key *) ef;
 	size_t ek_len = sizeof(struct eapol_key) +
 				L_BE16_TO_CPU(ek->key_data_len);
 

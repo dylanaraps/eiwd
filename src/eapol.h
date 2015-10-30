@@ -49,10 +49,19 @@ enum eapol_key_descriptor_version {
 
 struct eapol_sm;
 
-struct eapol_key {
+struct eapol_header {
 	uint8_t protocol_version;
 	uint8_t packet_type;
 	__be16 packet_len;
+} __attribute__ ((packed));
+
+struct eapol_frame {
+	struct eapol_header header;
+	uint8_t data[0];
+} __attribute__ ((packed));
+
+struct eapol_key {
+	struct eapol_header header;
 	uint8_t descriptor_type;
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 	bool key_mic:1;
@@ -96,7 +105,8 @@ struct eapol_key {
 } __attribute__ ((packed));
 
 typedef int (*eapol_tx_packet_func_t)(uint32_t ifindex, const uint8_t *aa,
-				const uint8_t *spa, const struct eapol_key *ek,
+				const uint8_t *spa,
+				const struct eapol_frame *ef,
 				void *user_data);
 typedef bool (*eapol_get_nonce_func_t)(uint8_t nonce[]);
 typedef void (*eapol_install_tk_func_t)(uint32_t ifindex, const uint8_t *aa,

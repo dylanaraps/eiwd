@@ -4735,7 +4735,7 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 	if (!ek)
 		return;
 
-	switch (ek->protocol_version) {
+	switch (ek->header.protocol_version) {
 	case 0x01:
 		str = "802.11X-2001";
 		break;
@@ -4747,9 +4747,9 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 		break;
 	}
 
-	print_attr(1, "Version: %u (%s)", ek->protocol_version, str);
+	print_attr(1, "Version: %u (%s)", ek->header.protocol_version, str);
 
-	switch (ek->packet_type) {
+	switch (ek->header.packet_type) {
 	case 0x00:
 		str = "Packet";
 		break;
@@ -4767,8 +4767,8 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 		break;
 	}
 
-	print_attr(1, "Type: %u (%s)", ek->packet_type, str);
-	print_attr(1, "Length: %d", L_BE16_TO_CPU(ek->packet_len));
+	print_attr(1, "Type: %u (%s)", ek->header.packet_type, str);
+	print_attr(1, "Length: %d", L_BE16_TO_CPU(ek->header.packet_len));
 	print_attr(1, "Descriptor Type: %u", ek->descriptor_type);
 	print_attr(1, "Key MIC: %s", ek->key_mic ? "true" : "false");
 	print_attr(1, "Secure: %s", ek->secure ? "true" : "false");
