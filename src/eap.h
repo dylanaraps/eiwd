@@ -117,3 +117,5 @@ void eap_method_error(struct eap_state *eap);
 
 void eap_save_last_id(struct eap_state *eap, uint8_t *last_id);
 void eap_restore_last_id(struct eap_state *eap, uint8_t last_id);
+
+extern struct eap_method eap_tls;

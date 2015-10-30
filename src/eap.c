@@ -414,6 +414,8 @@ int eap_unregister_method(struct eap_method *method)
 
 void eap_init(void) {
 	eap_methods = l_queue_new();
+
+	eap_register_method(&eap_tls);
 }
 
 void eap_exit(void) {
