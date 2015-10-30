@@ -2434,6 +2434,114 @@ static void eapol_sm_test_eap_ttls_md5(const void *data)
 	eapol_sm_test_tls(&s.tls, eapol_8021x_config);
 }
 
+static bool eap_nak_verify_deauthenticate_called;
+
+static void eap_nak_verify_deauthenticate(uint32_t ifindex, const uint8_t *aa,
+						const uint8_t *spa,
+						uint16_t reason_code,
+						void *user_data)
+{
+	assert(!eap_nak_verify_deauthenticate_called);
+	eap_nak_verify_deauthenticate_called = true;
+}
+
+static const uint8_t eap_ttls_start_req[] = {
+	0x02, 0x00, 0x00, 0x06, 0x01, 0x02, 0x00, 0x06, 0x15, 0x20
+};
+static const uint8_t eap_nak_tls[] = {
+	0x02, 0x00, 0x00, 0x06, 0x02, 0x02, 0x00, 0x06, 0x03, 0x0d
+};
+static const uint8_t eap_failure[] = {
+	0x02, 0x00, 0x00, 0x04, 0x04, 0x02, 0x00, 0x04
+};
+
+static int verify_8021x_eap_nak(uint32_t ifindex, const uint8_t *aa_addr,
+				const uint8_t *sta_addr,
+				const struct eapol_frame *ef, void *user_data)
+{
+	struct eapol_8021x_tls_test_state *s = user_data;
+	size_t len = sizeof(struct eapol_header) +
+		L_BE16_TO_CPU(ef->header.packet_len);
+
+	assert(ifindex == 1);
+	assert(!memcmp(sta_addr, spa, 6));
+	assert(!memcmp(aa_addr, aa, 6));
+	assert(len == sizeof(eap_nak_tls));
+	assert(!memcmp(ef, eap_nak_tls, sizeof(eap_nak_tls)));
+
+	assert(s->pending_req);
+	s->pending_req = 0;
+
+	return 0;
+}
+
+static void eapol_sm_test_eap_nak(const void *data)
+{
+	static const char *eapol_8021x_config = "[Security]\n"
+		"EAP-Method=TLS\n"
+		"EAP-Identity=abc@example.com\n"
+		"EAP-TLS-CACert=ell/unit/cert-ca.pem\n"
+		"EAP-TLS-ClientCert=ell/unit/cert-client.pem\n"
+		"EAP-TLS-ClientKey=ell/unit/cert-client-key.pem";
+	static const unsigned char ap_wpa_ie[] = {
+		0xdd, 0x16, 0x00, 0x50, 0xf2, 0x01, 0x01, 0x00,
+		0x00, 0x50, 0xf2, 0x02, 0x01, 0x00, 0x00, 0x50,
+		0xf2, 0x02, 0x01, 0x00, 0x00, 0x50, 0xf2, 0x02 };
+	static uint8_t ap_address[] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	static uint8_t sta_address[] = { 0x02, 0x00, 0x00, 0x00, 0x01, 0x00 };
+	bool r;
+	struct eapol_sm *sm;
+	struct l_settings *settings;
+	struct eapol_8021x_tls_test_state s;
+
+	aa = ap_address;
+	spa = sta_address;
+
+	eapol_init();
+	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2004);
+	__eapol_set_get_nonce_func(test_nonce);
+	__eapol_set_deauthenticate_func(verify_deauthenticate);
+
+	sm = eapol_sm_new();
+	eapol_sm_set_authenticator_address(sm, ap_address);
+	eapol_sm_set_supplicant_address(sm, sta_address);
+	eapol_sm_set_tx_user_data(sm, &s);
+
+	settings = l_settings_new();
+	l_settings_load_from_data(settings, eapol_8021x_config,
+					strlen(eapol_8021x_config));
+	eapol_sm_set_8021x_config(sm, settings);
+	l_settings_free(settings);
+
+	r = eapol_sm_set_own_wpa(sm,
+				eapol_key_data_20 + sizeof(struct eapol_key),
+				eapol_key_test_20.key_data_len);
+	assert(r);
+
+	eapol_sm_set_ap_wpa(sm, ap_wpa_ie, sizeof(ap_wpa_ie));
+	eapol_start(1, sm);
+
+	__eapol_set_tx_packet_func(verify_8021x_identity_resp);
+	s.pending_req = 1;
+	__eapol_rx_packet(1, sta_address, ap_address, eap_identity_req,
+				sizeof(eap_identity_req));
+	assert(!s.pending_req);
+
+	s.pending_req = 1;
+	__eapol_set_tx_packet_func(verify_8021x_eap_nak);
+	__eapol_rx_packet(1, sta_address, ap_address, eap_ttls_start_req,
+				sizeof(eap_ttls_start_req));
+	assert(!s.pending_req);
+
+	eap_nak_verify_deauthenticate_called = false;
+	__eapol_set_deauthenticate_func(eap_nak_verify_deauthenticate);
+	__eapol_rx_packet(1, sta_address, ap_address, eap_failure,
+				sizeof(eap_failure));
+	assert(eap_nak_verify_deauthenticate_called);
+
+	eapol_exit();
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -2520,6 +2628,9 @@ int main(int argc, char *argv[])
 
 	l_test_add("EAPoL/8021x EAP-TTLS+EAP-MD5 & 4-Way Handshake",
 			&eapol_sm_test_eap_ttls_md5, NULL);
+
+	l_test_add("EAPoL/8021x EAP NAK",
+			&eapol_sm_test_eap_nak, NULL);
 
 	return l_test_run();
 }
