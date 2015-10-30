@@ -104,8 +104,13 @@ unit_tests = unit/test-cmac-aes \
 		unit/test-ie unit/test-ssid-to-utf8 unit/test-ssid-security \
 		unit/test-arc4 unit/test-wsc
 
+ell_pem_files = cert-ca-key.pem cert-client-key.pem \
+		cert-server-key.pem \
+		cert-ca.pem cert-client.pem cert-server.pem
+
 if MAINTAINER_MODE
 noinst_PROGRAMS += $(unit_tests)
+noinst_DATA = ell/unit/test_data
 endif
 
 unit_test_cmac_aes_SOURCES = unit/test-cmac-aes.c \
@@ -193,7 +198,15 @@ ell/internal: Makefile
 	$(AM_V_at)$(MKDIR_P) ell
 	$(AM_V_GEN)for f in $(ell_sources) ; do \
 		if [ ! -f $$f ] ; then \
-			$(LN_S) -t ell -f $(top_srcdir)/../../ell/$$f ; \
+			$(LN_S) -t ell -f $(abs_srcdir)/../ell/$$f ; \
+		fi \
+	done > $@
+
+ell/unit/test_data: Makefile
+	$(AM_V_at)$(MKDIR_P) ell/unit
+	$(AM_V_GEN)for f in $(ell_pem_files) ; do \
+		if [ ! -f $$f ] ; then \
+			$(LN_S) -t ell/unit -f $(abs_srcdir)/../ell/unit/$$f ; \
 		fi \
 	done > $@
 
