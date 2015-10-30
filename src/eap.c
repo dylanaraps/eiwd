@@ -417,6 +417,7 @@ void eap_init(void) {
 
 	eap_register_method(&eap_md5);
 	eap_register_method(&eap_tls);
+	eap_register_method(&eap_ttls);
 }
 
 void eap_exit(void) {

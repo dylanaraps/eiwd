@@ -120,3 +120,4 @@ void eap_restore_last_id(struct eap_state *eap, uint8_t last_id);
 
 extern struct eap_method eap_md5;
 extern struct eap_method eap_tls;
+extern struct eap_method eap_ttls;
