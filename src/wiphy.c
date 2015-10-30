@@ -318,6 +318,7 @@ static struct scan_bss *network_select_bss(struct wiphy *wiphy,
 		return l_queue_peek_head(bss_list);
 
 	case SCAN_SSID_SECURITY_PSK:
+	case SCAN_SSID_SECURITY_8021X:
 		/* Pick the first bss that advertises any cipher we support. */
 		for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
 				bss_entry = bss_entry->next) {
@@ -499,6 +500,13 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	case SCAN_SSID_SECURITY_PSK:
 		return network_connect_psk(network, bss, message);
 	case SCAN_SSID_SECURITY_NONE:
+		mlme_authenticate_cmd(network, bss);
+		netdev->connect_pending = l_dbus_message_ref(message);
+		return NULL;
+	case SCAN_SSID_SECURITY_8021X:
+		network->settings = storage_network_open("8021x",
+							network->ssid);
+
 		mlme_authenticate_cmd(network, bss);
 		netdev->connect_pending = l_dbus_message_ref(message);
 		return NULL;
@@ -828,7 +836,9 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 		return dbus_error_not_connected(message);
 
 	if (netdev->connected_network->ssid_security ==
-			SCAN_SSID_SECURITY_PSK)
+			SCAN_SSID_SECURITY_PSK ||
+			netdev->connected_network->ssid_security ==
+			SCAN_SSID_SECURITY_8021X)
 		eapol_cancel(netdev->index);
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_DEAUTHENTICATE, 512);
@@ -970,6 +980,11 @@ static bool netdev_try_autoconnect(struct netdev *netdev,
 
 		break;
 	}
+	case SCAN_SSID_SECURITY_8021X:
+		network->settings = storage_network_open("8021x",
+							network->ssid);
+
+		break;
 	default:
 		return false;
 	}
@@ -1419,7 +1434,8 @@ static void mlme_associate_cmd(struct netdev *netdev)
 	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(network->ssid),
 			network->ssid);
 
-	if (network->ssid_security == SCAN_SSID_SECURITY_PSK) {
+	if (network->ssid_security == SCAN_SSID_SECURITY_PSK ||
+			network->ssid_security == SCAN_SSID_SECURITY_8021X) {
 		uint16_t pairwise_ciphers, group_ciphers;
 		uint32_t pairwise_cipher_attr;
 		uint32_t group_cipher_attr;
@@ -1428,7 +1444,10 @@ static void mlme_associate_cmd(struct netdev *netdev)
 		struct eapol_sm *sm = eapol_sm_new();
 
 		memset(&info, 0, sizeof(info));
-		info.akm_suites = IE_RSN_AKM_SUITE_PSK;
+		info.akm_suites =
+			(network->ssid_security == SCAN_SSID_SECURITY_PSK) ?
+			IE_RSN_AKM_SUITE_PSK :
+			IE_RSN_AKM_SUITE_8021X;
 
 		bss_get_supported_ciphers(bss, &pairwise_ciphers,
 						&group_ciphers);
@@ -1457,7 +1476,11 @@ static void mlme_associate_cmd(struct netdev *netdev)
 			eapol_sm_set_own_wpa(sm, rsne_buf, rsne_buf[1] + 2);
 		}
 
-		eapol_sm_set_pmk(sm, network->psk);
+		if (network->ssid_security == SCAN_SSID_SECURITY_PSK)
+			eapol_sm_set_pmk(sm, network->psk);
+		else
+			eapol_sm_set_8021x_config(sm, network->settings);
+
 		eapol_sm_set_authenticator_address(sm, bss->addr);
 		eapol_sm_set_supplicant_address(sm, netdev->addr);
 		eapol_sm_set_user_data(sm, netdev);
