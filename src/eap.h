@@ -95,6 +95,8 @@ struct eap_method {
 				const uint8_t *pkt, size_t len);
 };
 
+int eap_register_method(struct eap_method *method);
+
 void eap_set_data(struct eap_state *eap, void *data);
 void *eap_get_data(struct eap_state *eap);
 

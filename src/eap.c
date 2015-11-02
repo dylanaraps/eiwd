@@ -395,9 +395,10 @@ void eap_restore_last_id(struct eap_state *eap, uint8_t last_id)
 	eap->last_id = last_id;
 }
 
-static void eap_register_method(struct eap_method *method)
+int eap_register_method(struct eap_method *method)
 {
 	l_queue_push_head(eap_methods, method);
+	return 0;
 }
 
 void eap_init(void) {
