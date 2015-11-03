@@ -1469,6 +1469,7 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 	switch (eh->packet_type) {
 	case 0: /* EAPOL-EAP */
 		if (!sm->eap) {
+			/* If we're not configured for EAP, send a NAK */
 			sm->eap = eap_new(eapol_eap_msg_cb,
 						eapol_eap_complete_cb, sm);
 
