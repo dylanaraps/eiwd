@@ -548,7 +548,7 @@ static bool eap_md5_load_settings(struct eap_state *eap,
 	return true;
 }
 
-struct eap_method eap_md5 = {
+static struct eap_method eap_md5 = {
 	.request_type = EAP_TYPE_MD5_CHALLENGE,
 	.exports_msk = false,
 	.name = "MD5",
@@ -558,3 +558,17 @@ struct eap_method eap_md5 = {
 	.handle_request = eap_md5_handle_request,
 	.load_settings = eap_md5_load_settings,
 };
+
+static int eap_md5_init(void)
+{
+	l_debug("");
+	return eap_register_method(&eap_md5);
+}
+
+static void eap_md5_exit(void)
+{
+	l_debug("");
+	eap_unregister_method(&eap_md5);
+}
+
+EAP_METHOD_BUILTIN(eap_md5, eap_md5_init, eap_md5_exit)
