@@ -690,7 +690,7 @@ static bool eap_ttls_load_settings(struct eap_state *eap,
 	return eap_load_settings(ttls->eap, settings, setting);
 }
 
-struct eap_method eap_ttls = {
+static struct eap_method eap_ttls = {
 	.request_type = EAP_TYPE_TTLS,
 	.exports_msk = true,
 	.name = "TTLS",
@@ -700,3 +700,17 @@ struct eap_method eap_ttls = {
 	.handle_request = eap_ttls_handle_request,
 	.load_settings = eap_ttls_load_settings,
 };
+
+static int eap_ttls_init(void)
+{
+	l_debug("");
+	return eap_register_method(&eap_ttls);
+}
+
+static void eap_ttls_exit(void)
+{
+	l_debug("");
+	eap_unregister_method(&eap_ttls);
+}
+
+EAP_METHOD_BUILTIN(eap_ttls, eap_ttls_init, eap_ttls_exit)
