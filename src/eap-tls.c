@@ -419,7 +419,7 @@ static bool eap_tls_load_settings(struct eap_state *eap,
 	return true;
 }
 
-struct eap_method eap_tls = {
+static struct eap_method eap_tls = {
 	.request_type = EAP_TYPE_TLS_EAP,
 	.exports_msk = true,
 	.name = "TLS",
@@ -429,3 +429,17 @@ struct eap_method eap_tls = {
 	.handle_request = eap_tls_handle_request,
 	.load_settings = eap_tls_load_settings,
 };
+
+static int eap_tls_init(void)
+{
+	l_debug("");
+	return eap_register_method(&eap_tls);
+}
+
+static void eap_tls_exit(void)
+{
+	l_debug("");
+	eap_unregister_method(&eap_tls);
+}
+
+EAP_METHOD_BUILTIN(eap_tls, eap_tls_init, eap_tls_exit)
