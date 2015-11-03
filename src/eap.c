@@ -401,6 +401,17 @@ int eap_register_method(struct eap_method *method)
 	return 0;
 }
 
+int eap_unregister_method(struct eap_method *method)
+{
+	bool r;
+
+	r = l_queue_remove(eap_methods, method);
+	if (r)
+		return 0;
+
+	return -ENOENT;
+}
+
 void eap_init(void) {
 	eap_methods = l_queue_new();
 }
