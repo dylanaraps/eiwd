@@ -95,6 +95,18 @@ struct eap_method {
 				const uint8_t *pkt, size_t len);
 };
 
+struct eap_method_desc {
+	const char *name;
+	int (*init)(void);
+	void (*exit)(void);
+} __attribute__((aligned(8)));
+
+#define EAP_METHOD_BUILTIN(name, init, exit)				\
+	static struct eap_method_desc __eap_builtin_ ## name		\
+		__attribute__((used, section("__eap"), aligned(8))) = {	\
+			#name, init, exit				\
+		};							\
+
 int eap_register_method(struct eap_method *method);
 int eap_unregister_method(struct eap_method *method);
 
@@ -117,7 +129,3 @@ void eap_method_error(struct eap_state *eap);
 
 void eap_save_last_id(struct eap_state *eap, uint8_t *last_id);
 void eap_restore_last_id(struct eap_state *eap, uint8_t last_id);
-
-extern struct eap_method eap_md5;
-extern struct eap_method eap_tls;
-extern struct eap_method eap_ttls;

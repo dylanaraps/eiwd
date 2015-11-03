@@ -412,15 +412,54 @@ int eap_unregister_method(struct eap_method *method)
 	return -ENOENT;
 }
 
-void eap_init(void) {
-	eap_methods = l_queue_new();
+static void __eap_method_enable(struct eap_method_desc *start,
+					struct eap_method_desc *stop)
+{
+        struct eap_method_desc *desc;
 
-	eap_register_method(&eap_md5);
-	eap_register_method(&eap_tls);
-	eap_register_method(&eap_ttls);
+	l_debug("");
+
+	if (start == NULL || stop == NULL)
+		return;
+
+	for (desc = start; desc < stop; desc++) {
+		if (!desc->init)
+			continue;
+
+		desc->init();
+	}
 }
 
-void eap_exit(void) {
+static void __eap_method_disable(struct eap_method_desc *start,
+					struct eap_method_desc *stop)
+{
+        struct eap_method_desc *desc;
+
+	l_debug("");
+
+	if (start == NULL || stop == NULL)
+		return;
+
+	for (desc = start; desc < stop; desc++) {
+		if (!desc->exit)
+			continue;
+
+		desc->exit();
+	}
+}
+
+extern struct eap_method_desc __start___eap[];
+extern struct eap_method_desc __stop___eap[];
+
+void eap_init(void)
+{
+	eap_methods = l_queue_new();
+	__eap_method_enable(__start___eap, __stop___eap);
+}
+
+void eap_exit(void)
+{
+	__eap_method_disable(__start___eap, __stop___eap);
 	l_queue_destroy(eap_methods, NULL);
 }
 
