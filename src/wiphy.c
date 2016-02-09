@@ -135,22 +135,6 @@ static bool eapol_read(struct l_io *io, void *user_data)
 	return true;
 }
 
-static const char *ssid_security_to_str(enum scan_ssid_security ssid_security)
-{
-	switch (ssid_security) {
-	case SCAN_SSID_SECURITY_NONE:
-		return "open";
-	case SCAN_SSID_SECURITY_WEP:
-		return "wep";
-	case SCAN_SSID_SECURITY_PSK:
-		return "psk";
-	case SCAN_SSID_SECURITY_8021X:
-		return "8021x";
-	}
-
-	return NULL;
-}
-
 static const char *iwd_network_get_path(struct netdev *netdev,
 					const uint8_t *ssid, size_t ssid_len,
 					enum scan_ssid_security ssid_security)
@@ -165,7 +149,7 @@ static const char *iwd_network_get_path(struct netdev *netdev,
 								ssid[i]);
 
 	snprintf(path + pos, sizeof(path) - pos, "_%s",
-			ssid_security_to_str(ssid_security));
+			scan_ssid_security_to_str(ssid_security));
 
 	return path;
 }
@@ -1730,7 +1714,7 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 					network->object_path, network);
 
 		l_debug("Added new Network \"%s\" security %s", network->ssid,
-			ssid_security_to_str(ssid_security));
+			scan_ssid_security_to_str(ssid_security));
 
 		if (!l_dbus_register_interface(dbus_get_bus(),
 					network->object_path,

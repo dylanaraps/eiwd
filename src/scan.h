@@ -65,6 +65,8 @@ struct scan_bss {
 	uint16_t rank;
 };
 
+const char *scan_ssid_security_to_str(enum scan_ssid_security ssid_security);
+
 uint32_t scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
 			scan_notify_func_t notify, void *userdata,
 			scan_destroy_func_t destroy);

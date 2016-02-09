@@ -83,6 +83,22 @@ struct scan_results {
 	struct scan_freq_set *freqs;
 };
 
+const char *scan_ssid_security_to_str(enum scan_ssid_security ssid_security)
+{
+	switch (ssid_security) {
+	case SCAN_SSID_SECURITY_NONE:
+		return "open";
+	case SCAN_SSID_SECURITY_WEP:
+		return "wep";
+	case SCAN_SSID_SECURITY_PSK:
+		return "psk";
+	case SCAN_SSID_SECURITY_8021X:
+		return "8021x";
+	}
+
+	return NULL;
+}
+
 static void scan_done(struct l_genl_msg *msg, void *userdata);
 
 static bool scan_context_match(const void *a, const void *b)
