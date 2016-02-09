@@ -109,6 +109,7 @@ bool network_connected(uint32_t type, const char *ssid)
 	int err;
 	struct network_info *info;
 	struct network_info search;
+	const char *strtype;
 
 	search.type = type;
 	strncpy(search.ssid, ssid, 32);
@@ -118,15 +119,15 @@ bool network_connected(uint32_t type, const char *ssid)
 	if (!info)
 		return false;
 
-	switch(type) {
-	case SCAN_SSID_SECURITY_PSK:
-		err = storage_network_get_mtime("psk", ssid,
-					&info->connected_time);
-		break;
-	default:
+	strtype = scan_ssid_security_to_str(type);
+	if (!strtype)
 		goto fail;
-	}
 
+	err = storage_network_touch(strtype, ssid);
+	if (err < 0)
+		goto fail;
+
+	err = storage_network_get_mtime(strtype, ssid, &info->connected_time);
 	if (err < 0)
 		goto fail;
 
