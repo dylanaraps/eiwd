@@ -69,12 +69,8 @@ bool prf_sha1(const void *key, size_t key_len,
 		const void *prefix, size_t prefix_len,
 		const void *data, size_t data_len, void *output, size_t size);
 
-bool crypto_derive_ptk(const uint8_t *pmk, size_t pmk_len, const char *label,
-			const uint8_t *addr1, const uint8_t *addr2,
-			const uint8_t *nonce1, const uint8_t *nonce2,
-			uint8_t *out_ptk, size_t ptk_len);
-
 bool crypto_derive_pairwise_ptk(const uint8_t *pmk,
 				const uint8_t *addr1, const uint8_t *addr2,
 				const uint8_t *nonce1, const uint8_t *nonce2,
-				struct crypto_ptk *out_ptk, size_t ptk_len);
+				struct crypto_ptk *out_ptk, size_t ptk_len,
+				bool use_sha256);
