@@ -188,6 +188,66 @@ int crypto_cipher_tk_bits(enum crypto_cipher cipher)
 	return crypto_cipher_key_len(cipher) * 8;
 }
 
+#define SHA1_MAC_LEN 20
+
+static void F(struct l_checksum *checksum,
+			const char *salt, size_t salt_len,
+			unsigned int iterations, unsigned int count,
+							unsigned char *digest)
+{
+	unsigned char tmp[SHA1_MAC_LEN];
+	unsigned char buf[36];
+	unsigned int i, j;
+
+	memcpy(buf, salt, salt_len);
+	buf[salt_len + 0] = (count >> 24) & 0xff;
+	buf[salt_len + 1] = (count >> 16) & 0xff;
+	buf[salt_len + 2] = (count >> 8) & 0xff;
+	buf[salt_len + 3] = count & 0xff;
+
+	l_checksum_update(checksum, buf, salt_len + 4);
+	l_checksum_get_digest(checksum, tmp, SHA1_MAC_LEN);
+	memcpy(digest, tmp, SHA1_MAC_LEN);
+
+	for (i = 1; i < iterations; i++) {
+		l_checksum_update(checksum, tmp, SHA1_MAC_LEN);
+		l_checksum_get_digest(checksum, tmp, SHA1_MAC_LEN);
+
+		for (j = 0; j < SHA1_MAC_LEN; j++)
+			digest[j] ^= tmp[j];
+	}
+}
+
+bool pbkdf2_sha1(const void *password, size_t password_len,
+			const void *salt, size_t salt_len,
+			unsigned int iterations, void *output, size_t size)
+{
+	struct l_checksum *checksum;
+	unsigned char *ptr = output;
+	unsigned char digest[SHA1_MAC_LEN];
+	unsigned int i;
+
+	checksum = l_checksum_new_hmac(L_CHECKSUM_SHA1, password, password_len);
+	if (!checksum)
+		return false;
+
+	for (i = 1; size > 0; i++) {
+		size_t len;
+
+		F(checksum, salt, salt_len, iterations, i, digest);
+
+		len = size > SHA1_MAC_LEN ? SHA1_MAC_LEN : size;
+		memcpy(ptr, digest, len);
+
+		ptr += len;
+		size -= len;
+	}
+
+	l_checksum_free(checksum);
+
+	return true;
+}
+
 int crypto_psk_from_passphrase(const char *passphrase,
 				const unsigned char *ssid, size_t ssid_len,
 				unsigned char *out_psk)

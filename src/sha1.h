@@ -22,6 +22,3 @@
 
 #include <stdbool.h>
 
-bool pbkdf2_sha1(const void *password, size_t password_len,
-			const void *salt, size_t salt_len,
-			unsigned int iterations, void *output, size_t size);

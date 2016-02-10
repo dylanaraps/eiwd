@@ -140,7 +140,7 @@ unit_test_hmac_sha256_SOURCES = unit/test-hmac-sha256.c \
 unit_test_hmac_sha256_LDADD = ell/libell-internal.la
 
 unit_test_pbkdf2_sha1_SOURCES = unit/test-pbkdf2-sha1.c \
-					src/sha1.h src/sha1.c
+					src/crypto.h src/crypto.c
 unit_test_pbkdf2_sha1_LDADD = ell/libell-internal.la
 
 unit_test_prf_sha1_SOURCES = unit/test-prf-sha1.c \
