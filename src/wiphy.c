@@ -1428,10 +1428,15 @@ static void mlme_associate_cmd(struct netdev *netdev)
 		struct eapol_sm *sm = eapol_sm_new();
 
 		memset(&info, 0, sizeof(info));
-		info.akm_suites =
-			(network->ssid_security == SCAN_SSID_SECURITY_PSK) ?
-			IE_RSN_AKM_SUITE_PSK :
-			IE_RSN_AKM_SUITE_8021X;
+
+		if (network->ssid_security == SCAN_SSID_SECURITY_PSK)
+			info.akm_suites =
+				bss->sha256 ? IE_RSN_AKM_SUITE_PSK_SHA256 :
+						IE_RSN_AKM_SUITE_PSK;
+		else
+			info.akm_suites =
+				bss->sha256 ? IE_RSN_AKM_SUITE_8021X_SHA256 :
+						IE_RSN_AKM_SUITE_8021X;
 
 		bss_get_supported_ciphers(bss, &pairwise_ciphers,
 						&group_ciphers);
