@@ -22,9 +22,6 @@
 
 #include <stdbool.h>
 
-bool hmac_sha1(const void *key, size_t key_len,
-		const void *data, size_t data_len, void *output, size_t size);
-
 bool pbkdf2_sha1(const void *password, size_t password_len,
 			const void *salt, size_t salt_len,
 			unsigned int iterations, void *output, size_t size);

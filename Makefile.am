@@ -130,6 +130,7 @@ unit_test_hmac_md5_SOURCES = unit/test-hmac-md5.c \
 unit_test_hmac_md5_LDADD = ell/libell-internal.la
 
 unit_test_hmac_sha1_SOURCES = unit/test-hmac-sha1.c \
+					src/crypto.h src/crypto.c \
 					src/sha1.h src/sha1.c
 unit_test_hmac_sha1_LDADD = ell/libell-internal.la
 

@@ -74,22 +74,6 @@ static void __hmac_sha1(struct l_checksum *checksum,
 				size > SHA1_MAC_LEN ? SHA1_MAC_LEN : size);
 }
 
-bool hmac_sha1(const void *key, size_t key_len,
-                const void *data, size_t data_len, void *output, size_t size)
-{
-	struct l_checksum *checksum;
-
-	checksum = l_checksum_new(L_CHECKSUM_SHA1);
-	if (!checksum)
-		return false;
-
-	__hmac_sha1(checksum, key, key_len, data, data_len, output, size);
-
-	l_checksum_free(checksum);
-
-	return true;
-}
-
 static void F(struct l_checksum *checksum,
 			const char *password, size_t password_len,
 			const char *salt, size_t salt_len,

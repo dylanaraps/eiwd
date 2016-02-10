@@ -58,6 +58,13 @@ bool hmac_md5(const void *key, size_t key_len,
 				output, size);
 }
 
+bool hmac_sha1(const void *key, size_t key_len,
+		const void *data, size_t data_len, void *output, size_t size)
+{
+	return hmac_common(L_CHECKSUM_SHA1, key, key_len, data, data_len,
+				output, size);
+}
+
 bool hmac_sha256(const void *key, size_t key_len,
 		const void *data, size_t data_len, void *output, size_t size)
 {
