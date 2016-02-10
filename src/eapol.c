@@ -806,7 +806,8 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 
 	crypto_derive_pairwise_ptk(sm->pmk, sm->spa, sm->aa,
 					sm->anonce, sm->snonce,
-					ptk, sizeof(sm->ptk));
+					ptk, sizeof(sm->ptk),
+					false);
 
 	step2 = eapol_create_ptk_2_of_4(protocol_version,
 					ek->key_descriptor_version,
