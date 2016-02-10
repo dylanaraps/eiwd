@@ -29,7 +29,7 @@
 #include <assert.h>
 #include <ell/ell.h>
 
-#include "src/sha1.h"
+#include "src/crypto.h"
 
 struct hmac_data {
 	const char *key;
