@@ -30,6 +30,7 @@ unit/test-hmac-sha1
 unit/test-hmac-sha256
 unit/test-pbkdf2-sha1
 unit/test-prf-sha1
+unit/test-kdf-sha256
 unit/*.log
 unit/*.trs
 unit/test-ie
