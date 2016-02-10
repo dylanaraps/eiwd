@@ -29,7 +29,6 @@
 #include <assert.h>
 #include <ell/ell.h>
 
-#include "src/sha1.h"
 #include "src/crypto.h"
 
 struct psk_data {
