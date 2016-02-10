@@ -31,7 +31,6 @@
 
 #include <ell/ell.h>
 
-#include "sha1.h"
 #include "crypto.h"
 
 static bool hmac_common(enum l_checksum_type type,

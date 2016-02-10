@@ -55,7 +55,6 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h linux/kdbus.h \
 					src/kdbus.h src/kdbus.c \
 					src/netdev.h src/netdev.c \
 					src/wiphy.h src/wiphy.c \
-					src/sha1.h src/sha1.c \
 					src/ie.h src/ie.c \
 					src/dbus.h src/dbus.c \
 					src/manager.h src/manager.c \
@@ -86,7 +85,6 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					src/wscutil.h src/wscutil.c \
 					src/mpdu.h src/mpdu.c \
 					src/util.h src/util.c \
-					src/sha1.h src/sha1.c \
 					src/crypto.h src/crypto.c \
 					src/eapol.h src/eapol.c \
 					src/eap.h src/eap.c \
@@ -114,29 +112,24 @@ noinst_DATA = ell/unit/test_data
 endif
 
 unit_test_cmac_aes_SOURCES = unit/test-cmac-aes.c \
-					src/sha1.h src/sha1.c \
 					src/crypto.h src/crypto.c
 unit_test_cmac_aes_LDADD = ell/libell-internal.la
 
 unit_test_arc4_SOURCES = unit/test-arc4.c \
-					src/sha1.h src/sha1.c \
 					src/crypto.h src/crypto.c
 
 unit_test_arc4_LDADD = ell/libell-internal.la
 
 unit_test_hmac_md5_SOURCES = unit/test-hmac-md5.c \
-					src/sha1.h src/sha1.c \
 					src/crypto.h src/crypto.c
 unit_test_hmac_md5_LDADD = ell/libell-internal.la
 
 unit_test_hmac_sha1_SOURCES = unit/test-hmac-sha1.c \
-					src/crypto.h src/crypto.c \
-					src/sha1.h src/sha1.c
+					src/crypto.h src/crypto.c
 unit_test_hmac_sha1_LDADD = ell/libell-internal.la
 
 unit_test_hmac_sha256_SOURCES = unit/test-hmac-sha256.c \
-					src/crypto.h src/crypto.c \
-					src/sha1.h src/sha1.c
+					src/crypto.h src/crypto.c
 unit_test_hmac_sha256_LDADD = ell/libell-internal.la
 
 unit_test_pbkdf2_sha1_SOURCES = unit/test-pbkdf2-sha1.c \
@@ -144,15 +137,13 @@ unit_test_pbkdf2_sha1_SOURCES = unit/test-pbkdf2-sha1.c \
 unit_test_pbkdf2_sha1_LDADD = ell/libell-internal.la
 
 unit_test_prf_sha1_SOURCES = unit/test-prf-sha1.c \
-					src/crypto.h src/crypto.c \
-					src/sha1.h src/sha1.c
+					src/crypto.h src/crypto.c
 unit_test_prf_sha1_LDADD = ell/libell-internal.la
 
 unit_test_ie_SOURCES = unit/test-ie.c src/ie.h src/ie.c
 unit_test_ie_LDADD = ell/libell-internal.la
 
 unit_test_crypto_SOURCES = unit/test-crypto.c \
-				src/sha1.h src/sha1.c \
 				src/crypto.h src/crypto.c
 unit_test_crypto_LDADD = ell/libell-internal.la
 
@@ -161,7 +152,6 @@ unit_test_mpdu_SOURCES = unit/test-mpdu.c \
 unit_test_mpdu_LDADD = ell/libell-internal.la
 
 unit_test_eapol_SOURCES = unit/test-eapol.c \
-				src/sha1.h src/sha1.c \
 				src/crypto.h src/crypto.c \
 				src/ie.h src/ie.c \
 				src/eapol.h src/eapol.c \

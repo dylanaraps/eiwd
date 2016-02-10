@@ -34,7 +34,6 @@
 #include <arpa/inet.h>
 #include <ell/ell.h>
 
-#include "sha1.h"
 #include "crypto.h"
 #include "eapol.h"
 #include "ie.h"
