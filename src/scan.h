@@ -63,6 +63,7 @@ struct scan_bss {
 	struct l_uintset *supported_rates;
 	uint8_t utilization;
 	uint16_t rank;
+	bool sha256:1;
 };
 
 const char *scan_ssid_security_to_str(enum scan_ssid_security ssid_security);

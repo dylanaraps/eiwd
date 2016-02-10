@@ -1685,6 +1685,13 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 		}
 
 		ssid_security = scan_get_ssid_security(bss->capability, &rsne);
+
+		if (ssid_security == SCAN_SSID_SECURITY_PSK)
+			bss->sha256 =
+				rsne.akm_suites & IE_RSN_AKM_SUITE_PSK_SHA256;
+		else if (ssid_security == SCAN_SSID_SECURITY_8021X)
+			bss->sha256 =
+				rsne.akm_suites & IE_RSN_AKM_SUITE_8021X_SHA256;
 	} else if (bss->wpa) {
 		struct ie_rsn_info wpa;
 		int res = ie_parse_wpa_from_data(bss->wpa, bss->wpa[1] + 2,
