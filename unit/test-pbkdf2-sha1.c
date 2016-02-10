@@ -29,7 +29,7 @@
 #include <assert.h>
 #include <ell/ell.h>
 
-#include "src/sha1.h"
+#include "src/crypto.h"
 
 struct pbkdf2_data {
 	const char *password;
