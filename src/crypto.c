@@ -241,6 +241,45 @@ int crypto_psk_from_passphrase(const char *passphrase,
 	return 0;
 }
 
+bool prf_sha1(const void *key, size_t key_len,
+		const void *prefix, size_t prefix_len,
+		const void *data, size_t data_len, void *output, size_t size)
+{
+	struct l_checksum *hmac;
+	unsigned int i, offset = 0;
+	unsigned char empty = '\0';
+	unsigned char counter;
+	struct iovec iov[4] = {
+		[0] = { .iov_base = (void *) prefix, .iov_len = prefix_len },
+		[1] = { .iov_base = &empty, .iov_len = 1 },
+		[2] = { .iov_base = (void *) data, .iov_len = data_len },
+		[3] = { .iov_base = &counter, .iov_len = 1 },
+	};
+
+	hmac = l_checksum_new_hmac(L_CHECKSUM_SHA1, key, key_len);
+	if (!hmac)
+		return false;
+
+	/* PRF processes in 160-bit chunks (20 bytes) */
+	for (i = 0, counter = 0; i < (size + 19) / 20; i++, counter++) {
+		size_t len;
+
+		if (size - offset > 20)
+			len = 20;
+		else
+			len = size - offset;
+
+		l_checksum_updatev(hmac, iov, 4);
+		l_checksum_get_digest(hmac, output + offset, len);
+
+		offset += len;
+	}
+
+	l_checksum_free(hmac);
+
+	return true;
+}
+
 /*
  * 802.11, Section 11.6.6.7:
  * PTK = PRF-X(PMK, "Pairwise key expansion", Min(AA, SA) || Max(AA, SA) ||

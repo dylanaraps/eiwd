@@ -58,6 +58,10 @@ int crypto_psk_from_passphrase(const char *passphrase,
 				const unsigned char *ssid, size_t ssid_len,
 				unsigned char *out_psk);
 
+bool prf_sha1(const void *key, size_t key_len,
+		const void *prefix, size_t prefix_len,
+		const void *data, size_t data_len, void *output, size_t size);
+
 bool crypto_derive_ptk(const uint8_t *pmk, size_t pmk_len, const char *label,
 			const uint8_t *addr1, const uint8_t *addr2,
 			const uint8_t *nonce1, const uint8_t *nonce2,
