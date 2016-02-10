@@ -318,7 +318,7 @@ static void ptk_test(const void *data)
 
 	ret = crypto_derive_pairwise_ptk(test->pmk, test->aa, test->spa,
 					test->anonce, test->snonce,
-					ptk, ptk_len);
+					ptk, ptk_len, false);
 
 	assert(ret);
 

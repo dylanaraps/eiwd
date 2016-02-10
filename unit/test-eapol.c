@@ -1365,7 +1365,7 @@ static void eapol_4way_test(const void *data)
 			crypto_cipher_key_len(CRYPTO_CIPHER_CCMP);
 	ptk = l_malloc(ptk_len);
 	ret = crypto_derive_pairwise_ptk(psk, aa, spa, anonce, snonce,
-						ptk, ptk_len);
+						ptk, ptk_len, false);
 	assert(ret);
 
 	frame = eapol_create_ptk_2_of_4(EAPOL_PROTOCOL_VERSION_2001,
@@ -1449,7 +1449,7 @@ static void eapol_wpa2_handshake_test(const void *data)
 			crypto_cipher_key_len(CRYPTO_CIPHER_CCMP);
 	ptk = l_malloc(ptk_len);
 	ret = crypto_derive_pairwise_ptk(psk, aa, spa, anonce, snonce,
-						ptk, ptk_len);
+						ptk, ptk_len, false);
 	assert(ret);
 
 	frame = eapol_create_ptk_2_of_4(EAPOL_PROTOCOL_VERSION_2004,
@@ -1571,7 +1571,7 @@ static void eapol_wpa_handshake_test(const void *data)
 			crypto_cipher_key_len(CRYPTO_CIPHER_TKIP);
 	ptk = l_malloc(ptk_len);
 	ret = crypto_derive_pairwise_ptk(psk, aa, spa, anonce, snonce,
-						ptk, ptk_len);
+						ptk, ptk_len, false);
 	assert(ret);
 
 	frame = eapol_create_ptk_2_of_4(EAPOL_PROTOCOL_VERSION_2004,
@@ -2291,7 +2291,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	ptk = (struct crypto_ptk *) ptk_buf;
 	crypto_derive_pairwise_ptk(s->pmk, sta_address, ap_address,
 					step1->key_nonce, step2->key_nonce,
-					ptk, 64);
+					ptk, 64, false);
 
 	memset(step2->key_mic_data, 0, 16);
 	assert(eapol_calculate_mic(ptk->kck, step2, step2->key_mic_data));
