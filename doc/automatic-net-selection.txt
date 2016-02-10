@@ -1,0 +1,21 @@
+When IWD is searching for a network to connect to automatically, the following
+factors are taken into account:
+
+- Signal strength level
+
+- Is the network a legacy WPA network, or RSN compliant?  More weight is given
+  to networks that are RSN compliant.
+
+- Is the network Open or requires authentication?  More weight is given to
+  networks that require authentication.
+
+- Does the network support privacy in its Capability Information field?  More
+  weight is given to BSSes that do.
+
+- Maximum rate of the network
+
+- Channel Utilization (from BSS Load) of the network
+
+- Has the network been connected to before and if so, how long ago?  Networks
+  that have not been connected to previously are ignored for auto-connect
+  purposes.
