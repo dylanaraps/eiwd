@@ -593,6 +593,7 @@ struct eapol_sm {
 	uint8_t *own_ie;
 	enum ie_rsn_cipher_suite pairwise_cipher;
 	enum ie_rsn_cipher_suite group_cipher;
+	enum ie_rsn_akm_suite akm_suite;
 	uint8_t pmk[32];
 	uint64_t replay_counter;
 	uint8_t snonce[32];
@@ -690,6 +691,7 @@ static bool eapol_sm_setup_own_ciphers(struct eapol_sm *sm,
 	if (__builtin_popcount(info->akm_suites) != 1)
 		return false;
 
+	sm->akm_suite = info->akm_suites;
 	sm->pairwise_cipher = info->pairwise_ciphers;
 	sm->group_cipher = info->group_cipher;
 
@@ -788,6 +790,7 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 	struct crypto_ptk *ptk = (struct crypto_ptk *) sm->ptk;
 	struct eapol_key *step2;
 	uint8_t mic[16];
+	bool use_sha256;
 
 	if (!eapol_verify_ptk_1_of_4(ek)) {
 		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
@@ -804,10 +807,16 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 
 	memcpy(sm->anonce, ek->key_nonce, sizeof(ek->key_nonce));
 
+	if (sm->akm_suite == IE_RSN_AKM_SUITE_8021X_SHA256 ||
+			sm->akm_suite == IE_RSN_AKM_SUITE_PSK_SHA256)
+		use_sha256 = true;
+	else
+		use_sha256 = false;
+
 	crypto_derive_pairwise_ptk(sm->pmk, sm->spa, sm->aa,
 					sm->anonce, sm->snonce,
 					ptk, sizeof(sm->ptk),
-					false);
+					use_sha256);
 
 	step2 = eapol_create_ptk_2_of_4(protocol_version,
 					ek->key_descriptor_version,
