@@ -1235,6 +1235,8 @@ static void operstate_cb(bool result, void *user_data)
 		dbus_pending_reply(&netdev->connect_pending, reply);
 	}
 
+	network_connected(netdev->connected_network->ssid_security,
+				netdev->connected_network->ssid);
 	netdev_enter_state(netdev, NETDEV_STATE_CONNECTED);
 }
 
