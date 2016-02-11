@@ -499,19 +499,25 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	}
 }
 
+static bool network_property_get_name(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct network *network = user_data;
+
+	l_dbus_message_builder_append_basic(builder, 's', network->ssid);
+	return true;
+}
+
 static void setup_network_interface(struct l_dbus_interface *interface)
 {
-	l_dbus_interface_method(interface, "GetProperties", 0,
-				network_get_properties,
-				"a{sv}", "", "properties");
 	l_dbus_interface_method(interface, "Connect", 0,
 				network_connect,
 				"", "");
 
-	l_dbus_interface_signal(interface, "PropertyChanged", 0,
-				"sv", "name", "value");
-
-	l_dbus_interface_ro_property(interface, "Name", "s");
+	l_dbus_interface_property(interface, "Name", 0, "s",
+					network_property_get_name, NULL);
 }
 
 static void network_emit_added(struct network *network)
@@ -580,8 +586,7 @@ static void network_free(void *data)
 	l_settings_free(network->settings);
 
 	dbus = dbus_get_bus();
-	l_dbus_unregister_interface(dbus, network->object_path,
-					IWD_NETWORK_INTERFACE);
+	l_dbus_unregister_object(dbus, network->object_path);
 	network_emit_removed(network);
 
 	l_free(network->object_path);
@@ -673,41 +678,6 @@ static void device_emit_removed(struct netdev *netdev)
 
 	l_dbus_message_set_arguments(signal, "o", iwd_device_get_path(netdev));
 	l_dbus_send(dbus, signal);
-}
-
-static struct l_dbus_message *device_set_property(struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data)
-{
-	const char *property;
-	struct l_dbus_message_iter variant;
-
-	if (!l_dbus_message_get_arguments(message, "sv", &property, &variant))
-		return l_dbus_message_new_error(message,
-						"org.test.InvalidArguments",
-						"Invalid arguments");
-
-	return l_dbus_message_new_error(message, "org.test.InvalidArguments",
-					"Unknown Property %s", property);
-}
-
-static struct l_dbus_message *device_get_properties(struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data)
-{
-	struct netdev *netdev = user_data;
-	struct l_dbus_message *reply;
-	struct l_dbus_message_builder *builder;
-
-	reply = l_dbus_message_new_method_return(message);
-
-	builder = l_dbus_message_builder_new(reply);
-
-	__iwd_device_append_properties(netdev, builder);
-	l_dbus_message_builder_finalize(builder);
-	l_dbus_message_builder_destroy(builder);
-
-	return reply;
 }
 
 static void device_scan_triggered(int err, void *user_data)
@@ -839,14 +809,19 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 	return NULL;
 }
 
+static bool device_property_get_name(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	l_dbus_message_builder_append_basic(builder, 's', netdev->name);
+	return true;
+}
+
 static void setup_device_interface(struct l_dbus_interface *interface)
 {
-	l_dbus_interface_method(interface, "GetProperties", 0,
-				device_get_properties,
-				"a{sv}", "", "properties");
-	l_dbus_interface_method(interface, "SetProperty", 0,
-				device_set_property,
-				"", "sv", "name", "value");
 	l_dbus_interface_method(interface, "Scan", 0,
 				device_scan, "", "");
 	l_dbus_interface_method(interface, "GetNetworks", 0,
@@ -855,14 +830,13 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "Disconnect", 0,
 				device_disconnect, "", "");
 
-	l_dbus_interface_signal(interface, "PropertyChanged", 0,
-				"sv", "name", "value");
 	l_dbus_interface_signal(interface, "NetworkAdded", 0,
 				"oa{sv}", "path", "properties");
 	l_dbus_interface_signal(interface, "NetworkRemoved", 0,
 				"o", "path");
 
-	l_dbus_interface_ro_property(interface, "Name", "s");
+	l_dbus_interface_property(interface, "Name", 0, "s",
+					device_property_get_name, NULL);
 }
 
 static bool bss_match(const void *a, const void *b)
@@ -889,8 +863,7 @@ static void netdev_free(void *data)
 	__netdev_watch_call_removed(netdev);
 
 	dbus = dbus_get_bus();
-	l_dbus_unregister_interface(dbus, iwd_device_get_path(netdev),
-					IWD_DEVICE_INTERFACE);
+	l_dbus_unregister_object(dbus, iwd_device_get_path(netdev));
 
 	device_emit_removed(netdev);
 
@@ -1730,11 +1703,9 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 		l_debug("Added new Network \"%s\" security %s", network->ssid,
 			scan_ssid_security_to_str(ssid_security));
 
-		if (!l_dbus_register_interface(dbus_get_bus(),
+		if (!l_dbus_object_add_interface(dbus_get_bus(),
 					network->object_path,
-					IWD_NETWORK_INTERFACE,
-					setup_network_interface,
-					network, NULL))
+					IWD_NETWORK_INTERFACE, network))
 			l_info("Unable to register %s interface",
 				IWD_NETWORK_INTERFACE);
 		else
@@ -1913,11 +1884,9 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 
 		l_queue_push_head(wiphy->netdev_list, netdev);
 
-		if (!l_dbus_register_interface(dbus,
+		if (!l_dbus_object_add_interface(dbus,
 						iwd_device_get_path(netdev),
-						IWD_DEVICE_INTERFACE,
-						setup_device_interface,
-						netdev, NULL))
+						IWD_DEVICE_INTERFACE, netdev))
 			l_info("Unable to register %s interface",
 				IWD_DEVICE_INTERFACE);
 		else {
@@ -2357,6 +2326,21 @@ bool wiphy_init(struct l_genl_family *in)
 		l_queue_destroy(wiphy_list, NULL);
 	}
 
+	if (!l_dbus_register_interface(dbus_get_bus(),
+					IWD_NETWORK_INTERFACE,
+					setup_network_interface,
+					NULL, true))
+		return false;
+
+	if (!l_dbus_register_interface(dbus_get_bus(),
+					IWD_DEVICE_INTERFACE,
+					setup_device_interface,
+					NULL, true)) {
+		l_dbus_unregister_interface(dbus_get_bus(),
+						IWD_NETWORK_INTERFACE);
+		return false;
+	}
+
 	nl80211 = in;
 
 	if (!l_genl_family_register(nl80211, "config", wiphy_config_notify,
@@ -2406,6 +2390,9 @@ bool wiphy_exit(void)
 	wiphy_list = NULL;
 
 	nl80211 = NULL;
+
+	l_dbus_unregister_interface(dbus_get_bus(), IWD_DEVICE_INTERFACE);
+	l_dbus_unregister_interface(dbus_get_bus(), IWD_NETWORK_INTERFACE);
 
 	return true;
 }

@@ -30,34 +30,6 @@
 #include "src/wiphy.h"
 #include "src/agent.h"
 
-static struct l_dbus_message *manager_set_property(struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data)
-{
-	const char *property;
-	struct l_dbus_message_iter variant;
-
-	if (!l_dbus_message_get_arguments(message, "sv", &property, &variant))
-		return l_dbus_message_new_error(message,
-						"org.test.InvalidArguments",
-						"Invalid arguments");
-
-	return l_dbus_message_new_error(message, "org.test.InvalidArguments",
-					"Unknown Property %s", property);
-}
-
-static struct l_dbus_message *manager_get_properties(struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data)
-{
-	struct l_dbus_message *reply;
-
-	reply = l_dbus_message_new_method_return(message);
-	l_dbus_message_set_arguments(reply, "a{sv}", 0);
-
-	return reply;
-}
-
 static void append_device(struct netdev *netdev, void *user_data)
 {
 	struct l_dbus_message_builder *builder = user_data;
@@ -91,19 +63,10 @@ static struct l_dbus_message *manager_get_devices(struct l_dbus *dbus,
 
 static void setup_manager_interface(struct l_dbus_interface *interface)
 {
-	l_dbus_interface_method(interface, "GetProperties", 0,
-				manager_get_properties,
-				"a{sv}", "", "properties");
-	l_dbus_interface_method(interface, "SetProperty", 0,
-				manager_set_property,
-				"", "sv", "name", "value");
-
 	l_dbus_interface_method(interface, "GetDevices", 0,
 				manager_get_devices,
 				"a{oa{sv}}", "", "devices");
 
-	l_dbus_interface_signal(interface, "PropertyChanged", 0,
-				"sv", "name", "value");
 	l_dbus_interface_signal(interface, "DeviceAdded", 0,
 				"oa{sv}", "path", "properties");
 	l_dbus_interface_signal(interface, "DeviceRemoved", 0,
@@ -116,11 +79,19 @@ bool manager_init(struct l_dbus *dbus)
 {
 	agent_init();
 
-	if (!l_dbus_register_interface(dbus, IWD_MANAGER_PATH,
-					IWD_MANAGER_INTERFACE,
-					setup_manager_interface, NULL, NULL)) {
+	if (!l_dbus_register_interface(dbus, IWD_MANAGER_INTERFACE,
+						setup_manager_interface,
+						NULL, true)) {
 		l_info("Unable to register %s interface",
 				IWD_MANAGER_INTERFACE);
+		return false;
+	}
+
+	if (!l_dbus_object_add_interface(dbus, IWD_MANAGER_PATH,
+						IWD_MANAGER_INTERFACE, NULL)) {
+		l_info("Unable to register manager object on '%s'",
+				IWD_MANAGER_PATH);
+		l_dbus_unregister_interface(dbus, IWD_MANAGER_INTERFACE);
 		return false;
 	}
 
@@ -129,8 +100,9 @@ bool manager_init(struct l_dbus *dbus)
 
 bool manager_exit(struct l_dbus *dbus)
 {
-	l_dbus_unregister_interface(dbus, IWD_MANAGER_PATH,
-					IWD_MANAGER_INTERFACE);
+
+	l_dbus_unregister_object(dbus, IWD_MANAGER_PATH);
+	l_dbus_unregister_interface(dbus, IWD_MANAGER_INTERFACE);
 
 	return true;
 }

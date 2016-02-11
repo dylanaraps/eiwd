@@ -302,10 +302,9 @@ static void netdev_appeared(struct netdev *netdev, void *userdata)
 	wsc = l_new(struct wsc, 1);
 	wsc->netdev = netdev;
 
-	if (!l_dbus_register_interface(dbus, iwd_device_get_path(netdev),
-					IWD_WSC_INTERFACE,
-					setup_wsc_interface,
-					wsc, wsc_free)) {
+	if (!l_dbus_object_add_interface(dbus, iwd_device_get_path(netdev),
+						IWD_WSC_INTERFACE,
+						wsc)) {
 		wsc_free(wsc);
 		l_info("Unable to register %s interface", IWD_WSC_INTERFACE);
 	}
@@ -313,15 +312,15 @@ static void netdev_appeared(struct netdev *netdev, void *userdata)
 
 static void netdev_disappeared(struct netdev *netdev, void *userdata)
 {
-	struct l_dbus *dbus = dbus_get_bus();
-
-	if (!l_dbus_unregister_interface(dbus, iwd_device_get_path(netdev),
-						IWD_WSC_INTERFACE))
-		l_info("Unable to unregister %s interface", IWD_WSC_INTERFACE);
 }
 
 bool wsc_init(struct l_genl_family *in)
 {
+	if (!l_dbus_register_interface(dbus_get_bus(), IWD_WSC_INTERFACE,
+					setup_wsc_interface,
+					wsc_free, false))
+		return false;
+
 	netdev_watch = netdev_watch_add(netdev_appeared, netdev_disappeared,
 						NULL, NULL);
 	if (!netdev_watch)
@@ -337,6 +336,8 @@ bool wsc_exit()
 
 	if (!nl80211)
 		return false;
+
+	l_dbus_unregister_interface(dbus_get_bus(), IWD_WSC_INTERFACE);
 
 	netdev_watch_remove(netdev_watch);
 	nl80211 = 0;
