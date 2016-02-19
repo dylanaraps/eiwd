@@ -166,25 +166,6 @@ static bool __iwd_network_append_properties(const struct network *network,
 	return true;
 }
 
-static struct l_dbus_message *network_get_properties(struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data)
-{
-	struct network *network = user_data;
-	struct l_dbus_message *reply;
-	struct l_dbus_message_builder *builder;
-
-	reply = l_dbus_message_new_method_return(message);
-
-	builder = l_dbus_message_builder_new(reply);
-
-	__iwd_network_append_properties(network, builder);
-	l_dbus_message_builder_finalize(builder);
-	l_dbus_message_builder_destroy(builder);
-
-	return reply;
-}
-
 static const char *netdev_state_to_string(enum netdev_state state)
 {
 	switch (state) {
