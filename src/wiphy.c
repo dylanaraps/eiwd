@@ -157,10 +157,13 @@ static const char *iwd_network_get_path(struct netdev *netdev,
 static bool __iwd_network_append_properties(const struct network *network,
 					struct l_dbus_message_builder *builder)
 {
-	l_dbus_message_builder_enter_array(builder, "{sv}");
+	bool connected;
 
+	l_dbus_message_builder_enter_array(builder, "{sv}");
 	dbus_dict_append_string(builder, "Name", network->ssid);
 
+	connected = network->netdev->connected_network == network;
+	dbus_dict_append_bool(builder, "Connected", connected);
 	l_dbus_message_builder_leave_array(builder);
 
 	return true;
@@ -491,6 +494,19 @@ static bool network_property_get_name(struct l_dbus *dbus,
 	return true;
 }
 
+static bool network_property_is_connected(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct network *network = user_data;
+	bool connected;
+
+	connected = network->netdev->connected_network == network;
+	l_dbus_message_builder_append_basic(builder, 'b', &connected);
+	return true;
+}
+
 static void setup_network_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Connect", 0,
@@ -499,6 +515,10 @@ static void setup_network_interface(struct l_dbus_interface *interface)
 
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					network_property_get_name, NULL);
+
+	l_dbus_interface_property(interface, "Connected", 0, "b",
+					network_property_is_connected,
+					NULL);
 }
 
 static void network_emit_added(struct network *network)
