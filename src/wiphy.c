@@ -612,6 +612,10 @@ bool __iwd_device_append_properties(struct netdev *netdev,
 
 	dbus_dict_append_string(builder, "Name", netdev->name);
 
+	if (netdev->connected_network)
+		dbus_dict_append_object(builder, "ConnectedNetwork",
+			netdev->connected_network->object_path);
+
 	l_dbus_message_builder_leave_array(builder);
 
 	return true;
@@ -821,6 +825,22 @@ static bool device_property_get_name(struct l_dbus *dbus,
 	return true;
 }
 
+static bool device_property_get_connected_network(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	if (!netdev->connected_network)
+		return false;
+
+	l_dbus_message_builder_append_basic(builder, 'o',
+		netdev->connected_network->object_path);
+
+	return true;
+}
+
 static void setup_device_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Scan", 0,
@@ -838,6 +858,9 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					device_property_get_name, NULL);
+	l_dbus_interface_property(interface, "ConnectedNetwork", 0, "o",
+					device_property_get_connected_network,
+					NULL);
 }
 
 static bool bss_match(const void *a, const void *b)
