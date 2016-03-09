@@ -59,6 +59,17 @@ void dbus_dict_append_bool(struct l_dbus_message_builder *builder,
 	l_dbus_message_builder_leave_dict(builder);
 }
 
+void dbus_dict_append_object(struct l_dbus_message_builder *builder,
+				const char *key, const char *object_path)
+{
+	l_dbus_message_builder_enter_dict(builder, "sv");
+	l_dbus_message_builder_append_basic(builder, 's', key);
+	l_dbus_message_builder_enter_variant(builder, "o");
+	l_dbus_message_builder_append_basic(builder, 'o', object_path);
+	l_dbus_message_builder_leave_variant(builder);
+	l_dbus_message_builder_leave_dict(builder);
+}
+
 void dbus_dict_append_bytearray(struct l_dbus_message_builder *builder,
 				const char *key, const uint8_t *arrayval,
 				const int len)
