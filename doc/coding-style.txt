@@ -11,11 +11,10 @@ can get a passport for your patch ASAP.
 First of all, the Wireless daemon coding style must follow every rule for
 Linux kernel (http://www.kernel.org/doc/Documentation/CodingStyle).  There
 also exists a tool named checkpatch.pl to help you check the compliance
-with it. Just type "checkpatch.pl --no-tree patch_name" to check your patch.
+with it. Just type "checkpatch.pl --no-tree --no-signoff patch_name" to
+check your patch.
 
-In theory, you need to clean up all the warnings and errors except this
-one: "ERROR: Missing Signed-off-by: line(s)".  The Wirless daemon does not
-used Signed-Off lines, so including them is actually an error.  In certain
+In theory, you need to clean up all the warnings and errors.  In certain
 circumstances one can ignore the 80 character per line limit.  This is
 generally only allowed if the alternative would make the code even less
 readable.
