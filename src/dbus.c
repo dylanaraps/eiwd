@@ -170,31 +170,18 @@ void dbus_pending_reply(struct l_dbus_message **msg,
 	*msg = NULL;
 }
 
-static void request_name_callback(struct l_dbus_message *message,
-					void *user_data)
+static void request_name_callback(struct l_dbus *dbus, bool success,
+					bool queued, void *user_data)
 {
-	const char *error, *text;
-	uint32_t result;
-
-	if (l_dbus_message_get_error(message, &error, &text)) {
-		l_error("error=%s", error);
-		l_error("message=%s", text);
-		return;
-	}
-
-	if (!l_dbus_message_get_arguments(message, "u", &result))
-		return;
-}
-
-static void request_name_setup(struct l_dbus_message *message, void *user_data)
-{
-	const char *name = "net.connman.iwd";
-
-	l_dbus_message_set_arguments(message, "su", name, 0);
+	if (!success)
+		l_error("Name request failed");
 }
 
 static void ready_callback(void *user_data)
 {
+	l_dbus_name_acquire(g_dbus, "net.connman.iwd", false, false, true,
+				request_name_callback, NULL);
+
 	manager_init(g_dbus);
 }
 
@@ -240,12 +227,6 @@ bool dbus_init(bool enable_debug, bool use_kdbus)
 
 	l_dbus_set_ready_handler(g_dbus, ready_callback, g_dbus, NULL);
 	l_dbus_set_disconnect_handler(g_dbus, disconnect_callback, NULL, NULL);
-
-	l_dbus_method_call(g_dbus, "org.freedesktop.DBus",
-				"/org/freedesktop/DBus",
-				"org.freedesktop.DBus", "RequestName",
-				request_name_setup,
-				request_name_callback, NULL, NULL);
 
 	return true;
 }
