@@ -33,7 +33,6 @@
 
 #include "src/netdev.h"
 #include "src/wiphy.h"
-#include "src/kdbus.h"
 #include "src/dbus.h"
 #include "src/agent.h"
 #include "src/network.h"
@@ -165,36 +164,9 @@ int main(int argc, char *argv[])
 
 	l_info("Wireless daemon version %s", VERSION);
 
-	if (enable_kdbus) {
-		char *bus_name;
-		bool result;
-
-		if (!kdbus_create_bus()) {
-			exit_status = EXIT_FAILURE;
-			goto done;
-		}
-
-		bus_name = kdbus_lookup_bus();
-		if (!bus_name) {
-			exit_status = EXIT_FAILURE;
-			goto fail_dbus;
-		}
-
-		l_debug("Bus location: %s", bus_name);
-
-		result = kdbus_open_bus(bus_name, "net.connman.iwd", "iwd");
-
-		l_free(bus_name);
-
-		if (!result) {
-			exit_status = EXIT_FAILURE;
-			goto fail_dbus;
-		}
-	}
-
-	if (!dbus_init(enable_dbus_debug)) {
+	if (!dbus_init(enable_dbus_debug, enable_kdbus)) {
 		exit_status = EXIT_FAILURE;
-		goto fail_dbus;
+		goto done;
 	}
 
 	genl = l_genl_new_default();
@@ -243,10 +215,6 @@ fail_netdev:
 
 fail_genl:
 	dbus_exit();
-
-fail_dbus:
-	if (enable_kdbus)
-		kdbus_destroy_bus();
 
 done:
 	l_signal_remove(signal);

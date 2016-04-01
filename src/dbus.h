@@ -61,5 +61,5 @@ struct l_dbus_message *dbus_error_no_agent(struct l_dbus_message *msg);
 struct l_dbus_message *dbus_error_not_connected(struct l_dbus_message *msg);
 struct l_dbus_message *dbus_error_not_implemented(struct l_dbus_message *msg);
 
-bool dbus_init(bool enable_debug);
+bool dbus_init(bool enable_debug, bool use_kdbus);
 bool dbus_exit(void);

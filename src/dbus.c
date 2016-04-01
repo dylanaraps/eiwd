@@ -24,11 +24,16 @@
 #include <config.h>
 #endif
 
+#include <unistd.h>
+#include <stdio.h>
+
 #include <ell/ell.h>
+#include <ell/dbus-private.h>
 #include "src/dbus.h"
 #include "src/manager.h"
 
 struct l_dbus *g_dbus = 0;
+static int kdbus_fd = -1;
 
 static void do_debug(const char *str, void *user_data)
 {
@@ -204,9 +209,31 @@ struct l_dbus *dbus_get_bus(void)
 	return g_dbus;
 }
 
-bool dbus_init(bool enable_debug)
+bool dbus_init(bool enable_debug, bool use_kdbus)
 {
-	g_dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
+	if (!use_kdbus)
+		g_dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
+	else {
+		char bus_name[32], bus_address[64];
+
+		snprintf(bus_name, sizeof(bus_name), "%u-iwd", getuid());
+
+		kdbus_fd = _dbus_kernel_create_bus(bus_name);
+		if (kdbus_fd < 0)
+			return false;
+
+		snprintf(bus_address, sizeof(bus_address),
+				"kernel:path=/dev/kdbus/%s/bus", bus_name);
+
+		l_debug("Bus location: %s", bus_address);
+
+		g_dbus = l_dbus_new(bus_address);
+
+		if (!g_dbus) {
+			close(kdbus_fd);
+			return false;
+		}
+	}
 
 	if (enable_debug)
 		l_dbus_set_debug(g_dbus, do_debug, "[DBUS] ", NULL);
@@ -228,6 +255,9 @@ bool dbus_exit(void)
 	manager_exit(g_dbus);
 	l_dbus_destroy(g_dbus);
 	g_dbus = NULL;
+
+	if (kdbus_fd >= 0)
+		close(kdbus_fd);
 
 	return true;
 }
