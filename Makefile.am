@@ -5,7 +5,7 @@ ACLOCAL_AMFLAGS = -I build-aux
 
 noinst_LTLIBRARIES = ell/libell-internal.la
 
-ell_sources = ell/ell.h ell/private.h ell/missing.h \
+ell_sources = ell/ell.h ell/private.h ell/missing.h linux/kdbus.h \
 			ell/util.h ell/util.c \
 			ell/test.h ell/test.c \
 			ell/queue.h ell/queue.c \
@@ -31,6 +31,7 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/dbus-util.c \
 			ell/dbus-message.c \
 			ell/dbus-service.h ell/dbus-service.c \
+			ell/dbus-filter.c \
 			ell/gvariant-private.h \
 			ell/gvariant-util.c \
 			ell/siphash-private.h \
