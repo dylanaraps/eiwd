@@ -52,8 +52,7 @@ ell_libell_internal_la_SOURCES = $(ell_sources)
 
 bin_PROGRAMS = src/iwd client/iwctl monitor/iwmon
 
-src_iwd_SOURCES = src/main.c linux/nl80211.h linux/kdbus.h \
-					src/kdbus.h src/kdbus.c \
+src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/netdev.h src/netdev.c \
 					src/wiphy.h src/wiphy.c \
 					src/ie.h src/ie.c \
@@ -74,8 +73,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h linux/kdbus.h \
 					src/iwd.h
 src_iwd_LDADD = ell/libell-internal.la
 
-client_iwctl_SOURCES = client/main.c linux/kdbus.h \
-					src/kdbus.h src/kdbus.c
+client_iwctl_SOURCES = client/main.c src/kdbus.h src/kdbus.c
 client_iwctl_LDADD = ell/libell-internal.la
 
 monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
