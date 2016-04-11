@@ -1051,6 +1051,10 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 			sc->state = SCAN_STATE_PASSIVE;
 
 		break;
+
+	case NL80211_CMD_SCAN_ABORTED:
+		sc->state = SCAN_STATE_NOT_RUNNING;
+		break;
 	}
 }
 
