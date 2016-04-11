@@ -241,7 +241,8 @@ static void netdev_lost_beacon(struct netdev *netdev)
 		dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_failed(netdev->connect_pending));
 
-	netdev_disassociated(netdev);
+	if (netdev->connected_network)
+		netdev_disassociated(netdev);
 }
 
 static void genl_connect_cb(struct l_genl_msg *msg, void *user_data)
