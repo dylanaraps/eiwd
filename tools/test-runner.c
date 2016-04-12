@@ -57,13 +57,13 @@ static const char *own_binary;
 static char **test_argv;
 static int test_argc;
 
-static bool run_auto = false;
-static bool start_dbus = false;
-static int num_devs = 0;
-static const char *qemu_binary = NULL;
-static const char *kernel_image = NULL;
+static bool run_auto;
+static bool start_dbus;
+static int num_devs;
+static const char *qemu_binary;
+static const char *kernel_image;
 
-static const char *qemu_table[] = {
+static const char * const qemu_table[] = {
 	"qemu-system-x86_64",
 	"qemu-system-i386",
 	"/usr/bin/qemu-system-x86_64",
@@ -71,7 +71,7 @@ static const char *qemu_table[] = {
 	NULL
 };
 
-static const char *find_qemu(void)
+static const char * const find_qemu(void)
 {
 	int i;
 
@@ -85,7 +85,7 @@ static const char *find_qemu(void)
 	return NULL;
 }
 
-static const char *kernel_table[] = {
+static const char * const kernel_table[] = {
 	"bzImage",
 	"arch/x86/boot/bzImage",
 	"vmlinux",
@@ -93,7 +93,7 @@ static const char *kernel_table[] = {
 	NULL
 };
 
-static const char *find_kernel(void)
+static const char * const find_kernel(void)
 {
 	int i;
 
@@ -128,14 +128,16 @@ static const struct {
 	{ "proc",     "/proc",    NULL,        MS_NOSUID|MS_NOEXEC|MS_NODEV },
 	{ "devtmpfs", "/dev",     "mode=0755", MS_NOSUID|MS_STRICTATIME },
 	{ "devpts",   "/dev/pts", "mode=0620", MS_NOSUID|MS_NOEXEC },
-	{ "tmpfs",    "/dev/shm", "mode=1777", MS_NOSUID|MS_NODEV|MS_STRICTATIME },
-	{ "tmpfs",    "/run",     "mode=0755", MS_NOSUID|MS_NODEV|MS_STRICTATIME },
+	{ "tmpfs",    "/dev/shm", "mode=1777",
+					MS_NOSUID|MS_NODEV|MS_STRICTATIME },
+	{ "tmpfs",    "/run",     "mode=0755",
+					MS_NOSUID|MS_NODEV|MS_STRICTATIME },
 	{ "tmpfs",    "/tmp",              NULL, 0 },
 	{ "debugfs",  "/sys/kernel/debug", NULL, 0 },
 	{ }
 };
 
-static const char *config_table[] = {
+static const char * const config_table[] = {
 	"/var/lib/bluetooth",
 	"/etc/bluetooth",
 	"/etc/dbus-1",
@@ -190,7 +192,7 @@ static void prepare_sandbox(void)
 	}
 }
 
-static char *const qemu_argv[] = {
+static const char * const qemu_argv[] = {
 	"",
 	"-nodefaults",
 	"-nodefconfig",
@@ -213,7 +215,7 @@ static char *const qemu_argv[] = {
 	NULL
 };
 
-static char *const qemu_envp[] = {
+static const char *qemu_envp[] = {
 	"HOME=/",
 	NULL
 };
@@ -251,6 +253,7 @@ static void start_qemu(void)
 
 	for (i = 1; i < test_argc; i++) {
 		int len = sizeof(testargs) - pos;
+
 		pos += snprintf(testargs + pos, len, " %s", test_argv[i]);
 	}
 
@@ -397,20 +400,21 @@ static void create_dbus_system_conf(void)
 	if (!fp)
 		return;
 
-	fputs("<!DOCTYPE busconfig PUBLIC "
-		"\"-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN\" "
-		"\"http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd\">\n", fp);
+	fputs("<!DOCTYPE busconfig PUBLIC ", fp);
+	fputs("\"-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN\" ", fp);
+	fputs("\"http://www.freedesktop.org/standards/dbus/1.0/", fp);
+	fputs("busconfig.dtd\">\n", fp);
 	fputs("<busconfig>\n", fp);
 	fputs("<type>system</type>\n", fp);
 	fputs("<listen>unix:path=/run/dbus/system_bus_socket</listen>\n", fp);
 	fputs("<policy context=\"default\">\n", fp);
 	fputs("<allow user=\"*\"/>\n", fp);
 	fputs("<allow own=\"*\"/>\n", fp);
-	fputs("<allow send_type=\"method_call\"/>\n",fp);
+	fputs("<allow send_type=\"method_call\"/>\n", fp);
 	fputs("<allow send_type=\"signal\"/>\n", fp);
 	fputs("<allow send_type=\"method_return\"/>\n", fp);
 	fputs("<allow send_type=\"error\"/>\n", fp);
-	fputs("<allow receive_type=\"method_call\"/>\n",fp);
+	fputs("<allow receive_type=\"method_call\"/>\n", fp);
 	fputs("<allow receive_type=\"signal\"/>\n", fp);
 	fputs("<allow receive_type=\"method_return\"/>\n", fp);
 	fputs("<allow receive_type=\"error\"/>\n", fp);
@@ -463,7 +467,7 @@ static pid_t start_dbus_daemon(void)
 	return pid;
 }
 
-static const char *daemon_table[] = {
+static const char * const daemon_table[] = {
 	"bluetoothd",
 	"src/bluetoothd",
 	"/usr/sbin/bluetoothd",
@@ -503,7 +507,8 @@ static pid_t start_bluetooth_daemon(const char *home)
 	argv[1] = "--nodetach";
 	argv[2] = NULL;
 
-	envp[0] = "DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket";
+	envp[0] =
+		"DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket";
 	envp[1] = NULL;
 
 	printf("Starting Bluetooth daemon\n");
@@ -524,7 +529,7 @@ static pid_t start_bluetooth_daemon(const char *home)
 	return pid;
 }
 
-static const char *test_table[] = {
+static const char * const test_table[] = {
 	"mgmt-tester",
 	"smp-tester",
 	"l2cap-tester",
@@ -731,7 +736,7 @@ static void run_tests(void)
 	ptr = strstr(cmdline, "TESTAUTO=1");
 	if (ptr) {
 		printf("Automatic test execution requested\n");
-		run_auto= true;
+		run_auto = true;
 	}
 
 	ptr = strstr(cmdline, "TESTDEVS=1");
