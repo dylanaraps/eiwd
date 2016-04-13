@@ -71,8 +71,9 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/wsc.h src/wsc.c \
 					src/eap.h src/eap.c \
 					src/eap-tls.c src/eap-ttls.c \
+					src/backtrace.h src/backtrace.c \
 					src/iwd.h
-src_iwd_LDADD = ell/libell-internal.la
+src_iwd_LDADD = ell/libell-internal.la -ldl
 
 client_iwctl_SOURCES = client/main.c src/kdbus.h src/kdbus.c
 client_iwctl_LDADD = ell/libell-internal.la

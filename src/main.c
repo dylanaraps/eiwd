@@ -40,6 +40,8 @@
 #include "src/scan.h"
 #include "src/wsc.h"
 
+#include "src/backtrace.h"
+
 static struct l_timeout *timeout = NULL;
 
 static void main_loop_quit(struct l_timeout *timeout, void *user_data)
@@ -161,6 +163,10 @@ int main(int argc, char *argv[])
 
 	l_log_set_stderr();
 	l_debug_enable("*");
+
+#ifdef __GLIBC__
+	__iwd_backtrace_init(argv[0]);
+#endif
 
 	l_info("Wireless daemon version %s", VERSION);
 
