@@ -487,7 +487,11 @@ bool scan_periodic_stop(uint32_t ifindex)
 
 	l_debug("Stopping periodic scan for ifindex: %u", ifindex);
 
-	l_timeout_remove(sc->sp.timeout);
+	if (sc->sp.timeout) {
+		l_timeout_remove(sc->sp.timeout);
+		sc->sp.timeout = NULL;
+	}
+
 	sc->sp.interval = 0;
 	sc->sp.callback = NULL;
 	sc->sp.userdata = NULL;
