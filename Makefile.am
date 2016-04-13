@@ -5,7 +5,7 @@ ACLOCAL_AMFLAGS = -I build-aux
 
 noinst_LTLIBRARIES = ell/libell-internal.la
 
-ell_sources = ell/ell.h ell/private.h ell/missing.h linux/kdbus.h \
+ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/util.h ell/util.c \
 			ell/test.h ell/test.c \
 			ell/queue.h ell/queue.c \
@@ -49,7 +49,9 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h linux/kdbus.h \
 			ell/uuid.h ell/uuid.c \
 			ell/key.h ell/key.c
 
-ell_libell_internal_la_SOURCES = $(ell_sources)
+ell_linux_headers = linux/kdbus.h
+
+ell_libell_internal_la_SOURCES = $(ell_sources) $(ell_linux_headers)
 
 bin_PROGRAMS = src/iwd client/iwctl monitor/iwmon
 
@@ -197,6 +199,12 @@ ell/internal: Makefile
 	$(AM_V_GEN)for f in $(ell_sources) ; do \
 		if [ ! -f $$f ] ; then \
 			$(LN_S) -t ell -f $(abs_srcdir)/../ell/$$f ; \
+		fi \
+	done > $@
+	$(AM_V_at)$(MKDIR_P) linux
+	$(AM_V_GEN)for f in $(ell_linux_headers) ; do \
+		if [ ! -f $$f ] ; then \
+			$(LN_S) -t linux -f $(abs_srcdir)/../ell/$$f ; \
 		fi \
 	done > $@
 
