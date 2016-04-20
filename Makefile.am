@@ -95,8 +95,10 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 monitor_iwmon_LDADD = ell/libell-internal.la
 
 noinst_PROGRAMS = tools/hwsim
+noinst_PROGRAMS += tools/test-runner
 
 tools_hwsim_LDADD = ell/libell-internal.la
+tools_test_runner_LDADD = ell/libell-internal.la
 
 unit_tests = unit/test-cmac-aes \
 		unit/test-hmac-md5 unit/test-hmac-sha1 unit/test-hmac-sha256 \
