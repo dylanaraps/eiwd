@@ -66,7 +66,7 @@ static const char * const qemu_table[] = {
 	NULL
 };
 
-static const char * const find_qemu(void)
+static const char *find_qemu(void)
 {
 	int i;
 
@@ -88,7 +88,7 @@ static const char * const kernel_table[] = {
 	NULL
 };
 
-static const char * const find_kernel(void)
+static const char *find_kernel(void)
 {
 	int i;
 
@@ -208,7 +208,7 @@ static const char * const qemu_argv[] = {
 	NULL
 };
 
-static const char *qemu_envp[] = {
+static char *const qemu_envp[] = {
 	"HOME=/",
 	NULL
 };
