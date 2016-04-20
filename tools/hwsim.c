@@ -68,11 +68,11 @@ enum {
 
 static struct l_genl_family *hwsim;
 
-static bool keep_radios = false;
-static bool create_action = false;
-static bool list_action = false;
-static const char *list_option = NULL;
-static const char *destroy_action = NULL;
+static bool keep_radios;
+static bool create_action;
+static bool list_action;
+static const char *list_option;
+static const char *destroy_action;
 
 static void do_debug(const char *str, void *user_data)
 {
@@ -92,6 +92,7 @@ static void create_callback(struct l_genl_msg *msg, void *user_data)
 	 */
 	if (!l_genl_attr_init(&attr, msg)) {
 		int err = l_genl_msg_get_error(msg);
+
 		if (err < 0) {
 			l_warn("Failed to initialize create return attributes"
 				" [%d/%s]", -err, strerror(-err));
@@ -118,6 +119,7 @@ static void destroy_callback(struct l_genl_msg *msg, void *user_data)
 
 	if (!l_genl_attr_init(&attr, msg)) {
 		int err = l_genl_msg_get_error(msg);
+
 		if (err < 0) {
 			l_warn("Failed to destroy radio [%d/%s]",
 				-err, strerror(-err));
@@ -128,8 +130,8 @@ static void destroy_callback(struct l_genl_msg *msg, void *user_data)
 		goto done;
 	}
 
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-	}
+	while (l_genl_attr_next(&attr, &type, &len, &data))
+	;
 
 done:
 	l_main_quit();
@@ -149,9 +151,8 @@ static void hwsim_config(struct l_genl_msg *msg, void *user_data)
 	if (!l_genl_attr_init(&attr, msg))
 		return;
 
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+	while (l_genl_attr_next(&attr, &type, &len, &data))
 		l_debug("\tattr type %d len %d", type, len);
-	}
 }
 
 static void list_callback_done(void *user_data)
@@ -171,6 +172,7 @@ static void list_callback(struct l_genl_msg *msg, void *user_data)
 
 	if (!l_genl_attr_init(&attr, msg)) {
 		int err = l_genl_msg_get_error(msg);
+
 		if (err < 0) {
 			l_warn("Failed to list radio [%d/%s]",
 				-err, strerror(-err));
@@ -266,10 +268,11 @@ static void hwsim_ready(void *user_data)
 		l_genl_family_send(hwsim, msg, destroy_callback, NULL, NULL);
 	} else if (list_action) {
 		msg = l_genl_msg_new_sized(HWSIM_CMD_GET_RADIO,
-					list_option ? 8: 4);
+					list_option ? 8 : 4);
 
 		if (list_option) {
 			uint32_t id = atoi(list_option);
+
 			l_genl_msg_append_attr(msg, HWSIM_ATTR_RADIO_ID,
 					4, &id);
 			l_genl_family_send(hwsim, msg, list_callback,
