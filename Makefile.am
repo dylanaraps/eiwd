@@ -32,6 +32,7 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/dbus-message.c \
 			ell/dbus-service.h ell/dbus-service.c \
 			ell/dbus-filter.c \
+			ell/dbus-name-cache.c \
 			ell/gvariant-private.h \
 			ell/gvariant-util.c \
 			ell/siphash-private.h \
