@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 from gi.repository import GLib
 
@@ -27,7 +27,7 @@ class Agent(dbus.service.Object):
         print("RequestPassphrase (%s)" % (path))
 
         print("Service credentials requested, type cancel to cancel")
-        passphrase = raw_input('Answer: ')
+        passphrase = input('Answer: ')
 
         if not passphrase or passphrase == 'cancel':
             raise Canceled("canceled")
