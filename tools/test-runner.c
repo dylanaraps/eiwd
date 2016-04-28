@@ -42,6 +42,7 @@
 #include <sys/mount.h>
 #include <sys/param.h>
 #include <sys/reboot.h>
+#include <ell/ell.h>
 
 #ifndef WAIT_ANY
 #define WAIT_ANY (-1)
@@ -53,8 +54,9 @@ static const char *own_binary;
 static char **test_argv;
 static int test_argc;
 
-static bool run_auto;
 static bool start_dbus;
+static bool run_auto;
+static bool verbose_out;
 static const char *qemu_binary;
 static const char *kernel_image;
 
@@ -274,6 +276,73 @@ static void start_qemu(void)
 	argv[pos] = NULL;
 
 	execve(argv[0], argv, qemu_envp);
+}
+
+static void set_output_visibility(void)
+{
+	int fd;
+
+	if (verbose_out)
+		return;
+
+	fd = open("/dev/null", O_WRONLY);
+
+	dup2(fd, 1);
+	dup2(fd, 2);
+
+	close(fd);
+}
+
+static pid_t execute_program(char *argv[], bool wait)
+{
+	int status;
+	pid_t pid, child_pid;
+
+	child_pid = fork();
+	if (child_pid < 0) {
+		l_error("Failed to fork new process");
+		return -1;
+	}
+
+	if (child_pid == 0) {
+		set_output_visibility();
+
+		execvp(argv[0], argv);
+
+		l_error("Failed to call execvp: %s\n", strerror(errno));
+
+		exit(EXIT_FAILURE);
+	}
+
+	if (!wait)
+		goto exit;
+
+	do {
+		pid = waitpid(child_pid, &status, 0);
+	} while (!WIFEXITED(status) && pid == child_pid);
+
+	if (WEXITSTATUS(status) != EXIT_SUCCESS)
+		return -1;
+
+exit:
+	return child_pid;
+}
+
+static bool wait_for_socket(const char *socket, useconds_t wait_time)
+{
+	int i = 0;
+
+	do {
+		struct stat st;
+
+		if (!stat(socket, &st))
+			return true;
+
+		usleep(wait_time);
+	} while (i++ < 20);
+
+	l_error("Error: cannot find socket: %s\n", socket);
+	return false;
 }
 
 static void create_dbus_system_conf(void)
