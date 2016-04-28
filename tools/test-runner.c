@@ -48,7 +48,9 @@
 #define WAIT_ANY (-1)
 #endif
 
-#define CMDLINE_MAX 2048
+#define CMDLINE_MAX			2048
+
+#define BIN_IW				"/usr/sbin/iw"
 
 static const char *own_binary;
 static char **test_argv;
@@ -418,6 +420,84 @@ static pid_t start_dbus_daemon(void)
 	}
 
 	return pid;
+}
+
+static bool set_interface_state(const char *if_name, bool isUp)
+{
+	char *state, *argv[4];
+	pid_t pid;
+
+	if (isUp)
+		state = "up";
+	else
+		state = "down";
+
+	argv[0] = "/usr/sbin/ifconfig";
+	argv[1] = (char *) if_name;
+	argv[2] = state;
+	argv[3] = NULL;
+
+	pid = execute_program(argv, true);
+	if (pid < 0)
+		return false;
+
+	return true;
+}
+
+static bool create_interface(const char *if_name, const char *phy_name)
+{
+	char *argv[9];
+	pid_t pid;
+
+	argv[0] = BIN_IW;
+	argv[1] = "phy";
+	argv[2] = (char *) phy_name;
+	argv[3] = "interface";
+	argv[4] = "add";
+	argv[5] = (char *) if_name;
+	argv[6] = "type";
+	argv[7] = "managed";
+	argv[8] = NULL;
+
+	pid = execute_program(argv, true);
+	if (pid < 0)
+		return false;
+
+	return true;
+}
+
+static bool delete_interface(const char *if_name)
+{
+	char *argv[5];
+	pid_t pid;
+
+	argv[0] = BIN_IW;
+	argv[1] = "dev";
+	argv[2] = (char *) if_name;
+	argv[3] = "del";
+	argv[4] = NULL;
+
+	pid = execute_program(argv, true);
+	if (pid < 0)
+		return false;
+
+	return true;
+}
+
+static bool list_interfaces(void)
+{
+	char *argv[3];
+	pid_t pid;
+
+	argv[0] = "ifconfig";
+	argv[1] = "-a";
+	argv[2] = NULL;
+
+	pid = execute_program(argv, true);
+	if (pid < 0)
+		return false;
+
+	return true;
 }
 
 static const char * const daemon_table[] = {
