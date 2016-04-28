@@ -1366,12 +1366,14 @@ exit:
 
 static void run_tests(void)
 {
-	char cmdline[CMDLINE_MAX], *ptr, *cmds, *home = NULL;
+	char cmdline[CMDLINE_MAX], *ptr, *cmds;
 	FILE *fp;
+
+	l_log_set_stderr();
 
 	fp = fopen("/proc/cmdline", "re");
 	if (!fp) {
-		fprintf(stderr, "Failed to open kernel command line\n");
+		l_error("Failed to open kernel command line\n");
 		return;
 	}
 
@@ -1379,20 +1381,20 @@ static void run_tests(void)
 	fclose(fp);
 
 	if (!ptr) {
-		fprintf(stderr, "Failed to read kernel command line\n");
+		l_error("Failed to read kernel command line\n");
 		return;
 	}
 
 	ptr = strstr(cmdline, "TESTARGS=");
 	if (!ptr) {
-		fprintf(stderr, "No test command section found\n");
+		l_error("No test command section found\n");
 		return;
 	}
 
 	cmds = ptr + 10;
 	ptr = strchr(cmds, '\'');
 	if (!ptr) {
-		fprintf(stderr, "Malformed test command section\n");
+		l_error("Malformed test command section\n");
 		return;
 	}
 
@@ -1400,20 +1402,20 @@ static void run_tests(void)
 
 	ptr = strstr(cmdline, "TESTAUTO=1");
 	if (ptr) {
-		printf("Automatic test execution requested\n");
+		l_info("Automatic test execution requested\n");
 		run_auto = true;
 	}
 
-	ptr = strstr(cmdline, "TESTDBUS=1");
+	ptr = strstr(cmdline, "TESTVERBOUT=1");
 	if (ptr) {
-		printf("D-Bus daemon requested\n");
-		start_dbus = true;
+		l_info("Enable verbose output\n");
+		verbose_out = true;
 	}
 
 	ptr = strstr(cmdline, "TESTHOME=");
 	if (ptr) {
-		home = ptr + 4;
-		ptr = strpbrk(home + 9, " \r\n");
+		exec_home = ptr + 4;
+		ptr = strpbrk(exec_home + 9, " \r\n");
 		if (ptr)
 			*ptr = '\0';
 	}
@@ -1423,25 +1425,23 @@ static void run_tests(void)
 
 static void usage(void)
 {
-	printf("test-runner - Automated test execution utility\n"
+	printf("testrunner - Automated test execution utility\n"
 		"Usage:\n");
 	printf("\ttest-runner [options] [--] <command> [args]\n");
 	printf("Options:\n"
 		"\t-a, --auto             Find tests and run them\n"
-		"\t-d, --dbus             Start D-Bus daemon\n"
 		"\t-q, --qemu <path>      QEMU binary\n"
 		"\t-k, --kernel <image>   Kernel image (bzImage)\n"
+		"\t-v, --verbose          Enable verbose output\n"
 		"\t-h, --help             Show help options\n");
 }
 
 static const struct option main_options[] = {
 	{ "all",     no_argument,       NULL, 'a' },
 	{ "auto",    no_argument,       NULL, 'a' },
-	{ "unix",    no_argument,       NULL, 'u' },
-	{ "dbus",    no_argument,       NULL, 'd' },
 	{ "qemu",    required_argument, NULL, 'q' },
 	{ "kernel",  required_argument, NULL, 'k' },
-	{ "version", no_argument,       NULL, 'v' },
+	{ "verbose", no_argument,       NULL, 'v' },
 	{ "help",    no_argument,       NULL, 'h' },
 	{ }
 };
@@ -1450,9 +1450,12 @@ int main(int argc, char *argv[])
 {
 	if (getpid() == 1 && getppid() == 0) {
 		prepare_sandbox();
+
 		run_tests();
 
 		sync();
+		printf("Done running test. Rebooting...");
+
 		reboot(RB_AUTOBOOT);
 		return EXIT_SUCCESS;
 	}
@@ -1460,17 +1463,11 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "audq:k:vh", main_options, NULL);
+		opt = getopt_long(argc, argv, "aq:k:t:vh", main_options, NULL);
 		if (opt < 0)
 			break;
 
 		switch (opt) {
-		case 'a':
-			run_auto = true;
-			break;
-		case 'd':
-			start_dbus = true;
-			break;
 		case 'q':
 			qemu_binary = optarg;
 			break;
@@ -1478,8 +1475,8 @@ int main(int argc, char *argv[])
 			kernel_image = optarg;
 			break;
 		case 'v':
-			printf("%s\n", VERSION);
-			return EXIT_SUCCESS;
+			verbose_out = true;
+			break;
 		case 'h':
 			usage();
 			return EXIT_SUCCESS;
