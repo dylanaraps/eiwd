@@ -1251,6 +1251,68 @@ start_next_test:
 	goto start_next_test;
 }
 
+static void create_network_and_run_tests(const void *key, void *value,
+						void *config_cycle_count)
+{
+	int hwsim_radio_ids[HWSIM_RADIOS_MAX];
+	char *interface_names[HWSIM_RADIOS_MAX];
+	pid_t hostapd_pids[HWSIM_RADIOS_MAX];
+	pid_t iwd_pid;
+	char *config_dir_path;
+	struct l_settings *hw_settings;
+	struct l_queue *test_queue;
+
+	l_info("Starting configuration cycle No: %d\n",
+						++(*(int *)config_cycle_count));
+
+	if (!key || !value)
+		return;
+
+	memset(hwsim_radio_ids, -1, sizeof(hwsim_radio_ids));
+	memset(hostapd_pids, -1, sizeof(hostapd_pids));
+
+	config_dir_path = (char *) key;
+	test_queue = (struct l_queue *) value;
+
+	if (l_queue_isempty(test_queue)) {
+		l_error("No Python IWD tests have been found in %s\n",
+							config_dir_path);
+		return;
+	}
+
+	hw_settings = read_hw_config(config_dir_path);
+	if (!hw_settings)
+		return;
+
+	configure_hw_radios(hw_settings, hwsim_radio_ids, interface_names);
+
+	list_hwsim_radios();
+
+	list_interfaces();
+
+	configure_hostapd_instances(hw_settings, config_dir_path,
+							interface_names,
+								hostapd_pids);
+
+	iwd_pid = start_iwd();
+	if (iwd_pid == -1)
+		goto exit;
+
+	/*TODO wait for iwd to obtain phyX - replace with dbus call*/
+	sleep(2);
+
+	run_py_tests(config_dir_path, test_queue);
+
+	terminate_iwd(iwd_pid);
+
+	destroy_hostapd_instances(hostapd_pids);
+
+	destroy_hw_radios(hwsim_radio_ids, interface_names);
+
+exit:
+	l_settings_free(hw_settings);
+}
+
 static const char * const daemon_table[] = {
 	NULL
 };
