@@ -404,41 +404,21 @@ static void create_dbus_system_conf(void)
 
 static pid_t start_dbus_daemon(void)
 {
-	char *argv[3], *envp[1];
+	char *argv[3];
 	pid_t pid;
-	int i;
 
 	argv[0] = "/usr/bin/dbus-daemon";
 	argv[1] = "--system";
 	argv[2] = NULL;
 
-	envp[0] = NULL;
-
-	printf("Starting D-Bus daemon\n");
-
-	pid = fork();
-	if (pid < 0) {
-		perror("Failed to fork new process");
+	pid = execute_program(argv, false);
+	if (pid < 0)
 		return -1;
-	}
 
-	if (pid == 0) {
-		execve(argv[0], argv, envp);
-		exit(EXIT_SUCCESS);
-	}
+	if (!wait_for_socket("/run/dbus/system_bus_socket", 25 * 10000))
+		return -1;
 
-	printf("D-Bus daemon process %d created\n", pid);
-
-	for (i = 0; i < 20; i++) {
-		struct stat st;
-
-		if (!stat("/run/dbus/system_bus_socket", &st)) {
-			printf("Found D-Bus daemon socket\n");
-			break;
-		}
-
-		usleep(25 * 1000);
-	}
+	l_info("D-Bus is running\n");
 
 	return pid;
 }
