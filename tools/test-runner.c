@@ -747,6 +747,162 @@ error_exit:
 	return NULL;
 }
 
+#define HW_CONFIG_PHY_CHANNELS	"channels"
+#define HW_CONFIG_PHY_CHANCTX	"use_chanctx"
+#define HW_CONFIG_PHY_P2P	"p2p_device"
+
+#define HW_PHY_NAME_PREFIX	"PHY"
+
+#define HW_MIN_NUM_RADIOS	1
+
+#define HW_INTERFACE_PREFIX	"wln"
+#define HW_INTERFACE_STATE_UP   true
+#define HW_INTERFACE_STATE_DOWN false
+
+static bool configure_hw_radios(struct l_settings *hw_settings,
+						int hwsim_radio_ids[],
+						char *interface_names_out[])
+{
+	char interface_name[7];
+	char phy_name[7];
+	char **radio_conf_list;
+	int i, num_radios_requested, num_radios_created;
+	bool status = true;
+	bool has_hw_conf;
+
+	l_settings_get_int(hw_settings, HW_CONFIG_GROUP_SETUP,
+						HW_CONFIG_SETUP_NUM_RADIOS,
+							&num_radios_requested);
+
+	if (num_radios_requested < HW_MIN_NUM_RADIOS) {
+		l_error("%s must be greater or equal to %d\n",
+			HW_CONFIG_SETUP_NUM_RADIOS, HW_MIN_NUM_RADIOS);
+		return false;
+	}
+
+	radio_conf_list =
+		l_settings_get_string_list(hw_settings, HW_CONFIG_GROUP_SETUP,
+						HW_CONFIG_SETUP_RADIO_CONFS,
+									':');
+	if (!radio_conf_list)
+		has_hw_conf = true;
+
+	num_radios_created = 0;
+	i = 0;
+
+	while (num_radios_requested > num_radios_created) {
+		char *radio_config_group;
+
+		unsigned int channels;
+		bool p2p_device;
+		bool use_chanctx;
+
+		if (!has_hw_conf || !radio_conf_list[i]) {
+			channels = 1;
+			p2p_device = true;
+			use_chanctx = true;
+
+			has_hw_conf = false;
+			goto configure;
+		}
+
+		radio_config_group = radio_conf_list[i++];
+
+		if (!l_settings_has_group(hw_settings, radio_config_group)) {
+			l_error("No radio configuration group [%s] found in "
+					"config. file.\n", radio_config_group);
+
+			status = false;
+			goto exit;
+		}
+
+		if (!l_settings_get_uint(hw_settings, radio_config_group,
+							HW_CONFIG_PHY_CHANNELS,
+								&channels))
+			channels = 1;
+
+		if (!l_settings_get_bool(hw_settings, radio_config_group,
+							HW_CONFIG_PHY_P2P,
+								&p2p_device))
+			p2p_device = true;
+
+		if (!l_settings_get_bool(hw_settings, radio_config_group,
+							HW_CONFIG_PHY_CHANCTX,
+								&use_chanctx))
+			use_chanctx = true;
+
+configure:
+		sprintf(phy_name, "%s%d", HW_PHY_NAME_PREFIX,
+							num_radios_created);
+
+		hwsim_radio_ids[num_radios_created] =
+			create_hwsim_radio(phy_name, channels, p2p_device,
+							use_chanctx);
+
+		if (hwsim_radio_ids[num_radios_created] < 0) {
+			status = false;
+			goto exit;
+		}
+
+		sprintf(interface_name, "%s%d", HW_INTERFACE_PREFIX,
+							num_radios_created);
+
+		if (!create_interface(interface_name, phy_name)) {
+			status = false;
+			goto exit;
+		}
+
+		l_info("Created interface %s on %s\n", interface_name,
+								phy_name);
+
+		if (!set_interface_state(interface_name,
+						HW_INTERFACE_STATE_UP)) {
+			status = false;
+			goto exit;
+		}
+
+		interface_names_out[num_radios_created] =
+							strdup(interface_name);
+
+		num_radios_created++;
+	}
+
+	interface_names_out[num_radios_created + 1] = NULL;
+
+exit:
+	l_strfreev(radio_conf_list);
+	return status;
+}
+
+static void destroy_hw_radios(int hwsim_radio_ids[],
+				char *interface_names_in[])
+{
+	int i = 0;
+
+	while (interface_names_in[i]) {
+		set_interface_state(interface_names_in[i],
+					HW_INTERFACE_STATE_DOWN);
+
+		delete_interface(interface_names_in[i]);
+		l_info("Removed interface %s\n", interface_names_in[i]);
+
+		interface_names_in[i] = NULL;
+
+		i++;
+	}
+
+	i = 0;
+
+	while (hwsim_radio_ids[i] != -1) {
+		destroy_hwsim_radio(hwsim_radio_ids[i]);
+		l_info("Removed radio id %d\n", hwsim_radio_ids[i]);
+
+		hwsim_radio_ids[i] = -1;
+
+		i++;
+	}
+}
+
 static const char * const daemon_table[] = {
 	NULL
 };
