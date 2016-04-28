@@ -51,6 +51,9 @@
 #define CMDLINE_MAX			2048
 
 #define BIN_IW				"/usr/sbin/iw"
+#define BIN_HWSIM			"./hwsim"
+
+#define HWSIM_RADIOS_MAX		100
 
 static const char *own_binary;
 static char **test_argv;
@@ -61,6 +64,7 @@ static bool run_auto;
 static bool verbose_out;
 static const char *qemu_binary;
 static const char *kernel_image;
+static const char *exec_home;
 
 static const char * const qemu_table[] = {
 	"qemu-system-x86_64",
@@ -491,6 +495,88 @@ static bool list_interfaces(void)
 
 	argv[0] = "ifconfig";
 	argv[1] = "-a";
+	argv[2] = NULL;
+
+	pid = execute_program(argv, true);
+	if (pid < 0)
+		return false;
+
+	return true;
+}
+
+static bool list_hwsim_radios(void)
+{
+	char *argv[3];
+	pid_t pid;
+
+	if (chdir(exec_home + 5) < 0) {
+		l_error("Failed to change home test directory: %s",
+							strerror(errno));
+		return false;
+	}
+
+	argv[0] = BIN_HWSIM;
+	argv[1] = "--list";
+	argv[2] = NULL;
+
+	pid = execute_program(argv, true);
+	if (pid < 0)
+		return false;
+
+	return true;
+}
+
+static int read_radio_id(void)
+{
+	static int current_radio_id;
+
+	return current_radio_id++;
+}
+
+static int create_hwsim_radio(const char *radio_name,
+				const unsigned int channels, bool p2p_device,
+							bool use_chanctx)
+{
+	char *argv[6];
+	pid_t pid;
+
+	if (chdir(exec_home + 5) < 0) {
+		l_error("Failed to change home test directory: %s",
+							strerror(errno));
+		return -1;
+	}
+
+	/*TODO add the rest of params*/
+	argv[0] = BIN_HWSIM;
+	argv[1] = "--create";
+	argv[2] = "--keep";
+	argv[3] = "--name";
+	argv[4] = (char *) radio_name;
+	argv[5] = NULL;
+
+	pid = execute_program(argv, true);
+	if (pid < 0)
+		return -1;
+
+	return read_radio_id();
+}
+
+static bool destroy_hwsim_radio(int radio_id)
+{
+	char *argv[4];
+	char destroy_param[20];
+	pid_t pid;
+
+	sprintf(destroy_param, "--destroy=%d", radio_id);
+
+	if (chdir(exec_home + 5) < 0) {
+		l_error("Failed to change home test directory: %s",
+							strerror(errno));
+		return false;
+	}
+
+	argv[0] = BIN_HWSIM;
+	argv[1] = destroy_param;
 	argv[2] = NULL;
 
 	pid = execute_program(argv, true);
