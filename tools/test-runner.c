@@ -1013,6 +1013,80 @@ static void terminate_iwd(pid_t iwd_pid)
 	l_dbus_remove_watch(g_dbus, watch_id);
 }
 
+#define CONSOLE_LN_DEFAULT	"\x1B[0m"
+#define CONSOLE_LN_RED		"\x1B[31m"
+#define CONSOLE_LN_GREEN	"\x1B[32m"
+#define CONSOLE_LN_BLACK	"\x1B[30m"
+#define CONSOLE_LN_RESET	"\033[0m"
+
+#define CONSOLE_LN_BOLD		"\x1b[1m"
+
+#define CONSOLE_BG_WHITE	"\e[47m"
+#define CONSOLE_BG_DEFAULT	"\e[0m"
+
+enum test_status {
+	TEST_STATUS_STARTED,
+	TEST_STATUS_PASSED,
+	TEST_STATUS_FAILED,
+};
+
+static void print_test_status(char *test_name, enum test_status ts,
+								double interval)
+{
+	const char *clear_line = "\r";
+	int int_len;
+	char *color_str;
+	char *status_str;
+	char *interval_str;
+	char *line_end = "";
+
+	switch (ts) {
+	case TEST_STATUS_STARTED:
+		color_str = CONSOLE_LN_RESET;
+		status_str = "STARTED ";
+
+		if (verbose_out)
+			line_end = "\n";
+
+		break;
+	case TEST_STATUS_PASSED:
+		printf("%s", clear_line);
+		color_str = CONSOLE_LN_GREEN;
+		status_str = "PASSED  ";
+		line_end = "\n";
+
+		break;
+	case TEST_STATUS_FAILED:
+		printf("%s", clear_line);
+		color_str = CONSOLE_LN_RED;
+		status_str = "FAILED  ";
+		line_end = "\n";
+
+		break;
+	}
+
+	if (interval > 0)
+		int_len = snprintf(NULL, 0, "%.3f", interval);
+	else
+		int_len = 0;
+
+	int_len++;
+
+	interval_str = l_malloc(int_len);
+	memset(interval_str, ' ', int_len);
+	interval_str[int_len] = '\0';
+
+	if (interval > 0)
+		sprintf(interval_str, "%.3f sec", interval);
+
+	printf("%s%s%s%-60s%7s%s", color_str, status_str, CONSOLE_LN_RESET,
+		test_name, interval_str, line_end);
+
+	fflush(stdout);
+
+	l_free(interval_str);
+}
+
 static const char * const daemon_table[] = {
 	NULL
 };
