@@ -62,7 +62,6 @@
 static const char *own_binary;
 static char **test_argv;
 static int test_argc;
-static bool start_dbus;
 static bool run_auto = true;
 static bool verbose_out;
 static const char *qemu_binary;
@@ -133,7 +132,6 @@ static const struct {
 } mount_table[] = {
 	{ "sysfs",    "/sys",     NULL,        MS_NOSUID|MS_NOEXEC|MS_NODEV },
 	{ "proc",     "/proc",    NULL,        MS_NOSUID|MS_NOEXEC|MS_NODEV },
-	{ "devtmpfs", "/dev",     "mode=0755", MS_NOSUID|MS_STRICTATIME },
 	{ "devpts",   "/dev/pts", "mode=0620", MS_NOSUID|MS_NOEXEC },
 	{ "tmpfs",    "/dev/shm", "mode=1777",
 					MS_NOSUID|MS_NODEV|MS_STRICTATIME },
@@ -145,7 +143,6 @@ static const struct {
 };
 
 static const char * const config_table[] = {
-	"/etc/dbus-1",
 	"/usr/share/dbus-1",
 	NULL
 };
@@ -158,46 +155,50 @@ static void prepare_sandbox(void)
 		struct stat st;
 
 		if (lstat(mount_table[i].target, &st) < 0) {
-			printf("Creating %s\n", mount_table[i].target);
+			l_info("Creating %s\n", mount_table[i].target);
 			mkdir(mount_table[i].target, 0755);
 		}
 
-		printf("Mounting %s to %s\n", mount_table[i].fstype,
-						mount_table[i].target);
+		l_info("Mounting %s to %s\n", mount_table[i].fstype,
+							mount_table[i].target);
 
 		if (mount(mount_table[i].fstype,
 				mount_table[i].target,
 				mount_table[i].fstype,
 				mount_table[i].flags,
-				mount_table[i].options) < 0)
-			perror("Failed to mount filesystem");
+				mount_table[i].options) < 0) {
+			l_error("Error: Failed to mount filesystem %s\n",
+							mount_table[i].target);
+		}
 	}
 
 	for (i = 0; dev_table[i].target; i++) {
-		printf("Linking %s to %s\n", dev_table[i].linkpath,
-						dev_table[i].target);
+		l_info("Linking %s to %s\n", dev_table[i].linkpath,
+							dev_table[i].target);
 
 		if (symlink(dev_table[i].target, dev_table[i].linkpath) < 0)
-			perror("Failed to create device symlink");
+			l_error("Failed to create device symlink: %s",
+							strerror(errno));
 	}
 
-	printf("Creating new session group leader\n");
+	l_info("Creating new session group leader\n");
 	setsid();
 
-	printf("Setting controlling terminal\n");
+	l_info("Setting controlling terminal\n");
 	ioctl(STDIN_FILENO, TIOCSCTTY, 1);
 
 	for (i = 0; config_table[i]; i++) {
-		printf("Creating %s\n", config_table[i]);
+		l_info("Creating %s\n", config_table[i]);
 
 		if (mount("tmpfs", config_table[i], "tmpfs",
 				MS_NOSUID|MS_NOEXEC|MS_NODEV|MS_STRICTATIME,
 				"mode=0755") < 0)
-			perror("Failed to create filesystem");
+			l_error("Failed to create filesystem: %s",
+							strerror(errno));
 	}
 }
 
-static const char * const qemu_argv[] = {
+static char *const qemu_argv[] = {
 	"",
 	"-nodefaults",
 	"-nodefconfig",
@@ -217,6 +218,7 @@ static const char * const qemu_argv[] = {
 	"-device", "virtio-9p-pci,fsdev=fsdev-root,mount_tag=/dev/root",
 	"-chardev", "stdio,id=chardev-serial0,signal=off",
 	"-device", "pci-serial,chardev=chardev-serial0",
+	"-device", "virtio-rng-pci",
 	NULL
 };
 
@@ -257,19 +259,22 @@ static void start_qemu(void)
 	pos = snprintf(testargs, sizeof(testargs), "%s", test_argv[0]);
 
 	for (i = 1; i < test_argc; i++) {
-		int len = sizeof(testargs) - pos;
+		int len;
 
+		len = sizeof(testargs) - pos;
 		pos += snprintf(testargs + pos, len, " %s", test_argv[i]);
 	}
 
 	snprintf(cmdline, sizeof(cmdline),
-				"console=ttyS0,115200n8 earlyprintk=serial "
-				"rootfstype=9p "
-				"rootflags=trans=virtio,version=9p2000.L "
-				"acpi=off pci=noacpi noapic quiet ro init=%s "
-				"TESTHOME=%s TESTDBUS=%u "
-				"TESTAUTO=%u TESTARGS=\'%s\'", initcmd, cwd,
-				start_dbus, run_auto, testargs);
+			"console=ttyS0,115200n8 earlyprintk=serial "
+			"rootfstype=9p "
+			"root=/dev/root "
+			"rootflags=trans=virtio,version=9p2000.u "
+			"acpi=off pci=noacpi noapic quiet ro "
+			"mac80211_hwsim.radios=0 "
+			"init=%s TESTHOME=%s TESTAUTO=%u TESTVERBOUT=%u "
+			"TESTARGS=\'%s\'", initcmd, cwd, run_auto, verbose_out,
+			testargs);
 
 	argv = alloca(sizeof(qemu_argv));
 	memcpy(argv, qemu_argv, sizeof(qemu_argv));
@@ -277,11 +282,11 @@ static void start_qemu(void)
 	pos = (sizeof(qemu_argv) / sizeof(char *)) - 1;
 
 	argv[0] = (char *) qemu_binary;
-
 	argv[pos++] = "-kernel";
 	argv[pos++] = (char *) kernel_image;
 	argv[pos++] = "-append";
 	argv[pos++] = (char *) cmdline;
+	argv[pos++] = "-enable-kvm";
 
 	argv[pos] = NULL;
 
@@ -372,7 +377,7 @@ static void create_dbus_system_conf(void)
 {
 	FILE *fp;
 
-	fp = fopen("/etc/dbus-1/system.conf", "we");
+	fp = fopen("/usr/share/dbus-1/system.conf", "we");
 	if (!fp)
 		return;
 
