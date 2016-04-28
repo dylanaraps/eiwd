@@ -43,6 +43,8 @@
 #include <sys/mount.h>
 #include <sys/param.h>
 #include <sys/reboot.h>
+#include <sys/time.h>
+#include <glob.h>
 #include <ell/ell.h>
 
 #ifndef WAIT_ANY
@@ -59,13 +61,13 @@
 static const char *own_binary;
 static char **test_argv;
 static int test_argc;
-
 static bool start_dbus;
-static bool run_auto;
+static bool run_auto = true;
 static bool verbose_out;
 static const char *qemu_binary;
 static const char *kernel_image;
 static const char *exec_home;
+static struct l_dbus *g_dbus;
 
 static const char * const qemu_table[] = {
 	"qemu-system-x86_64",
@@ -951,6 +953,64 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 	}
 
 	return true;
+}
+
+static void iwd_appeared(struct l_dbus *dbus, void *user_data)
+{
+	l_info("IWD service has appeared\n");
+	l_main_quit();
+}
+
+static void iwd_disappeared(struct l_dbus *dbus, void *user_data)
+{
+	l_info("IWD service has disappeared\n");
+	l_main_quit();
+}
+
+static pid_t start_iwd(void)
+{
+	char *argv[2];
+	pid_t pid;
+	uint32_t watch_id;
+
+	argv[0] = "/usr/bin/iwd";
+	argv[1] = NULL;
+
+	pid = fork();
+	if (pid < 0) {
+		perror("Failed to fork new process");
+		return -1;
+	}
+
+	if (pid == 0) {
+		set_output_visibility();
+
+		execv(argv[0], argv);
+
+		exit(EXIT_FAILURE);
+	}
+
+	watch_id = l_dbus_add_service_watch(g_dbus, "net.connman.iwd",
+							iwd_appeared, NULL,
+							NULL, NULL);
+	l_main_run();
+
+	l_dbus_remove_watch(g_dbus, watch_id);
+
+	return pid;
+}
+
+static void terminate_iwd(pid_t iwd_pid)
+{
+	uint32_t watch_id;
+
+	watch_id = l_dbus_add_service_watch(g_dbus, "net.connman.iwd", NULL,
+						iwd_disappeared, NULL, NULL);
+	kill_process(iwd_pid);
+
+	l_main_run();
+
+	l_dbus_remove_watch(g_dbus, watch_id);
 }
 
 static const char * const daemon_table[] = {
