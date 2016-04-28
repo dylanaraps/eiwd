@@ -903,6 +903,56 @@ static void destroy_hw_radios(int hwsim_radio_ids[],
 	}
 }
 
+static bool configure_hostapd_instances(struct l_settings *hw_settings,
+						char *config_dir_path,
+						char *interface_names_in[],
+						pid_t hostapd_pids_out[])
+{
+	char **hostap_keys;
+	int i = 0;
+
+	if (!l_settings_has_group(hw_settings, HW_CONFIG_GROUP_HOSTAPD)) {
+		l_info("No hostapd instances to create");
+		return false;
+	}
+
+	hostap_keys =
+		l_settings_get_keys(hw_settings, HW_CONFIG_GROUP_HOSTAPD);
+
+	while (hostap_keys[i]) {
+		char hostapd_config_file_path[PATH_MAX];
+		const char *hostapd_config_file;
+		struct stat st;
+		char *interface_name;
+
+		hostapd_config_file =
+			l_settings_get_value(hw_settings,
+						HW_CONFIG_GROUP_HOSTAPD,
+						hostap_keys[i]);
+
+		snprintf(hostapd_config_file_path, PATH_MAX - 1, "%s/%s",
+				config_dir_path,
+				hostapd_config_file);
+
+		hostapd_config_file_path[PATH_MAX - 1] = '\0';
+
+		if (stat(hostapd_config_file_path, &st) != 0) {
+			l_error("%s : hostapd configuration file [%s] "
+				"does not exist.\n", HW_CONFIG_FILE_NAME,
+						hostapd_config_file_path);
+			return false;
+		}
+
+		interface_name = interface_names_in[i];
+
+		hostapd_pids_out[i] = start_hostapd(hostapd_config_file_path,
+								interface_name);
+		i++;
+	}
+
+	return true;
+}
+
 static const char * const daemon_table[] = {
 	NULL
 };
