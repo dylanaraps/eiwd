@@ -1293,198 +1293,75 @@ exit:
 	l_settings_free(hw_settings);
 }
 
-static const char * const daemon_table[] = {
-	NULL
-};
-
-static pid_t start_bluetooth_daemon(const char *home)
+static void run_command(char *cmdname)
 {
-	const char *daemon = NULL;
-	char *argv[3], *envp[2];
-	pid_t pid;
-	int i;
+	char tmp_path[PATH_MAX];
+	char test_home_path[PATH_MAX];
+	char *ptr;
+	pid_t dbus_pid;
+	int index, config_cycle_count, level;
+	struct l_hashmap *test_config_map;
+	struct stat st;
 
-	if (chdir(home + 5) < 0) {
-		perror("Failed to change home directory for daemon");
-		return -1;
-	}
+	ptr = strrchr(exec_home, '/');
+	if (!ptr)
+		exit(EXIT_FAILURE);
 
-	for (i = 0; daemon_table[i]; i++) {
-		struct stat st;
+	index = ptr - exec_home;
 
-		if (!stat(daemon_table[i], &st)) {
-			daemon = daemon_table[i];
-			break;
-		}
-	}
+	strncpy(tmp_path, exec_home + 5, index - 5);
+	tmp_path[index - 5] = '\0';
 
-	if (!daemon) {
-		fprintf(stderr, "Failed to locate Bluetooth daemon binary\n");
-		return -1;
-	}
+	sprintf(test_home_path, "%s/%s", tmp_path, TEST_TOP_DIR_DEFAULT_NAME);
 
-	printf("Using Bluetooth daemon %s\n", daemon);
+	if (stat(test_home_path, &st) == -1) {
+		l_error("Test directory %s does not exist",
+			test_home_path);
 
-	argv[0] = (char *) daemon;
-	argv[1] = "--nodetach";
-	argv[2] = NULL;
-
-	envp[0] =
-		"DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket";
-	envp[1] = NULL;
-
-	printf("Starting Bluetooth daemon\n");
-
-	pid = fork();
-	if (pid < 0) {
-		perror("Failed to fork new process");
-		return -1;
-	}
-
-	if (pid == 0) {
-		execve(argv[0], argv, envp);
-		exit(EXIT_SUCCESS);
-	}
-
-	printf("Bluetooth daemon process %d created\n", pid);
-
-	return pid;
-}
-
-static const char * const test_table[] = {
-	NULL
-};
-
-static void run_command(char *cmdname, char *home)
-{
-	char *argv[9], *envp[3];
-	int pos = 0, idx = 0;
-	pid_t pid, dbus_pid, daemon_pid;
-
-	if (start_dbus) {
-		create_dbus_system_conf();
-		dbus_pid = start_dbus_daemon();
-		daemon_pid = start_bluetooth_daemon(home);
-	} else {
-		dbus_pid = -1;
-		daemon_pid = -1;
-	}
-
-start_next:
-	if (run_auto) {
-		if (chdir(home + 5) < 0) {
-			perror("Failed to change home test directory");
-			return;
-		}
-
-		while (1) {
-			struct stat st;
-
-			if (!test_table[idx])
-				return;
-
-			if (!stat(test_table[idx], &st))
-				break;
-
-			idx++;
-		}
-
-		argv[0] = (char *) test_table[idx];
-		argv[1] = "-q";
-		argv[2] = NULL;
-	} else {
-		while (1) {
-			char *ptr;
-
-			ptr = strchr(cmdname, ' ');
-			if (!ptr) {
-				argv[pos++] = cmdname;
-				break;
-			}
-
-			*ptr = '\0';
-			argv[pos++] = cmdname;
-			if (pos > 8)
-				break;
-
-			cmdname = ptr + 1;
-		}
-
-		argv[pos] = NULL;
-	}
-
-	pos = 0;
-	envp[pos++] = "TERM=linux";
-	if (home)
-		envp[pos++] = home;
-	envp[pos] = NULL;
-
-	printf("Running command %s\n", argv[0]);
-
-	pid = fork();
-	if (pid < 0) {
-		perror("Failed to fork new process");
 		return;
 	}
 
-	if (pid == 0) {
-		if (home) {
-			printf("Changing into directory %s\n", home + 5);
-			if (chdir(home + 5) < 0)
-				perror("Failed to change directory");
-		}
+	test_config_map = l_hashmap_string_new();
+	if (!test_config_map)
+		return;
 
-		execve(argv[0], argv, envp);
-		exit(EXIT_SUCCESS);
+	if (run_auto)
+		level = 0;
+	else
+		level = 1;
+
+	l_info("Configuring network...");
+
+	if (!find_test_configuration(test_home_path, level, test_config_map))
+		goto exit;
+
+	if (l_hashmap_isempty(test_config_map)) {
+		l_error("No test configuration is found in %s.\n",
+								test_home_path);
+		goto exit;
 	}
 
-	printf("New process %d created\n", pid);
+	create_dbus_system_conf();
 
-	while (1)  {
-		pid_t corpse;
-		int status;
+	dbus_pid = start_dbus_daemon();
+	if (dbus_pid < 0)
+		goto exit;
 
-		corpse = waitpid(WAIT_ANY, &status, 0);
-		if (corpse < 0 || corpse == 0)
-			continue;
-
-		if (WIFEXITED(status))
-			printf("Process %d exited with status %d\n",
-						corpse, WEXITSTATUS(status));
-		else if (WIFSIGNALED(status))
-			printf("Process %d terminated with signal %d\n",
-						corpse, WTERMSIG(status));
-		else if (WIFSTOPPED(status))
-			printf("Process %d stopped with signal %d\n",
-						corpse, WSTOPSIG(status));
-		else if (WIFCONTINUED(status))
-			printf("Process %d continued\n", corpse);
-
-		if (corpse == dbus_pid) {
-			printf("D-Bus daemon terminated\n");
-			dbus_pid = -1;
-		}
-
-		if (corpse == daemon_pid) {
-			printf("Bluetooth daemon terminated\n");
-			daemon_pid = -1;
-		}
-
-		if (corpse == pid) {
-			if (!run_auto) {
-				if (daemon_pid > 0)
-					kill(daemon_pid, SIGTERM);
-				if (dbus_pid > 0)
-					kill(dbus_pid, SIGTERM);
-			}
-			break;
-		}
+	g_dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
+	if (!g_dbus) {
+		l_error("Error: cannot initialize system bus\n");
+		goto exit;
 	}
 
-	if (run_auto) {
-		idx++;
-		goto start_next;
-	}
+	config_cycle_count = 0;
+
+	l_hashmap_foreach(test_config_map, create_network_and_run_tests,
+							&config_cycle_count);
+
+	l_dbus_destroy(g_dbus);
+
+exit:
+	l_hashmap_destroy(test_config_map, NULL);
 }
 
 static void run_tests(void)
@@ -1541,7 +1418,7 @@ static void run_tests(void)
 			*ptr = '\0';
 	}
 
-	run_command(cmds, home);
+	run_command(cmds);
 }
 
 static void usage(void)
