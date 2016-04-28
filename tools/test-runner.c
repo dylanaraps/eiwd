@@ -711,6 +711,42 @@ static bool find_test_configuration(const char *path, int level,
 	return true;
 }
 
+#define HW_CONFIG_FILE_NAME		"hw.conf"
+#define HW_CONFIG_GROUP_HOSTAPD		"HOSTAPD"
+#define HW_CONFIG_GROUP_SETUP		"SETUP"
+
+#define HW_CONFIG_SETUP_NUM_RADIOS	"num_radios"
+#define HW_CONFIG_SETUP_RADIO_CONFS	"radio_confs"
+
+static struct l_settings *read_hw_config(const char *test_dir_path)
+{
+	struct l_settings *hw_settings;
+	char *hw_file;
+
+	hw_file = l_strdup_printf("%s/%s", test_dir_path, HW_CONFIG_FILE_NAME);
+
+	hw_settings = l_settings_new();
+
+	if (!l_settings_load_from_file(hw_settings, hw_file)) {
+		l_error("No %s file found\n", HW_CONFIG_FILE_NAME);
+		goto error_exit;
+	}
+
+	if (!l_settings_has_group(hw_settings, HW_CONFIG_GROUP_SETUP)) {
+		l_error("No %s setting group found in %s\n",
+						HW_CONFIG_GROUP_SETUP, hw_file);
+		goto error_exit;
+	}
+
+	l_free(hw_file);
+	return hw_settings;
+
+error_exit:
+	l_free(hw_file);
+	l_settings_free(hw_settings);
+	return NULL;
+}
+
 static const char * const daemon_table[] = {
 	NULL
 };
