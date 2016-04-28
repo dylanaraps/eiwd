@@ -57,6 +57,7 @@
 #define BIN_HWSIM			"./hwsim"
 
 #define HWSIM_RADIOS_MAX		100
+#define TEST_MAX_EXEC_TIME_SEC		20
 
 static const char *own_binary;
 static char **test_argv;
@@ -1085,6 +1086,169 @@ static void print_test_status(char *test_name, enum test_status ts,
 	fflush(stdout);
 
 	l_free(interval_str);
+}
+
+static void exec_tmr_hndl(struct l_timeout *timeout, void *user_data)
+{
+	pid_t *test_exec_pid = (pid_t *) user_data;
+
+	kill(*test_exec_pid, SIGKILL);
+
+	l_main_quit();
+}
+
+static void exec_tmr_destroy_hndl(void *user_data)
+{
+	l_main_quit();
+}
+
+static void signal_handler(struct l_signal *signal, uint32_t signo,
+								void *user_data)
+{
+	switch (signo) {
+	case SIGINT:
+	case SIGTERM:
+	case SIGKILL:
+		l_main_quit();
+		break;
+	}
+}
+
+static void run_py_tests(char *config_dir_path, struct l_queue *test_queue)
+{
+	sigset_t mask;
+	char *argv[3], *envp[3];
+	int pos = 0;
+	pid_t test_exec_pid;
+	struct timeval time_before, time_after, time_elapsed;
+	struct l_timeout *test_exec_timeout;
+	char *py_test = NULL;
+
+	if (!config_dir_path)
+		return;
+
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGINT);
+	sigaddset(&mask, SIGTERM);
+	sigaddset(&mask, SIGKILL);
+
+	if (chdir(config_dir_path) < 0)
+		l_error("Failed to change directory\n");
+	else {
+		printf(CONSOLE_LN_BOLD CONSOLE_LN_BLACK
+			CONSOLE_BG_WHITE "Running tests in %-63s"
+			CONSOLE_LN_RESET CONSOLE_BG_DEFAULT
+			"\n", config_dir_path);
+	}
+
+start_next_test:
+
+	if (l_queue_isempty(test_queue))
+		return;
+
+	py_test = (char *) l_queue_pop_head(test_queue);
+	if (!py_test)
+		return;
+
+	argv[0] = "/usr/bin/python";
+	argv[1] = py_test;
+	argv[2] = NULL;
+
+	pos = 0;
+	envp[pos++] = "TERM=linux";
+	if (config_dir_path)
+		envp[pos++] = (char *) config_dir_path;
+	envp[pos] = NULL;
+
+	test_exec_pid = fork();
+	if (test_exec_pid < 0) {
+		l_error("Failed to fork new process");
+		return;
+	}
+
+	if (test_exec_pid == 0) {
+		print_test_status(py_test, TEST_STATUS_STARTED, 0);
+
+		set_output_visibility();
+
+		execve(argv[0], argv, envp);
+
+		exit(EXIT_SUCCESS);
+	} else {
+		pid_t test_timer_pid;
+
+		gettimeofday(&time_before, NULL);
+
+		test_timer_pid = fork();
+		if (test_timer_pid < 0) {
+			l_error("Failed to fork new process");
+			return;
+		}
+
+		if (test_timer_pid == 0) {
+			struct l_signal *signal;
+
+			signal = l_signal_create(&mask, signal_handler, NULL,
+							NULL);
+
+			test_exec_timeout =
+				l_timeout_create(TEST_MAX_EXEC_TIME_SEC,
+							exec_tmr_hndl,
+							&test_exec_pid,
+							exec_tmr_destroy_hndl);
+
+			l_main_run();
+
+			l_timeout_remove(test_exec_timeout);
+			l_signal_remove(signal);
+
+			exit(EXIT_SUCCESS);
+		}
+	}
+
+	while (true) {
+		pid_t corpse;
+		int status;
+		double interval;
+		const int BUF_LEN = 11;
+		char interval_buf[BUF_LEN];
+
+		corpse = waitpid(WAIT_ANY, &status, 0);
+
+		if (corpse < 0 || corpse == 0)
+			continue;
+
+		if (test_exec_pid == corpse) {
+			gettimeofday(&time_after, NULL);
+
+			timersub(&time_after, &time_before, &time_elapsed);
+			sprintf(interval_buf, "%ld.%0ld",
+					(long int) time_elapsed.tv_sec,
+					(long int) time_elapsed.tv_usec);
+			interval_buf[BUF_LEN - 1] = '\0';
+			interval = atof(interval_buf);
+
+			if (WIFEXITED(status) &&
+					WEXITSTATUS(status) == EXIT_SUCCESS)
+				print_test_status(py_test, TEST_STATUS_PASSED,
+							interval);
+			else
+				print_test_status(py_test, TEST_STATUS_FAILED,
+								interval);
+		} else if (WIFSTOPPED(status))
+			l_info("Process %d stopped with signal %d\n", corpse,
+			       WSTOPSIG(status));
+		else if (WIFCONTINUED(status))
+			l_info("Process %d continued\n", corpse);
+
+		if (corpse == test_exec_pid)
+			break;
+	}
+
+	l_free(py_test);
+	py_test = NULL;
+
+	goto start_next_test;
 }
 
 static const char * const daemon_table[] = {
