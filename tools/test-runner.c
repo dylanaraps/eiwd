@@ -36,6 +36,7 @@
 #include <string.h>
 #include <getopt.h>
 #include <poll.h>
+#include <dirent.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -645,6 +646,69 @@ static void destroy_hostapd_instances(pid_t hostapd_pids[])
 
 		i++;
 	}
+}
+
+#define TEST_TOP_DIR_DEFAULT_NAME	"autotests"
+#define TEST_DIR_PREFIX			"test"
+#define TEST_FILE_SUFFIX1		"Test"
+#define TEST_FILE_SUFFIX2		"Test.py"
+
+static int is_test_file(const char *file)
+{
+	return l_str_has_suffix(file, TEST_FILE_SUFFIX1) ||
+		l_str_has_suffix(file, TEST_FILE_SUFFIX2);
+}
+
+static int is_test_dir(const char *dir)
+{
+	return strncmp(dir, TEST_DIR_PREFIX, strlen(TEST_DIR_PREFIX)) == 0;
+}
+
+static bool find_test_configuration(const char *path, int level,
+						struct l_hashmap *config_map)
+{
+	DIR *dir = NULL;
+	struct l_queue *py_test_queue = NULL;
+	struct dirent *entry;
+	char *npath;
+
+	if (!config_map)
+		return false;
+
+	dir = opendir(path);
+	if (!dir) {
+		l_error("Test directory does not exist: %s\n", path);
+		return false;
+	}
+
+	while ((entry = readdir(dir))) {
+		if (entry->d_type == DT_DIR) {
+			if (!strcmp(entry->d_name, ".") ||
+					!strcmp(entry->d_name, ".."))
+				continue;
+
+			if (level == 0 && is_test_dir(entry->d_name)) {
+				npath = l_strdup_printf("%s/%s", path,
+								entry->d_name);
+
+				find_test_configuration(npath, 1, config_map);
+
+				l_free(npath);
+			}
+		} else if (level == 1 && is_test_file(entry->d_name)) {
+			if (!py_test_queue)
+				py_test_queue = l_queue_new();
+
+			l_queue_push_tail(py_test_queue,
+						l_strdup(entry->d_name));
+		}
+	}
+
+	if (py_test_queue && !l_queue_isempty(py_test_queue))
+		l_hashmap_insert(config_map, path, py_test_queue);
+
+	closedir(dir);
+	return true;
 }
 
 static const char * const daemon_table[] = {
