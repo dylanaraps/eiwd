@@ -334,6 +334,19 @@ exit:
 	return child_pid;
 }
 
+static void kill_process(pid_t pid)
+{
+	int status;
+
+	kill(pid, SIGKILL);
+
+	do {
+		waitpid(pid, &status, 0);
+	} while (!WIFEXITED(status) && !WIFSIGNALED(status));
+
+	l_info("Process terminated: %d\n", pid);
+}
+
 static bool wait_for_socket(const char *socket, useconds_t wait_time)
 {
 	int i = 0;
@@ -584,6 +597,54 @@ static bool destroy_hwsim_radio(int radio_id)
 		return false;
 
 	return true;
+}
+
+#define HOSTAPD_CTRL_INTERFACE_PREFIX "/var/run/hostapd"
+
+static pid_t start_hostapd(const char *config_file, const char *interface_name)
+{
+	char *argv[5];
+	char *ctrl_interface;
+	pid_t pid;
+
+	ctrl_interface = l_strdup_printf("%s/%s", HOSTAPD_CTRL_INTERFACE_PREFIX,
+								interface_name);
+
+	argv[0] = "/usr/sbin/hostapd";
+	argv[1] = "-g";
+	argv[2] = ctrl_interface;
+	argv[3] = (char *) config_file;
+	argv[4] = NULL;
+
+	pid = execute_program(argv, false);
+	if (pid < 0) {
+		pid = -1;
+		goto exit;
+	}
+
+	if (!wait_for_socket(ctrl_interface, 25 * 10000))
+		pid = -1;
+
+exit:
+	l_free(ctrl_interface);
+
+	return pid;
+}
+
+static void destroy_hostapd_instances(pid_t hostapd_pids[])
+{
+	int i = 0;
+
+	while (hostapd_pids[i] != -1) {
+		kill_process(hostapd_pids[i]);
+
+		l_info("hostapd instance with pid=%d is destroyed\n",
+			hostapd_pids[i]);
+
+		hostapd_pids[i] = -1;
+
+		i++;
+	}
 }
 
 static const char * const daemon_table[] = {
