@@ -347,7 +347,7 @@ static void kill_process(pid_t pid)
 {
 	int status;
 
-	l_info("Terminate pid: %d", pid);
+	l_debug("Terminate pid: %d", pid);
 
 	kill(pid, SIGTERM);
 
@@ -627,7 +627,7 @@ static void destroy_hostapd_instances(pid_t hostapd_pids[])
 	while (hostapd_pids[i] != -1) {
 		kill_process(hostapd_pids[i]);
 
-		l_info("hostapd instance with pid=%d is destroyed",
+		l_debug("hostapd instance with pid=%d is destroyed",
 			hostapd_pids[i]);
 
 		hostapd_pids[i] = -1;
@@ -872,7 +872,7 @@ static void destroy_hw_radios(int hwsim_radio_ids[],
 					HW_INTERFACE_STATE_DOWN);
 
 		delete_interface(interface_names_in[i]);
-		l_info("Removed interface %s", interface_names_in[i]);
+		l_debug("Removed interface %s", interface_names_in[i]);
 
 		interface_names_in[i] = NULL;
 
@@ -883,7 +883,7 @@ static void destroy_hw_radios(int hwsim_radio_ids[],
 
 	while (hwsim_radio_ids[i] != -1) {
 		destroy_hwsim_radio(hwsim_radio_ids[i]);
-		l_info("Removed radio id %d", hwsim_radio_ids[i]);
+		l_debug("Removed radio id %d", hwsim_radio_ids[i]);
 
 		hwsim_radio_ids[i] = -1;
 
