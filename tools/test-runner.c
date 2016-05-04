@@ -1030,17 +1030,12 @@ static void print_test_status(char *test_name, enum test_status ts,
 	l_free(interval_str);
 }
 
-static void exec_tmr_hndl(struct l_timeout *timeout, void *user_data)
+static void test_timeout_timer_tick(struct l_timeout *timeout, void *user_data)
 {
 	pid_t *test_exec_pid = (pid_t *) user_data;
 
-	kill(*test_exec_pid, SIGKILL);
+	kill_process(*test_exec_pid);
 
-	l_main_quit();
-}
-
-static void exec_tmr_destroy_hndl(void *user_data)
-{
 	l_main_quit();
 }
 
@@ -1050,29 +1045,57 @@ static void signal_handler(struct l_signal *signal, uint32_t signo,
 	switch (signo) {
 	case SIGINT:
 	case SIGTERM:
-	case SIGKILL:
 		l_main_quit();
 		break;
 	}
 }
 
-static void run_py_tests(char *config_dir_path, struct l_queue *test_queue)
+static pid_t start_execution_timeout_timer(pid_t *test_exec_pid)
 {
 	sigset_t mask;
-	char *argv[3], *envp[3];
-	int pos = 0;
-	pid_t test_exec_pid;
-	struct timeval time_before, time_after, time_elapsed;
+	struct l_signal *signal;
 	struct l_timeout *test_exec_timeout;
+	pid_t test_timer_pid;
+
+	test_timer_pid = fork();
+	if (test_timer_pid < 0) {
+		l_error("Failed to fork new process");
+		return -1;
+	}
+
+	if (test_timer_pid == 0) {
+		sigemptyset(&mask);
+		sigaddset(&mask, SIGINT);
+		sigaddset(&mask, SIGTERM);
+
+		signal = l_signal_create(&mask, signal_handler,
+							test_exec_pid, NULL);
+		test_exec_timeout =
+			l_timeout_create(TEST_MAX_EXEC_TIME_SEC,
+						test_timeout_timer_tick,
+						test_exec_pid,
+						NULL);
+
+		l_main_run();
+
+		l_timeout_remove(test_exec_timeout);
+		l_signal_remove(signal);
+
+		exit(EXIT_SUCCESS);
+	}
+
+	return test_timer_pid;
+}
+
+static void run_py_tests(char *config_dir_path, struct l_queue *test_queue)
+{
+	char *argv[3];
+	pid_t test_exec_pid, test_timer_pid;
+	struct timeval time_before, time_after, time_elapsed;
 	char *py_test = NULL;
 
 	if (!config_dir_path)
 		return;
-
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGINT);
-	sigaddset(&mask, SIGTERM);
-	sigaddset(&mask, SIGKILL);
 
 	if (chdir(config_dir_path) < 0)
 		l_error("Failed to change directory\n");
@@ -1096,57 +1119,12 @@ start_next_test:
 	argv[1] = py_test;
 	argv[2] = NULL;
 
-	pos = 0;
-	envp[pos++] = "TERM=linux";
-	if (config_dir_path)
-		envp[pos++] = (char *) config_dir_path;
-	envp[pos] = NULL;
+	print_test_status(py_test, TEST_STATUS_STARTED, 0);
+	test_exec_pid = execute_program(argv, false);
 
-	test_exec_pid = fork();
-	if (test_exec_pid < 0) {
-		l_error("Failed to fork new process");
-		return;
-	}
+	gettimeofday(&time_before, NULL);
 
-	if (test_exec_pid == 0) {
-		print_test_status(py_test, TEST_STATUS_STARTED, 0);
-
-		set_output_visibility();
-
-		execve(argv[0], argv, envp);
-
-		exit(EXIT_SUCCESS);
-	} else {
-		pid_t test_timer_pid;
-
-		gettimeofday(&time_before, NULL);
-
-		test_timer_pid = fork();
-		if (test_timer_pid < 0) {
-			l_error("Failed to fork new process");
-			return;
-		}
-
-		if (test_timer_pid == 0) {
-			struct l_signal *signal;
-
-			signal = l_signal_create(&mask, signal_handler, NULL,
-							NULL);
-
-			test_exec_timeout =
-				l_timeout_create(TEST_MAX_EXEC_TIME_SEC,
-							exec_tmr_hndl,
-							&test_exec_pid,
-							exec_tmr_destroy_hndl);
-
-			l_main_run();
-
-			l_timeout_remove(test_exec_timeout);
-			l_signal_remove(signal);
-
-			exit(EXIT_SUCCESS);
-		}
-	}
+	test_timer_pid = start_execution_timeout_timer(&test_exec_pid);
 
 	while (true) {
 		pid_t corpse;
@@ -1162,6 +1140,8 @@ start_next_test:
 
 		if (test_exec_pid == corpse) {
 			gettimeofday(&time_after, NULL);
+
+			kill_process(test_timer_pid);
 
 			timersub(&time_after, &time_before, &time_elapsed);
 			sprintf(interval_buf, "%ld.%0ld",
