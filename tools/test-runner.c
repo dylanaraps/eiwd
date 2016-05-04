@@ -960,6 +960,7 @@ static void terminate_iwd(pid_t iwd_pid)
 #define CONSOLE_LN_RED		"\x1B[31m"
 #define CONSOLE_LN_GREEN	"\x1B[32m"
 #define CONSOLE_LN_BLACK	"\x1B[30m"
+#define CONSOLE_LN_YELLOW	"\x1B[33m"
 #define CONSOLE_LN_RESET	"\033[0m"
 
 #define CONSOLE_LN_BOLD		"\x1b[1m"
@@ -971,6 +972,7 @@ enum test_status {
 	TEST_STATUS_STARTED,
 	TEST_STATUS_PASSED,
 	TEST_STATUS_FAILED,
+	TEST_STATUS_TIMEDOUT,
 };
 
 static void print_test_status(char *test_name, enum test_status ts,
@@ -986,7 +988,7 @@ static void print_test_status(char *test_name, enum test_status ts,
 	switch (ts) {
 	case TEST_STATUS_STARTED:
 		color_str = CONSOLE_LN_RESET;
-		status_str = "STARTED ";
+		status_str = "STARTED   ";
 
 		if (verbose_out)
 			line_end = "\n";
@@ -995,14 +997,21 @@ static void print_test_status(char *test_name, enum test_status ts,
 	case TEST_STATUS_PASSED:
 		printf("%s", clear_line);
 		color_str = CONSOLE_LN_GREEN;
-		status_str = "PASSED  ";
+		status_str = "PASSED    ";
 		line_end = "\n";
 
 		break;
 	case TEST_STATUS_FAILED:
 		printf("%s", clear_line);
 		color_str = CONSOLE_LN_RED;
-		status_str = "FAILED  ";
+		status_str = "FAILED    ";
+		line_end = "\n";
+
+		break;
+	case TEST_STATUS_TIMEDOUT:
+		printf("%s", clear_line);
+		color_str = CONSOLE_LN_YELLOW;
+		status_str = "TIMED OUT ";
 		line_end = "\n";
 
 		break;
@@ -1154,6 +1163,9 @@ start_next_test:
 					WEXITSTATUS(status) == EXIT_SUCCESS)
 				print_test_status(py_test, TEST_STATUS_PASSED,
 							interval);
+			else if (WIFSIGNALED(status))
+				print_test_status(py_test, TEST_STATUS_TIMEDOUT,
+								interval);
 			else
 				print_test_status(py_test, TEST_STATUS_FAILED,
 								interval);
