@@ -762,7 +762,7 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 						HW_CONFIG_SETUP_NUM_RADIOS,
 							&num_radios_requested);
 
-	if (num_radios_requested < HW_MIN_NUM_RADIOS) {
+	if (num_radios_requested <= HW_MIN_NUM_RADIOS) {
 		l_error("%s must be greater or equal to %d\n",
 			HW_CONFIG_SETUP_NUM_RADIOS, HW_MIN_NUM_RADIOS);
 		return false;
