@@ -347,13 +347,13 @@ static void kill_process(pid_t pid)
 {
 	int status;
 
-	kill(pid, SIGKILL);
+	l_info("Terminate pid: %d", pid);
+
+	kill(pid, SIGTERM);
 
 	do {
 		waitpid(pid, &status, 0);
 	} while (!WIFEXITED(status) && !WIFSIGNALED(status));
-
-	l_info("Process terminated: %d\n", pid);
 }
 
 static bool wait_for_socket(const char *socket, useconds_t wait_time)
