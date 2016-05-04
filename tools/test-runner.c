@@ -181,14 +181,14 @@ static void prepare_sandbox(void)
 							strerror(errno));
 	}
 
-	l_info("Creating new session group leader\n");
+	l_info("Creating new session group leader");
 	setsid();
 
-	l_info("Setting controlling terminal\n");
+	l_info("Setting controlling terminal");
 	ioctl(STDIN_FILENO, TIOCSCTTY, 1);
 
 	for (i = 0; config_table[i]; i++) {
-		l_info("Creating %s\n", config_table[i]);
+		l_info("Creating %s", config_table[i]);
 
 		if (mount("tmpfs", config_table[i], "tmpfs",
 				MS_NOSUID|MS_NOEXEC|MS_NODEV|MS_STRICTATIME,
@@ -324,7 +324,7 @@ static pid_t execute_program(char *argv[], bool wait)
 
 		execvp(argv[0], argv);
 
-		l_error("Failed to call execvp: %s\n", strerror(errno));
+		l_error("Failed to call execvp: %s", strerror(errno));
 
 		exit(EXIT_FAILURE);
 	}
@@ -369,7 +369,7 @@ static bool wait_for_socket(const char *socket, useconds_t wait_time)
 		usleep(wait_time);
 	} while (i++ < 20);
 
-	l_error("Error: cannot find socket: %s\n", socket);
+	l_error("Error: cannot find socket: %s", socket);
 	return false;
 }
 
@@ -423,7 +423,7 @@ static pid_t start_dbus_daemon(void)
 	if (!wait_for_socket("/run/dbus/system_bus_socket", 25 * 10000))
 		return -1;
 
-	l_info("D-Bus is running\n");
+	l_info("D-Bus is running");
 
 	return pid;
 }
@@ -627,7 +627,7 @@ static void destroy_hostapd_instances(pid_t hostapd_pids[])
 	while (hostapd_pids[i] != -1) {
 		kill_process(hostapd_pids[i]);
 
-		l_info("hostapd instance with pid=%d is destroyed\n",
+		l_info("hostapd instance with pid=%d is destroyed",
 			hostapd_pids[i]);
 
 		hostapd_pids[i] = -1;
@@ -665,7 +665,7 @@ static bool find_test_configuration(const char *path, int level,
 
 	dir = opendir(path);
 	if (!dir) {
-		l_error("Test directory does not exist: %s\n", path);
+		l_error("Test directory does not exist: %s", path);
 		return false;
 	}
 
@@ -716,12 +716,12 @@ static struct l_settings *read_hw_config(const char *test_dir_path)
 	hw_settings = l_settings_new();
 
 	if (!l_settings_load_from_file(hw_settings, hw_file)) {
-		l_error("No %s file found\n", HW_CONFIG_FILE_NAME);
+		l_error("No %s file found", HW_CONFIG_FILE_NAME);
 		goto error_exit;
 	}
 
 	if (!l_settings_has_group(hw_settings, HW_CONFIG_GROUP_SETUP)) {
-		l_error("No %s setting group found in %s\n",
+		l_error("No %s setting group found in %s",
 						HW_CONFIG_GROUP_SETUP, hw_file);
 		goto error_exit;
 	}
@@ -763,7 +763,7 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 							&num_radios_requested);
 
 	if (num_radios_requested <= HW_MIN_NUM_RADIOS) {
-		l_error("%s must be greater or equal to %d\n",
+		l_error("%s must be greater or equal to %d",
 			HW_CONFIG_SETUP_NUM_RADIOS, HW_MIN_NUM_RADIOS);
 		return false;
 	}
@@ -798,7 +798,7 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 
 		if (!l_settings_has_group(hw_settings, radio_config_group)) {
 			l_error("No radio configuration group [%s] found in "
-					"config. file.\n", radio_config_group);
+					"config. file.", radio_config_group);
 
 			status = false;
 			goto exit;
@@ -840,7 +840,7 @@ configure:
 			goto exit;
 		}
 
-		l_info("Created interface %s on %s\n", interface_name,
+		l_info("Created interface %s on %s", interface_name,
 								phy_name);
 
 		if (!set_interface_state(interface_name,
@@ -872,7 +872,7 @@ static void destroy_hw_radios(int hwsim_radio_ids[],
 					HW_INTERFACE_STATE_DOWN);
 
 		delete_interface(interface_names_in[i]);
-		l_info("Removed interface %s\n", interface_names_in[i]);
+		l_info("Removed interface %s", interface_names_in[i]);
 
 		interface_names_in[i] = NULL;
 
@@ -883,7 +883,7 @@ static void destroy_hw_radios(int hwsim_radio_ids[],
 
 	while (hwsim_radio_ids[i] != -1) {
 		destroy_hwsim_radio(hwsim_radio_ids[i]);
-		l_info("Removed radio id %d\n", hwsim_radio_ids[i]);
+		l_info("Removed radio id %d", hwsim_radio_ids[i]);
 
 		hwsim_radio_ids[i] = -1;
 
@@ -926,7 +926,7 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 
 		if (stat(hostapd_config_file_path, &st) != 0) {
 			l_error("%s : hostapd configuration file [%s] "
-				"does not exist.\n", HW_CONFIG_FILE_NAME,
+				"does not exist.", HW_CONFIG_FILE_NAME,
 						hostapd_config_file_path);
 			return false;
 		}
@@ -1098,7 +1098,7 @@ static void run_py_tests(char *config_dir_path, struct l_queue *test_queue)
 		return;
 
 	if (chdir(config_dir_path) < 0)
-		l_error("Failed to change directory\n");
+		l_error("Failed to change directory");
 	else {
 		printf(CONSOLE_LN_BOLD CONSOLE_LN_BLACK
 			CONSOLE_BG_WHITE "Running tests in %-63s"
@@ -1158,10 +1158,10 @@ start_next_test:
 				print_test_status(py_test, TEST_STATUS_FAILED,
 								interval);
 		} else if (WIFSTOPPED(status))
-			l_info("Process %d stopped with signal %d\n", corpse,
+			l_info("Process %d stopped with signal %d", corpse,
 			       WSTOPSIG(status));
 		else if (WIFCONTINUED(status))
-			l_info("Process %d continued\n", corpse);
+			l_info("Process %d continued", corpse);
 
 		if (corpse == test_exec_pid)
 			break;
@@ -1184,7 +1184,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 	struct l_settings *hw_settings;
 	struct l_queue *test_queue;
 
-	l_info("Starting configuration cycle No: %d\n",
+	l_info("Starting configuration cycle No: %d",
 						++(*(int *)config_cycle_count));
 
 	if (!key || !value)
@@ -1197,7 +1197,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 	test_queue = (struct l_queue *) value;
 
 	if (l_queue_isempty(test_queue)) {
-		l_error("No Python IWD tests have been found in %s\n",
+		l_error("No Python IWD tests have been found in %s",
 							config_dir_path);
 		return;
 	}
@@ -1278,7 +1278,7 @@ static void run_command(char *cmdname)
 		goto exit;
 
 	if (l_hashmap_isempty(test_config_map)) {
-		l_error("No test configuration is found in %s.\n",
+		l_error("No test configuration is found in %s.",
 								test_home_path);
 		goto exit;
 	}
@@ -1291,7 +1291,7 @@ static void run_command(char *cmdname)
 
 	g_dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
 	if (!g_dbus) {
-		l_error("Error: cannot initialize system bus\n");
+		l_error("Error: cannot initialize system bus");
 		goto exit;
 	}
 
@@ -1315,7 +1315,7 @@ static void run_tests(void)
 
 	fp = fopen("/proc/cmdline", "re");
 	if (!fp) {
-		l_error("Failed to open kernel command line\n");
+		l_error("Failed to open kernel command line");
 		return;
 	}
 
@@ -1323,20 +1323,20 @@ static void run_tests(void)
 	fclose(fp);
 
 	if (!ptr) {
-		l_error("Failed to read kernel command line\n");
+		l_error("Failed to read kernel command line");
 		return;
 	}
 
 	ptr = strstr(cmdline, "TESTARGS=");
 	if (!ptr) {
-		l_error("No test command section found\n");
+		l_error("No test command section found");
 		return;
 	}
 
 	cmds = ptr + 10;
 	ptr = strchr(cmds, '\'');
 	if (!ptr) {
-		l_error("Malformed test command section\n");
+		l_error("Malformed test command section");
 		return;
 	}
 
@@ -1344,13 +1344,13 @@ static void run_tests(void)
 
 	ptr = strstr(cmdline, "TESTAUTO=1");
 	if (ptr) {
-		l_info("Automatic test execution requested\n");
+		l_info("Automatic test execution requested");
 		run_auto = true;
 	}
 
 	ptr = strstr(cmdline, "TESTVERBOUT=1");
 	if (ptr) {
-		l_info("Enable verbose output\n");
+		l_info("Enable verbose output");
 		verbose_out = true;
 	}
 
