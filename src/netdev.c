@@ -60,17 +60,6 @@ static void do_debug(const char *str, void *user_data)
 	l_info("%s%s", prefix, str);
 }
 
-static size_t rta_add_u8(void *rta_buf, unsigned short type, uint8_t value)
-{
-	struct rtattr *rta = rta_buf;
-
-	rta->rta_len = RTA_LENGTH(sizeof(uint8_t));
-	rta->rta_type = type;
-	*((uint8_t *) RTA_DATA(rta)) = value;
-
-	return RTA_SPACE(sizeof(uint8_t));
-}
-
 struct cb_data {
 	netdev_command_func_t callback;
 	void *user_data;
@@ -87,6 +76,17 @@ static void netlink_result(int error, uint16_t type, const void *data,
 	cb_data->callback(error < 0 ? false : true, cb_data->user_data);
 
 	l_free(cb_data);
+}
+
+static size_t rta_add_u8(void *rta_buf, unsigned short type, uint8_t value)
+{
+	struct rtattr *rta = rta_buf;
+
+	rta->rta_len = RTA_LENGTH(sizeof(uint8_t));
+	rta->rta_type = type;
+	*((uint8_t *) RTA_DATA(rta)) = value;
+
+	return RTA_SPACE(sizeof(uint8_t));
 }
 
 void netdev_set_linkmode_and_operstate(uint32_t ifindex,
