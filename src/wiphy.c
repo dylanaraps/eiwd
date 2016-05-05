@@ -64,6 +64,14 @@ struct network {
 	bool ask_psk:1; /* Whether we should force-ask agent for PSK */
 };
 
+enum netdev_state {
+	NETDEV_STATE_DISCONNECTED = 0,	/* Disconnected, no auto-connect */
+	NETDEV_STATE_AUTOCONNECT,	/* Disconnected, try auto-connect */
+	NETDEV_STATE_CONNECTING,	/* Connecting */
+	NETDEV_STATE_CONNECTED,
+	NETDEV_STATE_DISCONNECTING,
+};
+
 struct netdev {
 	uint32_t index;
 	char name[IFNAMSIZ];

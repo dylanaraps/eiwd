@@ -29,14 +29,6 @@ typedef void (*netdev_destroy_func_t)(void *userdata);
 
 typedef void (*netdev_command_func_t) (bool result, void *user_data);
 
-enum netdev_state {
-	NETDEV_STATE_DISCONNECTED = 0,	/* Disconnected, no auto-connect */
-	NETDEV_STATE_AUTOCONNECT,	/* Disconnected, try auto-connect */
-	NETDEV_STATE_CONNECTING,	/* Connecting */
-	NETDEV_STATE_CONNECTED,
-	NETDEV_STATE_DISCONNECTING,
-};
-
 void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 				uint8_t linkmode, uint8_t operstate,
 				netdev_command_func_t cb, void *user_data);
