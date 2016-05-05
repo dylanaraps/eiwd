@@ -65,12 +65,12 @@ struct network {
 	bool ask_psk:1; /* Whether we should force-ask agent for PSK */
 };
 
-enum netdev_state {
-	NETDEV_STATE_DISCONNECTED = 0,	/* Disconnected, no auto-connect */
-	NETDEV_STATE_AUTOCONNECT,	/* Disconnected, try auto-connect */
-	NETDEV_STATE_CONNECTING,	/* Connecting */
-	NETDEV_STATE_CONNECTED,
-	NETDEV_STATE_DISCONNECTING,
+enum device_state {
+	DEVICE_STATE_DISCONNECTED = 0,	/* Disconnected, no auto-connect */
+	DEVICE_STATE_AUTOCONNECT,	/* Disconnected, try auto-connect */
+	DEVICE_STATE_CONNECTING,	/* Connecting */
+	DEVICE_STATE_CONNECTED,
+	DEVICE_STATE_DISCONNECTING,
 };
 
 struct netdev {
@@ -78,7 +78,7 @@ struct netdev {
 	char name[IFNAMSIZ];
 	uint32_t type;
 	uint8_t addr[ETH_ALEN];
-	enum netdev_state state;
+	enum device_state state;
 	struct l_queue *bss_list;
 	struct l_queue *old_bss_list;
 	struct l_dbus_message *scan_pending;
@@ -178,18 +178,18 @@ static bool __iwd_network_append_properties(const struct network *network,
 	return true;
 }
 
-static const char *netdev_state_to_string(enum netdev_state state)
+static const char *device_state_to_string(enum device_state state)
 {
 	switch (state) {
-	case NETDEV_STATE_DISCONNECTED:
+	case DEVICE_STATE_DISCONNECTED:
 		return "disconnected";
-	case NETDEV_STATE_AUTOCONNECT:
+	case DEVICE_STATE_AUTOCONNECT:
 		return "autoconnect";
-	case NETDEV_STATE_CONNECTING:
+	case DEVICE_STATE_CONNECTING:
 		return "connecting";
-	case NETDEV_STATE_CONNECTED:
+	case DEVICE_STATE_CONNECTED:
 		return "connected";
-	case NETDEV_STATE_DISCONNECTING:
+	case DEVICE_STATE_DISCONNECTING:
 		return "disconnecting";
 	}
 
@@ -206,25 +206,25 @@ const uint8_t *netdev_get_address(struct netdev *netdev)
 	return netdev->addr;
 }
 
-static void netdev_enter_state(struct netdev *netdev, enum netdev_state state)
+static void netdev_enter_state(struct netdev *netdev, enum device_state state)
 {
 	l_debug("Old State: %s, new state: %s",
-			netdev_state_to_string(netdev->state),
-			netdev_state_to_string(state));
+			device_state_to_string(netdev->state),
+			device_state_to_string(state));
 
 	switch (state) {
-	case NETDEV_STATE_AUTOCONNECT:
+	case DEVICE_STATE_AUTOCONNECT:
 		scan_periodic_start(netdev->index, new_scan_results, netdev);
 		break;
-	case NETDEV_STATE_DISCONNECTED:
+	case DEVICE_STATE_DISCONNECTED:
 		scan_periodic_stop(netdev->index);
 		break;
-	case NETDEV_STATE_CONNECTED:
+	case DEVICE_STATE_CONNECTED:
 		scan_periodic_stop(netdev->index);
 		break;
-	case NETDEV_STATE_CONNECTING:
+	case DEVICE_STATE_CONNECTING:
 		break;
-	case NETDEV_STATE_DISCONNECTING:
+	case DEVICE_STATE_DISCONNECTING:
 		break;
 	}
 
@@ -241,7 +241,7 @@ static void netdev_disassociated(struct netdev *netdev)
 	netdev->connected_bss = NULL;
 	netdev->connected_network = NULL;
 
-	netdev_enter_state(netdev, NETDEV_STATE_AUTOCONNECT);
+	netdev_enter_state(netdev, DEVICE_STATE_AUTOCONNECT);
 }
 
 static void netdev_lost_beacon(struct netdev *netdev)
@@ -336,7 +336,7 @@ static int mlme_authenticate_cmd(struct network *network, struct scan_bss *bss)
 
 	netdev->connected_bss = bss;
 	netdev->connected_network = network;
-	netdev_enter_state(netdev, NETDEV_STATE_CONNECTING);
+	netdev_enter_state(netdev, DEVICE_STATE_CONNECTING);
 
 	return 0;
 }
@@ -459,8 +459,8 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 
 	l_debug("");
 
-	if (netdev->state != NETDEV_STATE_DISCONNECTED &&
-			netdev->state != NETDEV_STATE_AUTOCONNECT)
+	if (netdev->state != DEVICE_STATE_DISCONNECTED &&
+			netdev->state != DEVICE_STATE_AUTOCONNECT)
 		return dbus_error_busy(message);
 
 	/*
@@ -797,8 +797,8 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 
 	l_debug("");
 
-	if (netdev->state == NETDEV_STATE_CONNECTING ||
-			netdev->state == NETDEV_STATE_DISCONNECTING)
+	if (netdev->state == DEVICE_STATE_CONNECTING ||
+			netdev->state == DEVICE_STATE_DISCONNECTING)
 		return dbus_error_busy(message);
 
 	if (!netdev->connected_bss)
@@ -817,7 +817,7 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 						netdev->connected_bss->addr);
 	l_genl_family_send(nl80211, msg, device_disconnect_cb, netdev, NULL);
 
-	netdev_enter_state(netdev, NETDEV_STATE_DISCONNECTING);
+	netdev_enter_state(netdev, DEVICE_STATE_DISCONNECTING);
 
 	netdev->disconnect_pending = l_dbus_message_ref(message);
 
@@ -1064,7 +1064,7 @@ static void setting_keys_failed(struct netdev *netdev, uint16_t reason_code)
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
 						netdev->connected_bss->addr);
 	l_genl_family_send(nl80211, msg, deauthenticate_cb, netdev, NULL);
-	netdev_enter_state(netdev, NETDEV_STATE_DISCONNECTING);
+	netdev_enter_state(netdev, DEVICE_STATE_DISCONNECTING);
 }
 
 static void handshake_failed(uint32_t ifindex,
@@ -1081,7 +1081,7 @@ static void handshake_failed(uint32_t ifindex,
 	msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, aa);
 	l_genl_family_send(nl80211, msg, deauthenticate_cb, netdev, NULL);
-	netdev_enter_state(netdev, NETDEV_STATE_DISCONNECTING);
+	netdev_enter_state(netdev, DEVICE_STATE_DISCONNECTING);
 }
 
 static void mlme_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
@@ -1244,7 +1244,7 @@ static void operstate_cb(bool result, void *user_data)
 
 	network_connected(netdev->connected_network->ssid_security,
 				netdev->connected_network->ssid);
-	netdev_enter_state(netdev, NETDEV_STATE_CONNECTED);
+	netdev_enter_state(netdev, DEVICE_STATE_CONNECTED);
 }
 
 static void set_station_cb(struct l_genl_msg *msg, void *user_data)
@@ -1806,7 +1806,7 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 	l_queue_destroy(netdev->old_bss_list, bss_free);
 	netdev->old_bss_list = NULL;
 
-	if (netdev->state == NETDEV_STATE_AUTOCONNECT)
+	if (netdev->state == DEVICE_STATE_AUTOCONNECT)
 		netdev_autoconnect_next(netdev);
 
 	return true;
@@ -1932,7 +1932,7 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 						IF_OPER_DORMANT, NULL, NULL);
 
 		scan_ifindex_add(netdev->index);
-		netdev_enter_state(netdev, NETDEV_STATE_AUTOCONNECT);
+		netdev_enter_state(netdev, DEVICE_STATE_AUTOCONNECT);
 	}
 
 	l_debug("Found interface %s", netdev->name);
