@@ -27,15 +27,15 @@
 #include <errno.h>
 #include <ell/ell.h>
 
-#include "dbus.h"
-#include "netdev.h"
-#include "wiphy.h"
-#include "scan.h"
-#include "mpdu.h"
-#include "ie.h"
-#include "wscutil.h"
-#include "util.h"
-#include "wsc.h"
+#include "src/dbus.h"
+#include "src/netdev.h"
+#include "src/wiphy.h"
+#include "src/scan.h"
+#include "src/mpdu.h"
+#include "src/ie.h"
+#include "src/wscutil.h"
+#include "src/util.h"
+#include "src/wsc.h"
 
 #define WALK_TIME 120
 
