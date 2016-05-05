@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2013-2014  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2013-2016  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -24,17 +24,16 @@
 
 struct netdev;
 
-typedef void (*netdev_watch_func_t)(struct netdev *netdev, void *userdata);
-typedef void (*netdev_destroy_func_t)(void *userdata);
+typedef void (*device_watch_func_t)(struct netdev *device, void *userdata);
+typedef void (*device_destroy_func_t)(void *userdata);
 
-typedef void (*netdev_command_func_t) (bool result, void *user_data);
+uint32_t device_watch_add(device_watch_func_t added,
+				device_watch_func_t removed,
+				void *userdata, device_destroy_func_t destroy);
+bool device_watch_remove(uint32_t id);
 
-void netdev_set_linkmode_and_operstate(uint32_t ifindex,
-				uint8_t linkmode, uint8_t operstate,
-				netdev_command_func_t cb, void *user_data);
+void __device_watch_call_added(struct netdev *device);
+void __device_watch_call_removed(struct netdev *device);
 
-uint32_t netdev_get_ifindex(struct netdev *netdev);
-const uint8_t *netdev_get_address(struct netdev *netdev);
-
-bool netdev_init(void);
-bool netdev_exit(void);
+bool device_init(void);
+bool device_exit(void);

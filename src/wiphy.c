@@ -48,6 +48,7 @@
 #include "src/mpdu.h"
 #include "src/storage.h"
 #include "src/network.h"
+#include "src/device.h"
 
 static struct l_genl_family *nl80211 = NULL;
 
@@ -893,7 +894,7 @@ static void netdev_free(void *data)
 		dbus_pending_reply(&netdev->connect_pending,
 				dbus_error_aborted(netdev->connect_pending));
 
-	__netdev_watch_call_removed(netdev);
+	__device_watch_call_removed(netdev);
 
 	dbus = dbus_get_bus();
 	l_dbus_unregister_object(dbus, iwd_device_get_path(netdev));
@@ -1923,7 +1924,7 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 			l_info("Unable to register %s interface",
 				IWD_DEVICE_INTERFACE);
 		else {
-			__netdev_watch_call_added(netdev);
+			__device_watch_call_added(netdev);
 			device_emit_added(netdev);
 		}
 

@@ -59,6 +59,7 @@ bin_PROGRAMS = src/iwd client/iwctl monitor/iwmon
 src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/netdev.h src/netdev.c \
 					src/wiphy.h src/wiphy.c \
+					src/device.h src/device.c \
 					src/ie.h src/ie.c \
 					src/dbus.h src/dbus.c \
 					src/manager.h src/manager.c \

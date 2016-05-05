@@ -32,6 +32,7 @@
 #include "linux/nl80211.h"
 
 #include "src/netdev.h"
+#include "src/device.h"
 #include "src/wiphy.h"
 #include "src/dbus.h"
 #include "src/agent.h"
@@ -185,6 +186,11 @@ int main(int argc, char *argv[])
 	if (getenv("IWD_GENL_DEBUG"))
 		l_genl_set_debug(genl, do_debug, "[GENL] ", NULL);
 
+	if (!device_init()) {
+		exit_status = EXIT_FAILURE;
+		goto fail_device;
+	}
+
 	if (!netdev_init()) {
 		exit_status = EXIT_FAILURE;
 		goto fail_netdev;
@@ -217,6 +223,9 @@ fail_nl80211:
 	netdev_exit();
 
 fail_netdev:
+	device_exit();
+
+fail_device:
 	l_genl_unref(genl);
 
 fail_genl:

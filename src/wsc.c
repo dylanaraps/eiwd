@@ -29,6 +29,7 @@
 
 #include "src/dbus.h"
 #include "src/netdev.h"
+#include "src/device.h"
 #include "src/wiphy.h"
 #include "src/scan.h"
 #include "src/mpdu.h"
@@ -40,7 +41,7 @@
 #define WALK_TIME 120
 
 static struct l_genl_family *nl80211 = NULL;
-static uint32_t netdev_watch = 0;
+static uint32_t device_watch = 0;
 
 struct wsc_sm {
 	uint32_t ifindex;
@@ -294,15 +295,15 @@ static void wsc_free(void *userdata)
 	l_free(wsc);
 }
 
-static void netdev_appeared(struct netdev *netdev, void *userdata)
+static void device_appeared(struct netdev *device, void *userdata)
 {
 	struct l_dbus *dbus = dbus_get_bus();
 	struct wsc *wsc;
 
 	wsc = l_new(struct wsc, 1);
-	wsc->netdev = netdev;
+	wsc->netdev = device;
 
-	if (!l_dbus_object_add_interface(dbus, iwd_device_get_path(netdev),
+	if (!l_dbus_object_add_interface(dbus, iwd_device_get_path(device),
 						IWD_WSC_INTERFACE,
 						wsc)) {
 		wsc_free(wsc);
@@ -310,7 +311,7 @@ static void netdev_appeared(struct netdev *netdev, void *userdata)
 	}
 }
 
-static void netdev_disappeared(struct netdev *netdev, void *userdata)
+static void device_disappeared(struct netdev *device, void *userdata)
 {
 }
 
@@ -321,9 +322,9 @@ bool wsc_init(struct l_genl_family *in)
 					wsc_free, false))
 		return false;
 
-	netdev_watch = netdev_watch_add(netdev_appeared, netdev_disappeared,
+	device_watch = device_watch_add(device_appeared, device_disappeared,
 						NULL, NULL);
-	if (!netdev_watch)
+	if (!device_watch)
 		return false;
 
 	nl80211 = in;
@@ -339,7 +340,7 @@ bool wsc_exit()
 
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_WSC_INTERFACE);
 
-	netdev_watch_remove(netdev_watch);
+	device_watch_remove(device_watch);
 	nl80211 = 0;
 
 	return true;
