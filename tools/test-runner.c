@@ -1241,9 +1241,6 @@ static void create_network_and_run_tests(const void *key, void *value,
 	if (iwd_pid == -1)
 		goto exit;
 
-	/*TODO wait for iwd to obtain phyX - replace with dbus call*/
-	sleep(2);
-
 	run_py_tests(hw_settings, config_dir_path, test_queue);
 
 	terminate_iwd(iwd_pid);
