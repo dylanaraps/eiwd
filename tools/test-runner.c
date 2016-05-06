@@ -1360,7 +1360,7 @@ static void print_results(struct l_queue *test_stat_queue)
 	l_info("%s" CONSOLE_LN_RESET, sep_line);
 }
 
-void test_stat_queue_entry_destroy(void *data)
+static void test_stat_queue_entry_destroy(void *data)
 {
 	struct test_stats *ts;
 
