@@ -1107,7 +1107,7 @@ struct test_stats {
 	double py_run_time;
 };
 
-static void run_py_tests(struct l_settings *hw_settings, char *config_dir_path,
+static void run_py_tests(struct l_settings *hw_settings,
 					struct l_queue *test_queue,
 					struct l_queue *test_stats_queue)
 {
@@ -1118,18 +1118,10 @@ static void run_py_tests(struct l_settings *hw_settings, char *config_dir_path,
 	char *py_test = NULL;
 	struct test_stats *test_stats;
 
-	if (!config_dir_path)
-		return;
-
 	if (!l_settings_get_uint(hw_settings, HW_CONFIG_GROUP_SETUP,
 						HW_CONFIG_SETUP_MAX_EXEC_SEC,
 							&max_exec_interval))
 		max_exec_interval = TEST_MAX_EXEC_TIME_SEC;
-
-	if (chdir(config_dir_path) < 0) {
-		l_error("Failed to change directory");
-		return;
-	}
 
 	l_info(CONSOLE_LN_BOLD "%-10s%-60s%s" CONSOLE_LN_RESET, "Status",
 							"Test", "Duration");
@@ -1287,8 +1279,12 @@ static void create_network_and_run_tests(const void *key, void *value,
 	if (iwd_pid == -1)
 		goto exit;
 
-	run_py_tests(hw_settings, config_dir_path, test_queue,
-							test_stats_queue);
+	if (chdir(config_dir_path) < 0) {
+		l_error("Failed to change directory");
+		goto exit;
+	}
+
+	run_py_tests(hw_settings, test_queue, test_stats_queue);
 
 	l_info("Destructing network...");
 
