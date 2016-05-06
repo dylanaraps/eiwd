@@ -67,7 +67,7 @@ static bool verbose_out;
 static const char *qemu_binary;
 static const char *kernel_image;
 static const char *exec_home;
-static const char *test_list;
+static const char *test_dir_list = "";
 
 static const char * const qemu_table[] = {
 	"qemu-system-x86_64",
@@ -273,8 +273,8 @@ static void start_qemu(void)
 			"acpi=off pci=noacpi noapic quiet ro "
 			"mac80211_hwsim.radios=0 "
 			"init=%s TESTHOME=%s TESTAUTO=%u TESTVERBOUT=%u "
-			"TESTARGS=\'%s\'", initcmd, cwd, run_auto, verbose_out,
-			testargs);
+			"TESTDIRLIST=\'%s\' TESTARGS=\'%s\'", initcmd, cwd,
+			run_auto, verbose_out, test_dir_list, testargs);
 
 	argv = alloca(sizeof(qemu_argv));
 	memcpy(argv, qemu_argv, sizeof(qemu_argv));
@@ -1377,19 +1377,20 @@ static void run_command(char *cmdname)
 	char test_home_path[PATH_MAX];
 	char *ptr;
 	pid_t dbus_pid;
-	int index, level;
+	int i;
 	struct l_hashmap *test_config_map;
 	struct stat st;
 	struct l_queue *test_stat_queue;
+	char **test_config_dirs;
 
 	ptr = strrchr(exec_home, '/');
 	if (!ptr)
 		exit(EXIT_FAILURE);
 
-	index = ptr - exec_home;
+	i = ptr - exec_home;
 
-	strncpy(tmp_path, exec_home + 5, index - 5);
-	tmp_path[index - 5] = '\0';
+	strncpy(tmp_path, exec_home + 5, i - 5);
+	tmp_path[i - 5] = '\0';
 
 	sprintf(test_home_path, "%s/%s", tmp_path, TEST_TOP_DIR_DEFAULT_NAME);
 
@@ -1404,19 +1405,46 @@ static void run_command(char *cmdname)
 	if (!test_config_map)
 		return;
 
-	if (run_auto)
-		level = 0;
-	else
-		level = 1;
+	test_config_dirs = l_strsplit(test_dir_list, ',');
 
-	l_info("Searching for the test configurations...");
+	if (test_config_dirs[0]) {
+		i = 0;
 
-	if (!find_test_configuration(test_home_path, level, test_config_map))
-		goto exit;
+		while (test_config_dirs[i]) {
+			if (strchr(test_config_dirs[i], '/')) {
+				if (!find_test_configuration(
+							test_config_dirs[i], 1,
+							test_config_map))
+					goto exit;
+			} else {
+				char *config_dir_path;
+
+				config_dir_path =
+					l_strdup_printf("%s/%s", test_home_path,
+							test_config_dirs[i]);
+
+				if (!find_test_configuration(config_dir_path, 1,
+							test_config_map)) {
+					l_free(config_dir_path);
+
+					goto exit;
+				}
+
+				l_free(config_dir_path);
+			}
+
+			i++;
+		}
+	} else {
+		l_info("Searching for the test configurations...");
+
+		if (!find_test_configuration(test_home_path, 0,
+							test_config_map))
+			goto exit;
+	}
 
 	if (l_hashmap_isempty(test_config_map)) {
-		l_error("No test configuration is found in %s.",
-								test_home_path);
+		l_error("No test configuration discovered");
 		goto exit;
 	}
 
@@ -1436,6 +1464,7 @@ static void run_command(char *cmdname)
 	l_queue_destroy(test_stat_queue, test_stat_queue_entry_destroy);
 
 exit:
+	l_strfreev(test_config_dirs);
 	l_hashmap_destroy(test_config_map, NULL);
 }
 
@@ -1486,6 +1515,21 @@ static void run_tests(void)
 		l_info("Enable verbose output");
 		verbose_out = true;
 	}
+
+	ptr = strstr(cmdline, "TESTDIRLIST=");
+	if (!ptr) {
+		l_error("No test configuration directory list section found");
+		return;
+	}
+
+	test_dir_list = ptr + 13;
+	ptr = strchr(test_dir_list, '\'');
+	if (!ptr) {
+		l_error("Malformed test configuration directory list section");
+		return;
+	}
+
+	*ptr = '\0';
 
 	ptr = strstr(cmdline, "TESTHOME=");
 	if (ptr) {
@@ -1551,7 +1595,7 @@ int main(int argc, char *argv[])
 			kernel_image = optarg;
 			break;
 		case 't':
-			test_list = optarg;
+			test_dir_list = optarg;
 			break;
 		case 'v':
 			verbose_out = true;
