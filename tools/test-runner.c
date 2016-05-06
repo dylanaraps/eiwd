@@ -67,6 +67,7 @@ static bool verbose_out;
 static const char *qemu_binary;
 static const char *kernel_image;
 static const char *exec_home;
+static const char *test_list;
 
 static const char * const qemu_table[] = {
 	"qemu-system-x86_64",
@@ -1503,20 +1504,21 @@ static void usage(void)
 		"Usage:\n");
 	printf("\ttest-runner [options] [--] <command> [args]\n");
 	printf("Options:\n"
-		"\t-a, --auto             Find tests and run them\n"
-		"\t-q, --qemu <path>      QEMU binary\n"
-		"\t-k, --kernel <image>   Kernel image (bzImage)\n"
-		"\t-v, --verbose          Enable verbose output\n"
-		"\t-h, --help             Show help options\n");
+		"\t-q, --qemu <path>	QEMU binary\n"
+		"\t-k, --kernel <image>	Kernel image (bzImage)\n"
+		"\t-t, --tests <dirs>	Comma separated list of the test "
+					"configuration\n\t\t\t\tdirectories to"
+									" run\n"
+		"\t-v, --verbose		Enable verbose output\n"
+		"\t-h, --help		Show help options\n");
 }
 
 static const struct option main_options[] = {
-	{ "all",     no_argument,       NULL, 'a' },
-	{ "auto",    no_argument,       NULL, 'a' },
-	{ "qemu",    required_argument, NULL, 'q' },
-	{ "kernel",  required_argument, NULL, 'k' },
-	{ "verbose", no_argument,       NULL, 'v' },
-	{ "help",    no_argument,       NULL, 'h' },
+	{ "qemu",	required_argument, NULL, 'q' },
+	{ "kernel",	required_argument, NULL, 'k' },
+	{ "testdirs",	required_argument, NULL, 't' },
+	{ "verbose",	no_argument,       NULL, 'v' },
+	{ "help",	no_argument,       NULL, 'h' },
 	{ }
 };
 
@@ -1528,7 +1530,7 @@ int main(int argc, char *argv[])
 		run_tests();
 
 		sync();
-		printf("Done running test. Rebooting...");
+		l_info("Done running tests. Rebooting...");
 
 		reboot(RB_AUTOBOOT);
 		return EXIT_SUCCESS;
@@ -1537,7 +1539,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "aq:k:t:vh", main_options, NULL);
+		opt = getopt_long(argc, argv, "q:k:t:vh", main_options, NULL);
 		if (opt < 0)
 			break;
 
@@ -1547,6 +1549,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'k':
 			kernel_image = optarg;
+			break;
+		case 't':
+			test_list = optarg;
 			break;
 		case 'v':
 			verbose_out = true;
@@ -1559,16 +1564,9 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (run_auto) {
-		if (argc - optind > 0) {
-			fprintf(stderr, "Invalid command line parameters\n");
-			return EXIT_FAILURE;
-		}
-	} else {
-		if (argc - optind < 1) {
-			fprintf(stderr, "Failed to specify test command\n");
-			return EXIT_FAILURE;
-		}
+	if (argc - optind > 0) {
+		fprintf(stderr, "Invalid command line parameters\n");
+		return EXIT_FAILURE;
 	}
 
 	own_binary = argv[0];
