@@ -840,7 +840,7 @@ configure:
 			goto exit;
 		}
 
-		l_info("Created interface %s on %s", interface_name,
+		l_info("Created interface %s on %s radio", interface_name,
 								phy_name);
 
 		if (!set_interface_state(interface_name,
@@ -1020,7 +1020,7 @@ static void print_test_status(char *test_name, enum test_status ts,
 	if (interval > 0)
 		int_len = snprintf(NULL, 0, "%.3f", interval);
 	else
-		int_len = 0;
+		int_len = 3;
 
 	int_len++;
 
@@ -1030,6 +1030,8 @@ static void print_test_status(char *test_name, enum test_status ts,
 
 	if (interval > 0)
 		sprintf(interval_str, "%.3f sec", interval);
+	else
+		sprintf(interval_str, "%s", "...");
 
 	printf("%s%s%s%-60s%7s%s", color_str, status_str, CONSOLE_LN_RESET,
 		test_name, interval_str, line_end);
@@ -1097,14 +1099,24 @@ static pid_t start_execution_timeout_timer(unsigned int max_exec_interval_sec,
 	return test_timer_pid;
 }
 
+struct test_stats {
+	char *config_cycle_name;
+	unsigned int num_passed;
+	unsigned int num_failed;
+	unsigned int num_timedout;
+	double py_run_time;
+};
+
 static void run_py_tests(struct l_settings *hw_settings, char *config_dir_path,
-						struct l_queue *test_queue)
+					struct l_queue *test_queue,
+					struct l_queue *test_stats_queue)
 {
 	char *argv[3];
 	pid_t test_exec_pid, test_timer_pid;
 	struct timeval time_before, time_after, time_elapsed;
 	unsigned int max_exec_interval;
 	char *py_test = NULL;
+	struct test_stats *test_stats;
 
 	if (!config_dir_path)
 		return;
@@ -1114,14 +1126,13 @@ static void run_py_tests(struct l_settings *hw_settings, char *config_dir_path,
 							&max_exec_interval))
 		max_exec_interval = TEST_MAX_EXEC_TIME_SEC;
 
-	if (chdir(config_dir_path) < 0)
+	if (chdir(config_dir_path) < 0) {
 		l_error("Failed to change directory");
-	else {
-		printf(CONSOLE_LN_BOLD CONSOLE_LN_BLACK
-			CONSOLE_BG_WHITE "Running tests in %-63s"
-			CONSOLE_LN_RESET CONSOLE_BG_DEFAULT
-			"\n", config_dir_path);
+		return;
 	}
+
+	l_info(CONSOLE_LN_BOLD "%-10s%-60s%s" CONSOLE_LN_RESET, "Status",
+							"Test", "Duration");
 
 start_next_test:
 
@@ -1143,6 +1154,8 @@ start_next_test:
 
 	test_timer_pid = start_execution_timeout_timer(max_exec_interval,
 								&test_exec_pid);
+
+	test_stats = (struct test_stats *) l_queue_peek_tail(test_stats_queue);
 
 	while (true) {
 		pid_t corpse;
@@ -1169,15 +1182,22 @@ start_next_test:
 			interval = atof(interval_buf);
 
 			if (WIFEXITED(status) &&
-					WEXITSTATUS(status) == EXIT_SUCCESS)
+					WEXITSTATUS(status) == EXIT_SUCCESS) {
 				print_test_status(py_test, TEST_STATUS_PASSED,
 							interval);
-			else if (WIFSIGNALED(status))
+				test_stats->num_passed++;
+				test_stats->py_run_time += interval;
+			} else if (WIFSIGNALED(status)) {
 				print_test_status(py_test, TEST_STATUS_TIMEDOUT,
 								interval);
-			else
+				test_stats->num_timedout++;
+				test_stats->py_run_time += interval;
+			} else {
 				print_test_status(py_test, TEST_STATUS_FAILED,
 								interval);
+				test_stats->num_failed++;
+				test_stats->py_run_time += interval;
+			}
 		} else if (WIFSTOPPED(status))
 			l_info("Process %d stopped with signal %d", corpse,
 			       WSTOPSIG(status));
@@ -1194,8 +1214,31 @@ start_next_test:
 	goto start_next_test;
 }
 
+static void set_config_cycle_info(const char *config_dir_path,
+					struct l_queue *test_stats_queue)
+{
+	char sep_line[80];
+	char *config_name_ptr;
+	struct test_stats *test_stats;
+
+	memset(sep_line, '_', sizeof(sep_line) - 1);
+
+	config_name_ptr = strrchr(config_dir_path, '/');
+	config_name_ptr++;
+
+	l_info("%s", sep_line);
+	l_info(CONSOLE_LN_BOLD "Starting configuration cycle No: %d [%s]"
+		CONSOLE_LN_RESET, l_queue_length(test_stats_queue) + 1,
+							config_name_ptr);
+
+	test_stats = l_new(struct test_stats, 1);
+	test_stats->config_cycle_name = strdup(config_name_ptr);
+
+	l_queue_push_tail(test_stats_queue, test_stats);
+}
+
 static void create_network_and_run_tests(const void *key, void *value,
-						void *config_cycle_count)
+								void *data)
 {
 	int hwsim_radio_ids[HWSIM_RADIOS_MAX];
 	char *interface_names[HWSIM_RADIOS_MAX];
@@ -1204,9 +1247,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 	char *config_dir_path;
 	struct l_settings *hw_settings;
 	struct l_queue *test_queue;
-
-	l_info("Starting configuration cycle No: %d",
-						++(*(int *)config_cycle_count));
+	struct l_queue *test_stats_queue;
 
 	if (!key || !value)
 		return;
@@ -1216,6 +1257,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 	config_dir_path = (char *) key;
 	test_queue = (struct l_queue *) value;
+	test_stats_queue = (struct l_queue *) data;
 
 	if (l_queue_isempty(test_queue)) {
 		l_error("No Python IWD tests have been found in %s",
@@ -1223,9 +1265,13 @@ static void create_network_and_run_tests(const void *key, void *value,
 		return;
 	}
 
+	set_config_cycle_info(config_dir_path, test_stats_queue);
+
 	hw_settings = read_hw_config(config_dir_path);
 	if (!hw_settings)
 		return;
+
+	l_info("Configuring network...");
 
 	configure_hw_radios(hw_settings, hwsim_radio_ids, interface_names);
 
@@ -1241,7 +1287,10 @@ static void create_network_and_run_tests(const void *key, void *value,
 	if (iwd_pid == -1)
 		goto exit;
 
-	run_py_tests(hw_settings, config_dir_path, test_queue);
+	run_py_tests(hw_settings, config_dir_path, test_queue,
+							test_stats_queue);
+
+	l_info("Destructing network...");
 
 	terminate_iwd(iwd_pid);
 
@@ -1253,15 +1302,88 @@ exit:
 	l_settings_free(hw_settings);
 }
 
+struct stat_totals {
+	unsigned int total_passed;
+	unsigned int total_failed;
+	unsigned int total_timedout;
+	double total_duration;
+};
+
+static void print_test_stat(void *data, void *user_data)
+{
+	struct test_stats *test_stats;
+	struct stat_totals *stat_totals;
+
+	test_stats = (struct test_stats *) data;
+	stat_totals = (struct stat_totals *) user_data;
+
+	stat_totals->total_duration	+= test_stats->py_run_time;
+	stat_totals->total_passed	+= test_stats->num_passed;
+	stat_totals->total_failed	+= test_stats->num_failed;
+	stat_totals->total_timedout	+= test_stats->num_timedout;
+
+	l_info(CONSOLE_LN_BOLD "%27s "
+		CONSOLE_LN_DEFAULT "|" CONSOLE_LN_GREEN " %6d "
+		CONSOLE_LN_DEFAULT "|" CONSOLE_LN_RED " %6d "
+		CONSOLE_LN_DEFAULT "|" CONSOLE_LN_YELLOW " %9d "
+		CONSOLE_LN_RESET "| %9.3f sec",
+		test_stats->config_cycle_name, test_stats->num_passed,
+		test_stats->num_failed, test_stats->num_timedout,
+						test_stats->py_run_time);
+}
+
+static void print_results(struct l_queue *test_stat_queue)
+{
+	struct stat_totals stat_totals;
+	char sep_line[80];
+
+	memset(sep_line, '_', sizeof(sep_line) - 1);
+
+	l_info("%s\n" CONSOLE_LN_RESET, sep_line);
+	l_info("%27s " CONSOLE_LN_DEFAULT "|" CONSOLE_LN_GREEN " %s "
+		CONSOLE_LN_DEFAULT "|" CONSOLE_LN_RED " %5s "
+		CONSOLE_LN_DEFAULT "|" CONSOLE_LN_YELLOW " %9s "
+		CONSOLE_LN_RESET "| Duration",
+		"Configuration cycle", "PASSED", "FAILED", "TIMED OUT");
+
+	memset(sep_line, '-', sizeof(sep_line) - 1);
+	l_info("%s" CONSOLE_LN_RESET, sep_line);
+
+	l_queue_foreach(test_stat_queue, print_test_stat, &stat_totals);
+
+	l_info("%s" CONSOLE_LN_RESET, sep_line);
+	l_info("%27s "
+		CONSOLE_LN_DEFAULT "|" CONSOLE_LN_GREEN " %6d "
+		CONSOLE_LN_DEFAULT "|" CONSOLE_LN_RED " %6d "
+		CONSOLE_LN_DEFAULT "|" CONSOLE_LN_YELLOW " %9d "
+		CONSOLE_LN_RESET "| %9.3f sec",
+		"Total", stat_totals.total_passed, stat_totals.total_failed,
+			stat_totals.total_timedout, stat_totals.total_duration);
+
+	memset(sep_line, '_', sizeof(sep_line) - 1);
+	l_info("%s" CONSOLE_LN_RESET, sep_line);
+}
+
+void test_stat_queue_entry_destroy(void *data)
+{
+	struct test_stats *ts;
+
+	ts = (struct test_stats *) data;
+
+	l_free(ts->config_cycle_name);
+	l_free(ts);
+}
+
 static void run_command(char *cmdname)
 {
 	char tmp_path[PATH_MAX];
 	char test_home_path[PATH_MAX];
 	char *ptr;
 	pid_t dbus_pid;
-	int index, config_cycle_count, level;
+	int index, level;
 	struct l_hashmap *test_config_map;
 	struct stat st;
+	struct l_queue *test_stat_queue;
 
 	ptr = strrchr(exec_home, '/');
 	if (!ptr)
@@ -1290,7 +1412,7 @@ static void run_command(char *cmdname)
 	else
 		level = 1;
 
-	l_info("Configuring network...");
+	l_info("Searching for the test configurations...");
 
 	if (!find_test_configuration(test_home_path, level, test_config_map))
 		goto exit;
@@ -1307,10 +1429,14 @@ static void run_command(char *cmdname)
 	if (dbus_pid < 0)
 		goto exit;
 
-	config_cycle_count = 0;
+	test_stat_queue = l_queue_new();
 
 	l_hashmap_foreach(test_config_map, create_network_and_run_tests,
-							&config_cycle_count);
+							test_stat_queue);
+
+	print_results(test_stat_queue);
+
+	l_queue_destroy(test_stat_queue, test_stat_queue_entry_destroy);
 
 exit:
 	l_hashmap_destroy(test_config_map, NULL);
