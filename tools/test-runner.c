@@ -704,6 +704,7 @@ static bool find_test_configuration(const char *path, int level,
 
 #define HW_CONFIG_SETUP_NUM_RADIOS	"num_radios"
 #define HW_CONFIG_SETUP_RADIO_CONFS	"radio_confs"
+#define HW_CONFIG_SETUP_MAX_EXEC_SEC	"max_test_exec_interval_sec"
 
 static struct l_settings *read_hw_config(const char *test_dir_path)
 {
@@ -1058,7 +1059,8 @@ static void signal_handler(struct l_signal *signal, uint32_t signo,
 	}
 }
 
-static pid_t start_execution_timeout_timer(pid_t *test_exec_pid)
+static pid_t start_execution_timeout_timer(unsigned int max_exec_interval_sec,
+							pid_t *test_exec_pid)
 {
 	sigset_t mask;
 	struct l_signal *signal;
@@ -1079,7 +1081,7 @@ static pid_t start_execution_timeout_timer(pid_t *test_exec_pid)
 		signal = l_signal_create(&mask, signal_handler,
 							test_exec_pid, NULL);
 		test_exec_timeout =
-			l_timeout_create(TEST_MAX_EXEC_TIME_SEC,
+			l_timeout_create(max_exec_interval_sec,
 						test_timeout_timer_tick,
 						test_exec_pid,
 						NULL);
@@ -1095,15 +1097,22 @@ static pid_t start_execution_timeout_timer(pid_t *test_exec_pid)
 	return test_timer_pid;
 }
 
-static void run_py_tests(char *config_dir_path, struct l_queue *test_queue)
+static void run_py_tests(struct l_settings *hw_settings, char *config_dir_path,
+						struct l_queue *test_queue)
 {
 	char *argv[3];
 	pid_t test_exec_pid, test_timer_pid;
 	struct timeval time_before, time_after, time_elapsed;
+	unsigned int max_exec_interval;
 	char *py_test = NULL;
 
 	if (!config_dir_path)
 		return;
+
+	if (!l_settings_get_uint(hw_settings, HW_CONFIG_GROUP_SETUP,
+						HW_CONFIG_SETUP_MAX_EXEC_SEC,
+							&max_exec_interval))
+		max_exec_interval = TEST_MAX_EXEC_TIME_SEC;
 
 	if (chdir(config_dir_path) < 0)
 		l_error("Failed to change directory");
@@ -1132,7 +1141,8 @@ start_next_test:
 
 	gettimeofday(&time_before, NULL);
 
-	test_timer_pid = start_execution_timeout_timer(&test_exec_pid);
+	test_timer_pid = start_execution_timeout_timer(max_exec_interval,
+								&test_exec_pid);
 
 	while (true) {
 		pid_t corpse;
@@ -1234,7 +1244,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 	/*TODO wait for iwd to obtain phyX - replace with dbus call*/
 	sleep(2);
 
-	run_py_tests(config_dir_path, test_queue);
+	run_py_tests(hw_settings, config_dir_path, test_queue);
 
 	terminate_iwd(iwd_pid);
 
