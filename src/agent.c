@@ -373,7 +373,7 @@ static struct l_dbus_message *agent_unregister(struct l_dbus *dbus,
 
 	sender = l_dbus_message_get_sender(message);
 
-	if (!strcmp(default_agent->owner, sender))
+	if (strcmp(default_agent->owner, sender))
 		return dbus_error_not_found(message);
 
 	agent_free(default_agent);
