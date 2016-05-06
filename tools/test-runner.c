@@ -1048,7 +1048,7 @@ static void test_timeout_timer_tick(struct l_timeout *timeout, void *user_data)
 	l_main_quit();
 }
 
-static void signal_handler(struct l_signal *signal, uint32_t signo,
+static void test_timeout_signal_handler(struct l_signal *signal, uint32_t signo,
 								void *user_data)
 {
 	switch (signo) {
@@ -1078,7 +1078,7 @@ static pid_t start_execution_timeout_timer(unsigned int max_exec_interval_sec,
 		sigaddset(&mask, SIGINT);
 		sigaddset(&mask, SIGTERM);
 
-		signal = l_signal_create(&mask, signal_handler,
+		signal = l_signal_create(&mask, test_timeout_signal_handler,
 							test_exec_pid, NULL);
 		test_exec_timeout =
 			l_timeout_create(max_exec_interval_sec,
