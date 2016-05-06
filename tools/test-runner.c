@@ -62,7 +62,6 @@
 static const char *own_binary;
 static char **test_argv;
 static int test_argc;
-static bool run_auto = true;
 static bool verbose_out;
 static const char *qemu_binary;
 static const char *kernel_image;
@@ -272,9 +271,9 @@ static void start_qemu(void)
 			"rootflags=trans=virtio,version=9p2000.u "
 			"acpi=off pci=noacpi noapic quiet ro "
 			"mac80211_hwsim.radios=0 "
-			"init=%s TESTHOME=%s TESTAUTO=%u TESTVERBOUT=%u "
+			"init=%s TESTHOME=%s TESTVERBOUT=%u "
 			"TESTDIRLIST=\'%s\' TESTARGS=\'%s\'", initcmd, cwd,
-			run_auto, verbose_out, test_dir_list, testargs);
+			verbose_out, test_dir_list, testargs);
 
 	argv = alloca(sizeof(qemu_argv));
 	memcpy(argv, qemu_argv, sizeof(qemu_argv));
@@ -1436,6 +1435,7 @@ static void run_command(char *cmdname)
 			i++;
 		}
 	} else {
+		l_info("Automatic test execution requested");
 		l_info("Searching for the test configurations...");
 
 		if (!find_test_configuration(test_home_path, 0,
@@ -1503,12 +1503,6 @@ static void run_tests(void)
 	}
 
 	*ptr = '\0';
-
-	ptr = strstr(cmdline, "TESTAUTO=1");
-	if (ptr) {
-		l_info("Automatic test execution requested");
-		run_auto = true;
-	}
 
 	ptr = strstr(cmdline, "TESTVERBOUT=1");
 	if (ptr) {
