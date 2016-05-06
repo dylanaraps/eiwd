@@ -67,7 +67,6 @@ static bool verbose_out;
 static const char *qemu_binary;
 static const char *kernel_image;
 static const char *exec_home;
-static struct l_dbus *g_dbus;
 
 static const char * const qemu_table[] = {
 	"qemu-system-x86_64",
@@ -1301,18 +1300,10 @@ static void run_command(char *cmdname)
 	if (dbus_pid < 0)
 		goto exit;
 
-	g_dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
-	if (!g_dbus) {
-		l_error("Error: cannot initialize system bus");
-		goto exit;
-	}
-
 	config_cycle_count = 0;
 
 	l_hashmap_foreach(test_config_map, create_network_and_run_tests,
 							&config_cycle_count);
-
-	l_dbus_destroy(g_dbus);
 
 exit:
 	l_hashmap_destroy(test_config_map, NULL);
