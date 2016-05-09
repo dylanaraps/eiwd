@@ -154,11 +154,11 @@ static void prepare_sandbox(void)
 		struct stat st;
 
 		if (lstat(mount_table[i].target, &st) < 0) {
-			l_info("Creating %s\n", mount_table[i].target);
+			l_debug("Creating %s\n", mount_table[i].target);
 			mkdir(mount_table[i].target, 0755);
 		}
 
-		l_info("Mounting %s to %s\n", mount_table[i].fstype,
+		l_debug("Mounting %s to %s\n", mount_table[i].fstype,
 							mount_table[i].target);
 
 		if (mount(mount_table[i].fstype,
@@ -166,13 +166,13 @@ static void prepare_sandbox(void)
 				mount_table[i].fstype,
 				mount_table[i].flags,
 				mount_table[i].options) < 0) {
-			l_error("Error: Failed to mount filesystem %s\n",
+			l_error("Error: Failed to mount filesystem %s",
 							mount_table[i].target);
 		}
 	}
 
 	for (i = 0; dev_table[i].target; i++) {
-		l_info("Linking %s to %s\n", dev_table[i].linkpath,
+		l_debug("Linking %s to %s\n", dev_table[i].linkpath,
 							dev_table[i].target);
 
 		if (symlink(dev_table[i].target, dev_table[i].linkpath) < 0)
@@ -180,14 +180,14 @@ static void prepare_sandbox(void)
 							strerror(errno));
 	}
 
-	l_info("Creating new session group leader");
+	l_debug("Creating new session group leader");
 	setsid();
 
-	l_info("Setting controlling terminal");
+	l_debug("Setting controlling terminal");
 	ioctl(STDIN_FILENO, TIOCSCTTY, 1);
 
 	for (i = 0; config_table[i]; i++) {
-		l_info("Creating %s", config_table[i]);
+		l_debug("Creating %s", config_table[i]);
 
 		if (mount("tmpfs", config_table[i], "tmpfs",
 				MS_NOSUID|MS_NOEXEC|MS_NODEV|MS_STRICTATIME,
@@ -234,7 +234,7 @@ static bool check_virtualization(void)
 	__asm__ __volatile__("cpuid" : "=c" (ecx) : "a" (1) : "memory");
 
 	if (!!(ecx & (1 << 5))) {
-		printf("Found support for Virtual Machine eXtensions\n");
+		l_info("Found support for Virtual Machine eXtensions");
 		return true;
 	}
 #endif
@@ -1475,8 +1475,6 @@ static void run_tests(void)
 	char cmdline[CMDLINE_MAX], *ptr, *cmds;
 	FILE *fp;
 
-	l_log_set_stderr();
-
 	fp = fopen("/proc/cmdline", "re");
 	if (!fp) {
 		l_error("Failed to open kernel command line");
@@ -1540,10 +1538,10 @@ static void run_tests(void)
 
 static void usage(void)
 {
-	printf("testrunner - Automated test execution utility\n"
+	l_info("testrunner - Automated test execution utility\n"
 		"Usage:\n");
-	printf("\ttest-runner [options] [--] <command> [args]\n");
-	printf("Options:\n"
+	l_info("\ttest-runner [options] [--] <command> [args]\n");
+	l_info("Options:\n"
 		"\t-q, --qemu <path>	QEMU binary\n"
 		"\t-k, --kernel <image>	Kernel image (bzImage)\n"
 		"\t-t, --tests <dirs>	Comma separated list of the test "
@@ -1564,6 +1562,8 @@ static const struct option main_options[] = {
 
 int main(int argc, char *argv[])
 {
+	l_log_set_stderr();
+
 	if (getpid() == 1 && getppid() == 0) {
 		prepare_sandbox();
 
@@ -1605,7 +1605,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (argc - optind > 0) {
-		fprintf(stderr, "Invalid command line parameters\n");
+		l_error("Invalid command line parameters");
 		return EXIT_FAILURE;
 	}
 
@@ -1616,7 +1616,7 @@ int main(int argc, char *argv[])
 	if (!qemu_binary) {
 		qemu_binary = find_qemu();
 		if (!qemu_binary) {
-			fprintf(stderr, "No default QEMU binary found\n");
+			l_error("No default QEMU binary found");
 			return EXIT_FAILURE;
 		}
 	}
@@ -1624,13 +1624,13 @@ int main(int argc, char *argv[])
 	if (!kernel_image) {
 		kernel_image = find_kernel();
 		if (!kernel_image) {
-			fprintf(stderr, "No default kernel image found\n");
+			l_error("No default kernel image found");
 			return EXIT_FAILURE;
 		}
 	}
 
-	printf("Using QEMU binary %s\n", qemu_binary);
-	printf("Using kernel image %s\n", kernel_image);
+	l_info("Using QEMU binary %s", qemu_binary);
+	l_info("Using kernel image %s", kernel_image);
 
 	start_qemu();
 
