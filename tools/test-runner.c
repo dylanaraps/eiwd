@@ -1398,9 +1398,7 @@ static void run_command(char *cmdname)
 	sprintf(test_home_path, "%s/%s", tmp_path, TEST_TOP_DIR_DEFAULT_NAME);
 
 	if (stat(test_home_path, &st) == -1) {
-		l_error("Test directory %s does not exist",
-			test_home_path);
-
+		l_error("Test directory %s does not exist", test_home_path);
 		return;
 	}
 
