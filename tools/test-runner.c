@@ -1178,26 +1178,24 @@ start_next_test:
 				print_test_status(py_test, TEST_STATUS_PASSED,
 							interval);
 				test_stats->num_passed++;
-				test_stats->py_run_time += interval;
 			} else if (WIFSIGNALED(status)) {
 				print_test_status(py_test, TEST_STATUS_TIMEDOUT,
 								interval);
 				test_stats->num_timedout++;
-				test_stats->py_run_time += interval;
 			} else {
 				print_test_status(py_test, TEST_STATUS_FAILED,
 								interval);
 				test_stats->num_failed++;
-				test_stats->py_run_time += interval;
 			}
+
+			test_stats->py_run_time += interval;
+
+			break;
 		} else if (WIFSTOPPED(status))
 			l_info("Process %d stopped with signal %d", corpse,
 			       WSTOPSIG(status));
 		else if (WIFCONTINUED(status))
 			l_info("Process %d continued", corpse);
-
-		if (corpse == test_exec_pid)
-			break;
 	}
 
 	l_free(py_test);
