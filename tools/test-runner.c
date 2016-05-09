@@ -226,16 +226,19 @@ static char *const qemu_envp[] = {
 	NULL
 };
 
-static void check_virtualization(void)
+static bool check_virtualization(void)
 {
 #if defined(__GNUC__) && (defined(__i386__) || defined(__amd64__))
 	uint32_t ecx;
 
 	__asm__ __volatile__("cpuid" : "=c" (ecx) : "a" (1) : "memory");
 
-	if (!!(ecx & (1 << 5)))
+	if (!!(ecx & (1 << 5))) {
 		printf("Found support for Virtual Machine eXtensions\n");
+		return true;
+	}
 #endif
+	return false;
 }
 
 static void start_qemu(void)
@@ -244,8 +247,9 @@ static void start_qemu(void)
 	char cmdline[CMDLINE_MAX];
 	char **argv;
 	int i, pos;
+	bool has_virt;
 
-	check_virtualization();
+	has_virt = check_virtualization();
 
 	if (!getcwd(cwd, sizeof(cwd)))
 		strcat(cwd, "/");
@@ -285,7 +289,9 @@ static void start_qemu(void)
 	argv[pos++] = (char *) kernel_image;
 	argv[pos++] = "-append";
 	argv[pos++] = (char *) cmdline;
-	argv[pos++] = "-enable-kvm";
+
+	if (has_virt)
+		argv[pos++] = "-enable-kvm";
 
 	argv[pos] = NULL;
 
