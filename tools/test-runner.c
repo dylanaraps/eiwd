@@ -76,16 +76,23 @@ static const char * const qemu_table[] = {
 	NULL
 };
 
+static bool path_exist(const char *path_name)
+{
+	struct stat st;
+
+	if (!stat(path_name, &st))
+		return true;
+
+	return false;
+}
+
 static const char *find_qemu(void)
 {
 	int i;
 
-	for (i = 0; qemu_table[i]; i++) {
-		struct stat st;
-
-		if (!stat(qemu_table[i], &st))
+	for (i = 0; qemu_table[i]; i++)
+		if (path_exist(qemu_table[i]))
 			return qemu_table[i];
-	}
 
 	return NULL;
 }
@@ -102,12 +109,9 @@ static const char *find_kernel(void)
 {
 	int i;
 
-	for (i = 0; kernel_table[i]; i++) {
-		struct stat st;
-
-		if (!stat(kernel_table[i], &st))
+	for (i = 0; kernel_table[i]; i++)
+		if (path_exist(kernel_table[i]))
 			return kernel_table[i];
-	}
 
 	return NULL;
 }
@@ -366,9 +370,7 @@ static bool wait_for_socket(const char *socket, useconds_t wait_time)
 	int i = 0;
 
 	do {
-		struct stat st;
-
-		if (!stat(socket, &st))
+		if (path_exist(socket))
 			return true;
 
 		usleep(wait_time);
@@ -916,7 +918,6 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 	while (hostap_keys[i]) {
 		char hostapd_config_file_path[PATH_MAX];
 		const char *hostapd_config_file;
-		struct stat st;
 		char *interface_name;
 
 		hostapd_config_file =
@@ -930,7 +931,7 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 
 		hostapd_config_file_path[PATH_MAX - 1] = '\0';
 
-		if (stat(hostapd_config_file_path, &st) != 0) {
+		if (!path_exist(hostapd_config_file_path)) {
 			l_error("%s : hostapd configuration file [%s] "
 				"does not exist.", HW_CONFIG_FILE_NAME,
 						hostapd_config_file_path);
@@ -1382,7 +1383,6 @@ static void run_command(char *cmdname)
 	pid_t dbus_pid;
 	int i;
 	struct l_hashmap *test_config_map;
-	struct stat st;
 	struct l_queue *test_stat_queue;
 	char **test_config_dirs;
 
@@ -1397,7 +1397,7 @@ static void run_command(char *cmdname)
 
 	sprintf(test_home_path, "%s/%s", tmp_path, TEST_TOP_DIR_DEFAULT_NAME);
 
-	if (stat(test_home_path, &st) == -1) {
+	if (!path_exist(test_home_path)) {
 		l_error("Test directory %s does not exist", test_home_path);
 		return;
 	}
