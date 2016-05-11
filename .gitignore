@@ -22,6 +22,7 @@ src/iwd
 client/iwctl
 monitor/iwmon
 tools/hwsim
+tools/test-runner
 doc/iwmon.1
 unit/test-cmac-aes
 unit/test-arc4
