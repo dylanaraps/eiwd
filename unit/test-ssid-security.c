@@ -29,6 +29,7 @@
 #include <assert.h>
 #include <ell/ell.h>
 
+#include "src/iwd.h"
 #include "src/ie.h"
 #include "src/scan.h"
 
@@ -36,7 +37,7 @@ struct test_data {
 	unsigned char *rsne;
 	unsigned int rsne_len;
 	enum ie_bss_capability capability;
-	enum scan_ssid_security expected;
+	enum security expected;
 };
 
 static unsigned char ssid_security_wpa_data_1[] = {
@@ -49,7 +50,7 @@ static struct test_data ssid_security_wpa_test_1 = {
 	.rsne = ssid_security_wpa_data_1,
 	.rsne_len = sizeof(ssid_security_wpa_data_1),
 	.capability = IE_BSS_CAP_ESS,
-	.expected = SCAN_SSID_SECURITY_PSK,
+	.expected = SECURITY_PSK,
 };
 
 static unsigned char ssid_security_wpa2_data_1[] = {
@@ -62,7 +63,7 @@ static struct test_data ssid_security_wpa_test_2 = {
 	.rsne = ssid_security_wpa2_data_1,
 	.rsne_len = sizeof(ssid_security_wpa2_data_1),
 	.capability = IE_BSS_CAP_ESS,
-	.expected = SCAN_SSID_SECURITY_PSK,
+	.expected = SECURITY_PSK,
 };
 
 static unsigned char ssid_security_8021x_data_1[] = {
@@ -75,17 +76,17 @@ static struct test_data ssid_security_8021x_test_1 = {
 	.rsne = ssid_security_8021x_data_1,
 	.rsne_len = sizeof(ssid_security_8021x_data_1),
 	.capability = IE_BSS_CAP_ESS,
-	.expected = SCAN_SSID_SECURITY_8021X,
+	.expected = SECURITY_8021X,
 };
 
 static struct test_data ssid_security_wep_test_1 = {
 	.capability = IE_BSS_CAP_ESS | IE_BSS_CAP_PRIVACY,
-	.expected = SCAN_SSID_SECURITY_WEP,
+	.expected = SECURITY_WEP,
 };
 
 static struct test_data ssid_security_open_test_1 = {
 	.capability = IE_BSS_CAP_ESS,
-	.expected = SCAN_SSID_SECURITY_NONE,
+	.expected = SECURITY_NONE,
 };
 
 static void ssid_security_test(const void *data)
@@ -104,8 +105,7 @@ static void ssid_security_test(const void *data)
 	} else
 		infop = NULL;
 
-	assert(scan_get_ssid_security(test->capability, infop) ==
-			test->expected);
+	assert(scan_get_security(test->capability, infop) == test->expected);
 }
 
 int main(int argc, char *argv[])
