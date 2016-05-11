@@ -28,6 +28,8 @@
 
 #include <ell/ell.h>
 
+#include "src/iwd.h"
+#include "src/common.h"
 #include "src/network.h"
 #include "src/storage.h"
 #include "src/scan.h"
@@ -83,7 +85,7 @@ bool network_seen(uint32_t type, const char *ssid)
 	struct network_info *info;
 
 	switch(type) {
-	case SCAN_SSID_SECURITY_PSK:
+	case SECURITY_PSK:
 		err = storage_network_get_mtime("psk", ssid, &mtim);
 		break;
 	default:
@@ -119,7 +121,7 @@ bool network_connected(uint32_t type, const char *ssid)
 	if (!info)
 		return false;
 
-	strtype = scan_ssid_security_to_str(type);
+	strtype = security_to_str(type);
 	if (!strtype)
 		goto fail;
 

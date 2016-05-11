@@ -41,6 +41,7 @@
 #include "src/dbus.h"
 #include "src/scan.h"
 #include "src/util.h"
+#include "src/common.h"
 #include "src/eapol.h"
 #include "src/agent.h"
 #include "src/crypto.h"
@@ -58,7 +59,7 @@ struct network {
 	char ssid[33];
 	unsigned char *psk;
 	unsigned int agent_request;
-	enum scan_ssid_security ssid_security;
+	enum security security;
 	struct l_queue *bss_list;
 	struct l_settings *settings;
 	bool update_psk:1;  /* Whether PSK should be written to storage */
@@ -146,7 +147,7 @@ static bool eapol_read(struct l_io *io, void *user_data)
 
 static const char *iwd_network_get_path(struct netdev *netdev,
 					const uint8_t *ssid, size_t ssid_len,
-					enum scan_ssid_security ssid_security)
+					enum security security)
 {
 	static char path[256];
 	unsigned int pos, i;
@@ -158,7 +159,7 @@ static const char *iwd_network_get_path(struct netdev *netdev,
 								ssid[i]);
 
 	snprintf(path + pos, sizeof(path) - pos, "_%s",
-			scan_ssid_security_to_str(ssid_security));
+				security_to_str(security));
 
 	return path;
 }
@@ -290,13 +291,13 @@ static struct scan_bss *network_select_bss(struct wiphy *wiphy,
 
 	/* TODO: sort the list by RSSI, potentially other criteria. */
 
-	switch (network->ssid_security) {
-	case SCAN_SSID_SECURITY_NONE:
+	switch (network->security) {
+	case SECURITY_NONE:
 		/* Pick the first bss (strongest signal) */
 		return l_queue_peek_head(bss_list);
 
-	case SCAN_SSID_SECURITY_PSK:
-	case SCAN_SSID_SECURITY_8021X:
+	case SECURITY_PSK:
+	case SECURITY_8021X:
 		/* Pick the first bss that advertises any cipher we support. */
 		for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
 				bss_entry = bss_entry->next) {
@@ -474,14 +475,14 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	if (!bss)
 		return dbus_error_not_supported(message);
 
-	switch (network->ssid_security) {
-	case SCAN_SSID_SECURITY_PSK:
+	switch (network->security) {
+	case SECURITY_PSK:
 		return network_connect_psk(network, bss, message);
-	case SCAN_SSID_SECURITY_NONE:
+	case SECURITY_NONE:
 		mlme_authenticate_cmd(network, bss);
 		netdev->connect_pending = l_dbus_message_ref(message);
 		return NULL;
-	case SCAN_SSID_SECURITY_8021X:
+	case SECURITY_8021X:
 		network->settings = storage_network_open("8021x",
 							network->ssid);
 
@@ -804,10 +805,8 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 	if (!netdev->connected_bss)
 		return dbus_error_not_connected(message);
 
-	if (netdev->connected_network->ssid_security ==
-			SCAN_SSID_SECURITY_PSK ||
-			netdev->connected_network->ssid_security ==
-			SCAN_SSID_SECURITY_8021X)
+	if (netdev->connected_network->security == SECURITY_PSK ||
+			netdev->connected_network->security == SECURITY_8021X)
 		eapol_cancel(netdev->index);
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_DEAUTHENTICATE, 512);
@@ -931,10 +930,10 @@ static bool netdev_try_autoconnect(struct netdev *netdev,
 {
 	struct wiphy *wiphy = netdev->wiphy;
 
-	switch (network->ssid_security) {
-	case SCAN_SSID_SECURITY_NONE:
+	switch (network->security) {
+	case SECURITY_NONE:
 		break;
-	case SCAN_SSID_SECURITY_PSK:
+	case SECURITY_PSK:
 	{
 		uint16_t pairwise_ciphers, group_ciphers;
 		const char *psk;
@@ -971,7 +970,7 @@ static bool netdev_try_autoconnect(struct netdev *netdev,
 
 		break;
 	}
-	case SCAN_SSID_SECURITY_8021X:
+	case SECURITY_8021X:
 		network->settings = storage_network_open("8021x",
 							network->ssid);
 
@@ -1242,7 +1241,7 @@ static void operstate_cb(bool result, void *user_data)
 		dbus_pending_reply(&netdev->connect_pending, reply);
 	}
 
-	network_connected(netdev->connected_network->ssid_security,
+	network_connected(netdev->connected_network->security,
 				netdev->connected_network->ssid);
 	netdev_enter_state(netdev, DEVICE_STATE_CONNECTED);
 }
@@ -1396,8 +1395,8 @@ static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
 
 	l_info("Association completed");
 
-	if (netdev->connected_network->ssid_security ==
-						SCAN_SSID_SECURITY_NONE)
+	if (netdev->connected_network->security ==
+						SECURITY_NONE)
 		netdev_set_linkmode_and_operstate(netdev->index, 1, IF_OPER_UP,
 						operstate_cb, netdev);
 }
@@ -1427,8 +1426,8 @@ static void mlme_associate_cmd(struct netdev *netdev)
 	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(network->ssid),
 			network->ssid);
 
-	if (network->ssid_security == SCAN_SSID_SECURITY_PSK ||
-			network->ssid_security == SCAN_SSID_SECURITY_8021X) {
+	if (network->security == SECURITY_PSK ||
+			network->security == SECURITY_8021X) {
 		uint16_t pairwise_ciphers, group_ciphers;
 		uint32_t pairwise_cipher_attr;
 		uint32_t group_cipher_attr;
@@ -1438,7 +1437,7 @@ static void mlme_associate_cmd(struct netdev *netdev)
 
 		memset(&info, 0, sizeof(info));
 
-		if (network->ssid_security == SCAN_SSID_SECURITY_PSK)
+		if (network->security == SECURITY_PSK)
 			info.akm_suites =
 				bss->sha256 ? IE_RSN_AKM_SUITE_PSK_SHA256 :
 						IE_RSN_AKM_SUITE_PSK;
@@ -1474,7 +1473,7 @@ static void mlme_associate_cmd(struct netdev *netdev)
 			eapol_sm_set_own_wpa(sm, rsne_buf, rsne_buf[1] + 2);
 		}
 
-		if (network->ssid_security == SCAN_SSID_SECURITY_PSK)
+		if (network->security == SECURITY_PSK)
 			eapol_sm_set_pmk(sm, network->psk);
 		else
 			eapol_sm_set_8021x_config(sm, network->settings);
@@ -1594,7 +1593,7 @@ static void mlme_disconnect_event(struct l_genl_msg *msg,
 		 * Connection failed, if PSK try asking for the passphrase
 		 * once more
 		 */
-		if (network->ssid_security == SCAN_SSID_SECURITY_PSK) {
+		if (network->security == SECURITY_PSK) {
 			network->update_psk = false;
 			network->ask_psk = true;
 		}
@@ -1668,7 +1667,7 @@ static int autoconnect_rank_compare(const void *a, const void *b, void *user)
 static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 {
 	struct network *network;
-	enum scan_ssid_security ssid_security;
+	enum security security;
 	const char *path;
 	double rankmod;
 	struct autoconnect_entry *entry;
@@ -1698,12 +1697,12 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 			return;
 		}
 
-		ssid_security = scan_get_ssid_security(bss->capability, &rsne);
+		security = scan_get_security(bss->capability, &rsne);
 
-		if (ssid_security == SCAN_SSID_SECURITY_PSK)
+		if (security == SECURITY_PSK)
 			bss->sha256 =
 				rsne.akm_suites & IE_RSN_AKM_SUITE_PSK_SHA256;
-		else if (ssid_security == SCAN_SSID_SECURITY_8021X)
+		else if (security == SECURITY_8021X)
 			bss->sha256 =
 				rsne.akm_suites & IE_RSN_AKM_SUITE_8021X_SHA256;
 	} else if (bss->wpa) {
@@ -1716,26 +1715,26 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 			return;
 		}
 
-		ssid_security = scan_get_ssid_security(bss->capability, &wpa);
+		security = scan_get_security(bss->capability, &wpa);
 	} else
-		ssid_security = scan_get_ssid_security(bss->capability, NULL);
+		security = scan_get_security(bss->capability, NULL);
 
 	path = iwd_network_get_path(netdev, bss->ssid, bss->ssid_len,
-					ssid_security);
+					security);
 
 	network = l_hashmap_lookup(netdev->networks, path);
 	if (!network) {
 		network = l_new(struct network, 1);
 		network->netdev = netdev;
 		memcpy(network->ssid, bss->ssid, bss->ssid_len);
-		network->ssid_security = ssid_security;
+		network->security = security;
 		network->bss_list = l_queue_new();
 		network->object_path = strdup(path);
 		l_hashmap_insert(netdev->networks,
 					network->object_path, network);
 
 		l_debug("Added new Network \"%s\" security %s", network->ssid,
-			scan_ssid_security_to_str(ssid_security));
+			security_to_str(security));
 
 		if (!l_dbus_object_add_interface(dbus_get_bus(),
 					network->object_path,
@@ -1745,12 +1744,12 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 		else
 			network_emit_added(network);
 
-		network_seen(network->ssid_security, network->ssid);
+		network_seen(network->security, network->ssid);
 	}
 
 	l_queue_insert(network->bss_list, bss, scan_bss_rank_compare, NULL);
 
-	rankmod = network_rankmod(network->ssid_security, network->ssid);
+	rankmod = network_rankmod(network->security, network->ssid);
 	if (rankmod == 0.0)
 		return;
 

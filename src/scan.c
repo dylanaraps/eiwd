@@ -83,22 +83,6 @@ struct scan_results {
 	struct scan_freq_set *freqs;
 };
 
-const char *scan_ssid_security_to_str(enum scan_ssid_security ssid_security)
-{
-	switch (ssid_security) {
-	case SCAN_SSID_SECURITY_NONE:
-		return "open";
-	case SCAN_SSID_SECURITY_WEP:
-		return "wep";
-	case SCAN_SSID_SECURITY_PSK:
-		return "psk";
-	case SCAN_SSID_SECURITY_8021X:
-		return "8021x";
-	}
-
-	return NULL;
-}
-
 static void scan_done(struct l_genl_msg *msg, void *userdata);
 
 static bool scan_context_match(const void *a, const void *b)
@@ -524,8 +508,7 @@ static void scan_periodic_rearm(struct scan_context *sc)
 	sc->sp.rearm = false;
 }
 
-enum scan_ssid_security scan_get_ssid_security(
-					enum ie_bss_capability bss_capability,
+enum security scan_get_security(enum ie_bss_capability bss_capability,
 					const struct ie_rsn_info *info)
 {
 	if (info && (info->akm_suites & IE_RSN_AKM_SUITE_PSK ||
@@ -533,17 +516,17 @@ enum scan_ssid_security scan_get_ssid_security(
 			info->akm_suites & IE_RSN_AKM_SUITE_FT_USING_PSK ||
 			info->akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256 ||
 			info->akm_suites & IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256))
-		return SCAN_SSID_SECURITY_PSK;
+		return SECURITY_PSK;
 
 	if (info && (info->akm_suites & IE_RSN_AKM_SUITE_8021X ||
 			info->akm_suites & IE_RSN_AKM_SUITE_8021X_SHA256 ||
 			info->akm_suites & IE_RSN_AKM_SUITE_FT_OVER_8021X))
-		return SCAN_SSID_SECURITY_8021X;
+		return SECURITY_8021X;
 
 	if (bss_capability & IE_BSS_CAP_PRIVACY)
-		return SCAN_SSID_SECURITY_WEP;
+		return SECURITY_WEP;
 
-	return SCAN_SSID_SECURITY_NONE;
+	return SECURITY_NONE;
 }
 
 static bool scan_parse_bss_information_elements(struct scan_bss *bss,

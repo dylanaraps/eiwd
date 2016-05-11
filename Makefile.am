@@ -68,6 +68,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/eapol.h src/eapol.c \
 					src/scan.h src/scan.c \
 					src/util.h src/util.c \
+					src/common.h src/common.c \
 					src/agent.h src/agent.c \
 					src/storage.h src/storage.c \
 					src/network.h src/network.c \

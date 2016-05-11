@@ -20,13 +20,6 @@
  *
  */
 
-enum scan_ssid_security {
-	SCAN_SSID_SECURITY_NONE,
-	SCAN_SSID_SECURITY_WEP,
-	SCAN_SSID_SECURITY_PSK,
-	SCAN_SSID_SECURITY_8021X,
-};
-
 enum scan_band {
 	SCAN_BAND_2_4_GHZ =	0x1,
 	SCAN_BAND_5_GHZ =	0x2,
@@ -66,8 +59,6 @@ struct scan_bss {
 	bool sha256:1;
 };
 
-const char *scan_ssid_security_to_str(enum scan_ssid_security ssid_security);
-
 uint32_t scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
 			scan_notify_func_t notify, void *userdata,
 			scan_destroy_func_t destroy);
@@ -85,7 +76,7 @@ void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
 			uint32_t scan_interval, scan_func_t callback,
 			void *user_data);
 
-enum scan_ssid_security scan_get_ssid_security(enum ie_bss_capability bss_cap,
+enum security scan_get_security(enum ie_bss_capability bss_cap,
 						const struct ie_rsn_info *info);
 void scan_bss_free(struct scan_bss *bss);
 const char *scan_bss_address_to_string(const struct scan_bss *bss);

@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2013-2014  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2013-2016  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -20,11 +20,4 @@
  *
  */
 
-#define uninitialized_var(x) x = x
-
-enum security {
-	SECURITY_NONE,
-	SECURITY_WEP,
-	SECURITY_PSK,
-	SECURITY_8021X,
-};
+const char *security_to_str(enum security security);
