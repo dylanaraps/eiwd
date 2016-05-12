@@ -30,9 +30,11 @@
 
 #include "src/iwd.h"
 #include "src/common.h"
-#include "src/network.h"
 #include "src/storage.h"
 #include "src/scan.h"
+#include "src/dbus.h"
+#include "src/device.h"
+#include "src/network.h"
 
 struct network_info {
 	char ssid[33];
@@ -206,6 +208,21 @@ const char *network_get_path(struct network *network)
 enum security network_get_security(struct network *network)
 {
 	return network->security;
+}
+
+bool __iwd_network_append_properties(const struct network *network,
+					struct l_dbus_message_builder *builder)
+{
+	bool connected;
+
+	l_dbus_message_builder_enter_array(builder, "{sv}");
+	dbus_dict_append_string(builder, "Name", network->ssid);
+
+	connected = device_get_connected_network(network->netdev) == network;
+	dbus_dict_append_bool(builder, "Connected", connected);
+	l_dbus_message_builder_leave_array(builder);
+
+	return true;
 }
 
 void network_init()

@@ -151,21 +151,6 @@ static const char *iwd_network_get_path(struct netdev *netdev,
 	return path;
 }
 
-static bool __iwd_network_append_properties(const struct network *network,
-					struct l_dbus_message_builder *builder)
-{
-	bool connected;
-
-	l_dbus_message_builder_enter_array(builder, "{sv}");
-	dbus_dict_append_string(builder, "Name", network->ssid);
-
-	connected = network->netdev->connected_network == network;
-	dbus_dict_append_bool(builder, "Connected", connected);
-	l_dbus_message_builder_leave_array(builder);
-
-	return true;
-}
-
 static const char *device_state_to_string(enum device_state state)
 {
 	switch (state) {
