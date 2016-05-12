@@ -198,6 +198,11 @@ struct netdev *network_get_netdev(struct network *network)
 	return network->netdev;
 }
 
+const char *network_get_path(struct network *network)
+{
+	return network->object_path;
+}
+
 void network_init()
 {
 	networks = l_queue_new();
