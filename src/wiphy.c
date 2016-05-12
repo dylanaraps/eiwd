@@ -309,7 +309,7 @@ static struct scan_bss *network_select_bss(struct wiphy *wiphy,
 
 static int mlme_authenticate_cmd(struct network *network, struct scan_bss *bss)
 {
-	struct netdev *netdev = network->netdev;
+	struct netdev *netdev = network_get_netdev(network);
 	const char *ssid = network_get_ssid(network);
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
