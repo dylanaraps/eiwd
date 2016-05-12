@@ -188,6 +188,11 @@ double network_rankmod(uint32_t type, const char *ssid)
 	return 0.0;
 }
 
+const char *network_get_ssid(struct network *network)
+{
+	return network->ssid;
+}
+
 void network_init()
 {
 	networks = l_queue_new();
