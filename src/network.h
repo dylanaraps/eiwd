@@ -42,6 +42,7 @@ bool network_connected(uint32_t type, const char *ssid);
 double network_rankmod(uint32_t type, const char *ssid);
 
 const char *network_get_ssid(struct network *network);
+struct netdev *network_get_netdev(struct network *network);
 
 void network_init();
 void network_exit();

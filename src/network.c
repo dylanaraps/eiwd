@@ -193,6 +193,11 @@ const char *network_get_ssid(struct network *network)
 	return network->ssid;
 }
 
+struct netdev *network_get_netdev(struct network *network)
+{
+	return network->netdev;
+}
+
 void network_init()
 {
 	networks = l_queue_new();
