@@ -194,6 +194,11 @@ const uint8_t *netdev_get_address(struct netdev *netdev)
 	return netdev->addr;
 }
 
+struct network *device_get_connected_network(struct netdev *device)
+{
+	return device->connected_network;
+}
+
 static void netdev_enter_state(struct netdev *netdev, enum device_state state)
 {
 	l_debug("Old State: %s, new state: %s",

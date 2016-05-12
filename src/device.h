@@ -35,5 +35,7 @@ bool device_watch_remove(uint32_t id);
 void __device_watch_call_added(struct netdev *device);
 void __device_watch_call_removed(struct netdev *device);
 
+struct network *device_get_connected_network(struct netdev *device);
+
 bool device_init(void);
 bool device_exit(void);
