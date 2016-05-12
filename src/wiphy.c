@@ -612,7 +612,7 @@ bool __iwd_device_append_properties(struct netdev *netdev,
 
 	if (netdev->connected_network)
 		dbus_dict_append_object(builder, "ConnectedNetwork",
-			netdev->connected_network->object_path);
+				network_get_path(netdev->connected_network));
 
 	l_dbus_message_builder_leave_array(builder);
 
@@ -731,7 +731,7 @@ static void append_network_properties(const void *key, void *value,
 
 	l_dbus_message_builder_enter_dict(builder, "oa{sv}");
 	l_dbus_message_builder_append_basic(builder, 'o',
-						network->object_path);
+						network_get_path(network));
 	__iwd_network_append_properties(network, builder);
 	l_dbus_message_builder_leave_dict(builder);
 }
@@ -832,7 +832,7 @@ static bool device_property_get_connected_network(struct l_dbus *dbus,
 		return false;
 
 	l_dbus_message_builder_append_basic(builder, 'o',
-		netdev->connected_network->object_path);
+				network_get_path(netdev->connected_network));
 
 	return true;
 }
