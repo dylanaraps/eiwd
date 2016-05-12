@@ -303,7 +303,7 @@ static void device_appeared(struct netdev *device, void *userdata)
 	wsc = l_new(struct wsc, 1);
 	wsc->netdev = device;
 
-	if (!l_dbus_object_add_interface(dbus, iwd_device_get_path(device),
+	if (!l_dbus_object_add_interface(dbus, device_get_path(device),
 						IWD_WSC_INTERFACE,
 						wsc)) {
 		wsc_free(wsc);

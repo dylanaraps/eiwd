@@ -139,7 +139,7 @@ static const char *iwd_network_get_path(struct netdev *netdev,
 	static char path[256];
 	unsigned int pos, i;
 
-	pos = snprintf(path, sizeof(path), "%s/", iwd_device_get_path(netdev));
+	pos = snprintf(path, sizeof(path), "%s/", device_get_path(netdev));
 
 	for (i = 0; i < ssid_len && pos < sizeof(path); i++)
 		pos += snprintf(path + pos, sizeof(path) - pos, "%02x",
@@ -516,7 +516,7 @@ static void network_emit_added(struct network *network)
 	struct l_dbus_message_builder *builder;
 
 	signal = l_dbus_message_new_signal(dbus,
-					iwd_device_get_path(network->netdev),
+					device_get_path(network->netdev),
 					IWD_DEVICE_INTERFACE,
 					"NetworkAdded");
 
@@ -544,7 +544,7 @@ static void network_emit_removed(struct network *network)
 	struct l_dbus_message *signal;
 
 	signal = l_dbus_message_new_signal(dbus,
-					iwd_device_get_path(network->netdev),
+					device_get_path(network->netdev),
 					IWD_DEVICE_INTERFACE,
 					"NetworkRemoved");
 
@@ -585,7 +585,7 @@ static void network_free(void *data)
 	l_free(network);
 }
 
-const char *iwd_device_get_path(struct netdev *netdev)
+const char *device_get_path(struct netdev *netdev)
 {
 	static char path[12];
 
@@ -649,7 +649,7 @@ static void device_emit_added(struct netdev *netdev)
 	}
 
 	l_dbus_message_builder_append_basic(builder, 'o',
-						iwd_device_get_path(netdev));
+						device_get_path(netdev));
 	__iwd_device_append_properties(netdev, builder);
 
 	l_dbus_message_builder_finalize(builder);
@@ -669,7 +669,7 @@ static void device_emit_removed(struct netdev *netdev)
 	if (!signal)
 		return;
 
-	l_dbus_message_set_arguments(signal, "o", iwd_device_get_path(netdev));
+	l_dbus_message_set_arguments(signal, "o", device_get_path(netdev));
 	l_dbus_send(dbus, signal);
 }
 
@@ -874,7 +874,7 @@ static void netdev_free(void *data)
 	__device_watch_call_removed(netdev);
 
 	dbus = dbus_get_bus();
-	l_dbus_unregister_object(dbus, iwd_device_get_path(netdev));
+	l_dbus_unregister_object(dbus, device_get_path(netdev));
 
 	device_emit_removed(netdev);
 
@@ -1896,7 +1896,7 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 		l_queue_push_head(wiphy->netdev_list, netdev);
 
 		if (!l_dbus_object_add_interface(dbus,
-						iwd_device_get_path(netdev),
+						device_get_path(netdev),
 						IWD_DEVICE_INTERFACE, netdev))
 			l_info("Unable to register %s interface",
 				IWD_DEVICE_INTERFACE);

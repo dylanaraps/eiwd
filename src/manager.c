@@ -29,6 +29,7 @@
 #include "src/dbus.h"
 #include "src/wiphy.h"
 #include "src/agent.h"
+#include "src/device.h"
 
 static void append_device(struct netdev *netdev, void *user_data)
 {
@@ -36,7 +37,7 @@ static void append_device(struct netdev *netdev, void *user_data)
 
 	l_dbus_message_builder_enter_dict(builder, "oa{sv}");
 	l_dbus_message_builder_append_basic(builder, 'o',
-						iwd_device_get_path(netdev));
+						device_get_path(netdev));
 	__iwd_device_append_properties(netdev, builder);
 	l_dbus_message_builder_leave_dict(builder);
 }
