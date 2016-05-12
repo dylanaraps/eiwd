@@ -50,6 +50,7 @@ const char *network_get_path(struct network *network);
 enum security network_get_security(struct network *network);
 
 void network_emit_added(struct network *network);
+void network_emit_removed(struct network *network);
 
 void network_init();
 void network_exit();

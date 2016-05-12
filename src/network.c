@@ -254,6 +254,23 @@ void network_emit_added(struct network *network)
 	l_dbus_send(dbus, signal);
 }
 
+void network_emit_removed(struct network *network)
+{
+	struct l_dbus *dbus = dbus_get_bus();
+	struct l_dbus_message *signal;
+
+	signal = l_dbus_message_new_signal(dbus,
+					device_get_path(network->netdev),
+					IWD_DEVICE_INTERFACE,
+					"NetworkRemoved");
+
+	if (!signal)
+		return;
+
+	l_dbus_message_set_arguments(signal, "o", network->object_path);
+	l_dbus_send(dbus, signal);
+}
+
 void network_init()
 {
 	networks = l_queue_new();
