@@ -782,6 +782,7 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 	struct netdev *netdev = user_data;
 	struct l_genl_msg *msg;
 	uint16_t reason_code = MPDU_REASON_CODE_DEAUTH_LEAVING;
+	enum security security;
 
 	l_debug("");
 
@@ -792,8 +793,8 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 	if (!netdev->connected_bss)
 		return dbus_error_not_connected(message);
 
-	if (netdev->connected_network->security == SECURITY_PSK ||
-			netdev->connected_network->security == SECURITY_8021X)
+	security = network_get_security(netdev->connected_network);
+	if (security == SECURITY_PSK || security == SECURITY_8021X)
 		eapol_cancel(netdev->index);
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_DEAUTHENTICATE, 512);
@@ -917,7 +918,7 @@ static bool netdev_try_autoconnect(struct netdev *netdev,
 {
 	struct wiphy *wiphy = netdev->wiphy;
 
-	switch (network->security) {
+	switch (network_get_security(network)) {
 	case SECURITY_NONE:
 		break;
 	case SECURITY_PSK:
