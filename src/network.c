@@ -203,6 +203,11 @@ const char *network_get_path(struct network *network)
 	return network->object_path;
 }
 
+enum security network_get_security(struct network *network)
+{
+	return network->security;
+}
+
 void network_init()
 {
 	networks = l_queue_new();

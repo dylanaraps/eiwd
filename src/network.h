@@ -44,6 +44,7 @@ double network_rankmod(uint32_t type, const char *ssid);
 const char *network_get_ssid(struct network *network);
 struct netdev *network_get_netdev(struct network *network);
 const char *network_get_path(struct network *network);
+enum security network_get_security(struct network *network);
 
 void network_init();
 void network_exit();
