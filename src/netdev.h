@@ -24,9 +24,6 @@
 
 struct netdev;
 
-typedef void (*netdev_watch_func_t)(struct netdev *netdev, void *userdata);
-typedef void (*netdev_destroy_func_t)(void *userdata);
-
 typedef void (*netdev_command_func_t) (bool result, void *user_data);
 
 void netdev_set_linkmode_and_operstate(uint32_t ifindex,
