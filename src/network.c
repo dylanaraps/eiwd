@@ -225,6 +225,35 @@ bool __iwd_network_append_properties(const struct network *network,
 	return true;
 }
 
+void network_emit_added(struct network *network)
+{
+	struct l_dbus *dbus = dbus_get_bus();
+	struct l_dbus_message *signal;
+	struct l_dbus_message_builder *builder;
+
+	signal = l_dbus_message_new_signal(dbus,
+					device_get_path(network->netdev),
+					IWD_DEVICE_INTERFACE,
+					"NetworkAdded");
+
+	if (!signal)
+		return;
+
+	builder = l_dbus_message_builder_new(signal);
+	if (!builder) {
+		l_dbus_message_unref(signal);
+		return;
+	}
+
+	l_dbus_message_builder_append_basic(builder, 'o',
+						network->object_path);
+	__iwd_network_append_properties(network, builder);
+
+	l_dbus_message_builder_finalize(builder);
+	l_dbus_message_builder_destroy(builder);
+	l_dbus_send(dbus, signal);
+}
+
 void network_init()
 {
 	networks = l_queue_new();
