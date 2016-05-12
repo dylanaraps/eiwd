@@ -310,6 +310,7 @@ static struct scan_bss *network_select_bss(struct wiphy *wiphy,
 static int mlme_authenticate_cmd(struct network *network, struct scan_bss *bss)
 {
 	struct netdev *netdev = network->netdev;
+	const char *ssid = network_get_ssid(network);
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
 
@@ -317,8 +318,7 @@ static int mlme_authenticate_cmd(struct network *network, struct scan_bss *bss)
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
-	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(network->ssid),
-			network->ssid);
+	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(ssid), ssid);
 	msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
 	l_genl_family_send(nl80211, msg, genl_connect_cb, netdev, NULL);
 
