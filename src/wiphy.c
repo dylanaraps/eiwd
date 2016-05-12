@@ -53,19 +53,6 @@
 
 static struct l_genl_family *nl80211 = NULL;
 
-struct network {
-	char *object_path;
-	struct netdev *netdev;
-	char ssid[33];
-	unsigned char *psk;
-	unsigned int agent_request;
-	enum security security;
-	struct l_queue *bss_list;
-	struct l_settings *settings;
-	bool update_psk:1;  /* Whether PSK should be written to storage */
-	bool ask_psk:1; /* Whether we should force-ask agent for PSK */
-};
-
 enum device_state {
 	DEVICE_STATE_DISCONNECTED = 0,	/* Disconnected, no auto-connect */
 	DEVICE_STATE_AUTOCONNECT,	/* Disconnected, try auto-connect */

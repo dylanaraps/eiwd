@@ -22,6 +22,21 @@
 
 #include <stdbool.h>
 
+struct netdev;
+
+struct network {
+	char *object_path;
+	struct netdev *netdev;
+	char ssid[33];
+	unsigned char *psk;
+	unsigned int agent_request;
+	enum security security;
+	struct l_queue *bss_list;
+	struct l_settings *settings;
+	bool update_psk:1;  /* Whether PSK should be written to storage */
+	bool ask_psk:1; /* Whether we should force-ask agent for PSK */
+};
+
 bool network_seen(uint32_t type, const char *ssid);
 bool network_connected(uint32_t type, const char *ssid);
 double network_rankmod(uint32_t type, const char *ssid);
