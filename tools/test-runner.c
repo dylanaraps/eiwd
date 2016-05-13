@@ -618,7 +618,6 @@ static pid_t start_hostapd(const char *config_file, const char *interface_name)
 
 	pid = execute_program(argv, false);
 	if (pid < 0) {
-		pid = -1;
 		goto exit;
 	}
 
