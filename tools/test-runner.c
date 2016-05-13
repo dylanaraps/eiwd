@@ -913,7 +913,7 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 
 	if (!l_settings_has_group(hw_settings, HW_CONFIG_GROUP_HOSTAPD)) {
 		l_info("No hostapd instances to create");
-		return false;
+		return true;
 	}
 
 	hostap_keys =
