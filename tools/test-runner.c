@@ -779,12 +779,13 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 		return false;
 	}
 
+	has_hw_conf = l_settings_has_key(hw_settings, HW_CONFIG_GROUP_SETUP,
+						HW_CONFIG_SETUP_RADIO_CONFS);
+
 	radio_conf_list =
 		l_settings_get_string_list(hw_settings, HW_CONFIG_GROUP_SETUP,
 						HW_CONFIG_SETUP_RADIO_CONFS,
 									':');
-	if (!radio_conf_list)
-		has_hw_conf = true;
 
 	num_radios_created = 0;
 	i = 0;
