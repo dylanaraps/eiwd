@@ -322,6 +322,9 @@ static pid_t execute_program(char *argv[], bool wait)
 	int status;
 	pid_t pid, child_pid;
 
+	if (!argv[0])
+		return -1;
+
 	child_pid = fork();
 	if (child_pid < 0) {
 		l_error("Failed to fork new process");
@@ -333,7 +336,8 @@ static pid_t execute_program(char *argv[], bool wait)
 
 		execvp(argv[0], argv);
 
-		l_error("Failed to call execvp: %s", strerror(errno));
+		l_error("Failed to call execvp for: %s. Error: %s", argv[0],
+							strerror(errno));
 
 		exit(EXIT_FAILURE);
 	}
