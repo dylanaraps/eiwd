@@ -942,6 +942,10 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 
 		hostapd_pids_out[i] = start_hostapd(hostapd_config_file_path,
 								interface_name);
+
+		if (hostapd_pids_out[i] < 1)
+			return false;
+
 		i++;
 	}
 
@@ -1276,17 +1280,17 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 	list_interfaces();
 
-	configure_hostapd_instances(hw_settings, config_dir_path,
-							interface_names,
-								hostapd_pids);
+	if (!configure_hostapd_instances(hw_settings, config_dir_path,
+						interface_names, hostapd_pids))
+		goto exit_hostapd;
 
 	iwd_pid = start_iwd();
 	if (iwd_pid == -1)
-		goto exit;
+		goto exit_hostapd;
 
 	if (chdir(config_dir_path) < 0) {
 		l_error("Failed to change directory");
-		goto exit;
+		goto exit_hostapd;
 	}
 
 	run_py_tests(hw_settings, test_queue, test_stats_queue);
@@ -1295,11 +1299,11 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 	terminate_iwd(iwd_pid);
 
+exit_hostapd:
 	destroy_hostapd_instances(hostapd_pids);
 
 	destroy_hw_radios(hwsim_radio_ids, interface_names);
 
-exit:
 	l_settings_free(hw_settings);
 }
 
