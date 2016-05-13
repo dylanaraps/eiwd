@@ -1551,9 +1551,9 @@ static void usage(void)
 	l_info("Options:\n"
 		"\t-q, --qemu <path>	QEMU binary\n"
 		"\t-k, --kernel <image>	Kernel image (bzImage)\n"
-		"\t-t, --tests <dirs>	Comma separated list of the test "
-					"configuration\n\t\t\t\tdirectories to"
-									" run\n"
+		"\t-t, --testdirs <dirs>	Comma separated list of the "
+						"test configuration\n\t\t\t\t"
+						"directories to run\n"
 		"\t-v, --verbose		Enable verbose output\n"
 		"\t-h, --help		Show help options\n");
 }
