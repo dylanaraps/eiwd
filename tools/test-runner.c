@@ -1277,7 +1277,9 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 	l_info("Configuring network...");
 
-	configure_hw_radios(hw_settings, hwsim_radio_ids, interface_names);
+	if (!configure_hw_radios(hw_settings, hwsim_radio_ids,
+							interface_names))
+		goto exit_hwsim;
 
 	list_hwsim_radios();
 
@@ -1305,6 +1307,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 exit_hostapd:
 	destroy_hostapd_instances(hostapd_pids);
 
+exit_hwsim:
 	destroy_hw_radios(hwsim_radio_ids, interface_names);
 
 	l_settings_free(hw_settings);
