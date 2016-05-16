@@ -53,6 +53,7 @@ struct netdev *network_get_netdev(struct network *network);
 const char *network_get_path(struct network *network);
 enum security network_get_security(struct network *network);
 const unsigned char *network_get_psk(struct network *network);
+struct l_settings *network_get_settings(struct network *network);
 
 bool network_settings_load(struct network *network);
 void network_settings_close(struct network *network);

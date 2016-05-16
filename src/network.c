@@ -236,6 +236,11 @@ const unsigned char *network_get_psk(struct network *network)
 	return network->psk;
 }
 
+struct l_settings *network_get_settings(struct network *network)
+{
+	return network->settings;
+}
+
 bool network_settings_load(struct network *network)
 {
 	if (network->settings)
