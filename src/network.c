@@ -33,6 +33,7 @@
 #include "src/storage.h"
 #include "src/scan.h"
 #include "src/dbus.h"
+#include "src/agent.h"
 #include "src/device.h"
 #include "src/network.h"
 
@@ -344,6 +345,30 @@ bool network_register(struct network *network, const char *path)
 	network_emit_added(network);
 
 	return true;
+}
+
+static void network_unregister(struct network *network)
+{
+	struct l_dbus *dbus = dbus_get_bus();
+
+	agent_request_cancel(network->agent_request);
+	network_settings_close(network);
+
+	l_dbus_unregister_object(dbus, network->object_path);
+	network_emit_removed(network);
+
+	l_free(network->object_path);
+	network->object_path = NULL;
+}
+
+void network_remove(struct network *network)
+{
+	if (network->object_path)
+		network_unregister(network);
+
+	l_queue_destroy(network->bss_list, NULL);
+	l_free(network->psk);
+	l_free(network);
 }
 
 void network_init()
