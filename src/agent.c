@@ -38,6 +38,7 @@ struct agent_request {
 	unsigned int id;
 	void *user_data;
 	void *user_callback;
+	struct l_dbus_message *trigger;
 };
 
 struct agent {
@@ -95,6 +96,10 @@ static void agent_request_free(void *user_data)
 
 	l_dbus_message_unref(request->message);
 
+	if (request->trigger)
+		dbus_pending_reply(&request->trigger,
+				dbus_error_aborted(request->trigger));
+
 	l_free(request);
 }
 
@@ -115,7 +120,7 @@ static void passphrase_reply(struct l_dbus_message *reply,
 	result = AGENT_RESULT_OK;
 
 done:
-	user_callback(result, passphrase, request->user_data);
+	user_callback(result, passphrase, request->trigger, request->user_data);
 }
 
 static void agent_finalize_pending(struct agent *agent,
@@ -131,6 +136,11 @@ static void agent_finalize_pending(struct agent *agent,
 	pending = l_queue_pop_head(agent->requests);
 
 	passphrase_reply(reply, pending);
+
+	if (pending->trigger) {
+		l_dbus_message_unref(pending->trigger);
+		pending->trigger = NULL;
+	}
 
 	agent_request_free(pending);
 }
@@ -214,7 +224,8 @@ static void agent_send_next_request(struct agent *agent)
 
 static unsigned int agent_queue_request(struct agent *agent,
 				struct l_dbus_message *message, int timeout,
-				void *callback, void *user_data)
+				void *callback, struct l_dbus_message *trigger,
+				void *user_data)
 {
 	struct agent_request *request;
 
@@ -224,6 +235,7 @@ static unsigned int agent_queue_request(struct agent *agent,
 	request->id = ++next_request_id;
 	request->user_data = user_data;
 	request->user_callback = callback;
+	request->trigger = l_dbus_message_ref(trigger);
 
 	agent->timeout_secs = timeout;
 
@@ -239,13 +251,21 @@ static unsigned int agent_queue_request(struct agent *agent,
  * agent_request_passphrase:
  * @path: object path related to this request (like network object path)
  * @callback: user callback called when the request is ready
+ * @trigger: Message associated with (e.g. that triggered) this request
  * @user_data: user defined data
  *
  * Called when a passphrase information is needed from the user. Returns an
  * id that can be used to cancel the request.
+ *
+ * If @trigger is not NULL, then a reference is taken automatically.  If
+ * agent_cancel_request is called subsequently, a dbus_aborted error is
+ * automatically generated for @trigger.  Otherwise, after @callback is
+ * called, the reference to @trigger is dropped.  It is assumed that the
+ * caller will take ownership of @trigger in the callback if needed.
  */
 unsigned int agent_request_passphrase(const char *path,
 				agent_request_passphrase_func_t callback,
+				struct l_dbus_message *trigger,
 				void *user_data)
 {
 	struct l_dbus_message *message;
@@ -269,6 +289,7 @@ unsigned int agent_request_passphrase(const char *path,
 	return agent_queue_request(agent, message,
 				agent_timeout_input_request(),
 				callback,
+				trigger,
 				user_data);
 }
 

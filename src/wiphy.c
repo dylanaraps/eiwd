@@ -311,10 +311,6 @@ static int mlme_authenticate_cmd(struct network *network, struct scan_bss *bss)
 	msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
 	l_genl_family_send(nl80211, msg, genl_connect_cb, netdev, NULL);
 
-	netdev->connected_bss = bss;
-	netdev->connected_network = network;
-	netdev_enter_state(netdev, DEVICE_STATE_CONNECTING);
-
 	return 0;
 }
 
@@ -333,7 +329,9 @@ void device_connect_network(struct netdev *device, struct network *network,
 }
 
 static void passphrase_callback(enum agent_result result,
-				const char *passphrase, void *user_data)
+				const char *passphrase,
+				struct l_dbus_message *message,
+				void *user_data)
 {
 	struct network *network = user_data;
 	struct netdev *netdev = network->netdev;
@@ -345,8 +343,7 @@ static void passphrase_callback(enum agent_result result,
 	network->agent_request = 0;
 
 	if (result != AGENT_RESULT_OK) {
-		dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_aborted(netdev->connect_pending));
+		dbus_pending_reply(&message, dbus_error_aborted(message));
 		goto err;
 	}
 
@@ -354,8 +351,7 @@ static void passphrase_callback(enum agent_result result,
 
 	/* Did all good BSSes go away while we waited */
 	if (!bss) {
-		dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_failed(netdev->connect_pending));
+		dbus_pending_reply(&message, dbus_error_failed(message));
 		goto err;
 	}
 
@@ -367,8 +363,7 @@ static void passphrase_callback(enum agent_result result,
 					network->psk) < 0) {
 		l_error("PMK generation failed.  "
 			"Ensure Crypto Engine is properly configured");
-		dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_failed(netdev->connect_pending));
+		dbus_pending_reply(&message, dbus_error_failed(message));
 
 		goto err;
 	}
@@ -380,7 +375,7 @@ static void passphrase_callback(enum agent_result result,
 	 */
 	network->update_psk = true;
 
-	mlme_authenticate_cmd(network, bss);
+	device_connect_network(network->netdev, network, bss, message);
 	return;
 
 err:
@@ -429,14 +424,14 @@ static struct l_dbus_message *network_connect_psk(struct network *network,
 		network->agent_request =
 			agent_request_passphrase(network->object_path,
 						passphrase_callback,
+						message,
 						network);
 
 		if (!network->agent_request)
 			return dbus_error_no_agent(message);
 	} else
-		mlme_authenticate_cmd(network, bss);
+		device_connect_network(netdev, network, bss, message);
 
-	netdev->connect_pending = l_dbus_message_ref(message);
 	return NULL;
 }
 
@@ -469,14 +464,11 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	case SECURITY_PSK:
 		return network_connect_psk(network, bss, message);
 	case SECURITY_NONE:
-		mlme_authenticate_cmd(network, bss);
-		netdev->connect_pending = l_dbus_message_ref(message);
+		device_connect_network(netdev, network, bss, message);
 		return NULL;
 	case SECURITY_8021X:
 		network_settings_load(network);
-
-		mlme_authenticate_cmd(network, bss);
-		netdev->connect_pending = l_dbus_message_ref(message);
+		device_connect_network(netdev, network, bss, message);
 		return NULL;
 	default:
 		return dbus_error_not_supported(message);
