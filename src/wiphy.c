@@ -213,8 +213,7 @@ static void netdev_disassociated(struct netdev *netdev)
 {
 	struct network *network = netdev->connected_network;
 
-	l_settings_free(network->settings);
-	network->settings = NULL;
+	network_settings_close(network);
 
 	netdev->connected_bss = NULL;
 	netdev->connected_network = NULL;
@@ -371,8 +370,7 @@ static void passphrase_callback(enum agent_result result,
 	return;
 
 err:
-	l_settings_free(network->settings);
-	network->settings = NULL;
+	network_settings_close(network);
 
 	l_free(network->psk);
 	network->psk = NULL;
@@ -387,7 +385,8 @@ static struct l_dbus_message *network_connect_psk(struct network *network,
 
 	l_debug("");
 
-	network->settings = storage_network_open("psk", network->ssid);
+	network_settings_load(network);
+
 	psk = l_settings_get_value(network->settings, "Security",
 					"PreSharedKey");
 
@@ -460,8 +459,7 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 		netdev->connect_pending = l_dbus_message_ref(message);
 		return NULL;
 	case SECURITY_8021X:
-		network->settings = storage_network_open("8021x",
-							network->ssid);
+		network_settings_load(network);
 
 		mlme_authenticate_cmd(network, bss);
 		netdev->connect_pending = l_dbus_message_ref(message);
@@ -526,7 +524,7 @@ static void network_free(void *data)
 	struct l_dbus *dbus;
 
 	agent_request_cancel(network->agent_request);
-	l_settings_free(network->settings);
+	network_settings_close(network);
 
 	dbus = dbus_get_bus();
 	l_dbus_unregister_object(dbus, network->object_path);
@@ -883,7 +881,7 @@ static bool netdev_try_autoconnect(struct netdev *netdev,
 		if (network->ask_psk)
 			return false;
 
-		network->settings = storage_network_open("psk", network->ssid);
+		network_settings_load(network);
 		psk = l_settings_get_value(network->settings, "Security",
 						"PreSharedKey");
 
@@ -903,9 +901,7 @@ static bool netdev_try_autoconnect(struct netdev *netdev,
 		break;
 	}
 	case SECURITY_8021X:
-		network->settings = storage_network_open("8021x",
-							network->ssid);
-
+		network_settings_load(network);
 		break;
 	default:
 		return false;
