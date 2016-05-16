@@ -340,6 +340,18 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 	return 0;
 }
 
+void network_connect_failed(struct network *network)
+{
+	/*
+	 * Connection failed, if PSK try asking for the passphrase
+	 * once more
+	 */
+	if (network->security == SECURITY_PSK) {
+		network->update_psk = false;
+		network->ask_psk = true;
+	}
+}
+
 static struct scan_bss *network_select_bss(struct wiphy *wiphy,
 						struct network *network)
 {

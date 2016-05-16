@@ -58,7 +58,9 @@ struct l_settings *network_get_settings(struct network *network);
 bool network_settings_load(struct network *network);
 void network_settings_close(struct network *network);
 void network_sync_psk(struct network *network);
+
 int network_autoconnect(struct network *network, struct scan_bss *bss);
+void network_connect_failed(struct network *network);
 
 bool network_register(struct network *network, const char *path);
 
