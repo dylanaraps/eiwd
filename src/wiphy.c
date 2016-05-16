@@ -347,8 +347,7 @@ static void passphrase_callback(enum agent_result result,
 				void *user_data)
 {
 	struct network *network = user_data;
-	struct netdev *netdev = network->netdev;
-	struct wiphy *wiphy = netdev->wiphy;
+	struct wiphy *wiphy = device_get_wiphy(network->netdev);
 	struct scan_bss *bss;
 
 	l_debug("result %d", result);
@@ -466,7 +465,7 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	 * agent this may not be the final choice because BSS visibility can
 	 * change while we wait for the agent.
 	 */
-	bss = network_select_bss(netdev->wiphy, network);
+	bss = network_select_bss(device_get_wiphy(netdev), network);
 
 	/* None of the BSSes is compatible with our stack */
 	if (!bss)
