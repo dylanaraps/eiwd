@@ -639,67 +639,10 @@ static bool netdev_match(const void *a, const void *b)
 	return (netdev->index == index);
 }
 
-static bool netdev_try_autoconnect(struct netdev *netdev,
-					struct network *network,
-					struct scan_bss *bss)
-{
-	struct wiphy *wiphy = netdev->wiphy;
-
-	switch (network_get_security(network)) {
-	case SECURITY_NONE:
-		break;
-	case SECURITY_PSK:
-	{
-		uint16_t pairwise_ciphers, group_ciphers;
-		const char *psk;
-		size_t len;
-
-		bss_get_supported_ciphers(bss,
-					&pairwise_ciphers, &group_ciphers);
-
-		if (!wiphy_select_cipher(wiphy, pairwise_ciphers) ||
-				!wiphy_select_cipher(wiphy, group_ciphers)) {
-			l_debug("Cipher mis-match");
-			return false;
-		}
-
-		if (network->ask_psk)
-			return false;
-
-		network_settings_load(network);
-		psk = l_settings_get_value(network->settings, "Security",
-						"PreSharedKey");
-
-		/* TODO: Blacklist the network from auto-connect */
-		if (!psk)
-			return false;
-
-		l_free(network->psk);
-		network->psk = l_util_from_hexstring(psk, &len);
-
-		if (network->psk && len != 32) {
-			l_free(network->psk);
-			network->psk = NULL;
-			return false;
-		}
-
-		break;
-	}
-	case SECURITY_8021X:
-		network_settings_load(network);
-		break;
-	default:
-		return false;
-	}
-
-	device_connect_network(netdev, network, bss, NULL);
-	return true;
-}
-
 static void netdev_autoconnect_next(struct netdev *netdev)
 {
 	struct autoconnect_entry *entry;
-	bool r;
+	int r;
 
 	while ((entry = l_queue_pop_head(netdev->autoconnect_list))) {
 		l_debug("Considering autoconnecting to BSS '%s' with SSID: %s,"
@@ -709,10 +652,11 @@ static void netdev_autoconnect_next(struct netdev *netdev)
 			entry->bss->frequency, entry->rank,
 			entry->bss->signal_strength);
 
-		r = netdev_try_autoconnect(netdev, entry->network, entry->bss);
+		/* TODO: Blacklist the network from auto-connect */
+		r = network_autoconnect(entry->network, entry->bss);
 		l_free(entry);
 
-		if (r)
+		if (!r)
 			return;
 	}
 }
