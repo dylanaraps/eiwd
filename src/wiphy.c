@@ -184,6 +184,15 @@ struct network *device_get_connected_network(struct netdev *device)
 	return device->connected_network;
 }
 
+bool device_is_busy(struct netdev *device)
+{
+	if (device->state != DEVICE_STATE_DISCONNECTED &&
+			device->state != DEVICE_STATE_AUTOCONNECT)
+		return true;
+
+	return false;
+}
+
 static void netdev_enter_state(struct netdev *netdev, enum device_state state)
 {
 	l_debug("Old State: %s, new state: %s",
@@ -444,8 +453,7 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 
 	l_debug("");
 
-	if (netdev->state != DEVICE_STATE_DISCONNECTED &&
-			netdev->state != DEVICE_STATE_AUTOCONNECT)
+	if (device_is_busy(netdev))
 		return dbus_error_busy(message);
 
 	/*

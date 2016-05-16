@@ -38,6 +38,7 @@ void __device_watch_call_removed(struct netdev *device);
 
 struct network *device_get_connected_network(struct netdev *device);
 const char *device_get_path(struct netdev *device);
+bool device_is_busy(struct netdev *device);
 
 void device_connect_network(struct netdev *device, struct network *network,
 				struct scan_bss *bss,
