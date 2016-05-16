@@ -25,6 +25,7 @@
 #endif
 
 #include <sys/types.h>
+#include <errno.h>
 
 #include <ell/ell.h>
 
@@ -283,6 +284,60 @@ void network_settings_close(struct network *network)
 
 	l_settings_free(network->settings);
 	network->settings = NULL;
+}
+
+int network_autoconnect(struct network *network, struct scan_bss *bss)
+{
+	struct wiphy *wiphy = device_get_wiphy(network->netdev);
+
+	switch (network_get_security(network)) {
+	case SECURITY_NONE:
+		break;
+	case SECURITY_PSK:
+	{
+		uint16_t pairwise_ciphers, group_ciphers;
+		const char *psk;
+		size_t len;
+
+		bss_get_supported_ciphers(bss,
+					&pairwise_ciphers, &group_ciphers);
+
+		if (!wiphy_select_cipher(wiphy, pairwise_ciphers) ||
+				!wiphy_select_cipher(wiphy, group_ciphers)) {
+			l_debug("Cipher mis-match");
+			return -ENETUNREACH;
+		}
+
+		if (network->ask_psk)
+			return -ENOKEY;
+
+		network_settings_load(network);
+		psk = l_settings_get_value(network->settings, "Security",
+						"PreSharedKey");
+
+		if (!psk)
+			return -ENOKEY;
+
+		l_free(network->psk);
+		network->psk = l_util_from_hexstring(psk, &len);
+
+		if (network->psk && len != 32) {
+			l_free(network->psk);
+			network->psk = NULL;
+			return -ENOKEY;
+		}
+
+		break;
+	}
+	case SECURITY_8021X:
+		network_settings_load(network);
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	device_connect_network(network->netdev, network, bss, NULL);
+	return 0;
 }
 
 static struct scan_bss *network_select_bss(struct wiphy *wiphy,
