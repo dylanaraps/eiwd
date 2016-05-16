@@ -318,6 +318,20 @@ static int mlme_authenticate_cmd(struct network *network, struct scan_bss *bss)
 	return 0;
 }
 
+void device_connect_network(struct netdev *device, struct network *network,
+				struct scan_bss *bss,
+				struct l_dbus_message *message)
+{
+	device->connect_pending = l_dbus_message_ref(message);
+
+	device->connected_bss = bss;
+	device->connected_network = network;
+
+	netdev_enter_state(device, DEVICE_STATE_CONNECTING);
+
+	mlme_authenticate_cmd(network, bss);
+}
+
 static void passphrase_callback(enum agent_result result,
 				const char *passphrase, void *user_data)
 {

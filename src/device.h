@@ -23,6 +23,7 @@
 #include <stdbool.h>
 
 struct netdev;
+struct scan_bss;
 
 typedef void (*device_watch_func_t)(struct netdev *device, void *userdata);
 typedef void (*device_destroy_func_t)(void *userdata);
@@ -38,5 +39,8 @@ void __device_watch_call_removed(struct netdev *device);
 struct network *device_get_connected_network(struct netdev *device);
 const char *device_get_path(struct netdev *device);
 
+void device_connect_network(struct netdev *device, struct network *network,
+				struct scan_bss *bss,
+				struct l_dbus_message *message);
 bool device_init(void);
 bool device_exit(void);
