@@ -521,20 +521,8 @@ static void bss_free(void *data)
 static void network_free(void *data)
 {
 	struct network *network = data;
-	struct l_dbus *dbus;
 
-	agent_request_cancel(network->agent_request);
-	network_settings_close(network);
-
-	dbus = dbus_get_bus();
-	l_dbus_unregister_object(dbus, network->object_path);
-	network_emit_removed(network);
-
-	l_free(network->object_path);
-
-	l_queue_destroy(network->bss_list, NULL);
-	l_free(network->psk);
-	l_free(network);
+	network_remove(network);
 }
 
 const char *device_get_path(struct netdev *netdev)
@@ -1643,25 +1631,18 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 
 	network = l_hashmap_lookup(netdev->networks, path);
 	if (!network) {
-		network = l_new(struct network, 1);
-		network->netdev = netdev;
-		memcpy(network->ssid, bss->ssid, bss->ssid_len);
-		network->security = security;
-		network->bss_list = l_queue_new();
-		network->object_path = strdup(path);
+		network = network_create(netdev, bss->ssid, bss->ssid_len,
+						security);
+
+		if (!network_register(network, path)) {
+			network_remove(network);
+			return;
+		}
+
 		l_hashmap_insert(netdev->networks,
-					network->object_path, network);
-
-		l_debug("Added new Network \"%s\" security %s", network->ssid,
-			security_to_str(security));
-
-		if (!l_dbus_object_add_interface(dbus_get_bus(),
-					network->object_path,
-					IWD_NETWORK_INTERFACE, network))
-			l_info("Unable to register %s interface",
-				IWD_NETWORK_INTERFACE);
-		else
-			network_emit_added(network);
+					network_get_path(network), network);
+		l_debug("Added new Network \"%s\" security %s",
+			network_get_ssid(network), security_to_str(security));
 
 		network_seen(network->security, network->ssid);
 	}
