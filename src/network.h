@@ -51,6 +51,7 @@ enum security network_get_security(struct network *network);
 
 bool network_settings_load(struct network *network);
 void network_settings_close(struct network *network);
+void network_sync_psk(struct network *network);
 
 void network_emit_added(struct network *network);
 void network_emit_removed(struct network *network);

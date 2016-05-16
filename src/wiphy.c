@@ -1132,16 +1132,7 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 	}
 
 	/* If we got here, then our PSK works.  Save if required */
-	if (network->update_psk) {
-		char *hex;
-
-		network->update_psk = false;
-		hex = l_util_hexstring(network->psk, 32);
-		l_settings_set_value(network->settings, "Security",
-					"PreSharedKey", hex);
-		l_free(hex);
-		storage_network_sync("psk", network->ssid, network->settings);
-	}
+	network_sync_psk(network);
 
 	netdev->pairwise_new_key_cmd_id =
 		mlme_new_pairwise_key(netdev, cipher, aa,

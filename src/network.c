@@ -230,6 +230,21 @@ bool network_settings_load(struct network *network)
 	return true;
 }
 
+void network_sync_psk(struct network *network)
+{
+	char *hex;
+
+	if (!network->update_psk)
+		return;
+
+	network->update_psk = false;
+	hex = l_util_hexstring(network->psk, 32);
+	l_settings_set_value(network->settings, "Security",
+						"PreSharedKey", hex);
+	l_free(hex);
+	storage_network_sync("psk", network->ssid, network->settings);
+}
+
 void network_settings_close(struct network *network)
 {
 	if (!network->settings)
