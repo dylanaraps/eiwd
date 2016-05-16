@@ -231,6 +231,11 @@ enum security network_get_security(struct network *network)
 	return network->security;
 }
 
+const unsigned char *network_get_psk(struct network *network)
+{
+	return network->psk;
+}
+
 bool network_settings_load(struct network *network)
 {
 	if (network->settings)
