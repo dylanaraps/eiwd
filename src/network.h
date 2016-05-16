@@ -49,6 +49,9 @@ struct netdev *network_get_netdev(struct network *network);
 const char *network_get_path(struct network *network);
 enum security network_get_security(struct network *network);
 
+bool network_settings_load(struct network *network);
+void network_settings_close(struct network *network);
+
 void network_emit_added(struct network *network);
 void network_emit_removed(struct network *network);
 

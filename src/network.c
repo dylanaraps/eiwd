@@ -210,6 +210,35 @@ enum security network_get_security(struct network *network)
 	return network->security;
 }
 
+bool network_settings_load(struct network *network)
+{
+	if (network->settings)
+		return true;
+
+	switch (network->security) {
+	case SECURITY_8021X:
+		network->settings = storage_network_open("8021x",
+							network->ssid);
+		break;
+	case SECURITY_PSK:
+		network->settings = storage_network_open("psk", network->ssid);
+		break;
+	default:
+		return false;
+	};
+
+	return true;
+}
+
+void network_settings_close(struct network *network)
+{
+	if (!network->settings)
+		return;
+
+	l_settings_free(network->settings);
+	network->settings = NULL;
+}
+
 bool __iwd_network_append_properties(const struct network *network,
 					struct l_dbus_message_builder *builder)
 {
