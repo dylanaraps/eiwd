@@ -244,8 +244,7 @@ static void genl_connect_cb(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
-static enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy,
-							uint16_t mask)
+enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy, uint16_t mask)
 {
 	mask &= wiphy->pairwise_ciphers;
 

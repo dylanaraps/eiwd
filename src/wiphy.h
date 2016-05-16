@@ -24,8 +24,12 @@
 #include <stdbool.h>
 
 struct netdev;
+struct wiphy;
 
 typedef void (*iwd_device_foreach_func)(struct netdev *, void *data);
+
+enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy,
+							uint16_t mask);
 
 bool wiphy_init(struct l_genl_family *in);
 bool wiphy_exit(void);
