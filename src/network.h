@@ -41,6 +41,10 @@ bool network_seen(uint32_t type, const char *ssid);
 bool network_connected(uint32_t type, const char *ssid);
 double network_rankmod(uint32_t type, const char *ssid);
 
+struct network *network_create(struct netdev *device,
+				uint8_t *ssid, uint8_t ssid_len,
+				enum security security);
+
 bool __iwd_network_append_properties(const struct network *network,
 					struct l_dbus_message_builder *builder);
 

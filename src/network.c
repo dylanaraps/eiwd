@@ -190,6 +190,22 @@ double network_rankmod(uint32_t type, const char *ssid)
 	return 0.0;
 }
 
+struct network *network_create(struct netdev *device,
+				uint8_t *ssid, uint8_t ssid_len,
+				enum security security)
+{
+	struct network *network;
+
+	network = l_new(struct network, 1);
+	network->netdev = device;
+	memcpy(network->ssid, ssid, ssid_len);
+	network->security = security;
+
+	network->bss_list = l_queue_new();
+
+	return network;
+}
+
 const char *network_get_ssid(struct network *network)
 {
 	return network->ssid;
