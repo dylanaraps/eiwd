@@ -363,6 +363,12 @@ bool network_bss_list_isempty(struct network *network)
 	return l_queue_isempty(network->bss_list);
 }
 
+void network_bss_list_clear(struct network *network)
+{
+	l_queue_destroy(network->bss_list, NULL);
+	network->bss_list = l_queue_new();
+}
+
 static struct scan_bss *network_select_bss(struct wiphy *wiphy,
 						struct network *network)
 {
