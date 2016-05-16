@@ -331,6 +331,21 @@ void network_emit_removed(struct network *network)
 	l_dbus_send(dbus, signal);
 }
 
+bool network_register(struct network *network, const char *path)
+{
+	if (!l_dbus_object_add_interface(dbus_get_bus(), path,
+					IWD_NETWORK_INTERFACE, network)) {
+		l_info("Unable to register %s interface",
+						IWD_NETWORK_INTERFACE);
+		return false;
+	}
+
+	network->object_path = strdup(path);
+	network_emit_added(network);
+
+	return true;
+}
+
 void network_init()
 {
 	networks = l_queue_new();
