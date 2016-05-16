@@ -705,7 +705,7 @@ static void netdev_autoconnect_next(struct netdev *netdev)
 		l_debug("Considering autoconnecting to BSS '%s' with SSID: %s,"
 			" freq: %u, rank: %u, strength: %i",
 			scan_bss_address_to_string(entry->bss),
-			entry->network->ssid,
+			network_get_ssid(entry->network),
 			entry->bss->frequency, entry->rank,
 			entry->bss->signal_strength);
 
@@ -945,8 +945,8 @@ static void operstate_cb(bool result, void *user_data)
 		dbus_pending_reply(&netdev->connect_pending, reply);
 	}
 
-	network_connected(netdev->connected_network->security,
-				netdev->connected_network->ssid);
+	network_connected(network_get_security(netdev->connected_network),
+				network_get_ssid(netdev->connected_network));
 	netdev_enter_state(netdev, DEVICE_STATE_CONNECTED);
 }
 
@@ -1099,8 +1099,7 @@ static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
 
 	l_info("Association completed");
 
-	if (netdev->connected_network->security ==
-						SECURITY_NONE)
+	if (network_get_security(netdev->connected_network) == SECURITY_NONE)
 		netdev_set_linkmode_and_operstate(netdev->index, 1, IF_OPER_UP,
 						operstate_cb, netdev);
 }
@@ -1120,6 +1119,8 @@ static void mlme_associate_cmd(struct netdev *netdev)
 	struct scan_bss *bss = netdev->connected_bss;
 	struct network *network = netdev->connected_network;
 	struct wiphy *wiphy = netdev->wiphy;
+	const char *ssid = network_get_ssid(network);
+	enum security security = network_get_security(network);
 
 	l_debug("");
 
@@ -1127,11 +1128,9 @@ static void mlme_associate_cmd(struct netdev *netdev)
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
-	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(network->ssid),
-			network->ssid);
+	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(ssid), ssid);
 
-	if (network->security == SECURITY_PSK ||
-			network->security == SECURITY_8021X) {
+	if (security == SECURITY_PSK || security == SECURITY_8021X) {
 		uint16_t pairwise_ciphers, group_ciphers;
 		uint32_t pairwise_cipher_attr;
 		uint32_t group_cipher_attr;
@@ -1141,7 +1140,7 @@ static void mlme_associate_cmd(struct netdev *netdev)
 
 		memset(&info, 0, sizeof(info));
 
-		if (network->security == SECURITY_PSK)
+		if (security == SECURITY_PSK)
 			info.akm_suites =
 				bss->sha256 ? IE_RSN_AKM_SUITE_PSK_SHA256 :
 						IE_RSN_AKM_SUITE_PSK;
@@ -1177,10 +1176,11 @@ static void mlme_associate_cmd(struct netdev *netdev)
 			eapol_sm_set_own_wpa(sm, rsne_buf, rsne_buf[1] + 2);
 		}
 
-		if (network->security == SECURITY_PSK)
-			eapol_sm_set_pmk(sm, network->psk);
+		if (security == SECURITY_PSK)
+			eapol_sm_set_pmk(sm, network_get_psk(network));
 		else
-			eapol_sm_set_8021x_config(sm, network->settings);
+			eapol_sm_set_8021x_config(sm,
+						network_get_settings(network));
 
 		eapol_sm_set_authenticator_address(sm, bss->addr);
 		eapol_sm_set_supplicant_address(sm, netdev->addr);
@@ -1354,7 +1354,7 @@ static bool network_remove_if_lost(const void *key, void *data, void *user_data)
 		return false;
 
 	l_debug("No remaining BSSs for SSID: %s -- Removing network",
-			network->ssid);
+			network_get_ssid(network));
 	network_free(network);
 
 	return true;
@@ -1441,12 +1441,12 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 		l_debug("Added new Network \"%s\" security %s",
 			network_get_ssid(network), security_to_str(security));
 
-		network_seen(network->security, network->ssid);
+		network_seen(security, network_get_ssid(network));
 	}
 
 	l_queue_insert(network->bss_list, bss, scan_bss_rank_compare, NULL);
 
-	rankmod = network_rankmod(network->security, network->ssid);
+	rankmod = network_rankmod(security, network_get_ssid(network));
 	if (rankmod == 0.0)
 		return;
 
