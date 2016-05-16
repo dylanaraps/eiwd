@@ -62,6 +62,7 @@ void network_sync_psk(struct network *network);
 int network_autoconnect(struct network *network, struct scan_bss *bss);
 void network_connect_failed(struct network *network);
 bool network_bss_add(struct network *network, struct scan_bss *bss);
+bool network_bss_list_isempty(struct network *network);
 
 bool network_register(struct network *network, const char *path);
 

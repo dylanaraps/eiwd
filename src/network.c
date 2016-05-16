@@ -358,6 +358,11 @@ bool network_bss_add(struct network *network, struct scan_bss *bss)
 					scan_bss_rank_compare, NULL);
 }
 
+bool network_bss_list_isempty(struct network *network)
+{
+	return l_queue_isempty(network->bss_list);
+}
+
 static struct scan_bss *network_select_bss(struct wiphy *wiphy,
 						struct network *network)
 {
