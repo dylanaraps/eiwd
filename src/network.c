@@ -352,6 +352,12 @@ void network_connect_failed(struct network *network)
 	}
 }
 
+bool network_bss_add(struct network *network, struct scan_bss *bss)
+{
+	return l_queue_insert(network->bss_list, bss,
+					scan_bss_rank_compare, NULL);
+}
+
 static struct scan_bss *network_select_bss(struct wiphy *wiphy,
 						struct network *network)
 {
