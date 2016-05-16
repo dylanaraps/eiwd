@@ -1279,20 +1279,20 @@ static void network_reset_bss_list(const void *key, void *value,
 {
 	struct network *network = value;
 
-	l_queue_destroy(network->bss_list, NULL);
-	network->bss_list = l_queue_new();
+	network_bss_list_clear(network);
 }
 
 static bool network_remove_if_lost(const void *key, void *data, void *user_data)
 {
 	struct network *network = data;
 
-	if (!l_queue_isempty(network->bss_list))
+	if (!network_bss_list_isempty(network))
+		return false;
 		return false;
 
 	l_debug("No remaining BSSs for SSID: %s -- Removing network",
 			network_get_ssid(network));
-	network_free(network);
+	network_remove(network);
 
 	return true;
 }
@@ -1381,7 +1381,7 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 		network_seen(security, network_get_ssid(network));
 	}
 
-	l_queue_insert(network->bss_list, bss, scan_bss_rank_compare, NULL);
+	network_bss_add(network, bss);
 
 	rankmod = network_rankmod(security, network_get_ssid(network));
 	if (rankmod == 0.0)
@@ -1425,7 +1425,7 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 			l_warn("Connected BSS not in scan results!");
 			l_queue_push_tail(netdev->bss_list,
 						netdev->connected_bss);
-			l_queue_push_tail(netdev->connected_network->bss_list,
+			network_bss_add(netdev->connected_network,
 						netdev->connected_bss);
 			l_queue_remove(netdev->old_bss_list,
 						netdev->connected_bss);
