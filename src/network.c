@@ -286,7 +286,7 @@ bool __iwd_network_append_properties(const struct network *network,
 	return true;
 }
 
-void network_emit_added(struct network *network)
+static void network_emit_added(struct network *network)
 {
 	struct l_dbus *dbus = dbus_get_bus();
 	struct l_dbus_message *signal;
@@ -315,7 +315,7 @@ void network_emit_added(struct network *network)
 	l_dbus_send(dbus, signal);
 }
 
-void network_emit_removed(struct network *network)
+static void network_emit_removed(struct network *network)
 {
 	struct l_dbus *dbus = dbus_get_bus();
 	struct l_dbus_message *signal;
