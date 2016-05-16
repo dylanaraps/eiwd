@@ -193,6 +193,11 @@ bool device_is_busy(struct netdev *device)
 	return false;
 }
 
+struct wiphy *device_get_wiphy(struct netdev *device)
+{
+	return device->wiphy;
+}
+
 static void netdev_enter_state(struct netdev *netdev, enum device_state state)
 {
 	l_debug("Old State: %s, new state: %s",
