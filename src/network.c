@@ -28,6 +28,9 @@
 
 #include <ell/ell.h>
 
+#include "src/ie.h"
+#include "src/crypto.h"
+
 #include "src/iwd.h"
 #include "src/common.h"
 #include "src/storage.h"
@@ -35,6 +38,7 @@
 #include "src/dbus.h"
 #include "src/agent.h"
 #include "src/device.h"
+#include "src/wiphy.h"
 #include "src/network.h"
 
 struct network_info {
@@ -271,6 +275,226 @@ void network_settings_close(struct network *network)
 	network->settings = NULL;
 }
 
+static struct scan_bss *network_select_bss(struct wiphy *wiphy,
+						struct network *network)
+{
+	struct l_queue *bss_list = network->bss_list;
+	const struct l_queue_entry *bss_entry;
+
+	/* TODO: sort the list by RSSI, potentially other criteria. */
+
+	switch (network->security) {
+	case SECURITY_NONE:
+		/* Pick the first bss (strongest signal) */
+		return l_queue_peek_head(bss_list);
+
+	case SECURITY_PSK:
+	case SECURITY_8021X:
+		/* Pick the first bss that advertises any cipher we support. */
+		for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
+				bss_entry = bss_entry->next) {
+			struct scan_bss *bss = bss_entry->data;
+			uint16_t pairwise_ciphers, group_ciphers;
+
+			bss_get_supported_ciphers(bss, &pairwise_ciphers,
+							&group_ciphers);
+
+			if (wiphy_select_cipher(wiphy, pairwise_ciphers) &&
+					wiphy_select_cipher(wiphy,
+							group_ciphers))
+				return bss;
+		}
+
+		return NULL;
+
+	default:
+		return NULL;
+	}
+}
+
+static void passphrase_callback(enum agent_result result,
+				const char *passphrase,
+				struct l_dbus_message *message,
+				void *user_data)
+{
+	struct network *network = user_data;
+	struct wiphy *wiphy = device_get_wiphy(network->netdev);
+	struct scan_bss *bss;
+
+	l_debug("result %d", result);
+
+	network->agent_request = 0;
+
+	if (result != AGENT_RESULT_OK) {
+		dbus_pending_reply(&message, dbus_error_aborted(message));
+		goto err;
+	}
+
+	bss = network_select_bss(wiphy, network);
+
+	/* Did all good BSSes go away while we waited */
+	if (!bss) {
+		dbus_pending_reply(&message, dbus_error_failed(message));
+		goto err;
+	}
+
+	l_free(network->psk);
+	network->psk = l_malloc(32);
+
+	if (crypto_psk_from_passphrase(passphrase, (uint8_t *) network->ssid,
+					strlen(network->ssid),
+					network->psk) < 0) {
+		l_error("PMK generation failed.  "
+			"Ensure Crypto Engine is properly configured");
+		dbus_pending_reply(&message, dbus_error_failed(message));
+
+		goto err;
+	}
+
+	/*
+	 * We need to store the PSK in our permanent store.  However, before
+	 * we do that, make sure the PSK works.  We write to the store only
+	 * when we are connected
+	 */
+	network->update_psk = true;
+
+	device_connect_network(network->netdev, network, bss, message);
+	return;
+
+err:
+	network_settings_close(network);
+
+	l_free(network->psk);
+	network->psk = NULL;
+}
+
+static struct l_dbus_message *network_connect_psk(struct network *network,
+					struct scan_bss *bss,
+					struct l_dbus_message *message)
+{
+	struct netdev *netdev = network->netdev;
+	const char *psk;
+
+	l_debug("");
+
+	network_settings_load(network);
+
+	psk = l_settings_get_value(network->settings, "Security",
+					"PreSharedKey");
+
+	if (psk) {
+		size_t len;
+
+		l_debug("psk: %s", psk);
+
+		l_free(network->psk);
+		network->psk = l_util_from_hexstring(psk, &len);
+
+		l_debug("len: %zd", len);
+
+		if (network->psk && len != 32) {
+			l_debug("Can't parse PSK");
+			l_free(network->psk);
+			network->psk = NULL;
+		}
+	}
+
+	l_debug("ask_psk: %s", network->ask_psk ? "true" : "false");
+
+	if (network->ask_psk || !network->psk) {
+		network->ask_psk = false;
+
+		network->agent_request =
+			agent_request_passphrase(network->object_path,
+						passphrase_callback,
+						message,
+						network);
+
+		if (!network->agent_request)
+			return dbus_error_no_agent(message);
+	} else
+		device_connect_network(netdev, network, bss, message);
+
+	return NULL;
+}
+
+static struct l_dbus_message *network_connect(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct network *network = user_data;
+	struct netdev *netdev = network->netdev;
+	struct scan_bss *bss;
+
+	l_debug("");
+
+	if (device_is_busy(netdev))
+		return dbus_error_busy(message);
+
+	/*
+	 * Select the best BSS to use at this time.  If we have to query the
+	 * agent this may not be the final choice because BSS visibility can
+	 * change while we wait for the agent.
+	 */
+	bss = network_select_bss(device_get_wiphy(netdev), network);
+
+	/* None of the BSSes is compatible with our stack */
+	if (!bss)
+		return dbus_error_not_supported(message);
+
+	switch (network->security) {
+	case SECURITY_PSK:
+		return network_connect_psk(network, bss, message);
+	case SECURITY_NONE:
+		device_connect_network(netdev, network, bss, message);
+		return NULL;
+	case SECURITY_8021X:
+		network_settings_load(network);
+		device_connect_network(netdev, network, bss, message);
+		return NULL;
+	default:
+		return dbus_error_not_supported(message);
+	}
+}
+
+static bool network_property_get_name(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct network *network = user_data;
+
+	l_dbus_message_builder_append_basic(builder, 's', network->ssid);
+	return true;
+}
+
+static bool network_property_is_connected(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct network *network = user_data;
+	bool connected;
+
+	connected = device_get_connected_network(network->netdev) == network;
+	l_dbus_message_builder_append_basic(builder, 'b', &connected);
+	return true;
+}
+
+static void setup_network_interface(struct l_dbus_interface *interface)
+{
+	l_dbus_interface_method(interface, "Connect", 0,
+				network_connect,
+				"", "");
+
+	l_dbus_interface_property(interface, "Name", 0, "s",
+					network_property_get_name, NULL);
+
+	l_dbus_interface_property(interface, "Connected", 0, "b",
+					network_property_is_connected,
+					NULL);
+}
+
 bool __iwd_network_append_properties(const struct network *network,
 					struct l_dbus_message_builder *builder)
 {
@@ -373,10 +597,16 @@ void network_remove(struct network *network)
 
 void network_init()
 {
+	if (!l_dbus_register_interface(dbus_get_bus(), IWD_NETWORK_INTERFACE,
+					setup_network_interface, NULL, true))
+		l_error("Unable to register %s interface",
+						IWD_NETWORK_INTERFACE);
+
 	networks = l_queue_new();
 }
 
 void network_exit()
 {
 	l_queue_destroy(networks, l_free);
+	l_dbus_unregister_interface(dbus_get_bus(), IWD_NETWORK_INTERFACE);
 }
