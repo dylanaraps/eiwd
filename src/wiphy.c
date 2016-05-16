@@ -692,7 +692,7 @@ static bool netdev_try_autoconnect(struct netdev *netdev,
 		return false;
 	}
 
-	mlme_authenticate_cmd(network, bss);
+	device_connect_network(netdev, network, bss, NULL);
 	return true;
 }
 
