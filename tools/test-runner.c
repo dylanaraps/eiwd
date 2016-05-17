@@ -550,7 +550,7 @@ static int create_hwsim_radio(const char *radio_name,
 				const unsigned int channels, bool p2p_device,
 							bool use_chanctx)
 {
-	char *argv[6];
+	char *argv[7];
 	pid_t pid;
 
 	if (chdir(exec_home + 5) < 0) {
@@ -565,7 +565,8 @@ static int create_hwsim_radio(const char *radio_name,
 	argv[2] = "--keep";
 	argv[3] = "--name";
 	argv[4] = (char *) radio_name;
-	argv[5] = NULL;
+	argv[5] = "--nointerface";
+	argv[6] = NULL;
 
 	pid = execute_program(argv, true);
 	if (pid < 0)
