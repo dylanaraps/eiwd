@@ -445,6 +445,21 @@ static pid_t start_dbus_daemon(void)
 	return pid;
 }
 
+static pid_t start_haveged(void)
+{
+	char *argv[2];
+	pid_t pid;
+
+	argv[0] = "/usr/sbin/haveged";
+	argv[1] = NULL;
+
+	pid = execute_program(argv, true);
+	if (pid < 0)
+		return -1;
+
+	return pid;
+}
+
 static bool set_interface_state(const char *if_name, bool isUp)
 {
 	char *state, *argv[4];
@@ -1499,6 +1514,9 @@ static void run_command(char *cmdname)
 	dbus_pid = start_dbus_daemon();
 	if (dbus_pid < 0)
 		goto exit;
+
+	if (check_virtualization())
+		start_haveged();
 
 	test_stat_queue = l_queue_new();
 
