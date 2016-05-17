@@ -68,11 +68,14 @@ enum {
 
 static struct l_genl_family *hwsim;
 
-static bool keep_radios;
 static bool create_action;
 static bool list_action;
 static const char *list_option;
 static const char *destroy_action;
+
+static bool keep_radios_attr;
+static bool no_vif_attr;
+static const char *radio_name_attr;
 
 static void do_debug(const char *str, void *user_data)
 {
@@ -250,13 +253,31 @@ static void hwsim_ready(void *user_data)
 	}
 
 	if (create_action) {
-		msg = l_genl_msg_new_sized(HWSIM_CMD_NEW_RADIO,
-					keep_radios ? 0 : 4);
+		size_t msg_size = 0;
 
-		if (!keep_radios)
+		if (!keep_radios_attr)
+			msg_size += 4;
+
+		if (radio_name_attr)
+			msg_size += sizeof(radio_name_attr);
+
+		if (no_vif_attr)
+			msg_size += 4;
+
+		msg = l_genl_msg_new_sized(HWSIM_CMD_NEW_RADIO, msg_size);
+
+		if (!keep_radios_attr)
 			l_genl_msg_append_attr(msg,
 					HWSIM_ATTR_DESTROY_RADIO_ON_CLOSE,
 					0, NULL);
+
+		if (radio_name_attr)
+			l_genl_msg_append_attr(msg, HWSIM_ATTR_RADIO_NAME,
+						sizeof(radio_name_attr),
+							radio_name_attr);
+
+		if (no_vif_attr)
+			l_genl_msg_append_attr(msg, HWSIM_ATTR_NO_VIF, 0, NULL);
 
 		l_genl_family_send(hwsim, msg, create_callback, NULL, NULL);
 		return;
@@ -312,17 +333,21 @@ static void usage(void)
 		"\t-C, --create           Create new simulated radio\n"
 		"\t-D, --destroy <id>     Destroy existing radio\n"
 		"\t-k, --keep             Do not destroy radios when "
-							"program exits\n"
+						"program exits\n"
+		"\t-n, --name <name>      Name of a radio to be created\n"
+		"\t-i, --nointerface      Do not create VIF\n"
 		"\t-h, --help             Show help options\n");
 }
 
 static const struct option main_options[] = {
-	{ "list",      optional_argument, NULL, 'L' },
-	{ "create",    no_argument,       NULL, 'C' },
-	{ "destroy",   required_argument, NULL, 'D' },
-	{ "keep",      no_argument,       NULL, 'k' },
-	{ "version",   no_argument,       NULL, 'v' },
-	{ "help",      no_argument,       NULL, 'h' },
+	{ "list",	 optional_argument,	NULL, 'L' },
+	{ "create",	 no_argument,		NULL, 'C' },
+	{ "destroy",	 required_argument,	NULL, 'D' },
+	{ "keep",	 no_argument,		NULL, 'k' },
+	{ "name",	 required_argument,	NULL, 'n' },
+	{ "nointerface", no_argument,		NULL, 'i' },
+	{ "version",	 no_argument,		NULL, 'v' },
+	{ "help",	 no_argument,		NULL, 'h' },
 	{ }
 };
 
@@ -336,7 +361,8 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, ":L:CD:vhk", main_options, NULL);
+		opt = getopt_long(argc, argv, ":L:CD:kn:iv", main_options,
+									NULL);
 		if (opt < 0)
 			break;
 
@@ -364,7 +390,13 @@ int main(int argc, char *argv[])
 			actions++;
 			break;
 		case 'k':
-			keep_radios = true;
+			keep_radios_attr = true;
+			break;
+		case 'n':
+			radio_name_attr = optarg;
+			break;
+		case 'i':
+			no_vif_attr = true;
 			break;
 		case 'v':
 			printf("%s\n", VERSION);
