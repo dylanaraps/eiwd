@@ -32,8 +32,10 @@ def connect(networkToConnect, self, mainloop, bus):
         errorMsg = "Could not connect to network %s", networkToConnect
         logger.error(traceback.print_exc(file=sys.stdout))
         self.assertTrue(False, errorMsg)
+        return False
 
     logger.info("Successfully connected to: %s", networkToConnect)
+    return True
 
 # try to disconnect from the device.
 def disconnect(deviceToDisconnect, mainloop, bus):
@@ -46,8 +48,10 @@ def disconnect(deviceToDisconnect, mainloop, bus):
         errorMsg = "Failed to disconnect from device %s", deviceToDisconnect
         logger.error(traceback.print_exc(file=sys.stdout))
         assertTrue(False, errorMsg)
+        return False
 
     logger.info("Successfully disconnected from: %s", deviceToDisconnect)
+    return True
 
 # get the 1st network found to connect to
 def getNetworkToConnectTo(networkList):
