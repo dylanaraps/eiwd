@@ -1,3 +1,9 @@
+scanNetworkTest: This test checks that we find the right AP, as
+                 specified in the hostapd conf file.
+
+connectDisconnectTest: Connect and disconnect from a network
+                       as specified in the hostapd conf file.
+
 Pre-requisites:
 1. Ensure you have hostapd installed.
 2. Verify that the kernel has mac80211_hwsim.
@@ -18,8 +24,6 @@ Run tests (e.g. connectDisconnect test):
 3. Start connectDisconnect test (inside autotests directory).
     cd <iwd>/autotests/test1AP
     ./connectDisconnect.py
-
-Note: This will not work with test-runner for now because of entropy issue. WIP.
 
 Optional changes:
 1. You can provide your own config file to hostapd. If so, then you would need to
