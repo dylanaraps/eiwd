@@ -203,12 +203,12 @@ static void prepare_sandbox(void)
 
 static char *const qemu_argv[] = {
 	"",
+	"-machine", "",
 	"-nodefaults",
 	"-nodefconfig",
 	"-no-user-config",
 	"-monitor", "none",
 	"-display", "none",
-	"-machine", "type=q35,accel=kvm:tcg",
 	"-m", "192M",
 	"-nographic",
 	"-vga", "none",
@@ -289,6 +289,12 @@ static void start_qemu(void)
 	pos = (sizeof(qemu_argv) / sizeof(char *)) - 1;
 
 	argv[0] = (char *) qemu_binary;
+
+	if (has_virt)
+		argv[2] = "type=q35,accel=kvm:tcg";
+	else
+		argv[2] = "type=q35";
+
 	argv[pos++] = "-kernel";
 	argv[pos++] = (char *) kernel_image;
 	argv[pos++] = "-append";
