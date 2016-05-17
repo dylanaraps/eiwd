@@ -10,7 +10,7 @@ import os
 from random import randrange
 from subprocess import Popen
 import sys
-sys.path.append('../utility') #needed to import all the utlilty modules
+sys.path.append('../utility') #needed to import all the utility modules
 import utility
 
 def defineAgentVars():
@@ -37,6 +37,7 @@ class TestConnectDisconnect(unittest.TestCase):
         # so that the network list is updated. Alternatively, we can scan
         # for networks.
         if (networkToConnect == ""):
+            time.sleep(2)
             logger.debug("RESTART PROGRAM")
             os.execl(sys.executable, sys.executable, * sys.argv)
 
@@ -47,7 +48,11 @@ class TestConnectDisconnect(unittest.TestCase):
         network = dbus.Interface(bus.get_object("net.connman.iwd",
                                             networkToConnect),
                                             "net.connman.iwd.Network")
-        utility.connect(networkToConnect, self, mainloop, bus)
+        status = utility.connect(networkToConnect, self, mainloop, bus)
+        if status == False:
+            #terminate proc
+            proc.terminate()
+            return
 
         logger.info("Currently connected to: %s",
                     utility.getCurrentlyConnectedNetworkName())
