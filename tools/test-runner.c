@@ -1326,6 +1326,7 @@ static void print_test_stat(void *data, void *user_data)
 {
 	struct test_stats *test_stats;
 	struct stat_totals *stat_totals;
+	char *str_runtime, *str_passed, *str_failed, *str_timedout;
 
 	test_stats = (struct test_stats *) data;
 	stat_totals = (struct stat_totals *) user_data;
@@ -1335,14 +1336,39 @@ static void print_test_stat(void *data, void *user_data)
 	stat_totals->total_failed	+= test_stats->num_failed;
 	stat_totals->total_timedout	+= test_stats->num_timedout;
 
-	l_info(CONSOLE_LN_BOLD "%27s "
-		CONSOLE_LN_DEFAULT "|" CONSOLE_LN_GREEN " %6d "
-		CONSOLE_LN_DEFAULT "|" CONSOLE_LN_RED " %6d "
-		CONSOLE_LN_DEFAULT "|" CONSOLE_LN_YELLOW " %9d "
-		CONSOLE_LN_RESET "| %9.3f sec",
-		test_stats->config_cycle_name, test_stats->num_passed,
-		test_stats->num_failed, test_stats->num_timedout,
+	if (test_stats->py_run_time)
+		str_runtime = l_strdup_printf("| %9.3f sec",
 						test_stats->py_run_time);
+	else
+		str_runtime = l_strdup_printf("| %9s", "Skipped");
+
+	if (test_stats->num_passed)
+		str_passed = l_strdup_printf(" %6d ", test_stats->num_passed);
+	else
+		str_passed = l_strdup_printf(" %6c ", '-');
+
+	if (test_stats->num_failed)
+		str_failed = l_strdup_printf(" %6d ", test_stats->num_failed);
+	else
+		str_failed = l_strdup_printf(" %6c ", '-');
+
+	if (test_stats->num_timedout)
+		str_timedout = l_strdup_printf(" %9d ",
+						test_stats->num_timedout);
+	else
+		str_timedout = l_strdup_printf(" %9c ", '-');
+
+	l_info(CONSOLE_LN_BOLD "%27s "
+			CONSOLE_LN_DEFAULT "|" CONSOLE_LN_GREEN "%s"
+			CONSOLE_LN_DEFAULT "|" CONSOLE_LN_RED "%s"
+			CONSOLE_LN_DEFAULT "|" CONSOLE_LN_YELLOW "%s"
+			CONSOLE_LN_RESET "%s", test_stats->config_cycle_name,
+			str_passed, str_failed, str_timedout, str_runtime);
+
+	l_free(str_passed);
+	l_free(str_failed);
+	l_free(str_timedout);
+	l_free(str_runtime);
 }
 
 static void print_results(struct l_queue *test_stat_queue)
