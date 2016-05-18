@@ -308,7 +308,6 @@ static void hwsim_ready(void *user_data)
 
 static void hwsim_disappeared(void *user_data)
 {
-	l_info("MAC80211_HWSIM missing");
 	l_main_quit();
 }
 
