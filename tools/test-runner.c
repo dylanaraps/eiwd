@@ -446,7 +446,7 @@ static pid_t start_dbus_daemon(void)
 	return pid;
 }
 
-static pid_t start_haveged(void)
+static bool start_haveged(void)
 {
 	char *argv[2];
 	pid_t pid;
@@ -456,9 +456,9 @@ static pid_t start_haveged(void)
 
 	pid = execute_program(argv, true);
 	if (pid < 0)
-		return -1;
+		return false;
 
-	return pid;
+	return true;
 }
 
 static bool set_interface_state(const char *if_name, bool isUp)
@@ -1516,8 +1516,8 @@ static void run_command(char *cmdname)
 	if (dbus_pid < 0)
 		goto exit;
 
-	if (check_virtualization())
-		start_haveged();
+	if (!start_haveged())
+		goto exit;
 
 	test_stat_queue = l_queue_new();
 
