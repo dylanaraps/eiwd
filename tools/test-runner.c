@@ -425,7 +425,7 @@ static void create_dbus_system_conf(void)
 	mkdir("/run/dbus", 0755);
 }
 
-static pid_t start_dbus_daemon(void)
+static bool start_dbus_daemon(void)
 {
 	char *argv[3];
 	pid_t pid;
@@ -436,14 +436,14 @@ static pid_t start_dbus_daemon(void)
 
 	pid = execute_program(argv, false);
 	if (pid < 0)
-		return -1;
+		return false;
 
 	if (!wait_for_socket("/run/dbus/system_bus_socket", 25 * 10000))
-		return -1;
+		return false;
 
-	l_info("D-Bus is running");
+	l_debug("D-Bus is running");
 
-	return pid;
+	return true;
 }
 
 static bool start_haveged(void)
@@ -1440,7 +1440,6 @@ static void run_command(char *cmdname)
 	char tmp_path[PATH_MAX];
 	char test_home_path[PATH_MAX];
 	char *ptr;
-	pid_t dbus_pid;
 	int i;
 	struct l_hashmap *test_config_map;
 	struct l_queue *test_stat_queue;
@@ -1512,8 +1511,7 @@ static void run_command(char *cmdname)
 
 	create_dbus_system_conf();
 
-	dbus_pid = start_dbus_daemon();
-	if (dbus_pid < 0)
+	if (!start_dbus_daemon())
 		goto exit;
 
 	if (!start_haveged())
