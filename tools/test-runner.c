@@ -53,7 +53,7 @@
 
 #define CMDLINE_MAX			2048
 
-#define BIN_IW				"/usr/sbin/iw"
+#define BIN_IW				"iw"
 #define BIN_HWSIM			"./hwsim"
 
 #define HWSIM_RADIOS_MAX		100
@@ -280,8 +280,9 @@ static void start_qemu(void)
 			"acpi=off pci=noacpi noapic quiet ro "
 			"mac80211_hwsim.radios=0 "
 			"init=%s TESTHOME=%s TESTVERBOUT=%u "
-			"TESTDIRLIST=\'%s\' TESTARGS=\'%s\'", initcmd, cwd,
-			verbose_out, test_dir_list, testargs);
+			"TESTDIRLIST=\'%s\' TESTARGS=\'%s\' PATH=\'%s\'",
+			initcmd, cwd, verbose_out, test_dir_list, testargs,
+			getenv("PATH"));
 
 	argv = alloca(sizeof(qemu_argv));
 	memcpy(argv, qemu_argv, sizeof(qemu_argv));
@@ -429,7 +430,7 @@ static pid_t start_dbus_daemon(void)
 	char *argv[3];
 	pid_t pid;
 
-	argv[0] = "/usr/bin/dbus-daemon";
+	argv[0] = "dbus-daemon";
 	argv[1] = "--system";
 	argv[2] = NULL;
 
@@ -450,7 +451,7 @@ static pid_t start_haveged(void)
 	char *argv[2];
 	pid_t pid;
 
-	argv[0] = "/usr/sbin/haveged";
+	argv[0] = "haveged";
 	argv[1] = NULL;
 
 	pid = execute_program(argv, true);
@@ -470,7 +471,7 @@ static bool set_interface_state(const char *if_name, bool isUp)
 	else
 		state = "down";
 
-	argv[0] = "/usr/sbin/ifconfig";
+	argv[0] = "ifconfig";
 	argv[1] = (char *) if_name;
 	argv[2] = state;
 	argv[3] = NULL;
@@ -632,7 +633,7 @@ static pid_t start_hostapd(const char *config_file, const char *interface_name)
 	ctrl_interface = l_strdup_printf("%s/%s", HOSTAPD_CTRL_INTERFACE_PREFIX,
 								interface_name);
 
-	argv[0] = "/usr/sbin/hostapd";
+	argv[0] = "hostapd";
 	argv[1] = "-g";
 	argv[2] = ctrl_interface;
 	argv[3] = (char *) config_file;
@@ -982,7 +983,7 @@ static pid_t start_iwd(void)
 {
 	char *argv[2];
 
-	argv[0] = "/usr/bin/iwd";
+	argv[0] = "iwd";
 	argv[1] = NULL;
 
 	return execute_program(argv, false);
@@ -1172,7 +1173,7 @@ start_next_test:
 	if (!py_test)
 		return;
 
-	argv[0] = "/usr/bin/python";
+	argv[0] = "python";
 	argv[1] = py_test;
 	argv[2] = NULL;
 
@@ -1550,6 +1551,15 @@ static void run_tests(void)
 		l_error("Failed to read kernel command line");
 		return;
 	}
+
+	ptr = strstr(cmdline, "PATH=");
+	if (!ptr) {
+		l_error("No $PATH section found");
+		return;
+	}
+
+	ptr += 5;
+	setenv("PATH", ptr, true);
 
 	ptr = strstr(cmdline, "TESTARGS=");
 	if (!ptr) {
