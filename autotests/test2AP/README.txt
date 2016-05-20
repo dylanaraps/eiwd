@@ -8,7 +8,7 @@ Start with test-runner:
 1. Just start test-runner from under <iwd>/tools directory and it
    will automatically run the tests.
    cd <iwd>/tools
-   sudo ./test-runner -v
+   sudo ./test-runner -t test2AP
 
 Run stand-alone:
 Pre-requisites:
@@ -16,11 +16,10 @@ Pre-requisites:
 2. Verify that the kernel has mac80211_hwsim.
 
 Setup:
-1. Create radios using mac80211_hwsim. For most tests, we need 4 radios.
-    sudo modprobe mac80211_hwsim radios=4
-2. Enable network interfaces:
+1. Create radios using mac80211_hwsim. For most tests, we need 3 radios.
+    sudo modprobe mac80211_hwsim radios=3
+2. Enable network interface:
     sudo ifconfig wlan2 up
-    sudo ifconfig wlan3 up
 
 Run test (e.g. twoNetworksTest test):
 1. Start hostapd, with a config file as an argument.
