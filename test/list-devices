@@ -6,31 +6,37 @@ import dbus
 bus = dbus.SystemBus()
 
 manager = dbus.Interface(bus.get_object("net.connman.iwd", "/"),
-                                        "net.connman.iwd.Manager")
-devices = manager.GetDevices()
+                                        "org.freedesktop.DBus.ObjectManager")
+objects = manager.GetManagedObjects()
 
-for path in devices:
+for path in objects:
+    if 'net.connman.iwd.Device' not in objects[path]:
+        continue
+
+    device = objects[path]['net.connman.iwd.Device']
+
     print("[ %s ]" % path)
-    properties = devices[path]
 
-    for key in properties.keys():
-        val = properties[key]
+    for key in device.keys():
+        val = device[key]
         print("    %s = %s" % (key, val))
 
     print("    Networks:")
 
-    device = dbus.Interface(bus.get_object("net.connman.iwd", path),
-                                    "net.connman.iwd.Device")
-    networks = device.GetNetworks()
-    for path in networks:
-        print("    [ %s ]" % path)
-        properties = networks[path]
+    for path2 in objects:
+        if not path2.startswith(path) or \
+                'net.connman.iwd.Network' not in objects[path2]:
+            continue
 
-        for key in properties.keys():
+        network = objects[path2]['net.connman.iwd.Network']
+
+        print("    [ %s ]" % path2)
+
+        for key in network.keys():
             if key in ["SSID"]:
-                val = properties[key]
+                val = network[key]
                 val = "".join(map(chr, val))
             else:
-                val = properties[key]
+                val = network[key]
 
             print("        %s = %s" % (key, val))

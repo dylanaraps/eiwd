@@ -55,7 +55,7 @@ if __name__ == '__main__':
 
     bus = dbus.SystemBus()
     manager = dbus.Interface(bus.get_object('net.connman.iwd', "/"),
-                                'net.connman.iwd.Manager')
+                                'net.connman.iwd.AgentManager')
 
     path = "/test/agent/" + str(randrange(100))
     object = Agent(bus, path)
