@@ -226,6 +226,7 @@ static void netdev_enter_state(struct netdev *netdev, enum device_state state)
 static void netdev_disassociated(struct netdev *netdev)
 {
 	struct network *network = netdev->connected_network;
+	struct l_dbus *dbus = dbus_get_bus();
 
 	network_settings_close(network);
 
@@ -233,6 +234,11 @@ static void netdev_disassociated(struct netdev *netdev)
 	netdev->connected_network = NULL;
 
 	netdev_enter_state(netdev, DEVICE_STATE_AUTOCONNECT);
+
+	l_dbus_property_changed(dbus, device_get_path(netdev),
+				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
+	l_dbus_property_changed(dbus, network_get_path(network),
+				IWD_NETWORK_INTERFACE, "Connected");
 }
 
 static void netdev_lost_beacon(struct netdev *netdev)
@@ -294,6 +300,8 @@ void device_connect_network(struct netdev *device, struct network *network,
 				struct scan_bss *bss,
 				struct l_dbus_message *message)
 {
+	struct l_dbus *dbus = dbus_get_bus();
+
 	device->connect_pending = l_dbus_message_ref(message);
 
 	device->connected_bss = bss;
@@ -302,6 +310,11 @@ void device_connect_network(struct netdev *device, struct network *network,
 	netdev_enter_state(device, DEVICE_STATE_CONNECTING);
 
 	mlme_authenticate_cmd(network, bss);
+
+	l_dbus_property_changed(dbus, device_get_path(device),
+				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
+	l_dbus_property_changed(dbus, network_get_path(network),
+				IWD_NETWORK_INTERFACE, "Connected");
 }
 
 static void bss_free(void *data)
