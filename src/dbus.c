@@ -182,6 +182,9 @@ static void ready_callback(void *user_data)
 	l_dbus_name_acquire(g_dbus, "net.connman.iwd", false, false, true,
 				request_name_callback, NULL);
 
+	if (!l_dbus_object_manager_enable(g_dbus))
+		l_info("Unable to register the ObjectManager");
+
 	manager_init(g_dbus);
 }
 
