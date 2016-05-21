@@ -30,7 +30,7 @@
 #include <ell/ell.h>
 #include <ell/dbus-private.h>
 #include "src/dbus.h"
-#include "src/manager.h"
+#include "src/agent.h"
 
 struct l_dbus *g_dbus = 0;
 static int kdbus_fd = -1;
@@ -185,7 +185,7 @@ static void ready_callback(void *user_data)
 	if (!l_dbus_object_manager_enable(g_dbus))
 		l_info("Unable to register the ObjectManager");
 
-	manager_init(g_dbus);
+	agent_init(g_dbus);
 }
 
 static void disconnect_callback(void *user_data)
@@ -236,7 +236,8 @@ bool dbus_init(bool enable_debug, bool use_kdbus)
 
 bool dbus_exit(void)
 {
-	manager_exit(g_dbus);
+	agent_exit(g_dbus);
+
 	l_dbus_destroy(g_dbus);
 	g_dbus = NULL;
 

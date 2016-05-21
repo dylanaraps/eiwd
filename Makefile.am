@@ -62,7 +62,6 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/device.h src/device.c \
 					src/ie.h src/ie.c \
 					src/dbus.h src/dbus.c \
-					src/manager.h src/manager.c \
 					src/crypto.h src/crypto.c \
 					src/mpdu.h src/mpdu.c \
 					src/eapol.h src/eapol.c \

@@ -406,7 +406,7 @@ static struct l_dbus_message *agent_unregister(struct l_dbus *dbus,
 	return reply;
 }
 
-bool agent_setup(struct l_dbus_interface *interface)
+static void setup_agent_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "RegisterAgent", 0,
 				agent_register,
@@ -414,8 +414,6 @@ bool agent_setup(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "UnregisterAgent", 0,
 				agent_unregister,
 				"", "o", "path");
-
-	return true;
 }
 
 static void release_agent(struct agent *agent)
@@ -425,15 +423,35 @@ static void release_agent(struct agent *agent)
 	agent_free(agent);
 }
 
-bool agent_init(void)
+bool agent_init(struct l_dbus *dbus)
 {
+	if (!l_dbus_register_interface(dbus, IWD_AGENT_MANAGER_INTERFACE,
+						setup_agent_interface,
+						NULL, true)) {
+		l_info("Unable to register %s interface",
+				IWD_AGENT_MANAGER_INTERFACE);
+		return false;
+	}
+
+	if (!l_dbus_object_add_interface(dbus, IWD_AGENT_MANAGER_PATH,
+						IWD_AGENT_MANAGER_INTERFACE,
+						NULL)) {
+		l_info("Unable to register the agent manager object on '%s'",
+				IWD_AGENT_MANAGER_PATH);
+		l_dbus_unregister_interface(dbus, IWD_AGENT_MANAGER_INTERFACE);
+		return false;
+	}
+
 	return true;
 }
 
-void agent_exit(void)
+bool agent_exit(struct l_dbus *dbus)
 {
-	if (!default_agent)
-		return;
+	if (default_agent)
+		release_agent(default_agent);
 
-	release_agent(default_agent);
+	l_dbus_unregister_object(dbus, IWD_AGENT_MANAGER_PATH);
+	l_dbus_unregister_interface(dbus, IWD_AGENT_MANAGER_INTERFACE);
+
+	return true;
 }

@@ -330,22 +330,6 @@ const char *device_get_path(struct netdev *netdev)
 	return path;
 }
 
-bool __iwd_device_append_properties(struct netdev *netdev,
-					struct l_dbus_message_builder *builder)
-{
-	l_dbus_message_builder_enter_array(builder, "{sv}");
-
-	dbus_dict_append_string(builder, "Name", netdev->name);
-
-	if (netdev->connected_network)
-		dbus_dict_append_object(builder, "ConnectedNetwork",
-				network_get_path(netdev->connected_network));
-
-	l_dbus_message_builder_leave_array(builder);
-
-	return true;
-}
-
 void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
 {
 	const struct l_queue_entry *wiphy_entry;
@@ -364,50 +348,6 @@ void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
 			netdev_entry = netdev_entry->next;
 		}
 	}
-}
-
-static void device_emit_added(struct netdev *netdev)
-{
-	struct l_dbus *dbus = dbus_get_bus();
-	struct l_dbus_message *signal;
-	struct l_dbus_message_builder *builder;
-
-	signal = l_dbus_message_new_signal(dbus, IWD_MANAGER_PATH,
-						IWD_MANAGER_INTERFACE,
-						"DeviceAdded");
-
-	if (!signal)
-		return;
-
-	builder = l_dbus_message_builder_new(signal);
-	if (!builder) {
-		l_dbus_message_unref(signal);
-		return;
-	}
-
-	l_dbus_message_builder_append_basic(builder, 'o',
-						device_get_path(netdev));
-	__iwd_device_append_properties(netdev, builder);
-
-	l_dbus_message_builder_finalize(builder);
-	l_dbus_message_builder_destroy(builder);
-	l_dbus_send(dbus, signal);
-}
-
-static void device_emit_removed(struct netdev *netdev)
-{
-	struct l_dbus *dbus = dbus_get_bus();
-	struct l_dbus_message *signal;
-
-	signal = l_dbus_message_new_signal(dbus, IWD_MANAGER_PATH,
-						IWD_MANAGER_INTERFACE,
-						"DeviceRemoved");
-
-	if (!signal)
-		return;
-
-	l_dbus_message_set_arguments(signal, "o", device_get_path(netdev));
-	l_dbus_send(dbus, signal);
 }
 
 static void device_scan_triggered(int err, void *user_data)
@@ -612,8 +552,6 @@ static void netdev_free(void *data)
 
 	dbus = dbus_get_bus();
 	l_dbus_unregister_object(dbus, device_get_path(netdev));
-
-	device_emit_removed(netdev);
 
 	l_debug("Freeing interface %s", netdev->name);
 
@@ -1556,10 +1494,8 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 						IWD_DEVICE_INTERFACE, netdev))
 			l_info("Unable to register %s interface",
 				IWD_DEVICE_INTERFACE);
-		else {
-			__device_watch_call_added(netdev);
-			device_emit_added(netdev);
-		}
+
+		__device_watch_call_added(netdev);
 
 		netdev_set_linkmode_and_operstate(netdev->index, 1,
 						IF_OPER_DORMANT, NULL, NULL);

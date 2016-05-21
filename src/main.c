@@ -59,8 +59,6 @@ static void signal_handler(struct l_signal *signal, uint32_t signo,
 	case SIGTERM:
 		l_info("Terminate");
 
-		agent_exit();
-
 		timeout = l_timeout_create(1, main_loop_quit, NULL, NULL);
 		break;
 	}

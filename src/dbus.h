@@ -24,13 +24,13 @@
 
 #define IWD_SERVICE "net.connman.iwd"
 
-#define IWD_MANAGER_INTERFACE "net.connman.iwd.Manager"
+#define IWD_AGENT_MANAGER_INTERFACE "net.connman.iwd.AgentManager"
 #define IWD_DEVICE_INTERFACE "net.connman.iwd.Device"
 #define IWD_NETWORK_INTERFACE "net.connman.iwd.Network"
 #define IWD_AGENT_INTERFACE "net.connman.iwd.Agent"
 #define IWD_WSC_INTERFACE "net.connman.iwd.WiFiSimpleConfiguration"
 
-#define IWD_MANAGER_PATH "/"
+#define IWD_AGENT_MANAGER_PATH "/"
 
 struct l_dbus;
 
