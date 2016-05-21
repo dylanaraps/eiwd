@@ -32,9 +32,6 @@ struct network *network_create(struct netdev *device,
 				uint8_t *ssid, uint8_t ssid_len,
 				enum security security);
 
-bool __iwd_network_append_properties(const struct network *network,
-					struct l_dbus_message_builder *builder);
-
 const char *network_get_ssid(struct network *network);
 struct netdev *network_get_netdev(struct network *network);
 const char *network_get_path(struct network *network);

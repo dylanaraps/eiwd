@@ -602,67 +602,6 @@ static void setup_network_interface(struct l_dbus_interface *interface)
 					NULL);
 }
 
-bool __iwd_network_append_properties(const struct network *network,
-					struct l_dbus_message_builder *builder)
-{
-	bool connected;
-
-	l_dbus_message_builder_enter_array(builder, "{sv}");
-	dbus_dict_append_string(builder, "Name", network->ssid);
-
-	connected = device_get_connected_network(network->netdev) == network;
-	dbus_dict_append_bool(builder, "Connected", connected);
-	l_dbus_message_builder_leave_array(builder);
-
-	return true;
-}
-
-static void network_emit_added(struct network *network)
-{
-	struct l_dbus *dbus = dbus_get_bus();
-	struct l_dbus_message *signal;
-	struct l_dbus_message_builder *builder;
-
-	signal = l_dbus_message_new_signal(dbus,
-					device_get_path(network->netdev),
-					IWD_DEVICE_INTERFACE,
-					"NetworkAdded");
-
-	if (!signal)
-		return;
-
-	builder = l_dbus_message_builder_new(signal);
-	if (!builder) {
-		l_dbus_message_unref(signal);
-		return;
-	}
-
-	l_dbus_message_builder_append_basic(builder, 'o',
-						network->object_path);
-	__iwd_network_append_properties(network, builder);
-
-	l_dbus_message_builder_finalize(builder);
-	l_dbus_message_builder_destroy(builder);
-	l_dbus_send(dbus, signal);
-}
-
-static void network_emit_removed(struct network *network)
-{
-	struct l_dbus *dbus = dbus_get_bus();
-	struct l_dbus_message *signal;
-
-	signal = l_dbus_message_new_signal(dbus,
-					device_get_path(network->netdev),
-					IWD_DEVICE_INTERFACE,
-					"NetworkRemoved");
-
-	if (!signal)
-		return;
-
-	l_dbus_message_set_arguments(signal, "o", network->object_path);
-	l_dbus_send(dbus, signal);
-}
-
 bool network_register(struct network *network, const char *path)
 {
 	if (!l_dbus_object_add_interface(dbus_get_bus(), path,
@@ -673,7 +612,6 @@ bool network_register(struct network *network, const char *path)
 	}
 
 	network->object_path = strdup(path);
-	network_emit_added(network);
 
 	return true;
 }
@@ -686,7 +624,6 @@ static void network_unregister(struct network *network)
 	network_settings_close(network);
 
 	l_dbus_unregister_object(dbus, network->object_path);
-	network_emit_removed(network);
 
 	l_free(network->object_path);
 	network->object_path = NULL;
