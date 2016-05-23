@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include <ell/ell.h>
 
@@ -167,6 +168,29 @@ error_create_dirs:
 	return r;
 }
 
+static char *get_network_file_path(const char *type, const char *ssid)
+{
+	char *path;
+	const char *c;
+	char *hex = NULL;
+
+	for (c = ssid; *c; c++)
+		if (!isalnum(*c) && !strchr("-_ ", *c))
+			break;
+
+	if (*c) {
+		hex = l_util_hexstring((const unsigned char *) ssid,
+					strlen(ssid));
+
+		path = l_strdup_printf(STORAGEDIR "/=%s.%s", hex, type);
+
+		l_free(hex);
+	} else
+		path = l_strdup_printf(STORAGEDIR "/%s.%s", ssid, type);
+
+	return path;
+}
+
 struct l_settings *storage_network_open(const char *type, const char *ssid)
 {
 	struct l_settings *settings;
@@ -175,8 +199,7 @@ struct l_settings *storage_network_open(const char *type, const char *ssid)
 	if (ssid == NULL || type == NULL)
 		return NULL;
 
-	/* TODO: Handle SSID's with filesystem-reserved characters */
-	path = l_strdup_printf(STORAGEDIR "/%s.%s", ssid, type);
+	path = get_network_file_path(type, ssid);
 	settings = l_settings_new();
 
 	l_settings_load_from_file(settings, path);
@@ -193,7 +216,7 @@ int storage_network_touch(const char *type, const char *ssid)
 	if (ssid == NULL || type == NULL)
 		return -EINVAL;
 
-	path = l_strdup_printf(STORAGEDIR "/%s.%s", ssid, type);
+	path = get_network_file_path(type, ssid);
 	ret = utimensat(0, path, NULL, 0);
 	l_free(path);
 
@@ -213,7 +236,7 @@ int storage_network_get_mtime(const char *type, const char *ssid,
 	if (ssid == NULL || type == NULL)
 		return -EINVAL;
 
-	path = l_strdup_printf(STORAGEDIR "/%s.%s", ssid, type);
+	path = get_network_file_path(type, ssid);
 	ret = stat(path, &sb);
 	l_free(path);
 
@@ -234,9 +257,11 @@ void storage_network_sync(const char *type, const char *ssid,
 {
 	char *data;
 	size_t length = 0;
+	char *path;
 
-	/* TODO: Handle SSID's with filesystem-reserved characters */
+	path = get_network_file_path(type, ssid);
 	data = l_settings_to_data(settings, &length);
-	write_file(data, length, STORAGEDIR "/%s.%s", ssid, type);
+	write_file(data, length, "%s", path);
 	l_free(data);
+	l_free(path);
 }
