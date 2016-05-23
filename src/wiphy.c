@@ -468,13 +468,23 @@ static bool device_property_get_name(struct l_dbus *dbus,
 	return true;
 }
 
-static bool device_property_get_connected_network(struct l_dbus *dbus,
+static bool device_property_get_address(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
 					void *user_data)
 {
 	struct netdev *netdev = user_data;
 
+	l_dbus_message_builder_append_basic(builder, 's', netdev->addr);
+	return true;
+}
+
+static bool device_property_get_connected_network(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct netdev *netdev = user_data;
 	if (!netdev->connected_network)
 		return false;
 
@@ -493,6 +503,8 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					device_property_get_name, NULL);
+	l_dbus_interface_property(interface, "Address", 0, "s",
+					device_property_get_address, NULL);
 	l_dbus_interface_property(interface, "ConnectedNetwork", 0, "o",
 					device_property_get_connected_network,
 					NULL);
