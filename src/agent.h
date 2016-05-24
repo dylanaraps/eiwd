@@ -35,6 +35,7 @@ typedef void (*agent_request_passphrase_func_t) (enum agent_result result,
 bool agent_init(struct l_dbus *dbus);
 bool agent_exit(struct l_dbus *dbus);
 bool agent_setup(struct l_dbus_interface *interface);
+void agent_shutdown(void);
 
 unsigned int agent_request_passphrase(const char *path,
 				agent_request_passphrase_func_t callback,

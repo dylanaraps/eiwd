@@ -36,7 +36,6 @@
 #include "src/device.h"
 #include "src/wiphy.h"
 #include "src/dbus.h"
-#include "src/agent.h"
 #include "src/network.h"
 #include "src/eapol.h"
 #include "src/scan.h"
@@ -58,6 +57,8 @@ static void signal_handler(struct l_signal *signal, uint32_t signo,
 	case SIGINT:
 	case SIGTERM:
 		l_info("Terminate");
+
+		dbus_shutdown();
 
 		timeout = l_timeout_create(1, main_loop_quit, NULL, NULL);
 		break;

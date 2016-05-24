@@ -447,11 +447,14 @@ bool agent_init(struct l_dbus *dbus)
 
 bool agent_exit(struct l_dbus *dbus)
 {
-	if (default_agent)
-		release_agent(default_agent);
-
 	l_dbus_unregister_object(dbus, IWD_AGENT_MANAGER_PATH);
 	l_dbus_unregister_interface(dbus, IWD_AGENT_MANAGER_INTERFACE);
 
 	return true;
+}
+
+void agent_shutdown(void)
+{
+	if (default_agent)
+		release_agent(default_agent);
 }

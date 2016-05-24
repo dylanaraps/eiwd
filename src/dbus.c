@@ -246,3 +246,9 @@ bool dbus_exit(void)
 
 	return true;
 }
+
+void dbus_shutdown(void)
+{
+	/* Allow AgentManager to send a Release call before disconnecting */
+	agent_shutdown();
+}
