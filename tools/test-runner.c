@@ -63,6 +63,8 @@ static const char *own_binary;
 static char **test_argv;
 static int test_argc;
 static bool verbose_out;
+static bool enable_debug;
+const char *debug_filter;
 static const char *qemu_binary;
 static const char *kernel_image;
 static const char *exec_home;
@@ -270,8 +272,11 @@ static void start_qemu(void)
 			"acpi=off pci=noacpi noapic quiet ro "
 			"mac80211_hwsim.radios=0 "
 			"init=%s TESTHOME=%s TESTVERBOUT=%u "
+			"DEBUG_FILTER=\'%s\' "
 			"TESTDIRLIST=\'%s\' TESTARGS=\'%s\' PATH=\'%s\'",
-			initcmd, cwd, verbose_out, test_dir_list, testargs,
+			initcmd, cwd, verbose_out,
+			enable_debug ? debug_filter : "",
+			test_dir_list, testargs,
 			getenv("PATH"));
 
 	argv = alloca(sizeof(qemu_argv) + sizeof(char *) * 5);
@@ -1588,6 +1593,25 @@ static void run_tests(void)
 
 	*ptr = '\0';
 
+	ptr = strstr(cmdline, "DEBUG_FILTER=");
+	if (ptr) {
+		debug_filter = ptr + 14;
+
+		ptr = strchr(debug_filter, '\'');
+
+		if (!ptr) {
+			l_error("Malformed debug filter section");
+			return;
+		}
+
+		*ptr = '\0';
+
+		if (debug_filter[0] != '\0') {
+			enable_debug = true;
+			l_debug_enable(debug_filter);
+		}
+	}
+
 	ptr = strstr(cmdline, "TESTHOME=");
 	if (ptr) {
 		exec_home = ptr + 4;
@@ -1619,6 +1643,7 @@ static const struct option main_options[] = {
 	{ "kernel",	required_argument, NULL, 'k' },
 	{ "testdirs",	required_argument, NULL, 't' },
 	{ "verbose",	no_argument,       NULL, 'v' },
+	{ "debug",	optional_argument, NULL, 'd' },
 	{ "help",	no_argument,       NULL, 'h' },
 	{ }
 };
@@ -1655,6 +1680,16 @@ int main(int argc, char *argv[])
 			break;
 		case 't':
 			test_dir_list = optarg;
+			break;
+		case 'd':
+			enable_debug = true;
+
+			if (optarg)
+				debug_filter = optarg;
+			else
+				debug_filter = "*";
+
+			l_debug_enable(debug_filter);
 			break;
 		case 'v':
 			verbose_out = true;
