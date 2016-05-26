@@ -284,7 +284,7 @@ static void start_qemu(void)
 			initcmd, cwd, verbose_out, test_dir_list, testargs,
 			getenv("PATH"));
 
-	argv = alloca(sizeof(qemu_argv));
+	argv = alloca(sizeof(qemu_argv) + sizeof(char *) * 5);
 	memcpy(argv, qemu_argv, sizeof(qemu_argv));
 
 	pos = (sizeof(qemu_argv) / sizeof(char *)) - 1;
