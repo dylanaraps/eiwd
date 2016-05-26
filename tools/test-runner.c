@@ -301,8 +301,11 @@ static void start_qemu(void)
 	argv[pos++] = "-append";
 	argv[pos++] = (char *) cmdline;
 
-	if (has_virt)
+	if (has_virt) {
+		argv[pos++] = "-cpu";
+		argv[pos++] = "host";
 		argv[pos++] = "-enable-kvm";
+	}
 
 	argv[pos] = NULL;
 
