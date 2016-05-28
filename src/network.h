@@ -32,12 +32,12 @@ struct network *network_create(struct netdev *device,
 				uint8_t *ssid, uint8_t ssid_len,
 				enum security security);
 
-const char *network_get_ssid(struct network *network);
-struct netdev *network_get_netdev(struct network *network);
-const char *network_get_path(struct network *network);
-enum security network_get_security(struct network *network);
-const unsigned char *network_get_psk(struct network *network);
-struct l_settings *network_get_settings(struct network *network);
+const char *network_get_ssid(const struct network *network);
+struct netdev *network_get_netdev(const struct network *network);
+const char *network_get_path(const struct network *network);
+enum security network_get_security(const struct network *network);
+const unsigned char *network_get_psk(const struct network *network);
+struct l_settings *network_get_settings(const struct network *network);
 
 bool network_settings_load(struct network *network);
 void network_settings_close(struct network *network);

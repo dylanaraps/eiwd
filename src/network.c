@@ -234,32 +234,32 @@ struct network *network_create(struct netdev *device,
 	return network;
 }
 
-const char *network_get_ssid(struct network *network)
+const char *network_get_ssid(const struct network *network)
 {
 	return network->ssid;
 }
 
-struct netdev *network_get_netdev(struct network *network)
+struct netdev *network_get_netdev(const struct network *network)
 {
 	return network->netdev;
 }
 
-const char *network_get_path(struct network *network)
+const char *network_get_path(const struct network *network)
 {
 	return network->object_path;
 }
 
-enum security network_get_security(struct network *network)
+enum security network_get_security(const struct network *network)
 {
 	return network->security;
 }
 
-const unsigned char *network_get_psk(struct network *network)
+const unsigned char *network_get_psk(const struct network *network)
 {
 	return network->psk;
 }
 
-struct l_settings *network_get_settings(struct network *network)
+struct l_settings *network_get_settings(const struct network *network)
 {
 	return network->settings;
 }
