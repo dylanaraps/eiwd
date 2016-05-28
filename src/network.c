@@ -99,24 +99,24 @@ static bool network_info_match(const void *a, const void *b)
 	return true;
 }
 
-bool network_seen(uint32_t type, const char *ssid)
+bool network_seen(struct network *network)
 {
 	struct timespec mtim;
 	int err;
 	struct network_info *info;
 	struct network_info search;
 
-	search.type = type;
-	strncpy(search.ssid, ssid, 32);
+	search.type = network->security;
+	strncpy(search.ssid, network->ssid, 32);
 	search.ssid[32] = 0;
 
 	info = l_queue_find(networks, network_info_match, &search);
 	if (info)
 		return true;
 
-	switch(type) {
+	switch (network->security) {
 	case SECURITY_PSK:
-		err = storage_network_get_mtime("psk", ssid, &mtim);
+		err = storage_network_get_mtime("psk", network->ssid, &mtim);
 		break;
 	default:
 		return false;
@@ -126,8 +126,8 @@ bool network_seen(uint32_t type, const char *ssid)
 		return false;
 
 	info = l_new(struct network_info, 1);
-	info->type = type;
-	strncpy(info->ssid, ssid, 32);
+	info->type = network->security;
+	strncpy(info->ssid, network->ssid, 32);
 	info->ssid[32] = 0;
 	memcpy(&info->connected_time, &mtim, sizeof(struct timespec));
 
@@ -136,30 +136,31 @@ bool network_seen(uint32_t type, const char *ssid)
 	return true;
 }
 
-bool network_connected(uint32_t type, const char *ssid)
+bool network_connected(struct network *network)
 {
 	int err;
 	struct network_info *info;
 	struct network_info search;
 	const char *strtype;
 
-	search.type = type;
-	strncpy(search.ssid, ssid, 32);
+	search.type = network->security;
+	strncpy(search.ssid, network->ssid, 32);
 	search.ssid[32] = 0;
 
 	info = l_queue_remove_if(networks, network_info_match, &search);
 	if (!info)
 		return false;
 
-	strtype = security_to_str(type);
+	strtype = security_to_str(network->security);
 	if (!strtype)
 		goto fail;
 
-	err = storage_network_touch(strtype, ssid);
+	err = storage_network_touch(strtype, network->ssid);
 	if (err < 0)
 		goto fail;
 
-	err = storage_network_get_mtime(strtype, ssid, &info->connected_time);
+	err = storage_network_get_mtime(strtype, network->ssid,
+					&info->connected_time);
 	if (err < 0)
 		goto fail;
 

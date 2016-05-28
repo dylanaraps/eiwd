@@ -810,8 +810,7 @@ static void operstate_cb(bool result, void *user_data)
 		dbus_pending_reply(&netdev->connect_pending, reply);
 	}
 
-	network_connected(network_get_security(netdev->connected_network),
-				network_get_ssid(netdev->connected_network));
+	network_connected(netdev->connected_network);
 	netdev_enter_state(netdev, DEVICE_STATE_CONNECTED);
 }
 
@@ -1299,7 +1298,7 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 		l_debug("Added new Network \"%s\" security %s",
 			network_get_ssid(network), security_to_str(security));
 
-		network_seen(security, network_get_ssid(network));
+		network_seen(network);
 	}
 
 	network_bss_add(network, bss);

@@ -23,9 +23,10 @@
 #include <stdbool.h>
 
 struct netdev;
+struct network;
 
-bool network_seen(uint32_t type, const char *ssid);
-bool network_connected(uint32_t type, const char *ssid);
+bool network_seen(struct network *network);
+bool network_connected(struct network *network);
 double network_rankmod(uint32_t type, const char *ssid);
 
 struct network *network_create(struct netdev *device,
