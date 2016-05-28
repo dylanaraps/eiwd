@@ -104,6 +104,15 @@ bool network_seen(uint32_t type, const char *ssid)
 	struct timespec mtim;
 	int err;
 	struct network_info *info;
+	struct network_info search;
+
+	search.type = type;
+	strncpy(search.ssid, ssid, 32);
+	search.ssid[32] = 0;
+
+	info = l_queue_find(networks, network_info_match, &search);
+	if (info)
+		return true;
 
 	switch(type) {
 	case SECURITY_PSK:
