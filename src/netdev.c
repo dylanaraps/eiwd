@@ -34,14 +34,7 @@
 #include "src/wiphy.h"
 #include "src/netdev.h"
 
-struct netdev_data {
-	uint32_t index;
-	uint32_t flags;
-	char ifname[IF_NAMESIZE];
-};
-
 static struct l_netlink *rtnl = NULL;
-static struct l_hashmap *netdev_list = NULL;
 
 static void do_debug(const char *str, void *user_data)
 {
@@ -115,94 +108,6 @@ void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 	l_free(rtmmsg);
 }
 
-static void free_netdev_data(void *user_data)
-{
-	struct netdev_data *netdev = user_data;
-
-	l_free(netdev);
-}
-
-static void newlink_notify(const struct ifinfomsg *ifi, int bytes)
-{
-	struct netdev_data *netdev;
-	uint32_t index = ifi->ifi_index;
-	struct rtattr *rta;
-
-	netdev = l_hashmap_lookup(netdev_list, L_UINT_TO_PTR(index));
-	if (!netdev) {
-		netdev = l_new(struct netdev_data, 1);
-
-		netdev->index = index;
-
-		if (!l_hashmap_insert(netdev_list,
-					L_UINT_TO_PTR(index), netdev)) {
-			free_netdev_data(netdev);
-			return;
-		}
-	}
-
-	netdev->flags = ifi->ifi_flags;
-
-	for (rta = IFLA_RTA(ifi); RTA_OK(rta, bytes);
-					rta = RTA_NEXT(rta, bytes)) {
-		switch (rta->rta_type) {
-		case IFLA_IFNAME:
-			if (RTA_PAYLOAD(rta) <= IF_NAMESIZE)
-				strcpy(netdev->ifname, RTA_DATA(rta));
-			break;
-		}
-	}
-}
-
-static void dellink_notify(const struct ifinfomsg *ifi, int bytes)
-{
-	struct netdev_data *netdev;
-	uint32_t index = ifi->ifi_index;
-
-	wiphy_notify_dellink(index);
-
-	netdev = l_hashmap_remove(netdev_list, L_UINT_TO_PTR(index));
-	if (!netdev)
-		return;
-
-	free_netdev_data(netdev);
-}
-
-static void link_notify(uint16_t type, const void *data, uint32_t len,
-							void *user_data)
-{
-	const struct ifinfomsg *ifi = data;
-	int bytes;
-
-	if (ifi->ifi_type != ARPHRD_ETHER)
-		return;
-
-	bytes = len - NLMSG_ALIGN(sizeof(struct ifinfomsg));
-
-	switch (type) {
-	case RTM_NEWLINK:
-		newlink_notify(ifi, bytes);
-		break;
-	case RTM_DELLINK:
-		dellink_notify(ifi, bytes);
-		break;
-	}
-}
-
-static void netdev_destroy(void)
-{
-	/*
-	 * The netlink object keeps track of the registered notification
-	 * callbacks and their multicast memberships. When destroying the
-	 * netlink object, all resources will be freed.
-	 */
-	l_netlink_destroy(rtnl);
-	rtnl = NULL;
-
-	l_hashmap_destroy(netdev_list, free_netdev_data);
-	netdev_list = NULL;
-}
-
 bool netdev_init(void)
 {
 	if (rtnl)
@@ -219,19 +124,7 @@ bool netdev_init(void)
 	if (getenv("IWD_RTNL_DEBUG"))
 		l_netlink_set_debug(rtnl, do_debug, "[RTNL] ", NULL);
 
-	netdev_list = l_hashmap_new();
-
-	if (!l_netlink_register(rtnl, RTNLGRP_LINK, link_notify, NULL, NULL)) {
-		l_error("Failed to register link notification");
-		goto destroy;
-	}
-
 	return true;
-
-destroy:
-	netdev_destroy();
-
-	return false;
 }
 
 bool netdev_exit(void)
@@ -241,7 +134,13 @@ bool netdev_exit(void)
 
 	l_debug("Closing route netlink socket");
 
-	netdev_destroy();
+	/*
+	 * The netlink object keeps track of the registered notification
+	 * callbacks and their multicast memberships. When destroying the
+	 * netlink object, all resources will be freed.
+	 */
+	l_netlink_destroy(rtnl);
+	rtnl = NULL;
 
 	return true;
 }
