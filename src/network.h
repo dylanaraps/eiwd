@@ -22,19 +22,19 @@
 
 #include <stdbool.h>
 
-struct netdev;
+struct device;
 struct network;
 
 bool network_seen(struct network *network);
 bool network_connected(struct network *network);
 double network_rankmod(uint32_t type, const char *ssid);
 
-struct network *network_create(struct netdev *device,
+struct network *network_create(struct device *device,
 				uint8_t *ssid, uint8_t ssid_len,
 				enum security security);
 
 const char *network_get_ssid(const struct network *network);
-struct netdev *network_get_netdev(const struct network *network);
+struct device *network_get_device(const struct network *network);
 const char *network_get_path(const struct network *network);
 enum security network_get_security(const struct network *network);
 const unsigned char *network_get_psk(const struct network *network);

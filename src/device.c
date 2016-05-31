@@ -88,7 +88,7 @@ bool device_watch_remove(uint32_t id)
 	return true;
 }
 
-void __device_watch_call_added(struct netdev *device)
+void __device_watch_call_added(struct device *device)
 {
 	const struct l_queue_entry *e;
 
@@ -100,7 +100,7 @@ void __device_watch_call_added(struct netdev *device)
 	}
 }
 
-void __device_watch_call_removed(struct netdev *device)
+void __device_watch_call_removed(struct device *device)
 {
 	const struct l_queue_entry *e;
 

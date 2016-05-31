@@ -52,7 +52,7 @@ struct wsc_sm {
 };
 
 struct wsc {
-	struct netdev *netdev;
+	struct device *device;
 	struct l_dbus_message *pending;
 	struct wsc_sm *sm;
 };
@@ -241,8 +241,8 @@ static struct l_dbus_message *wsc_push_button(struct l_dbus *dbus,
 		return dbus_error_busy(message);
 
 	/* TODO: Parse wiphy bands to set the RF Bands properly below */
-	wsc->sm = wsc_sm_new_pushbutton(netdev_get_ifindex(wsc->netdev),
-				netdev_get_address(wsc->netdev),
+	wsc->sm = wsc_sm_new_pushbutton(device_get_ifindex(wsc->device),
+				device_get_address(wsc->device),
 				SCAN_BAND_2_4_GHZ | SCAN_BAND_5_GHZ);
 
 	wsc->pending = l_dbus_message_ref(message);
@@ -295,13 +295,13 @@ static void wsc_free(void *userdata)
 	l_free(wsc);
 }
 
-static void device_appeared(struct netdev *device, void *userdata)
+static void device_appeared(struct device *device, void *userdata)
 {
 	struct l_dbus *dbus = dbus_get_bus();
 	struct wsc *wsc;
 
 	wsc = l_new(struct wsc, 1);
-	wsc->netdev = device;
+	wsc->device = device;
 
 	if (!l_dbus_object_add_interface(dbus, device_get_path(device),
 						IWD_WSC_INTERFACE,
@@ -311,7 +311,7 @@ static void device_appeared(struct netdev *device, void *userdata)
 	}
 }
 
-static void device_disappeared(struct netdev *device, void *userdata)
+static void device_disappeared(struct device *device, void *userdata)
 {
 }
 

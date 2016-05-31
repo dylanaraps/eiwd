@@ -28,6 +28,7 @@
 #include <linux/rtnetlink.h>
 #include <net/if_arp.h>
 #include <net/if.h>
+#include <linux/if_ether.h>
 #include <ell/ell.h>
 
 #include "src/wiphy.h"

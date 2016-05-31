@@ -22,11 +22,11 @@
 
 #include <stdbool.h>
 
-struct netdev;
 struct scan_bss;
 struct wiphy;
+struct device;
 
-typedef void (*device_watch_func_t)(struct netdev *device, void *userdata);
+typedef void (*device_watch_func_t)(struct device *device, void *userdata);
 typedef void (*device_destroy_func_t)(void *userdata);
 
 uint32_t device_watch_add(device_watch_func_t added,
@@ -34,16 +34,20 @@ uint32_t device_watch_add(device_watch_func_t added,
 				void *userdata, device_destroy_func_t destroy);
 bool device_watch_remove(uint32_t id);
 
-void __device_watch_call_added(struct netdev *device);
-void __device_watch_call_removed(struct netdev *device);
+void __device_watch_call_added(struct device *device);
+void __device_watch_call_removed(struct device *device);
 
-struct network *device_get_connected_network(struct netdev *device);
-const char *device_get_path(struct netdev *device);
-bool device_is_busy(struct netdev *device);
-struct wiphy *device_get_wiphy(struct netdev *device);
+struct network *device_get_connected_network(struct device *device);
+const char *device_get_path(struct device *device);
+bool device_is_busy(struct device *device);
+struct wiphy *device_get_wiphy(struct device *device);
 
-void device_connect_network(struct netdev *device, struct network *network,
+void device_connect_network(struct device *device, struct network *network,
 				struct scan_bss *bss,
 				struct l_dbus_message *message);
+
+uint32_t device_get_ifindex(struct device *device);
+const uint8_t *device_get_address(struct device *device);
+
 bool device_init(void);
 bool device_exit(void);

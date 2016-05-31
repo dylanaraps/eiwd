@@ -50,7 +50,7 @@ struct network_info {
 
 struct network {
 	char *object_path;
-	struct netdev *netdev;
+	struct device *device;
 	char ssid[33];
 	unsigned char *psk;
 	unsigned int agent_request;
@@ -219,14 +219,14 @@ double network_rankmod(uint32_t type, const char *ssid)
 	return 0.0;
 }
 
-struct network *network_create(struct netdev *device,
+struct network *network_create(struct device *device,
 				uint8_t *ssid, uint8_t ssid_len,
 				enum security security)
 {
 	struct network *network;
 
 	network = l_new(struct network, 1);
-	network->netdev = device;
+	network->device = device;
 	memcpy(network->ssid, ssid, ssid_len);
 	network->security = security;
 
@@ -240,9 +240,9 @@ const char *network_get_ssid(const struct network *network)
 	return network->ssid;
 }
 
-struct netdev *network_get_netdev(const struct network *network)
+struct device *network_get_device(const struct network *network)
 {
-	return network->netdev;
+	return network->device;
 }
 
 const char *network_get_path(const struct network *network)
@@ -311,7 +311,7 @@ void network_settings_close(struct network *network)
 
 int network_autoconnect(struct network *network, struct scan_bss *bss)
 {
-	struct wiphy *wiphy = device_get_wiphy(network->netdev);
+	struct wiphy *wiphy = device_get_wiphy(network->device);
 
 	switch (network_get_security(network)) {
 	case SECURITY_NONE:
@@ -359,7 +359,7 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 		return -ENOTSUP;
 	}
 
-	device_connect_network(network->netdev, network, bss, NULL);
+	device_connect_network(network->device, network, bss, NULL);
 	return 0;
 }
 
@@ -435,7 +435,7 @@ static void passphrase_callback(enum agent_result result,
 				void *user_data)
 {
 	struct network *network = user_data;
-	struct wiphy *wiphy = device_get_wiphy(network->netdev);
+	struct wiphy *wiphy = device_get_wiphy(network->device);
 	struct scan_bss *bss;
 
 	l_debug("result %d", result);
@@ -475,7 +475,7 @@ static void passphrase_callback(enum agent_result result,
 	 */
 	network->update_psk = true;
 
-	device_connect_network(network->netdev, network, bss, message);
+	device_connect_network(network->device, network, bss, message);
 	return;
 
 err:
@@ -489,7 +489,7 @@ static struct l_dbus_message *network_connect_psk(struct network *network,
 					struct scan_bss *bss,
 					struct l_dbus_message *message)
 {
-	struct netdev *netdev = network->netdev;
+	struct device *device = network->device;
 	const char *psk;
 
 	l_debug("");
@@ -530,7 +530,7 @@ static struct l_dbus_message *network_connect_psk(struct network *network,
 		if (!network->agent_request)
 			return dbus_error_no_agent(message);
 	} else
-		device_connect_network(netdev, network, bss, message);
+		device_connect_network(device, network, bss, message);
 
 	return NULL;
 }
@@ -540,12 +540,12 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 						void *user_data)
 {
 	struct network *network = user_data;
-	struct netdev *netdev = network->netdev;
+	struct device *device = network->device;
 	struct scan_bss *bss;
 
 	l_debug("");
 
-	if (device_is_busy(netdev))
+	if (device_is_busy(device))
 		return dbus_error_busy(message);
 
 	/*
@@ -553,7 +553,7 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	 * agent this may not be the final choice because BSS visibility can
 	 * change while we wait for the agent.
 	 */
-	bss = network_select_bss(device_get_wiphy(netdev), network);
+	bss = network_select_bss(device_get_wiphy(device), network);
 
 	/* None of the BSSes is compatible with our stack */
 	if (!bss)
@@ -563,11 +563,11 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	case SECURITY_PSK:
 		return network_connect_psk(network, bss, message);
 	case SECURITY_NONE:
-		device_connect_network(netdev, network, bss, message);
+		device_connect_network(device, network, bss, message);
 		return NULL;
 	case SECURITY_8021X:
 		network_settings_load(network);
-		device_connect_network(netdev, network, bss, message);
+		device_connect_network(device, network, bss, message);
 		return NULL;
 	default:
 		return dbus_error_not_supported(message);
@@ -593,7 +593,7 @@ static bool network_property_is_connected(struct l_dbus *dbus,
 	struct network *network = user_data;
 	bool connected;
 
-	connected = device_get_connected_network(network->netdev) == network;
+	connected = device_get_connected_network(network->device) == network;
 	l_dbus_message_builder_append_basic(builder, 'b', &connected);
 	return true;
 }

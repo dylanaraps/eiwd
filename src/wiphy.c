@@ -61,7 +61,7 @@ enum device_state {
 	DEVICE_STATE_DISCONNECTING,
 };
 
-struct netdev {
+struct device {
 	uint32_t index;
 	char name[IFNAMSIZ];
 	uint32_t type;
@@ -109,7 +109,7 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 
 static bool eapol_read(struct l_io *io, void *user_data)
 {
-	struct netdev *netdev = user_data;
+	struct device *netdev = user_data;
 	int fd = l_io_get_fd(io);
 	struct sockaddr_ll sll;
 	socklen_t sll_len;
@@ -132,14 +132,14 @@ static bool eapol_read(struct l_io *io, void *user_data)
 	return true;
 }
 
-static const char *iwd_network_get_path(struct netdev *netdev,
+static const char *iwd_network_get_path(struct device *device,
 					const uint8_t *ssid, size_t ssid_len,
 					enum security security)
 {
 	static char path[256];
 	unsigned int pos, i;
 
-	pos = snprintf(path, sizeof(path), "%s/", device_get_path(netdev));
+	pos = snprintf(path, sizeof(path), "%s/", device_get_path(device));
 
 	for (i = 0; i < ssid_len && pos < sizeof(path); i++)
 		pos += snprintf(path + pos, sizeof(path) - pos, "%02x",
@@ -169,22 +169,12 @@ static const char *device_state_to_string(enum device_state state)
 	return "invalid";
 }
 
-uint32_t netdev_get_ifindex(struct netdev *netdev)
-{
-	return netdev->index;
-}
-
-const uint8_t *netdev_get_address(struct netdev *netdev)
-{
-	return netdev->addr;
-}
-
-struct network *device_get_connected_network(struct netdev *device)
+struct network *device_get_connected_network(struct device *device)
 {
 	return device->connected_network;
 }
 
-bool device_is_busy(struct netdev *device)
+bool device_is_busy(struct device *device)
 {
 	if (device->state != DEVICE_STATE_DISCONNECTED &&
 			device->state != DEVICE_STATE_AUTOCONNECT)
@@ -193,26 +183,26 @@ bool device_is_busy(struct netdev *device)
 	return false;
 }
 
-struct wiphy *device_get_wiphy(struct netdev *device)
+struct wiphy *device_get_wiphy(struct device *device)
 {
 	return device->wiphy;
 }
 
-static void netdev_enter_state(struct netdev *netdev, enum device_state state)
+static void device_enter_state(struct device *device, enum device_state state)
 {
 	l_debug("Old State: %s, new state: %s",
-			device_state_to_string(netdev->state),
+			device_state_to_string(device->state),
 			device_state_to_string(state));
 
 	switch (state) {
 	case DEVICE_STATE_AUTOCONNECT:
-		scan_periodic_start(netdev->index, new_scan_results, netdev);
+		scan_periodic_start(device->index, new_scan_results, device);
 		break;
 	case DEVICE_STATE_DISCONNECTED:
-		scan_periodic_stop(netdev->index);
+		scan_periodic_stop(device->index);
 		break;
 	case DEVICE_STATE_CONNECTED:
-		scan_periodic_stop(netdev->index);
+		scan_periodic_stop(device->index);
 		break;
 	case DEVICE_STATE_CONNECTING:
 		break;
@@ -220,47 +210,47 @@ static void netdev_enter_state(struct netdev *netdev, enum device_state state)
 		break;
 	}
 
-	netdev->state = state;
+	device->state = state;
 }
 
-static void netdev_disassociated(struct netdev *netdev)
+static void device_disassociated(struct device *device)
 {
-	struct network *network = netdev->connected_network;
+	struct network *network = device->connected_network;
 	struct l_dbus *dbus = dbus_get_bus();
 
 	network_settings_close(network);
 
-	netdev->connected_bss = NULL;
-	netdev->connected_network = NULL;
+	device->connected_bss = NULL;
+	device->connected_network = NULL;
 
-	netdev_enter_state(netdev, DEVICE_STATE_AUTOCONNECT);
+	device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 
-	l_dbus_property_changed(dbus, device_get_path(netdev),
+	l_dbus_property_changed(dbus, device_get_path(device),
 				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
 	l_dbus_property_changed(dbus, network_get_path(network),
 				IWD_NETWORK_INTERFACE, "Connected");
 }
 
-static void netdev_lost_beacon(struct netdev *netdev)
+static void device_lost_beacon(struct device *device)
 {
-	if (netdev->connect_pending)
-		dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_failed(netdev->connect_pending));
+	if (device->connect_pending)
+		dbus_pending_reply(&device->connect_pending,
+				dbus_error_failed(device->connect_pending));
 
-	if (netdev->connected_network)
-		netdev_disassociated(netdev);
+	if (device->connected_network)
+		device_disassociated(device);
 }
 
 static void genl_connect_cb(struct l_genl_msg *msg, void *user_data)
 {
-	struct netdev *netdev = user_data;
+	struct device *device = user_data;
 
 	if (l_genl_msg_get_error(msg) < 0) {
-		if (netdev->connect_pending)
-			dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_failed(netdev->connect_pending));
+		if (device->connect_pending)
+			dbus_pending_reply(&device->connect_pending,
+				dbus_error_failed(device->connect_pending));
 
-		netdev_disassociated(netdev);
+		device_disassociated(device);
 	}
 }
 
@@ -280,23 +270,23 @@ enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy, uint16_t mask)
 
 static int mlme_authenticate_cmd(struct network *network, struct scan_bss *bss)
 {
-	struct netdev *netdev = network_get_netdev(network);
+	struct device *device = network_get_device(network);
 	const char *ssid = network_get_ssid(network);
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
-	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &device->index);
 	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
 	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(ssid), ssid);
 	msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
-	l_genl_family_send(nl80211, msg, genl_connect_cb, netdev, NULL);
+	l_genl_family_send(nl80211, msg, genl_connect_cb, device, NULL);
 
 	return 0;
 }
 
-void device_connect_network(struct netdev *device, struct network *network,
+void device_connect_network(struct device *device, struct network *network,
 				struct scan_bss *bss,
 				struct l_dbus_message *message)
 {
@@ -307,7 +297,7 @@ void device_connect_network(struct netdev *device, struct network *network,
 	device->connected_bss = bss;
 	device->connected_network = network;
 
-	netdev_enter_state(device, DEVICE_STATE_CONNECTING);
+	device_enter_state(device, DEVICE_STATE_CONNECTING);
 
 	mlme_authenticate_cmd(network, bss);
 
@@ -335,12 +325,22 @@ static void network_free(void *data)
 	network_remove(network);
 }
 
-const char *device_get_path(struct netdev *netdev)
+const char *device_get_path(struct device *device)
 {
 	static char path[12];
 
-	snprintf(path, sizeof(path), "/%u", netdev->index);
+	snprintf(path, sizeof(path), "/%u", device->index);
 	return path;
+}
+
+const uint8_t *device_get_address(struct device *device)
+{
+	return device->addr;
+}
+
+uint32_t device_get_ifindex(struct device *device)
+{
+	return device->index;
 }
 
 void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
@@ -355,9 +355,9 @@ void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
 		netdev_entry = l_queue_get_entries(wiphy->netdev_list);
 
 		while (netdev_entry) {
-			struct netdev *netdev = netdev_entry->data;
+			struct device *device = netdev_entry->data;
 
-			func(netdev, user_data);
+			func(device, user_data);
 			netdev_entry = netdev_entry->next;
 		}
 	}
@@ -365,39 +365,39 @@ void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
 
 static void device_scan_triggered(int err, void *user_data)
 {
-	struct netdev *netdev = user_data;
+	struct device *device = user_data;
 	struct l_dbus_message *reply;
 
 	l_debug("device_scan_triggered: %i", err);
 
 	if (err < 0) {
-		dbus_pending_reply(&netdev->scan_pending,
-				dbus_error_failed(netdev->scan_pending));
+		dbus_pending_reply(&device->scan_pending,
+				dbus_error_failed(device->scan_pending));
 		return;
 	}
 
-	l_debug("Scan triggered for netdev %s", netdev->name);
+	l_debug("Scan triggered for netdev %s", device->name);
 
-	reply = l_dbus_message_new_method_return(netdev->scan_pending);
+	reply = l_dbus_message_new_method_return(device->scan_pending);
 	l_dbus_message_set_arguments(reply, "");
-	dbus_pending_reply(&netdev->scan_pending, reply);
+	dbus_pending_reply(&device->scan_pending, reply);
 }
 
 static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
 {
-	struct netdev *netdev = user_data;
+	struct device *device = user_data;
 
 	l_debug("Scan called from DBus");
 
-	if (netdev->scan_pending)
+	if (device->scan_pending)
 		return dbus_error_busy(message);
 
-	netdev->scan_pending = l_dbus_message_ref(message);
+	device->scan_pending = l_dbus_message_ref(message);
 
-	if (!scan_passive(netdev->index, device_scan_triggered,
-				new_scan_results, netdev, NULL))
+	if (!scan_passive(device->index, device_scan_triggered,
+				new_scan_results, device, NULL))
 		return dbus_error_failed(message);
 
 	return NULL;
@@ -405,54 +405,54 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 
 static void device_disconnect_cb(struct l_genl_msg *msg, void *user_data)
 {
-	struct netdev *netdev = user_data;
+	struct device *device = user_data;
 	struct l_dbus_message *reply;
 
 	if (l_genl_msg_get_error(msg) < 0) {
-		dbus_pending_reply(&netdev->disconnect_pending,
-				dbus_error_failed(netdev->disconnect_pending));
+		dbus_pending_reply(&device->disconnect_pending,
+				dbus_error_failed(device->disconnect_pending));
 		return;
 	}
 
-	netdev_disassociated(netdev);
+	device_disassociated(device);
 
-	reply = l_dbus_message_new_method_return(netdev->disconnect_pending);
+	reply = l_dbus_message_new_method_return(device->disconnect_pending);
 	l_dbus_message_set_arguments(reply, "");
-	dbus_pending_reply(&netdev->disconnect_pending, reply);
+	dbus_pending_reply(&device->disconnect_pending, reply);
 }
 
 static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
 {
-	struct netdev *netdev = user_data;
+	struct device *device = user_data;
 	struct l_genl_msg *msg;
 	uint16_t reason_code = MPDU_REASON_CODE_DEAUTH_LEAVING;
 	enum security security;
 
 	l_debug("");
 
-	if (netdev->state == DEVICE_STATE_CONNECTING ||
-			netdev->state == DEVICE_STATE_DISCONNECTING)
+	if (device->state == DEVICE_STATE_CONNECTING ||
+			device->state == DEVICE_STATE_DISCONNECTING)
 		return dbus_error_busy(message);
 
-	if (!netdev->connected_bss)
+	if (!device->connected_bss)
 		return dbus_error_not_connected(message);
 
-	security = network_get_security(netdev->connected_network);
+	security = network_get_security(device->connected_network);
 	if (security == SECURITY_PSK || security == SECURITY_8021X)
-		eapol_cancel(netdev->index);
+		eapol_cancel(device->index);
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_DEAUTHENTICATE, 512);
-	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &device->index);
 	msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
-						netdev->connected_bss->addr);
-	l_genl_family_send(nl80211, msg, device_disconnect_cb, netdev, NULL);
+						device->connected_bss->addr);
+	l_genl_family_send(nl80211, msg, device_disconnect_cb, device, NULL);
 
-	netdev_enter_state(netdev, DEVICE_STATE_DISCONNECTING);
+	device_enter_state(device, DEVICE_STATE_DISCONNECTING);
 
-	netdev->disconnect_pending = l_dbus_message_ref(message);
+	device->disconnect_pending = l_dbus_message_ref(message);
 
 	return NULL;
 }
@@ -462,9 +462,9 @@ static bool device_property_get_name(struct l_dbus *dbus,
 					struct l_dbus_message_builder *builder,
 					void *user_data)
 {
-	struct netdev *netdev = user_data;
+	struct device *device = user_data;
 
-	l_dbus_message_builder_append_basic(builder, 's', netdev->name);
+	l_dbus_message_builder_append_basic(builder, 's', device->name);
 	return true;
 }
 
@@ -473,9 +473,9 @@ static bool device_property_get_address(struct l_dbus *dbus,
 					struct l_dbus_message_builder *builder,
 					void *user_data)
 {
-	struct netdev *netdev = user_data;
+	struct device *device = user_data;
 
-	l_dbus_message_builder_append_basic(builder, 's', netdev->addr);
+	l_dbus_message_builder_append_basic(builder, 's', device->addr);
 	return true;
 }
 
@@ -484,12 +484,12 @@ static bool device_property_get_connected_network(struct l_dbus *dbus,
 					struct l_dbus_message_builder *builder,
 					void *user_data)
 {
-	struct netdev *netdev = user_data;
-	if (!netdev->connected_network)
+	struct device *device = user_data;
+	if (!device->connected_network)
 		return false;
 
 	l_dbus_message_builder_append_basic(builder, 'o',
-				network_get_path(netdev->connected_network));
+				network_get_path(device->connected_network));
 
 	return true;
 }
@@ -518,54 +518,54 @@ static bool bss_match(const void *a, const void *b)
 	return !memcmp(bss_a->addr, bss_b->addr, sizeof(bss_a->addr));
 }
 
-static void netdev_free(void *data)
+static void device_free(void *data)
 {
-	struct netdev *netdev = data;
+	struct device *device = data;
 	struct l_dbus *dbus;
 
-	if (netdev->scan_pending)
-		dbus_pending_reply(&netdev->scan_pending,
-				dbus_error_aborted(netdev->scan_pending));
+	if (device->scan_pending)
+		dbus_pending_reply(&device->scan_pending,
+				dbus_error_aborted(device->scan_pending));
 
-	if (netdev->connect_pending)
-		dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_aborted(netdev->connect_pending));
+	if (device->connect_pending)
+		dbus_pending_reply(&device->connect_pending,
+				dbus_error_aborted(device->connect_pending));
 
-	__device_watch_call_removed(netdev);
+	__device_watch_call_removed(device);
 
 	dbus = dbus_get_bus();
-	l_dbus_unregister_object(dbus, device_get_path(netdev));
+	l_dbus_unregister_object(dbus, device_get_path(device));
 
-	l_debug("Freeing interface %s", netdev->name);
+	l_debug("Freeing interface %s", device->name);
 
-	l_hashmap_destroy(netdev->networks, network_free);
+	l_hashmap_destroy(device->networks, network_free);
 
-	l_queue_destroy(netdev->bss_list, bss_free);
-	l_queue_destroy(netdev->old_bss_list, bss_free);
-	l_queue_destroy(netdev->autoconnect_list, l_free);
-	l_io_destroy(netdev->eapol_io);
+	l_queue_destroy(device->bss_list, bss_free);
+	l_queue_destroy(device->old_bss_list, bss_free);
+	l_queue_destroy(device->autoconnect_list, l_free);
+	l_io_destroy(device->eapol_io);
 
-	scan_ifindex_remove(netdev->index);
-	netdev_set_linkmode_and_operstate(netdev->index, 0, IF_OPER_DOWN,
+	scan_ifindex_remove(device->index);
+	netdev_set_linkmode_and_operstate(device->index, 0, IF_OPER_DOWN,
 					NULL, NULL);
 
-	l_free(netdev);
+	l_free(device);
 }
 
-static bool netdev_match(const void *a, const void *b)
+static bool device_match(const void *a, const void *b)
 {
-	const struct netdev *netdev = a;
+	const struct device *device = a;
 	uint32_t index = L_PTR_TO_UINT(b);
 
-	return (netdev->index == index);
+	return (device->index == index);
 }
 
-static void netdev_autoconnect_next(struct netdev *netdev)
+static void device_autoconnect_next(struct device *device)
 {
 	struct autoconnect_entry *entry;
 	int r;
 
-	while ((entry = l_queue_pop_head(netdev->autoconnect_list))) {
+	while ((entry = l_queue_pop_head(device->autoconnect_list))) {
 		l_debug("Considering autoconnecting to BSS '%s' with SSID: %s,"
 			" freq: %u, rank: %u, strength: %i",
 			scan_bss_address_to_string(entry->bss),
@@ -589,7 +589,7 @@ static void wiphy_free(void *data)
 	l_debug("Freeing wiphy %s", wiphy->name);
 
 	scan_freq_set_free(wiphy->supported_freqs);
-	l_queue_destroy(wiphy->netdev_list, netdev_free);
+	l_queue_destroy(wiphy->netdev_list, device_free);
 	l_free(wiphy);
 }
 
@@ -604,17 +604,17 @@ static bool wiphy_match(const void *a, const void *b)
 static void deauthenticate_cb(struct l_genl_msg *msg,
 						void *user_data)
 {
-	struct netdev *netdev = user_data;
+	struct device *device = user_data;
 
 	/* If we were inside a .Connect(), it has failed */
-	if (netdev->connect_pending)
-		dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_failed(netdev->connect_pending));
+	if (device->connect_pending)
+		dbus_pending_reply(&device->connect_pending,
+				dbus_error_failed(device->connect_pending));
 
-	netdev_disassociated(netdev);
+	device_disassociated(device);
 }
 
-static void setting_keys_failed(struct netdev *netdev, uint16_t reason_code)
+static void setting_keys_failed(struct device *device, uint16_t reason_code)
 {
 	struct l_genl_msg *msg;
 
@@ -624,31 +624,31 @@ static void setting_keys_failed(struct netdev *netdev, uint16_t reason_code)
 	 *
 	 * Cancel all pending commands, then de-authenticate
 	 */
-	l_genl_family_cancel(nl80211, netdev->pairwise_new_key_cmd_id);
-	netdev->pairwise_new_key_cmd_id = 0;
+	l_genl_family_cancel(nl80211, device->pairwise_new_key_cmd_id);
+	device->pairwise_new_key_cmd_id = 0;
 
-	l_genl_family_cancel(nl80211, netdev->pairwise_set_key_cmd_id);
-	netdev->pairwise_set_key_cmd_id = 0;
+	l_genl_family_cancel(nl80211, device->pairwise_set_key_cmd_id);
+	device->pairwise_set_key_cmd_id = 0;
 
-	l_genl_family_cancel(nl80211, netdev->group_new_key_cmd_id);
-	netdev->group_new_key_cmd_id = 0;
+	l_genl_family_cancel(nl80211, device->group_new_key_cmd_id);
+	device->group_new_key_cmd_id = 0;
 
-	eapol_cancel(netdev->index);
+	eapol_cancel(device->index);
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_DEAUTHENTICATE, 512);
-	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &device->index);
 	msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
-						netdev->connected_bss->addr);
-	l_genl_family_send(nl80211, msg, deauthenticate_cb, netdev, NULL);
-	netdev_enter_state(netdev, DEVICE_STATE_DISCONNECTING);
+						device->connected_bss->addr);
+	l_genl_family_send(nl80211, msg, deauthenticate_cb, device, NULL);
+	device_enter_state(device, DEVICE_STATE_DISCONNECTING);
 }
 
 static void handshake_failed(uint32_t ifindex,
 				const uint8_t *aa, const uint8_t *spa,
 				uint16_t reason_code, void *user_data)
 {
-	struct netdev *netdev = user_data;
+	struct device *device = user_data;
 	struct l_genl_msg *msg;
 
 	l_error("4-Way Handshake failed for ifindex: %d", ifindex);
@@ -657,25 +657,25 @@ static void handshake_failed(uint32_t ifindex,
 	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
 	msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, aa);
-	l_genl_family_send(nl80211, msg, deauthenticate_cb, netdev, NULL);
-	netdev_enter_state(netdev, DEVICE_STATE_DISCONNECTING);
+	l_genl_family_send(nl80211, msg, deauthenticate_cb, device, NULL);
+	device_enter_state(device, DEVICE_STATE_DISCONNECTING);
 }
 
 static void mlme_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 {
-	struct netdev *netdev = data;
+	struct device *device = data;
 
-	netdev->pairwise_set_key_cmd_id = 0;
+	device->pairwise_set_key_cmd_id = 0;
 
 	if (l_genl_msg_get_error(msg) < 0) {
 		l_error("Set Key for Pairwise Key failed for ifindex: %d",
-				netdev->index);
-		setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+				device->index);
+		setting_keys_failed(device, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
 }
 
-static unsigned int mlme_set_pairwise_key(struct netdev *netdev)
+static unsigned int mlme_set_pairwise_key(struct device *device)
 {
 	uint8_t key_id = 0;
 	struct l_genl_msg *msg;
@@ -686,7 +686,7 @@ static unsigned int mlme_set_pairwise_key(struct netdev *netdev)
 		return 0;
 
 	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &device->index);
 
 	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_DEFAULT, 0, NULL);
 
@@ -695,7 +695,7 @@ static unsigned int mlme_set_pairwise_key(struct netdev *netdev)
 	l_genl_msg_leave_nested(msg);
 
 	id = l_genl_family_send(nl80211, msg, mlme_set_pairwise_key_cb,
-					netdev, NULL);
+					device, NULL);
 	if (!id)
 		l_genl_msg_unref(msg);
 
@@ -704,19 +704,19 @@ static unsigned int mlme_set_pairwise_key(struct netdev *netdev)
 
 static void mlme_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 {
-	struct netdev *netdev = data;
+	struct device *device = data;
 
-	netdev->pairwise_new_key_cmd_id = 0;
+	device->pairwise_new_key_cmd_id = 0;
 
 	if (l_genl_msg_get_error(msg) < 0) {
 		l_error("New Key for Pairwise Key failed for ifindex: %d",
-				netdev->index);
-		setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+				device->index);
+		setting_keys_failed(device, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
 }
 
-static unsigned int mlme_new_pairwise_key(struct netdev *netdev,
+static unsigned int mlme_new_pairwise_key(struct device *device,
 							uint32_t cipher,
 							const uint8_t *aa,
 							const uint8_t *tk,
@@ -734,10 +734,10 @@ static unsigned int mlme_new_pairwise_key(struct netdev *netdev,
 	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_CIPHER, 4, &cipher);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, aa);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &device->index);
 
 	id = l_genl_family_send(nl80211, msg, mlme_new_pairwise_key_cb,
-					netdev, NULL);
+					device, NULL);
 	if (!id)
 		l_genl_msg_unref(msg);
 
@@ -748,8 +748,8 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 				const uint8_t *tk, uint32_t cipher,
 				void *user_data)
 {
-	struct netdev *netdev = user_data;
-	struct network *network = netdev->connected_network;
+	struct device *device = user_data;
+	struct network *network = device->connected_network;
 	uint8_t tk_buf[32];
 
 	l_debug("");
@@ -776,7 +776,7 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 		break;
 	default:
 		l_error("Unexpected cipher: %x", cipher);
-		setting_keys_failed(netdev,
+		setting_keys_failed(device,
 				MPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER);
 		return;
 	}
@@ -784,53 +784,53 @@ static void wiphy_set_tk(uint32_t ifindex, const uint8_t *aa,
 	/* If we got here, then our PSK works.  Save if required */
 	network_sync_psk(network);
 
-	netdev->pairwise_new_key_cmd_id =
-		mlme_new_pairwise_key(netdev, cipher, aa,
+	device->pairwise_new_key_cmd_id =
+		mlme_new_pairwise_key(device, cipher, aa,
 					tk_buf, crypto_cipher_key_len(cipher));
-	netdev->pairwise_set_key_cmd_id = mlme_set_pairwise_key(netdev);
+	device->pairwise_set_key_cmd_id = mlme_set_pairwise_key(device);
 }
 
 static void operstate_cb(bool result, void *user_data)
 {
-	struct netdev *netdev = user_data;
+	struct device *device = user_data;
 
 	if (!result) {
 		l_error("Setting LinkMode and OperState failed for ifindex %d",
-			netdev->index);
-		setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+			device->index);
+		setting_keys_failed(device, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
 
-	if (netdev->connect_pending) {
+	if (device->connect_pending) {
 		struct l_dbus_message *reply;
 
 		reply = l_dbus_message_new_method_return(
-						netdev->connect_pending);
+						device->connect_pending);
 		l_dbus_message_set_arguments(reply, "");
-		dbus_pending_reply(&netdev->connect_pending, reply);
+		dbus_pending_reply(&device->connect_pending, reply);
 	}
 
-	network_connected(netdev->connected_network);
-	netdev_enter_state(netdev, DEVICE_STATE_CONNECTED);
+	network_connected(device->connected_network);
+	device_enter_state(device, DEVICE_STATE_CONNECTED);
 }
 
 static void set_station_cb(struct l_genl_msg *msg, void *user_data)
 {
-	struct netdev *netdev = user_data;
+	struct device *device = user_data;
 
 	if (l_genl_msg_get_error(msg) < 0) {
-		l_error("Set Station failed for ifindex %d", netdev->index);
-		setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+		l_error("Set Station failed for ifindex %d", device->index);
+		setting_keys_failed(device, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
 
-	netdev_set_linkmode_and_operstate(netdev->index, 1, IF_OPER_UP,
-					operstate_cb, netdev);
+	netdev_set_linkmode_and_operstate(device->index, 1, IF_OPER_UP,
+					operstate_cb, device);
 }
 
-static int set_station_cmd(struct netdev *netdev)
+static int set_station_cmd(struct device *device)
 {
-	struct scan_bss *bss = netdev->connected_bss;
+	struct scan_bss *bss = device->connected_bss;
 	struct l_genl_msg *msg;
 	struct nl80211_sta_flag_update flags;
 
@@ -838,32 +838,32 @@ static int set_station_cmd(struct netdev *netdev)
 	flags.set = flags.mask;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_SET_STATION, 512);
-	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &device->index);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
 	msg_append_attr(msg, NL80211_ATTR_STA_FLAGS2,
 			sizeof(struct nl80211_sta_flag_update), &flags);
-	l_genl_family_send(nl80211, msg, set_station_cb, netdev, NULL);
+	l_genl_family_send(nl80211, msg, set_station_cb, device, NULL);
 
 	return 0;
 }
 
 static void mlme_new_group_key_cb(struct l_genl_msg *msg, void *data)
 {
-	struct netdev *netdev = data;
+	struct device *device = data;
 
-	netdev->group_new_key_cmd_id = 0;
+	device->group_new_key_cmd_id = 0;
 
 	if (l_genl_msg_get_error(msg) < 0) {
 		l_error("New Key for Group Key failed for ifindex: %d",
-				netdev->index);
-		setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+				device->index);
+		setting_keys_failed(device, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
 
-	set_station_cmd(netdev);
+	set_station_cmd(device);
 }
 
-static unsigned int mlme_new_group_key(struct netdev *netdev,
+static unsigned int mlme_new_group_key(struct device *device,
 					uint32_t cipher, uint8_t key_id,
 					const uint8_t *gtk, size_t gtk_len,
 					const uint8_t *rsc, size_t rsc_len)
@@ -885,10 +885,10 @@ static unsigned int mlme_new_group_key(struct netdev *netdev,
 	l_genl_msg_leave_nested(msg);
 
 	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &device->index);
 
 	id = l_genl_family_send(nl80211, msg, mlme_new_group_key_cb,
-					netdev, NULL);
+					device, NULL);
 	if (!id)
 		l_genl_msg_unref(msg);
 
@@ -900,7 +900,7 @@ static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
 				const uint8_t *rsc, uint8_t rsc_len,
 				uint32_t cipher, void *user_data)
 {
-	struct netdev *netdev = user_data;
+	struct device *device = user_data;
 	uint8_t gtk_buf[32];
 
 	l_debug("");
@@ -929,24 +929,24 @@ static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
 		break;
 	default:
 		l_error("Unexpected cipher: %x", cipher);
-		setting_keys_failed(netdev,
+		setting_keys_failed(device,
 					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
 		return;
 	}
 
 	if (crypto_cipher_key_len(cipher) != gtk_len) {
 		l_error("Unexpected key length: %d", gtk_len);
-		setting_keys_failed(netdev,
+		setting_keys_failed(device,
 					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
 		return;
 	}
 
-	netdev->group_new_key_cmd_id =
-			mlme_new_group_key(netdev, cipher, key_index,
+	device->group_new_key_cmd_id =
+			mlme_new_group_key(device, cipher, key_index,
 					gtk_buf, gtk_len, rsc, rsc_len);
 }
 
-static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
+static void mlme_associate_event(struct l_genl_msg *msg, struct device *device)
 {
 	int err;
 
@@ -955,41 +955,41 @@ static void mlme_associate_event(struct l_genl_msg *msg, struct netdev *netdev)
 	err = l_genl_msg_get_error(msg);
 	if (err < 0) {
 		l_error("association failed %s (%d)", strerror(-err), err);
-		dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_failed(netdev->connect_pending));
-		netdev_disassociated(netdev);
+		dbus_pending_reply(&device->connect_pending,
+				dbus_error_failed(device->connect_pending));
+		device_disassociated(device);
 		return;
 	}
 
 	l_info("Association completed");
 
-	if (network_get_security(netdev->connected_network) == SECURITY_NONE)
-		netdev_set_linkmode_and_operstate(netdev->index, 1, IF_OPER_UP,
-						operstate_cb, netdev);
+	if (network_get_security(device->connected_network) == SECURITY_NONE)
+		netdev_set_linkmode_and_operstate(device->index, 1, IF_OPER_UP,
+						operstate_cb, device);
 }
 
 static void genl_associate_cb(struct l_genl_msg *msg, void *user_data)
 {
-	struct netdev *netdev = user_data;
+	struct device *device = user_data;
 
-	if (l_genl_msg_get_error(msg) < 0 && netdev->connect_pending)
-		dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_failed(netdev->connect_pending));
+	if (l_genl_msg_get_error(msg) < 0 && device->connect_pending)
+		dbus_pending_reply(&device->connect_pending,
+				dbus_error_failed(device->connect_pending));
 }
 
-static void mlme_associate_cmd(struct netdev *netdev)
+static void mlme_associate_cmd(struct device *device)
 {
 	struct l_genl_msg *msg;
-	struct scan_bss *bss = netdev->connected_bss;
-	struct network *network = netdev->connected_network;
-	struct wiphy *wiphy = netdev->wiphy;
+	struct scan_bss *bss = device->connected_bss;
+	struct network *network = device->connected_network;
+	struct wiphy *wiphy = device->wiphy;
 	const char *ssid = network_get_ssid(network);
 	enum security security = network_get_security(network);
 
 	l_debug("");
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_ASSOCIATE, 512);
-	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &device->index);
 	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
 	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
 	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(ssid), ssid);
@@ -1047,11 +1047,11 @@ static void mlme_associate_cmd(struct netdev *netdev)
 						network_get_settings(network));
 
 		eapol_sm_set_authenticator_address(sm, bss->addr);
-		eapol_sm_set_supplicant_address(sm, netdev->addr);
-		eapol_sm_set_user_data(sm, netdev);
+		eapol_sm_set_supplicant_address(sm, device->addr);
+		eapol_sm_set_user_data(sm, device);
 		eapol_sm_set_tx_user_data(sm,
-				L_INT_TO_PTR(l_io_get_fd(netdev->eapol_io)));
-		eapol_start(netdev->index, sm);
+				L_INT_TO_PTR(l_io_get_fd(device->eapol_io)));
+		eapol_start(device->index, sm);
 
 		msg_append_attr(msg, NL80211_ATTR_CIPHER_SUITES_PAIRWISE,
 				4, &pairwise_cipher_attr);
@@ -1063,11 +1063,11 @@ static void mlme_associate_cmd(struct netdev *netdev)
 					rsne_buf[1] + 2, rsne_buf);
 	}
 
-	l_genl_family_send(nl80211, msg, genl_associate_cb, netdev, NULL);
+	l_genl_family_send(nl80211, msg, genl_associate_cb, device, NULL);
 }
 
 static void mlme_authenticate_event(struct l_genl_msg *msg,
-							struct netdev *netdev)
+							struct device *device)
 {
 	struct l_genl_attr attr;
 	uint16_t type, len;
@@ -1096,25 +1096,25 @@ static void mlme_authenticate_event(struct l_genl_msg *msg,
 	}
 
 	l_info("Authentication completed");
-	mlme_associate_cmd(netdev);
+	mlme_associate_cmd(device);
 	return;
 
 error:
-	if (netdev->connect_pending)
-		dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_failed(netdev->connect_pending));
+	if (device->connect_pending)
+		dbus_pending_reply(&device->connect_pending,
+				dbus_error_failed(device->connect_pending));
 
-	netdev_disassociated(netdev);
+	device_disassociated(device);
 }
 
 static void mlme_deauthenticate_event(struct l_genl_msg *msg,
-							struct netdev *netdev)
+							struct device *device)
 {
 	l_debug("");
 }
 
 static void mlme_disconnect_event(struct l_genl_msg *msg,
-					struct netdev *netdev)
+					struct device *device)
 {
 	struct l_genl_attr attr;
 	uint16_t type, len;
@@ -1151,19 +1151,19 @@ static void mlme_disconnect_event(struct l_genl_msg *msg,
 	if (!disconnect_by_ap)
 		return;
 
-	if (netdev->connect_pending) {
-		struct network *network = netdev->connected_network;
+	if (device->connect_pending) {
+		struct network *network = device->connected_network;
 
-		dbus_pending_reply(&netdev->connect_pending,
-				dbus_error_failed(netdev->connect_pending));
+		dbus_pending_reply(&device->connect_pending,
+				dbus_error_failed(device->connect_pending));
 
 		network_connect_failed(network);
 	}
 
-	netdev_disassociated(netdev);
+	device_disassociated(device);
 }
 
-static void mlme_cqm_event(struct l_genl_msg *msg, struct netdev *netdev)
+static void mlme_cqm_event(struct l_genl_msg *msg, struct device *device)
 {
 	struct l_genl_attr attr;
 	struct l_genl_attr nested;
@@ -1184,7 +1184,7 @@ static void mlme_cqm_event(struct l_genl_msg *msg, struct netdev *netdev)
 			while (l_genl_attr_next(&nested, &type, &len, &data)) {
 				switch (type) {
 				case NL80211_ATTR_CQM_BEACON_LOSS_EVENT:
-					netdev_lost_beacon(netdev);
+					device_lost_beacon(device);
 					break;
 				}
 			}
@@ -1224,7 +1224,7 @@ static int autoconnect_rank_compare(const void *a, const void *b, void *user)
 	return ae->rank - new_ae->rank;
 }
 
-static void process_bss(struct netdev *netdev, struct scan_bss *bss)
+static void process_bss(struct device *device, struct scan_bss *bss)
 {
 	struct network *network;
 	enum security security;
@@ -1279,12 +1279,12 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 	} else
 		security = scan_get_security(bss->capability, NULL);
 
-	path = iwd_network_get_path(netdev, bss->ssid, bss->ssid_len,
+	path = iwd_network_get_path(device, bss->ssid, bss->ssid_len,
 					security);
 
-	network = l_hashmap_lookup(netdev->networks, path);
+	network = l_hashmap_lookup(device->networks, path);
 	if (!network) {
-		network = network_create(netdev, bss->ssid, bss->ssid_len,
+		network = network_create(device, bss->ssid, bss->ssid_len,
 						security);
 
 		if (!network_register(network, path)) {
@@ -1292,7 +1292,7 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 			return;
 		}
 
-		l_hashmap_insert(netdev->networks,
+		l_hashmap_insert(device->networks,
 					network_get_path(network), network);
 		l_debug("Added new Network \"%s\" security %s",
 			network_get_ssid(network), security_to_str(security));
@@ -1310,56 +1310,56 @@ static void process_bss(struct netdev *netdev, struct scan_bss *bss)
 	entry->network = network;
 	entry->bss = bss;
 	entry->rank = bss->rank * rankmod;
-	l_queue_insert(netdev->autoconnect_list, entry,
+	l_queue_insert(device->autoconnect_list, entry,
 				autoconnect_rank_compare, NULL);
 }
 
 static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 				struct l_queue *bss_list, void *userdata)
 {
-	struct netdev *netdev = userdata;
+	struct device *device = userdata;
 	const struct l_queue_entry *bss_entry;
 
-	netdev->old_bss_list = netdev->bss_list;
-	netdev->bss_list = bss_list;
-	l_hashmap_foreach(netdev->networks, network_reset_bss_list, NULL);
+	device->old_bss_list = device->bss_list;
+	device->bss_list = bss_list;
+	l_hashmap_foreach(device->networks, network_reset_bss_list, NULL);
 
-	l_queue_destroy(netdev->autoconnect_list, l_free);
-	netdev->autoconnect_list = l_queue_new();
+	l_queue_destroy(device->autoconnect_list, l_free);
+	device->autoconnect_list = l_queue_new();
 
 	for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
 				bss_entry = bss_entry->next) {
 		struct scan_bss *bss = bss_entry->data;
 
-		process_bss(netdev, bss);
+		process_bss(device, bss);
 	}
 
-	if (netdev->connected_bss) {
+	if (device->connected_bss) {
 		struct scan_bss *bss;
 
-		bss = l_queue_find(netdev->bss_list, bss_match,
-						netdev->connected_bss);
+		bss = l_queue_find(device->bss_list, bss_match,
+						device->connected_bss);
 
 		if (!bss) {
 			l_warn("Connected BSS not in scan results!");
-			l_queue_push_tail(netdev->bss_list,
-						netdev->connected_bss);
-			network_bss_add(netdev->connected_network,
-						netdev->connected_bss);
-			l_queue_remove(netdev->old_bss_list,
-						netdev->connected_bss);
+			l_queue_push_tail(device->bss_list,
+						device->connected_bss);
+			network_bss_add(device->connected_network,
+						device->connected_bss);
+			l_queue_remove(device->old_bss_list,
+						device->connected_bss);
 		} else
-			netdev->connected_bss = bss;
+			device->connected_bss = bss;
 	}
 
-	l_hashmap_foreach_remove(netdev->networks,
+	l_hashmap_foreach_remove(device->networks,
 					network_remove_if_lost, NULL);
 
-	l_queue_destroy(netdev->old_bss_list, bss_free);
-	netdev->old_bss_list = NULL;
+	l_queue_destroy(device->old_bss_list, bss_free);
+	device->old_bss_list = NULL;
 
-	if (netdev->state == DEVICE_STATE_AUTOCONNECT)
-		netdev_autoconnect_next(netdev);
+	if (device->state == DEVICE_STATE_AUTOCONNECT)
+		device_autoconnect_next(device);
 
 	return true;
 }
@@ -1367,7 +1367,7 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy = NULL;
-	struct netdev *netdev;
+	struct device *device;
 	struct l_genl_attr attr;
 	uint16_t type, len;
 	const void *data;
@@ -1451,49 +1451,49 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	netdev = l_queue_find(wiphy->netdev_list, netdev_match,
+	device = l_queue_find(wiphy->netdev_list, device_match,
 						L_UINT_TO_PTR(ifindex));
-	if (!netdev) {
+	if (!device) {
 		struct l_dbus *dbus = dbus_get_bus();
 
-		netdev = l_new(struct netdev, 1);
-		netdev->bss_list = l_queue_new();
-		netdev->networks = l_hashmap_new();
-		l_hashmap_set_hash_function(netdev->networks, l_str_hash);
-		l_hashmap_set_compare_function(netdev->networks,
+		device = l_new(struct device, 1);
+		device->bss_list = l_queue_new();
+		device->networks = l_hashmap_new();
+		l_hashmap_set_hash_function(device->networks, l_str_hash);
+		l_hashmap_set_compare_function(device->networks,
 					(l_hashmap_compare_func_t) strcmp);
-		memcpy(netdev->name, ifname, sizeof(netdev->name));
-		memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
-		netdev->index = ifindex;
-		netdev->type = iftype;
-		netdev->wiphy = wiphy;
+		memcpy(device->name, ifname, sizeof(device->name));
+		memcpy(device->addr, ifaddr, sizeof(device->addr));
+		device->index = ifindex;
+		device->type = iftype;
+		device->wiphy = wiphy;
 
-		l_queue_push_head(wiphy->netdev_list, netdev);
+		l_queue_push_head(wiphy->netdev_list, device);
 
 		if (!l_dbus_object_add_interface(dbus,
-						device_get_path(netdev),
-						IWD_DEVICE_INTERFACE, netdev))
+						device_get_path(device),
+						IWD_DEVICE_INTERFACE, device))
 			l_info("Unable to register %s interface",
 				IWD_DEVICE_INTERFACE);
 
-		__device_watch_call_added(netdev);
+		__device_watch_call_added(device);
 
-		netdev_set_linkmode_and_operstate(netdev->index, 1,
+		netdev_set_linkmode_and_operstate(device->index, 1,
 						IF_OPER_DORMANT, NULL, NULL);
 
-		scan_ifindex_add(netdev->index);
-		netdev_enter_state(netdev, DEVICE_STATE_AUTOCONNECT);
+		scan_ifindex_add(device->index);
+		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 	}
 
-	l_debug("Found interface %s", netdev->name);
+	l_debug("Found interface %s", device->name);
 
-	netdev->eapol_io = eapol_open_pae(netdev->index);
-	if (!netdev->eapol_io) {
+	device->eapol_io = eapol_open_pae(device->index);
+	if (!device->eapol_io) {
 		l_error("Failed to open PAE socket");
 		return;
 	}
 
-	l_io_set_read_handler(netdev->eapol_io, eapol_read, netdev, NULL);
+	l_io_set_read_handler(device->eapol_io, eapol_read, device, NULL);
 }
 
 static void parse_supported_commands(struct wiphy *wiphy,
@@ -1749,7 +1749,7 @@ static void wiphy_config_notify(struct l_genl_msg *msg, void *user_data)
 static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy = NULL;
-	struct netdev *netdev = NULL;
+	struct device *device = NULL;
 	struct l_genl_attr attr;
 	uint16_t type, len;
 	const void *data;
@@ -1789,9 +1789,9 @@ static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 				return;
 			}
 
-			netdev = l_queue_find(wiphy->netdev_list, netdev_match,
+			device = l_queue_find(wiphy->netdev_list, device_match,
 					L_UINT_TO_PTR(*((uint32_t *) data)));
-			if (!netdev) {
+			if (!device) {
 				l_warn("No interface structure found");
 				return;
 			}
@@ -1804,7 +1804,7 @@ static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	if (!netdev) {
+	if (!device) {
 		l_warn("MLME notification is missing interface attribute");
 		return;
 	}
@@ -1812,19 +1812,19 @@ static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 
 	switch (cmd) {
 	case NL80211_CMD_AUTHENTICATE:
-		mlme_authenticate_event(msg, netdev);
+		mlme_authenticate_event(msg, device);
 		break;
 	case NL80211_CMD_ASSOCIATE:
-		mlme_associate_event(msg, netdev);
+		mlme_associate_event(msg, device);
 		break;
 	case NL80211_CMD_DEAUTHENTICATE:
-		mlme_deauthenticate_event(msg, netdev);
+		mlme_deauthenticate_event(msg, device);
 		break;
 	case NL80211_CMD_DISCONNECT:
-		mlme_disconnect_event(msg, netdev);
+		mlme_disconnect_event(msg, device);
 		break;
 	case NL80211_CMD_NOTIFY_CQM:
-		mlme_cqm_event(msg, netdev);
+		mlme_cqm_event(msg, device);
 		break;
 	}
 }
@@ -1975,13 +1975,13 @@ static void wiphy_check_dellink(void *data, void *user_data)
 {
 	uint32_t index = L_PTR_TO_UINT(user_data);
 	struct wiphy *wiphy = data;
-	struct netdev *netdev;
+	struct device *device;
 
-	netdev = l_queue_remove_if(wiphy->netdev_list, netdev_match,
+	device = l_queue_remove_if(wiphy->netdev_list, device_match,
 						L_UINT_TO_PTR(index));
-	if (netdev) {
-		l_warn("Removing leftover interface %s", netdev->name);
-		netdev_free(netdev);
+	if (device) {
+		l_warn("Removing leftover interface %s", device->name);
+		device_free(device);
 	}
 }
 
