@@ -1742,7 +1742,40 @@ static void wiphy_config_notify(struct l_genl_msg *msg, void *user_data)
 	if (!l_genl_attr_init(&attr, msg))
 		return;
 
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+	switch (cmd) {
+	case NL80211_CMD_NEW_WIPHY:
+	case NL80211_CMD_DEL_WIPHY:
+	{
+		const uint32_t *wiphy_id = NULL;
+		const char *wiphy_name = NULL;
+
+		while (l_genl_attr_next(&attr, &type, &len, &data)) {
+			switch (type) {
+			case NL80211_ATTR_WIPHY:
+				if (len != sizeof(uint32_t)) {
+					l_warn("Invalid wiphy attribute");
+					return;
+				}
+
+				wiphy_id = data;
+				break;
+
+			case NL80211_ATTR_WIPHY_NAME:
+				wiphy_name = data;
+				break;
+			}
+		}
+
+		if (!wiphy_id)
+			return;
+
+		if (cmd == NL80211_CMD_NEW_WIPHY)
+			l_info("New Wiphy %s[%d] added", wiphy_name, *wiphy_id);
+		else
+			l_info("Wiphy %s[%d] removed", wiphy_name, *wiphy_id);
+
+		break;
+	}
 	}
 }
 
