@@ -34,6 +34,4 @@ enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy,
 bool wiphy_init(struct l_genl_family *in);
 bool wiphy_exit(void);
 
-void wiphy_notify_dellink(uint32_t index);
-
 void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data);
