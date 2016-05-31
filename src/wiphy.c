@@ -1208,7 +1208,6 @@ static bool network_remove_if_lost(const void *key, void *data, void *user_data)
 
 	if (!network_bss_list_isempty(network))
 		return false;
-		return false;
 
 	l_debug("No remaining BSSs for SSID: %s -- Removing network",
 			network_get_ssid(network));
