@@ -35,6 +35,13 @@
 #include "src/wiphy.h"
 #include "src/netdev.h"
 
+struct netdev {
+	uint32_t index;
+	char name[IFNAMSIZ];
+	uint32_t type;
+	uint8_t addr[ETH_ALEN];
+};
+
 static struct l_netlink *rtnl = NULL;
 static struct l_genl_family *nl80211;
 
