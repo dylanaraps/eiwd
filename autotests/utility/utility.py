@@ -6,21 +6,26 @@ import logging
 import traceback
 
 # get all the available networks
-def getDeviceList(bus):
+def getObjectList(bus):
     logger.debug(sys._getframe().f_code.co_name)
     manager = dbus.Interface(bus.get_object("net.connman.iwd", "/"),
-                                        "net.connman.iwd.Manager")
-    return manager.GetDevices()
+                                        "org.freedesktop.DBus.ObjectManager")
+    return manager.GetManagedObjects()
 
 # get all the available networks
-def getNetworkList(devices, bus):
+def getNetworkList(objects, bus):
     logger.debug(sys._getframe().f_code.co_name)
-    for path in devices:
-        device = dbus.Interface(bus.get_object("net.connman.iwd", path),
-                                    "net.connman.iwd.Device")
-        return device.GetNetworks()
+    networkList = []
+    for path in objects:
+        if 'net.connman.iwd.Device' not in objects[path]:
+            continue
+        for path2 in objects:
+            if not path2.startswith(path) or \
+                'net.connman.iwd.Network' not in objects[path2]:
+                    continue
+            networkList.append(path2)
+        return networkList
 
-# try to connect to the network.
 def connect(networkToConnect, self, mainloop, bus):
     logger.debug(sys._getframe().f_code.co_name)
     logger.debug("    %s", networkToConnect)
@@ -54,11 +59,15 @@ def disconnect(deviceToDisconnect, mainloop, bus):
     return True
 
 # get the 1st network found to connect to
-def getNetworkToConnectTo(networkList):
+def getNetworkToConnectTo(objects):
     logger.debug(sys._getframe().f_code.co_name)
-    for networkInfo in networkList:
-        logger.debug("    %s", networkInfo)
-        return networkInfo
+    networkList = []
+    for path in objects:
+        for path2 in objects:
+            if not path2.startswith(path) or \
+                'net.connman.iwd.Network' not in objects[path2]:
+                    continue
+            return path2
     return ""
 
 # return the currently connected device by
@@ -68,55 +77,58 @@ def getCurrentlyConnectedDevice():
     bus = dbus.SystemBus()
     manager = dbus.Interface(bus.get_object("net.connman.iwd", "/"),
                                         "net.connman.iwd.Manager")
-    devices = manager.GetDevices()
-    for path in devices:
-        properties = devices[path]
-        for key in properties.keys():
+    objects = getObjectList(bus)
+    for path in objects:
+        if 'net.connman.iwd.Device' not in objects[path]:
+            continue
+        device = objects[path]['net.connman.iwd.Device']
+        for key in device.keys():
             if key in ["ConnectedNetwork"]:
-                    return path
+                return path
     return ""
 
 # get name of the network currently connected to
 def getCurrentlyConnectedNetworkName():
     logger.debug(sys._getframe().f_code.co_name)
     bus = dbus.SystemBus()
-    deviceList = getDeviceList(bus)
+    deviceList = getObjectList(bus)
     networkList = getNetworkList(deviceList, bus)
-    for path in networkList:
-            properties = networkList[path]
-            for key in properties.keys():
+    for path in deviceList:
+        for path2 in deviceList:
+            if not path2.startswith(path) or \
+                'net.connman.iwd.Network' not in deviceList[path2]:
+                continue
+            network = deviceList[path2]['net.connman.iwd.Network']
+            for key in network.keys():
+                name = ""
                 if key in ["Connected"]:
                     # this check is needed in case when we are testing
                     # connectivity with multiple networks. The previously
                     # connected network will still have the 'Connected' property
                     # even though it will be set to 0.
-                    if properties["Connected"] == 0:
+                    val = network[key]
+                    if network[key] == 0: # if "Connected is 0"
                         continue
-                    return properties["Name"]
+                    for key2 in network.keys():
+                        if key2 in ["Name"]:
+                            return network[key2]
     return ""
 
 # get name of the network
-def getNetworkName(networkList):
+def getNetworkName(deviceList):
     logger.debug(sys._getframe().f_code.co_name)
-    for network in networkList:
-            properties = networkList[network]
-            return properties["Name"]
+    for path in deviceList:
+        if 'net.connman.iwd.Device' not in deviceList[path]:
+            continue
+        for path2 in deviceList:
+            if not path2.startswith(path) or \
+                'net.connman.iwd.Network' not in deviceList[path2]:
+                continue
+            network = deviceList[path2]['net.connman.iwd.Network']
+            for key in network.keys():
+                if key in ["Name"]:
+                    return network[key]
     return ""
-
-# print information about all the networks found
-def printNetworkInfo(networkList):
-    logger.debug(sys._getframe().f_code.co_name)
-    for path in networkList:
-            logger.debug("    [ %s ]" % path)
-            properties = networkList[path]
-            for key in properties.keys():
-                if key in ["SSID"]:
-                    val = properties[key]
-                    val = "".join(map(chr, val))
-                else:
-                    val = properties[key]
-
-                logger.info("        %s = %s" % (key, val))
 
 def initLogger():
     global logger
