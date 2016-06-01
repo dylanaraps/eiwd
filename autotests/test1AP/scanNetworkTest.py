@@ -13,9 +13,8 @@ import utility
 class TestScanNetwork(unittest.TestCase):
     def test_scanNetwork(self):
         logger.info(sys._getframe().f_code.co_name)
-        deviceList = utility.getDeviceList(bus)
-        networkList = utility.getNetworkList(deviceList, bus)
-        networkName = utility.getNetworkName(networkList)
+        objectList = utility.getObjectList(bus)
+        networkName = utility.getNetworkName(objectList)
         # check if networkName is not null. If yes, restart program.
         # Alternatively, we can scan for networks.
         if networkName == "":
