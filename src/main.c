@@ -100,6 +100,9 @@ static void nl80211_appeared(void *user_data)
 	if (!wiphy_init(nl80211))
 		l_error("Unable to init wiphy functionality");
 
+	if (!netdev_init(nl80211))
+		l_error("Unable to init netdev functionality");
+
 	if (!scan_init(nl80211))
 		l_error("Unable to init scan functionality");
 
@@ -113,6 +116,7 @@ static void nl80211_vanished(void *user_data)
 
 	wsc_exit();
 	scan_exit();
+	netdev_exit();
 	wiphy_exit();
 }
 
@@ -191,11 +195,6 @@ int main(int argc, char *argv[])
 		goto fail_device;
 	}
 
-	if (!netdev_init()) {
-		exit_status = EXIT_FAILURE;
-		goto fail_netdev;
-	}
-
 	l_debug("Opening nl80211 interface");
 
 	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
@@ -220,9 +219,6 @@ int main(int argc, char *argv[])
 	l_genl_family_unref(nl80211);
 
 fail_nl80211:
-	netdev_exit();
-
-fail_netdev:
 	device_exit();
 
 fail_device:

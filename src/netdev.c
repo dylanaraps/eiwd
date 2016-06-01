@@ -35,6 +35,7 @@
 #include "src/netdev.h"
 
 static struct l_netlink *rtnl = NULL;
+static struct l_genl_family *nl80211;
 
 static void do_debug(const char *str, void *user_data)
 {
@@ -108,7 +109,7 @@ void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 	l_free(rtmmsg);
 }
 
-bool netdev_init(void)
+bool netdev_init(struct l_genl_family *in)
 {
 	if (rtnl)
 		return false;
@@ -124,6 +125,8 @@ bool netdev_init(void)
 	if (getenv("IWD_RTNL_DEBUG"))
 		l_netlink_set_debug(rtnl, do_debug, "[RTNL] ", NULL);
 
+	nl80211 = in;
+
 	return true;
 }
 
@@ -131,6 +134,8 @@ bool netdev_exit(void)
 {
 	if (!rtnl)
 		return false;
+
+	nl80211 = NULL;
 
 	l_debug("Closing route netlink socket");
 
