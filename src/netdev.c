@@ -133,6 +133,11 @@ uint32_t netdev_get_iftype(struct netdev *netdev)
 	return netdev->type;
 }
 
+const char *netdev_get_name(struct netdev *netdev)
+{
+	return netdev->name;
+}
+
 static void netdev_free(void *data)
 {
 	struct netdev *netdev = data;
