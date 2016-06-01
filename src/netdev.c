@@ -117,6 +117,11 @@ void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 	l_free(rtmmsg);
 }
 
+uint32_t netdev_get_ifindex(struct netdev *netdev)
+{
+	return netdev->index;
+}
+
 static void netdev_config_notify(struct l_genl_msg *msg, void *user_data)
 {
 	struct l_genl_attr attr;
