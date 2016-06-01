@@ -44,6 +44,7 @@ struct netdev {
 
 static struct l_netlink *rtnl = NULL;
 static struct l_genl_family *nl80211;
+static struct l_queue *netdev_list;
 
 static void do_debug(const char *str, void *user_data)
 {
@@ -127,6 +128,27 @@ uint32_t netdev_get_ifindex(struct netdev *netdev)
 	return netdev->index;
 }
 
+static void netdev_free(void *data)
+{
+	struct netdev *netdev = data;
+
+	l_debug("Freeing netdev %s[%d]", netdev->name, netdev->index);
+	l_free(netdev);
+}
+
+static bool netdev_match(const void *a, const void *b)
+{
+	const struct netdev *netdev = a;
+	uint32_t ifindex = L_PTR_TO_UINT(b);
+
+	return (netdev->index == ifindex);
+}
+
+struct netdev *netdev_find(int ifindex)
+{
+	return l_queue_find(netdev_list, netdev_match, L_UINT_TO_PTR(ifindex));
+}
+
 static void netdev_config_notify(struct l_genl_msg *msg, void *user_data)
 {
 	struct l_genl_attr attr;
@@ -199,6 +221,8 @@ bool netdev_init(struct l_genl_family *in)
 	if (getenv("IWD_RTNL_DEBUG"))
 		l_netlink_set_debug(rtnl, do_debug, "[RTNL] ", NULL);
 
+	netdev_list = l_queue_new();
+
 	nl80211 = in;
 
 	if (!l_genl_family_register(nl80211, "config", netdev_config_notify,
@@ -214,6 +238,9 @@ bool netdev_exit(void)
 		return false;
 
 	nl80211 = NULL;
+
+	l_queue_destroy(netdev_list, netdev_free);
+	netdev_list = NULL;
 
 	l_debug("Closing route netlink socket");
 	l_netlink_destroy(rtnl);
