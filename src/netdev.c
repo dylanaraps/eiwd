@@ -31,6 +31,7 @@
 #include <linux/if_ether.h>
 #include <ell/ell.h>
 
+#include "linux/nl80211.h"
 #include "src/wiphy.h"
 #include "src/netdev.h"
 
@@ -109,6 +110,62 @@ void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 	l_free(rtmmsg);
 }
 
+static void netdev_config_notify(struct l_genl_msg *msg, void *user_data)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	uint8_t cmd;
+
+	cmd = l_genl_msg_get_command(msg);
+
+	l_debug("Notification of command %u", cmd);
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	switch (cmd) {
+	case NL80211_CMD_NEW_INTERFACE:
+	case NL80211_CMD_DEL_INTERFACE:
+	{
+		const uint32_t *wiphy_id = NULL;
+		const uint32_t *ifindex = NULL;
+
+		while (l_genl_attr_next(&attr, &type, &len, &data)) {
+			switch (type) {
+			case NL80211_ATTR_WIPHY:
+				if (len != sizeof(uint32_t)) {
+					l_warn("Invalid wiphy attribute");
+					return;
+				}
+
+				wiphy_id = data;
+				break;
+
+			case NL80211_ATTR_IFINDEX:
+				if (len != sizeof(uint32_t)) {
+					l_warn("Invalid ifindex attribute");
+					return;
+				}
+
+				ifindex = data;
+				break;
+			}
+		}
+
+		if (!wiphy_id || !ifindex)
+			return;
+
+		if (cmd == NL80211_CMD_NEW_INTERFACE)
+			l_info("New interface %d added", *ifindex);
+		else
+			l_info("Interface %d removed", *ifindex);
+
+		break;
+	}
+	}
+}
+
 bool netdev_init(struct l_genl_family *in)
 {
 	if (rtnl)
@@ -126,6 +183,10 @@ bool netdev_init(struct l_genl_family *in)
 		l_netlink_set_debug(rtnl, do_debug, "[RTNL] ", NULL);
 
 	nl80211 = in;
+
+	if (!l_genl_family_register(nl80211, "config", netdev_config_notify,
+								NULL, NULL))
+		l_error("Registering for config notification failed");
 
 	return true;
 }
