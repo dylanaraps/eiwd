@@ -9,36 +9,28 @@ import dbus.mainloop.glib
 import time
 import threading
 import logging
-from random import randrange
 from subprocess import Popen
 import sys
 import os
 sys.path.append('../utility') #needed to import all the utlilty modules
 import utility
 
-def defineAgentVars():
-    global manager, pathAgent
-    bus = dbus.SystemBus()
-    pathAgent = "/connectToNetwork/agent/" + str(randrange(100))
-    manager = dbus.Interface(bus.get_object('net.connman.iwd', "/"),
-                          'net.connman.iwd.Manager')
-
-def getManager():
-    return manager
-
-def getPathAgent():
-    return pathAgent
-
-def getSecondNetworkToConnect(networkList, firstNetworkName):
+def getSecondNetworkToConnect(objectList, firstNetworkName):
     logger.debug(sys._getframe().f_code.co_name)
-    for networkInfo in networkList:
-        properties = networkList[networkInfo]
-        for key in properties.keys():
-            val = properties[key]
-            # skip the first connected network
-            if (properties["Name"] == firstNetworkName):
+    for path in objectList:
+        if 'net.connman.iwd.Device' not in objectList[path]:
+            continue
+        for path2 in objectList:
+            if not path2.startswith(path) or \
+                'net.connman.iwd.Network' not in objectList[path2]:
                 continue
-            return networkInfo
+            network = objectList[path2]['net.connman.iwd.Network']
+            for key in network.keys():
+                if key in ["Name"]:
+                    # skip the first connected network
+                    if (network[key] == firstNetworkName):
+                        continue
+                    return path2
     return ""
 
 class TestTwoNetworks(unittest.TestCase):
@@ -46,7 +38,7 @@ class TestTwoNetworks(unittest.TestCase):
     # connect to network B. disconnect from network B.
     def connectToNetwork(self, networkToConnect):
         # start simpleAgent
-        proc = Popen([sys.executable, './simpleAgent.py'])
+        proc = Popen([sys.executable, '../utility/simpleAgent.py'])
         time.sleep(2)
         network = dbus.Interface(bus.get_object("net.connman.iwd",
                                             networkToConnect),
@@ -80,10 +72,8 @@ class TestTwoNetworks(unittest.TestCase):
         return connectedNetworkName
 
     def doConnectDisconnectTwoNetworks(self):
-        deviceList = utility.getDeviceList(bus)
-        networkList = utility.getNetworkList(deviceList, bus)
-        utility.printNetworkInfo(networkList)
-        networkToConnect = utility.getNetworkToConnectTo(networkList)
+        objectList = utility.getObjectList(bus)
+        networkToConnect = utility.getNetworkToConnectTo(objectList)
 
         # check if networkToConnect is not null. If yes, restart program
         # so that the network list is updated. Alternatively, we can scan
@@ -98,9 +88,9 @@ class TestTwoNetworks(unittest.TestCase):
         connectedNetworkName = self.connectToNetwork(networkToConnect)
 
         # connect to the 2nd network
-        secondNetworkToConnect = getSecondNetworkToConnect(networkList,
-                                                           connectedNetworkName)
-        connectedNetworkName = self.connectToNetwork(secondNetworkToConnect)
+        secondNetworkToConnect = getSecondNetworkToConnect(objectList,
+                                                    connectedNetworkName)
+        connectedNetwork = self.connectToNetwork(secondNetworkToConnect)
 
     def test_twoNetworks(self):
         logger.info(sys._getframe().f_code.co_name)
