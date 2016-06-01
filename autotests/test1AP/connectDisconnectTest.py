@@ -13,25 +13,10 @@ import sys
 sys.path.append('../utility') #needed to import all the utility modules
 import utility
 
-def defineAgentVars():
-    global manager, pathAgent
-    bus = dbus.SystemBus()
-    pathAgent = "/connectToNetwork/agent/" + str(randrange(100))
-    manager = dbus.Interface(bus.get_object('net.connman.iwd', "/"),
-                          'net.connman.iwd.Manager')
-
-def getManager():
-    return manager
-
-def getPathAgent():
-    return pathAgent
-
 class TestConnectDisconnect(unittest.TestCase):
     def doConnectDisconnect(self):
-        deviceList = utility.getDeviceList(bus)
-        networkList = utility.getNetworkList(deviceList, bus)
-        utility.printNetworkInfo(networkList)
-        networkToConnect = utility.getNetworkToConnectTo(networkList)
+        objectList = utility.getObjectList(bus)
+        networkToConnect = utility.getNetworkToConnectTo(objectList)
 
         # check if networkToConnect is not null. If yes, restart program
         # so that the network list is updated. Alternatively, we can scan
@@ -43,20 +28,21 @@ class TestConnectDisconnect(unittest.TestCase):
 
         self.assertNotEqual(networkToConnect, "")
         # start simpleAgent
-        proc = Popen([sys.executable, './simpleAgent.py'])
+        proc = Popen([sys.executable, '../utility/simpleAgent.py'])
         time.sleep(2)
         network = dbus.Interface(bus.get_object("net.connman.iwd",
                                             networkToConnect),
                                             "net.connman.iwd.Network")
         status = utility.connect(networkToConnect, self, mainloop, bus)
+
         if status == False:
             #terminate proc
             proc.terminate()
             return
-
         logger.info("Currently connected to: %s",
-                    utility.getCurrentlyConnectedNetworkName())
-        self.assertEqual(utility.getCurrentlyConnectedNetworkName(), "IntelWIFI")
+                   utility.getCurrentlyConnectedNetworkName())
+        self.assertEqual(utility.getCurrentlyConnectedNetworkName(),
+                          "IntelWIFI")
 
         # retrieve the deviceId form networkToConnect. This will be used
         # for checking if we are disconnecting from the right device later.
