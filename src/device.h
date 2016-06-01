@@ -24,6 +24,7 @@
 
 struct scan_bss;
 struct wiphy;
+struct netdev;
 struct device;
 
 typedef void (*device_watch_func_t)(struct device *device, void *userdata);
@@ -48,6 +49,9 @@ void device_connect_network(struct device *device, struct network *network,
 
 uint32_t device_get_ifindex(struct device *device);
 const uint8_t *device_get_address(struct device *device);
+
+struct device *device_create(struct wiphy *wiphy, struct netdev *netdev);
+void device_remove(struct device *device);
 
 bool device_init(void);
 bool device_exit(void);

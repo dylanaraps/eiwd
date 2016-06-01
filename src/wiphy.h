@@ -25,6 +25,7 @@
 
 struct wiphy;
 struct device;
+struct netdev;
 
 typedef void (*iwd_device_foreach_func)(struct device *, void *data);
 

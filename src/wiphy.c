@@ -64,7 +64,6 @@ enum device_state {
 struct device {
 	uint32_t index;
 	char name[IFNAMSIZ];
-	uint32_t type;
 	uint8_t addr[ETH_ALEN];
 	enum device_state state;
 	struct l_queue *bss_list;
@@ -89,7 +88,6 @@ struct wiphy {
 	uint32_t id;
 	char name[20];
 	uint32_t feature_flags;
-	struct l_queue *netdev_list;
 	bool support_scheduled_scan:1;
 	bool support_rekey_offload:1;
 	uint16_t pairwise_ciphers;
@@ -103,6 +101,7 @@ struct autoconnect_entry {
 };
 
 static struct l_queue *wiphy_list = NULL;
+static struct l_queue *device_list;
 
 static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 				struct l_queue *bss_list, void *userdata);
@@ -345,21 +344,13 @@ uint32_t device_get_ifindex(struct device *device)
 
 void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
 {
-	const struct l_queue_entry *wiphy_entry;
+	const struct l_queue_entry *device_entry;
 
-	for (wiphy_entry = l_queue_get_entries(wiphy_list); wiphy_entry;
-					wiphy_entry = wiphy_entry->next) {
-		struct wiphy *wiphy = wiphy_entry->data;
-		const struct l_queue_entry *netdev_entry;
+	for (device_entry = l_queue_get_entries(device_list); device_entry;
+					device_entry = device_entry->next) {
+		struct device *device = device_entry->data;
 
-		netdev_entry = l_queue_get_entries(wiphy->netdev_list);
-
-		while (netdev_entry) {
-			struct device *device = netdev_entry->data;
-
-			func(device, user_data);
-			netdev_entry = netdev_entry->next;
-		}
+		func(device, user_data);
 	}
 }
 
@@ -518,40 +509,6 @@ static bool bss_match(const void *a, const void *b)
 	return !memcmp(bss_a->addr, bss_b->addr, sizeof(bss_a->addr));
 }
 
-static void device_free(void *data)
-{
-	struct device *device = data;
-	struct l_dbus *dbus;
-
-	if (device->scan_pending)
-		dbus_pending_reply(&device->scan_pending,
-				dbus_error_aborted(device->scan_pending));
-
-	if (device->connect_pending)
-		dbus_pending_reply(&device->connect_pending,
-				dbus_error_aborted(device->connect_pending));
-
-	__device_watch_call_removed(device);
-
-	dbus = dbus_get_bus();
-	l_dbus_unregister_object(dbus, device_get_path(device));
-
-	l_debug("Freeing interface %s", device->name);
-
-	l_hashmap_destroy(device->networks, network_free);
-
-	l_queue_destroy(device->bss_list, bss_free);
-	l_queue_destroy(device->old_bss_list, bss_free);
-	l_queue_destroy(device->autoconnect_list, l_free);
-	l_io_destroy(device->eapol_io);
-
-	scan_ifindex_remove(device->index);
-	netdev_set_linkmode_and_operstate(device->index, 0, IF_OPER_DOWN,
-					NULL, NULL);
-
-	l_free(device);
-}
-
 static bool device_match(const void *a, const void *b)
 {
 	const struct device *device = a;
@@ -589,7 +546,6 @@ static void wiphy_free(void *data)
 	l_debug("Freeing wiphy %s", wiphy->name);
 
 	scan_freq_set_free(wiphy->supported_freqs);
-	l_queue_destroy(wiphy->netdev_list, device_free);
 	l_free(wiphy);
 }
 
@@ -1364,136 +1320,80 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 	return true;
 }
 
-static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
+struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 {
-	struct wiphy *wiphy = NULL;
 	struct device *device;
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-	char ifname[IFNAMSIZ];
-	uint8_t ifaddr[ETH_ALEN];
-	uint32_t ifindex, iftype;
+	struct l_dbus *dbus = dbus_get_bus();
+	uint32_t ifindex = netdev_get_ifindex(netdev);
 
-	if (!l_genl_attr_init(&attr, msg))
-		return;
+	device = l_new(struct device, 1);
+	device->bss_list = l_queue_new();
+	device->networks = l_hashmap_new();
+	l_hashmap_set_hash_function(device->networks, l_str_hash);
+	l_hashmap_set_compare_function(device->networks,
+				(l_hashmap_compare_func_t) strcmp);
+	strcpy(device->name, netdev_get_name(netdev));
+	memcpy(device->addr, netdev_get_address(netdev), sizeof(device->addr));
+	device->index = ifindex;
+	device->wiphy = wiphy;
 
-	memset(ifname, 0, sizeof(ifname));
-	memset(ifaddr, 0, sizeof(ifaddr));
-	iftype = NL80211_IFTYPE_UNSPECIFIED;
-	ifindex = 0;
+	l_queue_push_head(device_list, device);
 
-	/*
-	 * The interface index and interface name attributes are normally
-	 * listed before the wiphy attribute. This handling assumes that
-	 * all attributes are included in the same message.
-	 *
-	 * If any required attribute is missing, the whole message will
-	 * be ignored.
-	 */
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_IFINDEX:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid interface index attribute");
-				return;
-			}
+	if (!l_dbus_object_add_interface(dbus, device_get_path(device),
+					IWD_DEVICE_INTERFACE, device))
+		l_info("Unable to register %s interface", IWD_DEVICE_INTERFACE);
 
-			ifindex = *((uint32_t *) data);
-			break;
+	__device_watch_call_added(device);
 
-		case NL80211_ATTR_IFNAME:
-			if (len > sizeof(ifname)) {
-				l_warn("Invalid interface name attribute");
-				return;
-			}
-
-			memcpy(ifname, data, len);
-			break;
-
-		case NL80211_ATTR_WIPHY:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid wiphy attribute");
-				return;
-			}
-
-			wiphy = l_queue_find(wiphy_list, wiphy_match,
-					L_UINT_TO_PTR(*((uint32_t *) data)));
-			break;
-
-		case NL80211_ATTR_IFTYPE:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid interface type attribute");
-				return;
-			}
-
-			iftype = *((uint32_t *) data);
-			break;
-
-		case NL80211_ATTR_MAC:
-			if (len != sizeof(ifaddr)) {
-				l_warn("Invalid interface address attribute");
-				return;
-			}
-
-			memcpy(ifaddr, data, len);
-			break;
-		}
-	}
-
-	if (!wiphy) {
-		l_warn("Missing wiphy attribute or wiphy not found");
-		return;
-	}
-
-	if (!ifindex) {
-		l_warn("Missing interface index attribute");
-		return;
-	}
-
-	device = l_queue_find(wiphy->netdev_list, device_match,
-						L_UINT_TO_PTR(ifindex));
-	if (!device) {
-		struct l_dbus *dbus = dbus_get_bus();
-
-		device = l_new(struct device, 1);
-		device->bss_list = l_queue_new();
-		device->networks = l_hashmap_new();
-		l_hashmap_set_hash_function(device->networks, l_str_hash);
-		l_hashmap_set_compare_function(device->networks,
-					(l_hashmap_compare_func_t) strcmp);
-		memcpy(device->name, ifname, sizeof(device->name));
-		memcpy(device->addr, ifaddr, sizeof(device->addr));
-		device->index = ifindex;
-		device->type = iftype;
-		device->wiphy = wiphy;
-
-		l_queue_push_head(wiphy->netdev_list, device);
-
-		if (!l_dbus_object_add_interface(dbus,
-						device_get_path(device),
-						IWD_DEVICE_INTERFACE, device))
-			l_info("Unable to register %s interface",
-				IWD_DEVICE_INTERFACE);
-
-		__device_watch_call_added(device);
-
-		netdev_set_linkmode_and_operstate(device->index, 1,
+	netdev_set_linkmode_and_operstate(device->index, 1,
 						IF_OPER_DORMANT, NULL, NULL);
 
-		scan_ifindex_add(device->index);
-		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
-	}
-
-	l_debug("Found interface %s", device->name);
+	scan_ifindex_add(device->index);
+	device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 
 	device->eapol_io = eapol_open_pae(device->index);
-	if (!device->eapol_io) {
+	if (device->eapol_io)
+		l_io_set_read_handler(device->eapol_io, eapol_read,
+								device, NULL);
+	else
 		l_error("Failed to open PAE socket");
-		return;
-	}
 
-	l_io_set_read_handler(device->eapol_io, eapol_read, device, NULL);
+	return device;
+}
+
+void device_remove(struct device *device)
+{
+	struct l_dbus *dbus;
+
+	l_debug("");
+
+	l_queue_remove(device_list, device);
+
+	if (device->scan_pending)
+		dbus_pending_reply(&device->scan_pending,
+				dbus_error_aborted(device->scan_pending));
+
+	if (device->connect_pending)
+		dbus_pending_reply(&device->connect_pending,
+				dbus_error_aborted(device->connect_pending));
+
+	__device_watch_call_removed(device);
+
+	dbus = dbus_get_bus();
+	l_dbus_unregister_object(dbus, device_get_path(device));
+
+	l_hashmap_destroy(device->networks, network_free);
+
+	l_queue_destroy(device->bss_list, bss_free);
+	l_queue_destroy(device->old_bss_list, bss_free);
+	l_queue_destroy(device->autoconnect_list, l_free);
+	l_io_destroy(device->eapol_io);
+
+	scan_ifindex_remove(device->index);
+	netdev_set_linkmode_and_operstate(device->index, 0, IF_OPER_DOWN,
+					NULL, NULL);
+
+	l_free(device);
 }
 
 struct wiphy *wiphy_find(int wiphy_id)
@@ -1659,7 +1559,6 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 			if (!wiphy) {
 				wiphy = l_new(struct wiphy, 1);
 				wiphy->id = id;
-				wiphy->netdev_list = l_queue_new();
 				wiphy->supported_freqs = scan_freq_set_new();
 				l_queue_push_head(wiphy_list, wiphy);
 			}
@@ -1827,7 +1726,7 @@ static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 				return;
 			}
 
-			device = l_queue_find(wiphy->netdev_list, device_match,
+			device = l_queue_find(device_list, device_match,
 					L_UINT_TO_PTR(*((uint32_t *) data)));
 			if (!device) {
 				l_warn("No interface structure found");
@@ -1973,6 +1872,7 @@ bool wiphy_init(struct l_genl_family *in)
 	__eapol_set_deauthenticate_func(handshake_failed);
 
 	wiphy_list = l_queue_new();
+	device_list = l_queue_new();
 
 	msg = l_genl_msg_new(NL80211_CMD_GET_PROTOCOL_FEATURES);
 	if (!l_genl_family_send(nl80211, msg, protocol_features_callback,
@@ -1989,11 +1889,6 @@ bool wiphy_init(struct l_genl_family *in)
 						NULL, wiphy_dump_done))
 		l_error("Getting all wiphy devices failed");
 
-	msg = l_genl_msg_new(NL80211_CMD_GET_INTERFACE);
-	if (!l_genl_family_dump(nl80211, msg, interface_dump_callback,
-								NULL, NULL))
-		l_error("Getting all interface information failed");
-
 	return true;
 }
 
@@ -2001,6 +1896,9 @@ bool wiphy_exit(void)
 {
 	l_queue_destroy(wiphy_list, wiphy_free);
 	wiphy_list = NULL;
+
+	l_queue_destroy(device_list, (l_queue_destroy_func_t) device_remove);
+	device_list = NULL;
 
 	nl80211 = NULL;
 

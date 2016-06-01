@@ -33,6 +33,7 @@
 
 #include "linux/nl80211.h"
 #include "src/wiphy.h"
+#include "src/device.h"
 #include "src/netdev.h"
 
 struct netdev {
@@ -159,6 +160,99 @@ struct netdev *netdev_find(int ifindex)
 	return l_queue_find(netdev_list, netdev_match, L_UINT_TO_PTR(ifindex));
 }
 
+static void netdev_get_interface_callback(struct l_genl_msg *msg,
+								void *user_data)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	const char *ifname;
+	uint16_t ifname_len;
+	const uint8_t *ifaddr;
+	const uint32_t *ifindex, *iftype;
+	struct netdev *netdev;
+	struct wiphy *wiphy = NULL;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_IFINDEX:
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid interface index attribute");
+				return;
+			}
+
+			ifindex = data;
+			break;
+
+		case NL80211_ATTR_IFNAME:
+			if (len > IFNAMSIZ) {
+				l_warn("Invalid interface name attribute");
+				return;
+			}
+
+			ifname = data;
+			ifname_len = len;
+			break;
+
+		case NL80211_ATTR_WIPHY:
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid wiphy attribute");
+				return;
+			}
+
+			wiphy = wiphy_find(*((uint32_t *) data));
+			break;
+
+		case NL80211_ATTR_IFTYPE:
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid interface type attribute");
+				return;
+			}
+
+			iftype = data;
+			break;
+
+		case NL80211_ATTR_MAC:
+			if (len != ETH_ALEN) {
+				l_warn("Invalid interface address attribute");
+				return;
+			}
+
+			ifaddr = data;
+			break;
+		}
+	}
+
+	if (!wiphy) {
+		l_warn("Missing wiphy attribute or wiphy not found");
+		return;
+	}
+
+	if (!ifindex || !ifaddr | !ifname) {
+		l_warn("Unable to parse interface information");
+		return;
+	}
+
+	if (netdev_find(*ifindex)) {
+		l_debug("Skipping duplicate netdev %s[%d]", ifname, *ifindex);
+		return;
+	}
+
+	netdev = l_new(struct netdev, 1);
+	netdev->index = *ifindex;
+	netdev->type = *iftype;
+	memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
+	memcpy(netdev->name, ifname, ifname_len);
+
+	l_queue_push_tail(netdev_list, netdev);
+
+	l_debug("Found interface %s[%d]", netdev->name, netdev->index);
+	device_create(wiphy, netdev);
+}
+
 static void netdev_config_notify(struct l_genl_msg *msg, void *user_data)
 {
 	struct l_genl_attr attr;
@@ -217,6 +311,8 @@ static void netdev_config_notify(struct l_genl_msg *msg, void *user_data)
 
 bool netdev_init(struct l_genl_family *in)
 {
+	struct l_genl_msg *msg;
+
 	if (rtnl)
 		return false;
 
@@ -238,6 +334,11 @@ bool netdev_init(struct l_genl_family *in)
 	if (!l_genl_family_register(nl80211, "config", netdev_config_notify,
 								NULL, NULL))
 		l_error("Registering for config notification failed");
+
+	msg = l_genl_msg_new(NL80211_CMD_GET_INTERFACE);
+	if (!l_genl_family_dump(nl80211, msg, netdev_get_interface_callback,
+								NULL, NULL))
+		l_error("Getting all interface information failed");
 
 	return true;
 }
