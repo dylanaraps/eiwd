@@ -1496,6 +1496,11 @@ static void interface_dump_callback(struct l_genl_msg *msg, void *user_data)
 	l_io_set_read_handler(device->eapol_io, eapol_read, device, NULL);
 }
 
+struct wiphy *wiphy_find(int wiphy_id)
+{
+	return l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(wiphy_id));
+}
+
 static void parse_supported_commands(struct wiphy *wiphy,
 						struct l_genl_attr *attr)
 {
