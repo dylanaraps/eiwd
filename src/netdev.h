@@ -30,6 +30,7 @@ void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 				uint8_t linkmode, uint8_t operstate,
 				netdev_command_func_t cb, void *user_data);
 
+const uint8_t *netdev_get_address(struct netdev *netdev);
 uint32_t netdev_get_ifindex(struct netdev *netdev);
 
 bool netdev_init(struct l_genl_family *in);

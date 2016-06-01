@@ -117,6 +117,11 @@ void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 	l_free(rtmmsg);
 }
 
+const uint8_t *netdev_get_address(struct netdev *netdev)
+{
+	return netdev->addr;
+}
+
 uint32_t netdev_get_ifindex(struct netdev *netdev)
 {
 	return netdev->index;
