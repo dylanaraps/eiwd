@@ -138,12 +138,6 @@ bool netdev_exit(void)
 	nl80211 = NULL;
 
 	l_debug("Closing route netlink socket");
-
-	/*
-	 * The netlink object keeps track of the registered notification
-	 * callbacks and their multicast memberships. When destroying the
-	 * netlink object, all resources will be freed.
-	 */
 	l_netlink_destroy(rtnl);
 	rtnl = NULL;
 
