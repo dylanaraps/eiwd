@@ -128,6 +128,11 @@ uint32_t netdev_get_ifindex(struct netdev *netdev)
 	return netdev->index;
 }
 
+uint32_t netdev_get_iftype(struct netdev *netdev)
+{
+	return netdev->type;
+}
+
 static void netdev_free(void *data)
 {
 	struct netdev *netdev = data;

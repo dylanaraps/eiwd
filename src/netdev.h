@@ -32,6 +32,7 @@ void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 
 const uint8_t *netdev_get_address(struct netdev *netdev);
 uint32_t netdev_get_ifindex(struct netdev *netdev);
+uint32_t netdev_get_iftype(struct netdev *netdev);
 
 struct netdev *netdev_find(int ifindex);
 
