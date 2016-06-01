@@ -14,9 +14,8 @@ class TestScanNetworkWithoutAP(unittest.TestCase):
     def test_scanNetworkWithoutAP(self):
         logger.info(sys._getframe().f_code.co_name)
         # scan and get network name
-        deviceList = utility.getDeviceList(bus)
-        networkList = utility.getNetworkList(deviceList, bus)
-        networkName = utility.getNetworkName(networkList)
+        objectList = utility.getObjectList(bus)
+        networkName = utility.getNetworkName(objectList)
         logger.info("Network Found: %s", networkName)
         # should not find any network since hostapd is not running.
         self.assertEqual(networkName, "")
