@@ -63,7 +63,6 @@ enum device_state {
 
 struct device {
 	uint32_t index;
-	uint8_t addr[ETH_ALEN];
 	enum device_state state;
 	struct l_queue *bss_list;
 	struct l_queue *old_bss_list;
@@ -108,7 +107,8 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 
 static bool eapol_read(struct l_io *io, void *user_data)
 {
-	struct device *netdev = user_data;
+	struct device *device = user_data;
+	struct netdev *netdev = device->netdev;
 	int fd = l_io_get_fd(io);
 	struct sockaddr_ll sll;
 	socklen_t sll_len;
@@ -125,8 +125,9 @@ static bool eapol_read(struct l_io *io, void *user_data)
 		return false;
 	}
 
-	__eapol_rx_packet(netdev->index, netdev->addr, sll.sll_addr,
-				frame, bytes);
+	__eapol_rx_packet(netdev_get_ifindex(netdev),
+				netdev_get_address(netdev),
+				sll.sll_addr, frame, bytes);
 
 	return true;
 }
@@ -334,7 +335,7 @@ const char *device_get_path(struct device *device)
 
 const uint8_t *device_get_address(struct device *device)
 {
-	return device->addr;
+	return netdev_get_address(device->netdev);
 }
 
 uint32_t device_get_ifindex(struct device *device)
@@ -467,7 +468,8 @@ static bool device_property_get_address(struct l_dbus *dbus,
 {
 	struct device *device = user_data;
 
-	l_dbus_message_builder_append_basic(builder, 's', device->addr);
+	l_dbus_message_builder_append_basic(builder, 's',
+					netdev_get_address(device->netdev));
 	return true;
 }
 
@@ -1004,7 +1006,8 @@ static void mlme_associate_cmd(struct device *device)
 						network_get_settings(network));
 
 		eapol_sm_set_authenticator_address(sm, bss->addr);
-		eapol_sm_set_supplicant_address(sm, device->addr);
+		eapol_sm_set_supplicant_address(sm,
+					netdev_get_address(device->netdev));
 		eapol_sm_set_user_data(sm, device);
 		eapol_sm_set_tx_user_data(sm,
 				L_INT_TO_PTR(l_io_get_fd(device->eapol_io)));
@@ -1333,7 +1336,6 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	l_hashmap_set_hash_function(device->networks, l_str_hash);
 	l_hashmap_set_compare_function(device->networks,
 				(l_hashmap_compare_func_t) strcmp);
-	memcpy(device->addr, netdev_get_address(netdev), sizeof(device->addr));
 	device->index = ifindex;
 	device->wiphy = wiphy;
 	device->netdev = netdev;
