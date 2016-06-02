@@ -158,12 +158,8 @@ static void prepare_sandbox(void)
 		struct stat st;
 
 		if (lstat(mount_table[i].target, &st) < 0) {
-			l_debug("Creating %s\n", mount_table[i].target);
 			mkdir(mount_table[i].target, 0755);
 		}
-
-		l_debug("Mounting %s to %s\n", mount_table[i].fstype,
-							mount_table[i].target);
 
 		if (mount(mount_table[i].fstype,
 				mount_table[i].target,
@@ -176,23 +172,17 @@ static void prepare_sandbox(void)
 	}
 
 	for (i = 0; dev_table[i].target; i++) {
-		l_debug("Linking %s to %s\n", dev_table[i].linkpath,
-							dev_table[i].target);
 
 		if (symlink(dev_table[i].target, dev_table[i].linkpath) < 0)
 			l_error("Failed to create device symlink: %s",
 							strerror(errno));
 	}
 
-	l_debug("Creating new session group leader");
 	setsid();
 
-	l_debug("Setting controlling terminal");
 	ioctl(STDIN_FILENO, TIOCSCTTY, 1);
 
 	for (i = 0; config_table[i]; i++) {
-		l_debug("Creating %s", config_table[i]);
-
 		if (mount("tmpfs", config_table[i], "tmpfs",
 				MS_NOSUID|MS_NOEXEC|MS_NODEV|MS_STRICTATIME,
 				"mode=0755") < 0)
