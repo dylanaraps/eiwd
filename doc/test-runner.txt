@@ -1,0 +1,268 @@
+Notes for test-runner usage
+***************************
+
+Tool Description
+================
+
+test-runner is an automated test execution tool for IWD. It is capable of
+creating the emulated environments representing a variety of network topologies
+and run the automated tests of IWD functionality.
+
+
+Software Prerequisites
+======================
+
+The test-runner tool requires the following binaries to be present on the host
+OS:
+
+	Name:			Tested ver.:
+	 1. qemu		2.4.1
+	 2. Linux kernel	4.5.5
+	 3. dbus-daemon		1.10.0
+	 4. ifconfig		2.10-alpha
+	 5. iw			3.17
+	 6. python		2.7
+	 7. haveged		no ver. avail.
+	 8. hostapd		2.4
+	 9. <iwd>/tools/hwsim	0.0
+	10. <iwd>/src/iwd	0.0
+
+Note: The test-runner mounts host's file system in readonly mode and executes
+the above binaries inside of an emulated environment directly from it.
+
+
+Building Kernel
+===============
+
+The test-runner tool requires a kernel that is at least build with these
+minimal options for a successful boot and execution:
+
+	<arch>_defconfig 			Default kernel configuration
+
+	kvmconfig				Default configuration for
+						kvm guests
+
+	<iwd>/tools/test_runner_kernel_config	The test-runner specific
+						configuration
+
+These configurations should be installed as .config in the kernel source
+directory. To make a x86_64 guest kernel the sequence of commands may look
+as follows:
+
+	$ cd linux-X.X.X
+
+	$ make x86_64_defconfig
+
+	$ make kvmconfig
+
+	$ scripts/config --enable <iwd>/tools/test_runner_kernel_config
+
+	$ make olddefconfig
+
+After that a default kernel with the required options can be built:
+
+	$ make -j$(nproc)
+
+Note: To catch locking related issues the following set of kernel config
+options may be useful:
+
+	CONFIG_LOCKDEP_SUPPORT=y
+	CONFIG_DEBUG_SPINLOCK=y
+	CONFIG_DEBUG_LOCK_ALLOC=y
+	CONFIG_PROVE_LOCKING=y
+	CONFIG_LOCKDEP=y
+	CONFIG_DEBUG_MUTEXES=y
+
+By default the test-runner will search for the kernel image in these locations:
+
+	<iwd>/tools/bzImage
+
+		or
+
+	<iwd>/tools/arch/x86/boot/bzImage
+
+An arbitrary kernel image location can be specified by using '--kernel <path>'
+parameter into test-runner.
+
+
+Running Automated Tests
+=======================
+
+By default, the automated test configuration directories reside in
+'<iwd>/autotests' and have a mandatory prefix of 'test'.
+
+	<iwd>/autotests/test1
+                       /test2
+                         ...
+
+The test configurations along with test cases in <iwd>/autotests/test*
+directories will be discovered and executed by test-runner in sequential
+fashion. The following set of commands is sufficient to run the automated
+tests shipped with IWD:
+
+	$ cd <iwd>/tools
+
+	$ sudo ./test-runner
+
+One can specify a particular set of test configurations to be executed by using
+'-t <dir1,dir2>' parameter. An absolute path is necessary for the test
+configuration directories outside of <iwd>/autotests.
+
+The command line may look as follows:
+
+	$ sudo ./test-runner -t test1,test3,/home/test4
+
+
+Creating Test Configurations
+============================
+
+A typical test configuration directory may consist of these types of files:
+
+	hw.conf			Defines the network configuration and
+				properties of the radios.
+
+	*Test or *Test.py	The set of test cases for IWD functionality
+				implemented using Python scripting language.
+				These files must have one of the two predefined
+				suffixes: 'Test' or 'Test.py'
+
+	*.conf			A configuration file for an instance of hostapd
+	(Defined in hw.conf)	service.
+
+Each configuration directory has exactly one hw.conf, where the number of
+Python script files is virtually unlimited. The number of hostapd configuration
+files is bounded by the limitation in mac80211_hwsim driver and is set
+to 99. (The mac80211_hwsim driver allows to create 100 of simultaneous radios
+and one of them is reserved by the test-runner for IWD)
+
+A typical contents of a test configuration directory may look as follows:
+
+	 /test1/hw.conf
+		ap1.conf
+		ap2.conf
+		networkScanTest
+		networkConnectTest.py
+
+
+Defining Network
+----------------
+Network topology along with configuration for the automated test cases is
+predetermined in hardware configuration file 'hw.conf'. In addition, it allows
+to establish the relationships between the emulated hardware radios and
+services that represent various entities of a wireless network.
+
+The following sample hardware configuration file allows to emulate a network
+of three nodes. Two of which are access points and the third one represents a
+supplicant running IWD:
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~ hw.conf ~~~~~~~~~~~~~~~~~~~~~~~~~
+# Lines starting with # are ignored
+
+# 'SETUP' is a manditory configuration group.
+[SETUP]
+#
+# Total number of radios requested per network setup. This includes
+# the radios used by APs as well as one for IWD. This field is mandatory and
+# has a range of [1, 100].
+num_radios=3
+
+# Definition of the radio configuration identifiers. These identifiers are used
+# to map the APs and IWD to the radios with the particular hardware properties.
+# This field is optional. If identifier is omitted from this list, then the
+# default radio properties will be used as they are defined in mac80211_hwsim
+# driver to satisfy a total number of radios requested in 'num_radios' field.
+radio_confs=rad0:rad1
+
+# Maximum execution interval per Python script file in seconds. This field is
+# optional.
+# Default: 20 seconds.
+#max_test_exec_interval_sec=5
+
+#
+# The following two configuration groups are examples of the radio
+# configurations.
+#
+# This group of settings allows to specify a set of properties for a radio. The
+# name of the group represents a radio identifier and must be predefined in
+# 'radio_confs' field inside of 'SETUP' group. This configuration group is
+# optional.
+# TODO: explain each one of the properties.
+[rad0]
+channels=2
+p2p_device=1
+use_chanctx=1
+
+# Properties of the second radio. This configuration group is optional.
+[rad1]
+p2p=0
+
+# 'HOSTAPD' configuration group identifies a set of access points (AP) for the
+# current network topology. Each key/value pair represents a single AP that is
+# emulated by the instance of hostapd service. The key indicates an arbitrary
+# radio identifier and value specifies a configuration file for the instance.
+# If a radio identifier can not be mapped to a predefined radio configuration
+# (identifier is not part of the 'radio_confs' list), then a radio with the
+# default configuration is used. This configuration group is optional.
+[HOSTAPD]
+rad0=ap1.conf
+rad1=ap2.conf
+#~~~~~~~~~~~~~~~~~~ end of hw.conf ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+Configuring Access Points
+-------------------------
+The test-runner tool makes use of the hostapd service to emulate the access
+points (AP). The hostapd service comes preinstalled on most Linux
+distributions.
+For more information on hostapd refer to this page:
+
+	http://linuxwireless.org/en/users/Documentation/hostapd/
+
+A full set of the hostapd configurations along with explanation can be
+found at:
+
+	https://w1.fi/cgit/hostap/plain/hostapd/hostapd.conf
+
+
+Writing Python Test Scripts
+---------------------------
+The test-runner tool relies on test cases written in Python script language
+to exercise the functionality of IWD. The outcomes of the tests are determined
+by the exit status of a process running test and reported on per Python file
+bases. The test creators are highly encouraged to use the Python unit test
+framework.
+
+For more information on Python unit test framework refer to the following page:
+
+	http://pyunit.sourceforge.net/pyunit.html
+
+
+Examples of the framework usage:
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~ alwaysPassingTest.py ~~~~~~~~~~~~~~~~~~~~~~~~~
+#!/usr/bin/python
+
+import unittest
+
+class TestPassingCase(unittest.TestCase):
+
+	def test_pass(self):
+		self.assertTrue(True)
+
+if __name__ == '__main__':
+	unittest.main()
+#~~~~~~~~~~~~~~~~~~ end of alwaysPassingTest.py ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~ alwaysFailingTest.py ~~~~~~~~~~~~~~~~~~~~~~~~~
+#!/usr/bin/python
+
+import unittest
+
+class TestFailingCase(unittest.TestCase):
+
+	def test_fail(self):
+		self.assertTrue(False)
+
+if __name__ == '__main__':
+	unittest.main()
+#~~~~~~~~~~~~~~~~~~ end of alwaysFailingTest.py ~~~~~~~~~~~~~~~~~~~~~~~~~
