@@ -63,7 +63,6 @@ enum device_state {
 
 struct device {
 	uint32_t index;
-	char name[IFNAMSIZ];
 	uint8_t addr[ETH_ALEN];
 	enum device_state state;
 	struct l_queue *bss_list;
@@ -82,6 +81,7 @@ struct device {
 	uint32_t group_new_key_cmd_id;
 
 	struct wiphy *wiphy;
+	struct netdev *netdev;
 };
 
 struct wiphy {
@@ -367,7 +367,7 @@ static void device_scan_triggered(int err, void *user_data)
 		return;
 	}
 
-	l_debug("Scan triggered for netdev %s", device->name);
+	l_debug("Scan triggered for %s", netdev_get_name(device->netdev));
 
 	reply = l_dbus_message_new_method_return(device->scan_pending);
 	l_dbus_message_set_arguments(reply, "");
@@ -455,7 +455,8 @@ static bool device_property_get_name(struct l_dbus *dbus,
 {
 	struct device *device = user_data;
 
-	l_dbus_message_builder_append_basic(builder, 's', device->name);
+	l_dbus_message_builder_append_basic(builder, 's',
+					netdev_get_name(device->netdev));
 	return true;
 }
 
@@ -1332,10 +1333,10 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	l_hashmap_set_hash_function(device->networks, l_str_hash);
 	l_hashmap_set_compare_function(device->networks,
 				(l_hashmap_compare_func_t) strcmp);
-	strcpy(device->name, netdev_get_name(netdev));
 	memcpy(device->addr, netdev_get_address(netdev), sizeof(device->addr));
 	device->index = ifindex;
 	device->wiphy = wiphy;
+	device->netdev = netdev;
 
 	l_queue_push_head(device_list, device);
 
