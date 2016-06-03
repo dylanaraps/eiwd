@@ -5,10 +5,20 @@ import dbus
 import logging
 import traceback
 
+IWD_SERVICE =                   'net.connman.iwd'
+
+IWD_AGENT_MANAGER_INTERFACE =   'net.connman.iwd.AgentManager'
+IWD_DEVICE_INTERFACE =          'net.connman.iwd.Device'
+IWD_NETWORK_INTERFACE =         'net.connman.iwd.Network'
+IWD_AGENT_INTERFACE =           'net.connman.iwd.Agent'
+IWD_WSC_INTERFACE =             'net.connman.iwd.WiFiSimpleConfiguration'
+
+IWD_TOP_LEVEL_PATH = "/"
+
 # get all the available networks
 def getObjectList(bus):
     logger.debug(sys._getframe().f_code.co_name)
-    manager = dbus.Interface(bus.get_object("net.connman.iwd", "/"),
+    manager = dbus.Interface(bus.get_object(IWD_SERVICE, "/"),
                                         "org.freedesktop.DBus.ObjectManager")
     return manager.GetManagedObjects()
 
@@ -17,11 +27,11 @@ def getNetworkList(objects, bus):
     logger.debug(sys._getframe().f_code.co_name)
     networkList = []
     for path in objects:
-        if 'net.connman.iwd.Device' not in objects[path]:
+        if IWD_DEVICE_INTERFACE not in objects[path]:
             continue
         for path2 in objects:
             if not path2.startswith(path) or \
-                'net.connman.iwd.Network' not in objects[path2]:
+                IWD_NETWORK_INTERFACE not in objects[path2]:
                     continue
             networkList.append(path2)
         return networkList
@@ -29,8 +39,8 @@ def getNetworkList(objects, bus):
 def connect(networkToConnect, self, mainloop, bus):
     logger.debug(sys._getframe().f_code.co_name)
     logger.debug("    %s", networkToConnect)
-    network = dbus.Interface(bus.get_object("net.connman.iwd",networkToConnect),
-                                            "net.connman.iwd.Network")
+    network = dbus.Interface(bus.get_object(IWD_SERVICE, networkToConnect),
+                                            IWD_NETWORK_INTERFACE)
     try:
         network.Connect()
     except:
@@ -45,8 +55,8 @@ def connect(networkToConnect, self, mainloop, bus):
 # try to disconnect from the device.
 def disconnect(deviceToDisconnect, mainloop, bus):
     logger.debug(sys._getframe().f_code.co_name)
-    device = dbus.Interface(bus.get_object("net.connman.iwd",deviceToDisconnect),
-                                           "net.connman.iwd.Device")
+    device = dbus.Interface(bus.get_object(IWD_SERVICE, deviceToDisconnect),
+                                           IWD_DEVICE_INTERFACE)
     try:
         device.Disconnect()
     except:
@@ -65,7 +75,7 @@ def getNetworkToConnectTo(objects):
     for path in objects:
         for path2 in objects:
             if not path2.startswith(path) or \
-                'net.connman.iwd.Network' not in objects[path2]:
+                IWD_NETWORK_INTERFACE not in objects[path2]:
                     continue
             return path2
     return ""
@@ -75,13 +85,13 @@ def getNetworkToConnectTo(objects):
 def getCurrentlyConnectedDevice():
     logger.debug(sys._getframe().f_code.co_name)
     bus = dbus.SystemBus()
-    manager = dbus.Interface(bus.get_object("net.connman.iwd", "/"),
+    manager = dbus.Interface(bus.get_object(IWD_SERVICE, "/"),
                                         "net.connman.iwd.Manager")
     objects = getObjectList(bus)
     for path in objects:
-        if 'net.connman.iwd.Device' not in objects[path]:
+        if IWD_DEVICE_INTERFACE not in objects[path]:
             continue
-        device = objects[path]['net.connman.iwd.Device']
+        device = objects[path][IWD_DEVICE_INTERFACE]
         for key in device.keys():
             if key in ["ConnectedNetwork"]:
                 return path
@@ -96,9 +106,9 @@ def getCurrentlyConnectedNetworkName():
     for path in deviceList:
         for path2 in deviceList:
             if not path2.startswith(path) or \
-                'net.connman.iwd.Network' not in deviceList[path2]:
+                IWD_NETWORK_INTERFACE not in deviceList[path2]:
                 continue
-            network = deviceList[path2]['net.connman.iwd.Network']
+            network = deviceList[path2][IWD_NETWORK_INTERFACE]
             for key in network.keys():
                 name = ""
                 if key in ["Connected"]:
@@ -118,13 +128,13 @@ def getCurrentlyConnectedNetworkName():
 def getNetworkName(deviceList):
     logger.debug(sys._getframe().f_code.co_name)
     for path in deviceList:
-        if 'net.connman.iwd.Device' not in deviceList[path]:
+        if IWD_DEVICE_INTERFACE not in deviceList[path]:
             continue
         for path2 in deviceList:
             if not path2.startswith(path) or \
-                'net.connman.iwd.Network' not in deviceList[path2]:
+                IWD_NETWORK_INTERFACE not in deviceList[path2]:
                 continue
-            network = deviceList[path2]['net.connman.iwd.Network']
+            network = deviceList[path2][IWD_NETWORK_INTERFACE]
             for key in network.keys():
                 if key in ["Name"]:
                     return network[key]
