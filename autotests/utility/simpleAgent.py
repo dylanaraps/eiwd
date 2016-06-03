@@ -19,8 +19,8 @@ def defineAgentVars():
     global manager, pathAgent
     bus = dbus.SystemBus()
     pathAgent = "/utility/agent/" + str(randrange(100))
-    manager = dbus.Interface(bus.get_object('net.connman.iwd', "/"),
-                          'net.connman.iwd.AgentManager')
+    manager = dbus.Interface(bus.get_object(utility.IWD_SERVICE, "/"),
+                             utility.IWD_AGENT_MANAGER_INTERFACE)
 
 def getManager():
     return manager
@@ -29,13 +29,13 @@ def getPathAgent():
     return pathAgent
 
 class Agent(dbus.service.Object):
-    @dbus.service.method("net.connman.iwd.Agent",
+    @dbus.service.method(utility.IWD_AGENT_INTERFACE,
                             in_signature='', out_signature='')
     def Release(self):
         logger.debug("Release")
         mainloop.quit()
 
-    @dbus.service.method("net.connman.iwd.Agent",
+    @dbus.service.method(utility.IWD_AGENT_INTERFACE,
                             in_signature='o',
                             out_signature='s')
     def RequestPassphrase(self, path):
