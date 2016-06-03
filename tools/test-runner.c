@@ -1435,8 +1435,9 @@ static void test_stat_queue_entry_destroy(void *data)
 
 static void run_command(char *cmdname)
 {
-	char tmp_path[PATH_MAX];
+	char top_level_path[PATH_MAX];
 	char test_home_path[PATH_MAX];
+	char env_path[PATH_MAX];
 	char *ptr;
 	int i;
 	struct l_hashmap *test_config_map;
@@ -1449,10 +1450,16 @@ static void run_command(char *cmdname)
 
 	i = ptr - exec_home;
 
-	strncpy(tmp_path, exec_home + 5, i - 5);
-	tmp_path[i - 5] = '\0';
+	strncpy(top_level_path, exec_home + 5, i - 5);
+	top_level_path[i - 5] = '\0';
 
-	sprintf(test_home_path, "%s/%s", tmp_path, TEST_TOP_DIR_DEFAULT_NAME);
+	sprintf(env_path, "%s/src:%s/tools:%s", top_level_path, top_level_path,
+								getenv("PATH"));
+
+	setenv("PATH", env_path, true);
+
+	sprintf(test_home_path, "%s/%s", top_level_path,
+						TEST_TOP_DIR_DEFAULT_NAME);
 
 	if (!path_exist(test_home_path)) {
 		l_error("Test directory %s does not exist", test_home_path);
