@@ -30,9 +30,10 @@ class TestConnectDisconnect(unittest.TestCase):
         # start simpleAgent
         proc = Popen([sys.executable, '../utility/simpleAgent.py'])
         time.sleep(2)
-        network = dbus.Interface(bus.get_object("net.connman.iwd",
-                                            networkToConnect),
-                                            "net.connman.iwd.Network")
+        network = dbus.Interface(bus.get_object(utility.IWD_SERVICE,
+                                                networkToConnect),
+                                 utility.IWD_NETWORK_INTERFACE)
+
         status = utility.connect(networkToConnect, self, mainloop, bus)
 
         if status == False:
@@ -65,11 +66,12 @@ class TestConnectDisconnect(unittest.TestCase):
     def test_connectDisconnect(self):
         logger.info(sys._getframe().f_code.co_name)
         while (True):
-            if bus.name_has_owner('net.connman.iwd') == True:
+            if bus.name_has_owner(utility.IWD_SERVICE) == True:
                 break
         self.doConnectDisconnect()
         #watch doesn't seem to work. So used name_has_owner
-        #watch = bus.watch_name_owner("net.connman.iwd",self.doConnectDisconnect)
+        #watch = bus.watch_name_owner(utility.IWD_SERVICE,
+        #                              self.doConnectDisconnect)
 
     @classmethod
     def setUpClass(cls):
