@@ -18,13 +18,13 @@ import utility
 def getSecondNetworkToConnect(objectList, firstNetworkName):
     logger.debug(sys._getframe().f_code.co_name)
     for path in objectList:
-        if 'net.connman.iwd.Device' not in objectList[path]:
+        if utility.IWD_DEVICE_INTERFACE not in objectList[path]:
             continue
         for path2 in objectList:
             if not path2.startswith(path) or \
-                'net.connman.iwd.Network' not in objectList[path2]:
+                utility.IWD_NETWORK_INTERFACE not in objectList[path2]:
                 continue
-            network = objectList[path2]['net.connman.iwd.Network']
+            network = objectList[path2][utility.IWD_NETWORK_INTERFACE]
             for key in network.keys():
                 if key in ["Name"]:
                     # skip the first connected network
@@ -40,9 +40,9 @@ class TestTwoNetworks(unittest.TestCase):
         # start simpleAgent
         proc = Popen([sys.executable, '../utility/simpleAgent.py'])
         time.sleep(2)
-        network = dbus.Interface(bus.get_object("net.connman.iwd",
-                                            networkToConnect),
-                                            "net.connman.iwd.Network")
+        network = dbus.Interface(bus.get_object(utility.IWD_SERVICE,
+                                                networkToConnect),
+                                 utility.IWD_NETWORK_INTERFACE)
         status = utility.connect(networkToConnect, self, mainloop, bus)
         if status == False:
             #terminate proc
@@ -95,7 +95,7 @@ class TestTwoNetworks(unittest.TestCase):
     def test_twoNetworks(self):
         logger.info(sys._getframe().f_code.co_name)
         while (True):
-            if bus.name_has_owner('net.connman.iwd') == True:
+            if bus.name_has_owner(utility.IWD_SERVICE) == True:
                 break
         self.doConnectDisconnectTwoNetworks()
 
