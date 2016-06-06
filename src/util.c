@@ -25,6 +25,7 @@
 #endif
 
 #include <string.h>
+#include <stdio.h>
 
 #include <ell/string.h>
 #include <ell/genl.h>
@@ -84,6 +85,16 @@ bool util_ssid_is_utf8(size_t len, const uint8_t *ssid)
 		return false;
 
 	return l_utf8_validate((const char *)ssid, len, NULL);
+}
+
+const char *util_address_to_string(const uint8_t *addr)
+{
+	static char str[18];
+
+	sprintf(str, "%02x:%02x:%02x:%02x:%02x:%02x",
+			addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+
+	return str;
 }
 
 bool _msg_append_attr(struct l_genl_msg *msg,

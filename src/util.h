@@ -28,6 +28,7 @@
 
 const char *util_ssid_to_utf8(size_t len, const uint8_t *ssid);
 bool util_ssid_is_utf8(size_t len, const uint8_t *ssid);
+const char *util_address_to_string(const uint8_t *addr);
 
 static inline uint8_t util_bit_field(const uint8_t oct, int start, int num)
 {
