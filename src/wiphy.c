@@ -310,10 +310,11 @@ void device_connect_network(struct device *device, struct network *network,
 static void bss_free(void *data)
 {
 	struct scan_bss *bss = data;
+	const char *addr;
 
-	l_debug("Freeing BSS %02X:%02X:%02X:%02X:%02X:%02X",
-			bss->addr[0], bss->addr[1], bss->addr[2],
-			bss->addr[3], bss->addr[4], bss->addr[5]);
+	addr = util_address_to_string(bss->addr);
+
+	l_debug("Freeing BSS %s", addr);
 
 	scan_bss_free(bss);
 }
@@ -530,7 +531,7 @@ static void device_autoconnect_next(struct device *device)
 	while ((entry = l_queue_pop_head(device->autoconnect_list))) {
 		l_debug("Considering autoconnecting to BSS '%s' with SSID: %s,"
 			" freq: %u, rank: %u, strength: %i",
-			scan_bss_address_to_string(entry->bss),
+			util_address_to_string(entry->bss->addr),
 			network_get_ssid(entry->network),
 			entry->bss->frequency, entry->rank,
 			entry->bss->signal_strength);
@@ -1196,7 +1197,7 @@ static void process_bss(struct device *device, struct scan_bss *bss)
 
 	l_debug("Found BSS '%s' with SSID: %s, freq: %u, rank: %u, "
 			"strength: %i",
-			scan_bss_address_to_string(bss),
+			util_address_to_string(bss->addr),
 			util_ssid_to_utf8(bss->ssid_len, bss->ssid),
 			bss->frequency, bss->rank, bss->signal_strength);
 
