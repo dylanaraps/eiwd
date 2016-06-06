@@ -81,7 +81,7 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 		int err;
 
 		l_debug("bss '%s' with SSID: %s, freq: %u",
-			scan_bss_address_to_string(bss),
+			util_address_to_string(bss->addr),
 			util_ssid_to_utf8(bss->ssid_len, bss->ssid),
 			bss->frequency);
 
@@ -154,7 +154,7 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 	}
 
 	l_debug("Found AP to connect to: %s",
-			scan_bss_address_to_string(target));
+			util_address_to_string(target->addr));
 
 	return false;
 }
