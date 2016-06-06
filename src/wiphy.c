@@ -467,9 +467,11 @@ static bool device_property_get_address(struct l_dbus *dbus,
 					void *user_data)
 {
 	struct device *device = user_data;
+	const char *str;
 
-	l_dbus_message_builder_append_basic(builder, 's',
-					netdev_get_address(device->netdev));
+	str = util_address_to_string(netdev_get_address(device->netdev));
+	l_dbus_message_builder_append_basic(builder, 's', str);
+
 	return true;
 }
 
