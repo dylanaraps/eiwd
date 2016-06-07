@@ -105,6 +105,7 @@ bool network_seen(struct network *network)
 	int err;
 	struct network_info *info;
 	struct network_info search;
+	const char *strtype;
 
 	search.type = network->security;
 	strncpy(search.ssid, network->ssid, 32);
@@ -114,14 +115,11 @@ bool network_seen(struct network *network)
 	if (info)
 		return true;
 
-	switch (network->security) {
-	case SECURITY_PSK:
-		err = storage_network_get_mtime("psk", network->ssid, &mtim);
-		break;
-	default:
+	strtype = security_to_str(network->security);
+	if (!strtype)
 		return false;
-	}
 
+	err = storage_network_get_mtime(strtype, network->ssid, &mtim);
 	if (err < 0)
 		return false;
 
@@ -267,22 +265,18 @@ struct l_settings *network_get_settings(const struct network *network)
 
 bool network_settings_load(struct network *network)
 {
+	const char *strtype;
+
 	if (network->settings)
 		return true;
 
-	switch (network->security) {
-	case SECURITY_8021X:
-		network->settings = storage_network_open("8021x",
-							network->ssid);
-		break;
-	case SECURITY_PSK:
-		network->settings = storage_network_open("psk", network->ssid);
-		break;
-	default:
+	strtype = security_to_str(network->security);
+	if (!strtype)
 		return false;
-	};
 
-	return true;
+	network->settings = storage_network_open(strtype, network->ssid);
+
+	return network->settings != NULL;
 }
 
 void network_sync_psk(struct network *network)
