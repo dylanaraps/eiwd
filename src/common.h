@@ -20,4 +20,9 @@
  *
  */
 
+#include <stdbool.h>
+
+enum security;
+
 const char *security_to_str(enum security security);
+bool security_from_str(const char *str, enum security *security);

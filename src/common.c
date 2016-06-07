@@ -25,6 +25,7 @@
 #endif
 
 #include <stddef.h>
+#include <string.h>
 
 #include "src/iwd.h"
 #include "src/common.h"
@@ -43,4 +44,20 @@ const char *security_to_str(enum security security)
 	}
 
 	return NULL;
+}
+
+bool security_from_str(const char *str, enum security *security)
+{
+	if (!strcmp(str, "open"))
+		*security = SECURITY_NONE;
+	else if (!strcmp(str, "wep"))
+		*security = SECURITY_WEP;
+	else if (!strcmp(str, "psk"))
+		*security = SECURITY_PSK;
+	else if (!strcmp(str, "8021x"))
+		*security = SECURITY_8021X;
+	else
+		return false;
+
+	return true;
 }
