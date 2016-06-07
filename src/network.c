@@ -154,7 +154,19 @@ bool network_connected(struct network *network)
 		goto fail;
 
 	err = storage_network_touch(strtype, network->ssid);
-	if (err < 0)
+	if (err == -ENOENT) {
+		/*
+		 * Write an empty settings file to keep track of the
+		 * last connected time.  This will also make iwd autoconnect
+		 * to this network in the future.
+		 * Current policy is that network becomes a Known Network
+		 * only on a successful connect.
+		 */
+		if (!network_settings_load(network))
+			goto fail;
+
+		storage_network_sync(strtype, network->ssid, network->settings);
+	} else
 		goto fail;
 
 	err = storage_network_get_mtime(strtype, network->ssid,
