@@ -36,3 +36,4 @@ int storage_network_get_mtime(const char *type, const char *ssid,
 				struct timespec *mtim);
 void storage_network_sync(const char *type, const char *ssid,
 				struct l_settings *settings);
+int storage_network_remove(const char *type, const char *ssid);

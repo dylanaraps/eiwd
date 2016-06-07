@@ -265,3 +265,15 @@ void storage_network_sync(const char *type, const char *ssid,
 	l_free(data);
 	l_free(path);
 }
+
+int storage_network_remove(const char *type, const char *ssid)
+{
+	char *path;
+	int ret;
+
+	path = get_network_file_path(type, ssid);
+	ret = unlink(path);
+	l_free(path);
+
+	return ret < 0 ? -errno : 0;
+}
