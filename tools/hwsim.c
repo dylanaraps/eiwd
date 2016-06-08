@@ -425,6 +425,9 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
+	if (!l_main_init())
+		return EXIT_FAILURE;
+
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGINT);
 	sigaddset(&mask, SIGTERM);
@@ -465,6 +468,8 @@ int main(int argc, char *argv[])
 
 done:
 	l_signal_remove(signal);
+
+	l_main_exit();
 
 	return exit_status;
 }
