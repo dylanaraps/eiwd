@@ -1112,6 +1112,9 @@ static pid_t start_execution_timeout_timer(unsigned int max_exec_interval_sec,
 	}
 
 	if (test_timer_pid == 0) {
+		if (!l_main_init())
+			exit(EXIT_FAILURE);
+
 		sigemptyset(&mask);
 		sigaddset(&mask, SIGINT);
 		sigaddset(&mask, SIGTERM);
@@ -1128,6 +1131,8 @@ static pid_t start_execution_timeout_timer(unsigned int max_exec_interval_sec,
 
 		l_timeout_remove(test_exec_timeout);
 		l_signal_remove(signal);
+
+		l_main_exit();
 
 		exit(EXIT_SUCCESS);
 	}
