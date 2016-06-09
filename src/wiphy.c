@@ -218,6 +218,9 @@ static void device_disassociated(struct device *device)
 	struct network *network = device->connected_network;
 	struct l_dbus *dbus = dbus_get_bus();
 
+	if (!network)
+		return;
+
 	network_disconnected(network);
 
 	device->connected_bss = NULL;
@@ -237,8 +240,7 @@ static void device_lost_beacon(struct device *device)
 		dbus_pending_reply(&device->connect_pending,
 				dbus_error_failed(device->connect_pending));
 
-	if (device->connected_network)
-		device_disassociated(device);
+	device_disassociated(device);
 }
 
 static void genl_connect_cb(struct l_genl_msg *msg, void *user_data)
