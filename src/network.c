@@ -276,6 +276,13 @@ const unsigned char *network_get_psk(const struct network *network)
 	return network->psk;
 }
 
+int network_get_signal_strength(const struct network *network)
+{
+	struct scan_bss *best_bss = l_queue_peek_head(network->bss_list);
+
+	return best_bss->signal_strength;
+}
+
 struct l_settings *network_get_settings(const struct network *network)
 {
 	return network->settings;
