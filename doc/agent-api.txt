@@ -20,10 +20,13 @@ Methods		void Release()
 
 			Possible Errors: net.connman.iwd.Agent.Error.Canceled
 
-		void Cancel()
+		void Cancel(string reason)
 
 			This method gets called to indicate that the agent
-			request failed before a reply was returned.
+			request failed before a reply was returned.  The
+			argument will indicate why the request is being
+			cancelled and may be "out-of-range", "user-canceled",
+			"timed-out" or "shutdown".
 
 Examples	Requesting a passphrase for WPA2 network
 
