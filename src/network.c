@@ -207,7 +207,7 @@ static const double rankmod_table[] = {
 	0.2913406263, 0.2899228820, 0.2885345572, 0.2871745887,
 };
 
-double network_rankmod(uint32_t type, const char *ssid)
+bool network_rankmod(const struct network *network, double *rankmod)
 {
 	const struct l_queue_entry *entry;
 	int n;
@@ -217,10 +217,10 @@ double network_rankmod(uint32_t type, const char *ssid)
 						entry = entry->next, n += 1) {
 		const struct network_info *info = entry->data;
 
-		if (info->type != type)
+		if (info->type != network->security)
 			continue;
 
-		if (strcmp(info->ssid, ssid))
+		if (strcmp(info->ssid, network->ssid))
 			continue;
 
 		nmax = L_ARRAY_SIZE(rankmod_table);
@@ -228,10 +228,11 @@ double network_rankmod(uint32_t type, const char *ssid)
 		if (n >= nmax)
 			n = nmax - 1;
 
-		return rankmod_table[n];
+		*rankmod = rankmod_table[n];
+		return true;
 	}
 
-	return 0.0;
+	return false;
 }
 
 struct network *network_create(struct device *device,

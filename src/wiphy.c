@@ -1267,8 +1267,8 @@ static void process_bss(struct device *device, struct scan_bss *bss)
 
 	network_bss_add(network, bss);
 
-	rankmod = network_rankmod(security, network_get_ssid(network));
-	if (rankmod == 0.0)
+	/* See if network is autoconnectable (is a known network) */
+	if (!network_rankmod(network, &rankmod))
 		return;
 
 	entry = l_new(struct autoconnect_entry, 1);
