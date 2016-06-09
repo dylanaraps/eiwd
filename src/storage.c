@@ -37,6 +37,7 @@
 
 #include <ell/ell.h>
 
+#include "common.h"
 #include "storage.h"
 
 #ifdef TEMP_FAILURE_RETRY
@@ -189,6 +190,63 @@ static char *get_network_file_path(const char *type, const char *ssid)
 		path = l_strdup_printf(STORAGEDIR "/%s.%s", ssid, type);
 
 	return path;
+}
+
+char *storage_network_ssid_from_path(const char *path, enum security *type)
+{
+	const char *filename = strrchr(path, '/');
+	const char *c, *end;
+	char *decoded;
+	static char buf[67];
+
+	if (filename)
+		filename++;	/* Skip the / */
+	else
+		filename = path;
+
+	end = strchr(filename, '.');
+
+	if (!end || !security_from_str(end + 1, type))
+		return NULL;
+
+	if (filename[0] != '=') {
+		if (end == filename || end - filename > 32)
+			return NULL;
+
+		for (c = filename; c < end; c++)
+			if (!isalnum(*c) && !strchr("-_ ", *c))
+				break;
+
+		if (c < end)
+			return NULL;
+
+		memcpy(buf, filename, end - filename);
+		buf[end - filename] = '\0';
+
+		return buf;
+	}
+
+	if (end - filename <= 1 || end - filename > 65)
+		return NULL;
+
+	memcpy(buf, filename + 1, end - filename - 1);
+	buf[end - filename - 1] = '0';
+	buf[end - filename + 0] = '0';
+	buf[end - filename + 1] = '\0';
+
+	decoded = (char *) l_util_from_hexstring(buf, NULL);
+	if (!decoded)
+		return NULL;
+
+	if (!l_utf8_validate(decoded, (end - filename) / 2, NULL)) {
+		l_free(decoded);
+		return NULL;
+	}
+
+	strcpy(buf, decoded);
+	l_free(decoded);
+
+	return buf;
 }
 
 struct l_settings *storage_network_open(const char *type, const char *ssid)
