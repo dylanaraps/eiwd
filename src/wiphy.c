@@ -218,7 +218,7 @@ static void device_disassociated(struct device *device)
 	struct network *network = device->connected_network;
 	struct l_dbus *dbus = dbus_get_bus();
 
-	network_settings_close(network);
+	network_disconnected(network);
 
 	device->connected_bss = NULL;
 	device->connected_network = NULL;

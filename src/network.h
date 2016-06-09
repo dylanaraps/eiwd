@@ -27,6 +27,7 @@ struct network;
 
 bool network_seen(struct network *network);
 bool network_connected(struct network *network);
+void network_disconnected(struct network *network);
 double network_rankmod(uint32_t type, const char *ssid);
 
 struct network *network_create(struct device *device,

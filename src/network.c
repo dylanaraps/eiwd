@@ -182,6 +182,11 @@ fail:
 	return false;
 }
 
+void network_disconnected(struct network *network)
+{
+	network_settings_close(network);
+}
+
 /* First 64 entries calculated by 1 / pow(n, 0.3) for n >= 1 */
 static const double rankmod_table[] = {
 	1.0000000000, 0.8122523964, 0.7192230933, 0.6597539554,
