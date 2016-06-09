@@ -160,6 +160,9 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
+	if (!l_main_init())
+		return EXIT_FAILURE;
+
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGINT);
 	sigaddset(&mask, SIGTERM);
@@ -230,6 +233,8 @@ fail_genl:
 done:
 	l_signal_remove(signal);
 	l_timeout_remove(timeout);
+
+	l_main_exit();
 
 	return exit_status;
 }
