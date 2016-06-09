@@ -326,9 +326,14 @@ static pid_t execute_program(char *argv[], bool wait)
 {
 	int status;
 	pid_t pid, child_pid;
+	char *str;
 
 	if (!argv[0])
 		return -1;
+
+	str = l_strjoinv(argv, ' ');
+	l_debug("Executing: %s", str);
+	l_free(str);
 
 	child_pid = fork();
 	if (child_pid < 0) {
