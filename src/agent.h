@@ -40,4 +40,4 @@ unsigned int agent_request_passphrase(const char *path,
 				agent_request_passphrase_func_t callback,
 				struct l_dbus_message *message,
 				void *user_data);
-bool agent_request_cancel(unsigned int req_id);
+bool agent_request_cancel(unsigned int req_id, int reason);

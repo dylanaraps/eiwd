@@ -54,7 +54,7 @@ void network_bss_list_clear(struct network *network);
 
 bool network_register(struct network *network, const char *path);
 
-void network_remove(struct network *network);
+void network_remove(struct network *network, int reason);
 
 void network_init();
 void network_exit();

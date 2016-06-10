@@ -83,11 +83,41 @@ static void send_request(struct agent *agent, const char *request)
 	l_dbus_send(dbus_get_bus(), message);
 }
 
-static void send_cancel_request(void *user_data)
+static void send_cancel_request(void *user_data, int reason)
 {
 	struct agent *agent = user_data;
+	struct l_dbus_message *message;
+	const char *reasonstr;
 
-	send_request(agent, "Cancel");
+	switch (reason) {
+	case -ECANCELED:
+		reasonstr = "user-canceled";
+		break;
+	case -ETIMEDOUT:
+		reasonstr = "timed-out";
+		break;
+	case -ERANGE:
+		reasonstr = "out-of-range";
+		break;
+	case -ESHUTDOWN:
+		reasonstr = "shutdown";
+		break;
+	default:
+		reasonstr = "unknown";
+	}
+
+	l_debug("send a Cancel(%s) to %s %s", reasonstr,
+			agent->owner, agent->path);
+
+	message = l_dbus_message_new_method_call(dbus_get_bus(),
+						agent->owner,
+						agent->path,
+						IWD_AGENT_INTERFACE,
+						"Cancel");
+
+	l_dbus_message_set_arguments(message, "s", reasonstr);
+
+	l_dbus_send(dbus_get_bus(), message);
 }
 
 static void agent_request_free(void *user_data)
@@ -177,7 +207,7 @@ static void request_timeout(struct l_timeout *timeout, void *user_data)
 
 	l_dbus_cancel(dbus_get_bus(), agent->pending_id);
 
-	send_cancel_request(agent);
+	send_cancel_request(agent, -ETIMEDOUT);
 
 	agent_finalize_pending(agent, NULL);
 
@@ -301,7 +331,7 @@ static bool find_request(const void *a, const void *b)
 	return request->id == id;
 }
 
-bool agent_request_cancel(unsigned int req_id)
+bool agent_request_cancel(unsigned int req_id, int reason)
 {
 	struct agent_request *request;
 
@@ -314,7 +344,7 @@ bool agent_request_cancel(unsigned int req_id)
 		return false;
 
 	if (!request->message)
-		send_cancel_request(default_agent);
+		send_cancel_request(default_agent, reason);
 
 	agent_request_free(request);
 

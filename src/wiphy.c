@@ -325,7 +325,7 @@ static void network_free(void *data)
 {
 	struct network *network = data;
 
-	network_remove(network);
+	network_remove(network, -ESHUTDOWN);
 }
 
 const char *device_get_path(struct device *device)
@@ -1176,7 +1176,7 @@ static bool network_remove_if_lost(const void *key, void *data, void *user_data)
 
 	l_debug("No remaining BSSs for SSID: %s -- Removing network",
 			network_get_ssid(network));
-	network_remove(network);
+	network_remove(network, -ERANGE);
 
 	return true;
 }
@@ -1253,7 +1253,7 @@ static void process_bss(struct device *device, struct scan_bss *bss)
 						security);
 
 		if (!network_register(network, path)) {
-			network_remove(network);
+			network_remove(network, -EINVAL);
 			return;
 		}
 

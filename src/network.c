@@ -645,11 +645,11 @@ bool network_register(struct network *network, const char *path)
 	return true;
 }
 
-static void network_unregister(struct network *network)
+static void network_unregister(struct network *network, int reason)
 {
 	struct l_dbus *dbus = dbus_get_bus();
 
-	agent_request_cancel(network->agent_request);
+	agent_request_cancel(network->agent_request, reason);
 	network_settings_close(network);
 
 	l_dbus_unregister_object(dbus, network->object_path);
@@ -658,10 +658,10 @@ static void network_unregister(struct network *network)
 	network->object_path = NULL;
 }
 
-void network_remove(struct network *network)
+void network_remove(struct network *network, int reason)
 {
 	if (network->object_path)
-		network_unregister(network);
+		network_unregister(network, reason);
 
 	l_queue_destroy(network->bss_list, NULL);
 	l_free(network->psk);
