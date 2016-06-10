@@ -192,7 +192,8 @@ static char *get_network_file_path(const char *type, const char *ssid)
 	return path;
 }
 
-char *storage_network_ssid_from_path(const char *path, enum security *type)
+const char *storage_network_ssid_from_path(const char *path,
+							enum security *type)
 {
 	const char *filename = strrchr(path, '/');
 	const char *c, *end;

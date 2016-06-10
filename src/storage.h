@@ -31,7 +31,8 @@ ssize_t read_file(void *buffer, size_t len, const char *path_fmt, ...)
 ssize_t write_file(const void *buffer, size_t len, const char *path_fmt, ...)
 	__attribute__((format(printf, 3, 4)));
 
-char *storage_network_ssid_from_path(const char *path, enum security *type);
+const char *storage_network_ssid_from_path(const char *path,
+							enum security *type);
 
 struct l_settings *storage_network_open(const char *type, const char *ssid);
 int storage_network_touch(const char *type, const char *ssid);
