@@ -68,6 +68,7 @@ struct device {
 	struct l_queue *old_bss_list;
 	struct l_dbus_message *scan_pending;
 	struct l_hashmap *networks;
+	struct l_queue *networks_sorted;
 	struct scan_bss *connected_bss;
 	struct network *connected_network;
 	struct l_queue *autoconnect_list;
@@ -452,6 +453,46 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 	return NULL;
 }
 
+static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct device *device = user_data;
+	struct l_dbus_message *reply;
+	struct l_dbus_message_builder *builder;
+	const struct l_queue_entry *entry;
+
+	reply = l_dbus_message_new_method_return(message);
+	builder = l_dbus_message_builder_new(reply);
+
+	l_dbus_message_builder_enter_array(builder, "(osns)");
+
+	for (entry = l_queue_get_entries(device->networks_sorted); entry;
+				entry = entry->next) {
+		const struct network *network = entry->data;
+		enum security security = network_get_security(network);
+		int32_t signal_strength = network_get_signal_strength(network);
+
+		l_dbus_message_builder_enter_struct(builder, "osns");
+		l_dbus_message_builder_append_basic(builder, 'o',
+						network_get_path(network));
+		l_dbus_message_builder_append_basic(builder, 's',
+						network_get_ssid(network));
+		l_dbus_message_builder_append_basic(builder, 'n',
+							&signal_strength);
+		l_dbus_message_builder_append_basic(builder, 's',
+						security_to_str(security));
+		l_dbus_message_builder_leave_struct(builder);
+	}
+
+	l_dbus_message_builder_leave_array(builder);
+
+	l_dbus_message_builder_finalize(builder);
+	l_dbus_message_builder_destroy(builder);
+
+	return reply;
+}
+
 static bool device_property_get_name(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -499,6 +540,9 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 				device_scan, "", "");
 	l_dbus_interface_method(interface, "Disconnect", 0,
 				device_disconnect, "", "");
+	l_dbus_interface_method(interface, "GetOrderedNetworks", 0,
+				device_get_networks, "a(osns)", "",
+				"networks");
 
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					device_property_get_name, NULL);
@@ -1159,21 +1203,22 @@ static void mlme_cqm_event(struct l_genl_msg *msg, struct device *device)
 	}
 }
 
-static void network_reset_bss_list(const void *key, void *value,
-					void *user_data)
-{
-	struct network *network = value;
-
-	network_bss_list_clear(network);
-}
-
-static bool network_remove_if_lost(const void *key, void *data, void *user_data)
+static bool process_network(const void *key, void *data, void *user_data)
 {
 	struct network *network = data;
+	struct device *device = user_data;
 
-	if (!network_bss_list_isempty(network))
+	if (!network_bss_list_isempty(network)) {
+		/* Build the network list ordered by rank */
+		network_rank_update(network);
+
+		l_queue_insert(device->networks_sorted, network,
+				network_rank_compare, NULL);
+
 		return false;
+	}
 
+	/* Drop networks that have no more BSSs in range */
 	l_debug("No remaining BSSs for SSID: %s -- Removing network",
 			network_get_ssid(network));
 	network_remove(network, -ERANGE);
@@ -1283,11 +1328,14 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 				struct l_queue *bss_list, void *userdata)
 {
 	struct device *device = userdata;
+	struct network *network;
 	const struct l_queue_entry *bss_entry;
 
 	device->old_bss_list = device->bss_list;
 	device->bss_list = bss_list;
-	l_hashmap_foreach(device->networks, network_reset_bss_list, NULL);
+
+	while ((network = l_queue_pop_head(device->networks_sorted)))
+		network_bss_list_clear(network);
 
 	l_queue_destroy(device->autoconnect_list, l_free);
 	device->autoconnect_list = l_queue_new();
@@ -1298,6 +1346,8 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 
 		process_bss(device, bss);
 	}
+
+	l_hashmap_foreach_remove(device->networks, process_network, device);
 
 	if (device->connected_bss) {
 		struct scan_bss *bss;
@@ -1316,9 +1366,6 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 		} else
 			device->connected_bss = bss;
 	}
-
-	l_hashmap_foreach_remove(device->networks,
-					network_remove_if_lost, NULL);
 
 	l_queue_destroy(device->old_bss_list, bss_free);
 	device->old_bss_list = NULL;
@@ -1341,6 +1388,7 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	l_hashmap_set_hash_function(device->networks, l_str_hash);
 	l_hashmap_set_compare_function(device->networks,
 				(l_hashmap_compare_func_t) strcmp);
+	device->networks_sorted = l_queue_new();
 	device->index = ifindex;
 	device->wiphy = wiphy;
 	device->netdev = netdev;
@@ -1390,6 +1438,7 @@ void device_remove(struct device *device)
 	dbus = dbus_get_bus();
 	l_dbus_unregister_object(dbus, device_get_path(device));
 
+	l_queue_destroy(device->networks_sorted, NULL);
 	l_hashmap_destroy(device->networks, network_free);
 
 	l_queue_destroy(device->bss_list, bss_free);
