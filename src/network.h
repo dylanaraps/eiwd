@@ -25,7 +25,7 @@
 struct device;
 struct network;
 
-bool network_seen(struct network *network);
+bool network_seen(struct network *network, struct timespec *when);
 bool network_connected(struct network *network);
 void network_disconnected(struct network *network);
 bool network_rankmod(const struct network *network, double *rankmod);

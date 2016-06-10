@@ -31,6 +31,7 @@
 #include <linux/if.h>
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
+#include <time.h>
 
 #include <ell/ell.h>
 
@@ -1234,7 +1235,8 @@ static int autoconnect_rank_compare(const void *a, const void *b, void *user)
 	return ae->rank - new_ae->rank;
 }
 
-static void process_bss(struct device *device, struct scan_bss *bss)
+static void process_bss(struct device *device, struct scan_bss *bss,
+			struct timespec *timestamp)
 {
 	struct network *network;
 	enum security security;
@@ -1306,9 +1308,10 @@ static void process_bss(struct device *device, struct scan_bss *bss)
 					network_get_path(network), network);
 		l_debug("Added new Network \"%s\" security %s",
 			network_get_ssid(network), security_to_str(security));
-
-		network_seen(network);
 	}
+
+	if (network_bss_list_isempty(network))
+		network_seen(network, timestamp);
 
 	network_bss_add(network, bss);
 
@@ -1330,6 +1333,9 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 	struct device *device = userdata;
 	struct network *network;
 	const struct l_queue_entry *bss_entry;
+	struct timespec now;
+
+	clock_gettime(CLOCK_REALTIME, &now);
 
 	device->old_bss_list = device->bss_list;
 	device->bss_list = bss_list;
@@ -1344,7 +1350,7 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 				bss_entry = bss_entry->next) {
 		struct scan_bss *bss = bss_entry->data;
 
-		process_bss(device, bss);
+		process_bss(device, bss, &now);
 	}
 
 	l_hashmap_foreach_remove(device->networks, process_network, device);

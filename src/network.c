@@ -47,6 +47,7 @@ struct network_info {
 	char ssid[33];
 	uint32_t type;
 	struct timespec connected_time;		/* Time last connected */
+	struct timespec seen_time;		/* Time last seen */
 };
 
 struct network {
@@ -101,7 +102,7 @@ static bool network_info_match(const void *a, const void *b)
 	return true;
 }
 
-bool network_seen(struct network *network)
+bool network_seen(struct network *network, struct timespec *when)
 {
 	struct timespec mtim;
 	int err;
@@ -115,7 +116,7 @@ bool network_seen(struct network *network)
 
 	info = l_queue_find(networks, network_info_match, &search);
 	if (info)
-		return true;
+		goto update;
 
 	strtype = security_to_str(network->security);
 	if (!strtype)
@@ -132,6 +133,15 @@ bool network_seen(struct network *network)
 	memcpy(&info->connected_time, &mtim, sizeof(struct timespec));
 
 	l_queue_insert(networks, info, timespec_compare, NULL);
+
+update:
+	/*
+	 * Update the last seen time.  Note this is not preserved across
+	 * the network going out of range and back, or program restarts.
+	 * It may be desirable for it to be preserved in some way but
+	 * without too frequent filesystem writes.
+	 */
+	memcpy(&info->seen_time, when, sizeof(struct timespec));
 
 	return true;
 }
