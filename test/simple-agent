@@ -36,9 +36,9 @@ class Agent(dbus.service.Object):
         return passphrase
 
     @dbus.service.method("net.connman.iwd.Agent",
-                            in_signature='', out_signature='')
-    def Cancel(self):
-        print("Cancel")
+                            in_signature='s', out_signature='')
+    def Cancel(self, reason):
+        print("Cancel: " + reason)
 
 def print_usage():
     print("Usage:")
