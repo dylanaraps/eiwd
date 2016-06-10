@@ -58,3 +58,6 @@ void network_remove(struct network *network, int reason);
 
 void network_init();
 void network_exit();
+
+int network_rank_compare(const void *a, const void *b, void *user);
+void network_rank_update(struct network *network);

@@ -26,6 +26,7 @@
 
 #include <sys/types.h>
 #include <errno.h>
+#include <limits.h>
 
 #include <ell/ell.h>
 
@@ -59,6 +60,7 @@ struct network {
 	struct l_settings *settings;
 	bool update_psk:1;  /* Whether PSK should be written to storage */
 	bool ask_psk:1; /* Whether we should force-ask agent for PSK */
+	int rank;
 };
 
 static struct l_queue *networks = NULL;
@@ -187,6 +189,29 @@ void network_disconnected(struct network *network)
 	network_settings_close(network);
 }
 
+static const struct network_info *network_find_info(const char *ssid,
+							enum security security,
+							unsigned int *index)
+{
+	const struct l_queue_entry *entry;
+	int n;
+
+	for (n = 0, entry = l_queue_get_entries(networks); entry;
+						entry = entry->next, n += 1) {
+		const struct network_info *info = entry->data;
+
+		if (info->type != security)
+			continue;
+
+		if (strcmp(info->ssid, ssid))
+			continue;
+
+		return info;
+	}
+
+	return NULL;
+}
+
 /* First 64 entries calculated by 1 / pow(n, 0.3) for n >= 1 */
 static const double rankmod_table[] = {
 	1.0000000000, 0.8122523964, 0.7192230933, 0.6597539554,
@@ -209,30 +234,22 @@ static const double rankmod_table[] = {
 
 bool network_rankmod(const struct network *network, double *rankmod)
 {
-	const struct l_queue_entry *entry;
-	int n;
-	int nmax;
+	unsigned int n;
+	unsigned int nmax;
+	const struct network_info *info = network_find_info(
+					network->ssid, network->security, &n);
 
-	for (n = 0, entry = l_queue_get_entries(networks); entry;
-						entry = entry->next, n += 1) {
-		const struct network_info *info = entry->data;
+	if (!info)
+		return false;
 
-		if (info->type != network->security)
-			continue;
+	nmax = L_ARRAY_SIZE(rankmod_table);
 
-		if (strcmp(info->ssid, network->ssid))
-			continue;
+	if (n >= nmax)
+		n = nmax - 1;
 
-		nmax = L_ARRAY_SIZE(rankmod_table);
+	*rankmod = rankmod_table[n];
 
-		if (n >= nmax)
-			n = nmax - 1;
-
-		*rankmod = rankmod_table[n];
-		return true;
-	}
-
-	return false;
+	return true;
 }
 
 struct network *network_create(struct device *device,
@@ -416,8 +433,6 @@ static struct scan_bss *network_select_bss(struct wiphy *wiphy,
 {
 	struct l_queue *bss_list = network->bss_list;
 	const struct l_queue_entry *bss_entry;
-
-	/* TODO: sort the list by RSSI, potentially other criteria. */
 
 	switch (network->security) {
 	case SECURITY_NONE:
@@ -682,4 +697,56 @@ void network_exit()
 {
 	l_queue_destroy(networks, l_free);
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_NETWORK_INTERFACE);
+}
+
+int network_rank_compare(const void *a, const void *b, void *user)
+{
+	const struct network *new_network = a;
+	const struct network *network = b;
+
+	return network->rank - new_network->rank;
+}
+
+void network_rank_update(struct network *network)
+{
+	bool connected;
+	unsigned int n;
+	const struct network_info *info = network_find_info(
+					network->ssid, network->security, &n);
+	int rank;
+
+	/*
+	 * Theoretically there may be difference between the BSS selection
+	 * here and in network_select_bss but those should be rare cases.
+	 */
+	struct scan_bss *best_bss = l_queue_peek_head(network->bss_list);
+
+	connected = device_get_connected_network(network->device) == network;
+
+	/*
+	 * The rank should separate networks into four groups that use
+	 * non-overlapping ranges for:
+	 *   - current connected network,
+	 *   - other networks we've connected to before,
+	 *   - networks with preprovisioned settings file that we haven't
+	 *     used yet,
+	 *   - other networks.
+	 *
+	 * Within the 2nd group the last connection time is the main factor,
+	 * for the other two groups it's the BSS rank - mainly signal strength.
+	 */
+	if (connected)
+		rank = INT_MAX;
+	else if (info) {
+		if (info->connected_time.tv_sec != 0) {
+			if (n >= L_ARRAY_SIZE(rankmod_table))
+				n = L_ARRAY_SIZE(rankmod_table) - 1;
+
+			rank = rankmod_table[n] * best_bss->rank + USHRT_MAX;
+		} else
+			rank = best_bss->rank;
+	} else
+		rank = (int) best_bss->rank - USHRT_MAX; /* Negative rank */
+
+	network->rank = rank;
 }
