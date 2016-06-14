@@ -29,11 +29,14 @@
 #include <net/if_arp.h>
 #include <net/if.h>
 #include <linux/if_ether.h>
+#include <errno.h>
+
 #include <ell/ell.h>
 
 #include "linux/nl80211.h"
 #include "src/wiphy.h"
 #include "src/device.h"
+#include "src/scan.h"
 #include "src/netdev.h"
 
 struct netdev {
@@ -41,6 +44,10 @@ struct netdev {
 	char name[IFNAMSIZ];
 	uint32_t type;
 	uint8_t addr[ETH_ALEN];
+
+	netdev_event_func_t event_filter;
+	netdev_connect_cb_t connect_cb;
+	void *user_data;
 };
 
 static struct l_netlink *rtnl = NULL;
@@ -158,6 +165,64 @@ static bool netdev_match(const void *a, const void *b)
 struct netdev *netdev_find(int ifindex)
 {
 	return l_queue_find(netdev_list, netdev_match, L_UINT_TO_PTR(ifindex));
+}
+
+static void netdev_cmd_authenticate_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	if (l_genl_msg_get_error(msg) >= 0) {
+		if (netdev->event_filter)
+			netdev->event_filter(netdev,
+						NETDEV_EVENT_AUTHENTICATING,
+						netdev->user_data);
+
+		return;
+	}
+
+	if (netdev->connect_cb)
+		netdev->connect_cb(netdev, NETDEV_RESULT_AUTHENTICATION_FAILED,
+						netdev->user_data);
+}
+
+static struct l_genl_msg *netdev_build_cmd_authenticate(struct netdev *netdev,
+							struct scan_bss *bss)
+{
+	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ,
+						4, &bss->frequency);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID,
+						bss->ssid_len, bss->ssid);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
+
+	return msg;
+}
+
+int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
+				struct eapol_sm *sm,
+				netdev_event_func_t event_filter,
+				netdev_connect_cb_t cb, void *user_data)
+{
+	struct l_genl_msg *authenticate;
+
+	authenticate = netdev_build_cmd_authenticate(netdev, bss);
+	if (!authenticate)
+		return -EINVAL;
+
+	if (!l_genl_family_send(nl80211, authenticate,
+				netdev_cmd_authenticate_cb, netdev, NULL))
+		return -EIO;
+
+	netdev->event_filter = event_filter;
+	netdev->connect_cb = cb;
+	netdev->user_data = user_data;
+
+	return 0;
 }
 
 static void netdev_get_interface_callback(struct l_genl_msg *msg,
