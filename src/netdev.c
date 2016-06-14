@@ -225,6 +225,12 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	return 0;
 }
 
+int netdev_disconnect(struct netdev *netdev,
+				netdev_disconnect_cb_t cb, void *user_data)
+{
+	return 0;
+}
+
 static void netdev_get_interface_callback(struct l_genl_msg *msg,
 								void *user_data)
 {

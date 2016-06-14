@@ -49,6 +49,8 @@ typedef void (*netdev_connect_cb_t)(struct netdev *netdev,
 typedef void (*netdev_event_func_t)(struct netdev *netdev,
 					enum netdev_event event,
 					void *user_data);
+typedef void (*netdev_disconnect_cb_t)(struct netdev *netdev, bool result,
+					void *user_data);
 
 void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 				uint8_t linkmode, uint8_t operstate,
@@ -63,6 +65,8 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 				struct eapol_sm *sm,
 				netdev_event_func_t event_filter,
 				netdev_connect_cb_t cb, void *user_data);
+int netdev_disconnect(struct netdev *netdev,
+				netdev_disconnect_cb_t cb, void *user_data);
 
 struct netdev *netdev_find(int ifindex);
 
