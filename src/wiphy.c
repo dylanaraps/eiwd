@@ -140,11 +140,6 @@ static const char *device_state_to_string(enum device_state state)
 	return "invalid";
 }
 
-struct network *device_get_connected_network(struct device *device)
-{
-	return device->connected_network;
-}
-
 bool device_is_busy(struct device *device)
 {
 	if (device->state != DEVICE_STATE_DISCONNECTED &&

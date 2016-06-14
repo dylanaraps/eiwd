@@ -116,6 +116,11 @@ void __device_watch_call_removed(struct device *device)
 	}
 }
 
+struct network *device_get_connected_network(struct device *device)
+{
+	return device->connected_network;
+}
+
 void device_disassociated(struct device *device)
 {
 	struct network *network = device->connected_network;
