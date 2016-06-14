@@ -207,11 +207,6 @@ static void network_free(void *data)
 	network_remove(network, -ESHUTDOWN);
 }
 
-const uint8_t *device_get_address(struct device *device)
-{
-	return netdev_get_address(device->netdev);
-}
-
 void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
 {
 	const struct l_queue_entry *device_entry;
