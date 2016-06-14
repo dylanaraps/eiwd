@@ -140,15 +140,6 @@ static const char *device_state_to_string(enum device_state state)
 	return "invalid";
 }
 
-bool device_is_busy(struct device *device)
-{
-	if (device->state != DEVICE_STATE_DISCONNECTED &&
-			device->state != DEVICE_STATE_AUTOCONNECT)
-		return true;
-
-	return false;
-}
-
 struct wiphy *device_get_wiphy(struct device *device)
 {
 	return device->wiphy;

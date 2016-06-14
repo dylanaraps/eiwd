@@ -131,6 +131,15 @@ const char *device_get_path(struct device *device)
 	return path;
 }
 
+bool device_is_busy(struct device *device)
+{
+	if (device->state != DEVICE_STATE_DISCONNECTED &&
+			device->state != DEVICE_STATE_AUTOCONNECT)
+		return true;
+
+	return false;
+}
+
 void device_disassociated(struct device *device)
 {
 	struct network *network = device->connected_network;
