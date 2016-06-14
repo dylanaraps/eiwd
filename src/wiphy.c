@@ -54,37 +54,6 @@
 
 static struct l_genl_family *nl80211 = NULL;
 
-enum device_state {
-	DEVICE_STATE_DISCONNECTED = 0,	/* Disconnected, no auto-connect */
-	DEVICE_STATE_AUTOCONNECT,	/* Disconnected, try auto-connect */
-	DEVICE_STATE_CONNECTING,	/* Connecting */
-	DEVICE_STATE_CONNECTED,
-	DEVICE_STATE_DISCONNECTING,
-};
-
-struct device {
-	uint32_t index;
-	enum device_state state;
-	struct l_queue *bss_list;
-	struct l_queue *old_bss_list;
-	struct l_dbus_message *scan_pending;
-	struct l_hashmap *networks;
-	struct l_queue *networks_sorted;
-	struct scan_bss *connected_bss;
-	struct network *connected_network;
-	struct l_queue *autoconnect_list;
-	struct l_dbus_message *connect_pending;
-	struct l_dbus_message *disconnect_pending;
-	struct l_io *eapol_io;
-
-	uint32_t pairwise_new_key_cmd_id;
-	uint32_t pairwise_set_key_cmd_id;
-	uint32_t group_new_key_cmd_id;
-
-	struct wiphy *wiphy;
-	struct netdev *netdev;
-};
-
 struct wiphy {
 	uint32_t id;
 	char name[20];
