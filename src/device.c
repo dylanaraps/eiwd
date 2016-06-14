@@ -24,6 +24,8 @@
 #include <config.h>
 #endif
 
+#include <stdio.h>
+
 #include <ell/ell.h>
 
 #include "src/common.h"
@@ -119,6 +121,14 @@ void __device_watch_call_removed(struct device *device)
 struct network *device_get_connected_network(struct device *device)
 {
 	return device->connected_network;
+}
+
+const char *device_get_path(struct device *device)
+{
+	static char path[12];
+
+	snprintf(path, sizeof(path), "/%u", device->index);
+	return path;
 }
 
 void device_disassociated(struct device *device)

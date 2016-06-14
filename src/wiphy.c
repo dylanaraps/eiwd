@@ -221,14 +221,6 @@ static void network_free(void *data)
 	network_remove(network, -ESHUTDOWN);
 }
 
-const char *device_get_path(struct device *device)
-{
-	static char path[12];
-
-	snprintf(path, sizeof(path), "/%u", device->index);
-	return path;
-}
-
 const uint8_t *device_get_address(struct device *device)
 {
 	return netdev_get_address(device->netdev);
