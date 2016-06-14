@@ -212,11 +212,6 @@ const uint8_t *device_get_address(struct device *device)
 	return netdev_get_address(device->netdev);
 }
 
-uint32_t device_get_ifindex(struct device *device)
-{
-	return device->index;
-}
-
 void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
 {
 	const struct l_queue_entry *device_entry;

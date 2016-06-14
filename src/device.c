@@ -145,6 +145,11 @@ struct wiphy *device_get_wiphy(struct device *device)
 	return device->wiphy;
 }
 
+uint32_t device_get_ifindex(struct device *device)
+{
+	return device->index;
+}
+
 void device_disassociated(struct device *device)
 {
 	struct network *network = device->connected_network;
