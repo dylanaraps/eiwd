@@ -629,7 +629,7 @@ static bool destroy_hwsim_radio(int radio_id)
 
 static pid_t start_hostapd(const char *config_file, const char *interface_name)
 {
-	char *argv[5];
+	char *argv[7];
 	char *ctrl_interface;
 	pid_t pid;
 
@@ -639,8 +639,10 @@ static pid_t start_hostapd(const char *config_file, const char *interface_name)
 	argv[0] = "hostapd";
 	argv[1] = "-g";
 	argv[2] = ctrl_interface;
-	argv[3] = (char *) config_file;
-	argv[4] = NULL;
+	argv[3] = "-i";
+	argv[4] = (char *) interface_name;
+	argv[5] = (char *) config_file;
+	argv[6] = NULL;
 
 	pid = execute_program(argv, false);
 	if (pid < 0) {
