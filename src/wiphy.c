@@ -193,19 +193,6 @@ static void device_lost_beacon(struct device *device)
 	device_disassociated(device);
 }
 
-static void genl_connect_cb(struct l_genl_msg *msg, void *user_data)
-{
-	struct device *device = user_data;
-
-	if (l_genl_msg_get_error(msg) < 0) {
-		if (device->connect_pending)
-			dbus_pending_reply(&device->connect_pending,
-				dbus_error_failed(device->connect_pending));
-
-		device_disassociated(device);
-	}
-}
-
 enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy, uint16_t mask)
 {
 	mask &= wiphy->pairwise_ciphers;
@@ -218,45 +205,6 @@ enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy, uint16_t mask)
 		return IE_RSN_CIPHER_SUITE_TKIP;
 
 	return 0;
-}
-
-static int mlme_authenticate_cmd(struct network *network, struct scan_bss *bss)
-{
-	struct device *device = network_get_device(network);
-	const char *ssid = network_get_ssid(network);
-	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
-	struct l_genl_msg *msg;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
-	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &device->index);
-	msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &bss->frequency);
-	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
-	msg_append_attr(msg, NL80211_ATTR_SSID, strlen(ssid), ssid);
-	msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
-	l_genl_family_send(nl80211, msg, genl_connect_cb, device, NULL);
-
-	return 0;
-}
-
-void device_connect_network(struct device *device, struct network *network,
-				struct scan_bss *bss,
-				struct l_dbus_message *message)
-{
-	struct l_dbus *dbus = dbus_get_bus();
-
-	device->connect_pending = l_dbus_message_ref(message);
-
-	device->connected_bss = bss;
-	device->connected_network = network;
-
-	device_enter_state(device, DEVICE_STATE_CONNECTING);
-
-	mlme_authenticate_cmd(network, bss);
-
-	l_dbus_property_changed(dbus, device_get_path(device),
-				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
-	l_dbus_property_changed(dbus, network_get_path(network),
-				IWD_NETWORK_INTERFACE, "Connected");
 }
 
 static void bss_free(void *data)

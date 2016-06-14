@@ -27,6 +27,7 @@
 #include <ell/ell.h>
 
 #include "src/common.h"
+#include "src/netdev.h"
 #include "src/dbus.h"
 #include "src/network.h"
 #include "src/device.h"
@@ -129,6 +130,70 @@ void device_disassociated(struct device *device)
 	device->connected_network = NULL;
 
 	device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
+
+	l_dbus_property_changed(dbus, device_get_path(device),
+				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
+	l_dbus_property_changed(dbus, network_get_path(network),
+				IWD_NETWORK_INTERFACE, "Connected");
+}
+
+static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
+					void *user_data)
+{
+	struct device *device = user_data;
+
+	if (result != NETDEV_RESULT_OK) {
+		if (device->connect_pending)
+			dbus_pending_reply(&device->connect_pending,
+				dbus_error_failed(device->connect_pending));
+
+		device_disassociated(device);
+		return;
+	}
+}
+
+static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
+					void *user_data)
+{
+	switch (event) {
+	case NETDEV_EVENT_AUTHENTICATING:
+		l_debug("Authenticating");
+		break;
+	case NETDEV_EVENT_ASSOCIATING:
+		l_debug("Associating");
+		break;
+	case NETDEV_EVENT_4WAY_HANDSHAKE:
+		l_debug("Handshaking");
+		break;
+	case NETDEV_EVENT_SETTING_KEYS:
+		l_debug("Setting keys");
+		break;
+	case NETDEV_EVENT_LOST_BEACON:
+		l_debug("Beacon lost");
+		break;
+	};
+}
+
+void device_connect_network(struct device *device, struct network *network,
+				struct scan_bss *bss,
+				struct l_dbus_message *message)
+{
+	struct l_dbus *dbus = dbus_get_bus();
+
+	device->connect_pending = l_dbus_message_ref(message);
+
+	if (netdev_connect(device->netdev, bss, NULL,
+					device_netdev_event,
+					device_connect_cb, device) < 0) {
+		dbus_pending_reply(&device->connect_pending,
+				dbus_error_failed(device->connect_pending));
+		return;
+	}
+
+	device->connected_bss = bss;
+	device->connected_network = network;
+
+	device_enter_state(device, DEVICE_STATE_CONNECTING);
 
 	l_dbus_property_changed(dbus, device_get_path(device),
 				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
