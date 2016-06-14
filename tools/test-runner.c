@@ -394,6 +394,11 @@ static bool wait_for_socket(const char *socket, useconds_t wait_time)
 	return false;
 }
 
+static void hashmap_string_destroy(void *value)
+{
+	l_free(value);
+}
+
 static void create_dbus_system_conf(void)
 {
 	FILE *fp;
@@ -788,7 +793,7 @@ error_exit:
 
 static bool configure_hw_radios(struct l_settings *hw_settings,
 						int hwsim_radio_ids[],
-						char *interface_names_out[])
+						struct l_hashmap *if_name_map)
 {
 	char interface_name[7];
 	char phy_name[7];
@@ -834,7 +839,7 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 			goto configure;
 		}
 
-		radio_config_group = radio_conf_list[i++];
+		radio_config_group = radio_conf_list[i];
 
 		if (!l_settings_has_group(hw_settings, radio_config_group)) {
 			l_error("No radio configuration group [%s] found in "
@@ -889,33 +894,35 @@ configure:
 			goto exit;
 		}
 
-		interface_names_out[num_radios_created] =
-							strdup(interface_name);
+		l_hashmap_insert(if_name_map,
+					has_hw_conf ?
+						l_strdup(radio_conf_list[i++]) :
+						l_strdup(interface_name),
+					l_strdup(interface_name));
 
 		num_radios_created++;
 	}
-
-	interface_names_out[num_radios_created + 1] = NULL;
 
 exit:
 	l_strfreev(radio_conf_list);
 	return status;
 }
 
-static void destroy_hw_radios(int hwsim_radio_ids[],
-				char *interface_names_in[])
+static void destroy_hw_radios(int hwsim_radio_ids[])
 {
 	int i = 0;
 
-	while (interface_names_in[i]) {
-		set_interface_state(interface_names_in[i],
-					HW_INTERFACE_STATE_DOWN);
+	while (hwsim_radio_ids[i] != -1) {
+		char *if_name;
 
-		delete_interface(interface_names_in[i]);
-		l_debug("Removed interface %s", interface_names_in[i]);
+		if_name = l_strdup_printf("%s%d", HW_INTERFACE_PREFIX, i);
 
-		interface_names_in[i] = NULL;
+		set_interface_state(if_name, HW_INTERFACE_STATE_DOWN);
+		delete_interface(if_name);
 
+		l_debug("Removed interface %s", if_name);
+
+		l_free(if_name);
 		i++;
 	}
 
@@ -931,9 +938,20 @@ static void destroy_hw_radios(int hwsim_radio_ids[],
 	}
 }
 
+static void get_next_avail_if(const void *key, void *value, void *data)
+{
+	char **if_name = (char **) data;
+
+	if (!*if_name && !strcmp(key, value)) {
+		*if_name = l_strdup(value);
+
+		l_debug("Found available interface %s", (char *) *if_name);
+	}
+}
+
 static bool configure_hostapd_instances(struct l_settings *hw_settings,
 						char *config_dir_path,
-						char *interface_names_in[],
+						struct l_hashmap *if_name_map,
 						pid_t hostapd_pids_out[])
 {
 	char **hostap_keys;
@@ -950,7 +968,7 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 	while (hostap_keys[i]) {
 		char hostapd_config_file_path[PATH_MAX];
 		const char *hostapd_config_file;
-		char *interface_name;
+		char *if_name;
 
 		hostapd_config_file =
 			l_settings_get_value(hw_settings,
@@ -970,10 +988,21 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 			return false;
 		}
 
-		interface_name = interface_names_in[i];
+		if_name = l_hashmap_remove(if_name_map, hostap_keys[i]);
+
+		if (!if_name)
+			l_hashmap_foreach(if_name_map, get_next_avail_if,
+								&if_name);
+		if (if_name) {
+			l_hashmap_remove(if_name_map, if_name);
+		} else {
+			l_error("Failed to find available interface.");
+			return false;
+		}
 
 		hostapd_pids_out[i] = start_hostapd(hostapd_config_file_path,
-								interface_name);
+								if_name);
+		l_free(if_name);
 
 		if (hostapd_pids_out[i] < 1)
 			return false;
@@ -1279,11 +1308,11 @@ static void create_network_and_run_tests(const void *key, void *value,
 								void *data)
 {
 	int hwsim_radio_ids[HWSIM_RADIOS_MAX];
-	char *interface_names[HWSIM_RADIOS_MAX];
 	pid_t hostapd_pids[HWSIM_RADIOS_MAX];
 	pid_t iwd_pid;
 	char *config_dir_path;
 	struct l_settings *hw_settings;
+	struct l_hashmap *if_name_map;
 	struct l_queue *test_queue;
 	struct l_queue *test_stats_queue;
 
@@ -1309,10 +1338,13 @@ static void create_network_and_run_tests(const void *key, void *value,
 	if (!hw_settings)
 		return;
 
+	if_name_map = l_hashmap_string_new();
+	if (!if_name_map)
+		return;
+
 	l_info("Configuring network...");
 
-	if (!configure_hw_radios(hw_settings, hwsim_radio_ids,
-							interface_names))
+	if (!configure_hw_radios(hw_settings, hwsim_radio_ids, if_name_map))
 		goto exit_hwsim;
 
 	list_hwsim_radios();
@@ -1320,7 +1352,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 	list_interfaces();
 
 	if (!configure_hostapd_instances(hw_settings, config_dir_path,
-						interface_names, hostapd_pids))
+						if_name_map, hostapd_pids))
 		goto exit_hostapd;
 
 	iwd_pid = start_iwd();
@@ -1342,8 +1374,9 @@ exit_hostapd:
 	destroy_hostapd_instances(hostapd_pids);
 
 exit_hwsim:
-	destroy_hw_radios(hwsim_radio_ids, interface_names);
+	destroy_hw_radios(hwsim_radio_ids);
 
+	l_hashmap_destroy(if_name_map, hashmap_string_destroy);
 	l_settings_free(hw_settings);
 }
 
