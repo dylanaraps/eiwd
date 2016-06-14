@@ -26,6 +26,9 @@
 
 #include <ell/ell.h>
 
+#include "src/common.h"
+#include "src/dbus.h"
+#include "src/network.h"
 #include "src/device.h"
 
 struct device_watchlist_item {
@@ -110,6 +113,27 @@ void __device_watch_call_removed(struct device *device)
 		if (item->removed)
 			item->removed(device, item->userdata);
 	}
+}
+
+void device_disassociated(struct device *device)
+{
+	struct network *network = device->connected_network;
+	struct l_dbus *dbus = dbus_get_bus();
+
+	if (!network)
+		return;
+
+	network_disconnected(network);
+
+	device->connected_bss = NULL;
+	device->connected_network = NULL;
+
+	device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
+
+	l_dbus_property_changed(dbus, device_get_path(device),
+				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
+	l_dbus_property_changed(dbus, network_get_path(network),
+				IWD_NETWORK_INTERFACE, "Connected");
 }
 
 bool device_init(void)

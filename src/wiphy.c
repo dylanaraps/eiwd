@@ -184,27 +184,6 @@ void device_enter_state(struct device *device, enum device_state state)
 	device->state = state;
 }
 
-static void device_disassociated(struct device *device)
-{
-	struct network *network = device->connected_network;
-	struct l_dbus *dbus = dbus_get_bus();
-
-	if (!network)
-		return;
-
-	network_disconnected(network);
-
-	device->connected_bss = NULL;
-	device->connected_network = NULL;
-
-	device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
-
-	l_dbus_property_changed(dbus, device_get_path(device),
-				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
-	l_dbus_property_changed(dbus, network_get_path(network),
-				IWD_NETWORK_INTERFACE, "Connected");
-}
-
 static void device_lost_beacon(struct device *device)
 {
 	if (device->connect_pending)

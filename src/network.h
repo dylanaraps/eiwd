@@ -24,6 +24,7 @@
 
 struct device;
 struct network;
+struct scan_bss;
 
 bool network_seen(struct network *network, struct timespec *when);
 bool network_connected(struct network *network);
