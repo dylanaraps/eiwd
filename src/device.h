@@ -73,13 +73,12 @@ struct network *device_get_connected_network(struct device *device);
 const char *device_get_path(struct device *device);
 bool device_is_busy(struct device *device);
 struct wiphy *device_get_wiphy(struct device *device);
+uint32_t device_get_ifindex(struct device *device);
+const uint8_t *device_get_address(struct device *device);
 
 void device_connect_network(struct device *device, struct network *network,
 				struct scan_bss *bss,
 				struct l_dbus_message *message);
-
-uint32_t device_get_ifindex(struct device *device);
-const uint8_t *device_get_address(struct device *device);
 
 struct device *device_create(struct wiphy *wiphy, struct netdev *netdev);
 void device_remove(struct device *device);
