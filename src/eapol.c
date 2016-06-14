@@ -739,6 +739,11 @@ void eapol_sm_set_tx_user_data(struct eapol_sm *sm, void *user_data)
 	sm->tx_user_data = user_data;
 }
 
+uint32_t eapol_sm_get_pairwise_cipher(struct eapol_sm *sm)
+{
+	return sm->pairwise_cipher;
+}
+
 static bool eapol_sm_ifindex_match(void *data, void *user_data)
 {
 	struct eapol_sm *sm = data;
