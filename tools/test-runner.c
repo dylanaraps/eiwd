@@ -918,9 +918,11 @@ static void destroy_hw_radios(int hwsim_radio_ids[])
 		if_name = l_strdup_printf("%s%d", HW_INTERFACE_PREFIX, i);
 
 		set_interface_state(if_name, HW_INTERFACE_STATE_DOWN);
-		delete_interface(if_name);
 
-		l_debug("Removed interface %s", if_name);
+		if (delete_interface(if_name))
+			l_debug("Removed interface %s", if_name);
+		else
+			l_error("Failed to remove interface %s", if_name);
 
 		l_free(if_name);
 		i++;
