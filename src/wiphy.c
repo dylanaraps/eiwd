@@ -140,11 +140,6 @@ static const char *device_state_to_string(enum device_state state)
 	return "invalid";
 }
 
-struct wiphy *device_get_wiphy(struct device *device)
-{
-	return device->wiphy;
-}
-
 void device_enter_state(struct device *device, enum device_state state)
 {
 	l_debug("Old State: %s, new state: %s",

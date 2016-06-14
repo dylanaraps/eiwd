@@ -140,6 +140,11 @@ bool device_is_busy(struct device *device)
 	return false;
 }
 
+struct wiphy *device_get_wiphy(struct device *device)
+{
+	return device->wiphy;
+}
+
 void device_disassociated(struct device *device)
 {
 	struct network *network = device->connected_network;
