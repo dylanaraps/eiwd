@@ -744,6 +744,11 @@ uint32_t eapol_sm_get_pairwise_cipher(struct eapol_sm *sm)
 	return sm->pairwise_cipher;
 }
 
+uint32_t eapol_sm_get_group_cipher(struct eapol_sm *sm)
+{
+	return sm->group_cipher;
+}
+
 static bool eapol_sm_ifindex_match(void *data, void *user_data)
 {
 	struct eapol_sm *sm = data;

@@ -189,6 +189,7 @@ void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data);
 void eapol_sm_set_tx_user_data(struct eapol_sm *sm, void *user_data);
 
 uint32_t eapol_sm_get_pairwise_cipher(struct eapol_sm *sm);
+uint32_t eapol_sm_get_group_cipher(struct eapol_sm *sm);
 
 struct l_io *eapol_open_pae(uint32_t index);
 
