@@ -1142,13 +1142,12 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	return device;
 }
 
-void device_remove(struct device *device)
+static void device_free(void *user)
 {
+	struct device *device = user;
 	struct l_dbus *dbus;
 
 	l_debug("");
-
-	l_queue_remove(device_list, device);
 
 	if (device->scan_pending)
 		dbus_pending_reply(&device->scan_pending,
@@ -1176,6 +1175,14 @@ void device_remove(struct device *device)
 					NULL, NULL);
 
 	l_free(device);
+}
+
+void device_remove(struct device *device)
+{
+	if (!l_queue_remove(device_list, device))
+		return;
+
+	device_free(device);
 }
 
 struct wiphy *wiphy_find(int wiphy_id)
@@ -1676,7 +1683,7 @@ bool wiphy_exit(void)
 	l_queue_destroy(wiphy_list, wiphy_free);
 	wiphy_list = NULL;
 
-	l_queue_destroy(device_list, (l_queue_destroy_func_t) device_remove);
+	l_queue_destroy(device_list, device_free);
 	device_list = NULL;
 
 	nl80211 = NULL;
