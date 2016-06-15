@@ -185,6 +185,12 @@ struct netdev *netdev_find(int ifindex)
 	return l_queue_find(netdev_list, netdev_match, L_UINT_TO_PTR(ifindex));
 }
 
+static void netdev_deauthenticate_event(struct l_genl_msg *msg,
+							struct netdev *netdev)
+{
+	l_debug("");
+}
+
 static void netdev_cmd_associate_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
@@ -417,6 +423,9 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 	switch (cmd) {
 	case NL80211_CMD_AUTHENTICATE:
 		netdev_authenticate_event(msg, netdev);
+		break;
+	case NL80211_CMD_DEAUTHENTICATE:
+		netdev_deauthenticate_event(msg, netdev);
 		break;
 	}
 }

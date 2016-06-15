@@ -836,12 +836,6 @@ static void mlme_associate_event(struct l_genl_msg *msg, struct device *device)
 						operstate_cb, device);
 }
 
-static void mlme_deauthenticate_event(struct l_genl_msg *msg,
-							struct device *device)
-{
-	l_debug("");
-}
-
 static void mlme_disconnect_event(struct l_genl_msg *msg,
 					struct device *device)
 {
@@ -1539,9 +1533,6 @@ static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 	switch (cmd) {
 	case NL80211_CMD_ASSOCIATE:
 		mlme_associate_event(msg, device);
-		break;
-	case NL80211_CMD_DEAUTHENTICATE:
-		mlme_deauthenticate_event(msg, device);
 		break;
 	case NL80211_CMD_DISCONNECT:
 		mlme_disconnect_event(msg, device);
