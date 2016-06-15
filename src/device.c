@@ -28,7 +28,12 @@
 
 #include <ell/ell.h>
 
+#include "src/iwd.h"
 #include "src/common.h"
+#include "src/ie.h"
+#include "src/eapol.h"
+#include "src/wiphy.h"
+#include "src/scan.h"
 #include "src/netdev.h"
 #include "src/dbus.h"
 #include "src/network.h"
@@ -217,11 +222,65 @@ void device_connect_network(struct device *device, struct network *network,
 				struct scan_bss *bss,
 				struct l_dbus_message *message)
 {
+	enum security security = network_get_security(network);
+	struct wiphy *wiphy = device->wiphy;
 	struct l_dbus *dbus = dbus_get_bus();
+	struct eapol_sm *sm = NULL;
+
+	if (security == SECURITY_PSK || security == SECURITY_8021X) {
+		uint16_t pairwise_ciphers, group_ciphers;
+		uint8_t rsne_buf[256];
+		struct ie_rsn_info info;
+
+		sm = eapol_sm_new();
+
+		eapol_sm_set_authenticator_address(sm, bss->addr);
+		eapol_sm_set_supplicant_address(sm,
+				netdev_get_address(device->netdev));
+
+		memset(&info, 0, sizeof(info));
+
+		if (security == SECURITY_PSK)
+			info.akm_suites =
+				bss->sha256 ? IE_RSN_AKM_SUITE_PSK_SHA256 :
+						IE_RSN_AKM_SUITE_PSK;
+		else
+			info.akm_suites =
+				bss->sha256 ? IE_RSN_AKM_SUITE_8021X_SHA256 :
+						IE_RSN_AKM_SUITE_8021X;
+
+		bss_get_supported_ciphers(bss,
+					&pairwise_ciphers, &group_ciphers);
+
+		info.pairwise_ciphers = wiphy_select_cipher(wiphy,
+							pairwise_ciphers);
+		info.group_cipher = wiphy_select_cipher(wiphy, group_ciphers);
+
+		/* RSN takes priority */
+		if (bss->rsne) {
+			ie_build_rsne(&info, rsne_buf);
+			eapol_sm_set_ap_rsn(sm, bss->rsne, bss->rsne[1] + 2);
+			eapol_sm_set_own_rsn(sm, rsne_buf, rsne_buf[1] + 2);
+		} else {
+			ie_build_wpa(&info, rsne_buf);
+			eapol_sm_set_ap_wpa(sm, bss->wpa, bss->wpa[1] + 2);
+			eapol_sm_set_own_wpa(sm, rsne_buf, rsne_buf[1] + 2);
+		}
+
+		if (security == SECURITY_PSK)
+			eapol_sm_set_pmk(sm, network_get_psk(network));
+		else
+			eapol_sm_set_8021x_config(sm,
+					network_get_settings(network));
+
+		eapol_sm_set_user_data(sm, device);
+		eapol_sm_set_tx_user_data(sm,
+				L_INT_TO_PTR(l_io_get_fd(device->eapol_io)));
+	}
 
 	device->connect_pending = l_dbus_message_ref(message);
 
-	if (netdev_connect(device->netdev, bss, NULL,
+	if (netdev_connect(device->netdev, bss, sm,
 					device_netdev_event,
 					device_connect_cb, device) < 0) {
 		dbus_pending_reply(&device->connect_pending,

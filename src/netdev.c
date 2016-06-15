@@ -34,7 +34,12 @@
 #include <ell/ell.h>
 
 #include "linux/nl80211.h"
+
+#include "src/iwd.h"
 #include "src/wiphy.h"
+#include "src/ie.h"
+#include "src/eapol.h"
+#include "src/crypto.h"
 #include "src/device.h"
 #include "src/scan.h"
 #include "src/netdev.h"
@@ -48,6 +53,8 @@ struct netdev {
 	netdev_event_func_t event_filter;
 	netdev_connect_cb_t connect_cb;
 	void *user_data;
+	struct l_genl_msg *associate_msg;
+	struct eapol_sm *sm;
 };
 
 static struct l_netlink *rtnl = NULL;
@@ -151,6 +158,17 @@ static void netdev_free(void *data)
 	struct netdev *netdev = data;
 
 	l_debug("Freeing netdev %s[%d]", netdev->name, netdev->index);
+
+	if (netdev->sm) {
+		eapol_sm_free(netdev->sm);
+		netdev->sm = NULL;
+	}
+
+	if (netdev->associate_msg) {
+		l_genl_msg_unref(netdev->associate_msg);
+		netdev->associate_msg = NULL;
+	}
+
 	l_free(netdev);
 }
 
@@ -165,6 +183,126 @@ static bool netdev_match(const void *a, const void *b)
 struct netdev *netdev_find(int ifindex)
 {
 	return l_queue_find(netdev_list, netdev_match, L_UINT_TO_PTR(ifindex));
+}
+
+static void netdev_cmd_associate_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	/* Wait for associate event */
+	if (l_genl_msg_get_error(msg) >= 0) {
+		if (netdev->event_filter)
+			netdev->event_filter(netdev,
+						NETDEV_EVENT_ASSOCIATING,
+						netdev->user_data);
+
+		if (netdev->sm) {
+			eapol_start(netdev->index, netdev->sm);
+			netdev->sm = NULL;
+		}
+
+		return;
+	}
+
+	if (netdev->connect_cb)
+		netdev->connect_cb(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
+						netdev->user_data);
+}
+
+static struct l_genl_msg *netdev_build_cmd_associate(struct netdev *netdev,
+							struct scan_bss *bss,
+							struct eapol_sm *sm)
+{
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_ASSOCIATE, 512);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ,
+						4, &bss->frequency);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID,
+						bss->ssid_len, bss->ssid);
+
+	if (sm) {
+		uint32_t cipher;
+		uint32_t nl_cipher;
+		size_t ie_len;
+		const uint8_t *ie;
+
+		cipher = eapol_sm_get_pairwise_cipher(sm);
+		if (cipher == IE_RSN_CIPHER_SUITE_CCMP)
+			nl_cipher = CRYPTO_CIPHER_CCMP;
+		else
+			nl_cipher = CRYPTO_CIPHER_TKIP;
+
+		l_genl_msg_append_attr(msg, NL80211_ATTR_CIPHER_SUITES_PAIRWISE,
+					4, &nl_cipher);
+
+		cipher = eapol_sm_get_group_cipher(sm);
+		if (cipher == IE_RSN_CIPHER_SUITE_CCMP)
+			nl_cipher = CRYPTO_CIPHER_CCMP;
+		else
+			nl_cipher = CRYPTO_CIPHER_TKIP;
+
+		l_genl_msg_append_attr(msg, NL80211_ATTR_CIPHER_SUITE_GROUP,
+					4, &nl_cipher);
+
+		l_genl_msg_append_attr(msg, NL80211_ATTR_CONTROL_PORT, 0, NULL);
+
+		ie = eapol_sm_get_own_ie(sm, &ie_len);
+		if (ie)
+			l_genl_msg_append_attr(msg, NL80211_ATTR_IE,
+								ie_len, ie);
+	}
+
+	return msg;
+}
+
+static void netdev_authenticate_event(struct l_genl_msg *msg,
+							struct netdev *netdev)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	int err;
+
+	l_debug("");
+
+	err = l_genl_msg_get_error(msg);
+	if (err < 0) {
+		l_error("authentication failed %s (%d)", strerror(-err), err);
+		goto error;
+	}
+
+	if (!l_genl_attr_init(&attr, msg)) {
+		l_debug("attr init failed");
+		goto error;
+	}
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_TIMED_OUT:
+			l_warn("authentication timed out");
+			goto error;
+		}
+	}
+
+	if (!netdev->associate_msg)
+		return;
+
+	if (l_genl_family_send(nl80211, netdev->associate_msg,
+				netdev_cmd_associate_cb, netdev, NULL) > 0) {
+		netdev->associate_msg = NULL;
+		return;
+	}
+
+	l_genl_msg_unref(netdev->associate_msg);
+	netdev->associate_msg = NULL;
+
+error:
+	if (netdev->connect_cb)
+		netdev->connect_cb(netdev, NETDEV_RESULT_AUTHENTICATION_FAILED,
+						netdev->user_data);
 }
 
 static void netdev_cmd_authenticate_cb(struct l_genl_msg *msg, void *user_data)
@@ -209,18 +347,30 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 				netdev_connect_cb_t cb, void *user_data)
 {
 	struct l_genl_msg *authenticate;
+	struct l_genl_msg *associate;
 
 	authenticate = netdev_build_cmd_authenticate(netdev, bss);
 	if (!authenticate)
 		return -EINVAL;
 
+	associate = netdev_build_cmd_associate(netdev, bss, sm);
+	if (!associate) {
+		l_genl_msg_unref(authenticate);
+		return -EINVAL;
+	}
+
 	if (!l_genl_family_send(nl80211, authenticate,
-				netdev_cmd_authenticate_cb, netdev, NULL))
+				netdev_cmd_authenticate_cb, netdev, NULL)) {
+		l_genl_msg_unref(associate);
+		l_genl_msg_unref(authenticate);
 		return -EIO;
+	}
 
 	netdev->event_filter = event_filter;
 	netdev->connect_cb = cb;
 	netdev->user_data = user_data;
+	netdev->sm = sm;
+	netdev->associate_msg = associate;
 
 	return 0;
 }
@@ -229,6 +379,46 @@ int netdev_disconnect(struct netdev *netdev,
 				netdev_disconnect_cb_t cb, void *user_data)
 {
 	return 0;
+}
+
+static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = NULL;
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	uint8_t cmd;
+
+	cmd = l_genl_msg_get_command(msg);
+
+	l_debug("MLME notification %u", cmd);
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_IFINDEX:
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid interface index attribute");
+				return;
+			}
+
+			netdev = netdev_find(*((uint32_t *) data));
+			break;
+		}
+	}
+
+	if (!netdev) {
+		l_warn("MLME notification is missing ifindex attribute");
+		return;
+	}
+
+	switch (cmd) {
+	case NL80211_CMD_AUTHENTICATE:
+		netdev_authenticate_event(msg, netdev);
+		break;
+	}
 }
 
 static void netdev_get_interface_callback(struct l_genl_msg *msg,
@@ -410,6 +600,10 @@ bool netdev_init(struct l_genl_family *in)
 	if (!l_genl_family_dump(nl80211, msg, netdev_get_interface_callback,
 								NULL, NULL))
 		l_error("Getting all interface information failed");
+
+	if (!l_genl_family_register(nl80211, "mlme", netdev_mlme_notify,
+								NULL, NULL))
+		l_error("Registering for MLME notification failed");
 
 	return true;
 }
