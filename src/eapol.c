@@ -749,6 +749,15 @@ uint32_t eapol_sm_get_group_cipher(struct eapol_sm *sm)
 	return sm->group_cipher;
 }
 
+const uint8_t *eapol_sm_get_own_ie(struct eapol_sm *sm, size_t *out_ie_len)
+{
+	if (!sm->own_ie)
+		return NULL;
+
+	*out_ie_len = sm->own_ie[1] + 2;
+	return sm->own_ie;
+}
+
 static bool eapol_sm_ifindex_match(void *data, void *user_data)
 {
 	struct eapol_sm *sm = data;
