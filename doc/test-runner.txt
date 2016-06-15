@@ -23,7 +23,7 @@ OS:
 	 5. iw			3.17
 	 6. python		2.7
 	 7. haveged		no ver. avail.
-	 8. hostapd		2.4
+	 8. hostapd		commit id: 31d3692
 	 9. <iwd>/tools/hwsim	0.0
 	10. <iwd>/src/iwd	0.0
 
@@ -212,8 +212,48 @@ rad1=ap2.conf
 Configuring Access Points
 -------------------------
 The test-runner tool makes use of the hostapd service to emulate the access
-points (AP). The hostapd service comes preinstalled on most Linux
-distributions.
+points (AP). Despite the fact that hostapd service comes preinstalled on most
+Linux distributions, test-runner uses some of the recently introduced features,
+which may only be available from the master tree of the hostapd repository:
+
+	git://w1.fi/srv/git/hostap.git
+
+		OR (its HTTP version)
+
+	http://w1.fi/hostap.git
+
+commit id: 31d3692fe5d56c05753ed4a70c7943979e1d29e7 or above is required.
+
+The sequence of commands to clone, build and install hostapd may look as
+follows:
+
+	$ git clone git://w1.fi/srv/git/hostap.git
+
+	$ cd hostap/hostapd
+
+	$ cp defconfig .config
+
+	$ vi .config
+
+	Find the following line:
+
+		#CONFIG_DRIVER_NL80211=y
+
+	and uncomment it by removing the '#' sign.
+
+	$ make install
+
+Note: If 'make install' fails with the netlink warnings you may need to
+install libnl-1.0pre8 (or later).
+
+Note: It is recommended to override the pre-installed version of hostapd with
+the newly built one to avoid any confusion. The simplest way to make sure
+that the correct version of hostapd is used is to execute the following
+command:
+
+	$ hostapd -h
+
+Make sure that '-i' option is available in the list of option.
 For more information on hostapd refer to this page:
 
 	http://linuxwireless.org/en/users/Documentation/hostapd/
