@@ -655,9 +655,6 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 
 	__device_watch_call_added(device);
 
-	netdev_set_linkmode_and_operstate(device->index, 1,
-						IF_OPER_DORMANT, NULL, NULL);
-
 	scan_ifindex_add(device->index);
 	device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 
@@ -700,9 +697,6 @@ static void device_free(void *user)
 	l_io_destroy(device->eapol_io);
 
 	scan_ifindex_remove(device->index);
-	netdev_set_linkmode_and_operstate(device->index, 0, IF_OPER_DOWN,
-					NULL, NULL);
-
 	l_free(device);
 }
 

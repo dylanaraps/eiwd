@@ -103,7 +103,7 @@ static size_t rta_add_u8(void *rta_buf, unsigned short type, uint8_t value)
 	return RTA_SPACE(sizeof(uint8_t));
 }
 
-void netdev_set_linkmode_and_operstate(uint32_t ifindex,
+static void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 				uint8_t linkmode, uint8_t operstate,
 				netdev_command_func_t callback, void *user_data)
 {
@@ -174,6 +174,9 @@ static void netdev_free(void *data)
 		l_genl_msg_unref(netdev->associate_msg);
 		netdev->associate_msg = NULL;
 	}
+
+	netdev_set_linkmode_and_operstate(netdev->index, 0, IF_OPER_DOWN,
+						NULL, NULL);
 
 	l_free(netdev);
 }
@@ -1013,6 +1016,9 @@ static void netdev_get_interface_callback(struct l_genl_msg *msg,
 	memcpy(netdev->name, ifname, ifname_len);
 
 	l_queue_push_tail(netdev_list, netdev);
+
+	netdev_set_linkmode_and_operstate(netdev->index, 1,
+						IF_OPER_DORMANT, NULL, NULL);
 
 	l_debug("Found interface %s[%d]", netdev->name, netdev->index);
 	device_create(wiphy, netdev);

@@ -53,10 +53,6 @@ typedef void (*netdev_event_func_t)(struct netdev *netdev,
 typedef void (*netdev_disconnect_cb_t)(struct netdev *netdev, bool result,
 					void *user_data);
 
-void netdev_set_linkmode_and_operstate(uint32_t ifindex,
-				uint8_t linkmode, uint8_t operstate,
-				netdev_command_func_t cb, void *user_data);
-
 const uint8_t *netdev_get_address(struct netdev *netdev);
 uint32_t netdev_get_ifindex(struct netdev *netdev);
 uint32_t netdev_get_iftype(struct netdev *netdev);
