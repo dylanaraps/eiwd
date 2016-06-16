@@ -194,6 +194,18 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 		device_disassociated(device);
 		return;
 	}
+
+	if (device->connect_pending) {
+		struct l_dbus_message *reply;
+
+		reply = l_dbus_message_new_method_return(
+						device->connect_pending);
+		l_dbus_message_set_arguments(reply, "");
+		dbus_pending_reply(&device->connect_pending, reply);
+	}
+
+	network_connected(device->connected_network);
+	device_enter_state(device, DEVICE_STATE_CONNECTED);
 }
 
 static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
