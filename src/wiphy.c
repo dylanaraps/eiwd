@@ -41,9 +41,7 @@
 #include "src/dbus.h"
 #include "src/scan.h"
 #include "src/util.h"
-#include "src/eapol.h"
 #include "src/netdev.h"
-#include "src/mpdu.h"
 #include "src/network.h"
 #include "src/device.h"
 #include "src/wiphy.h"
@@ -199,12 +197,13 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 	return NULL;
 }
 
-static void device_disconnect_cb(struct l_genl_msg *msg, void *user_data)
+static void device_disconnect_cb(struct netdev *netdev, bool success,
+					void *user_data)
 {
 	struct device *device = user_data;
 	struct l_dbus_message *reply;
 
-	if (l_genl_msg_get_error(msg) < 0) {
+	if (!success) {
 		dbus_pending_reply(&device->disconnect_pending,
 				dbus_error_failed(device->disconnect_pending));
 		return;
@@ -222,9 +221,6 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 						void *user_data)
 {
 	struct device *device = user_data;
-	struct l_genl_msg *msg;
-	uint16_t reason_code = MPDU_REASON_CODE_DEAUTH_LEAVING;
-	enum security security;
 
 	l_debug("");
 
@@ -235,16 +231,8 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 	if (!device->connected_bss)
 		return dbus_error_not_connected(message);
 
-	security = network_get_security(device->connected_network);
-	if (security == SECURITY_PSK || security == SECURITY_8021X)
-		eapol_cancel(device->index);
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_DEAUTHENTICATE, 512);
-	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &device->index);
-	msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
-	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
-						device->connected_bss->addr);
-	l_genl_family_send(nl80211, msg, device_disconnect_cb, device, NULL);
+	if (netdev_disconnect(device->netdev, device_disconnect_cb, device) < 0)
+		return dbus_error_failed(message);
 
 	device_enter_state(device, DEVICE_STATE_DISCONNECTING);
 

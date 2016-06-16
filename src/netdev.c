@@ -57,6 +57,7 @@ struct netdev {
 
 	netdev_event_func_t event_filter;
 	netdev_connect_cb_t connect_cb;
+	netdev_disconnect_cb_t disconnect_cb;
 	void *user_data;
 	struct l_genl_msg *associate_msg;
 	struct eapol_sm *sm;
@@ -311,6 +312,21 @@ static void netdev_deauthenticate_event(struct l_genl_msg *msg,
 							struct netdev *netdev)
 {
 	l_debug("");
+}
+
+static void netdev_cmd_deauthenticate_cb(struct l_genl_msg *msg,
+								void *user_data)
+{
+	struct netdev *netdev = user_data;
+	bool r;
+
+	if (l_genl_msg_get_error(msg) < 0)
+		r = false;
+	else
+		r = true;
+
+	if (netdev->disconnect_cb)
+		netdev->disconnect_cb(netdev, r, netdev->user_data);
 }
 
 static struct l_genl_msg *netdev_build_cmd_deauthenticate(struct netdev *netdev,
@@ -908,6 +924,21 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 int netdev_disconnect(struct netdev *netdev,
 				netdev_disconnect_cb_t cb, void *user_data)
 {
+	struct l_genl_msg *deauthenticate;
+
+	deauthenticate = netdev_build_cmd_deauthenticate(netdev,
+					MPDU_REASON_CODE_DEAUTH_LEAVING);
+	if (!l_genl_family_send(nl80211, deauthenticate,
+				netdev_cmd_deauthenticate_cb, netdev, NULL)) {
+		l_genl_msg_unref(deauthenticate);
+		return -EIO;
+	}
+
+	netdev->disconnect_cb = cb;
+	netdev->user_data = user_data;
+
+	eapol_cancel(netdev->index);
+
 	return 0;
 }
 
