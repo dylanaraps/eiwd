@@ -43,20 +43,12 @@
 #include "src/wiphy.h"
 #include "src/network.h"
 
-struct network_info {
-	char ssid[33];
-	uint32_t type;
-	struct timespec connected_time;		/* Time last connected */
-	struct timespec seen_time;		/* Time last seen */
-};
-
 struct network {
 	char *object_path;
 	struct device *device;
-	char ssid[33];
+	struct network_info *info;
 	unsigned char *psk;
 	unsigned int agent_request;
-	enum security security;
 	struct l_queue *bss_list;
 	struct l_settings *settings;
 	bool update_psk:1;  /* Whether PSK should be written to storage */
@@ -104,44 +96,13 @@ static bool network_info_match(const void *a, const void *b)
 
 bool network_seen(struct network *network, struct timespec *when)
 {
-	struct timespec mtim;
-	int err;
-	struct network_info *info;
-	struct network_info search;
-	const char *strtype;
-
-	search.type = network->security;
-	strncpy(search.ssid, network->ssid, 32);
-	search.ssid[32] = 0;
-
-	info = l_queue_find(networks, network_info_match, &search);
-	if (info)
-		goto update;
-
-	strtype = security_to_str(network->security);
-	if (!strtype)
-		return false;
-
-	err = storage_network_get_mtime(strtype, network->ssid, &mtim);
-	if (err < 0)
-		return false;
-
-	info = l_new(struct network_info, 1);
-	info->type = network->security;
-	strncpy(info->ssid, network->ssid, 32);
-	info->ssid[32] = 0;
-	memcpy(&info->connected_time, &mtim, sizeof(struct timespec));
-
-	l_queue_insert(networks, info, timespec_compare, NULL);
-
-update:
 	/*
 	 * Update the last seen time.  Note this is not preserved across
 	 * the network going out of range and back, or program restarts.
 	 * It may be desirable for it to be preserved in some way but
 	 * without too frequent filesystem writes.
 	 */
-	memcpy(&info->seen_time, when, sizeof(struct timespec));
+	memcpy(&network->info->seen_time, when, sizeof(struct timespec));
 
 	return true;
 }
@@ -149,23 +110,16 @@ update:
 bool network_connected(struct network *network)
 {
 	int err;
-	struct network_info *info;
-	struct network_info search;
 	const char *strtype;
 
-	search.type = network->security;
-	strncpy(search.ssid, network->ssid, 32);
-	search.ssid[32] = 0;
+	l_queue_remove(networks, network->info);
+	l_queue_push_head(networks, network->info);
 
-	info = l_queue_remove_if(networks, network_info_match, &search);
-	if (!info)
+	strtype = security_to_str(network_get_security(network));
+	if (!strtype)
 		return false;
 
-	strtype = security_to_str(network->security);
-	if (!strtype)
-		goto fail;
-
-	err = storage_network_touch(strtype, network->ssid);
+	err = storage_network_touch(strtype, network->info->ssid);
 	if (err == -ENOENT) {
 		/*
 		 * Write an empty settings file to keep track of the
@@ -175,23 +129,19 @@ bool network_connected(struct network *network)
 		 * only on a successful connect.
 		 */
 		if (!network_settings_load(network))
-			goto fail;
+			return false;
 
-		storage_network_sync(strtype, network->ssid, network->settings);
+		storage_network_sync(strtype, network->info->ssid,
+					network->settings);
 	} else
-		goto fail;
+		return false;
 
-	err = storage_network_get_mtime(strtype, network->ssid,
-					&info->connected_time);
+	err = storage_network_get_mtime(strtype, network->info->ssid,
+					&network->info->connected_time);
 	if (err < 0)
-		goto fail;
+		return false;
 
-	l_queue_push_head(networks, info);
 	return true;
-
-fail:
-	l_free(info);
-	return false;
 }
 
 void network_disconnected(struct network *network)
@@ -199,27 +149,23 @@ void network_disconnected(struct network *network)
 	network_settings_close(network);
 }
 
-static const struct network_info *network_find_info(const char *ssid,
-							enum security security,
-							unsigned int *index)
+static int network_find_rank_index(const struct network_info *info)
 {
 	const struct l_queue_entry *entry;
 	int n;
 
 	for (n = 0, entry = l_queue_get_entries(networks); entry;
-						entry = entry->next, n += 1) {
-		const struct network_info *info = entry->data;
+						entry = entry->next) {
+		struct network_info *network = entry->data;
 
-		if (info->type != security)
-			continue;
+		if (network == info)
+			return n;
 
-		if (strcmp(info->ssid, ssid))
-			continue;
-
-		return info;
+		if (network->seen_count)
+			n++;
 	}
 
-	return NULL;
+	return -1;
 }
 
 /* First 64 entries calculated by 1 / pow(n, 0.3) for n >= 1 */
@@ -244,12 +190,10 @@ static const double rankmod_table[] = {
 
 bool network_rankmod(const struct network *network, double *rankmod)
 {
-	unsigned int n;
-	unsigned int nmax;
-	const struct network_info *info = network_find_info(
-					network->ssid, network->security, &n);
+	int n = network_find_rank_index(network->info);
+	int nmax;
 
-	if (!info)
+	if (n == -1)
 		return false;
 
 	nmax = L_ARRAY_SIZE(rankmod_table);
@@ -262,6 +206,48 @@ bool network_rankmod(const struct network *network, double *rankmod)
 	return true;
 }
 
+static void network_info_free(void *data)
+{
+	struct network_info *network = data;
+
+	l_free(network);
+}
+
+static struct network_info *network_info_get(const char *ssid,
+						enum security security)
+{
+	struct network_info *network, search;
+
+	search.type = security;
+	strcpy(search.ssid, ssid);
+
+	network = l_queue_find(networks, network_info_match, &search);
+
+	if (!network) {
+		network = l_new(struct network_info, 1);
+		strcpy(network->ssid, ssid);
+		network->type = security;
+
+		l_queue_push_tail(networks, network);
+	}
+
+	network->seen_count++;
+
+	return network;
+}
+
+static void network_info_put(struct network_info *network)
+{
+	if (!networks)
+		return;
+
+	if (--network->seen_count)
+		return;
+
+	l_queue_remove(networks, network);
+	network_info_free(network);
+}
+
 struct network *network_create(struct device *device,
 				uint8_t *ssid, uint8_t ssid_len,
 				enum security security)
@@ -270,8 +256,7 @@ struct network *network_create(struct device *device,
 
 	network = l_new(struct network, 1);
 	network->device = device;
-	memcpy(network->ssid, ssid, ssid_len);
-	network->security = security;
+	network->info = network_info_get((char *) ssid, security);
 
 	network->bss_list = l_queue_new();
 
@@ -280,7 +265,7 @@ struct network *network_create(struct device *device,
 
 const char *network_get_ssid(const struct network *network)
 {
-	return network->ssid;
+	return network->info->ssid;
 }
 
 struct device *network_get_device(const struct network *network)
@@ -295,7 +280,7 @@ const char *network_get_path(const struct network *network)
 
 enum security network_get_security(const struct network *network)
 {
-	return network->security;
+	return network->info->type;
 }
 
 const unsigned char *network_get_psk(const struct network *network)
@@ -322,11 +307,11 @@ bool network_settings_load(struct network *network)
 	if (network->settings)
 		return true;
 
-	strtype = security_to_str(network->security);
+	strtype = security_to_str(network_get_security(network));
 	if (!strtype)
 		return false;
 
-	network->settings = storage_network_open(strtype, network->ssid);
+	network->settings = storage_network_open(strtype, network->info->ssid);
 
 	return network->settings != NULL;
 }
@@ -343,7 +328,7 @@ void network_sync_psk(struct network *network)
 	l_settings_set_value(network->settings, "Security",
 						"PreSharedKey", hex);
 	l_free(hex);
-	storage_network_sync("psk", network->ssid, network->settings);
+	storage_network_sync("psk", network->info->ssid, network->settings);
 }
 
 void network_settings_close(struct network *network)
@@ -415,7 +400,7 @@ void network_connect_failed(struct network *network)
 	 * Connection failed, if PSK try asking for the passphrase
 	 * once more
 	 */
-	if (network->security == SECURITY_PSK) {
+	if (network_get_security(network) == SECURITY_PSK) {
 		network->update_psk = false;
 		network->ask_psk = true;
 	}
@@ -444,7 +429,7 @@ static struct scan_bss *network_select_bss(struct wiphy *wiphy,
 	struct l_queue *bss_list = network->bss_list;
 	const struct l_queue_entry *bss_entry;
 
-	switch (network->security) {
+	switch (network_get_security(network)) {
 	case SECURITY_NONE:
 		/* Pick the first bss (strongest signal) */
 		return l_queue_peek_head(bss_list);
@@ -502,8 +487,9 @@ static void passphrase_callback(enum agent_result result,
 	l_free(network->psk);
 	network->psk = l_malloc(32);
 
-	if (crypto_psk_from_passphrase(passphrase, (uint8_t *) network->ssid,
-					strlen(network->ssid),
+	if (crypto_psk_from_passphrase(passphrase,
+					(uint8_t *) network->info->ssid,
+					strlen(network->info->ssid),
 					network->psk) < 0) {
 		l_error("PMK generation failed.  "
 			"Ensure Crypto Engine is properly configured");
@@ -603,7 +589,7 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	if (!bss)
 		return dbus_error_not_supported(message);
 
-	switch (network->security) {
+	switch (network_get_security(network)) {
 	case SECURITY_PSK:
 		return network_connect_psk(network, bss, message);
 	case SECURITY_NONE:
@@ -625,7 +611,7 @@ static bool network_property_get_name(struct l_dbus *dbus,
 {
 	struct network *network = user_data;
 
-	l_dbus_message_builder_append_basic(builder, 's', network->ssid);
+	l_dbus_message_builder_append_basic(builder, 's', network->info->ssid);
 	return true;
 }
 
@@ -690,6 +676,9 @@ void network_remove(struct network *network, int reason)
 
 	l_queue_destroy(network->bss_list, NULL);
 	l_free(network->psk);
+
+	network_info_put(network->info);
+
 	l_free(network);
 }
 
@@ -705,7 +694,9 @@ void network_init()
 
 void network_exit()
 {
-	l_queue_destroy(networks, l_free);
+	l_queue_destroy(networks, network_info_free);
+	networks = NULL;
+
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_NETWORK_INTERFACE);
 }
 
@@ -720,9 +711,6 @@ int network_rank_compare(const void *a, const void *b, void *user)
 void network_rank_update(struct network *network)
 {
 	bool connected;
-	unsigned int n;
-	const struct network_info *info = network_find_info(
-					network->ssid, network->security, &n);
 	int rank;
 
 	/*
@@ -747,16 +735,24 @@ void network_rank_update(struct network *network)
 	 */
 	if (connected)
 		rank = INT_MAX;
-	else if (info) {
-		if (info->connected_time.tv_sec != 0) {
-			if (n >= L_ARRAY_SIZE(rankmod_table))
-				n = L_ARRAY_SIZE(rankmod_table) - 1;
+	else if (network->info->connected_time.tv_sec != 0) {
+		int n = network_find_rank_index(network->info);
 
-			rank = rankmod_table[n] * best_bss->rank + USHRT_MAX;
-		} else
-			rank = best_bss->rank;
+		if (n >= (int) L_ARRAY_SIZE(rankmod_table))
+			n = L_ARRAY_SIZE(rankmod_table) - 1;
+
+		rank = rankmod_table[n] * best_bss->rank + USHRT_MAX;
 	} else
 		rank = (int) best_bss->rank - USHRT_MAX; /* Negative rank */
 
 	network->rank = rank;
+}
+
+void network_info_foreach(network_info_foreach_func_t function,
+				void *user_data)
+{
+	const struct l_queue_entry *entry;
+
+	for (entry = l_queue_get_entries(networks); entry; entry = entry->next)
+		function(entry->data, user_data);
 }

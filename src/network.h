@@ -21,6 +21,7 @@
  */
 
 #include <stdbool.h>
+#include <time.h>
 
 struct device;
 struct network;
@@ -62,3 +63,17 @@ void network_exit();
 
 int network_rank_compare(const void *a, const void *b, void *user);
 void network_rank_update(struct network *network);
+
+struct network_info {
+	char ssid[33];
+	enum security type;
+	struct timespec connected_time;	/* Time last connected */
+	struct timespec seen_time;	/* Time last seen */
+	int seen_count;			/* Ref count for network.info */
+};
+
+typedef void (*network_info_foreach_func_t)(const struct network_info *info,
+						void *user_data);
+
+void network_info_foreach(network_info_foreach_func_t function,
+				void *user_data);
