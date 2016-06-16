@@ -495,23 +495,6 @@ static void setting_keys_failed(struct device *device, uint16_t reason_code)
 	device_enter_state(device, DEVICE_STATE_DISCONNECTING);
 }
 
-static void handshake_failed(uint32_t ifindex,
-				const uint8_t *aa, const uint8_t *spa,
-				uint16_t reason_code, void *user_data)
-{
-	struct device *device = user_data;
-	struct l_genl_msg *msg;
-
-	l_error("4-Way Handshake failed for ifindex: %d", ifindex);
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_DEAUTHENTICATE, 512);
-	msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
-	msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
-	msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, aa);
-	l_genl_family_send(nl80211, msg, deauthenticate_cb, device, NULL);
-	device_enter_state(device, DEVICE_STATE_DISCONNECTING);
-}
-
 static void mlme_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 {
 	struct device *device = data;
@@ -1445,7 +1428,6 @@ bool wiphy_init(struct l_genl_family *in)
 
 	__eapol_set_install_tk_func(wiphy_set_tk);
 	__eapol_set_install_gtk_func(wiphy_set_gtk);
-	__eapol_set_deauthenticate_func(handshake_failed);
 
 	wiphy_list = l_queue_new();
 	device_list = l_queue_new();

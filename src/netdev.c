@@ -311,6 +311,27 @@ static void netdev_operstate_cb(bool success, void *user_data)
 		netdev->connect_cb(netdev, result, netdev->user_data);
 }
 
+static void netdev_handshake_failed(uint32_t ifindex,
+					const uint8_t *aa, const uint8_t *spa,
+					uint16_t reason_code, void *user_data)
+{
+	struct l_genl_msg *msg;
+	struct netdev *netdev;
+
+	netdev = netdev_find(ifindex);
+	if (!netdev)
+		return;
+
+	l_error("4-Way Handshake failed for ifindex: %d", ifindex);
+
+	msg = netdev_build_cmd_deauthenticate(netdev, reason_code);
+	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
+
+	if (netdev->connect_cb)
+		netdev->connect_cb(netdev, NETDEV_RESULT_HANDSHAKE_FAILED,
+						netdev->user_data);
+}
+
 static void netdev_associate_event(struct l_genl_msg *msg,
 							struct netdev *netdev)
 {
@@ -771,6 +792,8 @@ bool netdev_init(struct l_genl_family *in)
 	if (!l_genl_family_register(nl80211, "mlme", netdev_mlme_notify,
 								NULL, NULL))
 		l_error("Registering for MLME notification failed");
+
+	__eapol_set_deauthenticate_func(netdev_handshake_failed);
 
 	return true;
 }
