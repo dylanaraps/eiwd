@@ -33,21 +33,20 @@
 #include <ell/ell.h>
 
 #include "linux/nl80211.h"
+
 #include "src/iwd.h"
+#include "src/common.h"
 #include "src/ie.h"
-#include "src/wiphy.h"
+#include "src/crypto.h"
 #include "src/dbus.h"
 #include "src/scan.h"
 #include "src/util.h"
-#include "src/common.h"
 #include "src/eapol.h"
-#include "src/agent.h"
-#include "src/crypto.h"
 #include "src/netdev.h"
 #include "src/mpdu.h"
-#include "src/storage.h"
 #include "src/network.h"
 #include "src/device.h"
+#include "src/wiphy.h"
 
 static struct l_genl_family *nl80211 = NULL;
 
