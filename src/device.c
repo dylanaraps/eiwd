@@ -181,6 +181,17 @@ void device_disassociated(struct device *device)
 				IWD_NETWORK_INTERFACE, "Connected");
 }
 
+static void device_lost_beacon(struct device *device)
+{
+	l_debug("%d", device->index);
+
+	if (device->connect_pending)
+		dbus_pending_reply(&device->connect_pending,
+				dbus_error_failed(device->connect_pending));
+
+	device_disassociated(device);
+}
+
 static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 					void *user_data)
 {
@@ -211,6 +222,8 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 					void *user_data)
 {
+	struct device *device = user_data;
+
 	switch (event) {
 	case NETDEV_EVENT_AUTHENTICATING:
 		l_debug("Authenticating");
@@ -225,7 +238,7 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 		l_debug("Setting keys");
 		break;
 	case NETDEV_EVENT_LOST_BEACON:
-		l_debug("Beacon lost");
+		device_lost_beacon(device);
 		break;
 	};
 }

@@ -187,6 +187,44 @@ struct netdev *netdev_find(int ifindex)
 	return l_queue_find(netdev_list, netdev_match, L_UINT_TO_PTR(ifindex));
 }
 
+static void netdev_lost_beacon(struct netdev *netdev)
+{
+	if (!netdev->event_filter)
+		return;
+
+	netdev->event_filter(netdev, NETDEV_EVENT_LOST_BEACON,
+							netdev->user_data);
+}
+
+static void netdev_cqm_event(struct l_genl_msg *msg, struct netdev *netdev)
+{
+	struct l_genl_attr attr;
+	struct l_genl_attr nested;
+	uint16_t type, len;
+	const void *data;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_CQM:
+			if (!l_genl_attr_recurse(&attr, &nested))
+				return;
+
+			while (l_genl_attr_next(&nested, &type, &len, &data)) {
+				switch (type) {
+				case NL80211_ATTR_CQM_BEACON_LOSS_EVENT:
+					netdev_lost_beacon(netdev);
+					break;
+				}
+			}
+
+			break;
+		}
+	}
+}
+
 static void netdev_deauthenticate_event(struct l_genl_msg *msg,
 							struct netdev *netdev)
 {
@@ -497,6 +535,9 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 	case NL80211_CMD_ASSOCIATE:
 		netdev_associate_event(msg, netdev);
+		break;
+	case NL80211_CMD_NOTIFY_CQM:
+		netdev_cqm_event(msg, netdev);
 		break;
 	}
 }
