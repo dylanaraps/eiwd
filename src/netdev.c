@@ -27,7 +27,7 @@
 #include <stdlib.h>
 #include <linux/rtnetlink.h>
 #include <net/if_arp.h>
-#include <net/if.h>
+#include <linux/if.h>
 #include <linux/if_ether.h>
 #include <errno.h>
 
@@ -38,6 +38,7 @@
 #include "src/iwd.h"
 #include "src/wiphy.h"
 #include "src/ie.h"
+#include "src/mpdu.h"
 #include "src/eapol.h"
 #include "src/crypto.h"
 #include "src/device.h"
@@ -55,6 +56,7 @@ struct netdev {
 	void *user_data;
 	struct l_genl_msg *associate_msg;
 	struct eapol_sm *sm;
+	uint8_t remote_addr[ETH_ALEN];
 };
 
 static struct l_netlink *rtnl = NULL;
@@ -191,6 +193,76 @@ static void netdev_deauthenticate_event(struct l_genl_msg *msg,
 	l_debug("");
 }
 
+static struct l_genl_msg *netdev_build_cmd_deauthenticate(struct netdev *netdev,
+							uint16_t reason_code)
+{
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_DEAUTHENTICATE, 128);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
+							netdev->remote_addr);
+
+	return msg;
+}
+
+static void netdev_operstate_cb(bool success, void *user_data)
+{
+	struct netdev *netdev = user_data;
+	enum netdev_result result;
+
+	if (!success) {
+		struct l_genl_msg *msg;
+
+		l_error("Setting LinkMode and OperState failed for ifindex: %d",
+				netdev->index);
+
+		msg = netdev_build_cmd_deauthenticate(netdev,
+						MPDU_REASON_CODE_UNSPECIFIED);
+		l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
+
+		result = NETDEV_RESULT_KEY_SETTING_FAILED;
+	} else
+		result = NETDEV_RESULT_OK;
+
+	if (netdev->connect_cb)
+		netdev->connect_cb(netdev, result, netdev->user_data);
+}
+
+static void netdev_associate_event(struct l_genl_msg *msg,
+							struct netdev *netdev)
+{
+	int err;
+
+	l_debug("");
+
+	err = l_genl_msg_get_error(msg);
+	if (err < 0) {
+		l_error("association failed %s (%d)", strerror(-err), err);
+		goto error;
+	}
+
+	if (netdev->sm) {
+		eapol_start(netdev->index, netdev->sm);
+		netdev->sm = NULL;
+
+		if (netdev->event_filter)
+			netdev->event_filter(netdev,
+					NETDEV_EVENT_4WAY_HANDSHAKE,
+					netdev->user_data);
+	} else
+		netdev_set_linkmode_and_operstate(netdev->index, 1, IF_OPER_UP,
+						netdev_operstate_cb, netdev);
+
+	return;
+
+error:
+	if (netdev->connect_cb)
+		netdev->connect_cb(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
+						netdev->user_data);
+}
+
 static void netdev_cmd_associate_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
@@ -201,11 +273,6 @@ static void netdev_cmd_associate_cb(struct l_genl_msg *msg, void *user_data)
 			netdev->event_filter(netdev,
 						NETDEV_EVENT_ASSOCIATING,
 						netdev->user_data);
-
-		if (netdev->sm) {
-			eapol_start(netdev->index, netdev->sm);
-			netdev->sm = NULL;
-		}
 
 		return;
 	}
@@ -377,6 +444,7 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	netdev->user_data = user_data;
 	netdev->sm = sm;
 	netdev->associate_msg = associate;
+	memcpy(netdev->remote_addr, bss->addr, ETH_ALEN);
 
 	return 0;
 }
@@ -426,6 +494,9 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 	case NL80211_CMD_DEAUTHENTICATE:
 		netdev_deauthenticate_event(msg, netdev);
+		break;
+	case NL80211_CMD_ASSOCIATE:
+		netdev_associate_event(msg, netdev);
 		break;
 	}
 }

@@ -814,28 +814,6 @@ static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
 					gtk_buf, gtk_len, rsc, rsc_len);
 }
 
-static void mlme_associate_event(struct l_genl_msg *msg, struct device *device)
-{
-	int err;
-
-	l_debug("");
-
-	err = l_genl_msg_get_error(msg);
-	if (err < 0) {
-		l_error("association failed %s (%d)", strerror(-err), err);
-		dbus_pending_reply(&device->connect_pending,
-				dbus_error_failed(device->connect_pending));
-		device_disassociated(device);
-		return;
-	}
-
-	l_info("Association completed");
-
-	if (network_get_security(device->connected_network) == SECURITY_NONE)
-		netdev_set_linkmode_and_operstate(device->index, 1, IF_OPER_UP,
-						operstate_cb, device);
-}
-
 static void mlme_disconnect_event(struct l_genl_msg *msg,
 					struct device *device)
 {
@@ -1531,9 +1509,6 @@ static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
 
 
 	switch (cmd) {
-	case NL80211_CMD_ASSOCIATE:
-		mlme_associate_event(msg, device);
-		break;
 	case NL80211_CMD_DISCONNECT:
 		mlme_disconnect_event(msg, device);
 		break;
