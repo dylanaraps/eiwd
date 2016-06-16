@@ -28,7 +28,9 @@
 #include <linux/rtnetlink.h>
 #include <net/if_arp.h>
 #include <linux/if.h>
+#include <linux/if_packet.h>
 #include <linux/if_ether.h>
+#include <sys/socket.h>
 #include <errno.h>
 
 #include <ell/ell.h>
@@ -51,6 +53,8 @@ struct netdev {
 	uint32_t type;
 	uint8_t addr[ETH_ALEN];
 
+	struct l_io *eapol_io;
+
 	netdev_event_func_t event_filter;
 	netdev_connect_cb_t connect_cb;
 	void *user_data;
@@ -72,6 +76,31 @@ static void do_debug(const char *str, void *user_data)
 	const char *prefix = user_data;
 
 	l_info("%s%s", prefix, str);
+}
+
+static bool eapol_read(struct l_io *io, void *user_data)
+{
+	struct netdev *netdev = user_data;
+	int fd = l_io_get_fd(io);
+	struct sockaddr_ll sll;
+	socklen_t sll_len;
+	ssize_t bytes;
+	uint8_t frame[2304]; /* IEEE Std 802.11 ch. 8.2.3 */
+
+	memset(&sll, 0, sizeof(sll));
+	sll_len = sizeof(sll);
+
+	bytes = recvfrom(fd, frame, sizeof(frame), 0,
+				(struct sockaddr *) &sll, &sll_len);
+	if (bytes <= 0) {
+		l_error("EAPoL read socket: %s", strerror(errno));
+		return false;
+	}
+
+	__eapol_rx_packet(netdev->index, netdev->addr, sll.sll_addr,
+								frame, bytes);
+
+	return true;
 }
 
 struct cb_data {
@@ -174,6 +203,9 @@ static void netdev_free(void *data)
 		l_genl_msg_unref(netdev->associate_msg);
 		netdev->associate_msg = NULL;
 	}
+
+	l_io_destroy(netdev->eapol_io);
+	netdev->eapol_io = NULL;
 
 	netdev_set_linkmode_and_operstate(netdev->index, 0, IF_OPER_DOWN,
 						NULL, NULL);
@@ -665,7 +697,10 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 	}
 
 	if (netdev->sm) {
+		eapol_sm_set_tx_user_data(netdev->sm,
+				L_INT_TO_PTR(l_io_get_fd(netdev->eapol_io)));
 		eapol_start(netdev->index, netdev->sm);
+
 		netdev->sm = NULL;
 
 		if (netdev->event_filter)
@@ -1014,6 +1049,13 @@ static void netdev_get_interface_callback(struct l_genl_msg *msg,
 	netdev->type = *iftype;
 	memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
 	memcpy(netdev->name, ifname, ifname_len);
+
+	netdev->eapol_io = eapol_open_pae(netdev->index);
+	if (netdev->eapol_io)
+		l_io_set_read_handler(netdev->eapol_io, eapol_read,
+								netdev, NULL);
+	else
+		l_error("Failed to open PAE socket");
 
 	l_queue_push_tail(netdev_list, netdev);
 

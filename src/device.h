@@ -51,7 +51,6 @@ struct device {
 	struct l_queue *autoconnect_list;
 	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
-	struct l_io *eapol_io;
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;

@@ -27,9 +27,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
-#include <sys/socket.h>
-#include <linux/if.h>
-#include <linux/if_packet.h>
 #include <linux/if_ether.h>
 #include <time.h>
 
@@ -75,33 +72,6 @@ static struct l_queue *device_list;
 
 static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 				struct l_queue *bss_list, void *userdata);
-
-static bool eapol_read(struct l_io *io, void *user_data)
-{
-	struct device *device = user_data;
-	struct netdev *netdev = device->netdev;
-	int fd = l_io_get_fd(io);
-	struct sockaddr_ll sll;
-	socklen_t sll_len;
-	ssize_t bytes;
-	uint8_t frame[2304]; /* IEEE Std 802.11 ch. 8.2.3 */
-
-	memset(&sll, 0, sizeof(sll));
-	sll_len = sizeof(sll);
-
-	bytes = recvfrom(fd, frame, sizeof(frame), 0,
-				(struct sockaddr *) &sll, &sll_len);
-	if (bytes <= 0) {
-		l_error("EAPoL read socket: %s", strerror(errno));
-		return false;
-	}
-
-	__eapol_rx_packet(netdev_get_ifindex(netdev),
-				netdev_get_address(netdev),
-				sll.sll_addr, frame, bytes);
-
-	return true;
-}
 
 static const char *iwd_network_get_path(struct device *device,
 					const uint8_t *ssid, size_t ssid_len,
@@ -658,13 +628,6 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	scan_ifindex_add(device->index);
 	device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 
-	device->eapol_io = eapol_open_pae(device->index);
-	if (device->eapol_io)
-		l_io_set_read_handler(device->eapol_io, eapol_read,
-								device, NULL);
-	else
-		l_error("Failed to open PAE socket");
-
 	return device;
 }
 
@@ -694,7 +657,6 @@ static void device_free(void *user)
 	l_queue_destroy(device->bss_list, bss_free);
 	l_queue_destroy(device->old_bss_list, bss_free);
 	l_queue_destroy(device->autoconnect_list, l_free);
-	l_io_destroy(device->eapol_io);
 
 	scan_ifindex_remove(device->index);
 	l_free(device);

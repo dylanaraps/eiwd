@@ -320,10 +320,6 @@ void device_connect_network(struct device *device, struct network *network,
 		else
 			eapol_sm_set_8021x_config(sm,
 					network_get_settings(network));
-
-		eapol_sm_set_user_data(sm, device);
-		eapol_sm_set_tx_user_data(sm,
-				L_INT_TO_PTR(l_io_get_fd(device->eapol_io)));
 	}
 
 	device->connect_pending = l_dbus_message_ref(message);
