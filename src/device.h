@@ -38,24 +38,6 @@ enum device_state {
 typedef void (*device_watch_func_t)(struct device *device, void *userdata);
 typedef void (*device_destroy_func_t)(void *userdata);
 
-struct device {
-	uint32_t index;
-	enum device_state state;
-	struct l_queue *bss_list;
-	struct l_queue *old_bss_list;
-	struct l_dbus_message *scan_pending;
-	struct l_hashmap *networks;
-	struct l_queue *networks_sorted;
-	struct scan_bss *connected_bss;
-	struct network *connected_network;
-	struct l_queue *autoconnect_list;
-	struct l_dbus_message *connect_pending;
-	struct l_dbus_message *disconnect_pending;
-
-	struct wiphy *wiphy;
-	struct netdev *netdev;
-};
-
 uint32_t device_watch_add(device_watch_func_t added,
 				device_watch_func_t removed,
 				void *userdata, device_destroy_func_t destroy);

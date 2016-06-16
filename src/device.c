@@ -56,6 +56,24 @@ struct autoconnect_entry {
 	struct scan_bss *bss;
 };
 
+struct device {
+	uint32_t index;
+	enum device_state state;
+	struct l_queue *bss_list;
+	struct l_queue *old_bss_list;
+	struct l_dbus_message *scan_pending;
+	struct l_hashmap *networks;
+	struct l_queue *networks_sorted;
+	struct scan_bss *connected_bss;
+	struct network *connected_network;
+	struct l_queue *autoconnect_list;
+	struct l_dbus_message *connect_pending;
+	struct l_dbus_message *disconnect_pending;
+
+	struct wiphy *wiphy;
+	struct netdev *netdev;
+};
+
 static struct l_queue *device_watches = NULL;
 static uint32_t device_next_watch_id = 0;
 
