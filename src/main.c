@@ -40,6 +40,7 @@
 #include "src/eapol.h"
 #include "src/scan.h"
 #include "src/wsc.h"
+#include "src/knownnetworks.h"
 
 #include "src/backtrace.h"
 
@@ -212,10 +213,12 @@ int main(int argc, char *argv[])
 
 	eapol_init();
 	network_init();
+	known_networks_init();
 
 	exit_status = EXIT_SUCCESS;
 	l_main_run();
 
+	known_networks_exit();
 	network_exit();
 	eapol_exit();
 

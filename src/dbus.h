@@ -29,8 +29,10 @@
 #define IWD_NETWORK_INTERFACE "net.connman.iwd.Network"
 #define IWD_AGENT_INTERFACE "net.connman.iwd.Agent"
 #define IWD_WSC_INTERFACE "net.connman.iwd.WiFiSimpleConfiguration"
+#define IWD_KNOWN_NETWORKS_INTERFACE "net.connman.iwd.KnownNetworks"
 
 #define IWD_AGENT_MANAGER_PATH "/"
+#define IWD_KNOWN_NETWORKS_PATH "/"
 
 struct l_dbus;
 
