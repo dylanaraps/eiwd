@@ -22,9 +22,15 @@
 
 #define uninitialized_var(x) x = x
 
+struct device;
+
 enum security {
 	SECURITY_NONE,
 	SECURITY_WEP,
 	SECURITY_PSK,
 	SECURITY_8021X,
 };
+
+typedef void (*iwd_device_foreach_func)(struct device *, void *data);
+
+void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data);

@@ -25,11 +25,13 @@
 #endif
 
 #include <stdio.h>
+#include <errno.h>
 
 #include <ell/ell.h>
 
 #include "src/iwd.h"
 #include "src/common.h"
+#include "src/util.h"
 #include "src/ie.h"
 #include "src/eapol.h"
 #include "src/wiphy.h"
@@ -49,6 +51,8 @@ struct device_watchlist_item {
 
 static struct l_queue *device_watches = NULL;
 static uint32_t device_next_watch_id = 0;
+
+static struct l_queue *device_list;
 
 static void device_watchlist_item_free(void *userdata)
 {
@@ -121,6 +125,36 @@ void __device_watch_call_removed(struct device *device)
 		if (item->removed)
 			item->removed(device, item->userdata);
 	}
+}
+
+void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
+{
+	const struct l_queue_entry *device_entry;
+
+	for (device_entry = l_queue_get_entries(device_list); device_entry;
+					device_entry = device_entry->next) {
+		struct device *device = device_entry->data;
+
+		func(device, user_data);
+	}
+}
+
+static void bss_free(void *data)
+{
+	struct scan_bss *bss = data;
+	const char *addr;
+
+	addr = util_address_to_string(bss->addr);
+	l_debug("Freeing BSS %s", addr);
+
+	scan_bss_free(bss);
+}
+
+static void network_free(void *data)
+{
+	struct network *network = data;
+
+	network_remove(network, -ESHUTDOWN);
 }
 
 struct network *device_get_connected_network(struct device *device)
@@ -343,15 +377,89 @@ void device_connect_network(struct device *device, struct network *network,
 				IWD_NETWORK_INTERFACE, "Connected");
 }
 
+struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
+{
+	struct device *device;
+	struct l_dbus *dbus = dbus_get_bus();
+	uint32_t ifindex = netdev_get_ifindex(netdev);
+
+	device = l_new(struct device, 1);
+	device->bss_list = l_queue_new();
+	device->networks = l_hashmap_new();
+	l_hashmap_set_hash_function(device->networks, l_str_hash);
+	l_hashmap_set_compare_function(device->networks,
+				(l_hashmap_compare_func_t) strcmp);
+	device->networks_sorted = l_queue_new();
+	device->index = ifindex;
+	device->wiphy = wiphy;
+	device->netdev = netdev;
+
+	l_queue_push_head(device_list, device);
+
+	if (!l_dbus_object_add_interface(dbus, device_get_path(device),
+					IWD_DEVICE_INTERFACE, device))
+		l_info("Unable to register %s interface", IWD_DEVICE_INTERFACE);
+
+	__device_watch_call_added(device);
+
+	scan_ifindex_add(device->index);
+	device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
+
+	return device;
+}
+
+static void device_free(void *user)
+{
+	struct device *device = user;
+	struct l_dbus *dbus;
+
+	l_debug("");
+
+	if (device->scan_pending)
+		dbus_pending_reply(&device->scan_pending,
+				dbus_error_aborted(device->scan_pending));
+
+	if (device->connect_pending)
+		dbus_pending_reply(&device->connect_pending,
+				dbus_error_aborted(device->connect_pending));
+
+	__device_watch_call_removed(device);
+
+	dbus = dbus_get_bus();
+	l_dbus_unregister_object(dbus, device_get_path(device));
+
+	l_queue_destroy(device->networks_sorted, NULL);
+	l_hashmap_destroy(device->networks, network_free);
+
+	l_queue_destroy(device->bss_list, bss_free);
+	l_queue_destroy(device->old_bss_list, bss_free);
+	l_queue_destroy(device->autoconnect_list, l_free);
+
+	scan_ifindex_remove(device->index);
+	l_free(device);
+}
+
+void device_remove(struct device *device)
+{
+	if (!l_queue_remove(device_list, device))
+		return;
+
+	device_free(device);
+}
+
 bool device_init(void)
 {
 	device_watches = l_queue_new();
+	device_list = l_queue_new();
 
 	return true;
 }
 
 bool device_exit(void)
 {
+	l_queue_destroy(device_list, device_free);
+	device_list = NULL;
+
 	l_queue_destroy(device_watches, device_watchlist_item_free);
 
 	return true;
