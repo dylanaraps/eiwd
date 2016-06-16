@@ -141,6 +141,8 @@ bool network_connected(struct network *network)
 	if (err < 0)
 		return false;
 
+	network->info->is_known = true;
+
 	return true;
 }
 
@@ -161,7 +163,7 @@ static int network_find_rank_index(const struct network_info *info)
 		if (network == info)
 			return n;
 
-		if (network->seen_count)
+		if (network->is_known && network->seen_count)
 			n++;
 	}
 
@@ -242,6 +244,9 @@ static void network_info_put(struct network_info *network)
 		return;
 
 	if (--network->seen_count)
+		return;
+
+	if (network->is_known)
 		return;
 
 	l_queue_remove(networks, network);
@@ -742,10 +747,58 @@ void network_rank_update(struct network *network)
 			n = L_ARRAY_SIZE(rankmod_table) - 1;
 
 		rank = rankmod_table[n] * best_bss->rank + USHRT_MAX;
-	} else
+	} else if (network->info->is_known)
+		rank = best_bss->rank;
+	else
 		rank = (int) best_bss->rank - USHRT_MAX; /* Negative rank */
 
 	network->rank = rank;
+}
+
+bool network_info_add_known(const char *ssid, enum security security)
+{
+	struct network_info *network;
+	int err;
+
+	network = l_new(struct network_info, 1);
+	strcpy(network->ssid, ssid);
+	network->type = security;
+
+	err = storage_network_get_mtime(security_to_str(security), ssid,
+					&network->connected_time);
+	if (err < 0) {
+		l_free(network);
+		return false;
+	}
+
+	network->is_known = true;
+
+	l_queue_insert(networks, network, timespec_compare, NULL);
+
+	return true;
+}
+
+bool network_info_forget_known(const char *ssid, enum security security)
+{
+	struct network_info *network, search;
+
+	search.type = security;
+	strcpy(search.ssid, ssid);
+
+	network = l_queue_remove_if(networks, network_info_match, &search);
+	if (!network)
+		return false;
+
+	if (network->seen_count) {
+		memset(&network->connected_time, 0, sizeof(struct timespec));
+
+		network->is_known = false;
+
+		l_queue_push_tail(networks, network);
+	} else
+		network_info_free(network);
+
+	return true;
 }
 
 void network_info_foreach(network_info_foreach_func_t function,

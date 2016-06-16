@@ -70,10 +70,13 @@ struct network_info {
 	struct timespec connected_time;	/* Time last connected */
 	struct timespec seen_time;	/* Time last seen */
 	int seen_count;			/* Ref count for network.info */
+	bool is_known:1;
 };
 
 typedef void (*network_info_foreach_func_t)(const struct network_info *info,
 						void *user_data);
 
+bool network_info_add_known(const char *ssid, enum security security);
+bool network_info_forget_known(const char *ssid, enum security security);
 void network_info_foreach(network_info_foreach_func_t function,
 				void *user_data);
