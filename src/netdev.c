@@ -57,6 +57,10 @@ struct netdev {
 	struct l_genl_msg *associate_msg;
 	struct eapol_sm *sm;
 	uint8_t remote_addr[ETH_ALEN];
+
+	uint32_t pairwise_new_key_cmd_id;
+	uint32_t pairwise_set_key_cmd_id;
+	uint32_t group_new_key_cmd_id;
 };
 
 static struct l_netlink *rtnl = NULL;
@@ -309,6 +313,318 @@ static void netdev_operstate_cb(bool success, void *user_data)
 
 	if (netdev->connect_cb)
 		netdev->connect_cb(netdev, result, netdev->user_data);
+}
+
+static void netdev_setting_keys_failed(struct netdev *netdev,
+							uint16_t reason_code)
+{
+	struct l_genl_msg *msg;
+
+	/*
+	 * Something went wrong with our new_key, set_key, new_key,
+	 * set_station
+	 *
+	 * Cancel all pending commands, then de-authenticate
+	 */
+	l_genl_family_cancel(nl80211, netdev->pairwise_new_key_cmd_id);
+	netdev->pairwise_new_key_cmd_id = 0;
+
+	l_genl_family_cancel(nl80211, netdev->pairwise_set_key_cmd_id);
+	netdev->pairwise_set_key_cmd_id = 0;
+
+	l_genl_family_cancel(nl80211, netdev->group_new_key_cmd_id);
+	netdev->group_new_key_cmd_id = 0;
+
+	eapol_cancel(netdev->index);
+
+	msg = netdev_build_cmd_deauthenticate(netdev,
+						MPDU_REASON_CODE_UNSPECIFIED);
+	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
+
+	if (netdev->connect_cb)
+		netdev->connect_cb(netdev, NETDEV_RESULT_KEY_SETTING_FAILED,
+					netdev->user_data);
+}
+
+static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	if (l_genl_msg_get_error(msg) < 0) {
+		l_error("Set Station failed for ifindex %d", netdev->index);
+		netdev_setting_keys_failed(netdev,
+						MPDU_REASON_CODE_UNSPECIFIED);
+		return;
+	}
+
+	netdev_set_linkmode_and_operstate(netdev->index, 1, IF_OPER_UP,
+						netdev_operstate_cb, netdev);
+}
+
+static struct l_genl_msg *netdev_build_cmd_set_station(struct netdev *netdev)
+{
+	struct l_genl_msg *msg;
+	struct nl80211_sta_flag_update flags;
+
+	flags.mask = 1 << NL80211_STA_FLAG_AUTHORIZED;
+	flags.set = flags.mask;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_SET_STATION, 512);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC,
+						ETH_ALEN, netdev->remote_addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_FLAGS2,
+				sizeof(struct nl80211_sta_flag_update), &flags);
+
+	return msg;
+}
+
+static void netdev_new_group_key_cb(struct l_genl_msg *msg, void *data)
+{
+	struct netdev *netdev = data;
+
+	netdev->group_new_key_cmd_id = 0;
+
+	if (l_genl_msg_get_error(msg) < 0) {
+		l_error("New Key for Group Key failed for ifindex: %d",
+				netdev->index);
+		goto error;
+	}
+
+	msg = netdev_build_cmd_set_station(netdev);
+
+	if (l_genl_family_send(nl80211, msg, netdev_set_station_cb,
+							netdev, NULL) > 0)
+		return;
+
+error:
+	netdev_setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+}
+
+static struct l_genl_msg *netdev_build_cmd_new_key_group(struct netdev *netdev,
+					uint32_t cipher, uint8_t key_id,
+					const uint8_t *gtk, size_t gtk_len,
+					const uint8_t *rsc, size_t rsc_len)
+{
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_NEW_KEY, 512);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_DATA, gtk_len, gtk);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_CIPHER, 4, &cipher);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_SEQ, rsc_len, rsc);
+
+	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY_DEFAULT_TYPES);
+	l_genl_msg_append_attr(msg, NL80211_KEY_DEFAULT_TYPE_MULTICAST,
+				0, NULL);
+	l_genl_msg_leave_nested(msg);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+
+	return msg;
+}
+
+static void netdev_set_gtk(uint32_t ifindex, uint8_t key_index,
+				const uint8_t *gtk, uint8_t gtk_len,
+				const uint8_t *rsc, uint8_t rsc_len,
+				uint32_t cipher, void *user_data)
+{
+	uint8_t gtk_buf[32];
+	struct netdev *netdev;
+	struct l_genl_msg *msg;
+
+	netdev = netdev_find(ifindex);
+
+	l_debug("%d", netdev->index);
+
+	switch (cipher) {
+	case CRYPTO_CIPHER_CCMP:
+		memcpy(gtk_buf, gtk, 16);
+		break;
+	case CRYPTO_CIPHER_TKIP:
+		/*
+		 * Swap the TX and RX MIC key portions for supplicant.
+		 * WPA_80211_v3_1_090922 doc's 3.3.4:
+		 *   The MIC key used on the Client for transmit (TX) is in
+		 *   bytes 24-31, and the MIC key used on the Client for
+		 *   receive (RX) is in bytes 16-23 of the PTK.  That is,
+		 *   assume that TX MIC and RX MIC referred to in Clause 8.7
+		 *   are referenced to the Authenticator. Similarly, on the AP,
+		 *   the MIC used for TX is in bytes 16-23, and the MIC key
+		 *   used for RX is in bytes 24-31 of the PTK.
+		 *
+		 * Here apply this to the GTK instead of the PTK.
+		 */
+		memcpy(gtk_buf, gtk, 16);
+		memcpy(gtk_buf + 16, gtk + 24, 8);
+		memcpy(gtk_buf + 24, gtk + 16, 8);
+		break;
+	default:
+		l_error("Unexpected cipher: %x", cipher);
+		netdev_setting_keys_failed(netdev,
+					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
+		return;
+	}
+
+	if (crypto_cipher_key_len(cipher) != gtk_len) {
+		l_error("Unexpected key length: %d", gtk_len);
+		netdev_setting_keys_failed(netdev,
+					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
+		return;
+	}
+
+	msg = netdev_build_cmd_new_key_group(netdev, cipher, key_index,
+						gtk_buf, gtk_len,
+						rsc, rsc_len);
+	netdev->group_new_key_cmd_id =
+		l_genl_family_send(nl80211, msg, netdev_new_group_key_cb,
+						netdev, NULL);
+
+	if (netdev->group_new_key_cmd_id > 0)
+		return;
+
+	l_genl_msg_unref(msg);
+	netdev_setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+}
+
+static void netdev_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
+{
+	struct netdev *netdev = data;
+
+	netdev->pairwise_set_key_cmd_id = 0;
+
+	if (l_genl_msg_get_error(msg) >= 0)
+		return;
+
+	l_error("Set Key for Pairwise Key failed for ifindex: %d",
+								netdev->index);
+	netdev_setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+}
+
+static struct l_genl_msg *netdev_build_cmd_set_key_pairwise(
+							struct netdev *netdev)
+{
+	uint8_t key_id = 0;
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_SET_KEY, 512);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_DEFAULT, 0, NULL);
+
+	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY_DEFAULT_TYPES);
+	l_genl_msg_append_attr(msg, NL80211_KEY_DEFAULT_TYPE_UNICAST, 0, NULL);
+	l_genl_msg_leave_nested(msg);
+
+	return msg;
+}
+
+static void netdev_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
+{
+	struct netdev *netdev = data;
+
+	netdev->pairwise_new_key_cmd_id = 0;
+
+	if (l_genl_msg_get_error(msg) >= 0)
+		return;
+
+	l_error("New Key for Pairwise Key failed for ifindex: %d",
+								netdev->index);
+	netdev_setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+}
+
+static struct l_genl_msg *netdev_build_cmd_new_key_pairwise(
+							struct netdev *netdev,
+							uint32_t cipher,
+							const uint8_t *aa,
+							const uint8_t *tk,
+							size_t tk_len)
+{
+	uint8_t key_id = 0;
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_NEW_KEY, 512);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_DATA, tk_len, tk);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_CIPHER, 4, &cipher);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, aa);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+
+	return msg;
+}
+
+static void netdev_set_tk(uint32_t ifindex, const uint8_t *aa,
+				const uint8_t *tk, uint32_t cipher,
+				void *user_data)
+{
+	uint8_t tk_buf[32];
+	struct netdev *netdev;
+	struct l_genl_msg *msg;
+
+	netdev = netdev_find(ifindex);
+	if (!netdev)
+		return;
+
+	l_debug("%d", netdev->index);
+
+	if (netdev->event_filter)
+		netdev->event_filter(netdev, NETDEV_EVENT_SETTING_KEYS,
+					netdev->user_data);
+
+	switch (cipher) {
+	case CRYPTO_CIPHER_CCMP:
+		memcpy(tk_buf, tk, 16);
+		break;
+	case CRYPTO_CIPHER_TKIP:
+		/*
+		 * Swap the TX and RX MIC key portions for supplicant.
+		 * WPA_80211_v3_1_090922 doc's 3.3.4:
+		 *   The MIC key used on the Client for transmit (TX) is in
+		 *   bytes 24-31, and the MIC key used on the Client for
+		 *   receive (RX) is in bytes 16-23 of the PTK.  That is,
+		 *   assume that TX MIC and RX MIC referred to in Clause 8.7
+		 *   are referenced to the Authenticator. Similarly, on the AP,
+		 *   the MIC used for TX is in bytes 16-23, and the MIC key
+		 *   used for RX is in bytes 24-31 of the PTK.
+		 */
+		memcpy(tk_buf, tk, 16);
+		memcpy(tk_buf + 16, tk + 24, 8);
+		memcpy(tk_buf + 24, tk + 16, 8);
+		break;
+	default:
+		l_error("Unexpected cipher: %x", cipher);
+		netdev_setting_keys_failed(netdev,
+				MPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER);
+		return;
+	}
+
+	msg = netdev_build_cmd_new_key_pairwise(netdev, cipher, aa,
+						tk_buf,
+						crypto_cipher_key_len(cipher));
+	netdev->pairwise_new_key_cmd_id =
+		l_genl_family_send(nl80211, msg, netdev_new_pairwise_key_cb,
+						netdev, NULL);
+	if (!netdev->pairwise_new_key_cmd_id) {
+		l_genl_msg_unref(msg);
+		goto error;
+	}
+
+	msg = netdev_build_cmd_set_key_pairwise(netdev);
+
+	netdev->pairwise_set_key_cmd_id =
+		l_genl_family_send(nl80211, msg, netdev_set_pairwise_key_cb,
+						netdev, NULL);
+	if (netdev->pairwise_set_key_cmd_id > 0)
+		return;
+
+	l_genl_msg_unref(msg);
+error:
+	netdev_setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
 }
 
 static void netdev_handshake_failed(uint32_t ifindex,
@@ -793,6 +1109,8 @@ bool netdev_init(struct l_genl_family *in)
 								NULL, NULL))
 		l_error("Registering for MLME notification failed");
 
+	__eapol_set_install_tk_func(netdev_set_tk);
+	__eapol_set_install_gtk_func(netdev_set_gtk);
 	__eapol_set_deauthenticate_func(netdev_handshake_failed);
 
 	return true;

@@ -53,10 +53,6 @@ struct device {
 	struct l_dbus_message *disconnect_pending;
 	struct l_io *eapol_io;
 
-	uint32_t pairwise_new_key_cmd_id;
-	uint32_t pairwise_set_key_cmd_id;
-	uint32_t group_new_key_cmd_id;
-
 	struct wiphy *wiphy;
 	struct netdev *netdev;
 };

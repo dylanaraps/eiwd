@@ -239,6 +239,7 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 					void *user_data)
 {
 	struct device *device = user_data;
+	struct network *network = device->connected_network;
 
 	switch (event) {
 	case NETDEV_EVENT_AUTHENTICATING:
@@ -252,6 +253,10 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 		break;
 	case NETDEV_EVENT_SETTING_KEYS:
 		l_debug("Setting keys");
+
+		/* If we got here, then our PSK works.  Save if required */
+		network_sync_psk(network);
+
 		break;
 	case NETDEV_EVENT_LOST_BEACON:
 		device_lost_beacon(device);
