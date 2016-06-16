@@ -40,6 +40,7 @@ enum netdev_event {
 	NETDEV_EVENT_4WAY_HANDSHAKE,
 	NETDEV_EVENT_SETTING_KEYS,
 	NETDEV_EVENT_LOST_BEACON,
+	NETDEV_EVENT_DISCONNECT_BY_AP,
 };
 
 typedef void (*netdev_command_func_t) (bool result, void *user_data);

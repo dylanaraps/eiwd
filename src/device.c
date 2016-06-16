@@ -192,6 +192,22 @@ static void device_lost_beacon(struct device *device)
 	device_disassociated(device);
 }
 
+static void device_disconnect_by_ap(struct device *device)
+{
+	l_debug("%d", device->index);
+
+	if (device->connect_pending) {
+		struct network *network = device->connected_network;
+
+		dbus_pending_reply(&device->connect_pending,
+				dbus_error_failed(device->connect_pending));
+
+		network_connect_failed(network);
+	}
+
+	device_disassociated(device);
+}
+
 static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 					void *user_data)
 {
@@ -240,6 +256,8 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 	case NETDEV_EVENT_LOST_BEACON:
 		device_lost_beacon(device);
 		break;
+	case NETDEV_EVENT_DISCONNECT_BY_AP:
+		device_disconnect_by_ap(device);
 	};
 }
 

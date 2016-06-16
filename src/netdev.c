@@ -225,6 +225,49 @@ static void netdev_cqm_event(struct l_genl_msg *msg, struct netdev *netdev)
 	}
 }
 
+static void netdev_disconnect_event(struct l_genl_msg *msg,
+							struct netdev *netdev)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	uint16_t reason_code = 0;
+	bool disconnect_by_ap = false;
+
+	l_debug("");
+
+	if (!l_genl_attr_init(&attr, msg)) {
+		l_error("attr init failed");
+		return;
+	}
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_REASON_CODE:
+			if (len != sizeof(uint16_t))
+				l_warn("Invalid reason code attribute");
+			else
+				reason_code = *((uint16_t *) data);
+
+			break;
+
+		case NL80211_ATTR_DISCONNECTED_BY_AP:
+			disconnect_by_ap = true;
+			break;
+		}
+	}
+
+	l_info("Received Deauthentication event, reason: %hu, from_ap: %s",
+			reason_code, disconnect_by_ap ? "true" : "false");
+
+	if (!disconnect_by_ap)
+		return;
+
+	if (netdev->event_filter)
+		netdev->event_filter(netdev, NETDEV_EVENT_DISCONNECT_BY_AP,
+							netdev->user_data);
+}
+
 static void netdev_deauthenticate_event(struct l_genl_msg *msg,
 							struct netdev *netdev)
 {
@@ -535,6 +578,9 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 	case NL80211_CMD_ASSOCIATE:
 		netdev_associate_event(msg, netdev);
+		break;
+	case NL80211_CMD_DISCONNECT:
+		netdev_disconnect_event(msg, netdev);
 		break;
 	case NL80211_CMD_NOTIFY_CQM:
 		netdev_cqm_event(msg, netdev);

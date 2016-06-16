@@ -412,14 +412,6 @@ static bool bss_match(const void *a, const void *b)
 	return !memcmp(bss_a->addr, bss_b->addr, sizeof(bss_a->addr));
 }
 
-static bool device_match(const void *a, const void *b)
-{
-	const struct device *device = a;
-	uint32_t index = L_PTR_TO_UINT(b);
-
-	return (device->index == index);
-}
-
 static void device_autoconnect_next(struct device *device)
 {
 	struct autoconnect_entry *entry;
@@ -803,56 +795,6 @@ static void wiphy_set_gtk(uint32_t ifindex, uint8_t key_index,
 	device->group_new_key_cmd_id =
 			mlme_new_group_key(device, cipher, key_index,
 					gtk_buf, gtk_len, rsc, rsc_len);
-}
-
-static void mlme_disconnect_event(struct l_genl_msg *msg,
-					struct device *device)
-{
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-	uint16_t reason_code = 0;
-	bool disconnect_by_ap = false;
-
-	l_debug("");
-
-	if (!l_genl_attr_init(&attr, msg)) {
-		l_error("attr init failed");
-		return;
-	}
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_REASON_CODE:
-			if (len != sizeof(uint16_t))
-				l_warn("Invalid reason code attribute");
-			else
-				reason_code = *((uint16_t *) data);
-
-			break;
-
-		case NL80211_ATTR_DISCONNECTED_BY_AP:
-			disconnect_by_ap = true;
-			break;
-		}
-	}
-
-	l_info("Received Deauthentication event, reason: %hu, from_ap: %s",
-			reason_code, disconnect_by_ap ? "true" : "false");
-
-	if (!disconnect_by_ap)
-		return;
-
-	if (device->connect_pending) {
-		struct network *network = device->connected_network;
-
-		dbus_pending_reply(&device->connect_pending,
-				dbus_error_failed(device->connect_pending));
-
-		network_connect_failed(network);
-	}
-
-	device_disassociated(device);
 }
 
 static bool process_network(const void *key, void *data, void *user_data)
@@ -1404,77 +1346,6 @@ static void wiphy_config_notify(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
-static void wiphy_mlme_notify(struct l_genl_msg *msg, void *user_data)
-{
-	struct wiphy *wiphy = NULL;
-	struct device *device = NULL;
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-	uint8_t cmd;
-
-	cmd = l_genl_msg_get_command(msg);
-
-	l_debug("MLME notification %u", cmd);
-
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_WIPHY:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid wiphy attribute");
-				return;
-			}
-
-			wiphy = l_queue_find(wiphy_list, wiphy_match,
-					L_UINT_TO_PTR(*((uint32_t *) data)));
-			if (!wiphy) {
-				l_warn("No wiphy structure found");
-				return;
-			}
-			break;
-
-		case NL80211_ATTR_IFINDEX:
-			if (!wiphy) {
-				l_warn("No wiphy structure found");
-				return;
-			}
-
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid interface index attribute");
-				return;
-			}
-
-			device = l_queue_find(device_list, device_match,
-					L_UINT_TO_PTR(*((uint32_t *) data)));
-			if (!device) {
-				l_warn("No interface structure found");
-				return;
-			}
-			break;
-		}
-	}
-
-	if (!wiphy) {
-		l_warn("MLME notification is missing wiphy attribute");
-		return;
-	}
-
-	if (!device) {
-		l_warn("MLME notification is missing interface attribute");
-		return;
-	}
-
-
-	switch (cmd) {
-	case NL80211_CMD_DISCONNECT:
-		mlme_disconnect_event(msg, device);
-		break;
-	}
-}
-
 static void wiphy_regulatory_notify(struct l_genl_msg *msg, void *user_data)
 {
 	struct l_genl_attr attr;
@@ -1567,10 +1438,6 @@ bool wiphy_init(struct l_genl_family *in)
 	if (!l_genl_family_register(nl80211, "config", wiphy_config_notify,
 								NULL, NULL))
 		l_error("Registering for config notification failed");
-
-	if (!l_genl_family_register(nl80211, "mlme", wiphy_mlme_notify,
-								NULL, NULL))
-		l_error("Registering for MLME notification failed");
 
 	if (!l_genl_family_register(nl80211, "regulatory",
 					wiphy_regulatory_notify, NULL, NULL))
