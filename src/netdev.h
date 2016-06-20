@@ -52,6 +52,8 @@ typedef void (*netdev_event_func_t)(struct netdev *netdev,
 					void *user_data);
 typedef void (*netdev_disconnect_cb_t)(struct netdev *netdev, bool result,
 					void *user_data);
+typedef void (*netdev_watch_func_t)(struct netdev *netdev, bool up,
+					void *user_data);
 
 const uint8_t *netdev_get_address(struct netdev *netdev);
 uint32_t netdev_get_ifindex(struct netdev *netdev);
@@ -67,6 +69,10 @@ int netdev_disconnect(struct netdev *netdev,
 				netdev_disconnect_cb_t cb, void *user_data);
 
 struct netdev *netdev_find(int ifindex);
+
+uint32_t netdev_watch_add(struct netdev *netdev, netdev_watch_func_t func,
+				void *user_data);
+bool netdev_watch_remove(struct netdev *netdev, uint32_t id);
 
 bool netdev_init(struct l_genl_family *in);
 bool netdev_exit(void);

@@ -67,6 +67,15 @@ struct netdev {
 	uint32_t pairwise_new_key_cmd_id;
 	uint32_t pairwise_set_key_cmd_id;
 	uint32_t group_new_key_cmd_id;
+
+	struct l_queue *watches;
+	uint32_t next_watch_id;
+};
+
+struct netdev_watch {
+	uint32_t id;
+	netdev_watch_func_t callback;
+	void *user_data;
 };
 
 static struct l_netlink *rtnl = NULL;
@@ -216,6 +225,8 @@ static void netdev_free(void *data)
 
 	netdev_set_linkmode_and_operstate(netdev->index, 0, IF_OPER_DOWN,
 						NULL, NULL);
+
+	l_queue_destroy(netdev->watches, l_free);
 
 	l_free(netdev);
 }
@@ -1000,6 +1011,14 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
+static void netdev_watch_notify(void *data, void *user_data)
+{
+	struct netdev_watch *watch = data;
+	struct netdev *netdev = user_data;
+
+	watch->callback(netdev, netdev->up, watch->user_data);
+}
+
 static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 {
 	struct netdev *netdev;
@@ -1014,6 +1033,8 @@ static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 		return;
 
 	netdev->up = up;
+
+	l_queue_foreach(netdev->watches, netdev_watch_notify, netdev);
 }
 
 static void netdev_getlink_cb(int error, uint16_t type, const void *data,
@@ -1224,6 +1245,46 @@ static void netdev_link_notify(uint16_t type, const void *data, uint32_t len,
 		netdev_newlink_notify(ifi, bytes);
 		break;
 	}
+}
+
+static bool netdev_watch_match(const void *a, const void *b)
+{
+	const struct netdev_watch *item = a;
+	uint32_t id = L_PTR_TO_UINT(b);
+
+	return item->id == id;
+}
+
+uint32_t netdev_watch_add(struct netdev *netdev, netdev_watch_func_t func,
+				void *user_data)
+{
+	struct netdev_watch *item;
+
+	item = l_new(struct netdev_watch, 1);
+	item->id = ++netdev->next_watch_id;
+	item->callback = func;
+	item->user_data = user_data;
+
+	if (!netdev->watches)
+		netdev->watches = l_queue_new();
+
+	l_queue_push_tail(netdev->watches, item);
+
+	return item->id;
+}
+
+bool netdev_watch_remove(struct netdev *netdev, uint32_t id)
+{
+	struct netdev_watch *item;
+
+	item = l_queue_remove_if(netdev->watches, netdev_watch_match,
+					L_UINT_TO_PTR(id));
+	if (!item)
+		return false;
+
+	l_free(item);
+
+	return true;
 }
 
 bool netdev_init(struct l_genl_family *in)
