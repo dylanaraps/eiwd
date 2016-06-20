@@ -28,7 +28,8 @@ struct netdev;
 struct device;
 
 enum device_state {
-	DEVICE_STATE_DISCONNECTED = 0,	/* Disconnected, no auto-connect */
+	DEVICE_STATE_OFF = 0,		/* Interface down */
+	DEVICE_STATE_DISCONNECTED,	/* Disconnected, no auto-connect */
 	DEVICE_STATE_AUTOCONNECT,	/* Disconnected, try auto-connect */
 	DEVICE_STATE_CONNECTING,	/* Connecting */
 	DEVICE_STATE_CONNECTED,

@@ -186,6 +186,8 @@ static const char *iwd_network_get_path(struct device *device,
 static const char *device_state_to_string(enum device_state state)
 {
 	switch (state) {
+	case DEVICE_STATE_OFF:
+		return "off";
 	case DEVICE_STATE_DISCONNECTED:
 		return "disconnected";
 	case DEVICE_STATE_AUTOCONNECT:
@@ -443,7 +445,8 @@ const char *device_get_path(struct device *device)
 bool device_is_busy(struct device *device)
 {
 	if (device->state != DEVICE_STATE_DISCONNECTED &&
-			device->state != DEVICE_STATE_AUTOCONNECT)
+			device->state != DEVICE_STATE_AUTOCONNECT &&
+			device->state != DEVICE_STATE_OFF)
 		return true;
 
 	return false;
@@ -471,6 +474,9 @@ void device_enter_state(struct device *device, enum device_state state)
 			device_state_to_string(state));
 
 	switch (state) {
+	case DEVICE_STATE_OFF:
+		scan_periodic_stop(device->index);
+		break;
 	case DEVICE_STATE_AUTOCONNECT:
 		scan_periodic_start(device->index, new_scan_results, device);
 		break;
@@ -856,6 +862,51 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 					NULL);
 }
 
+static bool device_remove_network(const void *key, void *data, void *user_data)
+{
+	struct network *network = data;
+
+	network_remove(network, -ESHUTDOWN);
+
+	return true;
+}
+
+static void device_netdev_notify(struct netdev *netdev, bool up,
+					void *user_data)
+{
+	struct device *device = user_data;
+	struct l_dbus *dbus = dbus_get_bus();
+
+	if (up)
+		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
+	else {
+		device_enter_state(device, DEVICE_STATE_OFF);
+
+		if (device->scan_pending)
+			dbus_pending_reply(&device->scan_pending,
+				dbus_error_aborted(device->scan_pending));
+
+		if (device->connect_pending)
+			dbus_pending_reply(&device->connect_pending,
+				dbus_error_aborted(device->connect_pending));
+
+		device->connected_bss = NULL;
+		device->connected_network = NULL;
+
+		l_hashmap_foreach_remove(device->networks,
+						device_remove_network, device);
+
+		l_queue_destroy(device->autoconnect_list, l_free);
+		device->autoconnect_list = l_queue_new();
+
+		l_queue_destroy(device->bss_list, bss_free);
+		device->bss_list = l_queue_new();
+
+		l_queue_destroy(device->networks_sorted, NULL);
+		device->networks_sorted = l_queue_new();
+	}
+}
+
 struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 {
 	struct device *device;
@@ -882,7 +933,9 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	__device_watch_call_added(device);
 
 	scan_ifindex_add(device->index);
-	device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
+
+	device_netdev_notify(netdev, netdev_get_is_up(netdev), device);
+	netdev_watch_add(netdev, device_netdev_notify, device);
 
 	return device;
 }
