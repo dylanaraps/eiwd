@@ -52,6 +52,7 @@ struct netdev {
 	char name[IFNAMSIZ];
 	uint32_t type;
 	uint8_t addr[ETH_ALEN];
+	bool up:1;
 
 	struct l_io *eapol_io;
 
@@ -187,6 +188,11 @@ uint32_t netdev_get_iftype(struct netdev *netdev)
 const char *netdev_get_name(struct netdev *netdev)
 {
 	return netdev->name;
+}
+
+bool netdev_get_is_up(struct netdev *netdev)
+{
+	return netdev->up;
 }
 
 static void netdev_free(void *data)
@@ -994,6 +1000,40 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
+static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
+{
+	struct netdev *netdev;
+	bool up;
+
+	netdev = netdev_find(ifi->ifi_index);
+	if (!netdev)
+		return;
+
+	up = (ifi->ifi_flags & IFF_UP) != 0;
+	if (netdev->up == up)
+		return;
+
+	netdev->up = up;
+}
+
+static void netdev_getlink_cb(int error, uint16_t type, const void *data,
+			uint32_t len, void *user_data)
+{
+	const struct ifinfomsg *ifi = data;
+	unsigned int bytes;
+
+	if (error != 0 || ifi->ifi_type != ARPHRD_ETHER ||
+			type != RTM_NEWLINK) {
+		l_error("RTM_GETLINK error %i ifi_type %i type %i",
+				error, (int) ifi->ifi_type, (int) type);
+		return;
+	}
+
+	bytes = len - NLMSG_ALIGN(sizeof(struct ifinfomsg));
+
+	netdev_newlink_notify(ifi, bytes);
+}
+
 static void netdev_get_interface_callback(struct l_genl_msg *msg,
 								void *user_data)
 {
@@ -1006,6 +1046,8 @@ static void netdev_get_interface_callback(struct l_genl_msg *msg,
 	const uint32_t *ifindex, *iftype;
 	struct netdev *netdev;
 	struct wiphy *wiphy = NULL;
+	struct ifinfomsg *rtmmsg;
+	size_t bufsize;
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -1095,6 +1137,19 @@ static void netdev_get_interface_callback(struct l_genl_msg *msg,
 
 	l_debug("Found interface %s[%d]", netdev->name, netdev->index);
 	device_create(wiphy, netdev);
+
+	/* Query interface flags */
+	bufsize = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+	rtmmsg = l_malloc(bufsize);
+	memset(rtmmsg, 0, bufsize);
+
+	rtmmsg->ifi_family = AF_UNSPEC;
+	rtmmsg->ifi_index = *ifindex;
+
+	l_netlink_send(rtnl, RTM_GETLINK, 0, rtmmsg, bufsize,
+			netdev_getlink_cb, netdev, NULL);
+
+	l_free(rtmmsg);
 }
 
 static void netdev_config_notify(struct l_genl_msg *msg, void *user_data)
@@ -1153,6 +1208,24 @@ static void netdev_config_notify(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
+static void netdev_link_notify(uint16_t type, const void *data, uint32_t len,
+							void *user_data)
+{
+	const struct ifinfomsg *ifi = data;
+	unsigned int bytes;
+
+	if (ifi->ifi_type != ARPHRD_ETHER)
+		return;
+
+	bytes = len - NLMSG_ALIGN(sizeof(struct ifinfomsg));
+
+	switch (type) {
+	case RTM_NEWLINK:
+		netdev_newlink_notify(ifi, bytes);
+		break;
+	}
+}
+
 bool netdev_init(struct l_genl_family *in)
 {
 	struct l_genl_msg *msg;
@@ -1170,6 +1243,13 @@ bool netdev_init(struct l_genl_family *in)
 
 	if (getenv("IWD_RTNL_DEBUG"))
 		l_netlink_set_debug(rtnl, do_debug, "[RTNL] ", NULL);
+
+	if (!l_netlink_register(rtnl, RTNLGRP_LINK,
+				netdev_link_notify, NULL, NULL)) {
+		l_error("Failed to register for RTNL link notifications");
+		l_netlink_destroy(rtnl);
+		return false;
+	}
 
 	netdev_list = l_queue_new();
 
