@@ -843,6 +843,19 @@ static bool device_property_get_connected_network(struct l_dbus *dbus,
 	return true;
 }
 
+static bool device_property_get_powered(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct device *device = user_data;
+	bool powered = device->state == DEVICE_STATE_OFF;
+
+	l_dbus_message_builder_append_basic(builder, 'b', &powered);
+
+	return true;
+}
+
 static void setup_device_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Scan", 0,
@@ -860,6 +873,8 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_property(interface, "ConnectedNetwork", 0, "o",
 					device_property_get_connected_network,
 					NULL);
+	l_dbus_interface_property(interface, "Powered", 0, "b",
+					device_property_get_powered, NULL);
 }
 
 static bool device_remove_network(const void *key, void *data, void *user_data)
@@ -905,6 +920,9 @@ static void device_netdev_notify(struct netdev *netdev, bool up,
 		l_queue_destroy(device->networks_sorted, NULL);
 		device->networks_sorted = l_queue_new();
 	}
+
+	l_dbus_property_changed(dbus, device_get_path(device),
+				IWD_DEVICE_INTERFACE, "Powered");
 }
 
 struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
