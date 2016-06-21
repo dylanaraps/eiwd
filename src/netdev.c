@@ -204,6 +204,20 @@ bool netdev_get_is_up(struct netdev *netdev)
 	return netdev->up;
 }
 
+static void netdev_operstate_dormant_cb(bool success, void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	l_debug("netdev: %d, success: %d", netdev->index, success);
+}
+
+static void netdev_operstate_down_cb(bool success, void *user_data)
+{
+	uint32_t index = L_PTR_TO_UINT(user_data);
+
+	l_debug("netdev: %d, success: %d", index, success);
+}
+
 static void netdev_free(void *data)
 {
 	struct netdev *netdev = data;
@@ -224,7 +238,8 @@ static void netdev_free(void *data)
 	netdev->eapol_io = NULL;
 
 	netdev_set_linkmode_and_operstate(netdev->index, 0, IF_OPER_DOWN,
-						NULL, NULL);
+						netdev_operstate_down_cb,
+						L_UINT_TO_PTR(netdev->index));
 
 	l_queue_destroy(netdev->watches, l_free);
 
@@ -1154,7 +1169,9 @@ static void netdev_get_interface_callback(struct l_genl_msg *msg,
 	l_queue_push_tail(netdev_list, netdev);
 
 	netdev_set_linkmode_and_operstate(netdev->index, 1,
-						IF_OPER_DORMANT, NULL, NULL);
+						IF_OPER_DORMANT,
+						netdev_operstate_dormant_cb,
+						netdev);
 
 	l_debug("Found interface %s[%d]", netdev->name, netdev->index);
 	device_create(wiphy, netdev);
