@@ -120,6 +120,11 @@ typedef void (*eapol_deauthenticate_func_t)(uint32_t ifindex, const uint8_t *aa,
 						const uint8_t *spa,
 						uint16_t reason_code,
 						void *user_data);
+typedef void (*eapol_rekey_offload_func_t)(uint32_t ifindex,
+					const uint8_t *kek,
+					const uint8_t *kck,
+					uint64_t replay_counter,
+					void *user_data);
 
 bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 				uint8_t *mic);
@@ -168,6 +173,9 @@ void __eapol_set_protocol_version(enum eapol_protocol_version version);
 void __eapol_set_install_tk_func(eapol_install_tk_func_t func);
 void __eapol_set_install_gtk_func(eapol_install_gtk_func_t func);
 void __eapol_set_deauthenticate_func(eapol_deauthenticate_func_t func);
+void __eapol_set_rekey_offload_func(eapol_rekey_offload_func_t func);
+void __eapol_update_replay_counter(uint32_t ifindex, const uint8_t *spa,
+				const uint8_t *aa, uint64_t replay_counter);
 
 struct eapol_sm *eapol_sm_new();
 void eapol_sm_free(struct eapol_sm *sm);

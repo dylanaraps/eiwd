@@ -47,6 +47,7 @@ eapol_get_nonce_func_t get_nonce = NULL;
 eapol_install_tk_func_t install_tk = NULL;
 eapol_install_gtk_func_t install_gtk = NULL;
 eapol_deauthenticate_func_t deauthenticate = NULL;
+eapol_rekey_offload_func_t rekey_offload = NULL;
 enum eapol_protocol_version protocol_version = EAPOL_PROTOCOL_VERSION_2004;
 
 #define VERIFY_IS_ZERO(field)					\
@@ -1199,6 +1200,10 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 				ek->key_rsc, 6, cipher, sm->user_data);
 	}
 
+	if (rekey_offload)
+		rekey_offload(sm->ifindex, ptk->kek, ptk->kck,
+			sm->replay_counter, sm->user_data);
+
 fail:
 	l_free(step4);
 }
@@ -1528,6 +1533,22 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 	}
 }
 
+void __eapol_update_replay_counter(uint32_t ifindex, const uint8_t *spa,
+				const uint8_t *aa, uint64_t replay_counter)
+{
+	struct eapol_sm *sm;
+
+	sm = eapol_find_sm(ifindex, spa, aa);
+
+	if (!sm)
+		return;
+
+	if (sm->replay_counter >= replay_counter)
+		return;
+
+	sm->replay_counter = replay_counter;
+}
+
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func)
 {
 	tx_packet = func;
@@ -1556,6 +1577,11 @@ void __eapol_set_install_gtk_func(eapol_install_gtk_func_t func)
 void __eapol_set_deauthenticate_func(eapol_deauthenticate_func_t func)
 {
 	deauthenticate = func;
+}
+
+void __eapol_set_rekey_offload_func(eapol_rekey_offload_func_t func)
+{
+	rekey_offload = func;
 }
 
 struct l_io *eapol_open_pae(uint32_t index)
