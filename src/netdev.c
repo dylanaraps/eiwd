@@ -70,6 +70,7 @@ struct netdev {
 
 	struct l_queue *watches;
 	uint32_t next_watch_id;
+	bool rekey_offload_support : 1;
 };
 
 struct netdev_watch {
@@ -293,6 +294,46 @@ static void netdev_cqm_event(struct l_genl_msg *msg, struct netdev *netdev)
 			}
 
 			break;
+		}
+	}
+}
+
+static void netdev_rekey_offload_event(struct l_genl_msg *msg,
+					struct netdev *netdev)
+{
+	struct l_genl_attr attr;
+	struct l_genl_attr nested;
+	uint16_t type, len;
+	const void *data;
+	uint64_t replay_ctr;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_REKEY_DATA:
+			if (!l_genl_attr_recurse(&attr, &nested))
+				return;
+
+			while (l_genl_attr_next(&nested, &type, &len, &data)) {
+				switch (type) {
+				case NL80211_REKEY_DATA_REPLAY_CTR:
+					if (len != sizeof(uint64_t))
+						l_warn("Invalid replay_ctr");
+					else {
+						replay_ctr = *((uint64_t *)
+							data);
+						__eapol_update_replay_counter(
+							netdev->index,
+							netdev->addr,
+							netdev->remote_addr,
+							replay_ctr);
+					}
+
+					break;
+				}
+			}
 		}
 	}
 }
@@ -731,6 +772,67 @@ static void netdev_handshake_failed(uint32_t ifindex,
 						netdev->user_data);
 }
 
+static void hardware_rekey_cb(struct l_genl_msg *msg, void *data)
+{
+	struct netdev *netdev = data;
+	int err;
+
+	err = l_genl_msg_get_error(msg);
+	if (err < 0) {
+		if (err == -EOPNOTSUPP) {
+			l_error("hardware_rekey not supported");
+			netdev->rekey_offload_support = false;
+		}
+	}
+}
+
+static struct l_genl_msg *netdev_build_cmd_replay_counter(struct netdev *netdev,
+					const uint8_t *kek,
+					const uint8_t *kck,
+					uint64_t replay_ctr)
+{
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_SET_REKEY_OFFLOAD, 512);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+
+	l_genl_msg_enter_nested(msg, NL80211_ATTR_REKEY_DATA);
+	l_genl_msg_append_attr(msg, NL80211_REKEY_DATA_KEK,
+					NL80211_KEK_LEN, kek);
+	l_genl_msg_append_attr(msg, NL80211_REKEY_DATA_KCK,
+					NL80211_KCK_LEN, kck);
+	l_genl_msg_append_attr(msg, NL80211_REKEY_DATA_REPLAY_CTR,
+			NL80211_REPLAY_CTR_LEN, &replay_ctr);
+
+	l_genl_msg_leave_nested(msg);
+
+	return msg;
+}
+
+static void netdev_set_rekey_offload(uint32_t ifindex,
+					const uint8_t *kek,
+					const uint8_t *kck,
+					uint64_t replay_counter,
+					void *user_data)
+{
+	struct netdev *netdev;
+	struct l_genl_msg *msg;
+
+	netdev = netdev_find(ifindex);
+	if (!netdev)
+		return;
+
+	if (!netdev->rekey_offload_support)
+		return;
+
+	l_debug("%d", netdev->index);
+	msg = netdev_build_cmd_replay_counter(netdev, kek, kck,
+					replay_counter);
+	l_genl_family_send(nl80211, msg, hardware_rekey_cb, netdev, NULL);
+
+}
+
 static void netdev_associate_event(struct l_genl_msg *msg,
 							struct netdev *netdev)
 {
@@ -1023,6 +1125,9 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 	case NL80211_CMD_NOTIFY_CQM:
 		netdev_cqm_event(msg, netdev);
 		break;
+	case NL80211_CMD_SET_REKEY_OFFLOAD:
+		netdev_rekey_offload_event(msg, netdev);
+		break;
 	}
 }
 
@@ -1156,6 +1261,7 @@ static void netdev_get_interface_callback(struct l_genl_msg *msg,
 	netdev = l_new(struct netdev, 1);
 	netdev->index = *ifindex;
 	netdev->type = *iftype;
+	netdev->rekey_offload_support = true;
 	memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
 	memcpy(netdev->name, ifname, ifname_len);
 
