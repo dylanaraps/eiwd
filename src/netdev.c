@@ -1455,6 +1455,7 @@ bool netdev_init(struct l_genl_family *in)
 	__eapol_set_install_tk_func(netdev_set_tk);
 	__eapol_set_install_gtk_func(netdev_set_gtk);
 	__eapol_set_deauthenticate_func(netdev_handshake_failed);
+	__eapol_set_rekey_offload_func(netdev_set_rekey_offload);
 
 	return true;
 }
