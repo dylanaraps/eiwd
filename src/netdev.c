@@ -1181,10 +1181,10 @@ static void netdev_get_interface_callback(struct l_genl_msg *msg,
 	struct l_genl_attr attr;
 	uint16_t type, len;
 	const void *data;
-	const char *ifname;
-	uint16_t ifname_len;
+	const char *ifname = NULL;
+	uint16_t ifname_len = 0;
 	const uint8_t *ifaddr;
-	const uint32_t *ifindex, *iftype;
+	const uint32_t *ifindex = NULL, *iftype = NULL;
 	struct netdev *netdev;
 	struct wiphy *wiphy = NULL;
 	struct ifinfomsg *rtmmsg;
