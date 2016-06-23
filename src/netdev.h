@@ -74,5 +74,6 @@ uint32_t netdev_watch_add(struct netdev *netdev, netdev_watch_func_t func,
 				void *user_data);
 bool netdev_watch_remove(struct netdev *netdev, uint32_t id);
 
-bool netdev_init(struct l_genl_family *in);
+bool netdev_init(struct l_genl_family *in,
+				const char *whitelist, const char *blacklist);
 bool netdev_exit(void);

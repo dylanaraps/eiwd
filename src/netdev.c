@@ -32,6 +32,7 @@
 #include <linux/if_ether.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include <fnmatch.h>
 
 #include <ell/ell.h>
 
@@ -82,6 +83,8 @@ struct netdev_watch {
 static struct l_netlink *rtnl = NULL;
 static struct l_genl_family *nl80211;
 static struct l_queue *netdev_list;
+static char **whitelist_filter;
+static char **blacklist_filter;
 
 static void do_debug(const char *str, void *user_data)
 {
@@ -1175,6 +1178,38 @@ static void netdev_getlink_cb(int error, uint16_t type, const void *data,
 	netdev_newlink_notify(ifi, bytes);
 }
 
+static bool netdev_is_managed(const char *ifname)
+{
+	char *pattern;
+	unsigned int i;
+
+	if (!whitelist_filter)
+		goto check_blacklist;
+
+	for (i = 0; (pattern = whitelist_filter[i]); i++) {
+		if (fnmatch(pattern, ifname, 0) != 0)
+			continue;
+
+		goto check_blacklist;
+	}
+
+	l_debug("whitelist filtered ifname: %s", ifname);
+	return false;
+
+check_blacklist:
+	if (!blacklist_filter)
+		return true;
+
+	for (i = 0; (pattern = blacklist_filter[i]); i++) {
+		if (fnmatch(pattern, ifname, 0) == 0) {
+			l_debug("blacklist filtered ifname: %s", ifname);
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static void netdev_get_interface_callback(struct l_genl_msg *msg,
 								void *user_data)
 {
@@ -1255,6 +1290,11 @@ static void netdev_get_interface_callback(struct l_genl_msg *msg,
 
 	if (netdev_find(*ifindex)) {
 		l_debug("Skipping duplicate netdev %s[%d]", ifname, *ifindex);
+		return;
+	}
+
+	if (!netdev_is_managed(ifname)) {
+		l_debug("interface %s filtered out", ifname);
 		return;
 	}
 
@@ -1410,7 +1450,8 @@ bool netdev_watch_remove(struct netdev *netdev, uint32_t id)
 	return true;
 }
 
-bool netdev_init(struct l_genl_family *in)
+bool netdev_init(struct l_genl_family *in,
+				const char *whitelist, const char *blacklist)
 {
 	struct l_genl_msg *msg;
 
@@ -1456,6 +1497,12 @@ bool netdev_init(struct l_genl_family *in)
 	__eapol_set_install_gtk_func(netdev_set_gtk);
 	__eapol_set_deauthenticate_func(netdev_handshake_failed);
 	__eapol_set_rekey_offload_func(netdev_set_rekey_offload);
+
+	if (whitelist)
+		whitelist_filter = l_strsplit(whitelist, ',');
+
+	if (blacklist)
+		blacklist_filter = l_strsplit(blacklist, ',');
 
 	return true;
 }

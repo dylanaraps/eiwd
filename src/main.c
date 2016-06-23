@@ -107,7 +107,7 @@ static void nl80211_appeared(void *user_data)
 	if (!wiphy_init(nl80211))
 		l_error("Unable to init wiphy functionality");
 
-	if (!netdev_init(nl80211))
+	if (!netdev_init(nl80211, interfaces, nointerfaces))
 		l_error("Unable to init netdev functionality");
 
 	if (!scan_init(nl80211))
