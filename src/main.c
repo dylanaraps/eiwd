@@ -45,6 +45,8 @@
 #include "src/backtrace.h"
 
 static struct l_timeout *timeout = NULL;
+static const char *interfaces;
+static const char *nointerfaces;
 
 static void main_loop_quit(struct l_timeout *timeout, void *user_data)
 {
@@ -74,14 +76,18 @@ static void usage(void)
 	printf("Options:\n"
 		"\t-B, --dbus-debug       Enable DBus debugging\n"
 		"\t-K, --kdbus            Setup Kernel D-Bus\n"
+		"\t-i, --interfaces       Interfaces to manage\n"
+		"\t-I, --nointerfaces     Interfaces to ignore\n"
 		"\t-h, --help             Show help options\n");
 }
 
 static const struct option main_options[] = {
-	{ "kdbus",      no_argument,       NULL, 'K' },
-	{ "dbus-debug", no_argument,       NULL, 'B' },
-	{ "version",    no_argument,       NULL, 'v' },
-	{ "help",       no_argument,       NULL, 'h' },
+	{ "kdbus",        no_argument,       NULL, 'K' },
+	{ "dbus-debug",   no_argument,       NULL, 'B' },
+	{ "version",      no_argument,       NULL, 'v' },
+	{ "interfaces",   required_argument, NULL, 'i' },
+	{ "nointerfaces", required_argument, NULL, 'I' },
+	{ "help",         no_argument,       NULL, 'h' },
 	{ }
 };
 
@@ -134,7 +140,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "KBvh", main_options, NULL);
+		opt = getopt_long(argc, argv, "KBi:I:vh", main_options, NULL);
 		if (opt < 0)
 			break;
 
@@ -144,6 +150,12 @@ int main(int argc, char *argv[])
 			break;
 		case 'B':
 			enable_dbus_debug = true;
+			break;
+		case 'i':
+			interfaces = optarg;
+			break;
+		case 'I':
+			nointerfaces = optarg;
 			break;
 		case 'v':
 			printf("%s\n", VERSION);
