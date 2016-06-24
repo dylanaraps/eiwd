@@ -400,8 +400,6 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 		process_bss(device, bss, &now);
 	}
 
-	l_hashmap_foreach_remove(device->networks, process_network, device);
-
 	if (device->connected_bss) {
 		struct scan_bss *bss;
 
@@ -419,6 +417,8 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 		} else
 			device->connected_bss = bss;
 	}
+
+	l_hashmap_foreach_remove(device->networks, process_network, device);
 
 	l_queue_destroy(device->old_bss_list, bss_free);
 	device->old_bss_list = NULL;
