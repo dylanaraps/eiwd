@@ -500,20 +500,21 @@ void device_disassociated(struct device *device)
 	struct network *network = device->connected_network;
 	struct l_dbus *dbus = dbus_get_bus();
 
-	if (!network)
-		return;
+	if (network) {
+		if (device->state == DEVICE_STATE_CONNECTED)
+			network_disconnected(network);
 
-	network_disconnected(network);
+		device->connected_bss = NULL;
+		device->connected_network = NULL;
 
-	device->connected_bss = NULL;
-	device->connected_network = NULL;
+		l_dbus_property_changed(dbus, device_get_path(device),
+					IWD_DEVICE_INTERFACE,
+					"ConnectedNetwork");
+		l_dbus_property_changed(dbus, network_get_path(network),
+					IWD_NETWORK_INTERFACE, "Connected");
+	}
 
 	device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
-
-	l_dbus_property_changed(dbus, device_get_path(device),
-				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
-	l_dbus_property_changed(dbus, network_get_path(network),
-				IWD_NETWORK_INTERFACE, "Connected");
 }
 
 static void device_lost_beacon(struct device *device)
@@ -742,8 +743,7 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 						void *user_data)
 {
 	struct device *device = user_data;
-
-	l_debug("");
+	struct network *network;
 
 	if (device->state == DEVICE_STATE_CONNECTING ||
 			device->state == DEVICE_STATE_DISCONNECTING)
@@ -754,6 +754,24 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 
 	if (netdev_disconnect(device->netdev, device_disconnect_cb, device) < 0)
 		return dbus_error_failed(message);
+
+	network = device->connected_network;
+
+	/*
+	 * If the disconnect somehow fails we won't know if we're still
+	 * connected so we may as well indicate now that we're no longer
+	 * connected.
+	 */
+	if (device->state == DEVICE_STATE_CONNECTED)
+		network_disconnected(network);
+
+	device->connected_bss = NULL;
+	device->connected_network = NULL;
+
+	l_dbus_property_changed(dbus, device_get_path(device),
+				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
+	l_dbus_property_changed(dbus, network_get_path(network),
+				IWD_NETWORK_INTERFACE, "Connected");
 
 	device_enter_state(device, DEVICE_STATE_DISCONNECTING);
 
