@@ -53,8 +53,6 @@ struct netdev {
 	char name[IFNAMSIZ];
 	uint32_t type;
 	uint8_t addr[ETH_ALEN];
-	bool up:1;
-
 	struct l_io *eapol_io;
 
 	netdev_event_func_t event_filter;
@@ -64,14 +62,15 @@ struct netdev {
 	struct l_genl_msg *associate_msg;
 	struct eapol_sm *sm;
 	uint8_t remote_addr[ETH_ALEN];
-
 	uint32_t pairwise_new_key_cmd_id;
 	uint32_t pairwise_set_key_cmd_id;
 	uint32_t group_new_key_cmd_id;
 
 	struct l_queue *watches;
 	uint32_t next_watch_id;
+
 	bool rekey_offload_support : 1;
+	bool up:1;
 };
 
 struct netdev_watch {
