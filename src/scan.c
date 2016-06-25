@@ -51,6 +51,7 @@ uint32_t next_scan_request_id = 0;
 struct scan_periodic {
 	struct l_timeout *timeout;
 	uint16_t interval;
+	scan_trigger_func_t trigger;
 	scan_notify_func_t callback;
 	void *userdata;
 	bool rearm:1;
@@ -427,10 +428,13 @@ static void scan_periodic_done(struct l_genl_msg *msg, void *user_data)
 
 	sc->state = SCAN_STATE_PASSIVE;
 	l_debug("Periodic scan triggered for ifindex: %u", sc->ifindex);
+
+	if (sc->sp.trigger)
+		sc->sp.trigger(0, sc->sp.userdata);
 }
 
-void scan_periodic_start(uint32_t ifindex, scan_notify_func_t func,
-								void *userdata)
+void scan_periodic_start(uint32_t ifindex, scan_trigger_func_t trigger,
+				scan_notify_func_t func, void *userdata)
 {
 	struct scan_context *sc;
 
@@ -448,6 +452,7 @@ void scan_periodic_start(uint32_t ifindex, scan_notify_func_t func,
 	l_debug("Starting periodic scan for ifindex: %u", ifindex);
 
 	sc->sp.interval = SCAN_INIT_INTERVAL;
+	sc->sp.trigger = trigger;
 	sc->sp.callback = func;
 	sc->sp.userdata = userdata;
 	sc->sp.retry = false;
@@ -477,6 +482,7 @@ bool scan_periodic_stop(uint32_t ifindex)
 	}
 
 	sc->sp.interval = 0;
+	sc->sp.trigger = NULL;
 	sc->sp.callback = NULL;
 	sc->sp.userdata = NULL;
 	sc->sp.rearm = false;

@@ -68,8 +68,8 @@ uint32_t scan_active(uint32_t ifindex, uint8_t *extra_ie, size_t extra_ie_size,
 			scan_destroy_func_t destroy);
 bool scan_cancel(uint32_t ifindex, uint32_t id);
 
-void scan_periodic_start(uint32_t ifindex, scan_notify_func_t func,
-								void *userdata);
+void scan_periodic_start(uint32_t ifindex, scan_trigger_func_t trigger,
+				scan_notify_func_t func, void *userdata);
 bool scan_periodic_stop(uint32_t ifindex);
 
 void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,

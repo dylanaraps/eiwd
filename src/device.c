@@ -478,7 +478,8 @@ void device_enter_state(struct device *device, enum device_state state)
 		scan_periodic_stop(device->index);
 		break;
 	case DEVICE_STATE_AUTOCONNECT:
-		scan_periodic_start(device->index, new_scan_results, device);
+		scan_periodic_start(device->index, NULL,
+					new_scan_results, device);
 		break;
 	case DEVICE_STATE_DISCONNECTED:
 		scan_periodic_stop(device->index);
