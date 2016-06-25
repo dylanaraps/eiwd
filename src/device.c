@@ -910,9 +910,11 @@ static void device_netdev_notify(struct netdev *netdev, bool up,
 	struct device *device = user_data;
 	struct l_dbus *dbus = dbus_get_bus();
 
-	if (up)
+	if (up) {
 		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
-	else {
+
+		__device_watch_call_added(device);
+	} else {
 		device_enter_state(device, DEVICE_STATE_OFF);
 
 		if (device->scan_pending)
@@ -937,6 +939,8 @@ static void device_netdev_notify(struct netdev *netdev, bool up,
 
 		l_queue_destroy(device->networks_sorted, NULL);
 		device->networks_sorted = l_queue_new();
+
+		__device_watch_call_removed(device);
 	}
 
 	l_dbus_property_changed(dbus, device_get_path(device),
@@ -966,8 +970,6 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 					IWD_DEVICE_INTERFACE, device))
 		l_info("Unable to register %s interface", IWD_DEVICE_INTERFACE);
 
-	__device_watch_call_added(device);
-
 	scan_ifindex_add(device->index);
 
 	device_netdev_notify(netdev, netdev_get_is_up(netdev), device);
@@ -991,7 +993,8 @@ static void device_free(void *user)
 		dbus_pending_reply(&device->connect_pending,
 				dbus_error_aborted(device->connect_pending));
 
-	__device_watch_call_removed(device);
+	if (device->state != DEVICE_STATE_OFF)
+		__device_watch_call_removed(device);
 
 	dbus = dbus_get_bus();
 	l_dbus_unregister_object(dbus, device_get_path(device));
