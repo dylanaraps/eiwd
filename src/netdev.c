@@ -54,6 +54,7 @@ struct netdev {
 	uint32_t type;
 	uint8_t addr[ETH_ALEN];
 	struct l_io *eapol_io;
+	struct device *device;
 
 	netdev_event_func_t event_filter;
 	netdev_connect_cb_t connect_cb;
@@ -226,6 +227,8 @@ static void netdev_free(void *data)
 	struct netdev *netdev = data;
 
 	l_debug("Freeing netdev %s[%d]", netdev->name, netdev->index);
+
+	device_remove(netdev->device);
 
 	if (netdev->sm) {
 		eapol_sm_free(netdev->sm);
@@ -1319,7 +1322,7 @@ static void netdev_get_interface_callback(struct l_genl_msg *msg,
 						netdev);
 
 	l_debug("Found interface %s[%d]", netdev->name, netdev->index);
-	device_create(wiphy, netdev);
+	netdev->device = device_create(wiphy, netdev);
 
 	/* Query interface flags */
 	bufsize = NLMSG_LENGTH(sizeof(struct ifinfomsg));
