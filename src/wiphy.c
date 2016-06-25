@@ -335,6 +335,48 @@ static void wiphy_dump_done(void *user)
 	}
 }
 
+static void wiphy_new_wiphy_event(struct l_genl_msg *msg)
+{
+	struct wiphy *wiphy;
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	uint32_t id;
+
+	l_debug("");
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	if (!l_genl_attr_next(&attr, &type, &len, &data))
+		return;
+
+	if (type != NL80211_ATTR_WIPHY)
+		return;
+
+	if (len != sizeof(uint32_t)) {
+		l_warn("Invalid wiphy attribute");
+		return;
+	}
+
+	id = *((uint32_t *) data);
+
+	wiphy = l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(id));
+	if (wiphy) {
+		l_info("Wiphy %s[%d] already being tracked",
+				wiphy->name, wiphy->id);
+		return;
+	}
+
+	wiphy = l_new(struct wiphy, 1);
+	wiphy->id = id;
+	wiphy->supported_freqs = scan_freq_set_new();
+	l_queue_push_head(wiphy_list, wiphy);
+
+	wiphy_parse_attributes(wiphy, &attr);
+	wiphy_print_basic_info(wiphy);
+}
+
 static void wiphy_del_wiphy_event(struct l_genl_msg *msg)
 {
 	struct wiphy *wiphy;
