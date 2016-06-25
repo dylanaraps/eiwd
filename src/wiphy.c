@@ -70,7 +70,7 @@ static void wiphy_free(void *data)
 {
 	struct wiphy *wiphy = data;
 
-	l_debug("Freeing wiphy %s", wiphy->name);
+	l_debug("Freeing wiphy %s[%u]", wiphy->name, wiphy->id);
 
 	scan_freq_set_free(wiphy->supported_freqs);
 	l_free(wiphy);
