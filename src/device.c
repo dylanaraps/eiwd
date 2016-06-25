@@ -867,7 +867,7 @@ static bool device_property_get_powered(struct l_dbus *dbus,
 					void *user_data)
 {
 	struct device *device = user_data;
-	bool powered = device->state == DEVICE_STATE_OFF;
+	bool powered = device->state != DEVICE_STATE_OFF;
 
 	l_dbus_message_builder_append_basic(builder, 'b', &powered);
 
