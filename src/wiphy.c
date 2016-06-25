@@ -232,19 +232,59 @@ static void parse_supported_bands(struct wiphy *wiphy,
 	}
 }
 
-#define FAIL_NO_WIPHY()					\
-	if (!wiphy) {					\
-		l_warn("No wiphy structure found");	\
-		return;					\
-	}						\
+static void wiphy_parse_attributes(struct wiphy *wiphy,
+					struct l_genl_attr *attr)
+{
+	struct l_genl_attr nested;
+	uint16_t type, len;
+	const void *data;
+
+	while (l_genl_attr_next(attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_WIPHY:
+			l_warn("Duplicate wiphy attribute");
+			break;
+		case NL80211_ATTR_WIPHY_NAME:
+			if (len > sizeof(wiphy->name))
+				l_warn("Invalid wiphy name attribute");
+			else
+				memcpy(wiphy->name, data, len);
+
+			break;
+		case NL80211_ATTR_FEATURE_FLAGS:
+			if (len != sizeof(uint32_t))
+				l_warn("Invalid feature flags attribute");
+			else
+				wiphy->feature_flags = *((uint32_t *) data);
+
+			break;
+		case NL80211_ATTR_SUPPORTED_COMMANDS:
+			if (l_genl_attr_recurse(attr, &nested))
+				parse_supported_commands(wiphy, &nested);
+
+			break;
+		case NL80211_ATTR_CIPHER_SUITES:
+			parse_supported_ciphers(wiphy, data, len);
+			break;
+		case NL80211_ATTR_WIPHY_BANDS:
+			if (l_genl_attr_recurse(attr, &nested))
+				parse_supported_bands(wiphy, &nested);
+
+			break;
+		}
+	}
+
+}
 
 static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 {
-	struct wiphy *wiphy = NULL;
-	struct l_genl_attr attr, nested;
+	struct wiphy *wiphy;
+	struct l_genl_attr attr;
 	uint16_t type, len;
 	const void *data;
 	uint32_t id;
+
+	l_debug("");
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -258,75 +298,29 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 	 * since the information included can not fit into a single
 	 * message.
 	 */
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_WIPHY:
-			if (wiphy) {
-				l_warn("Duplicate wiphy attribute");
-				return;
-			}
+	if (!l_genl_attr_next(&attr, &type, &len, &data))
+		return;
 
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid wiphy attribute");
-				return;
-			}
+	if (type != NL80211_ATTR_WIPHY)
+		return;
 
-			id = *((uint32_t *) data);
 
-			wiphy = l_queue_find(wiphy_list, wiphy_match,
-							L_UINT_TO_PTR(id));
-			if (!wiphy) {
-				wiphy = l_new(struct wiphy, 1);
-				wiphy->id = id;
-				wiphy->supported_freqs = scan_freq_set_new();
-				l_queue_push_head(wiphy_list, wiphy);
-			}
-			break;
-
-		case NL80211_ATTR_WIPHY_NAME:
-			FAIL_NO_WIPHY();
-
-			if (len > sizeof(wiphy->name)) {
-				l_warn("Invalid wiphy name attribute");
-				return;
-			}
-
-			memcpy(wiphy->name, data, len);
-			break;
-
-		case NL80211_ATTR_FEATURE_FLAGS:
-			FAIL_NO_WIPHY();
-
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid feature flags attribute");
-				return;
-			}
-
-			wiphy->feature_flags = *((uint32_t *) data);
-			break;
-		case NL80211_ATTR_SUPPORTED_COMMANDS:
-			FAIL_NO_WIPHY();
-
-			if (!l_genl_attr_recurse(&attr, &nested))
-				return;
-
-			parse_supported_commands(wiphy, &nested);
-			break;
-		case NL80211_ATTR_CIPHER_SUITES:
-			FAIL_NO_WIPHY();
-
-			parse_supported_ciphers(wiphy, data, len);
-			break;
-		case NL80211_ATTR_WIPHY_BANDS:
-			FAIL_NO_WIPHY();
-
-			if (!l_genl_attr_recurse(&attr, &nested))
-				return;
-
-			parse_supported_bands(wiphy, &nested);
-			break;
-		}
+	if (len != sizeof(uint32_t)) {
+		l_warn("Invalid wiphy attribute");
+		return;
 	}
+
+	id = *((uint32_t *) data);
+
+	wiphy = l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(id));
+	if (!wiphy) {
+		wiphy = l_new(struct wiphy, 1);
+		wiphy->id = id;
+		wiphy->supported_freqs = scan_freq_set_new();
+		l_queue_push_head(wiphy_list, wiphy);
+	}
+
+	wiphy_parse_attributes(wiphy, &attr);
 }
 
 static void wiphy_dump_done(void *user)
