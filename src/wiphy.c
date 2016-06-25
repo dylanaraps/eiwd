@@ -89,6 +89,45 @@ struct wiphy *wiphy_find(int wiphy_id)
 	return l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(wiphy_id));
 }
 
+static void wiphy_print_basic_info(struct wiphy *wiphy)
+{
+	uint32_t bands;
+	char buf[1024];
+
+	l_info("Wiphy: %d, Name: %s", wiphy->id, wiphy->name);
+
+	bands = scan_freq_set_get_bands(wiphy->supported_freqs);
+
+	if (bands) {
+		int len = 0;
+
+		len += sprintf(buf + len, "\tBands:");
+
+		if (bands & SCAN_BAND_2_4_GHZ)
+			len += sprintf(buf + len, " 2.4 GHz");
+
+		if (bands & SCAN_BAND_5_GHZ)
+			len += sprintf(buf + len, " 5 GHz");
+
+		l_info("%s", buf);
+	}
+
+	if (wiphy->pairwise_ciphers &
+			(IE_RSN_CIPHER_SUITE_CCMP | IE_RSN_CIPHER_SUITE_TKIP)) {
+		int len = 0;
+
+		len += sprintf(buf + len, "\tCiphers:");
+
+		if (wiphy->pairwise_ciphers & IE_RSN_CIPHER_SUITE_CCMP)
+			len += sprintf(buf + len, " CCMP");
+
+		if (wiphy->pairwise_ciphers & IE_RSN_CIPHER_SUITE_TKIP)
+			len += sprintf(buf + len, " TKIP");
+
+		l_info("%s", buf);
+	}
+}
+
 static void parse_supported_commands(struct wiphy *wiphy,
 						struct l_genl_attr *attr)
 {
@@ -111,8 +150,6 @@ static void parse_supported_commands(struct wiphy *wiphy,
 static void parse_supported_ciphers(struct wiphy *wiphy, const void *data,
 						uint16_t len)
 {
-	bool s;
-
 	while (len >= 4) {
 		uint32_t cipher = *(uint32_t *)data;
 
@@ -139,12 +176,6 @@ static void parse_supported_ciphers(struct wiphy *wiphy, const void *data,
 		len -= 4;
 		data += 4;
 	}
-
-	s = wiphy->pairwise_ciphers & IE_RSN_CIPHER_SUITE_CCMP;
-	l_info("Wiphy supports CCMP: %s", s ? "true" : "false");
-
-	s = wiphy->pairwise_ciphers & IE_RSN_CIPHER_SUITE_TKIP;
-	l_info("Wiphy supports TKIP: %s", s ? "true" : "false");
 }
 
 static void parse_supported_frequencies(struct wiphy *wiphy,
@@ -305,18 +336,8 @@ static void wiphy_dump_done(void *user)
 	for (wiphy_entry = l_queue_get_entries(wiphy_list); wiphy_entry;
 					wiphy_entry = wiphy_entry->next) {
 		struct wiphy *wiphy = wiphy_entry->data;
-		uint32_t bands;
 
-		l_info("Wiphy: %d, Name: %s", wiphy->id, wiphy->name);
-		l_info("Bands:");
-
-		bands = scan_freq_set_get_bands(wiphy->supported_freqs);
-
-		if (bands & SCAN_BAND_2_4_GHZ)
-			l_info("\t2.4 Ghz");
-
-		if (bands & SCAN_BAND_5_GHZ)
-			l_info("\t5.0 Ghz");
+		wiphy_print_basic_info(wiphy);
 	}
 }
 
