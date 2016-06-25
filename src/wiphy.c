@@ -335,54 +335,52 @@ static void wiphy_dump_done(void *user)
 	}
 }
 
-static void wiphy_config_notify(struct l_genl_msg *msg, void *user_data)
+static void wiphy_del_wiphy_event(struct l_genl_msg *msg)
 {
+	struct wiphy *wiphy;
 	struct l_genl_attr attr;
 	uint16_t type, len;
 	const void *data;
+	uint32_t id;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	if (!l_genl_attr_next(&attr, &type, &len, &data))
+		return;
+
+	if (type != NL80211_ATTR_WIPHY)
+		return;
+
+	if (len != sizeof(uint32_t)) {
+		l_warn("Invalid wiphy attribute");
+		return;
+	}
+
+	id = *((uint32_t *) data);
+
+	wiphy = l_queue_remove_if(wiphy_list, wiphy_match, L_UINT_TO_PTR(id));
+	if (!wiphy)
+		return;
+
+	wiphy_free(wiphy);
+}
+
+static void wiphy_config_notify(struct l_genl_msg *msg, void *user_data)
+{
 	uint8_t cmd;
 
 	cmd = l_genl_msg_get_command(msg);
 
 	l_debug("Notification of command %u", cmd);
 
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
 	switch (cmd) {
 	case NL80211_CMD_NEW_WIPHY:
-	case NL80211_CMD_DEL_WIPHY:
-	{
-		const uint32_t *wiphy_id = NULL;
-		const char *wiphy_name = NULL;
-
-		while (l_genl_attr_next(&attr, &type, &len, &data)) {
-			switch (type) {
-			case NL80211_ATTR_WIPHY:
-				if (len != sizeof(uint32_t)) {
-					l_warn("Invalid wiphy attribute");
-					return;
-				}
-
-				wiphy_id = data;
-				break;
-
-			case NL80211_ATTR_WIPHY_NAME:
-				wiphy_name = data;
-				break;
-			}
-		}
-
-		if (!wiphy_id)
-			return;
-
-		if (cmd == NL80211_CMD_NEW_WIPHY)
-			l_info("New Wiphy %s[%d] added", wiphy_name, *wiphy_id);
-		else
-			l_info("Wiphy %s[%d] removed", wiphy_name, *wiphy_id);
-
+		wiphy_new_wiphy_event(msg);
 		break;
-	}
+	case NL80211_CMD_DEL_WIPHY:
+		wiphy_del_wiphy_event(msg);
+		break;
 	}
 }
 
