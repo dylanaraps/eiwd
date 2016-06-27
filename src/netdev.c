@@ -838,18 +838,37 @@ static void netdev_set_rekey_offload(uint32_t ifindex,
 
 }
 
-static void netdev_associate_event(struct l_genl_msg *msg,
+static void netdev_connect_event(struct l_genl_msg *msg,
 							struct netdev *netdev)
 {
-	int err;
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	const uint16_t *status_code = NULL;
 
 	l_debug("");
 
-	err = l_genl_msg_get_error(msg);
-	if (err < 0) {
-		l_error("association failed %s (%d)", strerror(-err), err);
+	if (!l_genl_attr_init(&attr, msg)) {
+		l_debug("attr init failed");
 		goto error;
 	}
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_TIMED_OUT:
+			l_warn("authentication timed out");
+			goto error;
+		case NL80211_ATTR_STATUS_CODE:
+			if (len == sizeof(uint16_t))
+				status_code = data;
+
+			break;
+		}
+	}
+
+	/* AP Rejected the authenticate / associate */
+	if (!status_code || *status_code != 0)
+		goto error;
 
 	if (netdev->sm) {
 		eapol_sm_set_tx_user_data(netdev->sm,
@@ -874,11 +893,23 @@ error:
 						netdev->user_data);
 }
 
-static void netdev_cmd_associate_cb(struct l_genl_msg *msg, void *user_data)
+static void netdev_authenticate_event(struct l_genl_msg *msg,
+							struct netdev *netdev)
+{
+	l_debug("");
+}
+
+static void netdev_associate_event(struct l_genl_msg *msg,
+							struct netdev *netdev)
+{
+	l_debug("");
+}
+
+static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
 
-	/* Wait for associate event */
+	/* Wait for connect event */
 	if (l_genl_msg_get_error(msg) >= 0) {
 		if (netdev->event_filter)
 			netdev->event_filter(netdev,
@@ -893,19 +924,24 @@ static void netdev_cmd_associate_cb(struct l_genl_msg *msg, void *user_data)
 						netdev->user_data);
 }
 
-static struct l_genl_msg *netdev_build_cmd_associate(struct netdev *netdev,
+static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 							struct scan_bss *bss,
 							struct eapol_sm *sm)
 {
+	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
 
-	msg = l_genl_msg_new_sized(NL80211_CMD_ASSOCIATE, 512);
+	msg = l_genl_msg_new_sized(NL80211_CMD_CONNECT, 512);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ,
 						4, &bss->frequency);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID,
 						bss->ssid_len, bss->ssid);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
+
+	if (bss->capability & IE_BSS_CAP_PRIVACY)
+		l_genl_msg_append_attr(msg, NL80211_ATTR_PRIVACY, 0, NULL);
 
 	if (sm) {
 		uint32_t cipher;
@@ -942,111 +978,21 @@ static struct l_genl_msg *netdev_build_cmd_associate(struct netdev *netdev,
 	return msg;
 }
 
-static void netdev_authenticate_event(struct l_genl_msg *msg,
-							struct netdev *netdev)
-{
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-	int err;
-
-	l_debug("");
-
-	err = l_genl_msg_get_error(msg);
-	if (err < 0) {
-		l_error("authentication failed %s (%d)", strerror(-err), err);
-		goto error;
-	}
-
-	if (!l_genl_attr_init(&attr, msg)) {
-		l_debug("attr init failed");
-		goto error;
-	}
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_TIMED_OUT:
-			l_warn("authentication timed out");
-			goto error;
-		}
-	}
-
-	if (!netdev->associate_msg)
-		return;
-
-	if (l_genl_family_send(nl80211, netdev->associate_msg,
-				netdev_cmd_associate_cb, netdev, NULL) > 0) {
-		netdev->associate_msg = NULL;
-		return;
-	}
-
-	l_genl_msg_unref(netdev->associate_msg);
-	netdev->associate_msg = NULL;
-
-error:
-	if (netdev->connect_cb)
-		netdev->connect_cb(netdev, NETDEV_RESULT_AUTHENTICATION_FAILED,
-						netdev->user_data);
-}
-
-static void netdev_cmd_authenticate_cb(struct l_genl_msg *msg, void *user_data)
-{
-	struct netdev *netdev = user_data;
-
-	if (l_genl_msg_get_error(msg) >= 0) {
-		if (netdev->event_filter)
-			netdev->event_filter(netdev,
-						NETDEV_EVENT_AUTHENTICATING,
-						netdev->user_data);
-
-		return;
-	}
-
-	if (netdev->connect_cb)
-		netdev->connect_cb(netdev, NETDEV_RESULT_AUTHENTICATION_FAILED,
-						netdev->user_data);
-}
-
-static struct l_genl_msg *netdev_build_cmd_authenticate(struct netdev *netdev,
-							struct scan_bss *bss)
-{
-	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
-	struct l_genl_msg *msg;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ,
-						4, &bss->frequency);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID,
-						bss->ssid_len, bss->ssid);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
-
-	return msg;
-}
-
 int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 				struct eapol_sm *sm,
 				netdev_event_func_t event_filter,
 				netdev_connect_cb_t cb, void *user_data)
 {
-	struct l_genl_msg *authenticate;
-	struct l_genl_msg *associate;
+	struct l_genl_msg *cmd_connect;
 
-	authenticate = netdev_build_cmd_authenticate(netdev, bss);
-	if (!authenticate)
-		return -EINVAL;
-
-	associate = netdev_build_cmd_associate(netdev, bss, sm);
-	if (!associate) {
-		l_genl_msg_unref(authenticate);
+	cmd_connect = netdev_build_cmd_connect(netdev, bss, sm);
+	if (!cmd_connect) {
+		l_genl_msg_unref(cmd_connect);
 		return -EINVAL;
 	}
 
-	if (!l_genl_family_send(nl80211, authenticate,
-				netdev_cmd_authenticate_cb, netdev, NULL)) {
-		l_genl_msg_unref(associate);
-		l_genl_msg_unref(authenticate);
+	if (!l_genl_family_send(nl80211, cmd_connect,
+				netdev_cmd_connect_cb, netdev, NULL)) {
 		return -EIO;
 	}
 
@@ -1054,7 +1000,6 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	netdev->connect_cb = cb;
 	netdev->user_data = user_data;
 	netdev->sm = sm;
-	netdev->associate_msg = associate;
 	memcpy(netdev->remote_addr, bss->addr, ETH_ALEN);
 
 	return 0;
@@ -1123,6 +1068,9 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 	case NL80211_CMD_ASSOCIATE:
 		netdev_associate_event(msg, netdev);
+		break;
+	case NL80211_CMD_CONNECT:
+		netdev_connect_event(msg, netdev);
 		break;
 	case NL80211_CMD_DISCONNECT:
 		netdev_disconnect_event(msg, netdev);
