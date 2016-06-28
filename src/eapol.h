@@ -202,7 +202,7 @@ const uint8_t *eapol_sm_get_own_ie(struct eapol_sm *sm, size_t *out_ie_len);
 
 struct l_io *eapol_open_pae(uint32_t index);
 
-void eapol_start(uint32_t ifindex, struct eapol_sm *sm);
+void eapol_start(uint32_t ifindex, struct l_io *io, struct eapol_sm *sm);
 void eapol_cancel(uint32_t ifindex);
 
 bool eapol_init();

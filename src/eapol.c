@@ -603,6 +603,7 @@ struct eapol_sm {
 	void *user_data;
 	void *tx_user_data;
 	struct l_timeout *timeout;
+	struct l_io *io;
 	bool have_snonce:1;
 	bool have_replay:1;
 	bool ptk_complete:1;
@@ -619,6 +620,7 @@ static void eapol_sm_destroy(void *value)
 	l_free(sm->own_ie);
 
 	l_timeout_remove(sm->timeout);
+	l_io_destroy(sm->io);
 
 	if (sm->eap)
 		eap_free(sm->eap);
@@ -1462,14 +1464,12 @@ void eapol_sm_set_8021x_config(struct eapol_sm *sm, struct l_settings *settings)
 	eap_load_settings(sm->eap, settings, "EAP-");
 }
 
-void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
-			const uint8_t *frame, size_t len)
+static void eapol_rx_packet(struct eapol_sm *sm,
+					const uint8_t *frame, size_t len)
 {
 	const struct eapol_header *eh;
-	struct eapol_sm *sm;
 
 	/* Validate Header */
-
 	if (len < sizeof(struct eapol_header))
 		return;
 
@@ -1480,10 +1480,6 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 		return;
 
 	if (len < (size_t) 4 + L_BE16_TO_CPU(eh->packet_len))
-		return;
-
-	sm = eapol_find_sm(ifindex, spa, aa);
-	if (!sm)
 		return;
 
 	switch (eh->packet_type) {
@@ -1512,12 +1508,23 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 		if (!sm->have_pmk)
 			return;
 
-		eapol_key_handle(sm, ifindex, frame, len);
+		eapol_key_handle(sm, sm->ifindex, frame, len);
 		break;
 
 	default:
 		return;
 	}
+}
+
+void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
+					const uint8_t *frame, size_t len)
+{
+	struct eapol_sm *sm = eapol_find_sm(ifindex, spa, aa);
+
+	if (!sm)
+		return;
+
+	eapol_rx_packet(sm, frame, len);
 }
 
 void __eapol_update_replay_counter(uint32_t ifindex, const uint8_t *spa,
@@ -1608,6 +1615,33 @@ struct l_io *eapol_open_pae(uint32_t index)
 	return io;
 }
 
+static bool eapol_read(struct l_io *io, void *user_data)
+{
+	struct eapol_sm *sm = user_data;
+	int fd = l_io_get_fd(io);
+	struct sockaddr_ll sll;
+	socklen_t sll_len;
+	ssize_t bytes;
+	uint8_t frame[2304]; /* IEEE Std 802.11 ch. 8.2.3 */
+
+	memset(&sll, 0, sizeof(sll));
+	sll_len = sizeof(sll);
+
+	bytes = recvfrom(fd, frame, sizeof(frame), 0,
+				(struct sockaddr *) &sll, &sll_len);
+	if (bytes <= 0) {
+		l_error("EAPoL read socket: %s", strerror(errno));
+		return false;
+	}
+
+	if (memcmp(sm->aa, sll.sll_addr, 6))
+		return true;
+
+	eapol_rx_packet(sm, frame, bytes);
+
+	return true;
+}
+
 /*
  * Default implementation of the frame transmission function.
  * This function expects an fd to be passed as user_data
@@ -1649,6 +1683,12 @@ void eapol_start(uint32_t ifindex, struct l_io *io, struct eapol_sm *sm)
 {
 	sm->ifindex = ifindex;
 	sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);
+
+	if (io) {
+		sm->io = io;
+		l_io_set_read_handler(io, eapol_read, sm, NULL);
+	}
+
 	l_queue_push_head(state_machines, sm);
 }
 

@@ -53,7 +53,6 @@ struct netdev {
 	char name[IFNAMSIZ];
 	uint32_t type;
 	uint8_t addr[ETH_ALEN];
-	struct l_io *eapol_io;
 	struct device *device;
 
 	netdev_event_func_t event_filter;
@@ -62,6 +61,7 @@ struct netdev {
 	void *user_data;
 	struct l_genl_msg *associate_msg;
 	struct eapol_sm *sm;
+	struct l_io *eapol_io;
 	uint8_t remote_addr[ETH_ALEN];
 	uint32_t pairwise_new_key_cmd_id;
 	uint32_t pairwise_set_key_cmd_id;
@@ -91,31 +91,6 @@ static void do_debug(const char *str, void *user_data)
 	const char *prefix = user_data;
 
 	l_info("%s%s", prefix, str);
-}
-
-static bool eapol_read(struct l_io *io, void *user_data)
-{
-	struct netdev *netdev = user_data;
-	int fd = l_io_get_fd(io);
-	struct sockaddr_ll sll;
-	socklen_t sll_len;
-	ssize_t bytes;
-	uint8_t frame[2304]; /* IEEE Std 802.11 ch. 8.2.3 */
-
-	memset(&sll, 0, sizeof(sll));
-	sll_len = sizeof(sll);
-
-	bytes = recvfrom(fd, frame, sizeof(frame), 0,
-				(struct sockaddr *) &sll, &sll_len);
-	if (bytes <= 0) {
-		l_error("EAPoL read socket: %s", strerror(errno));
-		return false;
-	}
-
-	__eapol_rx_packet(netdev->index, netdev->addr, sll.sll_addr,
-								frame, bytes);
-
-	return true;
 }
 
 struct cb_data {
@@ -233,15 +208,15 @@ static void netdev_free(void *data)
 	if (netdev->sm) {
 		eapol_sm_free(netdev->sm);
 		netdev->sm = NULL;
+
+		l_io_destroy(netdev->eapol_io);
+		netdev->eapol_io = NULL;
 	}
 
 	if (netdev->associate_msg) {
 		l_genl_msg_unref(netdev->associate_msg);
 		netdev->associate_msg = NULL;
 	}
-
-	l_io_destroy(netdev->eapol_io);
-	netdev->eapol_io = NULL;
 
 	netdev_set_linkmode_and_operstate(netdev->index, 0, IF_OPER_DOWN,
 						netdev_operstate_down_cb,
@@ -838,6 +813,21 @@ static void netdev_set_rekey_offload(uint32_t ifindex,
 
 }
 
+static void netdev_connect_failed(struct netdev *netdev,
+						enum netdev_result result)
+{
+	if (netdev->sm) {
+		eapol_sm_free(netdev->sm);
+		netdev->sm = NULL;
+
+		l_io_destroy(netdev->eapol_io);
+		netdev->eapol_io = NULL;
+	}
+
+	if (netdev->connect_cb)
+		netdev->connect_cb(netdev, result, netdev->user_data);
+}
+
 static void netdev_connect_event(struct l_genl_msg *msg,
 							struct netdev *netdev)
 {
@@ -873,9 +863,10 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 	if (netdev->sm) {
 		eapol_sm_set_tx_user_data(netdev->sm,
 				L_INT_TO_PTR(l_io_get_fd(netdev->eapol_io)));
-		eapol_start(netdev->index, netdev->sm);
+		eapol_start(netdev->index, netdev->eapol_io, netdev->sm);
 
 		netdev->sm = NULL;
+		netdev->eapol_io = NULL;
 
 		if (netdev->event_filter)
 			netdev->event_filter(netdev,
@@ -888,13 +879,7 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 	return;
 
 error:
-	if (netdev->sm) {
-		eapol_sm_free(netdev->sm);
-		netdev->sm = NULL;
-
-	if (netdev->connect_cb)
-		netdev->connect_cb(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
-						netdev->user_data);
+	netdev_connect_failed(netdev, NETDEV_RESULT_ASSOCIATION_FAILED);
 }
 
 static void netdev_authenticate_event(struct l_genl_msg *msg,
@@ -923,9 +908,7 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	if (netdev->connect_cb)
-		netdev->connect_cb(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
-						netdev->user_data);
+	netdev_connect_failed(netdev, NETDEV_RESULT_ASSOCIATION_FAILED);
 }
 
 static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
@@ -1003,8 +986,24 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	netdev->event_filter = event_filter;
 	netdev->connect_cb = cb;
 	netdev->user_data = user_data;
-	netdev->sm = sm;
 	memcpy(netdev->remote_addr, bss->addr, ETH_ALEN);
+
+	netdev->sm = sm;
+	if (netdev->sm) {
+		/*
+		 * Due to timing / race conditions, it is possible for
+		 * EAPoL packets to arrive before the netdev events
+		 * are received.  Here we 'prime' the socket, so that
+		 * the data is available as soon as we call eapol_start
+		 *
+		 * If this isn't done, then we might 'miss' the first EAPoL
+		 * packet from the AP, and have to wait for the AP to
+		 * retransmit.  This delays our handshake by 1-2 seconds
+		 */
+		netdev->eapol_io = eapol_open_pae(netdev->index);
+		if (!netdev->eapol_io)
+			l_error("Failed to open PAE socket");
+	}
 
 	return 0;
 }
@@ -1258,13 +1257,6 @@ static void netdev_get_interface_callback(struct l_genl_msg *msg,
 	netdev->rekey_offload_support = true;
 	memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
 	memcpy(netdev->name, ifname, ifname_len);
-
-	netdev->eapol_io = eapol_open_pae(netdev->index);
-	if (netdev->eapol_io)
-		l_io_set_read_handler(netdev->eapol_io, eapol_read,
-								netdev, NULL);
-	else
-		l_error("Failed to open PAE socket");
 
 	l_queue_push_tail(netdev_list, netdev);
 
