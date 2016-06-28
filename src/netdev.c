@@ -888,6 +888,10 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 	return;
 
 error:
+	if (netdev->sm) {
+		eapol_sm_free(netdev->sm);
+		netdev->sm = NULL;
+
 	if (netdev->connect_cb)
 		netdev->connect_cb(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
 						netdev->user_data);
