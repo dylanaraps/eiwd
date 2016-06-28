@@ -791,13 +791,6 @@ static void eapol_timeout(struct l_timeout *timeout, void *user_data)
 				MPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT);
 }
 
-void eapol_start(uint32_t ifindex, struct eapol_sm *sm)
-{
-	sm->ifindex = ifindex;
-	sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);
-	l_queue_push_head(state_machines, sm);
-}
-
 static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 					const struct eapol_key *ek)
 {
@@ -1650,6 +1643,13 @@ static int eapol_write(uint32_t ifindex, const uint8_t *aa, const uint8_t *spa,
 static bool eapol_get_nonce(uint8_t nonce[])
 {
 	return l_getrandom(nonce, 32);
+}
+
+void eapol_start(uint32_t ifindex, struct l_io *io, struct eapol_sm *sm)
+{
+	sm->ifindex = ifindex;
+	sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);
+	l_queue_push_head(state_machines, sm);
 }
 
 void eapol_cancel(uint32_t ifindex)
