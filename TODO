@@ -265,16 +265,6 @@ Wireless daemon
   Priority: High
   Complexity: C1
 
-- Centralize scanning logic and handling into scan.c.
-
-  There can be passive, active, listening (P2P) scanning to handle.
-  We need to handle background scan for roaming. Also scheduled scan
-  might need to be simulated when hw does not support it.
-  All scanning operations should be cancellable.
-
-  Priority: High
-  Complexity: C4
-
 - Add utility to create netlink REKEY_DATA attributes
 
   The REKEY_DATA needs to be uploaded to the driver so that if re-keying is
