@@ -1749,7 +1749,7 @@ static void eapol_sm_test_ptk(const void *data)
 	assert(r);
 
 	eapol_sm_set_ap_rsn(sm, ap_rsne, sizeof(ap_rsne));
-	eapol_start(1, sm);
+	eapol_start(1, NULL, sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, spa, aa, eapol_key_data_3,
@@ -1809,7 +1809,7 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 	assert(r);
 
 	eapol_sm_set_ap_rsn(sm, ap_rsne, sizeof(ap_rsne));
-	eapol_start(1, sm);
+	eapol_start(1, NULL, sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, spa, aa, eapol_key_data_7,
@@ -1872,7 +1872,7 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 	assert(r);
 
 	eapol_sm_set_ap_wpa(sm, ap_wpa_ie, sizeof(ap_wpa_ie));
-	eapol_start(1, sm);
+	eapol_start(1, NULL, sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_13,
@@ -1936,7 +1936,7 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 	assert(r);
 
 	eapol_sm_set_ap_wpa(sm, ap_wpa_ie, sizeof(ap_wpa_ie));
-	eapol_start(1, sm);
+	eapol_start(1, NULL, sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_19,
@@ -2162,7 +2162,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	assert(r);
 
 	eapol_sm_set_ap_wpa(sm, ap_wpa_ie, sizeof(ap_wpa_ie));
-	eapol_start(1, sm);
+	eapol_start(1, NULL, sm);
 
 	__eapol_set_tx_packet_func(verify_8021x_identity_resp);
 	s->pending_req = 1;
@@ -2518,7 +2518,7 @@ static void eapol_sm_test_eap_nak(const void *data)
 	assert(r);
 
 	eapol_sm_set_ap_wpa(sm, ap_wpa_ie, sizeof(ap_wpa_ie));
-	eapol_start(1, sm);
+	eapol_start(1, NULL, sm);
 
 	__eapol_set_tx_packet_func(verify_8021x_identity_resp);
 	s.pending_req = 1;
