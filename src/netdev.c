@@ -409,6 +409,8 @@ static void netdev_operstate_cb(bool success, void *user_data)
 						MPDU_REASON_CODE_UNSPECIFIED);
 		l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 
+		eapol_cancel(netdev->index);
+
 		result = NETDEV_RESULT_KEY_SETTING_FAILED;
 	} else
 		result = NETDEV_RESULT_OK;
