@@ -107,8 +107,6 @@ static void netlink_result(int error, uint16_t type, const void *data,
 		return;
 
 	cb_data->callback(error < 0 ? false : true, cb_data->user_data);
-
-	l_free(cb_data);
 }
 
 static size_t rta_add_u8(void *rta_buf, unsigned short type, uint8_t value)
@@ -153,7 +151,7 @@ static void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 
 	l_netlink_send(rtnl, RTM_SETLINK, 0, rtmmsg,
 					rta_buf - (void *) rtmmsg,
-					netlink_result, cb_data, NULL);
+					netlink_result, cb_data, l_free);
 
 	l_free(rtmmsg);
 }
