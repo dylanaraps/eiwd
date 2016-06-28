@@ -772,12 +772,6 @@ static bool eapol_sm_ifindex_match(void *data, void *user_data)
 	return true;
 }
 
-void eapol_cancel(uint32_t ifindex)
-{
-	l_queue_foreach_remove(state_machines, eapol_sm_ifindex_match,
-					L_UINT_TO_PTR(ifindex));
-}
-
 static inline void handshake_failed(uint32_t ifindex, struct eapol_sm *sm,
 					uint16_t reason_code)
 {
@@ -1656,6 +1650,12 @@ static int eapol_write(uint32_t ifindex, const uint8_t *aa, const uint8_t *spa,
 static bool eapol_get_nonce(uint8_t nonce[])
 {
 	return l_getrandom(nonce, 32);
+}
+
+void eapol_cancel(uint32_t ifindex)
+{
+	l_queue_foreach_remove(state_machines, eapol_sm_ifindex_match,
+					L_UINT_TO_PTR(ifindex));
 }
 
 bool eapol_init()
