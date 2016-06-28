@@ -240,6 +240,8 @@ struct netdev *netdev_find(int ifindex)
 
 static void netdev_lost_beacon(struct netdev *netdev)
 {
+	eapol_cancel(netdev->index);
+
 	if (!netdev->event_filter)
 		return;
 
@@ -353,6 +355,8 @@ static void netdev_disconnect_event(struct l_genl_msg *msg,
 
 	if (!disconnect_by_ap)
 		return;
+
+	eapol_cancel(netdev->index);
 
 	if (netdev->event_filter)
 		netdev->event_filter(netdev, NETDEV_EVENT_DISCONNECT_BY_AP,
