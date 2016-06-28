@@ -793,6 +793,36 @@ static void eapol_timeout(struct l_timeout *timeout, void *user_data)
 				MPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT);
 }
 
+static void eapol_tx_packet(struct eapol_sm *sm, const struct eapol_frame *ef)
+{
+	size_t frame_size;
+	struct sockaddr_ll sll;
+	ssize_t r;
+	int fd;
+
+	if (!sm->io) {
+		tx_packet(sm->ifindex, sm->aa, sm->spa, ef, sm->tx_user_data);
+		return;
+	}
+
+	fd = l_io_get_fd(sm->io);
+
+	memset(&sll, 0, sizeof(sll));
+	sll.sll_family = AF_PACKET;
+	sll.sll_ifindex = sm->ifindex;
+	sll.sll_protocol = htons(ETH_P_PAE);
+	sll.sll_halen = ETH_ALEN;
+	memcpy(sll.sll_addr, sm->aa, ETH_ALEN);
+
+	frame_size = sizeof(struct eapol_header) +
+			L_BE16_TO_CPU(ef->header.packet_len);
+
+	r = sendto(fd, ef, frame_size, 0,
+			(struct sockaddr *) &sll, sizeof(sll));
+	if (r < 0)
+		l_error("EAPoL write socket: %s", strerror(errno));
+}
+
 static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 					const struct eapol_key *ek)
 {
@@ -844,8 +874,7 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 	}
 
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
-	tx_packet(ifindex, sm->aa, sm->spa,
-			(struct eapol_frame *) step2, sm->tx_user_data);
+	eapol_tx_packet(sm, (struct eapol_frame *) step2);
 	l_free(step2);
 
 	l_timeout_remove(sm->timeout);
@@ -1170,8 +1199,7 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 		goto fail;
 
 	memcpy(step4->key_mic_data, mic, sizeof(mic));
-	tx_packet(ifindex, sm->aa, sm->spa,
-			(struct eapol_frame *) step4, sm->tx_user_data);
+	eapol_tx_packet(sm, (struct eapol_frame *) step4);
 
 	sm->ptk_complete = true;
 
@@ -1253,8 +1281,7 @@ static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
 		goto done;
 
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
-	tx_packet(ifindex, sm->aa, sm->spa,
-			(struct eapol_frame *) step2, sm->tx_user_data);
+	eapol_tx_packet(sm, (struct eapol_frame *) step2);
 
 	if (install_gtk) {
 		uint32_t cipher =
@@ -1405,7 +1432,7 @@ static void eapol_eap_msg_cb(const uint8_t *eap_data, size_t len,
 
 	memcpy(frame->data, eap_data, len);
 
-	tx_packet(sm->ifindex, sm->aa, sm->spa, frame, sm->tx_user_data);
+	eapol_tx_packet(sm, frame);
 }
 
 /* This respresentes the eapTimout, eapFail and eapSuccess messages */
@@ -1642,38 +1669,6 @@ static bool eapol_read(struct l_io *io, void *user_data)
 	return true;
 }
 
-/*
- * Default implementation of the frame transmission function.
- * This function expects an fd to be passed as user_data
- */
-static int eapol_write(uint32_t ifindex, const uint8_t *aa, const uint8_t *spa,
-			const struct eapol_frame *ef, void *user_data)
-{
-	int fd = L_PTR_TO_INT(user_data);
-	size_t frame_size;
-	struct sockaddr_ll sll;
-	ssize_t r;
-
-	memset(&sll, 0, sizeof(sll));
-	sll.sll_family = AF_PACKET;
-	sll.sll_ifindex = ifindex;
-	sll.sll_protocol = htons(ETH_P_PAE);
-	sll.sll_halen = ETH_ALEN;
-	memcpy(sll.sll_addr, aa, ETH_ALEN);
-
-	frame_size = sizeof(struct eapol_header) +
-			L_BE16_TO_CPU(ef->header.packet_len);
-
-	r = sendto(fd, ef, frame_size, 0,
-			(struct sockaddr *) &sll, sizeof(sll));
-	if (r < 0) {
-		l_error("EAPoL write socket: %s", strerror(errno));
-		return -errno;
-	}
-
-	return 0;
-}
-
 static bool eapol_get_nonce(uint8_t nonce[])
 {
 	return l_getrandom(nonce, 32);
@@ -1703,7 +1698,6 @@ bool eapol_init()
 	state_machines = l_queue_new();
 	protocol_version = EAPOL_PROTOCOL_VERSION_2004;
 	get_nonce = eapol_get_nonce;
-	tx_packet = eapol_write;
 
 	eap_init();
 
@@ -1714,7 +1708,6 @@ bool eapol_exit()
 {
 	l_queue_destroy(state_machines, eapol_sm_destroy);
 	get_nonce = NULL;
-	tx_packet = NULL;
 
 	eap_exit();
 

@@ -865,8 +865,6 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 		goto error;
 
 	if (netdev->sm) {
-		eapol_sm_set_tx_user_data(netdev->sm,
-				L_INT_TO_PTR(l_io_get_fd(netdev->eapol_io)));
 		eapol_start(netdev->index, netdev->eapol_io, netdev->sm);
 
 		netdev->sm = NULL;
