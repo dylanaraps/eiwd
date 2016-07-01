@@ -37,6 +37,7 @@
 #include "src/ie.h"
 #include "src/crypto.h"
 #include "src/scan.h"
+#include "src/netdev.h"
 #include "src/wiphy.h"
 
 static struct l_genl_family *nl80211 = NULL;
@@ -375,6 +376,8 @@ static void wiphy_new_wiphy_event(struct l_genl_msg *msg)
 
 	wiphy_parse_attributes(wiphy, &attr);
 	wiphy_print_basic_info(wiphy);
+
+	netdev_new_wiphy_hint(wiphy->id);
 }
 
 static void wiphy_del_wiphy_event(struct l_genl_msg *msg)
