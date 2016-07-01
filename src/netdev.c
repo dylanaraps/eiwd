@@ -1115,6 +1115,18 @@ static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 	l_queue_foreach(netdev->watches, netdev_watch_notify, netdev);
 }
 
+static void netdev_dellink_notify(const struct ifinfomsg *ifi, int bytes)
+{
+	struct netdev *netdev;
+
+	netdev = l_queue_remove_if(netdev_list, netdev_match,
+						L_UINT_TO_PTR(ifi->ifi_index));
+	if (!netdev)
+		return;
+
+	netdev_free(netdev);
+}
+
 static void netdev_getlink_cb(int error, uint16_t type, const void *data,
 			uint32_t len, void *user_data)
 {
@@ -1354,6 +1366,9 @@ static void netdev_link_notify(uint16_t type, const void *data, uint32_t len,
 	switch (type) {
 	case RTM_NEWLINK:
 		netdev_newlink_notify(ifi, bytes);
+		break;
+	case RTM_DELLINK:
+		netdev_dellink_notify(ifi, bytes);
 		break;
 	}
 }
