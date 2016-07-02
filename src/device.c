@@ -957,8 +957,19 @@ static void device_netdev_notify(struct netdev *netdev, bool up,
 			dbus_pending_reply(&device->connect_pending,
 				dbus_error_aborted(device->connect_pending));
 
-		device->connected_bss = NULL;
-		device->connected_network = NULL;
+		if (device->connected_network) {
+			struct network *network = device->connected_network;
+
+			device->connected_bss = NULL;
+			device->connected_network = NULL;
+
+			l_dbus_property_changed(dbus, device_get_path(device),
+						IWD_DEVICE_INTERFACE,
+						"ConnectedNetwork");
+			l_dbus_property_changed(dbus, network_get_path(network),
+						IWD_NETWORK_INTERFACE,
+						"Connected");
+		}
 
 		l_hashmap_foreach_remove(device->networks,
 						device_remove_network, device);
