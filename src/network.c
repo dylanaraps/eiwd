@@ -778,6 +778,17 @@ bool network_info_add_known(const char *ssid, enum security security)
 	return true;
 }
 
+static void network_info_check_device(struct device *device, void *user_data)
+{
+	struct network_info *info = user_data;
+	struct network *network;
+
+	network = device_get_connected_network(device);
+
+	if (network && network->info == info)
+		device_disconnect(device);
+}
+
 bool network_info_forget_known(const char *ssid, enum security security)
 {
 	struct network_info *network, search;
@@ -789,14 +800,19 @@ bool network_info_forget_known(const char *ssid, enum security security)
 	if (!network)
 		return false;
 
-	if (network->seen_count) {
-		memset(&network->connected_time, 0, sizeof(struct timespec));
-
-		network->is_known = false;
-
-		l_queue_push_tail(networks, network);
-	} else
+	if (!network->seen_count) {
 		network_info_free(network);
+
+		return true;
+	}
+
+	memset(&network->connected_time, 0, sizeof(struct timespec));
+
+	network->is_known = false;
+
+	l_queue_push_tail(networks, network);
+
+	__iwd_device_foreach(network_info_check_device, network);
 
 	return true;
 }

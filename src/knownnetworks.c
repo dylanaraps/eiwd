@@ -115,11 +115,6 @@ static struct l_dbus_message *forget_network(struct l_dbus *dbus,
 	if (!security_from_str(strtype, &security))
 		return dbus_error_invalid_args(message);
 
-	/*
-	 * TODO: Disconnect from the network if currently connected or
-	 * connecting.
-	 */
-
 	if (!network_info_forget_known(ssid, security))
 		return dbus_error_failed(message);
 
