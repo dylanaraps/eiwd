@@ -1,0 +1,28 @@
+Network hierarchy
+=================
+
+Service		net.connman.iwd
+Interface	net.connman.iwd.Network [Experimental]
+Object path	/{phy0,phy1,...}/{1,2,...}/Xxx
+
+Methods		void Connect()
+
+			Connect to the network.  Request the device
+			implied by the object path to connect to specified
+			network.
+
+			Possible errors: net.connman.iwd.Aborted
+					 new.connman.iwd.Busy
+					 new.connman.iwd.Failed
+					 new.connman.iwd.NoAgent
+					 new.connman.iwd.NotSupported
+					 new.connman.iwd.Timeout
+
+Properties	string Name [readonly]
+
+			Network SSID
+
+		boolean Connected [readonly]
+
+			Reflects whether the device is connected to this
+			network.

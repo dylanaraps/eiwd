@@ -1,0 +1,83 @@
+Device hierarchy
+================
+
+Service		net.connman.iwd
+Interface	net.connman.iwd.Device [Experimental]
+Object path	/{phy0,phy1,...}/{1,2,...}
+
+Methods		void Scan()
+
+			Schedule a network scan.
+
+			Possible errors: net.connman.iwd.Busy
+					 new.connman.iwd.Failed
+
+		void Disconnect()
+
+			Disconnect from the network
+
+			Possible errors: net.connman.iwd.Busy
+					 new.connman.iwd.Failed
+					 new.connman.iwd.NotConnected
+
+		array(osns) GetOrderedNetworks()
+
+			Return the list of networks found in the most recent
+			scan, sorted by their user interface importantce
+			score as calculated by iwd.  If the device is
+			currently connected to a network, that network is
+			always first on the list, followed by any known
+			networks that have been used at least once before,
+			followed by any other known networks and any other
+			detected networks as the last group.  Within these
+			groups the maximum relative signal-strength is the
+			main sorting factor.
+
+			Every record returned contains a 4-tuple of the
+			following values.
+
+			object Object
+
+				net.connman.iwd.Network object representing
+				the network.
+
+			string Name
+
+				Contains the Name (SSID) of the network
+
+			int16 SignalStrength
+
+				Network's maximum signal strength expressed
+				in 100 * dBm.  The value is the range of 0
+				(strongest signal) to -10000 (weakest signal)
+
+			string Type
+
+				Contains the type of the network.  Possible
+				types are "open", "psk", "8021x" (EAP)
+
+Properties	string Name [readonly]
+
+			Device's interface name
+
+		string Address [readonly]
+
+			Interface's hardware address in the XX:XX:XX:XX:XX:XX
+			format
+
+		object ConnectedNetwork [readonly, optional]
+
+			net.connman.iwd.Network object representing the
+			network the device is currently connected to
+
+		boolean Powered [readwrite]
+
+			True if the interface is UP.  If false, the device's
+			radio is powered down and no other actions can
+			be performed on the device.
+
+		boolean Scanning [readonly]
+
+			Reflects whether the device is currently scanning
+			for networks.  net.connman.iwd.Network objects are
+			updated when this property goes from true to false.
