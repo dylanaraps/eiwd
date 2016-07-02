@@ -78,6 +78,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/backtrace.h src/backtrace.c \
 					src/knownnetworks.h \
 					src/knownnetworks.c \
+					src/rfkill.h src/rfkill.c \
 					src/iwd.h
 src_iwd_LDADD = ell/libell-internal.la -ldl
 

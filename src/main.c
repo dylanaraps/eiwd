@@ -41,6 +41,7 @@
 #include "src/scan.h"
 #include "src/wsc.h"
 #include "src/knownnetworks.h"
+#include "src/rfkill.h"
 
 #include "src/backtrace.h"
 
@@ -226,10 +227,12 @@ int main(int argc, char *argv[])
 	eapol_init();
 	network_init();
 	known_networks_init();
+	rfkill_init();
 
 	exit_status = EXIT_SUCCESS;
 	l_main_run();
 
+	rfkill_exit();
 	known_networks_exit();
 	network_exit();
 	eapol_exit();
