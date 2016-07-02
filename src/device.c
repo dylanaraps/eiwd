@@ -729,6 +729,9 @@ static void device_disconnect_cb(struct netdev *netdev, bool success,
 	struct l_dbus_message *reply;
 
 	if (!success) {
+		if (!device->disconnect_pending)
+			return;
+
 		dbus_pending_reply(&device->disconnect_pending,
 				dbus_error_failed(device->disconnect_pending));
 		return;
@@ -736,26 +739,27 @@ static void device_disconnect_cb(struct netdev *netdev, bool success,
 
 	device_disassociated(device);
 
+	if (!device->disconnect_pending)
+		return;
+
 	reply = l_dbus_message_new_method_return(device->disconnect_pending);
 	l_dbus_message_set_arguments(reply, "");
 	dbus_pending_reply(&device->disconnect_pending, reply);
 }
 
-static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data)
+int device_disconnect(struct device *device)
 {
-	struct device *device = user_data;
 	struct network *network = device->connected_network;
+	struct l_dbus *dbus = dbus_get_bus();
 
 	if (device->state == DEVICE_STATE_DISCONNECTING)
-		return dbus_error_busy(message);
+		return -EBUSY;
 
 	if (!device->connected_bss)
-		return dbus_error_not_connected(message);
+		return -ENOTCONN;
 
 	if (netdev_disconnect(device->netdev, device_disconnect_cb, device) < 0)
-		return dbus_error_failed(message);
+		return -EIO;
 
 	if (device->state == DEVICE_STATE_CONNECTING)
 		if (device->connect_pending)
@@ -779,6 +783,29 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 				IWD_NETWORK_INTERFACE, "Connected");
 
 	device_enter_state(device, DEVICE_STATE_DISCONNECTING);
+
+	return 0;
+}
+
+static struct l_dbus_message *device_dbus_disconnect(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct device *device = user_data;
+	int result;
+
+	l_debug("");
+
+	result = device_disconnect(device);
+
+	if (result == -EBUSY)
+		return dbus_error_busy(message);
+
+	if (result == -ENOTCONN)
+		return dbus_error_not_connected(message);
+
+	if (result < 0)
+		return dbus_error_failed(message);
 
 	device->disconnect_pending = l_dbus_message_ref(message);
 
@@ -884,7 +911,7 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "Scan", 0,
 				device_scan, "", "");
 	l_dbus_interface_method(interface, "Disconnect", 0,
-				device_disconnect, "", "");
+				device_dbus_disconnect, "", "");
 	l_dbus_interface_method(interface, "GetOrderedNetworks", 0,
 				device_get_networks, "a(osns)", "",
 				"networks");

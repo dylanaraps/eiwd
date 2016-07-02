@@ -59,6 +59,7 @@ void device_disassociated(struct device *device);
 void device_connect_network(struct device *device, struct network *network,
 				struct scan_bss *bss,
 				struct l_dbus_message *message);
+int device_disconnect(struct device *device);
 
 struct device *device_create(struct wiphy *wiphy, struct netdev *netdev);
 void device_remove(struct device *device);
