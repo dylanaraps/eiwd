@@ -555,7 +555,9 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 			dbus_pending_reply(&device->connect_pending,
 				dbus_error_failed(device->connect_pending));
 
-		device_disassociated(device);
+		if (device->state == DEVICE_STATE_CONNECTING)
+			device_disassociated(device);
+
 		return;
 	}
 
@@ -744,10 +746,9 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 						void *user_data)
 {
 	struct device *device = user_data;
-	struct network *network;
+	struct network *network = device->connected_network;
 
-	if (device->state == DEVICE_STATE_CONNECTING ||
-			device->state == DEVICE_STATE_DISCONNECTING)
+	if (device->state == DEVICE_STATE_DISCONNECTING)
 		return dbus_error_busy(message);
 
 	if (!device->connected_bss)
@@ -756,7 +757,10 @@ static struct l_dbus_message *device_disconnect(struct l_dbus *dbus,
 	if (netdev_disconnect(device->netdev, device_disconnect_cb, device) < 0)
 		return dbus_error_failed(message);
 
-	network = device->connected_network;
+	if (device->state == DEVICE_STATE_CONNECTING)
+		if (device->connect_pending)
+			dbus_pending_reply(&device->connect_pending,
+				dbus_error_aborted(device->connect_pending));
 
 	/*
 	 * If the disconnect somehow fails we won't know if we're still
