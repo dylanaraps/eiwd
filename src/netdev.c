@@ -1290,7 +1290,7 @@ static void netdev_get_interface_callback(struct l_genl_msg *msg,
 	rtmmsg->ifi_family = AF_UNSPEC;
 	rtmmsg->ifi_index = *ifindex;
 
-	l_netlink_send(rtnl, RTM_GETLINK, 0, rtmmsg, bufsize,
+	l_netlink_send(rtnl, RTM_GETLINK, 0, rtmmsg, sizeof(struct ifinfomsg),
 			netdev_getlink_cb, netdev, NULL);
 
 	l_free(rtmmsg);
