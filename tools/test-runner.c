@@ -1664,6 +1664,7 @@ static void run_tests(void)
 		if (debug_filter[0] != '\0') {
 			enable_debug = true;
 			l_debug_enable(debug_filter);
+			setenv("HWSIM_DEBUG", "", true);
 		}
 	}
 
