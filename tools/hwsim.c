@@ -75,6 +75,7 @@ static const char *destroy_action;
 
 static bool keep_radios_attr;
 static bool no_vif_attr;
+static bool p2p;
 static const char *radio_name_attr;
 
 static void do_debug(const char *str, void *user_data)
@@ -264,6 +265,9 @@ static void hwsim_ready(void *user_data)
 		if (no_vif_attr)
 			msg_size += 4;
 
+		if (p2p)
+			msg_size += 4;
+
 		msg = l_genl_msg_new_sized(HWSIM_CMD_NEW_RADIO, msg_size);
 
 		if (!keep_radios_attr)
@@ -278,6 +282,11 @@ static void hwsim_ready(void *user_data)
 
 		if (no_vif_attr)
 			l_genl_msg_append_attr(msg, HWSIM_ATTR_NO_VIF, 0, NULL);
+
+		if (p2p)
+			l_genl_msg_append_attr(msg,
+						HWSIM_ATTR_SUPPORT_P2P_DEVICE,
+						0, NULL);
 
 		l_genl_family_send(hwsim, msg, create_callback, NULL, NULL);
 		return;
@@ -335,6 +344,7 @@ static void usage(void)
 						"program exits\n"
 		"\t-n, --name <name>      Name of a radio to be created\n"
 		"\t-i, --nointerface      Do not create VIF\n"
+		"\t-p, --p2p              Support P2P\n"
 		"\t-h, --help             Show help options\n");
 }
 
@@ -345,6 +355,7 @@ static const struct option main_options[] = {
 	{ "keep",	 no_argument,		NULL, 'k' },
 	{ "name",	 required_argument,	NULL, 'n' },
 	{ "nointerface", no_argument,		NULL, 'i' },
+	{ "p2p",	 no_argument,		NULL, 'p' },
 	{ "version",	 no_argument,		NULL, 'v' },
 	{ "help",	 no_argument,		NULL, 'h' },
 	{ }
@@ -360,7 +371,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, ":L:CD:kn:iv", main_options,
+		opt = getopt_long(argc, argv, ":L:CD:kn:ipv", main_options,
 									NULL);
 		if (opt < 0)
 			break;
@@ -396,6 +407,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'i':
 			no_vif_attr = true;
+			break;
+		case 'p':
+			p2p = true;
 			break;
 		case 'v':
 			printf("%s\n", VERSION);
