@@ -68,10 +68,13 @@ enum {
 
 static struct l_genl_family *hwsim;
 
-static bool create_action;
-static bool list_action;
-static const char *list_option;
-static const char *destroy_action;
+static const char *options;
+
+static enum action {
+	ACTION_CREATE,
+	ACTION_DESTROY,
+	ACTION_LIST,
+} action;
 
 static bool keep_radios_attr;
 static bool no_vif_attr;
@@ -244,6 +247,8 @@ static void hwsim_ready(void *user_data)
 {
 	struct l_genl_msg *msg;
 	int ret;
+	size_t msg_size;
+	uint32_t radio_id;
 
 	ret = l_genl_family_register(hwsim, "config", hwsim_config,
 					NULL, NULL);
@@ -253,8 +258,27 @@ static void hwsim_ready(void *user_data)
 		return;
 	}
 
-	if (create_action) {
-		size_t msg_size = 0;
+	switch (action) {
+	case ACTION_LIST:
+		msg = l_genl_msg_new_sized(HWSIM_CMD_GET_RADIO,
+					options ? 8 : 4);
+
+		if (options) {
+			radio_id = atoi(options);
+
+			l_genl_msg_append_attr(msg, HWSIM_ATTR_RADIO_ID,
+					4, &radio_id);
+			l_genl_family_send(hwsim, msg, list_callback,
+						NULL, list_callback_done);
+		} else {
+			l_genl_family_dump(hwsim, msg, list_callback,
+						NULL, list_callback_done);
+		}
+
+		break;
+
+	case ACTION_CREATE:
+		msg_size = 0;
 
 		if (!keep_radios_attr)
 			msg_size += 4;
@@ -289,30 +313,23 @@ static void hwsim_ready(void *user_data)
 						0, NULL);
 
 		l_genl_family_send(hwsim, msg, create_callback, NULL, NULL);
-		return;
-	} else if (destroy_action) {
-		uint32_t id = atoi(destroy_action);
+
+		break;
+
+	case ACTION_DESTROY:
+		radio_id = atoi(options);
 
 		msg = l_genl_msg_new_sized(HWSIM_CMD_DEL_RADIO, 8);
-		l_genl_msg_append_attr(msg, HWSIM_ATTR_RADIO_ID, 4, &id);
+		l_genl_msg_append_attr(msg, HWSIM_ATTR_RADIO_ID, 4, &radio_id);
 		l_genl_family_send(hwsim, msg, destroy_callback, NULL, NULL);
-	} else if (list_action) {
-		msg = l_genl_msg_new_sized(HWSIM_CMD_GET_RADIO,
-					list_option ? 8 : 4);
 
-		if (list_option) {
-			uint32_t id = atoi(list_option);
+		break;
 
-			l_genl_msg_append_attr(msg, HWSIM_ATTR_RADIO_ID,
-					4, &id);
-			l_genl_family_send(hwsim, msg, list_callback,
-						NULL, list_callback_done);
-		} else {
-			l_genl_family_dump(hwsim, msg, list_callback,
-						NULL, list_callback_done);
-		}
-	} else
+	default:
 		l_main_quit();
+
+		break;
+	}
 }
 
 static void hwsim_disappeared(void *user_data)
@@ -379,7 +396,7 @@ int main(int argc, char *argv[])
 		switch (opt) {
 		case ':':
 			if (optopt == 'L') {
-				list_action = true;
+				action = ACTION_LIST;
 				actions++;
 			} else {
 				printf("option '-%c' requires an argument\n",
@@ -387,16 +404,17 @@ int main(int argc, char *argv[])
 			}
 			break;
 		case 'L':
-			list_action = true;
-			list_option = optarg;
+			action = ACTION_LIST;
+			options = optarg;
 			actions++;
 			break;
 		case 'C':
-			create_action = true;
+			action = ACTION_CREATE;
 			actions++;
 			break;
 		case 'D':
-			destroy_action = optarg;
+			action = ACTION_DESTROY;
+			options = optarg;
 			actions++;
 			break;
 		case 'k':
