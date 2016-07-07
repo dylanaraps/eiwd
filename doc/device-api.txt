@@ -23,7 +23,7 @@ Methods		void Scan()
 		array(osns) GetOrderedNetworks()
 
 			Return the list of networks found in the most recent
-			scan, sorted by their user interface importantce
+			scan, sorted by their user interface importance
 			score as calculated by iwd.  If the device is
 			currently connected to a network, that network is
 			always first on the list, followed by any known
