@@ -1349,9 +1349,10 @@ static void create_network_and_run_tests(const void *key, void *value,
 	if (!configure_hw_radios(hw_settings, hwsim_radio_ids, if_name_map))
 		goto exit_hwsim;
 
-	list_hwsim_radios();
-
-	list_interfaces();
+	if (verbose_out) {
+		list_hwsim_radios();
+		list_interfaces();
+	}
 
 	if (!configure_hostapd_instances(hw_settings, config_dir_path,
 						if_name_map, hostapd_pids))
