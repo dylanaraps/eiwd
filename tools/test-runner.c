@@ -630,6 +630,28 @@ static bool destroy_hwsim_radio(int radio_id)
 	return true;
 }
 
+static pid_t register_hwsim_as_trans_medium(void)
+{
+	char *argv[3];
+
+	if (chdir(exec_home + 5) < 0) {
+		l_error("Failed to change home test directory: %s",
+							strerror(errno));
+		return false;
+	}
+
+	argv[0] = BIN_HWSIM;
+	argv[1] = "--register";
+	argv[2] = NULL;
+
+	return execute_program(argv, false);
+}
+
+static void terminate_medium(pid_t medium_pid)
+{
+	kill_process(medium_pid);
+}
+
 #define HOSTAPD_CTRL_INTERFACE_PREFIX "/var/run/hostapd"
 
 static pid_t start_hostapd(const char *config_file, const char *interface_name)
@@ -1311,7 +1333,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 {
 	int hwsim_radio_ids[HWSIM_RADIOS_MAX];
 	pid_t hostapd_pids[HWSIM_RADIOS_MAX];
-	pid_t iwd_pid;
+	pid_t iwd_pid, medium_pid;
 	char *config_dir_path;
 	struct l_settings *hw_settings;
 	struct l_hashmap *if_name_map;
@@ -1349,6 +1371,10 @@ static void create_network_and_run_tests(const void *key, void *value,
 	if (!configure_hw_radios(hw_settings, hwsim_radio_ids, if_name_map))
 		goto exit_hwsim;
 
+	medium_pid = register_hwsim_as_trans_medium();
+	if (medium_pid < 0)
+		goto exit_hwsim;
+
 	if (verbose_out) {
 		list_hwsim_radios();
 		list_interfaces();
@@ -1372,6 +1398,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 	l_info("Destructing network...");
 
 	terminate_iwd(iwd_pid);
+	terminate_medium(medium_pid);
 
 exit_hostapd:
 	destroy_hostapd_instances(hostapd_pids);
