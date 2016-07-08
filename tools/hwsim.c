@@ -69,6 +69,7 @@ enum {
 static struct l_genl_family *hwsim;
 
 static const char *options;
+static int exit_status;
 
 static enum action {
 	ACTION_CREATE,
@@ -103,6 +104,7 @@ static void create_callback(struct l_genl_msg *msg, void *user_data)
 		if (err < 0) {
 			l_warn("Failed to initialize create return attributes"
 				" [%d/%s]", -err, strerror(-err));
+			exit_status = EXIT_FAILURE;
 			goto done;
 		}
 
@@ -111,6 +113,7 @@ static void create_callback(struct l_genl_msg *msg, void *user_data)
 		l_info("Created new radio with id %u", radio_id);
 	} else {
 		l_warn("Failed to get create return value");
+		exit_status = EXIT_FAILURE;
 		goto done;
 	}
 
@@ -130,6 +133,7 @@ static void destroy_callback(struct l_genl_msg *msg, void *user_data)
 		if (err < 0) {
 			l_warn("Failed to destroy radio [%d/%s]",
 				-err, strerror(-err));
+			exit_status = EXIT_FAILURE;
 			goto done;
 		}
 
@@ -183,6 +187,7 @@ static void list_callback(struct l_genl_msg *msg, void *user_data)
 		if (err < 0) {
 			l_warn("Failed to list radio [%d/%s]",
 				-err, strerror(-err));
+			exit_status = EXIT_FAILURE;
 			return;
 		}
 	}
@@ -254,6 +259,7 @@ static void hwsim_ready(void *user_data)
 					NULL, NULL);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to create hwsim config listener\n");
+		exit_status = EXIT_FAILURE;
 		l_main_quit();
 		return;
 	}
@@ -383,7 +389,7 @@ int main(int argc, char *argv[])
 	struct l_signal *signal;
 	struct l_genl *genl;
 	sigset_t mask;
-	int exit_status, actions = 0;
+	int actions = 0;
 
 	for (;;) {
 		int opt;
@@ -401,6 +407,7 @@ int main(int argc, char *argv[])
 			} else {
 				printf("option '-%c' requires an argument\n",
 					optopt);
+				return EXIT_FAILURE;
 			}
 			break;
 		case 'L':
