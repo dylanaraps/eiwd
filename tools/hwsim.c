@@ -79,7 +79,7 @@ static enum action {
 
 static bool keep_radios_attr;
 static bool no_vif_attr;
-static bool p2p;
+static bool p2p_attr;
 static const char *radio_name_attr;
 
 static void do_debug(const char *str, void *user_data)
@@ -295,7 +295,7 @@ static void hwsim_ready(void *user_data)
 		if (no_vif_attr)
 			msg_size += 4;
 
-		if (p2p)
+		if (p2p_attr)
 			msg_size += 4;
 
 		msg = l_genl_msg_new_sized(HWSIM_CMD_NEW_RADIO, msg_size);
@@ -313,7 +313,7 @@ static void hwsim_ready(void *user_data)
 		if (no_vif_attr)
 			l_genl_msg_append_attr(msg, HWSIM_ATTR_NO_VIF, 0, NULL);
 
-		if (p2p)
+		if (p2p_attr)
 			l_genl_msg_append_attr(msg,
 						HWSIM_ATTR_SUPPORT_P2P_DEVICE,
 						0, NULL);
@@ -434,7 +434,7 @@ int main(int argc, char *argv[])
 			no_vif_attr = true;
 			break;
 		case 'p':
-			p2p = true;
+			p2p_attr = true;
 			break;
 		case 'v':
 			printf("%s\n", VERSION);
