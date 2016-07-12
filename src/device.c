@@ -906,6 +906,55 @@ static bool device_property_get_powered(struct l_dbus *dbus,
 	return true;
 }
 
+struct set_powered_cb_data {
+	struct device *device;
+	struct l_dbus *dbus;
+	struct l_dbus_message *message;
+	l_dbus_property_complete_cb_t complete;
+};
+
+static void set_powered_cb(struct netdev *netdev, int result, void *user_data)
+{
+	struct set_powered_cb_data *cb_data = user_data;
+	struct l_dbus_message *reply = NULL;
+
+	if (result < 0)
+		reply = dbus_error_failed(cb_data->message);
+
+	cb_data->complete(cb_data->dbus, cb_data->message, reply);
+}
+
+static struct l_dbus_message *device_property_set_powered(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_iter *new_value,
+					l_dbus_property_complete_cb_t complete,
+					void *user_data)
+{
+	struct device *device = user_data;
+	bool powered;
+	struct set_powered_cb_data *cb_data;
+
+	if (!l_dbus_message_iter_get_variant(new_value, "b", &powered))
+		return dbus_error_invalid_args(message);
+
+	if (powered == (device->state != DEVICE_STATE_OFF)) {
+		complete(dbus, message, NULL);
+
+		return NULL;
+	}
+
+	cb_data = l_new(struct set_powered_cb_data, 1);
+	cb_data->device = device;
+	cb_data->dbus = dbus;
+	cb_data->message = message;
+	cb_data->complete = complete;
+
+	netdev_set_powered(device->netdev, powered, set_powered_cb, cb_data,
+				l_free);
+
+	return NULL;
+}
+
 static void setup_device_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Scan", 0,
@@ -924,7 +973,8 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 					device_property_get_connected_network,
 					NULL);
 	l_dbus_interface_property(interface, "Powered", 0, "b",
-					device_property_get_powered, NULL);
+					device_property_get_powered,
+					device_property_set_powered);
 }
 
 static bool device_remove_network(const void *key, void *data, void *user_data)
