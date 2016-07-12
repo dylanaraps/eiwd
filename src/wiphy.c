@@ -39,6 +39,7 @@
 #include "src/scan.h"
 #include "src/netdev.h"
 #include "src/dbus.h"
+#include "src/rfkill.h"
 #include "src/wiphy.h"
 
 static struct l_genl_family *nl80211 = NULL;
@@ -51,6 +52,9 @@ struct wiphy {
 	bool support_rekey_offload:1;
 	uint16_t pairwise_ciphers;
 	struct scan_freq_set *supported_freqs;
+
+	bool soft_rfkill : 1;
+	bool hard_rfkill : 1;
 };
 
 static struct l_queue *wiphy_list = NULL;
@@ -337,6 +341,9 @@ static void wiphy_register(struct wiphy *wiphy)
 {
 	struct l_dbus *dbus = dbus_get_bus();
 
+	wiphy->soft_rfkill = rfkill_get_soft_state(wiphy->id);
+	wiphy->hard_rfkill = rfkill_get_hard_state(wiphy->id);
+
 	if (!l_dbus_object_add_interface(dbus, wiphy_get_path(wiphy),
 					IWD_WIPHY_INTERFACE, wiphy))
 		l_info("Unable to add the %s interface to %s",
@@ -522,8 +529,45 @@ static void protocol_features_callback(struct l_genl_msg *msg, void *user_data)
 		l_debug("Found split wiphy dump support");
 }
 
+static void wiphy_rfkill_cb(unsigned int wiphy_id, bool soft, bool hard,
+				void *user_data)
+{
+	struct wiphy *wiphy = wiphy_find(wiphy_id);
+	struct l_dbus *dbus = dbus_get_bus();
+	bool old_powered, new_powered;
+
+	if (!wiphy)
+		return;
+
+	old_powered = !wiphy->soft_rfkill && !wiphy->hard_rfkill;
+
+	wiphy->soft_rfkill = soft;
+	wiphy->hard_rfkill = hard;
+
+	new_powered = !wiphy->soft_rfkill && !wiphy->hard_rfkill;
+
+	if (old_powered != new_powered)
+		l_dbus_property_changed(dbus, wiphy_get_path(wiphy),
+					IWD_WIPHY_INTERFACE, "Powered");
+}
+
+static bool wiphy_property_get_powered(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct wiphy *wiphy = user_data;
+	bool value = !wiphy->soft_rfkill && !wiphy->hard_rfkill;
+
+	l_dbus_message_builder_append_basic(builder, 'b', &value);
+
+	return true;
+}
+
 static void setup_wiphy_interface(struct l_dbus_interface *interface)
 {
+	l_dbus_interface_property(interface, "Powered", 0, "b",
+					wiphy_property_get_powered, NULL);
 }
 
 bool wiphy_init(struct l_genl_family *in)
@@ -565,6 +609,8 @@ bool wiphy_init(struct l_genl_family *in)
 	if (!l_genl_family_dump(nl80211, msg, wiphy_dump_callback,
 						NULL, wiphy_dump_done))
 		l_error("Getting all wiphy devices failed");
+
+	rfkill_watch_add(wiphy_rfkill_cb, NULL);
 
 	if (!l_dbus_register_interface(dbus_get_bus(),
 					IWD_WIPHY_INTERFACE,
