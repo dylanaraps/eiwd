@@ -18,19 +18,13 @@ import utility
 def getSecondNetworkToConnect(objectList, firstNetworkName):
     logger.debug(sys._getframe().f_code.co_name)
     for path in objectList:
-        if utility.IWD_DEVICE_INTERFACE not in objectList[path]:
+        if utility.IWD_NETWORK_INTERFACE not in objectList[path]:
             continue
-        for path2 in objectList:
-            if not path2.startswith(path) or \
-                utility.IWD_NETWORK_INTERFACE not in objectList[path2]:
-                continue
-            network = objectList[path2][utility.IWD_NETWORK_INTERFACE]
-            for key in network.keys():
-                if key in ["Name"]:
-                    # skip the first connected network
-                    if (network[key] == firstNetworkName):
-                        continue
-                    return path2
+        network = objectList[path][utility.IWD_NETWORK_INTERFACE]
+        # skip the first connected network
+        if network["Name"] == firstNetworkName:
+            continue
+        return path
     return ""
 
 class TestTwoNetworks(unittest.TestCase):

@@ -27,14 +27,10 @@ def getNetworkList(objects, bus):
     logger.debug(sys._getframe().f_code.co_name)
     networkList = []
     for path in objects:
-        if IWD_DEVICE_INTERFACE not in objects[path]:
+        if IWD_NETWORK_INTERFACE not in objects[path]:
             continue
-        for path2 in objects:
-            if not path2.startswith(path) or \
-                IWD_NETWORK_INTERFACE not in objects[path2]:
-                    continue
-            networkList.append(path2)
-        return networkList
+        networkList.append(path)
+    return networkList
 
 def connect(networkToConnect, self, mainloop, bus):
     logger.debug(sys._getframe().f_code.co_name)
@@ -73,11 +69,9 @@ def getNetworkToConnectTo(objects):
     logger.debug(sys._getframe().f_code.co_name)
     networkList = []
     for path in objects:
-        for path2 in objects:
-            if not path2.startswith(path) or \
-                IWD_NETWORK_INTERFACE not in objects[path2]:
-                    continue
-            return path2
+        if IWD_NETWORK_INTERFACE not in objects[path]:
+            continue
+        return path
     return ""
 
 # return the currently connected device by
@@ -102,42 +96,27 @@ def getCurrentlyConnectedNetworkName():
     logger.debug(sys._getframe().f_code.co_name)
     bus = dbus.SystemBus()
     deviceList = getObjectList(bus)
-    networkList = getNetworkList(deviceList, bus)
     for path in deviceList:
-        for path2 in deviceList:
-            if not path2.startswith(path) or \
-                IWD_NETWORK_INTERFACE not in deviceList[path2]:
-                continue
-            network = deviceList[path2][IWD_NETWORK_INTERFACE]
-            for key in network.keys():
-                name = ""
-                if key in ["Connected"]:
-                    # this check is needed in case when we are testing
-                    # connectivity with multiple networks. The previously
-                    # connected network will still have the 'Connected' property
-                    # even though it will be set to 0.
-                    val = network[key]
-                    if network[key] == 0: # if "Connected is 0"
-                        continue
-                    for key2 in network.keys():
-                        if key2 in ["Name"]:
-                            return network[key2]
+        if IWD_NETWORK_INTERFACE not in deviceList[path]:
+            continue
+        network = deviceList[path][IWD_NETWORK_INTERFACE]
+        # this check is needed in case when we are testing
+        # connectivity with multiple networks. The previously
+        # connected network will still have the 'Connected' property
+        # even though it will be set to 0.
+        if not network["Connected"]: # if "Connected is 0"
+            continue
+        return network["Name"]
     return ""
 
 # get name of the network
 def getNetworkName(deviceList):
     logger.debug(sys._getframe().f_code.co_name)
     for path in deviceList:
-        if IWD_DEVICE_INTERFACE not in deviceList[path]:
+        if IWD_NETWORK_INTERFACE not in deviceList[path]:
             continue
-        for path2 in deviceList:
-            if not path2.startswith(path) or \
-                IWD_NETWORK_INTERFACE not in deviceList[path2]:
-                continue
-            network = deviceList[path2][IWD_NETWORK_INTERFACE]
-            for key in network.keys():
-                if key in ["Name"]:
-                    return network[key]
+        network = deviceList[path][IWD_NETWORK_INTERFACE]
+        return network["Name"]
     return ""
 
 def initLogger():
