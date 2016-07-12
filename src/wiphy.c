@@ -38,6 +38,7 @@
 #include "src/crypto.h"
 #include "src/scan.h"
 #include "src/netdev.h"
+#include "src/dbus.h"
 #include "src/wiphy.h"
 
 static struct l_genl_family *nl80211 = NULL;
@@ -88,6 +89,14 @@ static bool wiphy_match(const void *a, const void *b)
 struct wiphy *wiphy_find(int wiphy_id)
 {
 	return l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(wiphy_id));
+}
+
+const char *wiphy_get_path(struct wiphy *wiphy)
+{
+	static char path[15];
+
+	snprintf(path, sizeof(path), "/phy%u", wiphy->id);
+	return path;
 }
 
 static void wiphy_print_basic_info(struct wiphy *wiphy)
@@ -324,6 +333,16 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 	wiphy_parse_attributes(wiphy, &attr);
 }
 
+static void wiphy_register(struct wiphy *wiphy)
+{
+	struct l_dbus *dbus = dbus_get_bus();
+
+	if (!l_dbus_object_add_interface(dbus, wiphy_get_path(wiphy),
+					IWD_WIPHY_INTERFACE, wiphy))
+		l_info("Unable to add the %s interface to %s",
+				IWD_WIPHY_INTERFACE, wiphy_get_path(wiphy));
+}
+
 static void wiphy_dump_done(void *user)
 {
 	const struct l_queue_entry *wiphy_entry;
@@ -331,6 +350,8 @@ static void wiphy_dump_done(void *user)
 	for (wiphy_entry = l_queue_get_entries(wiphy_list); wiphy_entry;
 					wiphy_entry = wiphy_entry->next) {
 		struct wiphy *wiphy = wiphy_entry->data;
+
+		wiphy_register(wiphy);
 
 		wiphy_print_basic_info(wiphy);
 	}
@@ -377,6 +398,8 @@ static void wiphy_new_wiphy_event(struct l_genl_msg *msg)
 	wiphy_parse_attributes(wiphy, &attr);
 	wiphy_print_basic_info(wiphy);
 
+	wiphy_register(wiphy);
+
 	netdev_new_wiphy_hint(wiphy->id);
 }
 
@@ -407,6 +430,8 @@ static void wiphy_del_wiphy_event(struct l_genl_msg *msg)
 	wiphy = l_queue_remove_if(wiphy_list, wiphy_match, L_UINT_TO_PTR(id));
 	if (!wiphy)
 		return;
+
+	l_dbus_unregister_object(dbus_get_bus(), wiphy_get_path(wiphy));
 
 	wiphy_free(wiphy);
 }
@@ -497,6 +522,10 @@ static void protocol_features_callback(struct l_genl_msg *msg, void *user_data)
 		l_debug("Found split wiphy dump support");
 }
 
+static void setup_wiphy_interface(struct l_dbus_interface *interface)
+{
+}
+
 bool wiphy_init(struct l_genl_family *in)
 {
 	struct l_genl_msg *msg;
@@ -537,6 +566,13 @@ bool wiphy_init(struct l_genl_family *in)
 						NULL, wiphy_dump_done))
 		l_error("Getting all wiphy devices failed");
 
+	if (!l_dbus_register_interface(dbus_get_bus(),
+					IWD_WIPHY_INTERFACE,
+					setup_wiphy_interface,
+					NULL, true))
+		l_error("Unable to register the %s interface",
+				IWD_WIPHY_INTERFACE);
+
 	return true;
 }
 
@@ -546,6 +582,8 @@ bool wiphy_exit(void)
 	wiphy_list = NULL;
 
 	nl80211 = NULL;
+
+	l_dbus_unregister_interface(dbus_get_bus(), IWD_WIPHY_INTERFACE);
 
 	return true;
 }

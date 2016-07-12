@@ -442,9 +442,10 @@ struct network *device_get_connected_network(struct device *device)
 
 const char *device_get_path(struct device *device)
 {
-	static char path[12];
+	static char path[26];
 
-	snprintf(path, sizeof(path), "/%u", device->index);
+	snprintf(path, sizeof(path), "%s/%u", wiphy_get_path(device->wiphy),
+			device->index);
 	return path;
 }
 
