@@ -69,6 +69,7 @@ struct device {
 	struct l_queue *autoconnect_list;
 	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
+	bool scanning;
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
@@ -381,8 +382,13 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 	struct network *network;
 	const struct l_queue_entry *bss_entry;
 	struct timespec now;
+	struct l_dbus *dbus = dbus_get_bus();
 
 	clock_gettime(CLOCK_REALTIME, &now);
+
+	device->scanning = false;
+	l_dbus_property_changed(dbus, device_get_path(device),
+				IWD_DEVICE_INTERFACE, "Scanning");
 
 	device->old_bss_list = device->bss_list;
 	device->bss_list = bss_list;
@@ -467,6 +473,17 @@ const uint8_t *device_get_address(struct device *device)
 	return netdev_get_address(device->netdev);
 }
 
+static void periodic_scan_trigger(int err, void *user_data)
+{
+	struct device *device = user_data;
+	struct l_dbus *dbus = dbus_get_bus();
+
+	device->scanning = true;
+	l_dbus_property_changed(dbus, device_get_path(device),
+				IWD_DEVICE_INTERFACE, "Scanning");
+
+}
+
 void device_enter_state(struct device *device, enum device_state state)
 {
 	l_debug("Old State: %s, new state: %s",
@@ -478,7 +495,7 @@ void device_enter_state(struct device *device, enum device_state state)
 		scan_periodic_stop(device->index);
 		break;
 	case DEVICE_STATE_AUTOCONNECT:
-		scan_periodic_start(device->index, NULL,
+		scan_periodic_start(device->index, periodic_scan_trigger,
 					new_scan_results, device);
 		break;
 	case DEVICE_STATE_DISCONNECTED:
@@ -686,6 +703,7 @@ static void device_scan_triggered(int err, void *user_data)
 {
 	struct device *device = user_data;
 	struct l_dbus_message *reply;
+	struct l_dbus *dbus = dbus_get_bus();
 
 	l_debug("device_scan_triggered: %i", err);
 
@@ -696,6 +714,10 @@ static void device_scan_triggered(int err, void *user_data)
 	}
 
 	l_debug("Scan triggered for %s", netdev_get_name(device->netdev));
+
+	device->scanning = true;
+	l_dbus_property_changed(dbus, device_get_path(device),
+				IWD_DEVICE_INTERFACE, "Scanning");
 
 	reply = l_dbus_message_new_method_return(device->scan_pending);
 	l_dbus_message_set_arguments(reply, "");
@@ -955,6 +977,18 @@ static struct l_dbus_message *device_property_set_powered(struct l_dbus *dbus,
 	return NULL;
 }
 
+static bool device_property_get_scanning(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct device *device = user_data;
+
+	l_dbus_message_builder_append_basic(builder, 'b', &device->scanning);
+
+	return true;
+}
+
 static void setup_device_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Scan", 0,
@@ -975,6 +1009,8 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_property(interface, "Powered", 0, "b",
 					device_property_get_powered,
 					device_property_set_powered);
+	l_dbus_interface_property(interface, "Scanning", 0, "b",
+					device_property_get_scanning, NULL);
 }
 
 static bool device_remove_network(const void *key, void *data, void *user_data)
