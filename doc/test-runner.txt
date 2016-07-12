@@ -17,7 +17,7 @@ OS:
 
 	Name:			Tested ver.:
 	 1. qemu		2.4.1
-	 2. Linux kernel	4.6.1
+	 2. Linux kernel	https://git.kernel.org/pub/scm/linux/kernel/git/martineau/linux.git
 	 3. dbus-daemon		1.10.0
 	 4. ifconfig		2.10-alpha
 	 5. iw			3.17
@@ -56,8 +56,6 @@ as follows:
 	$ make kvmconfig
 
 	$ sh <iwd>/tools/test_runner_kernel_config
-
-	$ make olddefconfig
 
 After that a default kernel with the required options can be built:
 
