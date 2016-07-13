@@ -70,6 +70,7 @@ struct device {
 	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
 	bool scanning;
+	uint32_t netdev_watch_id;
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
@@ -1103,7 +1104,8 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	scan_ifindex_add(device->index);
 
 	device_netdev_notify(netdev, netdev_get_is_up(netdev), device);
-	netdev_watch_add(netdev, device_netdev_notify, device);
+	device->netdev_watch_id =
+		netdev_watch_add(netdev, device_netdev_notify, device);
 
 	return device;
 }
@@ -1135,6 +1137,8 @@ static void device_free(void *user)
 	l_queue_destroy(device->bss_list, bss_free);
 	l_queue_destroy(device->old_bss_list, bss_free);
 	l_queue_destroy(device->autoconnect_list, l_free);
+
+	netdev_watch_remove(device->netdev, device->netdev_watch_id);
 
 	scan_ifindex_remove(device->index);
 	l_free(device);
