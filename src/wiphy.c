@@ -564,10 +564,40 @@ static bool wiphy_property_get_powered(struct l_dbus *dbus,
 	return true;
 }
 
+static struct l_dbus_message *wiphy_property_set_powered(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_iter *new_value,
+					l_dbus_property_complete_cb_t complete,
+					void *user_data)
+{
+	struct wiphy *wiphy = user_data;
+	bool old_powered, new_powered;
+
+	if (!l_dbus_message_iter_get_variant(new_value, "b", &new_powered))
+		return dbus_error_invalid_args(message);
+
+	old_powered = !wiphy->soft_rfkill && !wiphy->hard_rfkill;
+
+	if (old_powered == new_powered)
+		goto done;
+
+	if (wiphy->hard_rfkill)
+		return dbus_error_not_available(message);
+
+	if (!rfkill_set_soft_state(wiphy->id, !new_powered))
+		return dbus_error_failed(message);
+
+done:
+	complete(dbus, message, NULL);
+
+	return NULL;
+}
+
 static void setup_wiphy_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_property(interface, "Powered", 0, "b",
-					wiphy_property_get_powered, NULL);
+					wiphy_property_get_powered,
+					wiphy_property_set_powered);
 }
 
 bool wiphy_init(struct l_genl_family *in)
