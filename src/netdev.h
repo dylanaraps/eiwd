@@ -54,6 +54,9 @@ typedef void (*netdev_disconnect_cb_t)(struct netdev *netdev, bool result,
 					void *user_data);
 typedef void (*netdev_watch_func_t)(struct netdev *netdev, bool up,
 					void *user_data);
+typedef void (*netdev_set_powered_cb_t)(struct netdev *netdev, int result,
+					void *user_data);
+typedef void (*netdev_destroy_func_t)(void *user_data);
 
 const uint8_t *netdev_get_address(struct netdev *netdev);
 uint32_t netdev_get_ifindex(struct netdev *netdev);
@@ -67,6 +70,10 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 				netdev_connect_cb_t cb, void *user_data);
 int netdev_disconnect(struct netdev *netdev,
 				netdev_disconnect_cb_t cb, void *user_data);
+
+int netdev_set_powered(struct netdev *netdev, bool powered,
+				netdev_set_powered_cb_t cb, void *user_data,
+				netdev_destroy_func_t destroy);
 
 struct netdev *netdev_find(int ifindex);
 void netdev_new_wiphy_hint(uint32_t wiphy_id);

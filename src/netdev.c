@@ -54,6 +54,7 @@ struct netdev {
 	uint32_t type;
 	uint8_t addr[ETH_ALEN];
 	struct device *device;
+	unsigned int ifi_flags;
 
 	netdev_event_func_t event_filter;
 	netdev_connect_cb_t connect_cb;
@@ -71,7 +72,6 @@ struct netdev {
 	uint32_t next_watch_id;
 
 	bool rekey_offload_support : 1;
-	bool up:1;
 };
 
 struct netdev_watch {
@@ -178,7 +178,75 @@ const char *netdev_get_name(struct netdev *netdev)
 
 bool netdev_get_is_up(struct netdev *netdev)
 {
-	return netdev->up;
+	return (netdev->ifi_flags & IFF_UP) != 0;
+}
+
+struct set_powered_cb_data {
+	struct netdev *netdev;
+	netdev_set_powered_cb_t callback;
+	void *user_data;
+	l_netlink_destroy_func_t destroy;
+};
+
+static void netdev_set_powered_result(int error, uint16_t type,
+					const void *data,
+					uint32_t len, void *user_data)
+{
+	struct set_powered_cb_data *cb_data = user_data;
+
+	if (!cb_data)
+		return;
+
+	cb_data->callback(cb_data->netdev, error, cb_data->user_data);
+}
+
+static void netdev_set_powered_destroy(void *user_data)
+{
+	struct set_powered_cb_data *cb_data = user_data;
+
+	if (!cb_data)
+		return;
+
+	if (cb_data->destroy)
+		cb_data->destroy(cb_data->user_data);
+
+	l_free(cb_data);
+}
+
+int netdev_set_powered(struct netdev *netdev, bool powered,
+			netdev_set_powered_cb_t callback, void *user_data,
+			netdev_destroy_func_t destroy)
+{
+	struct ifinfomsg *rtmmsg;
+	size_t bufsize;
+	struct set_powered_cb_data *cb_data = NULL;
+
+	bufsize = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+
+	rtmmsg = l_malloc(bufsize);
+	memset(rtmmsg, 0, bufsize);
+
+	rtmmsg->ifi_family = AF_UNSPEC;
+	rtmmsg->ifi_index = netdev->index;
+	rtmmsg->ifi_change = 0xffffffff;
+	rtmmsg->ifi_flags = powered ? (netdev->ifi_flags | IFF_UP) :
+		(netdev->ifi_flags & ~IFF_UP);
+
+	if (callback) {
+		cb_data = l_new(struct set_powered_cb_data, 1);
+		cb_data->netdev = netdev;
+		cb_data->callback = callback;
+		cb_data->user_data = user_data;
+		cb_data->destroy = destroy;
+	}
+
+	l_netlink_send(rtnl, RTM_SETLINK, 0, rtmmsg, bufsize,
+			netdev_set_powered_result, cb_data,
+			netdev_set_powered_destroy);
+
+	l_free(rtmmsg);
+
+	return 0;
 }
 
 static void netdev_operstate_dormant_cb(bool success, void *user_data)
@@ -1094,23 +1162,26 @@ static void netdev_watch_notify(void *data, void *user_data)
 	struct netdev_watch *watch = data;
 	struct netdev *netdev = user_data;
 
-	watch->callback(netdev, netdev->up, watch->user_data);
+	watch->callback(netdev, netdev_get_is_up(netdev), watch->user_data);
 }
 
 static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 {
 	struct netdev *netdev;
-	bool up;
+	bool old_up, new_up;
 
 	netdev = netdev_find(ifi->ifi_index);
 	if (!netdev)
 		return;
 
-	up = (ifi->ifi_flags & IFF_UP) != 0;
-	if (netdev->up == up)
-		return;
+	old_up = netdev_get_is_up(netdev);
 
-	netdev->up = up;
+	netdev->ifi_flags = ifi->ifi_flags;
+
+	new_up = netdev_get_is_up(netdev);
+
+	if (old_up == new_up)
+		return;
 
 	l_queue_foreach(netdev->watches, netdev_watch_notify, netdev);
 }
