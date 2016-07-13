@@ -54,6 +54,7 @@ struct netdev {
 	uint32_t type;
 	uint8_t addr[ETH_ALEN];
 	struct device *device;
+	struct wiphy *wiphy;
 	unsigned int ifi_flags;
 
 	netdev_event_func_t event_filter;
@@ -269,6 +270,15 @@ static void netdev_free(void *data)
 
 	l_debug("Freeing netdev %s[%d]", netdev->name, netdev->index);
 
+	l_queue_destroy(netdev->watches, l_free);
+
+	l_free(netdev);
+}
+
+static void netdev_shutdown_one(void *data, void *user_data)
+{
+	struct netdev *netdev = data;
+
 	device_remove(netdev->device);
 
 	if (netdev->sm) {
@@ -288,9 +298,8 @@ static void netdev_free(void *data)
 						netdev_operstate_down_cb,
 						L_UINT_TO_PTR(netdev->index));
 
-	l_queue_destroy(netdev->watches, l_free);
-
-	l_free(netdev);
+	if (netdev_get_is_up(netdev))
+		netdev_set_powered(netdev, false, NULL, NULL, NULL);
 }
 
 static bool netdev_match(const void *a, const void *b)
@@ -1198,11 +1207,46 @@ static void netdev_dellink_notify(const struct ifinfomsg *ifi, int bytes)
 	netdev_free(netdev);
 }
 
+static void netdev_initial_up_cb(struct netdev *netdev, int result,
+					void *user_data)
+{
+	if (result != 0) {
+		l_error("Error bringing interface %i up: %s", netdev->index,
+			strerror(-result));
+
+		return;
+	}
+
+	netdev_set_linkmode_and_operstate(netdev->index, 1,
+						IF_OPER_DORMANT,
+						netdev_operstate_dormant_cb,
+						netdev);
+
+	l_debug("Interface %i initialized", netdev->index);
+
+	netdev->device = device_create(netdev->wiphy, netdev);
+}
+
+static void netdev_initial_down_cb(struct netdev *netdev, int result,
+					void *user_data)
+{
+	if (result != 0) {
+		l_error("Error taking interface %i down: %s", netdev->index,
+			strerror(-result));
+
+		return;
+	}
+
+	netdev_set_powered(netdev, true, netdev_initial_up_cb,
+				NULL, NULL);
+}
+
 static void netdev_getlink_cb(int error, uint16_t type, const void *data,
 			uint32_t len, void *user_data)
 {
 	const struct ifinfomsg *ifi = data;
 	unsigned int bytes;
+	struct netdev *netdev;
 
 	if (error != 0 || ifi->ifi_type != ARPHRD_ETHER ||
 			type != RTM_NEWLINK) {
@@ -1211,9 +1255,23 @@ static void netdev_getlink_cb(int error, uint16_t type, const void *data,
 		return;
 	}
 
+	netdev = netdev_find(ifi->ifi_index);
+	if (!netdev)
+		return;
+
 	bytes = len - NLMSG_ALIGN(sizeof(struct ifinfomsg));
 
 	netdev_newlink_notify(ifi, bytes);
+
+	/*
+	 * If the interface is UP, reset it to ensure a clean state,
+	 * otherwise just bring it UP.
+	 */
+	if (netdev_get_is_up(netdev)) {
+		netdev_set_powered(netdev, false, netdev_initial_down_cb,
+					NULL, NULL);
+	} else
+		netdev_initial_down_cb(netdev, 0, NULL);
 }
 
 static bool netdev_is_managed(const char *ifname)
@@ -1342,16 +1400,11 @@ static void netdev_get_interface_callback(struct l_genl_msg *msg,
 	netdev->rekey_offload_support = true;
 	memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
 	memcpy(netdev->name, ifname, ifname_len);
+	netdev->wiphy = wiphy;
 
 	l_queue_push_tail(netdev_list, netdev);
 
-	netdev_set_linkmode_and_operstate(netdev->index, 1,
-						IF_OPER_DORMANT,
-						netdev_operstate_dormant_cb,
-						netdev);
-
 	l_debug("Found interface %s[%d]", netdev->name, netdev->index);
-	netdev->device = device_create(wiphy, netdev);
 
 	/* Query interface flags */
 	bufsize = NLMSG_LENGTH(sizeof(struct ifinfomsg));
@@ -1568,4 +1621,12 @@ bool netdev_exit(void)
 	rtnl = NULL;
 
 	return true;
+}
+
+void netdev_shutdown(void)
+{
+	if (!rtnl)
+		return;
+
+	l_queue_foreach(netdev_list, netdev_shutdown_one, NULL);
 }

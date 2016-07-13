@@ -85,3 +85,4 @@ bool netdev_watch_remove(struct netdev *netdev, uint32_t id);
 bool netdev_init(struct l_genl_family *in,
 				const char *whitelist, const char *blacklist);
 bool netdev_exit(void);
+void netdev_shutdown(void);
