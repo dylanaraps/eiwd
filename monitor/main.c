@@ -49,6 +49,7 @@
 static struct nlmon *nlmon = NULL;
 static const char *writer_path = NULL;
 static struct l_timeout *timeout = NULL;
+static bool nortnl;
 
 #define NLA_OK(nla,len)         ((len) >= (int) sizeof(struct nlattr) && \
 				(nla)->nla_len >= sizeof(struct nlattr) && \
@@ -104,7 +105,7 @@ static void genl_parse(uint16_t type, const void *data, uint32_t len,
 		return;
 
 	if (!strcmp(name, NL80211_GENL_NAME)) {
-		nlmon = nlmon_open(ifname, id, writer_path);
+		nlmon = nlmon_open(ifname, id, writer_path, nortnl);
 		if (!nlmon)
 			l_main_quit();
 	}
@@ -681,6 +682,7 @@ static const struct option main_options[] = {
 	{ "analyze",   required_argument, NULL, 'a' },
 	{ "nl80211",   required_argument, NULL, 'F' },
 	{ "interface", required_argument, NULL, 'i' },
+	{ "nortnl",    no_argument,       NULL, 'n' },
 	{ "version",   no_argument,       NULL, 'v' },
 	{ "help",      no_argument,       NULL, 'h' },
 	{ }
@@ -700,7 +702,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "r:w:a:F:i:vh",
+		opt = getopt_long(argc, argv, "r:w:a:F:i:nvh",
 						main_options, NULL);
 		if (opt < 0)
 			break;
@@ -737,6 +739,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'i':
 			ifname = optarg;
+			break;
+		case 'n':
+			nortnl = true;
 			break;
 		case 'v':
 			printf("%s\n", VERSION);

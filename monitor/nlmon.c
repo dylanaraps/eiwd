@@ -93,6 +93,7 @@ struct nlmon {
 	struct l_io *pae_io;
 	struct l_queue *req_list;
 	struct pcap *pcap;
+	bool nortnl;
 };
 
 struct nlmon_req {
@@ -4616,7 +4617,10 @@ static bool nlmon_receive(struct l_io *io, void *user_data)
 		switch (proto_type) {
 		case NETLINK_ROUTE:
 			store_netlink(nlmon, tv, proto_type, nlmsg);
-			nlmon_print_rtnl(nlmon, tv, nlmsg, nlmsg->nlmsg_len);
+
+			if (!nlmon->nortnl)
+				nlmon_print_rtnl(nlmon, tv, nlmsg,
+							nlmsg->nlmsg_len);
 			break;
 		case NETLINK_GENERIC:
 			nlmon_message(nlmon, tv, tp, nlmsg);
@@ -4920,7 +4924,8 @@ static struct l_io *open_pae(void)
 	return io;
 }
 
-struct nlmon *nlmon_open(const char *ifname, uint16_t id, const char *pathname)
+struct nlmon *nlmon_open(const char *ifname, uint16_t id, const char *pathname,
+				bool nortnl)
 {
 	struct nlmon *nlmon;
 	struct l_io *io, *pae_io;
@@ -4953,6 +4958,7 @@ struct nlmon *nlmon_open(const char *ifname, uint16_t id, const char *pathname)
 	nlmon->pae_io = pae_io;
 	nlmon->req_list = l_queue_new();
 	nlmon->pcap = pcap;
+	nlmon->nortnl = nortnl;
 
 	l_io_set_read_handler(nlmon->io, nlmon_receive, nlmon, NULL);
 	l_io_set_read_handler(nlmon->pae_io, pae_receive, nlmon, NULL);
