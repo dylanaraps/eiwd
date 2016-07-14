@@ -1079,7 +1079,9 @@ static void device_netdev_notify(struct netdev *netdev,
 
 		l_dbus_property_changed(dbus, device_get_path(device),
 					IWD_DEVICE_INTERFACE, "Powered");
-	}
+	} else if (event == NETDEV_EVENT_NAME_CHANGE)
+		l_dbus_property_changed(dbus, device_get_path(device),
+					IWD_DEVICE_INTERFACE, "Name");
 }
 
 struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
