@@ -13,30 +13,21 @@ for path in objects:
     if 'net.connman.iwd.Device' not in objects[path]:
         continue
 
-    device = objects[path]['net.connman.iwd.Device']
+    properties = objects[path]['net.connman.iwd.Device']
+    device = dbus.Interface(bus.get_object("net.connman.iwd", path),
+                                                    'net.connman.iwd.Device')
 
     print("[ %s ]" % path)
 
-    for key in device.keys():
-        val = device[key]
+    for key in properties:
+        val = properties[key]
         print("    %s = %s" % (key, val))
 
-    print("    Networks:")
+    print("    Sorted networks:")
 
-    for path2 in objects:
-        if not path2.startswith(path) or \
-                'net.connman.iwd.Network' not in objects[path2]:
-            continue
-
-        network = objects[path2]['net.connman.iwd.Network']
-
+    for path2, ssid, rssi, security in device.GetOrderedNetworks():
         print("    [ %s ]" % path2)
 
-        for key in network.keys():
-            if key in ["SSID"]:
-                val = network[key]
-                val = "".join(map(chr, val))
-            else:
-                val = network[key]
-
-            print("        %s = %s" % (key, val))
+        print("        SSID = %s" % (ssid,))
+        print("        Signal strength = %i dBm" % (rssi / 100,))
+        print("        Security = %s" % (security,))
