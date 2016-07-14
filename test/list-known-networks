@@ -1,0 +1,21 @@
+#!/usr/bin/python3
+
+import sys
+import dbus
+
+bus = dbus.SystemBus()
+
+kn = dbus.Interface(bus.get_object("net.connman.iwd", "/"),
+                    "net.connman.iwd.KnownNetworks")
+
+if len(sys.argv) >= 4 and sys.argv[1] == 'forget':
+    kn.ForgetNetwork(sys.argv[2], sys.argv[3])
+
+print('Known Networks:')
+
+for network in kn.ListKnownNetworks():
+    print("[ %s ]" % network['Name'])
+
+    for key in network:
+        val = network[key]
+        print("    %s = %s" % (key, val))
