@@ -9,7 +9,6 @@ import logging
 import traceback
 import threading
 import time
-
 import sys
 sys.path.append('../utility') #needed to import all the utlilty modules
 import utility
@@ -55,6 +54,8 @@ def registerAgent(bus, mainloop):
     try:
         manager.RegisterAgent(pathAgent)
         logger.debug("Registered iwd agent")
+        # this will be received by stdout in the parent
+        print("AGENT_REGISTERED")
     except:
         logger.debug("Error in registering path")
         logger.debug(traceback.print_exc(file=sys.stdout))

@@ -7,17 +7,31 @@ import dbus
 import time
 import logging
 import os
-from random import randrange
-from subprocess import Popen
+from subprocess import Popen, PIPE, STDOUT
 import sys
 sys.path.append('../utility') #needed to import all the utility modules
 import utility
+import pty
 
 class TestConnectDisconnect(unittest.TestCase):
     def doConnectDisconnect(self):
         objectList = utility.getObjectList(bus)
-        networkToConnect = utility.getNetworkToConnectTo(objectList)
 
+        # start simpleAgent
+        master, slave = pty.openpty()
+        proc = Popen([sys.executable, '../utility/simpleAgent.py'],
+                     stdin=PIPE, stdout=slave, close_fds=True)
+        stdout_handle = os.fdopen(master)
+        if stdout_handle.readline().rstrip() == "AGENT_REGISTERED":
+            logger.debug("Agent Registered")
+        else:
+            logger.debug("Agent failed to register")
+
+        # close the handles
+        stdout_handle.close()
+        os.close(slave)
+
+        networkToConnect = utility.getNetworkToConnectTo(objectList)
         # check if networkToConnect is not null. If yes, restart program
         # so that the network list is updated. Alternatively, we can scan
         # for networks.
@@ -27,9 +41,6 @@ class TestConnectDisconnect(unittest.TestCase):
             os.execl(sys.executable, sys.executable, * sys.argv)
 
         self.assertNotEqual(networkToConnect, "")
-        # start simpleAgent
-        proc = Popen([sys.executable, '../utility/simpleAgent.py'])
-        time.sleep(2)
         network = dbus.Interface(bus.get_object(utility.IWD_SERVICE,
                                                 networkToConnect),
                                  utility.IWD_NETWORK_INTERFACE)
@@ -69,9 +80,6 @@ class TestConnectDisconnect(unittest.TestCase):
             if bus.name_has_owner(utility.IWD_SERVICE) == True:
                 break
         self.doConnectDisconnect()
-        #watch doesn't seem to work. So used name_has_owner
-        #watch = bus.watch_name_owner(utility.IWD_SERVICE,
-        #                              self.doConnectDisconnect)
 
     @classmethod
     def setUpClass(cls):

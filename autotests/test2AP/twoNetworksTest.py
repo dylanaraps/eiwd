@@ -9,11 +9,12 @@ import dbus.mainloop.glib
 import time
 import threading
 import logging
-from subprocess import Popen
+from subprocess import Popen, PIPE, STDOUT
 import sys
 import os
 sys.path.append('../utility') #needed to import all the utlilty modules
 import utility
+import pty
 
 def getSecondNetworkToConnect(objectList, firstNetworkName):
     logger.debug(sys._getframe().f_code.co_name)
@@ -32,8 +33,19 @@ class TestTwoNetworks(unittest.TestCase):
     # connect to network B. disconnect from network B.
     def connectToNetwork(self, networkToConnect):
         # start simpleAgent
-        proc = Popen([sys.executable, '../utility/simpleAgent.py'])
-        time.sleep(2)
+        master, slave = pty.openpty()
+        proc = Popen([sys.executable, '../utility/simpleAgent.py'],
+                     stdin=PIPE, stdout=slave, close_fds=True)
+        stdout_handle = os.fdopen(master)
+        if stdout_handle.readline().rstrip() == "AGENT_REGISTERED":
+            logger.debug("Agent Registered")
+        else:
+            logger.debug("Agent failed to register")
+
+        # close the handles
+        stdout_handle.close()
+        os.close(slave)
+
         network = dbus.Interface(bus.get_object(utility.IWD_SERVICE,
                                                 networkToConnect),
                                  utility.IWD_NETWORK_INTERFACE)
