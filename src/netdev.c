@@ -1166,33 +1166,61 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
+struct netdev_watch_event_data {
+	struct netdev *netdev;
+	enum netdev_watch_event type;
+};
+
 static void netdev_watch_notify(void *data, void *user_data)
 {
 	struct netdev_watch *watch = data;
-	struct netdev *netdev = user_data;
+	struct netdev_watch_event_data *event = user_data;
 
-	watch->callback(netdev, netdev_get_is_up(netdev), watch->user_data);
+	watch->callback(event->netdev, event->type, watch->user_data);
 }
 
 static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 {
 	struct netdev *netdev;
 	bool old_up, new_up;
+	char old_name[IFNAMSIZ];
+	struct rtattr *attr;
+	struct netdev_watch_event_data event;
 
 	netdev = netdev_find(ifi->ifi_index);
 	if (!netdev)
 		return;
 
 	old_up = netdev_get_is_up(netdev);
+	strcpy(old_name, netdev->name);
 
 	netdev->ifi_flags = ifi->ifi_flags;
 
+	for (attr = IFLA_RTA(ifi); RTA_OK(attr, bytes);
+			attr = RTA_NEXT(attr, bytes)) {
+		if (attr->rta_type != IFLA_IFNAME)
+			continue;
+
+		strcpy(netdev->name, RTA_DATA(attr));
+
+		break;
+	}
+
 	new_up = netdev_get_is_up(netdev);
 
-	if (old_up == new_up)
-		return;
+	if (old_up != new_up) {
+		event.netdev = netdev;
+		event.type = new_up ? NETDEV_EVENT_UP : NETDEV_EVENT_DOWN;
 
-	l_queue_foreach(netdev->watches, netdev_watch_notify, netdev);
+		l_queue_foreach(netdev->watches, netdev_watch_notify, &event);
+	}
+
+	if (strcmp(old_name, netdev->name)) {
+		event.netdev = netdev;
+		event.type = NETDEV_EVENT_NAME_CHANGE;
+
+		l_queue_foreach(netdev->watches, netdev_watch_notify, &event);
+	}
 }
 
 static void netdev_dellink_notify(const struct ifinfomsg *ifi, int bytes)

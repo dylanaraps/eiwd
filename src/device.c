@@ -1024,17 +1024,21 @@ static bool device_remove_network(const void *key, void *data, void *user_data)
 	return true;
 }
 
-static void device_netdev_notify(struct netdev *netdev, bool up,
+static void device_netdev_notify(struct netdev *netdev,
+					enum netdev_watch_event event,
 					void *user_data)
 {
 	struct device *device = user_data;
 	struct l_dbus *dbus = dbus_get_bus();
 
-	if (up) {
+	if (event == NETDEV_EVENT_UP) {
 		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 
 		__device_watch_call_added(device);
-	} else {
+
+		l_dbus_property_changed(dbus, device_get_path(device),
+					IWD_DEVICE_INTERFACE, "Powered");
+	} else if (event == NETDEV_EVENT_DOWN) {
 		device_enter_state(device, DEVICE_STATE_OFF);
 
 		if (device->scan_pending)
@@ -1072,10 +1076,10 @@ static void device_netdev_notify(struct netdev *netdev, bool up,
 		device->networks_sorted = l_queue_new();
 
 		__device_watch_call_removed(device);
-	}
 
-	l_dbus_property_changed(dbus, device_get_path(device),
-				IWD_DEVICE_INTERFACE, "Powered");
+		l_dbus_property_changed(dbus, device_get_path(device),
+					IWD_DEVICE_INTERFACE, "Powered");
+	}
 }
 
 struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
@@ -1103,7 +1107,8 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 
 	scan_ifindex_add(device->index);
 
-	device_netdev_notify(netdev, netdev_get_is_up(netdev), device);
+	device_netdev_notify(netdev, netdev_get_is_up(netdev) ?
+				NETDEV_EVENT_UP : NETDEV_EVENT_DOWN, device);
 	device->netdev_watch_id =
 		netdev_watch_add(netdev, device_netdev_notify, device);
 

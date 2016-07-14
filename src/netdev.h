@@ -43,6 +43,12 @@ enum netdev_event {
 	NETDEV_EVENT_DISCONNECT_BY_AP,
 };
 
+enum netdev_watch_event {
+	NETDEV_EVENT_UP,
+	NETDEV_EVENT_DOWN,
+	NETDEV_EVENT_NAME_CHANGE,
+};
+
 typedef void (*netdev_command_func_t) (bool result, void *user_data);
 typedef void (*netdev_connect_cb_t)(struct netdev *netdev,
 					enum netdev_result result,
@@ -52,7 +58,8 @@ typedef void (*netdev_event_func_t)(struct netdev *netdev,
 					void *user_data);
 typedef void (*netdev_disconnect_cb_t)(struct netdev *netdev, bool result,
 					void *user_data);
-typedef void (*netdev_watch_func_t)(struct netdev *netdev, bool up,
+typedef void (*netdev_watch_func_t)(struct netdev *netdev,
+					enum netdev_watch_event event,
 					void *user_data);
 typedef void (*netdev_set_powered_cb_t)(struct netdev *netdev, int result,
 					void *user_data);
