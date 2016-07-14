@@ -313,6 +313,10 @@ static void device_appeared(struct device *device, void *userdata)
 
 static void device_disappeared(struct device *device, void *userdata)
 {
+	struct l_dbus *dbus = dbus_get_bus();
+
+	l_dbus_object_remove_interface(dbus, device_get_path(device),
+					IWD_WSC_INTERFACE);
 }
 
 bool wsc_init(struct l_genl_family *in)
