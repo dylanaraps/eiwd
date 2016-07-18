@@ -247,6 +247,7 @@ Wireless daemon
 
   Priority: High
   Complexity: C1
+  Owner: Andrew Zaborowski <andrew.zaborowski@intel.com>
 
 - Add unit test for each of the mpdu management frame type
 
