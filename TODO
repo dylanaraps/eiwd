@@ -276,6 +276,92 @@ Wireless daemon
   Priority: Low
   Complexity: C1
 
+- Add support for PMK Caching from 802.11-2007.  This is sometimes referred to
+  as "fast, secure roam back".  Essentially the client caches PMKIDs generated
+  when connecting to various APs.  If the client roams back to an AP that has
+  already been connected to, and the PMK is cached by both, then the 802.1X
+  exchange can be skipped.
+
+  Priority: Low
+  Complexity: C4
+
+- Add support for Pre-authentication from 802.11-2007.  This allows the client
+  to pre-authenticate to a target AP.  The 802.1X exchange is done through the
+  currently connected AP, but with the target AP as the 'authenticator'.  The
+  process creates a new PMK which is cached by both the target AP and the
+  client.  The client can then roam onto the target AP using a process similar
+  to PMK caching outlined above.
+
+  Priority: Low
+  Complexity: C4
+
+- Add support for Opportunistic Key Caching (OKC).  This is not defined by
+  any 802.11 standards, but is made available by major vendors such as Cisco
+  and Microsoft.
+
+  Priority: Low
+  Complexity: C4
+
+- Add support for Direct Link Setup from 802.11e.
+
+  Priority: Low
+  Complexity: C8
+
+- Add support for Automatic Power Save Delivery (APSD).  This includes
+  scheduled (s-APSD) and unscheduled (u-APSD).  This will require rudimentary
+  support of WMM protocol.  This feature was introduced in 802.11e.
+
+  Priority: Low
+  Complexity: C4
+
+- Add support for Radio Resource Management from 802.11k.  If supported by the
+  AP, allows the client to optimize its scanning strategy by obtaining the
+  channels of nearby APs that are part of the same ESS as the currently
+  connected AP.  This requires the client to enable 'RM Enabled Capabilities'
+  element (section 8.4.2.47) appropriately, and send appropriately formatted
+  Action frames to request relevant reports from the AP.  The reports from the
+  AP will be received via Management frames and contain multiple Neighbor
+  Report elements (8.4.2.39).  Also examine how AP Channel Report element
+  (8.4.2.38) is used.
+
+  Priority: Medium
+  Complexity: C4
+
+- Add support for Fast BSS Transition (FT) from 802.11r.  There are a couple
+  of modes for FT supported.  'FT over DS' and 'FT over air'.  In FT over DS,
+  action frames can be used to perform a 4-way handshake to the target AP
+  while still connected to the current AP.  FT over air folds 4-way handshake
+  messages into authenticate/authenticate response and
+  reassociate/reassociate response messages.
+
+  In theory, it is possible to use FT with PSK networks.
+
+  Priority: Medium
+  Complexity: C8
+
+- Add support for 802.11u.  This is required for Passpoint 2.0 support.
+
+  Priority: Low
+  Complexity: C8
+
+- Add support for Wireless Network Management (WNM) from 802.11v.  Parts of
+  this are needed for Passpoint support.
+
+  Priority: Low
+  Complexity: C8
+
+- Add support for Protected Management Frames (PMF) from 802.11w.  This allows
+  the management frames to be encrypted and thus secured.  In particular, this
+  is extremely important for 802.11r (FT) and 802.11k (RRM) support.
+
+  Priority: High
+  Complexity: C4
+
+- Add support for Tunneled Direct Link Setup (TDLS) from 802.11z.
+
+  Priority: Medium
+  Complexity: C8
+
 
 Client
 ======
