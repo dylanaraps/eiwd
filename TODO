@@ -212,23 +212,6 @@ Wireless simulator
 Wireless daemon
 ===============
 
-- Building 802.11 authentications management frames
-
-  The other way round, provide a core API to encode an authentication
-  or deauthentication frame from a generic structure representing the
-  MPDU.
-
-  Priority: Medium
-  Complexity: C2
-
-- Handle the relevant logic of the authentication management frames
-
-  When an authentication management frame is received, such frame needs
-  to be understood and handled properly.
-
-  Priority: Medium
-  Complexity: C2
-
 - Add support for EAP based authentication and key generation
 
   Provide full EAP support for enterprise wireless.  However it should be
