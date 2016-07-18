@@ -124,6 +124,7 @@ cfg80211 / nl80211
 
   Priority: Low
   Complexity: C2
+  Owner: Denis Kenzior <denkenz@gmail.com>
 
 
 Wireless monitor
