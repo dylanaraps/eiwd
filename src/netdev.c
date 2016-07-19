@@ -1406,6 +1406,16 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 		return;
 	}
 
+	if (!iftype) {
+		l_warn("Missing iftype attribute");
+		return;
+	}
+
+	if (*iftype != NL80211_IFTYPE_STATION) {
+		l_warn("Skipping non-STA interfaces");
+		return;
+	}
+
 	if (!ifindex || !ifaddr | !ifname) {
 		l_warn("Unable to parse interface information");
 		return;
