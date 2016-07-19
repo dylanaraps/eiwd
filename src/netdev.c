@@ -61,7 +61,6 @@ struct netdev {
 	netdev_connect_cb_t connect_cb;
 	netdev_disconnect_cb_t disconnect_cb;
 	void *user_data;
-	struct l_genl_msg *associate_msg;
 	struct eapol_sm *sm;
 	struct l_io *eapol_io;
 	uint8_t remote_addr[ETH_ALEN];
@@ -287,11 +286,6 @@ static void netdev_shutdown_one(void *data, void *user_data)
 
 		l_io_destroy(netdev->eapol_io);
 		netdev->eapol_io = NULL;
-	}
-
-	if (netdev->associate_msg) {
-		l_genl_msg_unref(netdev->associate_msg);
-		netdev->associate_msg = NULL;
 	}
 
 	netdev_set_linkmode_and_operstate(netdev->index, 0, IF_OPER_DOWN,
