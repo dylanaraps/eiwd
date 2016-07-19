@@ -71,6 +71,8 @@ struct netdev {
 	struct l_queue *watches;
 	uint32_t next_watch_id;
 
+	bool connected : 1;
+	bool eapol_active : 1;
 	bool rekey_offload_support : 1;
 };
 
@@ -269,15 +271,6 @@ static void netdev_free(void *data)
 
 	l_debug("Freeing netdev %s[%d]", netdev->name, netdev->index);
 
-	l_queue_destroy(netdev->watches, l_free);
-
-	l_free(netdev);
-}
-
-static void netdev_shutdown_one(void *data, void *user_data)
-{
-	struct netdev *netdev = data;
-
 	device_remove(netdev->device);
 
 	if (netdev->sm) {
@@ -286,7 +279,17 @@ static void netdev_shutdown_one(void *data, void *user_data)
 
 		l_io_destroy(netdev->eapol_io);
 		netdev->eapol_io = NULL;
-	}
+	} else if (netdev->eapol_active)
+		eapol_cancel(netdev->index);
+
+	l_queue_destroy(netdev->watches, l_free);
+
+	l_free(netdev);
+}
+
+static void netdev_shutdown_one(void *data, void *user_data)
+{
+	struct netdev *netdev = data;
 
 	netdev_set_linkmode_and_operstate(netdev->index, 0, IF_OPER_DOWN,
 						netdev_operstate_down_cb,
@@ -311,7 +314,12 @@ struct netdev *netdev_find(int ifindex)
 
 static void netdev_lost_beacon(struct netdev *netdev)
 {
-	eapol_cancel(netdev->index);
+	if (netdev->eapol_active) {
+		netdev->eapol_active = false;
+		eapol_cancel(netdev->index);
+	}
+
+	netdev->connected = false;
 
 	if (!netdev->event_filter)
 		return;
@@ -424,10 +432,15 @@ static void netdev_disconnect_event(struct l_genl_msg *msg,
 	l_info("Received Deauthentication event, reason: %hu, from_ap: %s",
 			reason_code, disconnect_by_ap ? "true" : "false");
 
+	netdev->connected = false;
+
+	if (netdev->eapol_active) {
+		eapol_cancel(netdev->index);
+		netdev->eapol_active = false;
+	}
+
 	if (!disconnect_by_ap)
 		return;
-
-	eapol_cancel(netdev->index);
 
 	if (netdev->event_filter)
 		netdev->event_filter(netdev, NETDEV_EVENT_DISCONNECT_BY_AP,
@@ -485,6 +498,8 @@ static void netdev_operstate_cb(bool success, void *user_data)
 		l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 
 		eapol_cancel(netdev->index);
+		netdev->eapol_active = false;
+		netdev->connected = false;
 
 		result = NETDEV_RESULT_KEY_SETTING_FAILED;
 	} else
@@ -515,6 +530,8 @@ static void netdev_setting_keys_failed(struct netdev *netdev,
 	netdev->group_new_key_cmd_id = 0;
 
 	eapol_cancel(netdev->index);
+	netdev->eapol_active = false;
+	netdev->connected = false;
 
 	msg = netdev_build_cmd_deauthenticate(netdev,
 						MPDU_REASON_CODE_UNSPECIFIED);
@@ -819,6 +836,9 @@ static void netdev_handshake_failed(uint32_t ifindex,
 
 	l_error("4-Way Handshake failed for ifindex: %d", ifindex);
 
+	netdev->eapol_active = false;
+	netdev->connected = false;
+
 	msg = netdev_build_cmd_deauthenticate(netdev, reason_code);
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 
@@ -899,6 +919,8 @@ static void netdev_connect_failed(struct netdev *netdev,
 		netdev->eapol_io = NULL;
 	}
 
+	netdev->connected = false;
+
 	if (netdev->connect_cb)
 		netdev->connect_cb(netdev, result, netdev->user_data);
 }
@@ -937,6 +959,7 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 
 	if (netdev->sm) {
 		eapol_start(netdev->index, netdev->eapol_io, netdev->sm);
+		netdev->eapol_active = true;
 
 		netdev->sm = NULL;
 		netdev->eapol_io = NULL;
@@ -1045,6 +1068,9 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 {
 	struct l_genl_msg *cmd_connect;
 
+	if (netdev->connected)
+		return -EISCONN;
+
 	cmd_connect = netdev_build_cmd_connect(netdev, bss, sm);
 	if (!cmd_connect) {
 		l_genl_msg_unref(cmd_connect);
@@ -1060,6 +1086,8 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	netdev->connect_cb = cb;
 	netdev->user_data = user_data;
 	memcpy(netdev->remote_addr, bss->addr, ETH_ALEN);
+
+	netdev->connected = true;
 
 	netdev->sm = sm;
 	if (netdev->sm) {
@@ -1086,6 +1114,9 @@ int netdev_disconnect(struct netdev *netdev,
 {
 	struct l_genl_msg *deauthenticate;
 
+	if (!netdev->connected)
+		return -ENOTCONN;
+
 	deauthenticate = netdev_build_cmd_deauthenticate(netdev,
 					MPDU_REASON_CODE_DEAUTH_LEAVING);
 	if (!l_genl_family_send(nl80211, deauthenticate,
@@ -1096,8 +1127,6 @@ int netdev_disconnect(struct netdev *netdev,
 
 	netdev->disconnect_cb = cb;
 	netdev->user_data = user_data;
-
-	eapol_cancel(netdev->index);
 
 	return 0;
 }
