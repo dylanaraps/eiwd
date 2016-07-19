@@ -1665,6 +1665,9 @@ bool netdev_exit(void)
 	if (!rtnl)
 		return false;
 
+	l_strfreev(whitelist_filter);
+	l_strfreev(blacklist_filter);
+
 	nl80211 = NULL;
 
 	l_queue_destroy(netdev_list, netdev_free);
