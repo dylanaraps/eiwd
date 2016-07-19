@@ -488,6 +488,9 @@ static void periodic_scan_trigger(int err, void *user_data)
 
 void device_enter_state(struct device *device, enum device_state state)
 {
+	struct l_dbus *dbus = dbus_get_bus();
+	bool disconnected;
+
 	l_debug("Old State: %s, new state: %s",
 			device_state_to_string(device->state),
 			device_state_to_string(state));
@@ -511,6 +514,13 @@ void device_enter_state(struct device *device, enum device_state state)
 	case DEVICE_STATE_DISCONNECTING:
 		break;
 	}
+
+	disconnected = device->state <= DEVICE_STATE_AUTOCONNECT;
+
+	if ((disconnected && state > DEVICE_STATE_AUTOCONNECT) ||
+			(!disconnected && state != device->state))
+		l_dbus_property_changed(dbus, device_get_path(device),
+					IWD_DEVICE_INTERFACE, "State");
 
 	device->state = state;
 }
@@ -991,6 +1001,36 @@ static bool device_property_get_scanning(struct l_dbus *dbus,
 	return true;
 }
 
+static bool device_property_get_state(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct device *device = user_data;
+	const char *statestr = "unknown";
+
+	switch (device->state) {
+	case DEVICE_STATE_CONNECTED:
+		statestr = "connected";
+		break;
+	case DEVICE_STATE_CONNECTING:
+		statestr = "connecting";
+		break;
+	case DEVICE_STATE_DISCONNECTING:
+		statestr = "disconnecting";
+		break;
+	case DEVICE_STATE_OFF:
+	case DEVICE_STATE_DISCONNECTED:
+	case DEVICE_STATE_AUTOCONNECT:
+		statestr = "disconnected";
+		break;
+	}
+
+	l_dbus_message_builder_append_basic(builder, 's', statestr);
+
+	return true;
+}
+
 static void setup_device_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Scan", 0,
@@ -1013,6 +1053,8 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 					device_property_set_powered);
 	l_dbus_interface_property(interface, "Scanning", 0, "b",
 					device_property_get_scanning, NULL);
+	l_dbus_interface_property(interface, "State", 0, "s",
+					device_property_get_state, NULL);
 }
 
 static bool device_remove_network(const void *key, void *data, void *user_data)
