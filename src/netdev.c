@@ -1525,18 +1525,6 @@ static void netdev_link_notify(uint16_t type, const void *data, uint32_t len,
 	}
 }
 
-void netdev_new_wiphy_hint(uint32_t wiphy_id)
-{
-	struct l_genl_msg *msg;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_GET_INTERFACE, 8);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY, 4, &wiphy_id);
-
-	if (!l_genl_family_dump(nl80211, msg, netdev_get_interface_callback,
-								NULL, NULL))
-		l_error("Getting wiphy %d interface info failed", wiphy_id);
-}
-
 static bool netdev_watch_match(const void *a, const void *b)
 {
 	const struct netdev_watch *item = a;

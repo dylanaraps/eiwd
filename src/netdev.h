@@ -83,7 +83,6 @@ int netdev_set_powered(struct netdev *netdev, bool powered,
 				netdev_destroy_func_t destroy);
 
 struct netdev *netdev_find(int ifindex);
-void netdev_new_wiphy_hint(uint32_t wiphy_id);
 
 uint32_t netdev_watch_add(struct netdev *netdev, netdev_watch_func_t func,
 				void *user_data);

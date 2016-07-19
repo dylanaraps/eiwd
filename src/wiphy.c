@@ -406,8 +406,6 @@ static void wiphy_new_wiphy_event(struct l_genl_msg *msg)
 	wiphy_print_basic_info(wiphy);
 
 	wiphy_register(wiphy);
-
-	netdev_new_wiphy_hint(wiphy->id);
 }
 
 static void wiphy_del_wiphy_event(struct l_genl_msg *msg)
