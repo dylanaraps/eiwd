@@ -370,29 +370,27 @@ static void netdev_rekey_offload_event(struct l_genl_msg *msg,
 		return;
 
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_REKEY_DATA:
-			if (!l_genl_attr_recurse(&attr, &nested))
-				return;
+		if (type != NL80211_ATTR_REKEY_DATA)
+			continue;
 
-			while (l_genl_attr_next(&nested, &type, &len, &data)) {
-				switch (type) {
-				case NL80211_REKEY_DATA_REPLAY_CTR:
-					if (len != sizeof(uint64_t))
-						l_warn("Invalid replay_ctr");
-					else {
-						replay_ctr = *((uint64_t *)
-							data);
-						__eapol_update_replay_counter(
-							netdev->index,
+		if (!l_genl_attr_recurse(&attr, &nested))
+			return;
+
+		while (l_genl_attr_next(&nested, &type, &len, &data)) {
+			if (type != NL80211_REKEY_DATA_REPLAY_CTR)
+				continue;
+
+			if (len != sizeof(uint64_t)) {
+				l_warn("Invalid replay_ctr");
+				return;
+			}
+
+			replay_ctr = *((uint64_t *) data);
+			__eapol_update_replay_counter(netdev->index,
 							netdev->addr,
 							netdev->remote_addr,
 							replay_ctr);
-					}
-
-					break;
-				}
-			}
+			return;
 		}
 	}
 }
