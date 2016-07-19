@@ -65,10 +65,17 @@ Properties	string Name [readonly]
 			Interface's hardware address in the XX:XX:XX:XX:XX:XX
 			format
 
+		string State [readonly]
+
+			Reflects the general network connection state.  One of:
+
+			"connected", "disconnected", "connecting", "disconnecting"
+
 		object ConnectedNetwork [readonly, optional]
 
 			net.connman.iwd.Network object representing the
-			network the device is currently connected to
+			network the device is currently connected to or to
+			which a connection is in progress.
 
 		boolean Powered [readwrite]
 
