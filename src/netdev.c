@@ -1231,14 +1231,15 @@ static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 
 	if (old_up != new_up) {
 		event.netdev = netdev;
-		event.type = new_up ? NETDEV_EVENT_UP : NETDEV_EVENT_DOWN;
+		event.type = new_up ? NETDEV_WATCH_EVENT_UP :
+						NETDEV_WATCH_EVENT_DOWN;
 
 		l_queue_foreach(netdev->watches, netdev_watch_notify, &event);
 	}
 
 	if (strcmp(old_name, netdev->name)) {
 		event.netdev = netdev;
-		event.type = NETDEV_EVENT_NAME_CHANGE;
+		event.type = NETDEV_WATCH_EVENT_NAME_CHANGE;
 
 		l_queue_foreach(netdev->watches, netdev_watch_notify, &event);
 	}

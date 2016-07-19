@@ -1031,14 +1031,16 @@ static void device_netdev_notify(struct netdev *netdev,
 	struct device *device = user_data;
 	struct l_dbus *dbus = dbus_get_bus();
 
-	if (event == NETDEV_EVENT_UP) {
+	switch (event) {
+	case NETDEV_WATCH_EVENT_UP:
 		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 
 		__device_watch_call_added(device);
 
 		l_dbus_property_changed(dbus, device_get_path(device),
 					IWD_DEVICE_INTERFACE, "Powered");
-	} else if (event == NETDEV_EVENT_DOWN) {
+		break;
+	case NETDEV_WATCH_EVENT_DOWN:
 		device_enter_state(device, DEVICE_STATE_OFF);
 
 		if (device->scan_pending)
@@ -1079,9 +1081,12 @@ static void device_netdev_notify(struct netdev *netdev,
 
 		l_dbus_property_changed(dbus, device_get_path(device),
 					IWD_DEVICE_INTERFACE, "Powered");
-	} else if (event == NETDEV_EVENT_NAME_CHANGE)
+		break;
+	case NETDEV_WATCH_EVENT_NAME_CHANGE:
 		l_dbus_property_changed(dbus, device_get_path(device),
 					IWD_DEVICE_INTERFACE, "Name");
+		break;
+	}
 }
 
 struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
@@ -1110,7 +1115,9 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	scan_ifindex_add(device->index);
 
 	device_netdev_notify(netdev, netdev_get_is_up(netdev) ?
-				NETDEV_EVENT_UP : NETDEV_EVENT_DOWN, device);
+						NETDEV_WATCH_EVENT_UP :
+						NETDEV_WATCH_EVENT_DOWN,
+						device);
 	device->netdev_watch_id =
 		netdev_watch_add(netdev, device_netdev_notify, device);
 

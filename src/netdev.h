@@ -44,9 +44,9 @@ enum netdev_event {
 };
 
 enum netdev_watch_event {
-	NETDEV_EVENT_UP,
-	NETDEV_EVENT_DOWN,
-	NETDEV_EVENT_NAME_CHANGE,
+	NETDEV_WATCH_EVENT_UP,
+	NETDEV_WATCH_EVENT_DOWN,
+	NETDEV_WATCH_EVENT_NAME_CHANGE,
 };
 
 typedef void (*netdev_command_func_t) (bool result, void *user_data);
