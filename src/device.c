@@ -1175,6 +1175,9 @@ bool device_init(void)
 
 bool device_exit(void)
 {
+	if (!l_queue_isempty(device_list))
+		l_warn("device_list isn't empty!");
+
 	l_queue_destroy(device_list, device_free);
 	device_list = NULL;
 
