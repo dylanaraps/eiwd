@@ -1706,6 +1706,9 @@ bool eapol_init()
 
 bool eapol_exit()
 {
+	if (!l_queue_isempty(state_machines))
+		l_warn("stale eapol state machines found");
+
 	l_queue_destroy(state_machines, eapol_sm_destroy);
 	get_nonce = NULL;
 
