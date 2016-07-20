@@ -87,7 +87,7 @@ static struct rfkill_map_entry *map_wiphy(unsigned int rfkill_id)
 	unsigned int wiphy_id;
 	struct rfkill_map_entry *entry;
 
-	path = l_strdup_printf("/sys/class/rfkill/rfkill%u/name", rfkill_id);
+	path = l_strdup_printf("/sys/class/rfkill/rfkill%u/device/index", rfkill_id);
 
 	fd = TFR(open(path, O_RDONLY));
 
@@ -104,7 +104,7 @@ static struct rfkill_map_entry *map_wiphy(unsigned int rfkill_id)
 		return NULL;
 
 	buf[bytes] = '\0';
-	if (sscanf(buf, "phy%u %n", &wiphy_id, &consumed) != 1 ||
+	if (sscanf(buf, "%u %n", &wiphy_id, &consumed) != 1 ||
 			consumed != bytes)
 		return NULL;
 
