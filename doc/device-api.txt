@@ -69,7 +69,8 @@ Properties	string Name [readonly]
 
 			Reflects the general network connection state.  One of:
 
-			"connected", "disconnected", "connecting", "disconnecting"
+			"connected", "disconnected", "connecting",
+			"disconnecting"
 
 		object ConnectedNetwork [readonly, optional]
 
