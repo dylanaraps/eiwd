@@ -74,6 +74,25 @@ def getNetworkToConnectTo(objects):
         return path
     return ""
 
+# return the current connection status
+# connected, disconnected, connecting, disconnecting
+def getConnectionStatus():
+    logger.debug(sys._getframe().f_code.co_name)
+    bus = dbus.SystemBus()
+    manager = dbus.Interface(bus.get_object(IWD_SERVICE, "/"),
+                                        "net.connman.iwd.Manager")
+    objects = getObjectList(bus)
+    for path in objects:
+        if IWD_DEVICE_INTERFACE not in objects[path]:
+            continue
+        device = objects[path][IWD_DEVICE_INTERFACE]
+        for key in device.keys():
+            if key in ["State"]:
+                logger.debug("Device state is %s", device["State"])
+                if device["State"] in "connected":
+                    return True
+        return False
+
 # return the currently connected device by
 # checking the 'ConnectedNetwork' property
 def getCurrentlyConnectedDevice():

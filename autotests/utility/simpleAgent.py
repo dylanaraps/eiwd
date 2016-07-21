@@ -73,10 +73,10 @@ def unregisterAgent(manager, pathAgent):
 
 def delayedUnregister(manager, path, mainloop):
     counter = 1
-    while (utility.getCurrentlyConnectedDevice() == "" and counter < 10):
-         time.sleep(1)
-         counter += 1
-         continue
+    while (not utility.getConnectionStatus() and counter < 10):
+            time.sleep(1)
+            counter += 1
+            continue
 
     time.sleep(1)
     unregisterAgent(manager, path)
