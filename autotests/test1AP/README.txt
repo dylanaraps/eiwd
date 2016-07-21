@@ -1,8 +1,21 @@
 scanNetworkTest: This test checks that we find the right AP, as
                  specified in the hostapd conf file.
+                 conf file: IntelWIFI_CCMP.conf, IntelWIFI_TKIP.conf
 
 connectDisconnectTest: Connect and disconnect from a network
                        as specified in the hostapd conf file.
+                       conf file: IntelWIFI_CCMP.conf, IntelWIFI_TKIP.conf
+
+invalidPassphraseTest: Try to connect to a network with an
+                       invalid passphrase. The connection is
+                       unsuccessful.
+                       conf file: invalidPassphrase.conf
+
+APShutdownTest: Connect to a network. Shutdown the AP. The
+                connection is lost.
+                conf file: IntelWIFI_CCMP.conf, IntelWIFI_TKIP.conf
+                NOTE: Test will be removed once hwsim supports
+                      the ability to modify signal strength.
 
 Pre-requisites:
 1. Ensure you have hostapd installed.
