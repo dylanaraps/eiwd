@@ -31,7 +31,8 @@ class TestConnectDisconnect(unittest.TestCase):
         stdout_handle.close()
         os.close(slave)
 
-        networkToConnect = utility.getNetworkToConnectTo(objectList)
+        networkToConnect = utility.getNetworkToConnectTo(objectList,
+                                                         "IntelWIFI")
         # check if networkToConnect is not null. If yes, restart program
         # so that the network list is updated. Alternatively, we can scan
         # for networks.

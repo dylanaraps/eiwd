@@ -23,7 +23,8 @@ class TestScanNetwork(unittest.TestCase):
             os.execl(sys.executable, sys.executable, * sys.argv)
 
         logger.info("Network Found: %s", networkName)
-        self.assertEqual(networkName, "IntelWIFI")
+        networkListToMatch = ["IntelWIFI", "IntelWIFI_WrongPW"]
+        self.assertIn(networkName, networkListToMatch)
 
     @classmethod
     def setUpClass(cls):

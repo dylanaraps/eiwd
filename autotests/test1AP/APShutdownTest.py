@@ -32,7 +32,8 @@ class TestAPShutdown(unittest.TestCase):
         stdout_handle.close()
         os.close(slave)
 
-        networkToConnect = utility.getNetworkToConnectTo(objectList)
+        networkToConnect = utility.getNetworkToConnectTo(objectList,
+                                                         "IntelWIFI")
         # check if networkToConnect is not null. If yes, restart program
         # so that the network list is updated. Alternatively, we can scan
         # for networks.
@@ -58,10 +59,10 @@ class TestAPShutdown(unittest.TestCase):
                           "IntelWIFI")
 
         #kill AP
-        pid_bytes = check_output("pgrep hostapd", shell=True)
+        pid_bytes = check_output("pgrep -o -x hostapd", shell=True)
         pid = pid_bytes.decode('utf-8')
         logger.debug("shutting down AP with pid: %s", pid)
-        os.system("kill %d"%int(pid))
+        os.system("kill " + pid)
 
         #should not be connected to any network after AP shutdown
         logger.info("After AP shutdown, connected to: %s",
@@ -82,6 +83,7 @@ class TestAPShutdown(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         global logger, bus, mainloop
+        os.system("rm -rf /var/lib/iwd")
         utility.initLogger()
         logger = logging.getLogger(__name__)
         bus = dbus.SystemBus()

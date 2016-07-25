@@ -9,6 +9,7 @@ import logging
 import os
 from subprocess import Popen, PIPE, STDOUT
 import sys
+import subprocess
 sys.path.append('../utility') #needed to import all the utility modules
 import utility
 import pty
@@ -31,7 +32,8 @@ class TestInvalidPassphrase(unittest.TestCase):
         stdout_handle.close()
         os.close(slave)
 
-        networkToConnect = utility.getNetworkToConnectTo(objectList)
+        networkToConnect = utility.getNetworkToConnectTo(objectList,
+                                                         "IntelWIFI_WrongPW")
         # check if networkToConnect is not null. If yes, restart program
         # so that the network list is updated. Alternatively, we can scan
         # for networks.
@@ -66,6 +68,7 @@ class TestInvalidPassphrase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         global logger, bus, mainloop
+        os.system("rm -rf /var/lib/iwd")
         utility.initLogger()
         logger = logging.getLogger(__name__)
         bus = dbus.SystemBus()
