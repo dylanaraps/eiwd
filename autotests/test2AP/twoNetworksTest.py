@@ -79,7 +79,7 @@ class TestTwoNetworks(unittest.TestCase):
 
     def doConnectDisconnectTwoNetworks(self):
         objectList = utility.getObjectList(bus)
-        networkToConnect = utility.getNetworkToConnectTo(objectList)
+        networkToConnect = utility.getNetworkToConnectTo(objectList, "")
 
         # check if networkToConnect is not null. If yes, restart program
         # so that the network list is updated. Alternatively, we can scan
