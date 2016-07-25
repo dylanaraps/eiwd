@@ -65,13 +65,18 @@ def disconnect(deviceToDisconnect, mainloop, bus):
     return True
 
 # get the 1st network found to connect to
-def getNetworkToConnectTo(objects):
+def getNetworkToConnectTo(objects, networkNameToMatch):
     logger.debug(sys._getframe().f_code.co_name)
     networkList = []
     for path in objects:
         if IWD_NETWORK_INTERFACE not in objects[path]:
             continue
-        return path
+        if not networkNameToMatch:
+            return path
+        else:
+            network = objects[path][IWD_NETWORK_INTERFACE]
+            if network["Name"] == networkNameToMatch:
+                return path
     return ""
 
 # return the current connection status
