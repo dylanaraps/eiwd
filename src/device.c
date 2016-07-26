@@ -580,9 +580,16 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 	struct device *device = user_data;
 
 	if (result != NETDEV_RESULT_OK) {
-		if (device->connect_pending)
-			dbus_pending_reply(&device->connect_pending,
-				dbus_error_failed(device->connect_pending));
+		struct l_dbus_message *reply;
+
+		if (device->connect_pending) {
+			if (result == NETDEV_RESULT_ABORTED)
+				reply = dbus_error_aborted(device->connect_pending);
+			else
+				reply = dbus_error_failed(device->connect_pending);
+
+			dbus_pending_reply(&device->connect_pending, reply);
+		}
 
 		if (device->state == DEVICE_STATE_CONNECTING)
 			device_disassociated(device);
