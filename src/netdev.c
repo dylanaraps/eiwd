@@ -199,7 +199,7 @@ static void netdev_set_powered_result(int error, uint16_t type,
 	if (!cb_data)
 		return;
 
-	cb_data->callback(cb_data->netdev, error, cb_data->user_data);
+	cb_data->callback(cb_data->netdev, -error, cb_data->user_data);
 }
 
 static void netdev_set_powered_destroy(void *user_data)
@@ -1263,7 +1263,8 @@ static void netdev_initial_up_cb(struct netdev *netdev, int result,
 		l_error("Error bringing interface %i up: %s", netdev->index,
 			strerror(-result));
 
-		return;
+		if (result != -ERFKILL)
+			return;
 	}
 
 	netdev_set_linkmode_and_operstate(netdev->index, 1,
