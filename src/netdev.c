@@ -1070,13 +1070,12 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 		return -EISCONN;
 
 	cmd_connect = netdev_build_cmd_connect(netdev, bss, sm);
-	if (!cmd_connect) {
-		l_genl_msg_unref(cmd_connect);
+	if (!cmd_connect)
 		return -EINVAL;
-	}
 
 	if (!l_genl_family_send(nl80211, cmd_connect,
 				netdev_cmd_connect_cb, netdev, NULL)) {
+		l_genl_msg_unref(cmd_connect);
 		return -EIO;
 	}
 
