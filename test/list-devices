@@ -2,6 +2,7 @@
 
 import sys
 import dbus
+import collections
 
 bus = dbus.SystemBus()
 
@@ -9,13 +10,22 @@ manager = dbus.Interface(bus.get_object("net.connman.iwd", "/"),
                                         "org.freedesktop.DBus.ObjectManager")
 objects = manager.GetManagedObjects()
 
+Obj = collections.namedtuple('Obj', ['interfaces', 'children'])
+tree = Obj({}, {})
 for path in objects:
-    if 'net.connman.iwd.Device' not in objects[path]:
+    node = tree
+    elems = path.split('/')
+    for subpath in [ '/'.join(elems[:l + 1]) for l in range(1, len(elems)) ]:
+        if subpath not in node.children:
+            node.children[subpath] = Obj({}, {})
+        node = node.children[subpath]
+    node.interfaces.update(objects[path])
+
+for path, phy in tree.children.items():
+    if 'net.connman.iwd.Adapter' not in phy.interfaces:
         continue
 
-    properties = objects[path]['net.connman.iwd.Device']
-    device = dbus.Interface(bus.get_object("net.connman.iwd", path),
-                                                    'net.connman.iwd.Device')
+    properties = phy.interfaces['net.connman.iwd.Adapter']
 
     print("[ %s ]" % path)
 
@@ -23,11 +33,27 @@ for path in objects:
         val = properties[key]
         print("    %s = %s" % (key, val))
 
-    print("    Sorted networks:")
+    print("    Devices:")
 
-    for path2, ssid, rssi, security in device.GetOrderedNetworks():
+    for path2, device in phy.children.items():
+        if 'net.connman.iwd.Device' not in device.interfaces:
+            continue
+
+        properties = device.interfaces['net.connman.iwd.Device']
+        device = dbus.Interface(bus.get_object("net.connman.iwd", path2),
+                                                    'net.connman.iwd.Device')
+
         print("    [ %s ]" % path2)
 
-        print("        SSID = %s" % (ssid,))
-        print("        Signal strength = %i dBm" % (rssi / 100,))
-        print("        Security = %s" % (security,))
+        for key in properties:
+            val = properties[key]
+            print("        %s = %s" % (key, val))
+
+        print("        Sorted networks:")
+
+        for path3, ssid, rssi, security in device.GetOrderedNetworks():
+            print("        [ %s ]" % path3)
+
+            print("            SSID = %s" % (ssid,))
+            print("            Signal strength = %i dBm" % (rssi / 100,))
+            print("            Security = %s" % (security,))
