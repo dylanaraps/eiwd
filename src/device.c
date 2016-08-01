@@ -356,6 +356,9 @@ static void process_bss(struct device *device, struct scan_bss *bss,
 
 	network_bss_add(network, bss);
 
+	if (device->state != DEVICE_STATE_AUTOCONNECT)
+		return;
+
 	/* See if network is autoconnectable (is a known network) */
 	if (!network_rankmod(network, &rankmod))
 		return;
