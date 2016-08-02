@@ -265,22 +265,54 @@ static void netdev_operstate_down_cb(bool success, void *user_data)
 	l_debug("netdev: %d, success: %d", index, success);
 }
 
-static void netdev_free(void *data)
+static void netdev_connect_free(struct netdev *netdev)
 {
-	struct netdev *netdev = data;
-
-	l_debug("Freeing netdev %s[%d]", netdev->name, netdev->index);
-
-	device_remove(netdev->device);
-
 	if (netdev->sm) {
 		eapol_sm_free(netdev->sm);
 		netdev->sm = NULL;
 
 		l_io_destroy(netdev->eapol_io);
 		netdev->eapol_io = NULL;
-	} else if (netdev->eapol_active)
-		eapol_cancel(netdev->index);
+	}
+
+	netdev->eapol_active = false;
+	eapol_cancel(netdev->index);
+
+	netdev->connected = false;
+	netdev->connect_cb = NULL;
+	netdev->event_filter = NULL;
+
+	if (netdev->pairwise_new_key_cmd_id) {
+		l_genl_family_cancel(nl80211, netdev->pairwise_new_key_cmd_id);
+		netdev->pairwise_new_key_cmd_id = 0;
+	}
+
+	if (netdev->pairwise_set_key_cmd_id) {
+		l_genl_family_cancel(nl80211, netdev->pairwise_set_key_cmd_id);
+		netdev->pairwise_set_key_cmd_id = 0;
+	}
+
+	if (netdev->group_new_key_cmd_id) {
+		l_genl_family_cancel(nl80211, netdev->group_new_key_cmd_id);
+		netdev->group_new_key_cmd_id = 0;
+	}
+}
+
+static void netdev_free(void *data)
+{
+	struct netdev *netdev = data;
+
+	l_debug("Freeing netdev %s[%d]", netdev->name, netdev->index);
+
+	if (netdev->connected) {
+		if (netdev->connect_cb)
+			netdev->connect_cb(netdev, NETDEV_RESULT_ABORTED,
+						netdev->user_data);
+
+		netdev_connect_free(netdev);
+	}
+
+	device_remove(netdev->device);
 
 	l_queue_destroy(netdev->watches, l_free);
 
@@ -314,18 +346,14 @@ struct netdev *netdev_find(int ifindex)
 
 static void netdev_lost_beacon(struct netdev *netdev)
 {
-	if (netdev->eapol_active) {
-		netdev->eapol_active = false;
-		eapol_cancel(netdev->index);
-	}
-
-	netdev->connected = false;
-
-	if (!netdev->event_filter)
+	if (!netdev->connected)
 		return;
 
-	netdev->event_filter(netdev, NETDEV_EVENT_LOST_BEACON,
+	if (netdev->event_filter)
+		netdev->event_filter(netdev, NETDEV_EVENT_LOST_BEACON,
 							netdev->user_data);
+
+	netdev_connect_free(netdev);
 }
 
 static void netdev_cqm_event(struct l_genl_msg *msg, struct netdev *netdev)
@@ -406,6 +434,9 @@ static void netdev_disconnect_event(struct l_genl_msg *msg,
 
 	l_debug("");
 
+	if (!netdev->connected)
+		return;
+
 	if (!l_genl_attr_init(&attr, msg)) {
 		l_error("attr init failed");
 		return;
@@ -430,19 +461,11 @@ static void netdev_disconnect_event(struct l_genl_msg *msg,
 	l_info("Received Deauthentication event, reason: %hu, from_ap: %s",
 			reason_code, disconnect_by_ap ? "true" : "false");
 
-	netdev->connected = false;
-
-	if (netdev->eapol_active) {
-		eapol_cancel(netdev->index);
-		netdev->eapol_active = false;
-	}
-
-	if (!disconnect_by_ap)
-		return;
-
-	if (netdev->event_filter)
+	if (disconnect_by_ap && netdev->event_filter)
 		netdev->event_filter(netdev, NETDEV_EVENT_DISCONNECT_BY_AP,
 							netdev->user_data);
+
+	netdev_connect_free(netdev);
 }
 
 static void netdev_deauthenticate_event(struct l_genl_msg *msg,
@@ -457,13 +480,15 @@ static void netdev_cmd_deauthenticate_cb(struct l_genl_msg *msg,
 	struct netdev *netdev = user_data;
 	bool r;
 
+	if (!netdev->disconnect_cb)
+		return;
+
 	if (l_genl_msg_get_error(msg) < 0)
 		r = false;
 	else
 		r = true;
 
-	if (netdev->disconnect_cb)
-		netdev->disconnect_cb(netdev, r, netdev->user_data);
+	netdev->disconnect_cb(netdev, r, netdev->user_data);
 }
 
 static struct l_genl_msg *netdev_build_cmd_deauthenticate(struct netdev *netdev,
@@ -483,7 +508,9 @@ static struct l_genl_msg *netdev_build_cmd_deauthenticate(struct netdev *netdev,
 static void netdev_operstate_cb(bool success, void *user_data)
 {
 	struct netdev *netdev = user_data;
-	enum netdev_result result;
+
+	if (!netdev->connected)
+		return;
 
 	if (!success) {
 		struct l_genl_msg *msg;
@@ -495,16 +522,18 @@ static void netdev_operstate_cb(bool success, void *user_data)
 						MPDU_REASON_CODE_UNSPECIFIED);
 		l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 
-		eapol_cancel(netdev->index);
-		netdev->eapol_active = false;
-		netdev->connected = false;
+		if (netdev->connect_cb)
+			netdev->connect_cb(netdev,
+					NETDEV_RESULT_KEY_SETTING_FAILED,
+					netdev->user_data);
 
-		result = NETDEV_RESULT_KEY_SETTING_FAILED;
-	} else
-		result = NETDEV_RESULT_OK;
+		netdev_connect_free(netdev);
+
+		return;
+	}
 
 	if (netdev->connect_cb)
-		netdev->connect_cb(netdev, result, netdev->user_data);
+		netdev->connect_cb(netdev, NETDEV_RESULT_OK, netdev->user_data);
 }
 
 static void netdev_setting_keys_failed(struct netdev *netdev,
@@ -527,10 +556,6 @@ static void netdev_setting_keys_failed(struct netdev *netdev,
 	l_genl_family_cancel(nl80211, netdev->group_new_key_cmd_id);
 	netdev->group_new_key_cmd_id = 0;
 
-	eapol_cancel(netdev->index);
-	netdev->eapol_active = false;
-	netdev->connected = false;
-
 	msg = netdev_build_cmd_deauthenticate(netdev,
 						MPDU_REASON_CODE_UNSPECIFIED);
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
@@ -538,11 +563,16 @@ static void netdev_setting_keys_failed(struct netdev *netdev,
 	if (netdev->connect_cb)
 		netdev->connect_cb(netdev, NETDEV_RESULT_KEY_SETTING_FAILED,
 					netdev->user_data);
+
+	netdev_connect_free(netdev);
 }
 
 static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
+
+	if (!netdev->connected)
+		return;
 
 	if (l_genl_msg_get_error(msg) < 0) {
 		l_error("Set Station failed for ifindex %d", netdev->index);
@@ -843,6 +873,8 @@ static void netdev_handshake_failed(uint32_t ifindex,
 	if (netdev->connect_cb)
 		netdev->connect_cb(netdev, NETDEV_RESULT_HANDSHAKE_FAILED,
 						netdev->user_data);
+
+	netdev_connect_free(netdev);
 }
 
 static void hardware_rekey_cb(struct l_genl_msg *msg, void *data)
@@ -909,18 +941,10 @@ static void netdev_set_rekey_offload(uint32_t ifindex,
 static void netdev_connect_failed(struct netdev *netdev,
 						enum netdev_result result)
 {
-	if (netdev->sm) {
-		eapol_sm_free(netdev->sm);
-		netdev->sm = NULL;
-
-		l_io_destroy(netdev->eapol_io);
-		netdev->eapol_io = NULL;
-	}
-
-	netdev->connected = false;
-
 	if (netdev->connect_cb)
 		netdev->connect_cb(netdev, result, netdev->user_data);
+
+	netdev_connect_free(netdev);
 }
 
 static void netdev_connect_event(struct l_genl_msg *msg,
@@ -932,6 +956,9 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 	const uint16_t *status_code = NULL;
 
 	l_debug("");
+
+	if (!netdev->connected)
+		return;
 
 	if (!l_genl_attr_init(&attr, msg)) {
 		l_debug("attr init failed");
@@ -1113,6 +1140,8 @@ int netdev_disconnect(struct netdev *netdev,
 
 	if (!netdev->connected)
 		return -ENOTCONN;
+
+	netdev_connect_failed(netdev, NETDEV_RESULT_ABORTED);
 
 	deauthenticate = netdev_build_cmd_deauthenticate(netdev,
 					MPDU_REASON_CODE_DEAUTH_LEAVING);
