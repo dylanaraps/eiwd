@@ -41,8 +41,10 @@
 #include "src/dbus.h"
 #include "src/rfkill.h"
 #include "src/wiphy.h"
+#include "src/storage.h"
 
 static struct l_genl_family *nl80211 = NULL;
+static struct l_hwdb *hwdb;
 
 struct wiphy {
 	uint32_t id;
@@ -52,6 +54,8 @@ struct wiphy {
 	bool support_rekey_offload:1;
 	uint16_t pairwise_ciphers;
 	struct scan_freq_set *supported_freqs;
+	char *model_str;
+	char *vendor_str;
 
 	bool soft_rfkill : 1;
 	bool hard_rfkill : 1;
@@ -79,6 +83,8 @@ static void wiphy_free(void *data)
 	l_debug("Freeing wiphy %s[%u]", wiphy->name, wiphy->id);
 
 	scan_freq_set_free(wiphy->supported_freqs);
+	l_free(wiphy->model_str);
+	l_free(wiphy->vendor_str);
 	l_free(wiphy);
 }
 
@@ -344,6 +350,39 @@ static void wiphy_register(struct wiphy *wiphy)
 	wiphy->soft_rfkill = rfkill_get_soft_state(wiphy->id);
 	wiphy->hard_rfkill = rfkill_get_hard_state(wiphy->id);
 
+	if (wiphy->name && hwdb) {
+		char modalias[128];
+		ssize_t len;
+		struct l_hwdb_entry *entries = NULL, *kv;
+
+		len = read_file(modalias, sizeof(modalias) - 1,
+				"/sys/class/ieee80211/%s/device/modalias",
+				wiphy->name);
+
+		if (len > 0) {
+			modalias[len] = '\0';
+			entries = l_hwdb_lookup(hwdb, "%s", modalias);
+		}
+
+		for (kv = entries; kv; kv = kv->next) {
+			if (!strcmp(kv->key, "ID_MODEL_FROM_DATABASE")) {
+				if (wiphy->model_str)
+					continue;
+
+				wiphy->model_str = l_strdup(kv->value);
+			}
+
+			if (!strcmp(kv->key, "ID_VENDOR_FROM_DATABASE")) {
+				if (wiphy->vendor_str)
+					continue;
+
+				wiphy->vendor_str = l_strdup(kv->value);
+			}
+		}
+
+		l_hwdb_lookup_free(entries);
+	}
+
 	if (!l_dbus_object_add_interface(dbus, wiphy_get_path(wiphy),
 					IWD_WIPHY_INTERFACE, wiphy))
 		l_info("Unable to add the %s interface to %s",
@@ -591,11 +630,45 @@ done:
 	return NULL;
 }
 
+static bool wiphy_property_get_model(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct wiphy *wiphy = user_data;
+
+	if (!wiphy->model_str)
+		return false;
+
+	l_dbus_message_builder_append_basic(builder, 's', wiphy->model_str);
+
+	return true;
+}
+
+static bool wiphy_property_get_vendor(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct wiphy *wiphy = user_data;
+
+	if (!wiphy->vendor_str)
+		return false;
+
+	l_dbus_message_builder_append_basic(builder, 's', wiphy->vendor_str);
+
+	return true;
+}
+
 static void setup_wiphy_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_property(interface, "Powered", 0, "b",
 					wiphy_property_get_powered,
 					wiphy_property_set_powered);
+	l_dbus_interface_property(interface, "Model", 0, "s",
+					wiphy_property_get_model, NULL);
+	l_dbus_interface_property(interface, "Vendor", 0, "s",
+					wiphy_property_get_vendor, NULL);
 }
 
 bool wiphy_init(struct l_genl_family *in)
@@ -647,6 +720,8 @@ bool wiphy_init(struct l_genl_family *in)
 		l_error("Unable to register the %s interface",
 				IWD_WIPHY_INTERFACE);
 
+	hwdb = l_hwdb_new_default();
+
 	return true;
 }
 
@@ -658,6 +733,8 @@ bool wiphy_exit(void)
 	nl80211 = NULL;
 
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_WIPHY_INTERFACE);
+
+	l_hwdb_unref(hwdb);
 
 	return true;
 }
