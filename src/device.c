@@ -805,11 +805,6 @@ int device_disconnect(struct device *device)
 	if (netdev_disconnect(device->netdev, device_disconnect_cb, device) < 0)
 		return -EIO;
 
-	if (device->state == DEVICE_STATE_CONNECTING)
-		if (device->connect_pending)
-			dbus_pending_reply(&device->connect_pending,
-				dbus_error_aborted(device->connect_pending));
-
 	/*
 	 * If the disconnect somehow fails we won't know if we're still
 	 * connected so we may as well indicate now that we're no longer
