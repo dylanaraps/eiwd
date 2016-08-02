@@ -1700,9 +1700,6 @@ bool netdev_exit(void)
 
 	nl80211 = NULL;
 
-	l_queue_destroy(netdev_list, netdev_free);
-	netdev_list = NULL;
-
 	l_debug("Closing route netlink socket");
 	l_netlink_destroy(rtnl);
 	rtnl = NULL;
@@ -1716,4 +1713,7 @@ void netdev_shutdown(void)
 		return;
 
 	l_queue_foreach(netdev_list, netdev_shutdown_one, NULL);
+
+	l_queue_destroy(netdev_list, netdev_free);
+	netdev_list = NULL;
 }
