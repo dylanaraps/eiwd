@@ -774,27 +774,24 @@ static void device_disconnect_cb(struct netdev *netdev, bool success,
 					void *user_data)
 {
 	struct device *device = user_data;
-	struct l_dbus_message *reply;
 
 	l_debug("%d, success: %d", device->index, success);
 
-	if (!success) {
-		if (!device->disconnect_pending)
-			return;
+	if (device->disconnect_pending) {
+		struct l_dbus_message *reply;
 
-		dbus_pending_reply(&device->disconnect_pending,
-				dbus_error_failed(device->disconnect_pending));
-		return;
+		if (success) {
+			reply = l_dbus_message_new_method_return(
+						device->disconnect_pending);
+			l_dbus_message_set_arguments(reply, "");
+		} else
+			reply = dbus_error_failed(device->disconnect_pending);
+
+
+		dbus_pending_reply(&device->disconnect_pending, reply);
 	}
 
 	device_disassociated(device);
-
-	if (!device->disconnect_pending)
-		return;
-
-	reply = l_dbus_message_new_method_return(device->disconnect_pending);
-	l_dbus_message_set_arguments(reply, "");
-	dbus_pending_reply(&device->disconnect_pending, reply);
 }
 
 int device_disconnect(struct device *device)
