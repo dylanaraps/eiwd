@@ -774,6 +774,7 @@ static void device_disconnect_cb(struct netdev *netdev, bool success,
 					void *user_data)
 {
 	struct device *device = user_data;
+	bool trigger_autoconnect = true;
 
 	l_debug("%d, success: %d", device->index, success);
 
@@ -789,9 +790,19 @@ static void device_disconnect_cb(struct netdev *netdev, bool success,
 
 
 		dbus_pending_reply(&device->disconnect_pending, reply);
+
+		/*
+		 * If the disconnect was triggered by the user, don't
+		 * autoconnect.  Wait for user's explicit instructions to scan
+		 * and connect to the network
+		 */
+		trigger_autoconnect = false;
 	}
 
-	device_disassociated(device);
+	device_enter_state(device, DEVICE_STATE_DISCONNECTED);
+
+	if (trigger_autoconnect)
+		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 }
 
 int device_disconnect(struct device *device)
