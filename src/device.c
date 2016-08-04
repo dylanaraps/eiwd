@@ -607,7 +607,9 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 	}
 
 	if (result != NETDEV_RESULT_OK) {
-		device_disassociated(device);
+		if (result != NETDEV_RESULT_ABORTED)
+			device_disassociated(device);
+
 		return;
 	}
 
