@@ -533,6 +533,8 @@ void device_disassociated(struct device *device)
 	struct network *network = device->connected_network;
 	struct l_dbus *dbus = dbus_get_bus();
 
+	l_debug("%d", device->index);
+
 	if (network) {
 		if (device->state == DEVICE_STATE_CONNECTED)
 			network_disconnected(network);
@@ -581,6 +583,8 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 					void *user_data)
 {
 	struct device *device = user_data;
+
+	l_debug("%d, result: %d", device->index, result);
 
 	if (device->connect_pending) {
 		struct l_dbus_message *reply;
@@ -769,6 +773,8 @@ static void device_disconnect_cb(struct netdev *netdev, bool success,
 {
 	struct device *device = user_data;
 	struct l_dbus_message *reply;
+
+	l_debug("%d, success: %d", device->index, success);
 
 	if (!success) {
 		if (!device->disconnect_pending)
