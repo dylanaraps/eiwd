@@ -532,8 +532,10 @@ static void netdev_operstate_cb(bool success, void *user_data)
 		return;
 	}
 
-	if (netdev->connect_cb)
+	if (netdev->connect_cb) {
 		netdev->connect_cb(netdev, NETDEV_RESULT_OK, netdev->user_data);
+		netdev->connect_cb = NULL;
+	}
 }
 
 static void netdev_setting_keys_failed(struct netdev *netdev,
