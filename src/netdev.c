@@ -67,6 +67,7 @@ struct netdev {
 	uint32_t pairwise_new_key_cmd_id;
 	uint32_t pairwise_set_key_cmd_id;
 	uint32_t group_new_key_cmd_id;
+	uint32_t connect_cmd_id;
 
 	struct l_queue *watches;
 	uint32_t next_watch_id;
@@ -295,6 +296,11 @@ static void netdev_connect_free(struct netdev *netdev)
 	if (netdev->group_new_key_cmd_id) {
 		l_genl_family_cancel(nl80211, netdev->group_new_key_cmd_id);
 		netdev->group_new_key_cmd_id = 0;
+	}
+
+	if (netdev->connect_cmd_id) {
+		l_genl_family_cancel(nl80211, netdev->connect_cmd_id);
+		netdev->connect_cmd_id = 0;
 	}
 }
 
@@ -1021,6 +1027,8 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
 
+	netdev->connect_cmd_id = 0;
+
 	/* Wait for connect event */
 	if (l_genl_msg_get_error(msg) >= 0) {
 		if (netdev->event_filter)
@@ -1102,8 +1110,11 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	if (!cmd_connect)
 		return -EINVAL;
 
-	if (!l_genl_family_send(nl80211, cmd_connect,
-				netdev_cmd_connect_cb, netdev, NULL)) {
+	netdev->connect_cmd_id = l_genl_family_send(nl80211, cmd_connect,
+							netdev_cmd_connect_cb,
+							netdev, NULL);
+
+	if (!netdev->connect_cmd_id) {
 		l_genl_msg_unref(cmd_connect);
 		return -EIO;
 	}
