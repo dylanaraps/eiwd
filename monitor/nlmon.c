@@ -3585,6 +3585,53 @@ static void print_attributes(int indent, const struct attr_entry *table,
 	}
 }
 
+static void print_eapol_key(const void *data, uint32_t size)
+{
+	const struct eapol_key *ek = eapol_key_validate(data, size);
+
+	if (!ek)
+		return;
+
+	print_attr(1, "Descriptor Type: %u", ek->descriptor_type);
+	print_attr(1, "Key MIC: %s", ek->key_mic ? "true" : "false");
+	print_attr(1, "Secure: %s", ek->secure ? "true" : "false");
+	print_attr(1, "Error: %s", ek->error ? "true" : "false");
+	print_attr(1, "Request: %s", ek->request ? "true" : "false");
+	print_attr(1, "Encrypted Key Data: %s",
+				ek->encrypted_key_data ? "true" : "false");
+	print_attr(1, "SMK Message: %s", ek->smk_message ? "true" : "false");
+	print_attr(1, "Key Descriptor Version: %d (%02x)",
+						ek->key_descriptor_version,
+						ek->key_descriptor_version);
+	print_attr(1, "Key Type: %s", ek->key_type ? "true" : "false");
+
+	if (ek->descriptor_type == EAPOL_DESCRIPTOR_TYPE_WPA)
+		print_attr(1, "Key Id: %u", ek->wpa_key_id);
+
+	print_attr(1, "Install: %s", ek->install ? "true" : "false");
+	print_attr(1, "Key ACK: %s", ek->key_ack ? "true" : "false");
+	print_attr(1, "Key Length: %d", L_BE16_TO_CPU(ek->key_length));
+	print_attr(1, "Key Replay Counter: %ld",
+					L_BE64_TO_CPU(ek->key_replay_counter));
+	print_attr(1, "Key NONCE");
+	print_hexdump(2, ek->key_nonce, 32);
+	print_attr(1, "Key IV");
+	print_hexdump(2, ek->eapol_key_iv, 16);
+	print_attr(1, "Key RSC ");
+	print_hexdump(2, ek->key_rsc, 8);
+	print_attr(1, "Key MIC Data");
+	print_hexdump(2, ek->key_mic_data, 16);
+
+	if (ek->encrypted_key_data) {
+		print_attr(1, "Key Data: len %d",
+					L_BE16_TO_CPU(ek->key_data_len));
+		print_hexdump(2, ek->key_data, L_BE16_TO_CPU(ek->key_data_len));
+		return;
+	}
+
+	print_ie(1, "Key Data", ek->key_data, L_BE16_TO_CPU(ek->key_data_len));
+}
+
 static void netlink_str(char *str, size_t size,
 				uint16_t type, uint16_t flags, uint32_t len)
 {
@@ -4718,9 +4765,9 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 					uint8_t type, int index,
 					const void *data, uint32_t size)
 {
-	const struct eapol_key *ek;
 	char extra_str[16];
 	const char *str;
+	const struct eapol_header *eh;
 
 	update_time_offset(tv);
 
@@ -4737,27 +4784,28 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 	print_attr(0, "EAPoL: len %u", size);
 	print_hexdump(0, data, size);
 
-	ek = eapol_key_validate(data, size);
-	if (!ek)
-		return;
+	eh = data;
 
-	switch (ek->header.protocol_version) {
+	switch (eh->protocol_version) {
 	case 0x01:
-		str = "802.11X-2001";
+		str = "802.1X-2001";
 		break;
 	case 0x02:
-		str = "802.11X-2004";
+		str = "802.1X-2004";
+		break;
+	case 0x03:
+		str = "802.1X-2010";
 		break;
 	default:
 		str = "Reserved";
 		break;
 	}
 
-	print_attr(1, "Version: %u (%s)", ek->header.protocol_version, str);
+	print_attr(1, "Protocol Version: %u (%s)", eh->protocol_version, str);
 
-	switch (ek->header.packet_type) {
+	switch (eh->packet_type) {
 	case 0x00:
-		str = "Packet";
+		str = "EAP";
 		break;
 	case 0x01:
 		str = "Start";
@@ -4768,51 +4816,34 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 	case 0x03:
 		str = "Key";
 		break;
+	case 0x04:
+		str = "Encapsulated-ASF-Alert";
+		break;
+	case 0x05:
+		str = "MKA";
+		break;
+	case 0x06:
+		str = "Announcement (Generic)";
+		break;
+	case 0x07:
+		str = "Announcement (Specific)";
+		break;
+	case 0x08:
+		str = "Announcement-Req";
+		break;
 	default:
 		str = "Reserved";
 		break;
 	}
 
-	print_attr(1, "Type: %u (%s)", ek->header.packet_type, str);
-	print_attr(1, "Length: %d", L_BE16_TO_CPU(ek->header.packet_len));
-	print_attr(1, "Descriptor Type: %u", ek->descriptor_type);
-	print_attr(1, "Key MIC: %s", ek->key_mic ? "true" : "false");
-	print_attr(1, "Secure: %s", ek->secure ? "true" : "false");
-	print_attr(1, "Error: %s", ek->error ? "true" : "false");
-	print_attr(1, "Request: %s", ek->request ? "true" : "false");
-	print_attr(1, "Encrypted Key Data: %s",
-				ek->encrypted_key_data ? "true" : "false");
-	print_attr(1, "SMK Message: %s", ek->smk_message ? "true" : "false");
-	print_attr(1, "Key Descriptor Version: %d (%02x)",
-						ek->key_descriptor_version,
-						ek->key_descriptor_version);
-	print_attr(1, "Key Type: %s", ek->key_type ? "true" : "false");
+	print_attr(1, "Type: %u (%s)", eh->packet_type, str);
+	print_attr(1, "Length: %d", L_BE16_TO_CPU(eh->packet_len));
 
-	if (ek->descriptor_type == EAPOL_DESCRIPTOR_TYPE_WPA)
-		print_attr(1, "Key Id: %u", ek->wpa_key_id);
-
-	print_attr(1, "Install: %s", ek->install ? "true" : "false");
-	print_attr(1, "Key ACK: %s", ek->key_ack ? "true" : "false");
-	print_attr(1, "Key Length: %d", L_BE16_TO_CPU(ek->key_length));
-	print_attr(1, "Key Replay Counter: %ld",
-					L_BE64_TO_CPU(ek->key_replay_counter));
-	print_attr(1, "Key NONCE");
-	print_hexdump(2, ek->key_nonce, 32);
-	print_attr(1, "Key IV");
-	print_hexdump(2, ek->eapol_key_iv, 16);
-	print_attr(1, "Key RSC ");
-	print_hexdump(2, ek->key_rsc, 8);
-	print_attr(1, "Key MIC Data");
-	print_hexdump(2, ek->key_mic_data, 16);
-
-	if (ek->encrypted_key_data) {
-		print_attr(1, "Key Data: len %d",
-					L_BE16_TO_CPU(ek->key_data_len));
-		print_hexdump(2, ek->key_data, L_BE16_TO_CPU(ek->key_data_len));
-		return;
+	switch (eh->packet_type) {
+	case 0x03:
+		print_eapol_key(data, size);
+		break;
 	}
-
-	print_ie(1, "Key Data", ek->key_data, L_BE16_TO_CPU(ek->key_data_len));
 }
 
 static bool pae_receive(struct l_io *io, void *user_data)
