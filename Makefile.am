@@ -113,8 +113,8 @@ unit_tests = unit/test-cmac-aes \
 		unit/test-ie unit/test-ssid-to-utf8 unit/test-ssid-security \
 		unit/test-arc4 unit/test-wsc
 
-ell_pem_files = cert-ca-key.pem cert-client-key.pem \
-		cert-server-key.pem \
+ell_pem_files = cert-ca-key.pem cert-client-key.pem cert-client-key-pkcs8.pem \
+		cert-server-key.pem cert-server-key-pkcs8.pem \
 		cert-ca.pem cert-client.pem cert-server.pem
 
 if MAINTAINER_MODE
