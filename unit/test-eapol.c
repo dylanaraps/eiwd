@@ -2034,15 +2034,17 @@ static int verify_8021x_tls_resp(uint32_t ifindex, const uint8_t *aa_addr,
 	}
 
 	header_len = 6;
+	fragment_len = l_get_be16(ef->data + 2) - header_len;
+
 	if (ef->data[5] & 0x80) { /* L flag */
 		assert(len >= 14);
 		header_len += 4;
+		fragment_len -= 4;
 		assert(ef->data[5] & 0x40); /* M flag */
 		assert(l_get_be32(ef->data + 6) > fragment_len);
 	}
 	s->tx_ack = !!(ef->data[5] & 0x40); /* M flag */
 
-	fragment_len = l_get_be16(ef->data + 2) - header_len;
 	assert(len == 4 + header_len + fragment_len);
 
 	assert(s->pending_req);
