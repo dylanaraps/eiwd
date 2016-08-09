@@ -2182,7 +2182,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	s->tx_buf_offset = 0;
 
 	l_tls_set_auth_data(s->tls, "ell/unit/cert-server.pem",
-				"ell/unit/cert-server-key.pem", NULL);
+				"ell/unit/cert-server-key-pkcs8.pem", NULL);
 	l_tls_set_cacert(s->tls, "ell/unit/cert-ca.pem");
 
 	start = 1;
@@ -2338,7 +2338,7 @@ static void eapol_sm_test_eap_tls(const void *data)
 		"EAP-Identity=abc@example.com\n"
 		"EAP-TLS-CACert=ell/unit/cert-ca.pem\n"
 		"EAP-TLS-ClientCert=ell/unit/cert-client.pem\n"
-		"EAP-TLS-ClientKey=ell/unit/cert-client-key.pem";
+		"EAP-TLS-ClientKey=ell/unit/cert-client-key-pkcs8.pem";
 	struct eapol_8021x_tls_test_state s;
 
 	s.app_data_cb = eapol_sm_test_tls_new_data;
@@ -2421,7 +2421,7 @@ static void eapol_sm_test_eap_ttls_md5(const void *data)
 		"EAP-Identity=abc@example.com\n"
 		"EAP-TTLS-CACert=ell/unit/cert-ca.pem\n"
 		"EAP-TTLS-ClientCert=ell/unit/cert-client.pem\n"
-		"EAP-TTLS-ClientKey=ell/unit/cert-client-key.pem\n"
+		"EAP-TTLS-ClientKey=ell/unit/cert-client-key-pkcs8.pem\n"
 		"EAP-TTLS-Phase2-Method=MD5\n"
 		"EAP-TTLS-Phase2-Identity=abc@example.com\n"
 		"EAP-TTLS-Phase2-MD5-Secret=testpasswd";
@@ -2483,7 +2483,7 @@ static void eapol_sm_test_eap_nak(const void *data)
 		"EAP-Identity=abc@example.com\n"
 		"EAP-TLS-CACert=ell/unit/cert-ca.pem\n"
 		"EAP-TLS-ClientCert=ell/unit/cert-client.pem\n"
-		"EAP-TLS-ClientKey=ell/unit/cert-client-key.pem";
+		"EAP-TLS-ClientKey=ell/unit/cert-client-key-pkcs8.pem";
 	static const unsigned char ap_wpa_ie[] = {
 		0xdd, 0x16, 0x00, 0x50, 0xf2, 0x01, 0x01, 0x00,
 		0x00, 0x50, 0xf2, 0x02, 0x01, 0x00, 0x00, 0x50,
