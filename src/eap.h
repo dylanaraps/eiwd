@@ -61,7 +61,7 @@ void eap_exit(void);
 
 /* EAP method API */
 
-enum eap_request_type {
+enum eap_type {
 	EAP_TYPE_IDENTITY	= 1,
 	EAP_TYPE_NOTIFICATION	= 2,
 	EAP_TYPE_NAK		= 3,
@@ -72,7 +72,7 @@ enum eap_request_type {
 	EAP_TYPE_EXPANDED	= 254,
 };
 
-enum eap_pkt_code {
+enum eap_code {
 	EAP_CODE_REQUEST	= 1,
 	EAP_CODE_RESPONSE	= 2,
 	EAP_CODE_SUCCESS	= 3,
@@ -80,7 +80,7 @@ enum eap_pkt_code {
 };
 
 struct eap_method {
-	enum eap_request_type request_type;
+	enum eap_type request_type;
 	bool exports_msk;
 	const char *name;
 
@@ -114,7 +114,7 @@ void eap_set_data(struct eap_state *eap, void *data);
 void *eap_get_data(struct eap_state *eap);
 
 void eap_send_response(struct eap_state *eap,
-			enum eap_request_type request_type,
+			enum eap_type request_type,
 			uint8_t *buf, size_t len);
 
 void eap_set_key_material(struct eap_state *eap,

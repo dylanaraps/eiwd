@@ -102,7 +102,7 @@ size_t eap_get_mtu(struct eap_state *eap)
 }
 
 void eap_send_response(struct eap_state *eap,
-			enum eap_request_type request_type,
+			enum eap_type request_type,
 			uint8_t *buf, size_t len)
 {
 	buf[0] = EAP_CODE_RESPONSE;
@@ -148,7 +148,7 @@ static void eap_send_identity_response(struct eap_state *eap, char *identity)
 static void eap_handle_request(struct eap_state *eap,
 				const uint8_t *pkt, size_t len)
 {
-	enum eap_request_type type;
+	enum eap_type type;
 	uint8_t buf[10];
 	int buf_len;
 
@@ -218,7 +218,7 @@ void eap_rx_packet(struct eap_state *eap, const uint8_t *pkt, size_t len)
 	id = pkt[1];
 	eap_len = l_get_be16(&pkt[2]);
 
-	switch ((enum eap_pkt_code) code) {
+	switch ((enum eap_code) code) {
 	case EAP_CODE_REQUEST:
 		if (id == eap->last_id) {
 			/*
