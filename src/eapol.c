@@ -202,10 +202,13 @@ const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len)
 
 	ek = (const struct eapol_key *) frame;
 
-	if (ek->header.protocol_version != EAPOL_PROTOCOL_VERSION_2001 &&
-			ek->header.protocol_version !=
-			EAPOL_PROTOCOL_VERSION_2004)
+	switch (ek->header.protocol_version) {
+	case EAPOL_PROTOCOL_VERSION_2001:
+	case EAPOL_PROTOCOL_VERSION_2004:
+		break;
+	default:
 		return NULL;
+	}
 
 	if (ek->header.packet_type != 3)
 		return NULL;
