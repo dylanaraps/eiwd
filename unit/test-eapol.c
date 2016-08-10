@@ -1723,8 +1723,6 @@ static void eapol_sm_test_ptk(const void *data)
 	struct eapol_sm *sm;
 
 	eapol_init();
-	/* Our test data expects 2001 protocol */
-	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2001);
 
 	snonce = eapol_key_test_4.key_nonce;
 	__eapol_set_get_nonce_func(test_nonce);
@@ -1739,6 +1737,10 @@ static void eapol_sm_test_ptk(const void *data)
 	expected_step4_frame_size = sizeof(eapol_key_data_6);
 
 	sm = eapol_sm_new();
+
+	/* key_data_3 uses 2004 while key_data_3 uses 2001, so force 2001 */
+	eapol_sm_set_protocol_version(sm, EAPOL_PROTOCOL_VERSION_2001);
+
 	eapol_sm_set_pmk(sm, psk);
 	eapol_sm_set_authenticator_address(sm, aa);
 	eapol_sm_set_supplicant_address(sm, spa);
@@ -1782,7 +1784,6 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 	struct eapol_sm *sm;
 
 	eapol_init();
-	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2004);
 
 	snonce = eapol_key_test_8.key_nonce;
 	__eapol_set_get_nonce_func(test_nonce);
@@ -1848,7 +1849,6 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 	struct eapol_sm *sm;
 
 	eapol_init();
-	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2004);
 	snonce = eapol_key_test_14.key_nonce;
 	__eapol_set_get_nonce_func(test_nonce);
 
@@ -1912,7 +1912,6 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 	struct eapol_sm *sm;
 
 	eapol_init();
-	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2001);
 	snonce = eapol_key_test_20.key_nonce;
 	__eapol_set_get_nonce_func(test_nonce);
 
@@ -2148,7 +2147,6 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	spa = sta_address;
 
 	eapol_init();
-	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2004);
 	__eapol_set_get_nonce_func(test_nonce);
 	__eapol_set_deauthenticate_func(verify_deauthenticate);
 
@@ -2504,7 +2502,6 @@ static void eapol_sm_test_eap_nak(const void *data)
 	spa = sta_address;
 
 	eapol_init();
-	__eapol_set_protocol_version(EAPOL_PROTOCOL_VERSION_2004);
 	__eapol_set_get_nonce_func(test_nonce);
 	__eapol_set_deauthenticate_func(verify_deauthenticate);
 
