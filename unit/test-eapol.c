@@ -2099,14 +2099,14 @@ static void eapol_sm_test_tls_test_ready(const char *peer_identity,
 }
 
 static void eapol_sm_test_tls_test_disconnected(enum l_tls_alert_desc reason,
-							bool remote, void *user_data)
+						bool remote, void *user_data)
 {
 	assert(false);
 }
 
 static void verify_deauthenticate(uint32_t ifindex, const uint8_t *aa,
-					const uint8_t *spa, uint16_t reason_code,
-					void *user_data)
+					const uint8_t *spa,
+					uint16_t reason_code, void *user_data)
 {
 	assert(false);
 }
