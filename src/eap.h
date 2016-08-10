@@ -81,6 +81,8 @@ enum eap_code {
 
 struct eap_method {
 	enum eap_type request_type;
+	uint8_t vendor_id[3];
+	uint32_t vendor_type;
 	bool exports_msk;
 	const char *name;
 

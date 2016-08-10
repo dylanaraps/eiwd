@@ -101,14 +101,35 @@ size_t eap_get_mtu(struct eap_state *eap)
 	return eap->mtu;
 }
 
-void eap_send_response(struct eap_state *eap,
-			enum eap_type request_type,
-			uint8_t *buf, size_t len)
+/**
+ * eap_send_response:
+ * @eap: EAP state
+ * @type: Type of response being sent
+ * @buf: Buffer to send
+ * @len: Size of the buffer
+ *
+ * Sends out a response to a received request.  This method first fills the
+ * EAP header into the buffer based on the EAP type response being sent.
+ *
+ * If the response type is EAP_TYPE_EXPANDED, then the Vendor-Id and
+ * Vendor-Type fields are filled in based on contents of the eap_method
+ * associated with @eap.
+ *
+ * The buffer passed in MUST be at least 12 bytes long if @type is
+ * EAP_TYPE_EXPANDED and at least 5 bytes for other cases.
+ **/
+void eap_send_response(struct eap_state *eap, enum eap_type type,
+						uint8_t *buf, size_t len)
 {
 	buf[0] = EAP_CODE_RESPONSE;
 	buf[1] = eap->last_id;
 	l_put_be16(len, &buf[2]);
-	buf[4] = request_type;
+	buf[4] = type;
+
+	if (type == EAP_TYPE_EXPANDED) {
+		memcpy(buf + 5, eap->method->vendor_id, 3);
+		l_put_be32(eap->method->vendor_type, buf + 8);
+	}
 
 	eap->tx_packet(buf, len, eap->user_data);
 }
@@ -167,6 +188,10 @@ static void eap_handle_request(struct eap_state *eap,
 			goto unsupported_method;
 		}
 
+		/*
+		 * TODO: Handle Expanded Nak if our vendor-id / vendor-types
+		 * don't match
+		 */
 		eap->method->handle_request(eap, pkt + 1, len - 1);
 
 		return;
@@ -198,6 +223,13 @@ static void eap_handle_request(struct eap_state *eap,
 		/* Send a legacy NAK response */
 		buf_len = 5;
 
+		/*
+		 * RFC3748, Section 5.3.1: "A peer supporting Expanded Types
+		 * that receives a Request for an unacceptable authentication
+		 * Type (4-253,255) MAY include the value 254 in the Nak
+		 * Response (Type 3) to indicate the desire for an Expanded
+		 * authentication Type."
+		 */
 		buf[buf_len++] = eap->method ? eap->method->request_type : 0;
 
 		eap_send_response(eap, EAP_TYPE_NAK, buf, buf_len);
