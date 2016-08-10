@@ -1435,7 +1435,7 @@ static void eapol_eap_msg_cb(const uint8_t *eap_data, size_t len,
 	uint8_t buf[sizeof(struct eapol_frame) + len];
 	struct eapol_frame *frame = (struct eapol_frame *) buf;
 
-	frame->header.protocol_version = EAPOL_PROTOCOL_VERSION_2004;
+	frame->header.protocol_version = sm->protocol_version;
 	frame->header.packet_type = 0;
 	l_put_be16(len, &frame->header.packet_len);
 
