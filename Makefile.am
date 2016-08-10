@@ -73,6 +73,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/network.h src/network.c \
 					src/wscutil.h src/wscutil.c \
 					src/wsc.h src/wsc.c \
+					src/eap-wsc.c \
 					src/eap.h src/eap.c \
 					src/eap-tls.c src/eap-ttls.c \
 					src/backtrace.h src/backtrace.c \
