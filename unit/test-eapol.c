@@ -1761,6 +1761,7 @@ static void eapol_sm_test_ptk(const void *data)
 					sizeof(eapol_key_data_5));
 	assert(verify_step4_called);
 
+	eapol_cancel(1);
 	eapol_exit();
 }
 
@@ -1826,6 +1827,7 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 					sizeof(eapol_key_data_11));
 	assert(verify_gtk_step2_called);
 
+	eapol_cancel(1);
 	eapol_exit();
 }
 
@@ -1889,6 +1891,7 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 					sizeof(eapol_key_data_17));
 	assert(verify_gtk_step2_called);
 
+	eapol_cancel(1);
 	eapol_exit();
 }
 
@@ -1953,6 +1956,7 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 					sizeof(eapol_key_data_23));
 	assert(verify_gtk_step2_called);
 
+	eapol_cancel(1);
 	eapol_exit();
 }
 
@@ -2328,6 +2332,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	assert(verify_step4_called);
 	assert(verify_install_tk_called);
 
+	eapol_cancel(1);
 	eapol_exit();
 }
 
@@ -2540,6 +2545,7 @@ static void eapol_sm_test_eap_nak(const void *data)
 				sizeof(eap_failure));
 	assert(eap_nak_verify_deauthenticate_called);
 
+	eapol_cancel(1);
 	eapol_exit();
 }
 
