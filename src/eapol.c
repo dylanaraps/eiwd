@@ -48,7 +48,6 @@ eapol_install_tk_func_t install_tk = NULL;
 eapol_install_gtk_func_t install_gtk = NULL;
 eapol_deauthenticate_func_t deauthenticate = NULL;
 eapol_rekey_offload_func_t rekey_offload = NULL;
-enum eapol_protocol_version protocol_version = EAPOL_PROTOCOL_VERSION_2004;
 
 #define VERIFY_IS_ZERO(field)					\
 	do {							\
@@ -587,6 +586,7 @@ struct eapol_key *eapol_create_gtk_2_of_2(
 }
 
 struct eapol_sm {
+	enum eapol_protocol_version protocol_version;
 	uint32_t ifindex;
 	uint8_t spa[6];
 	uint8_t aa[6];
@@ -640,6 +640,12 @@ struct eapol_sm *eapol_sm_new()
 void eapol_sm_free(struct eapol_sm *sm)
 {
 	eapol_sm_destroy(sm);
+}
+
+void eapol_sm_set_protocol_version(struct eapol_sm *sm,
+				enum eapol_protocol_version protocol_version)
+{
+	sm->protocol_version = protocol_version;
 }
 
 void eapol_sm_set_supplicant_address(struct eapol_sm *sm, const uint8_t *spa)
@@ -857,7 +863,7 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 					ptk, sizeof(sm->ptk),
 					use_sha256);
 
-	step2 = eapol_create_ptk_2_of_4(protocol_version,
+	step2 = eapol_create_ptk_2_of_4(sm->protocol_version,
 					ek->key_descriptor_version,
 					sm->replay_counter,
 					sm->snonce,
@@ -1185,7 +1191,7 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	} else
 		gtk = NULL;
 
-	step4 = eapol_create_ptk_4_of_4(protocol_version,
+	step4 = eapol_create_ptk_4_of_4(sm->protocol_version,
 					ek->key_descriptor_version,
 					sm->replay_counter, sm->wpa_ie);
 
@@ -1265,7 +1271,7 @@ static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
 	} else
 		gtk_key_index = ek->wpa_key_id;
 
-	step2 = eapol_create_gtk_2_of_2(protocol_version,
+	step2 = eapol_create_gtk_2_of_2(sm->protocol_version,
 					ek->key_descriptor_version,
 					sm->replay_counter, sm->wpa_ie,
 					ek->wpa_key_id);
@@ -1502,12 +1508,19 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 
 	eh = (const struct eapol_header *) frame;
 
-	if (eh->protocol_version != EAPOL_PROTOCOL_VERSION_2001 &&
-			eh->protocol_version != EAPOL_PROTOCOL_VERSION_2004)
+	switch (eh->protocol_version) {
+	case EAPOL_PROTOCOL_VERSION_2001:
+	case EAPOL_PROTOCOL_VERSION_2004:
+		break;
+	default:
 		return;
+	}
 
 	if (len < (size_t) 4 + L_BE16_TO_CPU(eh->packet_len))
 		return;
+
+	if (!sm->protocol_version)
+		sm->protocol_version = eh->protocol_version;
 
 	switch (eh->packet_type) {
 	case 0: /* EAPOL-EAP */
@@ -1578,11 +1591,6 @@ void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func)
 void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func)
 {
 	get_nonce = func;
-}
-
-void __eapol_set_protocol_version(enum eapol_protocol_version version)
-{
-	protocol_version = version;
 }
 
 void __eapol_set_install_tk_func(eapol_install_tk_func_t func)
@@ -1696,7 +1704,6 @@ void eapol_cancel(uint32_t ifindex)
 bool eapol_init()
 {
 	state_machines = l_queue_new();
-	protocol_version = EAPOL_PROTOCOL_VERSION_2004;
 	get_nonce = eapol_get_nonce;
 
 	eap_init();

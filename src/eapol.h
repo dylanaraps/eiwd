@@ -169,7 +169,6 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
 
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func);
 void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func);
-void __eapol_set_protocol_version(enum eapol_protocol_version version);
 void __eapol_set_install_tk_func(eapol_install_tk_func_t func);
 void __eapol_set_install_gtk_func(eapol_install_gtk_func_t func);
 void __eapol_set_deauthenticate_func(eapol_deauthenticate_func_t func);
@@ -179,6 +178,9 @@ void __eapol_update_replay_counter(uint32_t ifindex, const uint8_t *spa,
 
 struct eapol_sm *eapol_sm_new();
 void eapol_sm_free(struct eapol_sm *sm);
+
+void eapol_sm_set_protocol_version(struct eapol_sm *sm,
+				enum eapol_protocol_version protocol_version);
 
 void eapol_sm_set_supplicant_address(struct eapol_sm *sm, const uint8_t *spa);
 void eapol_sm_set_authenticator_address(struct eapol_sm *sm, const uint8_t *aa);
