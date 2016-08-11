@@ -464,14 +464,20 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_bool;
 	case WSC_ATTR_ASSOCIATION_STATE:
 		return extract_association_state;
+	case WSC_ATTR_AUTHENTICATION_TYPE_FLAGS:
+		return extract_uint16;
 	case WSC_ATTR_CONFIGURATION_ERROR:
 		return extract_configuration_error;
 	case WSC_ATTR_CONFIGURATION_METHODS:
 		return extract_uint16;
+	case WSC_ATTR_CONNECTION_TYPE_FLAGS:
+		return extract_uint8;
 	case WSC_ATTR_DEVICE_NAME:
 		return extract_device_name;
 	case WSC_ATTR_DEVICE_PASSWORD_ID:
 		return extract_device_password_id;
+	case WSC_ATTR_ENCRYPTION_TYPE_FLAGS:
+		return extract_uint16;
 	case WSC_ATTR_ENROLLEE_NONCE:
 		return extract_enrollee_nonce;
 	case WSC_ATTR_MAC_ADDRESS:
