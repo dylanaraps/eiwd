@@ -657,6 +657,18 @@ static bool wfa_extract_registrar_configuration_methods(
 	return true;
 }
 
+#define REQUIRED(attr, out) \
+	WSC_ATTR_ ## attr, ATTR_FLAG_REQUIRED, out
+
+#define OPTIONAL(attr, out) \
+	WSC_ATTR_ ## attr, 0, out
+
+#define REGISTRAR(attr, out) \
+	WSC_ATTR_ ## attr, ATTR_FLAG_REGISTRAR, out
+
+#define VERSION2(attr, out) \
+	WSC_ATTR_ ## attr, ATTR_FLAG_VERSION2, out
+
 int wsc_parse_beacon(const unsigned char *pdu, unsigned int len,
 				struct wsc_beacon *out)
 {
@@ -667,16 +679,15 @@ int wsc_parse_beacon(const unsigned char *pdu, unsigned int len,
 	memset(out, 0, sizeof(struct wsc_beacon));
 
 	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
-		WSC_ATTR_VERSION, ATTR_FLAG_REQUIRED, &version,
-		WSC_ATTR_WSC_STATE, ATTR_FLAG_REQUIRED, &out->config_state,
-		WSC_ATTR_AP_SETUP_LOCKED, 0, &out->ap_setup_locked,
-		WSC_ATTR_SELECTED_REGISTRAR, 0, &out->selected_registrar,
-		WSC_ATTR_DEVICE_PASSWORD_ID,
-			ATTR_FLAG_REGISTRAR, &out->device_password_id,
-		WSC_ATTR_SELECTED_REGISTRAR_CONFIGURATION_METHODS,
-			ATTR_FLAG_REGISTRAR, &out->selected_reg_config_methods,
-		WSC_ATTR_UUID_E, ATTR_FLAG_REQUIRED, &out->uuid_e,
-		WSC_ATTR_RF_BANDS, 0, &out->rf_bands,
+		REQUIRED(VERSION, &version),
+		REQUIRED(WSC_STATE, &out->config_state),
+		OPTIONAL(AP_SETUP_LOCKED, &out->ap_setup_locked),
+		OPTIONAL(SELECTED_REGISTRAR, &out->selected_registrar),
+		REGISTRAR(DEVICE_PASSWORD_ID, &out->device_password_id),
+		REGISTRAR(SELECTED_REGISTRAR_CONFIGURATION_METHODS,
+					&out->selected_reg_config_methods),
+		REQUIRED(UUID_E, &out->uuid_e),
+		OPTIONAL(RF_BANDS, &out->rf_bands),
 		WSC_ATTR_INVALID);
 
 	if (r < 0)
@@ -720,26 +731,23 @@ int wsc_parse_probe_response(const unsigned char *pdu, unsigned int len,
 	memset(out, 0, sizeof(struct wsc_probe_response));
 
 	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
-		WSC_ATTR_VERSION, ATTR_FLAG_REQUIRED, &version,
-		WSC_ATTR_WSC_STATE, ATTR_FLAG_REQUIRED, &out->config_state,
-		WSC_ATTR_AP_SETUP_LOCKED, 0, &out->ap_setup_locked,
-		WSC_ATTR_SELECTED_REGISTRAR, 0, &out->selected_registrar,
-		WSC_ATTR_DEVICE_PASSWORD_ID,
-			ATTR_FLAG_REGISTRAR, &out->device_password_id,
-		WSC_ATTR_SELECTED_REGISTRAR_CONFIGURATION_METHODS,
-			ATTR_FLAG_REGISTRAR, &out->selected_reg_config_methods,
-		WSC_ATTR_RESPONSE_TYPE, ATTR_FLAG_REQUIRED, &out->response_type,
-		WSC_ATTR_UUID_E, ATTR_FLAG_REQUIRED, &out->uuid_e,
-		WSC_ATTR_MANUFACTURER, ATTR_FLAG_REQUIRED, &out->manufacturer,
-		WSC_ATTR_MODEL_NAME, ATTR_FLAG_REQUIRED, &out->model_name,
-		WSC_ATTR_MODEL_NUMBER, ATTR_FLAG_REQUIRED, &out->model_number,
-		WSC_ATTR_SERIAL_NUMBER, ATTR_FLAG_REQUIRED, &out->serial_number,
-		WSC_ATTR_PRIMARY_DEVICE_TYPE,
-			ATTR_FLAG_REQUIRED, &out->primary_device_type,
-		WSC_ATTR_DEVICE_NAME, ATTR_FLAG_REQUIRED, &out->device_name,
-		WSC_ATTR_CONFIGURATION_METHODS,
-			ATTR_FLAG_REQUIRED, &out->config_methods,
-		WSC_ATTR_RF_BANDS, 0, &out->rf_bands,
+		REQUIRED(VERSION, &version),
+		REQUIRED(WSC_STATE, &out->config_state),
+		OPTIONAL(AP_SETUP_LOCKED, &out->ap_setup_locked),
+		OPTIONAL(SELECTED_REGISTRAR, &out->selected_registrar),
+		REGISTRAR(DEVICE_PASSWORD_ID, &out->device_password_id),
+		REGISTRAR(SELECTED_REGISTRAR_CONFIGURATION_METHODS,
+					&out->selected_reg_config_methods),
+		REQUIRED(RESPONSE_TYPE, &out->response_type),
+		REQUIRED(UUID_E, &out->uuid_e),
+		REQUIRED(MANUFACTURER, &out->manufacturer),
+		REQUIRED(MODEL_NAME, &out->model_name),
+		REQUIRED(MODEL_NUMBER, &out->model_number),
+		REQUIRED(SERIAL_NUMBER, &out->serial_number),
+		REQUIRED(PRIMARY_DEVICE_TYPE, &out->primary_device_type),
+		REQUIRED(DEVICE_NAME, &out->device_name),
+		REQUIRED(CONFIGURATION_METHODS, &out->config_methods),
+		OPTIONAL(RF_BANDS, &out->rf_bands),
 		WSC_ATTR_INVALID);
 
 	if (r < 0)
@@ -783,25 +791,20 @@ int wsc_parse_probe_request(const unsigned char *pdu, unsigned int len,
 	memset(out, 0, sizeof(struct wsc_probe_request));
 
 	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
-		WSC_ATTR_VERSION, ATTR_FLAG_REQUIRED, &version,
-		WSC_ATTR_REQUEST_TYPE, ATTR_FLAG_REQUIRED, &out->request_type,
-		WSC_ATTR_CONFIGURATION_METHODS,
-			ATTR_FLAG_REQUIRED, &out->config_methods,
-		WSC_ATTR_UUID_E, ATTR_FLAG_REQUIRED, &out->uuid_e,
-		WSC_ATTR_PRIMARY_DEVICE_TYPE,
-			ATTR_FLAG_REQUIRED, &out->primary_device_type,
-		WSC_ATTR_RF_BANDS, ATTR_FLAG_REQUIRED, &out->rf_bands,
-		WSC_ATTR_ASSOCIATION_STATE,
-			ATTR_FLAG_REQUIRED, &out->association_state,
-		WSC_ATTR_CONFIGURATION_ERROR,
-			ATTR_FLAG_REQUIRED, &out->configuration_error,
-		WSC_ATTR_DEVICE_PASSWORD_ID,
-			ATTR_FLAG_REQUIRED, &out->device_password_id,
-		WSC_ATTR_MANUFACTURER, ATTR_FLAG_VERSION2, &out->manufacturer,
-		WSC_ATTR_MODEL_NAME, ATTR_FLAG_VERSION2, &out->model_name,
-		WSC_ATTR_MODEL_NUMBER, ATTR_FLAG_VERSION2, &out->model_number,
-		WSC_ATTR_DEVICE_NAME, ATTR_FLAG_VERSION2, &out->device_name,
-		WSC_ATTR_REQUESTED_DEVICE_TYPE, 0, &out->requested_device_type,
+		REQUIRED(VERSION, &version),
+		REQUIRED(REQUEST_TYPE, &out->request_type),
+		REQUIRED(CONFIGURATION_METHODS, &out->config_methods),
+		REQUIRED(UUID_E, &out->uuid_e),
+		REQUIRED(PRIMARY_DEVICE_TYPE, &out->primary_device_type),
+		REQUIRED(RF_BANDS, &out->rf_bands),
+		REQUIRED(ASSOCIATION_STATE, &out->association_state),
+		REQUIRED(CONFIGURATION_ERROR, &out->configuration_error),
+		REQUIRED(DEVICE_PASSWORD_ID, &out->device_password_id),
+		VERSION2(MANUFACTURER, &out->manufacturer),
+		VERSION2(MODEL_NAME, &out->model_name),
+		VERSION2(MODEL_NUMBER, &out->model_number),
+		VERSION2(DEVICE_NAME, &out->device_name),
+		OPTIONAL(REQUESTED_DEVICE_TYPE, &out->requested_device_type),
 		WSC_ATTR_INVALID);
 
 	if (r < 0)
