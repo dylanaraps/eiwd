@@ -324,6 +324,28 @@ static bool extract_model_number(struct wsc_attr_iter *iter, void *data)
 	return extract_ascii_string(iter, data, 32);
 }
 
+static bool extract_os_version(struct wsc_attr_iter *iter, void *data)
+{
+	uint32_t v;
+	uint32_t *out = data;
+
+	if (wsc_attr_iter_get_length(iter) != 4)
+		return false;
+
+	v = l_get_be32(wsc_attr_iter_get_data(iter));
+
+	/*
+	 * The OS Version component indicates what operating system is running
+	 * on the device. It is a four-byte field. The most significant bit is
+	 * reserved and always set to one.
+	 */
+	if ((v & 0x80000000) == 0)
+		return false;
+
+	*out = v & 0x7fffffff;
+	return true;
+}
+
 static bool extract_public_key(struct wsc_attr_iter *iter, void *data)
 {
 	if (wsc_attr_iter_get_length(iter) != 192)
@@ -462,6 +484,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_model_name;
 	case WSC_ATTR_MODEL_NUMBER:
 		return extract_model_number;
+	case WSC_ATTR_OS_VERSION:
+		return extract_os_version;
 	case WSC_ATTR_PUBLIC_KEY:
 		return extract_public_key;
 	case WSC_ATTR_PRIMARY_DEVICE_TYPE:
