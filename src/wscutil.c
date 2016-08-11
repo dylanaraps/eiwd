@@ -324,6 +324,15 @@ static bool extract_model_number(struct wsc_attr_iter *iter, void *data)
 	return extract_ascii_string(iter, data, 32);
 }
 
+static bool extract_public_key(struct wsc_attr_iter *iter, void *data)
+{
+	if (wsc_attr_iter_get_length(iter) != 192)
+		return false;
+
+	memcpy(data, wsc_attr_iter_get_data(iter), 192);
+	return true;
+}
+
 static bool extract_primary_device_type(struct wsc_attr_iter *iter, void *data)
 {
 	struct wsc_primary_device_type *out = data;
@@ -453,6 +462,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_model_name;
 	case WSC_ATTR_MODEL_NUMBER:
 		return extract_model_number;
+	case WSC_ATTR_PUBLIC_KEY:
+		return extract_public_key;
 	case WSC_ATTR_PRIMARY_DEVICE_TYPE:
 		return extract_primary_device_type;
 	case WSC_ATTR_RF_BANDS:
