@@ -275,6 +275,15 @@ static bool extract_device_password_id(struct wsc_attr_iter *iter, void *data)
 	return true;
 }
 
+static bool extract_enrollee_nonce(struct wsc_attr_iter *iter, void *data)
+{
+	if (wsc_attr_iter_get_length(iter) != 16)
+		return false;
+
+	memcpy(data, wsc_attr_iter_get_data(iter), 16);
+	return true;
+}
+
 static bool extract_mac_address(struct wsc_attr_iter *iter, void *data)
 {
 	if (wsc_attr_iter_get_length(iter) != 6)
@@ -432,6 +441,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_device_name;
 	case WSC_ATTR_DEVICE_PASSWORD_ID:
 		return extract_device_password_id;
+	case WSC_ATTR_ENROLLEE_NONCE:
+		return extract_enrollee_nonce;
 	case WSC_ATTR_MAC_ADDRESS:
 		return extract_mac_address;
 	case WSC_ATTR_MANUFACTURER:
