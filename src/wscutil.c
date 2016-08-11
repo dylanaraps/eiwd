@@ -280,6 +280,22 @@ static bool extract_manufacturer(struct wsc_attr_iter *iter, void *data)
 	return extract_ascii_string(iter, data, 64);
 }
 
+static bool extract_message_type(struct wsc_attr_iter *iter, void *data)
+{
+	enum wsc_message_type *out = data;
+	uint8_t mt;
+
+	if (!extract_uint8(iter, &mt))
+		return false;
+
+	/* WSC 2.0.5: Table 42 */
+	if (!mt || mt > 0x0f)
+		return false;
+
+	*out = mt;
+	return true;
+}
+
 static bool extract_model_name(struct wsc_attr_iter *iter, void *data)
 {
 	return extract_ascii_string(iter, data, 32);
@@ -412,6 +428,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_device_password_id;
 	case WSC_ATTR_MANUFACTURER:
 		return extract_manufacturer;
+	case WSC_ATTR_MESSAGE_TYPE:
+		return extract_message_type;
 	case WSC_ATTR_MODEL_NAME:
 		return extract_model_name;
 	case WSC_ATTR_MODEL_NUMBER:
