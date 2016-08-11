@@ -380,12 +380,39 @@ struct wsc_probe_request {
 	struct wsc_primary_device_type requested_device_type;
 };
 
+struct wsc_m1 {
+	bool version2;
+	uint8_t uuid_e[16];
+	uint8_t addr[6];
+	uint8_t enrollee_nonce[16];
+	uint8_t public_key[192];
+	uint16_t auth_type_flags;
+	uint16_t encryption_type_flags;
+	uint8_t connection_type_flags;
+	uint16_t config_methods;
+	enum wsc_config_state config_state;
+	char manufacturer[65];
+	char model_name[33];
+	char model_number[33];
+	char serial_number[33];
+	struct wsc_primary_device_type primary_device_type;
+	char device_name[33];
+	uint8_t rf_bands;
+	enum wsc_association_state association_state;
+	enum wsc_device_password_id device_password_id;
+	enum wsc_configuration_error configuration_error;
+	uint32_t os_version;
+	bool request_to_enroll;
+};
+
 int wsc_parse_beacon(const unsigned char *pdu, unsigned int len,
 				struct wsc_beacon *out);
 int wsc_parse_probe_response(const unsigned char *pdu, unsigned int len,
 				struct wsc_probe_response *out);
 int wsc_parse_probe_request(const unsigned char *pdu, unsigned int len,
 				struct wsc_probe_request *out);
+
+int wsc_parse_m1(const uint8_t *pdu, uint32_t len, struct wsc_m1 *out);
 
 uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
 				size_t *out_len);
