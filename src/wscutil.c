@@ -401,13 +401,10 @@ static bool extract_wsc_state(struct wsc_attr_iter *iter, void *data)
 
 static bool extract_uuid(struct wsc_attr_iter *iter, void *data)
 {
-	uint8_t *out = data;
-
 	if (wsc_attr_iter_get_length(iter) != 16)
 		return false;
 
-	memcpy(out, wsc_attr_iter_get_data(iter), 16);
-
+	memcpy(data, wsc_attr_iter_get_data(iter), 16);
 	return true;
 }
 
