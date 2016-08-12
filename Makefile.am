@@ -183,7 +183,8 @@ unit_test_ssid_security_SOURCES = unit/test-ssid-security.c src/ie.h src/ie.c \
 				src/scan.h src/scan.c
 unit_test_ssid_security_LDADD = ell/libell-internal.la
 
-unit_test_wsc_SOURCES = unit/test-wsc.c src/wscutil.h src/wscutil.c
+unit_test_wsc_SOURCES = unit/test-wsc.c src/wscutil.h src/wscutil.c \
+				src/crypto.h src/crypto.c
 unit_test_wsc_LDADD = ell/libell-internal.la
 
 TESTS = $(unit_tests)
