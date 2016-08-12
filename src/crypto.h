@@ -37,6 +37,11 @@ struct crypto_ptk {
 	uint8_t tk[0];
 } __attribute__ ((packed));
 
+extern const unsigned char crypto_dh5_prime[];
+extern size_t crypto_dh5_prime_size;
+extern const unsigned char crypto_dh5_generator[];
+extern size_t crypto_dh5_generator_size;
+
 bool hmac_md5(const void *key, size_t key_len,
 		const void *data, size_t data_len, void *output, size_t size);
 bool hmac_sha1(const void *key, size_t key_len,
