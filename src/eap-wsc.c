@@ -29,10 +29,14 @@
 #include <errno.h>
 #include <ell/ell.h>
 
+#include "crypto.h"
 #include "eap.h"
 #include "wscutil.h"
 
 #define EAP_WSC_OFFSET 12
+
+static struct l_key *dh5_generator;
+static struct l_key *dh5_prime;
 
 struct eap_wsc_state {
 };
@@ -88,9 +92,32 @@ static struct eap_method eap_wsc = {
 
 static int eap_wsc_init(void)
 {
+	int r = -ENOTSUP;
+
 	l_debug("");
 
-	return eap_register_method(&eap_wsc);
+	dh5_generator = l_key_new(L_KEY_RAW, crypto_dh5_generator,
+						crypto_dh5_generator_size);
+	if (!dh5_generator)
+		goto fail_generator;
+
+	dh5_prime = l_key_new(L_KEY_RAW, crypto_dh5_prime,
+						crypto_dh5_prime_size);
+	if (!dh5_prime)
+		goto fail_prime;
+
+	r = eap_register_method(&eap_wsc);
+	if (!r)
+		return 0;
+
+	l_key_free(dh5_prime);
+	dh5_prime = NULL;
+
+fail_prime:
+	l_key_free(dh5_generator);
+	dh5_generator = NULL;
+fail_generator:
+	return r;
 }
 
 static void eap_wsc_exit(void)
@@ -98,6 +125,9 @@ static void eap_wsc_exit(void)
 	l_debug("");
 
 	eap_unregister_method(&eap_wsc);
+
+	l_key_free(dh5_prime);
+	l_key_free(dh5_generator);
 }
 
 EAP_METHOD_BUILTIN(eap_wsc, eap_wsc_init, eap_wsc_exit)
