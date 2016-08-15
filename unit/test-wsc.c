@@ -526,6 +526,8 @@ struct m1_data {
 	struct wsc_m1 expected;
 	const void *pdu;
 	unsigned int len;
+	const uint8_t *public_key;
+	uint32_t public_key_size;
 };
 
 static const struct m1_data m1_data_1 = {
@@ -569,6 +571,8 @@ static const struct m1_data m1_data_1 = {
 		.os_version = 0,
 		.request_to_enroll = false,
 	},
+	.public_key = dh_public_key_1,
+	.public_key_size = sizeof(dh_public_key_1),
 };
 
 static void wsc_test_parse_m1(const void *data)
@@ -615,6 +619,8 @@ static void wsc_test_parse_m1(const void *data)
 	assert(expected->configuration_error == m1.configuration_error);
 	assert(expected->os_version == m1.os_version);
 	assert(expected->request_to_enroll == m1.request_to_enroll);
+
+	assert(!memcmp(test->public_key, m1.public_key, 192));
 }
 
 int main(int argc, char *argv[])
