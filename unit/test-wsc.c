@@ -157,7 +157,7 @@ static const struct beacon_data beacon_data_1 = {
 	.len = sizeof(beacon1),
 	.expected = {
 		.version2 = true,
-		.config_state = WSC_CONFIG_STATE_CONFIGURED,
+		.state = WSC_STATE_CONFIGURED,
 		.ap_setup_locked = false,
 		.selected_registrar = false,
 	},
@@ -174,7 +174,7 @@ static void wsc_test_parse_beacon(const void *data)
 	assert(r == 0);
 
 	assert(expected->version2 == beacon.version2);
-	assert(expected->config_state == beacon.config_state);
+	assert(expected->state == beacon.state);
 	assert(expected->ap_setup_locked == beacon.ap_setup_locked);
 	assert(expected->selected_registrar == beacon.selected_registrar);
 	assert(expected->device_password_id == beacon.device_password_id);
@@ -201,7 +201,7 @@ static const struct probe_response_data probe_response_data_1 = {
 	.len = sizeof(wsc_attrs1),
 	.expected = {
 		.version2 = true,
-		.config_state = WSC_CONFIG_STATE_CONFIGURED,
+		.state = WSC_STATE_CONFIGURED,
 		.ap_setup_locked = false,
 		.selected_registrar = true,
 		.device_password_id = WSC_DEVICE_PASSWORD_ID_PUSH_BUTTON,
@@ -239,7 +239,7 @@ static void wsc_test_parse_probe_response(const void *data)
 	assert(r == 0);
 
 	assert(expected->version2 == probe_response.version2);
-	assert(expected->config_state == probe_response.config_state);
+	assert(expected->state == probe_response.state);
 	assert(expected->ap_setup_locked == probe_response.ap_setup_locked);
 	assert(expected->selected_registrar ==
 					probe_response.selected_registrar);
@@ -553,7 +553,7 @@ static const struct m1_data m1_data_1 = {
 				WSC_CONFIGURATION_METHOD_KEYPAD |
 				WSC_CONFIGURATION_METHOD_DISPLAY |
 				WSC_CONFIGURATION_METHOD_NFC_INTERFACE,
-		.config_state = WSC_CONFIG_STATE_NOT_CONFIGURED,
+		.state = WSC_STATE_NOT_CONFIGURED,
 		.manufacturer = " ",
 		.model_name = " ",
 		.model_number = " ",
@@ -596,7 +596,7 @@ static void wsc_test_parse_m1(const void *data)
 	assert(expected->encryption_type_flags == m1.encryption_type_flags);
 	assert(expected->connection_type_flags == m1.connection_type_flags);
 	assert(expected->config_methods == m1.config_methods);
-	assert(expected->config_state == m1.config_state);
+	assert(expected->state == m1.state);
 
 	assert(!strcmp(expected->manufacturer, m1.manufacturer));
 	assert(!strcmp(expected->model_name, m1.model_name));
