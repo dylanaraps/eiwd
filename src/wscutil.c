@@ -433,6 +433,15 @@ static bool extract_version(struct wsc_attr_iter *iter, void *data)
 	return true;
 }
 
+static bool extract_uuid(struct wsc_attr_iter *iter, void *data)
+{
+	if (wsc_attr_iter_get_length(iter) != 16)
+		return false;
+
+	memcpy(data, wsc_attr_iter_get_data(iter), 16);
+	return true;
+}
+
 static bool extract_wsc_state(struct wsc_attr_iter *iter, void *data)
 {
 	uint8_t *out = data;
@@ -445,15 +454,6 @@ static bool extract_wsc_state(struct wsc_attr_iter *iter, void *data)
 		return false;
 
 	*out = st;
-	return true;
-}
-
-static bool extract_uuid(struct wsc_attr_iter *iter, void *data)
-{
-	if (wsc_attr_iter_get_length(iter) != 16)
-		return false;
-
-	memcpy(data, wsc_attr_iter_get_data(iter), 16);
 	return true;
 }
 
