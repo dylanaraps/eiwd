@@ -168,6 +168,15 @@ static bool extract_bool(struct wsc_attr_iter *iter, void *data)
 	return true;
 }
 
+static bool extract_uuid(struct wsc_attr_iter *iter, void *data)
+{
+	if (wsc_attr_iter_get_length(iter) != 16)
+		return false;
+
+	memcpy(data, wsc_attr_iter_get_data(iter), 16);
+	return true;
+}
+
 static bool extract_ascii_string(struct wsc_attr_iter *iter, void *data,
 					unsigned int max_len)
 {
@@ -442,15 +451,6 @@ static bool extract_version(struct wsc_attr_iter *iter, void *data)
 	return true;
 }
 
-static bool extract_uuid(struct wsc_attr_iter *iter, void *data)
-{
-	if (wsc_attr_iter_get_length(iter) != 16)
-		return false;
-
-	memcpy(data, wsc_attr_iter_get_data(iter), 16);
-	return true;
-}
-
 static bool extract_wsc_state(struct wsc_attr_iter *iter, void *data)
 {
 	uint8_t *out = data;
@@ -526,6 +526,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 	case WSC_ATTR_WSC_STATE:
 		return extract_wsc_state;
 	case WSC_ATTR_UUID_E:
+		return extract_uuid;
+	case WSC_ATTR_UUID_R:
 		return extract_uuid;
 	default:
 		break;
