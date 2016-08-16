@@ -238,6 +238,15 @@ static bool extract_association_state(struct wsc_attr_iter *iter, void *data)
 	return true;
 }
 
+static bool extract_authenticator(struct wsc_attr_iter *iter, void *data)
+{
+	if (wsc_attr_iter_get_length(iter) != 8)
+		return false;
+
+	memcpy(data, wsc_attr_iter_get_data(iter), 8);
+	return true;
+}
+
 static bool extract_configuration_error(struct wsc_attr_iter *iter, void *data)
 {
 	enum wsc_configuration_error *out = data;
@@ -466,6 +475,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_association_state;
 	case WSC_ATTR_AUTHENTICATION_TYPE_FLAGS:
 		return extract_uint16;
+	case WSC_ATTR_AUTHENTICATOR:
+		return extract_authenticator;
 	case WSC_ATTR_CONFIGURATION_ERROR:
 		return extract_configuration_error;
 	case WSC_ATTR_CONFIGURATION_METHODS:
