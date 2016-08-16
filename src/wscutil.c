@@ -959,7 +959,7 @@ int wsc_parse_m1(const uint8_t *pdu, uint32_t len, struct wsc_m1 *out)
 
 	/* WSC 2.0.5, Section 8.3.1: "Specific RF band used for this message" */
 	if (__builtin_popcount(out->rf_bands) != 1)
-		return false;
+		return -EBADMSG;
 
 	if (!wsc_wfa_ext_iter_next(&iter))
 		goto done;
