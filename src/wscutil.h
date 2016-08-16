@@ -416,5 +416,6 @@ int wsc_parse_m1(const uint8_t *pdu, uint32_t len, struct wsc_m1 *out);
 
 uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
 				size_t *out_len);
+uint8_t *wsc_build_m1(const struct wsc_m1 *m1, size_t *out_len);
 
 bool wsc_uuid_from_addr(const uint8_t addr[], uint8_t *out_uuid);

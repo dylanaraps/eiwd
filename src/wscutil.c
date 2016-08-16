@@ -1030,6 +1030,18 @@ static bool wsc_attr_builder_put_u16(struct wsc_attr_builder *builder,
 	return true;
 }
 
+static bool wsc_attr_builder_put_u32(struct wsc_attr_builder *builder,
+								uint32_t v)
+{
+	if (builder->offset + 4 + builder->curlen + 4 >= builder->capacity)
+		wsc_attr_builder_grow(builder);
+
+	l_put_be32(v, builder->buf + builder->offset + 4 + builder->curlen);
+	builder->curlen += 4;
+
+	return true;
+}
+
 static bool wsc_attr_builder_put_bytes(struct wsc_attr_builder *builder,
 					const void *bytes, size_t size)
 {
@@ -1127,6 +1139,14 @@ static void build_association_state(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_u16(builder, state);
 }
 
+static void build_authentication_type_flags(struct wsc_attr_builder *builder,
+					uint16_t auth_type_flags)
+{
+	wsc_attr_builder_start_attr(builder,
+					WSC_ATTR_AUTHENTICATION_TYPE_FLAGS);
+	wsc_attr_builder_put_u16(builder, auth_type_flags);
+}
+
 static void build_configuration_error(struct wsc_attr_builder *builder,
 					enum wsc_configuration_error error)
 {
@@ -1139,6 +1159,27 @@ static void build_configuration_methods(struct wsc_attr_builder *builder,
 {
 	wsc_attr_builder_start_attr(builder, WSC_ATTR_CONFIGURATION_METHODS);
 	wsc_attr_builder_put_u16(builder, config_methods);
+}
+
+static void build_connection_type_flags(struct wsc_attr_builder *builder,
+						uint8_t connection_type_flags)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_CONNECTION_TYPE_FLAGS);
+	wsc_attr_builder_put_u8(builder, connection_type_flags);
+}
+
+static void build_encryption_type_flags(struct wsc_attr_builder *builder,
+						uint16_t encryption_type_flags)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_ENCRYPTION_TYPE_FLAGS);
+	wsc_attr_builder_put_u16(builder, encryption_type_flags);
+}
+
+static void build_enrollee_nonce(struct wsc_attr_builder *builder,
+							const uint8_t *nonce)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_ENROLLEE_NONCE);
+	wsc_attr_builder_put_bytes(builder, nonce, 16);
 }
 
 static void build_device_name(struct wsc_attr_builder *builder,
@@ -1155,11 +1196,25 @@ static void build_device_password_id(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_u16(builder, id);
 }
 
+static void build_mac_address(struct wsc_attr_builder *builder,
+							const uint8_t *addr)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_MAC_ADDRESS);
+	wsc_attr_builder_put_bytes(builder, addr, 6);
+}
+
 static void build_manufacturer(struct wsc_attr_builder *builder,
 						const char *manufacturer)
 {
 	wsc_attr_builder_start_attr(builder, WSC_ATTR_MANUFACTURER);
 	wsc_attr_builder_put_string(builder, manufacturer);
+}
+
+static void build_message_type(struct wsc_attr_builder *builder,
+						enum wsc_message_type type)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_MESSAGE_TYPE);
+	wsc_attr_builder_put_u8(builder, type);
 }
 
 static void build_model_name(struct wsc_attr_builder *builder,
@@ -1176,6 +1231,13 @@ static void build_model_number(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_string(builder, model_number);
 }
 
+static void build_os_version(struct wsc_attr_builder *builder,
+							uint32_t os_version)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_OS_VERSION);
+	wsc_attr_builder_put_u32(builder, os_version | 0x80000000);
+}
+
 static void build_primary_device_type(struct wsc_attr_builder *builder,
 				const struct wsc_primary_device_type *pdt)
 {
@@ -1184,6 +1246,13 @@ static void build_primary_device_type(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_oui(builder, pdt->oui);
 	wsc_attr_builder_put_u8(builder, pdt->oui_type);
 	wsc_attr_builder_put_u16(builder, pdt->subcategory);
+}
+
+static void build_public_key(struct wsc_attr_builder *builder,
+						const uint8_t *public_key)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_PUBLIC_KEY);
+	wsc_attr_builder_put_bytes(builder, public_key, 192);
 }
 
 static void build_request_type(struct wsc_attr_builder *builder,
@@ -1199,6 +1268,13 @@ static void build_rf_bands(struct wsc_attr_builder *builder, uint8_t rf_bands)
 	wsc_attr_builder_put_u8(builder, rf_bands);
 }
 
+static void build_serial_number(struct wsc_attr_builder *builder,
+						const char *serial_number)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_SERIAL_NUMBER);
+	wsc_attr_builder_put_string(builder, serial_number);
+}
+
 static void build_uuid_e(struct wsc_attr_builder *builder, const uint8_t *uuid)
 {
 	wsc_attr_builder_start_attr(builder, WSC_ATTR_UUID_E);
@@ -1209,6 +1285,13 @@ static void build_version(struct wsc_attr_builder *builder, uint8_t version)
 {
 	wsc_attr_builder_start_attr(builder, WSC_ATTR_VERSION);
 	wsc_attr_builder_put_u8(builder, version);
+}
+
+static void build_wsc_state(struct wsc_attr_builder *builder,
+					enum wsc_state state)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_WSC_STATE);
+	wsc_attr_builder_put_u8(builder, state);
 }
 
 uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
@@ -1244,6 +1327,57 @@ uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
 	wsc_attr_builder_put_u8(builder, 0x20);
 
 	if (!probe_request->request_to_enroll)
+		goto done;
+
+	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_REQUEST_TO_ENROLL);
+	wsc_attr_builder_put_u8(builder, 1);
+	wsc_attr_builder_put_u8(builder, 1);
+
+done:
+	ret = wsc_attr_builder_free(builder, false, out_len);
+	return ret;
+}
+
+uint8_t *wsc_build_m1(const struct wsc_m1 *m1, size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+	uint8_t *ret;
+
+	builder = wsc_attr_builder_new(1024);
+	build_version(builder, 0x10);
+	build_message_type(builder, WSC_MESSAGE_TYPE_M1);
+	build_uuid_e(builder, m1->uuid_e);
+	build_mac_address(builder, m1->addr);
+	build_enrollee_nonce(builder, m1->enrollee_nonce);
+	build_public_key(builder, m1->public_key);
+	build_authentication_type_flags(builder, m1->auth_type_flags);
+	build_encryption_type_flags(builder, m1->encryption_type_flags);
+	build_connection_type_flags(builder, m1->connection_type_flags);
+	build_configuration_methods(builder, m1->config_methods);
+	build_wsc_state(builder, m1->state);
+	build_manufacturer(builder, m1->manufacturer);
+	build_model_name(builder, m1->model_name);
+	build_model_number(builder, m1->model_number);
+	build_serial_number(builder, m1->serial_number);
+	build_primary_device_type(builder, &m1->primary_device_type);
+	build_device_name(builder, m1->device_name);
+	build_rf_bands(builder, m1->rf_bands);
+	build_association_state(builder, m1->association_state);
+	build_device_password_id(builder, m1->device_password_id);
+	build_configuration_error(builder, m1->configuration_error);
+	build_os_version(builder, m1->os_version);
+
+	if (!m1->version2)
+		goto done;
+
+	/* Put in the WFA Vendor Extension */
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_VENDOR_EXTENSION);
+	wsc_attr_builder_put_oui(builder, wfa_ext);
+	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_VERSION2);
+	wsc_attr_builder_put_u8(builder, 1);
+	wsc_attr_builder_put_u8(builder, 0x20);
+
+	if (!m1->request_to_enroll)
 		goto done;
 
 	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_REQUEST_TO_ENROLL);
