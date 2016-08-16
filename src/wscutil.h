@@ -253,9 +253,9 @@ enum wsc_rf_band {
 };
 
 /* Table 45 */
-enum wsc_config_state {
-	WSC_CONFIG_STATE_NOT_CONFIGURED		= 0x01,
-	WSC_CONFIG_STATE_CONFIGURED		= 0x02,
+enum wsc_state {
+	WSC_STATE_NOT_CONFIGURED	= 0x01,
+	WSC_STATE_CONFIGURED		= 0x02,
 };
 
 struct wsc_wfa_ext_iter {
@@ -329,7 +329,7 @@ struct wsc_primary_device_type {
 
 struct wsc_beacon {
 	bool version2;
-	enum wsc_config_state config_state;
+	enum wsc_state state;
 	bool ap_setup_locked;
 	bool selected_registrar;
 	enum wsc_device_password_id device_password_id;
@@ -342,7 +342,7 @@ struct wsc_beacon {
 
 struct wsc_probe_response {
 	bool version2;
-	enum wsc_config_state config_state;
+	enum wsc_state state;
 	bool ap_setup_locked;
 	bool selected_registrar;
 	enum wsc_device_password_id device_password_id;
@@ -390,7 +390,7 @@ struct wsc_m1 {
 	uint16_t encryption_type_flags;
 	uint8_t connection_type_flags;
 	uint16_t config_methods;
-	enum wsc_config_state config_state;
+	enum wsc_state state;
 	char manufacturer[65];
 	char model_name[33];
 	char model_number[33];
