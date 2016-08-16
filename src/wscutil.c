@@ -1242,6 +1242,10 @@ uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
 	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_VERSION2);
 	wsc_attr_builder_put_u8(builder, 1);
 	wsc_attr_builder_put_u8(builder, 0x20);
+
+	if (!probe_request->request_to_enroll)
+		goto done;
+
 	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_REQUEST_TO_ENROLL);
 	wsc_attr_builder_put_u8(builder, 1);
 	wsc_attr_builder_put_u8(builder, 1);
