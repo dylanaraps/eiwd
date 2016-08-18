@@ -207,23 +207,6 @@ Wireless daemon
   Priority: Medium
   Complexity: C8
 
-- Create a document to doc describing general architecture and relation
-  between different objects.
-
-  Current understanding is that diffrent relation between elements
-  looks probably like this:
-      Manager->Wiphy->NetDevice->AvailableNetwork
-
-  Wiphy is the actual physical device, NetDevice is the network interface
-  and AvailableNetwork is {SSID, security} combo. Each network can have
-  a list of BSSs.
-  Consider also multi-wifi device scenarios. If user has multiple USB
-  WiFi dongles and switches between those cards, all previously configured
-  networks should still be available.
-
-  Priority: High
-  Complexity: C2
-
 - Allow Disconnect() method call to abort pending connections.
 
   If we are in the process of connecting to an AP, the connection attempt
