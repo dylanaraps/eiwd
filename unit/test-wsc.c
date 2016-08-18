@@ -786,6 +786,25 @@ static void wsc_test_parse_m2(const void *data)
 	assert(!memcmp(test->public_key, m2.public_key, 192));
 }
 
+static void wsc_test_build_m2(const void *data)
+{
+	const struct m2_data *test = data;
+	struct wsc_m2 m2;
+	uint8_t *out;
+	size_t out_len;
+
+	memcpy(&m2, &test->expected, sizeof(m2));
+	memcpy(m2.public_key, test->public_key, 192);
+
+	out = wsc_build_m2(&m2, &out_len);
+	assert(out);
+
+	assert(out_len == test->len);
+	assert(!memcmp(test->pdu, out, test->len));
+
+	l_free(out);
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -815,6 +834,7 @@ int main(int argc, char *argv[])
 	l_test_add("/wsc/build/m1 1", wsc_test_build_m1, &m1_data_1);
 
 	l_test_add("/wsc/parse/m2 1", wsc_test_parse_m2, &m2_data_1);
+	l_test_add("/wsc/build/m2 1", wsc_test_build_m2, &m2_data_1);
 
 	return l_test_run();
 }
