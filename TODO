@@ -109,23 +109,6 @@ cfg80211 / nl80211
   Priority: High
   Complexity: C4
 
-- Add missing support for NL80211_CMD_GET_INTERFACE filtering
-
-  The NL80211_CMD_GET_INTERFACE command description indicates that you
-  can filter results based NL80211_ATTR_WIPHY.  This feature has never
-  been implemented.
-
-  Either remove that feature from the description since it does not exist
-  or actually implemented the filtering on wiphy.  Johannes indicated that
-  fixing the description might be the better approach.  If the feature is
-  easy to add, then it should be added.  However if filtering on wiphy is
-  a rather complicated task, then better just update the description to
-  match the reality.
-
-  Priority: Low
-  Complexity: C2
-  Owner: Denis Kenzior <denkenz@gmail.com>
-
 
 Wireless monitor
 ================
