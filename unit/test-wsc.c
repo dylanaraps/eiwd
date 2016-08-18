@@ -962,6 +962,7 @@ int main(int argc, char *argv[])
 	l_test_add("/wsc/parse/m1 2", wsc_test_parse_m1, &m1_data_2);
 
 	l_test_add("/wsc/build/m1 1", wsc_test_build_m1, &m1_data_1);
+	l_test_add("/wsc/build/m1 2", wsc_test_build_m1, &m1_data_2);
 
 	l_test_add("/wsc/parse/m2 1", wsc_test_parse_m2, &m2_data_1);
 	l_test_add("/wsc/build/m2 1", wsc_test_build_m2, &m2_data_1);
