@@ -1078,6 +1078,21 @@ static void wsc_test_parse_m3(const void *data)
 	assert(!memcmp(expected->authenticator, m3.authenticator, 8));
 }
 
+static void wsc_test_build_m3(const void *data)
+{
+	const struct m3_data *test = data;
+	uint8_t *out;
+	size_t out_len;
+
+	out = wsc_build_m3(&test->expected, &out_len);
+	assert(out);
+
+	assert(out_len == test->len);
+	assert(!memcmp(test->pdu, out, test->len));
+
+	l_free(out);
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -1118,6 +1133,7 @@ int main(int argc, char *argv[])
 	l_test_add("/wsc/build/m2 1", wsc_test_build_m2, &m2_data_1);
 
 	l_test_add("/wsc/parse/m3 1", wsc_test_parse_m3, &m3_data_1);
+	l_test_add("/wsc/build/m3 1", wsc_test_build_m3, &m3_data_1);
 
 	return l_test_run();
 }
