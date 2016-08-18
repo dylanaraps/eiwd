@@ -983,6 +983,53 @@ done:
 	return 0;
 }
 
+int wsc_parse_m2(const uint8_t *pdu, uint32_t len, struct wsc_m2 *out)
+{
+	int r;
+	struct wsc_wfa_ext_iter iter;
+	uint8_t version;
+	enum wsc_message_type msg_type;
+
+	memset(out, 0, sizeof(struct wsc_m1));
+
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
+		REQUIRED(VERSION, &version),
+		REQUIRED(MESSAGE_TYPE, &msg_type),
+		REQUIRED(ENROLLEE_NONCE, &out->enrollee_nonce),
+		REQUIRED(REGISTRAR_NONCE, &out->registrar_nonce),
+		REQUIRED(UUID_R, &out->uuid_r),
+		REQUIRED(PUBLIC_KEY, &out->public_key),
+		REQUIRED(AUTHENTICATION_TYPE_FLAGS, &out->auth_type_flags),
+		REQUIRED(ENCRYPTION_TYPE_FLAGS, &out->encryption_type_flags),
+		REQUIRED(CONNECTION_TYPE_FLAGS, &out->connection_type_flags),
+		REQUIRED(CONFIGURATION_METHODS, &out->config_methods),
+		REQUIRED(MANUFACTURER, &out->manufacturer),
+		REQUIRED(MODEL_NAME, &out->model_name),
+		REQUIRED(MODEL_NUMBER, &out->model_number),
+		REQUIRED(SERIAL_NUMBER, &out->serial_number),
+		REQUIRED(PRIMARY_DEVICE_TYPE, &out->primary_device_type),
+		REQUIRED(DEVICE_NAME, &out->device_name),
+		REQUIRED(RF_BANDS, &out->rf_bands),
+		REQUIRED(ASSOCIATION_STATE, &out->association_state),
+		REQUIRED(CONFIGURATION_ERROR, &out->configuration_error),
+		REQUIRED(DEVICE_PASSWORD_ID, &out->device_password_id),
+		REQUIRED(OS_VERSION, &out->os_version),
+		REQUIRED(AUTHENTICATOR, &out->authenticator),
+		WSC_ATTR_INVALID);
+
+	if (r < 0)
+		return r;
+
+	if (msg_type != WSC_MESSAGE_TYPE_M2)
+		return -EBADMSG;
+
+	/* WSC 2.0.5, Section 8.3.2: "Specific RF band used for this message" */
+	if (__builtin_popcount(out->rf_bands) != 1)
+		return -EBADMSG;
+
+	return 0;
+}
+
 struct wsc_attr_builder {
 	size_t capacity;
 	uint8_t *buf;
