@@ -207,15 +207,6 @@ Wireless daemon
   Priority: Medium
   Complexity: C8
 
-- Allow Disconnect() method call to abort pending connections.
-
-  If we are in the process of connecting to an AP, the connection attempt
-  should be aborted and a de-authentication procedure should be triggered.
-
-  Priority: High
-  Complexity: C1
-  Owner: Andrew Zaborowski <andrew.zaborowski@intel.com>
-
 - Add unit test data with 2nd RSNE in Authenticator 3/4 message
 
   The specification allows the AP to send a second RSN element in its 4-way
