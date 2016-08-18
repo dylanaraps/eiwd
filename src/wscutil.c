@@ -356,10 +356,10 @@ static bool extract_os_version(struct wsc_attr_iter *iter, void *data)
 	 * The OS Version component indicates what operating system is running
 	 * on the device. It is a four-byte field. The most significant bit is
 	 * reserved and always set to one.
+	 *
+	 * We do not strictly check this as at least Apple's WPS implementation
+	 * does not set the MSB to 1.
 	 */
-	if ((v & 0x80000000) == 0)
-		return false;
-
 	*out = v & 0x7fffffff;
 	return true;
 }
