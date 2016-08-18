@@ -562,6 +562,7 @@ static bool verify_version2(struct wsc_wfa_ext_iter *ext_iter)
 static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 				bool *out_version2,
 				struct wsc_wfa_ext_iter *ext_iter,
+				uint8_t *authenticator,
 				enum wsc_attr type, ...)
 {
 	struct wsc_attr_iter iter;
@@ -647,8 +648,31 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 	for (; e; e = e->next) {
 		struct attr_handler_entry *entry = e->data;
 
-		if (entry->flags & ATTR_FLAG_REQUIRED)
+		if (entry->flags & ATTR_FLAG_REQUIRED) {
 			parse_error = true;
+			goto done;
+		}
+	}
+
+	/* Authenticator element must be the last element */
+	if (authenticator) {
+		while (wsc_attr_iter_get_type(&iter) !=
+						WSC_ATTR_AUTHENTICATOR) {
+			if (!wsc_attr_iter_next(&iter)) {
+				have_required = false;
+				goto done;
+			}
+		}
+
+		if (!extract_authenticator(&iter, authenticator)) {
+			parse_error = true;
+			goto done;
+		}
+
+		if (wsc_attr_iter_next(&iter) != false) {
+			parse_error = true;
+			goto done;
+		}
 	}
 
 	/*
@@ -771,7 +795,7 @@ int wsc_parse_beacon(const unsigned char *pdu, unsigned int len,
 
 	memset(out, 0, sizeof(struct wsc_beacon));
 
-	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, NULL,
 		REQUIRED(VERSION, &version),
 		REQUIRED(WSC_STATE, &out->state),
 		OPTIONAL(AP_SETUP_LOCKED, &out->ap_setup_locked),
@@ -823,7 +847,7 @@ int wsc_parse_probe_response(const unsigned char *pdu, unsigned int len,
 
 	memset(out, 0, sizeof(struct wsc_probe_response));
 
-	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, NULL,
 		REQUIRED(VERSION, &version),
 		REQUIRED(WSC_STATE, &out->state),
 		OPTIONAL(AP_SETUP_LOCKED, &out->ap_setup_locked),
@@ -883,7 +907,7 @@ int wsc_parse_probe_request(const unsigned char *pdu, unsigned int len,
 
 	memset(out, 0, sizeof(struct wsc_probe_request));
 
-	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, NULL,
 		REQUIRED(VERSION, &version),
 		REQUIRED(REQUEST_TYPE, &out->request_type),
 		REQUIRED(CONFIGURATION_METHODS, &out->config_methods),
@@ -930,7 +954,7 @@ int wsc_parse_m1(const uint8_t *pdu, uint32_t len, struct wsc_m1 *out)
 
 	memset(out, 0, sizeof(struct wsc_m1));
 
-	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, NULL,
 		REQUIRED(VERSION, &version),
 		REQUIRED(MESSAGE_TYPE, &msg_type),
 		REQUIRED(UUID_E, &out->uuid_e),
@@ -992,7 +1016,7 @@ int wsc_parse_m2(const uint8_t *pdu, uint32_t len, struct wsc_m2 *out)
 
 	memset(out, 0, sizeof(struct wsc_m1));
 
-	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, out->authenticator,
 		REQUIRED(VERSION, &version),
 		REQUIRED(MESSAGE_TYPE, &msg_type),
 		REQUIRED(ENROLLEE_NONCE, &out->enrollee_nonce),
@@ -1014,7 +1038,6 @@ int wsc_parse_m2(const uint8_t *pdu, uint32_t len, struct wsc_m2 *out)
 		REQUIRED(CONFIGURATION_ERROR, &out->configuration_error),
 		REQUIRED(DEVICE_PASSWORD_ID, &out->device_password_id),
 		REQUIRED(OS_VERSION, &out->os_version),
-		REQUIRED(AUTHENTICATOR, &out->authenticator),
 		WSC_ATTR_INVALID);
 
 	if (r < 0)
