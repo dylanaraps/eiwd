@@ -1319,6 +1319,20 @@ static void build_encryption_type_flags(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_u16(builder, encryption_type_flags);
 }
 
+static void build_e_hash1(struct wsc_attr_builder *builder,
+							const uint8_t *e_hash1)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_E_HASH1);
+	wsc_attr_builder_put_bytes(builder, e_hash1, 32);
+}
+
+static void build_e_hash2(struct wsc_attr_builder *builder,
+							const uint8_t *e_hash2)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_E_HASH2);
+	wsc_attr_builder_put_bytes(builder, e_hash2, 32);
+}
+
 static void build_enrollee_nonce(struct wsc_attr_builder *builder,
 							const uint8_t *nonce)
 {
@@ -1577,6 +1591,34 @@ done:
 	return ret;
 }
 
+uint8_t *wsc_build_m3(const struct wsc_m3 *m3, size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+	uint8_t *ret;
+
+	builder = wsc_attr_builder_new(256);
+	build_version(builder, 0x10);
+	build_message_type(builder, WSC_MESSAGE_TYPE_M3);
+	build_registrar_nonce(builder, m3->registrar_nonce);
+	build_e_hash1(builder, m3->e_hash1);
+	build_e_hash2(builder, m3->e_hash2);
+
+	if (!m3->version2)
+		goto done;
+
+	/* Put in the WFA Vendor Extension */
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_VENDOR_EXTENSION);
+	wsc_attr_builder_put_oui(builder, wfa_ext);
+	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_VERSION2);
+	wsc_attr_builder_put_u8(builder, 1);
+	wsc_attr_builder_put_u8(builder, 0x20);
+
+done:
+	build_authenticator(builder, m3->authenticator);
+
+	ret = wsc_attr_builder_free(builder, false, out_len);
+	return ret;
+}
 
 bool wsc_uuid_from_addr(const uint8_t addr[], uint8_t *out_uuid)
 {
