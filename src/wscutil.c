@@ -1451,6 +1451,13 @@ static void build_wsc_state(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_u8(builder, state);
 }
 
+#define START_WFA_VENDOR_EXTENSION()					\
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_VENDOR_EXTENSION);\
+	wsc_attr_builder_put_oui(builder, wfa_ext);			\
+	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_VERSION2);	\
+	wsc_attr_builder_put_u8(builder, 1);				\
+	wsc_attr_builder_put_u8(builder, 0x20)
+
 uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
 							size_t *out_len)
 {
@@ -1476,12 +1483,7 @@ uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
 	build_model_number(builder, probe_request->model_number);
 	build_device_name(builder, probe_request->device_name);
 
-	/* Put in the WFA Vendor Extension */
-	wsc_attr_builder_start_attr(builder, WSC_ATTR_VENDOR_EXTENSION);
-	wsc_attr_builder_put_oui(builder, wfa_ext);
-	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_VERSION2);
-	wsc_attr_builder_put_u8(builder, 1);
-	wsc_attr_builder_put_u8(builder, 0x20);
+	START_WFA_VENDOR_EXTENSION();
 
 	if (!probe_request->request_to_enroll)
 		goto done;
@@ -1527,12 +1529,7 @@ uint8_t *wsc_build_m1(const struct wsc_m1 *m1, size_t *out_len)
 	if (!m1->version2)
 		goto done;
 
-	/* Put in the WFA Vendor Extension */
-	wsc_attr_builder_start_attr(builder, WSC_ATTR_VENDOR_EXTENSION);
-	wsc_attr_builder_put_oui(builder, wfa_ext);
-	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_VERSION2);
-	wsc_attr_builder_put_u8(builder, 1);
-	wsc_attr_builder_put_u8(builder, 0x20);
+	START_WFA_VENDOR_EXTENSION();
 
 	if (!m1->request_to_enroll)
 		goto done;
@@ -1577,12 +1574,7 @@ uint8_t *wsc_build_m2(const struct wsc_m2 *m2, size_t *out_len)
 	if (!m2->version2)
 		goto done;
 
-	/* Put in the WFA Vendor Extension */
-	wsc_attr_builder_start_attr(builder, WSC_ATTR_VENDOR_EXTENSION);
-	wsc_attr_builder_put_oui(builder, wfa_ext);
-	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_VERSION2);
-	wsc_attr_builder_put_u8(builder, 1);
-	wsc_attr_builder_put_u8(builder, 0x20);
+	START_WFA_VENDOR_EXTENSION();
 
 done:
 	build_authenticator(builder, m2->authenticator);
@@ -1606,12 +1598,7 @@ uint8_t *wsc_build_m3(const struct wsc_m3 *m3, size_t *out_len)
 	if (!m3->version2)
 		goto done;
 
-	/* Put in the WFA Vendor Extension */
-	wsc_attr_builder_start_attr(builder, WSC_ATTR_VENDOR_EXTENSION);
-	wsc_attr_builder_put_oui(builder, wfa_ext);
-	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_VERSION2);
-	wsc_attr_builder_put_u8(builder, 1);
-	wsc_attr_builder_put_u8(builder, 0x20);
+	START_WFA_VENDOR_EXTENSION();
 
 done:
 	build_authenticator(builder, m3->authenticator);
