@@ -125,9 +125,9 @@ bool wsc_attr_iter_recurse_wfa_ext(struct wsc_attr_iter *iter,
 }
 
 enum attr_flag {
-	ATTR_FLAG_REQUIRED,	/* Always required */
-	ATTR_FLAG_VERSION2,	/* Included if Version2 is present */
-	ATTR_FLAG_REGISTRAR,	/* Included if Selected Registrar is true */
+	ATTR_FLAG_REQUIRED  = 0x1,  /* Always required */
+	ATTR_FLAG_VERSION2  = 0x2,  /* Included if Version2 is present */
+	ATTR_FLAG_REGISTRAR = 0x4,  /* Included if Selected Registrar is true */
 };
 
 typedef bool (*attr_handler)(struct wsc_attr_iter *, void *);
@@ -779,7 +779,7 @@ int wsc_parse_beacon(const unsigned char *pdu, unsigned int len,
 		REGISTRAR(DEVICE_PASSWORD_ID, &out->device_password_id),
 		REGISTRAR(SELECTED_REGISTRAR_CONFIGURATION_METHODS,
 					&out->selected_reg_config_methods),
-		REQUIRED(UUID_E, &out->uuid_e),
+		OPTIONAL(UUID_E, &out->uuid_e),
 		OPTIONAL(RF_BANDS, &out->rf_bands),
 		WSC_ATTR_INVALID);
 
