@@ -1209,6 +1209,13 @@ static void build_authentication_type_flags(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_u16(builder, auth_type_flags);
 }
 
+static void build_authenticator(struct wsc_attr_builder *builder,
+					const uint8_t *authenticator)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_AUTHENTICATOR);
+	wsc_attr_builder_put_bytes(builder, authenticator, 8);
+}
+
 static void build_configuration_error(struct wsc_attr_builder *builder,
 					enum wsc_configuration_error error)
 {
@@ -1317,6 +1324,13 @@ static void build_public_key(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_bytes(builder, public_key, 192);
 }
 
+static void build_registrar_nonce(struct wsc_attr_builder *builder,
+							const uint8_t *nonce)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_REGISTRAR_NONCE);
+	wsc_attr_builder_put_bytes(builder, nonce, 16);
+}
+
 static void build_request_type(struct wsc_attr_builder *builder,
 						enum wsc_request_type type)
 {
@@ -1340,6 +1354,12 @@ static void build_serial_number(struct wsc_attr_builder *builder,
 static void build_uuid_e(struct wsc_attr_builder *builder, const uint8_t *uuid)
 {
 	wsc_attr_builder_start_attr(builder, WSC_ATTR_UUID_E);
+	wsc_attr_builder_put_bytes(builder, uuid, 16);
+}
+
+static void build_uuid_r(struct wsc_attr_builder *builder, const uint8_t *uuid)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_UUID_R);
 	wsc_attr_builder_put_bytes(builder, uuid, 16);
 }
 
@@ -1450,6 +1470,52 @@ done:
 	ret = wsc_attr_builder_free(builder, false, out_len);
 	return ret;
 }
+
+uint8_t *wsc_build_m2(const struct wsc_m2 *m2, size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+	uint8_t *ret;
+
+	builder = wsc_attr_builder_new(1024);
+	build_version(builder, 0x10);
+	build_message_type(builder, WSC_MESSAGE_TYPE_M2);
+	build_enrollee_nonce(builder, m2->enrollee_nonce);
+	build_registrar_nonce(builder, m2->registrar_nonce);
+	build_uuid_r(builder, m2->uuid_r);
+	build_public_key(builder, m2->public_key);
+	build_authentication_type_flags(builder, m2->auth_type_flags);
+	build_encryption_type_flags(builder, m2->encryption_type_flags);
+	build_connection_type_flags(builder, m2->connection_type_flags);
+	build_configuration_methods(builder, m2->config_methods);
+	build_manufacturer(builder, m2->manufacturer);
+	build_model_name(builder, m2->model_name);
+	build_model_number(builder, m2->model_number);
+	build_serial_number(builder, m2->serial_number);
+	build_primary_device_type(builder, &m2->primary_device_type);
+	build_device_name(builder, m2->device_name);
+	build_rf_bands(builder, m2->rf_bands);
+	build_association_state(builder, m2->association_state);
+	build_configuration_error(builder, m2->configuration_error);
+	build_device_password_id(builder, m2->device_password_id);
+	build_os_version(builder, m2->os_version);
+
+	if (!m2->version2)
+		goto done;
+
+	/* Put in the WFA Vendor Extension */
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_VENDOR_EXTENSION);
+	wsc_attr_builder_put_oui(builder, wfa_ext);
+	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_VERSION2);
+	wsc_attr_builder_put_u8(builder, 1);
+	wsc_attr_builder_put_u8(builder, 0x20);
+
+done:
+	build_authenticator(builder, m2->authenticator);
+
+	ret = wsc_attr_builder_free(builder, false, out_len);
+	return ret;
+}
+
 
 bool wsc_uuid_from_addr(const uint8_t addr[], uint8_t *out_uuid)
 {
