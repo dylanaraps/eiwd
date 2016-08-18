@@ -1230,20 +1230,6 @@ static void build_connection_type_flags(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_u8(builder, connection_type_flags);
 }
 
-static void build_encryption_type_flags(struct wsc_attr_builder *builder,
-						uint16_t encryption_type_flags)
-{
-	wsc_attr_builder_start_attr(builder, WSC_ATTR_ENCRYPTION_TYPE_FLAGS);
-	wsc_attr_builder_put_u16(builder, encryption_type_flags);
-}
-
-static void build_enrollee_nonce(struct wsc_attr_builder *builder,
-							const uint8_t *nonce)
-{
-	wsc_attr_builder_start_attr(builder, WSC_ATTR_ENROLLEE_NONCE);
-	wsc_attr_builder_put_bytes(builder, nonce, 16);
-}
-
 static void build_device_name(struct wsc_attr_builder *builder,
 						const char *device_name)
 {
@@ -1256,6 +1242,20 @@ static void build_device_password_id(struct wsc_attr_builder *builder,
 {
 	wsc_attr_builder_start_attr(builder, WSC_ATTR_DEVICE_PASSWORD_ID);
 	wsc_attr_builder_put_u16(builder, id);
+}
+
+static void build_encryption_type_flags(struct wsc_attr_builder *builder,
+						uint16_t encryption_type_flags)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_ENCRYPTION_TYPE_FLAGS);
+	wsc_attr_builder_put_u16(builder, encryption_type_flags);
+}
+
+static void build_enrollee_nonce(struct wsc_attr_builder *builder,
+							const uint8_t *nonce)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_ENROLLEE_NONCE);
+	wsc_attr_builder_put_bytes(builder, nonce, 16);
 }
 
 static void build_mac_address(struct wsc_attr_builder *builder,
