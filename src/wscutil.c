@@ -1014,7 +1014,7 @@ int wsc_parse_m2(const uint8_t *pdu, uint32_t len, struct wsc_m2 *out)
 	uint8_t version;
 	enum wsc_message_type msg_type;
 
-	memset(out, 0, sizeof(struct wsc_m1));
+	memset(out, 0, sizeof(struct wsc_m2));
 
 	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, out->authenticator,
 		REQUIRED(VERSION, &version),
