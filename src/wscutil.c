@@ -177,7 +177,7 @@ static bool extract_uuid(struct wsc_attr_iter *iter, void *data)
 	return true;
 }
 
-static bool extract_e_hash(struct wsc_attr_iter *iter, void *data)
+static bool extract_hash(struct wsc_attr_iter *iter, void *data)
 {
 	if (wsc_attr_iter_get_length(iter) != 32)
 		return false;
@@ -508,7 +508,7 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_device_password_id;
 	case WSC_ATTR_E_HASH1:
 	case WSC_ATTR_E_HASH2:
-		return extract_e_hash;
+		return extract_hash;
 	case WSC_ATTR_ENCRYPTED_SETTINGS:
 		return extract_encrypted_settings;
 	case WSC_ATTR_ENCRYPTION_TYPE_FLAGS:
@@ -531,8 +531,6 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_public_key;
 	case WSC_ATTR_PRIMARY_DEVICE_TYPE:
 		return extract_primary_device_type;
-	case WSC_ATTR_RF_BANDS:
-		return extract_uint8;
 	case WSC_ATTR_REGISTRAR_NONCE:
 		return extract_nonce;
 	case WSC_ATTR_REQUEST_TYPE:
@@ -541,6 +539,11 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_primary_device_type;
 	case WSC_ATTR_RESPONSE_TYPE:
 		return extract_response_type;
+	case WSC_ATTR_RF_BANDS:
+		return extract_uint8;
+	case WSC_ATTR_R_HASH1:
+	case WSC_ATTR_R_HASH2:
+		return extract_hash;
 	case WSC_ATTR_SELECTED_REGISTRAR:
 		return extract_bool;
 	case WSC_ATTR_SELECTED_REGISTRAR_CONFIGURATION_METHODS:
