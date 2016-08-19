@@ -311,6 +311,16 @@ static bool extract_device_password_id(struct wsc_attr_iter *iter, void *data)
 	return true;
 }
 
+static bool extract_encrypted_settings(struct wsc_attr_iter *iter, void *data)
+{
+	struct iovec *iov = data;
+
+	iov->iov_len = wsc_attr_iter_get_length(iter);
+	iov->iov_base = (void *) wsc_attr_iter_get_data(iter);
+
+	return true;
+}
+
 static bool extract_mac_address(struct wsc_attr_iter *iter, void *data)
 {
 	if (wsc_attr_iter_get_length(iter) != 6)
@@ -499,6 +509,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 	case WSC_ATTR_E_HASH1:
 	case WSC_ATTR_E_HASH2:
 		return extract_e_hash;
+	case WSC_ATTR_ENCRYPTED_SETTINGS:
+		return extract_encrypted_settings;
 	case WSC_ATTR_ENCRYPTION_TYPE_FLAGS:
 		return extract_uint16;
 	case WSC_ATTR_ENROLLEE_NONCE:
