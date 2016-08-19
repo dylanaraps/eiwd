@@ -1106,6 +1106,34 @@ int wsc_parse_m3(const uint8_t *pdu, uint32_t len, struct wsc_m3 *out)
 	return 0;
 }
 
+int wsc_parse_m4(const uint8_t *pdu, uint32_t len, struct wsc_m4 *out,
+						struct iovec *out_encrypted)
+{
+	int r;
+	struct wsc_wfa_ext_iter iter;
+	uint8_t version;
+	enum wsc_message_type msg_type;
+
+	memset(out, 0, sizeof(struct wsc_m4));
+
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, out->authenticator,
+		REQUIRED(VERSION, &version),
+		REQUIRED(MESSAGE_TYPE, &msg_type),
+		REQUIRED(ENROLLEE_NONCE, &out->enrollee_nonce),
+		REQUIRED(R_HASH1, &out->r_hash1),
+		REQUIRED(R_HASH2, &out->r_hash2),
+		REQUIRED(ENCRYPTED_SETTINGS, out_encrypted),
+		WSC_ATTR_INVALID);
+
+	if (r < 0)
+		return r;
+
+	if (msg_type != WSC_MESSAGE_TYPE_M4)
+		return -EBADMSG;
+
+	return 0;
+}
+
 struct wsc_attr_builder {
 	size_t capacity;
 	uint8_t *buf;

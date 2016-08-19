@@ -20,6 +20,8 @@
  *
  */
 
+struct iovec;
+
 /* Wi-Fi Simple Configuration Technical Specification v2.0.5, Section 12 */
 enum wsc_attr {
 	WSC_ATTR_8021X_ENABLED					= 0x1062,
@@ -437,6 +439,14 @@ struct wsc_m3 {
 	uint8_t authenticator[8];
 };
 
+struct wsc_m4 {
+	bool version2;
+	uint8_t enrollee_nonce[16];
+	uint8_t r_hash1[32];
+	uint8_t r_hash2[32];
+	uint8_t authenticator[8];
+};
+
 int wsc_parse_beacon(const unsigned char *pdu, unsigned int len,
 				struct wsc_beacon *out);
 int wsc_parse_probe_response(const unsigned char *pdu, unsigned int len,
@@ -447,6 +457,8 @@ int wsc_parse_probe_request(const unsigned char *pdu, unsigned int len,
 int wsc_parse_m1(const uint8_t *pdu, uint32_t len, struct wsc_m1 *out);
 int wsc_parse_m2(const uint8_t *pdu, uint32_t len, struct wsc_m2 *out);
 int wsc_parse_m3(const uint8_t *pdu, uint32_t len, struct wsc_m3 *out);
+int wsc_parse_m4(const uint8_t *pdu, uint32_t len, struct wsc_m4 *out,
+						struct iovec *out_encrypted);
 
 uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
 				size_t *out_len);
