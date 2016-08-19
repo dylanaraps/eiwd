@@ -511,6 +511,8 @@ static void wsc_test_dh_generate_pubkey(const void *data)
 	uint8_t public_key[test->private_key_size];
 	size_t len;
 
+	memset(public_key, 0, sizeof(public_key));
+
 	generator = l_key_new(L_KEY_RAW, crypto_dh5_generator,
 						crypto_dh5_generator_size);
 	assert(generator);
@@ -522,6 +524,7 @@ static void wsc_test_dh_generate_pubkey(const void *data)
 						test->private_key_size);
 	assert(private);
 
+	len = test->private_key_size;
 	assert(l_key_compute_dh_public(generator, private, prime,
 							public_key, &len));
 	assert(len == test->public_key_size);
