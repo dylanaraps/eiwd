@@ -1462,6 +1462,20 @@ static void build_rf_bands(struct wsc_attr_builder *builder, uint8_t rf_bands)
 	wsc_attr_builder_put_u8(builder, rf_bands);
 }
 
+static void build_r_hash1(struct wsc_attr_builder *builder,
+							const uint8_t *r_hash1)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_R_HASH1);
+	wsc_attr_builder_put_bytes(builder, r_hash1, 32);
+}
+
+static void build_r_hash2(struct wsc_attr_builder *builder,
+							const uint8_t *r_hash2)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_R_HASH2);
+	wsc_attr_builder_put_bytes(builder, r_hash2, 32);
+}
+
 static void build_serial_number(struct wsc_attr_builder *builder,
 						const char *serial_number)
 {
@@ -1648,6 +1662,35 @@ done:
 
 	ret = wsc_attr_builder_free(builder, false, out_len);
 	return ret;
+}
+
+uint8_t *wsc_build_m4(const struct wsc_m4 *m4, const uint8_t *encrypted,
+			size_t encrypted_len, size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+	uint8_t *ret;
+
+	builder = wsc_attr_builder_new(256);
+	build_version(builder, 0x10);
+	build_message_type(builder, WSC_MESSAGE_TYPE_M4);
+	build_enrollee_nonce(builder, m4->enrollee_nonce);
+	build_r_hash1(builder, m4->r_hash1);
+	build_r_hash2(builder, m4->r_hash2);
+
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_ENCRYPTED_SETTINGS);
+	wsc_attr_builder_put_bytes(builder, encrypted, encrypted_len);
+
+	if (!m4->version2)
+		goto done;
+
+	START_WFA_VENDOR_EXTENSION();
+
+done:
+	build_authenticator(builder, m4->authenticator);
+
+	ret = wsc_attr_builder_free(builder, false, out_len);
+	return ret;
+
 }
 
 bool wsc_uuid_from_addr(const uint8_t addr[], uint8_t *out_uuid)

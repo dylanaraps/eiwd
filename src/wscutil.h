@@ -465,5 +465,7 @@ uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
 uint8_t *wsc_build_m1(const struct wsc_m1 *m1, size_t *out_len);
 uint8_t *wsc_build_m2(const struct wsc_m2 *m2, size_t *out_len);
 uint8_t *wsc_build_m3(const struct wsc_m3 *m3, size_t *out_len);
+uint8_t *wsc_build_m4(const struct wsc_m4 *m4, const uint8_t *encrypted,
+			size_t encrypted_len, size_t *out_len);
 
 bool wsc_uuid_from_addr(const uint8_t addr[], uint8_t *out_uuid);
