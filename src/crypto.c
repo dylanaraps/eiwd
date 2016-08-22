@@ -187,6 +187,7 @@ bool arc4_skip(const uint8_t *key, size_t key_len, size_t skip,
 
 	return true;
 }
+
 /* 802.11, Section 11.6.2, Table 11-4 */
 int crypto_cipher_key_len(enum crypto_cipher cipher)
 {
@@ -408,6 +409,7 @@ bool kdf_sha256(const void *key, size_t key_len,
 
 	return true;
 }
+
 /*
  * 802.11, Section 11.6.6.7:
  * PTK = PRF-X(PMK, "Pairwise key expansion", Min(AA, SA) || Max(AA, SA) ||
