@@ -609,6 +609,8 @@ struct m1_data {
 	struct wsc_m1 expected;
 	const void *pdu;
 	unsigned int len;
+	const uint8_t *private_key;
+	uint32_t private_key_size;
 	const uint8_t *public_key;
 	uint32_t public_key_size;
 };
@@ -654,6 +656,8 @@ static const struct m1_data m1_data_1 = {
 		.os_version = 0,
 		.request_to_enroll = false,
 	},
+	.private_key = dh_private_key_1,
+	.private_key_size = sizeof(dh_private_key_1),
 	.public_key = dh_public_key_1,
 	.public_key_size = sizeof(dh_public_key_1),
 };
@@ -699,6 +703,8 @@ static const struct m1_data m1_data_2 = {
 		.os_version = 0,
 		.request_to_enroll = false,
 	},
+	.private_key = dh_private_key_2,
+	.private_key_size = sizeof(dh_private_key_2),
 	.public_key = dh_public_key_2,
 	.public_key_size = sizeof(dh_public_key_2),
 };
@@ -768,6 +774,78 @@ static void wsc_test_build_m1(const void *data)
 	assert(!memcmp(test->pdu, out, test->len));
 
 	l_free(out);
+}
+
+static bool wsc_compute_authenticator(struct l_key *peer_public_key,
+					struct l_key *private_key,
+					struct l_key *prime,
+					const uint8_t *enrollee_nonce,
+					const uint8_t *enrollee_mac,
+					const uint8_t *registrar_nonce,
+					const uint8_t *prev_msg,
+					size_t prev_msg_len,
+					const uint8_t *cur_msg,
+					size_t cur_msg_len,
+					uint8_t *authenticator)
+{
+	uint8_t shared_secret[192];
+	size_t shared_secret_len;
+	struct l_checksum *sha256;
+	uint8_t dhkey[32];
+	struct l_checksum *hmac_sha256;
+	uint8_t kdk[32];
+	ssize_t digest_len;
+	bool r;
+	struct iovec iov[3];
+	struct wsc_session_key session_key;
+
+	/* Compute shared secret */
+	shared_secret_len = sizeof(shared_secret);
+	r = l_key_compute_dh_secret(peer_public_key, private_key, prime,
+					shared_secret, &shared_secret_len);
+	assert(r);
+
+	sha256 = l_checksum_new(L_CHECKSUM_SHA256);
+	assert(sha256);
+
+	/* Compute DHKey */
+	assert(l_checksum_update(sha256, shared_secret, shared_secret_len));
+	digest_len = l_checksum_get_digest(sha256, dhkey, sizeof(dhkey));
+	assert(digest_len == 32);
+	l_checksum_free(sha256);
+
+	hmac_sha256 = l_checksum_new_hmac(L_CHECKSUM_SHA256,
+							dhkey, sizeof(dhkey));
+	assert(hmac_sha256);
+
+	iov[0].iov_base = (void *) enrollee_nonce;
+	iov[0].iov_len = 16;
+	iov[1].iov_base = (void *) enrollee_mac;
+	iov[1].iov_len = 6;
+	iov[2].iov_base = (void *) registrar_nonce;
+	iov[2].iov_len = 16;
+
+	assert(l_checksum_updatev(hmac_sha256, iov, 3));
+	digest_len = l_checksum_get_digest(hmac_sha256, kdk, sizeof(kdk));
+	assert(digest_len == 32);
+	l_checksum_free(hmac_sha256);
+
+	assert(wsc_kdf(kdk, &session_key, sizeof(session_key)));
+
+	hmac_sha256 = l_checksum_new_hmac(L_CHECKSUM_SHA256,
+						session_key.auth_key,
+						sizeof(session_key.auth_key));
+	iov[0].iov_base = (void *) prev_msg;
+	iov[0].iov_len = prev_msg_len;
+	iov[1].iov_base = (void *) cur_msg;
+	iov[1].iov_len = cur_msg_len - 12;
+
+	assert(l_checksum_updatev(hmac_sha256, iov, 2));
+	digest_len = l_checksum_get_digest(hmac_sha256, authenticator, 8);
+	assert(digest_len == 8);
+	l_checksum_free(hmac_sha256);
+
+	return true;
 }
 
 static const unsigned char eap_wsc_m2_1[] = {
@@ -862,6 +940,7 @@ struct m2_data {
 	unsigned int len;
 	const uint8_t *public_key;
 	uint32_t public_key_size;
+	const struct m1_data *m1;
 };
 
 static const struct m2_data m2_data_1 = {
@@ -908,6 +987,7 @@ static const struct m2_data m2_data_1 = {
 	},
 	.public_key = eap_wsc_m2_1 + 92,
 	.public_key_size = 192,
+	.m1 = &m1_data_1,
 };
 
 static const struct m2_data m2_data_2 = {
@@ -954,6 +1034,7 @@ static const struct m2_data m2_data_2 = {
 	},
 	.public_key = eap_wsc_m2_2 + 92,
 	.public_key_size = 192,
+	.m1 = &m1_data_2,
 };
 
 static void wsc_test_parse_m2(const void *data)
@@ -961,6 +1042,10 @@ static void wsc_test_parse_m2(const void *data)
 	const struct m2_data *test = data;
 	struct wsc_m2 m2;
 	const struct wsc_m2 *expected = &test->expected;
+	struct l_key *private;
+	struct l_key *prime;
+	struct l_key *peer_public;
+	uint8_t authenticator[8];
 	int r;
 
 	r = wsc_parse_m2(test->pdu, test->len, &m2);
@@ -1001,6 +1086,33 @@ static void wsc_test_parse_m2(const void *data)
 	assert(!memcmp(expected->authenticator, m2.authenticator, 8));
 
 	assert(!memcmp(test->public_key, m2.public_key, 192));
+
+	prime = l_key_new(L_KEY_RAW, crypto_dh5_prime, crypto_dh5_prime_size);
+	assert(prime);
+
+	private = l_key_new(L_KEY_RAW, test->m1->private_key,
+						test->m1->private_key_size);
+	assert(private);
+
+	peer_public = l_key_new(L_KEY_RAW, test->public_key,
+						test->public_key_size);
+	assert(peer_public);
+
+	assert(wsc_compute_authenticator(peer_public, private, prime,
+						m2.enrollee_nonce,
+						test->m1->expected.addr,
+						m2.registrar_nonce,
+						test->m1->pdu,
+						test->m1->len,
+						test->pdu,
+						test->len,
+						authenticator));
+
+	assert(!memcmp(m2.authenticator, authenticator, 8));
+
+	l_key_free(prime);
+	l_key_free(private);
+	l_key_free(peer_public);
 }
 
 static void wsc_test_build_m2(const void *data)
