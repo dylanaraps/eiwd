@@ -276,8 +276,10 @@ static void netdev_connect_free(struct netdev *netdev)
 		netdev->eapol_io = NULL;
 	}
 
-	netdev->eapol_active = false;
-	eapol_cancel(netdev->index);
+	if (netdev->eapol_active) {
+		eapol_cancel(netdev->index);
+		netdev->eapol_active = false;
+	}
 
 	netdev->connected = false;
 	netdev->connect_cb = NULL;
