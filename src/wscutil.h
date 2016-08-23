@@ -469,3 +469,11 @@ uint8_t *wsc_build_m4(const struct wsc_m4 *m4, const uint8_t *encrypted,
 			size_t encrypted_len, size_t *out_len);
 
 bool wsc_uuid_from_addr(const uint8_t addr[], uint8_t *out_uuid);
+
+struct wsc_session_key {
+	uint8_t auth_key[32];
+	uint8_t keywrap_key[16];
+	uint8_t emsk[32];
+} __attribute__ ((packed));
+
+bool wsc_kdf(const void *kdk, void *output, size_t size);

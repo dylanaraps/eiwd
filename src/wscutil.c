@@ -1703,3 +1703,48 @@ bool wsc_uuid_from_addr(const uint8_t addr[], uint8_t *out_uuid)
 
 	return l_uuid_v5(nsid, addr, 6, out_uuid);
 }
+
+/* WSC 2.0.5, Section 7.3 */
+bool wsc_kdf(const void *key, void *output, size_t size)
+{
+	static char *personalization = "Wi-Fi Easy and Secure Key Derivation";
+	struct l_checksum *hmac;
+	unsigned int i, offset = 0;
+	unsigned int counter;
+	uint8_t counter_be[4];
+	uint8_t total_key_bits[4];
+	struct iovec iov[3] = {
+		[0] = { .iov_base = counter_be, .iov_len = 4 },
+		[1] = { .iov_base = personalization,
+					.iov_len = strlen(personalization) },
+		[2] = { .iov_base = total_key_bits, .iov_len = 4 },
+	};
+
+	hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, key, 32);
+	if (!hmac)
+		return false;
+
+	/* Length is denominated in bits, not bytes */
+	l_put_be32(size * 8, total_key_bits);
+
+	/* KDF processes in 256-bit chunks (32 bytes) */
+	for (i = 0, counter = 1; i < (size + 31) / 32; i++, counter++) {
+		size_t len;
+
+		if (size - offset > 32)
+			len = 32;
+		else
+			len = size - offset;
+
+		l_put_be32(counter, counter_be);
+
+		l_checksum_updatev(hmac, iov, 3);
+		l_checksum_get_digest(hmac, output + offset, len);
+
+		offset += len;
+	}
+
+	l_checksum_free(hmac);
+
+	return true;
+}
