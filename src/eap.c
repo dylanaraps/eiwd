@@ -188,12 +188,19 @@ static void eap_handle_request(struct eap_state *eap,
 			goto unsupported_method;
 		}
 
+		if (type != EAP_TYPE_EXPANDED) {
+			eap->method->handle_request(eap, pkt + 1, len - 1);
+			return;
+		}
+
 		/*
 		 * TODO: Handle Expanded Nak if our vendor-id / vendor-types
 		 * don't match
 		 */
-		eap->method->handle_request(eap, pkt + 1, len - 1);
+		if (len < 8)
+			return;
 
+		eap->method->handle_request(eap, pkt + 8, len - 8);
 		return;
 	}
 
