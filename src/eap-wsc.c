@@ -36,6 +36,28 @@
 
 #define EAP_WSC_OFFSET 12
 
+/* WSC v2.0.5, Section 7.7.1 */
+enum wsc_op {
+	WSC_OP_START	= 0x01,
+	WSC_OP_ACK	= 0x02,
+	WSC_OP_NACK	= 0x03,
+	WSC_OP_MSG	= 0x04,
+	WSC_OP_DONE	= 0x05,
+	WSC_OP_FRAG_ACK = 0x06,
+};
+
+/* WSC v2.0.5, Section 7.7.1 */
+enum wsc_flag {
+	WSC_FLAG_MF	= 0x01,
+	WSC_FLAG_LF	= 0x02,
+};
+
+enum state {
+	STATE_EXPECT_START = 0,
+	STATE_EXPECT_M2,
+	STATE_EXPECT_M4,
+};
+
 static struct l_key *dh5_generator;
 static struct l_key *dh5_prime;
 
@@ -47,6 +69,7 @@ struct eap_wsc_state {
 	char *device_password;
 	uint8_t e_snonce1[16];
 	uint8_t e_snonce2[16];
+	enum state state;
 };
 
 static inline void eap_wsc_state_set_sent_pdu(struct eap_wsc_state *wsc,
@@ -88,13 +111,59 @@ static void eap_wsc_remove(struct eap_state *eap)
 	l_free(wsc);
 }
 
+static void eap_wsc_send_response(struct eap_state *eap,
+						uint8_t *pdu, size_t len)
+{
+	struct eap_wsc_state *wsc = eap_get_data(eap);
+	uint8_t buf[len + 14];
+
+	buf[12] = WSC_OP_MSG;
+	buf[13] = 0;
+	memcpy(buf + 14, pdu, len);
+
+	eap_send_response(eap, EAP_TYPE_EXPANDED, buf, len + 14);
+
+	eap_wsc_state_set_sent_pdu(wsc, pdu, len);
+}
+
 static void eap_wsc_handle_request(struct eap_state *eap,
 					const uint8_t *pkt, size_t len)
 {
-	uint8_t buf[256];
+	struct eap_wsc_state *wsc = eap_get_data(eap);
+	uint8_t op;
+	uint8_t flags;
+	uint8_t *pdu;
+	size_t pdu_len;
 
-	/* TODO: Fill in response */
-	eap_send_response(eap, EAP_TYPE_EXPANDED, buf, 256);
+	if (len < 2)
+		return;
+
+	op = pkt[0];
+	flags = pkt[1];
+
+	/* TODO: Handle fragmentation */
+	if (flags != 0)
+		return;
+
+	switch (wsc->state) {
+	case STATE_EXPECT_START:
+		if (op != WSC_OP_START)
+			return;
+
+		if (len != 2)
+			return;
+
+		pdu = wsc_build_m1(wsc->m1, &pdu_len);
+		if (!pdu)
+			return;
+
+		eap_wsc_send_response(eap, pdu, pdu_len);
+		wsc->state = STATE_EXPECT_M2;
+		break;
+	case STATE_EXPECT_M2:
+	case STATE_EXPECT_M4:
+		break;
+	}
 }
 
 static bool load_hexencoded(struct l_settings *settings, const char *key,
