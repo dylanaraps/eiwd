@@ -32,6 +32,7 @@
 #include "crypto.h"
 #include "eap.h"
 #include "wscutil.h"
+#include "util.h"
 
 #define EAP_WSC_OFFSET 12
 
@@ -39,6 +40,8 @@ static struct l_key *dh5_generator;
 static struct l_key *dh5_prime;
 
 struct eap_wsc_state {
+	struct wsc_m1 *m1;
+	struct l_key *private;
 };
 
 static int eap_wsc_probe(struct eap_state *eap, const char *name)
@@ -61,6 +64,8 @@ static void eap_wsc_remove(struct eap_state *eap)
 
 	eap_set_data(eap, NULL);
 
+	l_key_free(wsc->private);
+	l_free(wsc->m1);
 	l_free(wsc);
 }
 
@@ -73,10 +78,184 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 	eap_send_response(eap, EAP_TYPE_EXPANDED, buf, 256);
 }
 
+static bool load_hexencoded(struct l_settings *settings, const char *key,
+						uint8_t *to, size_t len)
+{
+	const char *v;
+	size_t decoded_len;
+	unsigned char *decoded;
+
+	v = l_settings_get_value(settings, "WSC", key);
+	if (!v)
+		return false;
+
+	decoded = l_util_from_hexstring(v, &decoded_len);
+	if (!decoded)
+		return false;
+
+	if (decoded_len != len) {
+		l_free(decoded);
+		return false;
+	}
+
+	memcpy(to, decoded, len);
+	l_free(decoded);
+
+	return true;
+}
+
+static bool load_primary_device_type(struct l_settings *settings,
+					struct wsc_primary_device_type *pdt)
+{
+	const char *v;
+	int r;
+
+	v = l_settings_get_value(settings, "WSC", "PrimaryDeviceType");
+	if (!v)
+		return false;
+
+	r = sscanf(v, "%hx-%2hhx%2hhx%2hhx%2hhx-%2hx", &pdt->category,
+			&pdt->oui[0], &pdt->oui[1], &pdt->oui[2],
+			&pdt->oui_type, &pdt->subcategory);
+	if (r != 6)
+		return false;
+
+	return true;
+}
+
+static bool load_constrained_string(struct l_settings *settings,
+						const char *key,
+						char *out, size_t max)
+{
+	char *v;
+	size_t tocopy;
+
+	v = l_settings_get_string(settings, "WSC", key);
+	if (!v)
+		return false;
+
+	tocopy = strlen(v);
+	if (tocopy >= max)
+		tocopy = max - 1;
+
+	memcpy(out, v, tocopy);
+	out[max - 1] = '\0';
+
+	l_free(v);
+
+	return true;
+}
+
 static bool eap_wsc_load_settings(struct eap_state *eap,
 					struct l_settings *settings,
 					const char *prefix)
 {
+	struct eap_wsc_state *wsc = eap_get_data(eap);
+	const char *v;
+	uint8_t private_key[192];
+	size_t len;
+	unsigned int u32;
+
+	wsc->m1 = l_new(struct wsc_m1, 1);
+	wsc->m1->version2 = true;
+
+	v = l_settings_get_value(settings, "WSC", "EnrolleeMAC");
+	if (!v)
+		return false;
+
+	if (!util_string_to_address(v, wsc->m1->addr))
+		return false;
+
+	if (!wsc_uuid_from_addr(wsc->m1->addr, wsc->m1->uuid_e))
+		return false;
+
+	if (!load_hexencoded(settings, "EnrolleeNonce",
+						wsc->m1->enrollee_nonce, 16))
+		l_getrandom(wsc->m1->enrollee_nonce, 16);
+
+	if (!load_hexencoded(settings, "PrivateKey", private_key, 192))
+		l_getrandom(private_key, 192);
+
+	wsc->private = l_key_new(L_KEY_RAW, private_key, 192);
+	memset(private_key, 0, 192);
+
+	if (!wsc->private)
+		return false;
+
+	len = sizeof(wsc->m1->public_key);
+	if (!l_key_compute_dh_public(dh5_generator, wsc->private, dh5_prime,
+						wsc->m1->public_key, &len))
+		return false;
+
+	if (len != sizeof(wsc->m1->public_key))
+		return false;
+
+	wsc->m1->auth_type_flags = WSC_AUTHENTICATION_TYPE_WPA2_PERSONAL |
+					WSC_AUTHENTICATION_TYPE_WPA_PERSONAL |
+					WSC_AUTHENTICATION_TYPE_OPEN;
+	wsc->m1->encryption_type_flags = WSC_ENCRYPTION_TYPE_NONE |
+						WSC_ENCRYPTION_TYPE_AES_TKIP;
+	wsc->m1->connection_type_flags = WSC_CONNECTION_TYPE_ESS;
+
+	if (!l_settings_get_uint(settings, "WSC",
+						"ConfigurationMethods", &u32))
+		u32 = WSC_CONFIGURATION_METHOD_VIRTUAL_DISPLAY_PIN;
+
+	wsc->m1->config_methods = u32;
+	wsc->m1->state = WSC_STATE_NOT_CONFIGURED;
+
+	if (!load_constrained_string(settings, "Manufacturer",
+			wsc->m1->manufacturer, sizeof(wsc->m1->manufacturer)))
+		strcpy(wsc->m1->manufacturer, " ");
+
+	if (!load_constrained_string(settings, "ModelName",
+			wsc->m1->model_name, sizeof(wsc->m1->model_name)))
+		strcpy(wsc->m1->model_name, " ");
+
+	if (!load_constrained_string(settings, "ModelNumber",
+			wsc->m1->model_number, sizeof(wsc->m1->model_number)))
+		strcpy(wsc->m1->model_number, " ");
+
+	if (!load_constrained_string(settings, "SerialNumber",
+			wsc->m1->serial_number, sizeof(wsc->m1->serial_number)))
+		strcpy(wsc->m1->serial_number, " ");
+
+	if (!load_primary_device_type(settings,
+					&wsc->m1->primary_device_type)) {
+		/* Make ourselves a WFA standard PC by default */
+		wsc->m1->primary_device_type.category = 1;
+		memcpy(wsc->m1->primary_device_type.oui, wsc_wfa_oui, 3);
+		wsc->m1->primary_device_type.oui_type = 0x04;
+		wsc->m1->primary_device_type.subcategory = 1;
+	}
+
+	if (!load_constrained_string(settings, "DeviceName",
+			wsc->m1->device_name, sizeof(wsc->m1->device_name)))
+		strcpy(wsc->m1->device_name, " ");
+
+	if (!l_settings_get_uint(settings, "WSC", "RFBand", &u32))
+		return false;
+
+	switch (u32) {
+	case WSC_RF_BAND_2_4_GHZ:
+	case WSC_RF_BAND_5_0_GHZ:
+	case WSC_RF_BAND_60_GHZ:
+		wsc->m1->rf_bands = u32;
+		break;
+	default:
+		return false;
+	}
+
+	wsc->m1->association_state = WSC_ASSOCIATION_STATE_NOT_ASSOCIATED;
+	wsc->m1->device_password_id = WSC_DEVICE_PASSWORD_ID_PUSH_BUTTON;
+	wsc->m1->configuration_error = WSC_CONFIGURATION_ERROR_NO_ERROR;
+
+	if (!l_settings_get_uint(settings, "WSC",
+						"OSVersion", &u32))
+		u32 = 0;
+
+	wsc->m1->os_version = u32 & 0x7fffffff;
+
 	return true;
 }
 
