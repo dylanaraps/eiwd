@@ -260,6 +260,8 @@ enum wsc_state {
 	WSC_STATE_CONFIGURED		= 0x02,
 };
 
+extern const unsigned char wsc_wfa_oui[3];
+
 struct wsc_wfa_ext_iter {
 	unsigned short max;
 	unsigned short pos;

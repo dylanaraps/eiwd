@@ -32,7 +32,7 @@
 
 #include "wscutil.h"
 
-static const unsigned char wfa_ext[3] = { 0x00, 0x37, 0x2a };
+const unsigned char wsc_wfa_oui[3] = { 0x00, 0x37, 0x2a };
 
 void wsc_wfa_ext_iter_init(struct wsc_wfa_ext_iter *iter,
 				const unsigned char *pdu, unsigned short len)
@@ -116,7 +116,7 @@ bool wsc_attr_iter_recurse_wfa_ext(struct wsc_attr_iter *iter,
 	if (iter->len < 3)
 		return false;
 
-	if (memcmp(iter->data, wfa_ext, sizeof(wfa_ext)))
+	if (memcmp(iter->data, wsc_wfa_oui, sizeof(wsc_wfa_oui)))
 		return false;
 
 	wsc_wfa_ext_iter_init(wfa_iter, iter->data + 3, iter->len - 3);
@@ -1510,7 +1510,7 @@ static void build_wsc_state(struct wsc_attr_builder *builder,
 
 #define START_WFA_VENDOR_EXTENSION()					\
 	wsc_attr_builder_start_attr(builder, WSC_ATTR_VENDOR_EXTENSION);\
-	wsc_attr_builder_put_oui(builder, wfa_ext);			\
+	wsc_attr_builder_put_oui(builder, wsc_wfa_oui);			\
 	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_VERSION2);	\
 	wsc_attr_builder_put_u8(builder, 1);				\
 	wsc_attr_builder_put_u8(builder, 0x20)
