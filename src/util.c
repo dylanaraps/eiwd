@@ -97,6 +97,40 @@ const char *util_address_to_string(const uint8_t *addr)
 	return str;
 }
 
+bool util_string_to_address(const char *str, uint8_t *addr)
+{
+	unsigned int i;
+
+	if (!str)
+		return false;
+
+	if (strlen(str) != 17)
+		return false;
+
+	for (i = 0; i < 15; i += 3) {
+		if (!l_ascii_isxdigit(str[i]))
+			return false;
+
+		if (!l_ascii_isxdigit(str[i + 1]))
+			return false;
+
+		if (str[i + 2] != ':')
+			return false;
+        }
+
+	if (!l_ascii_isxdigit(str[i]))
+		return false;
+
+	if (!l_ascii_isxdigit(str[i + 1]))
+		return false;
+
+	sscanf(str, "%2hhx:%2hhx:%2hhx:%2hhx:%2hhx:%2hhx",
+			&addr[0], &addr[1], &addr[2],
+			&addr[3], &addr[4], &addr[5]);
+
+	return true;
+}
+
 bool _msg_append_attr(struct l_genl_msg *msg,
 			uint16_t type, const char *type_str,
 			uint16_t len, const void *value)
