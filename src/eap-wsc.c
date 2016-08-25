@@ -81,6 +81,8 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 }
 
 static struct eap_method eap_wsc = {
+	.vendor_id = { 0x00, 0x37, 0x2a },
+	.vendor_type = 0x00000001,
 	.request_type = EAP_TYPE_EXPANDED,
 	.exports_msk = true,
 	.name = "WSC",
