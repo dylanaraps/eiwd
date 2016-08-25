@@ -31,7 +31,10 @@
 #include <ell/ell.h>
 
 #include "src/wscutil.h"
+#include "src/eapol.h"
+#include "src/eap.h"
 #include "src/crypto.h"
+#include "src/util.h"
 
 static const unsigned char wsc_attrs1[] = {
 	0x10, 0x4a, 0x00, 0x01, 0x10, 0x10, 0x44, 0x00, 0x01, 0x02, 0x10, 0x41,
@@ -1297,6 +1300,153 @@ static void wsc_test_build_m4(const void *data)
 	l_free(out);
 }
 
+static const uint8_t eap_identity_req[] = {
+	0x01, 0x00, 0x00, 0x05, 0x01, 0x00, 0x00, 0x05, 0x01
+};
+
+static const uint8_t eap_identity_resp[] = {
+	0x01, 0x00, 0x00, 0x22, 0x02, 0x00, 0x00, 0x22,
+	0x01, 0x57, 0x46, 0x41, 0x2d, 0x53, 0x69, 0x6d,
+	0x70, 0x6c, 0x65, 0x43, 0x6f, 0x6e, 0x66, 0x69,
+	0x67, 0x2d, 0x45, 0x6e, 0x72, 0x6f, 0x6c, 0x6c,
+	0x65, 0x65, 0x2d, 0x31, 0x2d, 0x30,
+};
+
+static const uint8_t eap_wsc_start[] = {
+	0x01, 0x00, 0x00, 0x0e, 0x01, 0x01, 0x00, 0x0e, 0xfe, 0x00, 0x37, 0x2a,
+	0x00, 0x00, 0x00, 0x01, 0x01, 0x00,
+};
+
+static void verify_deauthenticate(uint32_t ifindex, const uint8_t *aa,
+				const uint8_t *spa, uint16_t reason_code,
+				void *user_data)
+{
+	assert(true);
+}
+
+static int verify_8021x_identity_resp(uint32_t ifindex, const uint8_t *aa_addr,
+					const uint8_t *sta_addr,
+					const struct eapol_frame *ef,
+					void *user_data)
+{
+	bool *response_sent = user_data;
+	size_t len = sizeof(struct eapol_header) +
+		L_BE16_TO_CPU(ef->header.packet_len);
+
+	assert(len == sizeof(eap_identity_resp));
+	assert(!memcmp(ef, eap_identity_resp, sizeof(eap_identity_resp)));
+
+	*response_sent = true;
+
+	return 0;
+}
+
+static int verify_8021x_wsc_m1(uint32_t ifindex, const uint8_t *aa_addr,
+			const uint8_t *sta_addr, const struct eapol_frame *ef,
+			void *user_data)
+{
+	bool *response_sent = user_data;
+	size_t len = sizeof(struct eapol_header) +
+		L_BE16_TO_CPU(ef->header.packet_len);
+
+	assert(len == sizeof(eap_wsc_m1_2));
+	assert(!memcmp(ef, eap_wsc_m1_2, sizeof(eap_wsc_m1_2)));
+
+	*response_sent = true;
+
+	return 0;
+}
+
+static int verify_8021x_wsc_m3(uint32_t ifindex, const uint8_t *aa_addr,
+			const uint8_t *sta_addr, const struct eapol_frame *ef,
+			void *user_data)
+{
+	bool *response_sent = user_data;
+	size_t len = sizeof(struct eapol_header) +
+		L_BE16_TO_CPU(ef->header.packet_len);
+
+	assert(len == sizeof(eap_wsc_m3));
+	assert(!memcmp(ef, eap_wsc_m3, sizeof(eap_wsc_m3)));
+
+	*response_sent = true;
+
+	return 0;
+}
+
+static void wsc_test_pbc_handshake(const void *data)
+{
+	static uint8_t ap_address[] = { 0x24, 0xa2, 0xe1, 0xec, 0x17, 0x04 };
+	static uint8_t sta_address[] = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 };
+	bool response_sent;
+	struct eapol_sm *sm;
+	char *hex;
+	struct l_settings *settings;
+
+	eapol_init();
+	__eapol_set_deauthenticate_func(verify_deauthenticate);
+
+	sm = eapol_sm_new();
+	eapol_sm_set_authenticator_address(sm, ap_address);
+	eapol_sm_set_supplicant_address(sm, sta_address);
+	eapol_sm_set_tx_user_data(sm, &response_sent);
+
+	settings = l_settings_new();
+	l_settings_set_string(settings, "Security", "EAP-Identity",
+					"WFA-SimpleConfig-Enrollee-1-0");
+	l_settings_set_string(settings, "Security", "EAP-Method", "WSC");
+
+	l_settings_set_uint(settings, "WSC", "RFBand", WSC_RF_BAND_2_4_GHZ);
+	l_settings_set_uint(settings, "WSC", "ConfigurationMethods",
+				WSC_CONFIGURATION_METHOD_VIRTUAL_DISPLAY_PIN |
+				WSC_CONFIGURATION_METHOD_KEYPAD |
+				WSC_CONFIGURATION_METHOD_DISPLAY |
+				WSC_CONFIGURATION_METHOD_NFC_INTERFACE);
+	l_settings_set_string(settings, "WSC", "PrimaryDeviceType",
+					"0-00000000-0");
+	l_settings_set_string(settings, "WSC", "EnrolleeMAC",
+					util_address_to_string(sta_address));
+
+	hex = l_util_hexstring(m1_data_2.expected.enrollee_nonce, 16);
+	l_settings_set_string(settings, "WSC", "EnrolleeNonce", hex);
+	l_free(hex);
+
+	hex = l_util_hexstring(m1_data_2.private_key,
+						m1_data_2.private_key_size);
+	l_settings_set_string(settings, "WSC", "PrivateKey", hex);
+	l_free(hex);
+
+	l_settings_set_string(settings, "WSC", "E-SNonce1",
+					"fdbb480ee6f572f3591cc3b364f2185b");
+	l_settings_set_string(settings, "WSC", "E-SNonce2",
+					"c12698739faf385920ba659d524c71c9");
+
+	eapol_sm_set_8021x_config(sm, settings);
+	l_settings_free(settings);
+
+	eapol_start(1, NULL, sm);
+
+	__eapol_set_tx_packet_func(verify_8021x_identity_resp);
+	response_sent = false;
+	__eapol_rx_packet(1, sta_address, ap_address, eap_identity_req,
+				sizeof(eap_identity_req));
+	assert(response_sent);
+
+	__eapol_set_tx_packet_func(verify_8021x_wsc_m1);
+	response_sent = false;
+	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_start,
+				sizeof(eap_wsc_start));
+	assert(response_sent);
+
+	__eapol_set_tx_packet_func(verify_8021x_wsc_m3);
+	response_sent = false;
+	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_m2_2,
+				sizeof(eap_wsc_m2_2));
+	assert(response_sent);
+
+	eapol_cancel(1);
+	eapol_exit();
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -1341,6 +1491,9 @@ int main(int argc, char *argv[])
 
 	l_test_add("/wsc/parse/m4 1", wsc_test_parse_m4, &m4_data_1);
 	l_test_add("/wsc/build/m4 1", wsc_test_build_m4, &m4_data_1);
+
+	l_test_add("/wsc/handshake/PBC Handshake Test",
+						wsc_test_pbc_handshake, NULL);
 
 	return l_test_run();
 }
