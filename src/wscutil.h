@@ -449,6 +449,13 @@ struct wsc_m4 {
 	uint8_t authenticator[8];
 };
 
+struct wsc_nack {
+	bool version2;
+	uint8_t enrollee_nonce[16];
+	uint8_t registrar_nonce[16];
+	enum wsc_configuration_error configuration_error;
+};
+
 int wsc_parse_beacon(const unsigned char *pdu, unsigned int len,
 				struct wsc_beacon *out);
 int wsc_parse_probe_response(const unsigned char *pdu, unsigned int len,
@@ -461,6 +468,8 @@ int wsc_parse_m2(const uint8_t *pdu, uint32_t len, struct wsc_m2 *out);
 int wsc_parse_m3(const uint8_t *pdu, uint32_t len, struct wsc_m3 *out);
 int wsc_parse_m4(const uint8_t *pdu, uint32_t len, struct wsc_m4 *out,
 						struct iovec *out_encrypted);
+
+int wsc_parse_nack(const uint8_t *pdu, uint32_t len, struct wsc_nack *out);
 
 uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
 				size_t *out_len);
