@@ -1716,7 +1716,28 @@ done:
 
 	ret = wsc_attr_builder_free(builder, false, out_len);
 	return ret;
+}
 
+uint8_t *wsc_build_nack(const struct wsc_nack *nack, size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+	uint8_t *ret;
+
+	builder = wsc_attr_builder_new(256);
+	build_version(builder, 0x10);
+	build_message_type(builder, WSC_MESSAGE_TYPE_WSC_NACK);
+	build_enrollee_nonce(builder, nack->enrollee_nonce);
+	build_registrar_nonce(builder, nack->registrar_nonce);
+	build_configuration_error(builder, nack->configuration_error);
+
+	if (!nack->version2)
+		goto done;
+
+	START_WFA_VENDOR_EXTENSION();
+
+done:
+	ret = wsc_attr_builder_free(builder, false, out_len);
+	return ret;
 }
 
 bool wsc_uuid_from_addr(const uint8_t addr[], uint8_t *out_uuid)
