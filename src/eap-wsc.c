@@ -42,6 +42,9 @@ static struct l_key *dh5_prime;
 struct eap_wsc_state {
 	struct wsc_m1 *m1;
 	struct l_key *private;
+	char *device_password;
+	uint8_t e_snonce1[16];
+	uint8_t e_snonce2[16];
 };
 
 static int eap_wsc_probe(struct eap_state *eap, const char *name)
@@ -64,6 +67,7 @@ static void eap_wsc_remove(struct eap_state *eap)
 
 	eap_set_data(eap, NULL);
 
+	l_free(wsc->device_password);
 	l_key_free(wsc->private);
 	l_free(wsc->m1);
 	l_free(wsc);
@@ -155,6 +159,7 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 	uint8_t private_key[192];
 	size_t len;
 	unsigned int u32;
+	const char *device_password;
 
 	wsc->m1 = l_new(struct wsc_m1, 1);
 	wsc->m1->version2 = true;
@@ -255,6 +260,42 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 		u32 = 0;
 
 	wsc->m1->os_version = u32 & 0x7fffffff;
+
+	device_password = l_settings_get_string(settings, "WSC",
+							"DevicePassword");
+	if (device_password) {
+		int i;
+
+		for (i = 0; device_password[i]; i++) {
+			if (!l_ascii_isxdigit(device_password[i]))
+				return false;
+		}
+
+		if (i < 8)
+			return false;
+
+		wsc->device_password = strdup(device_password);
+		/*
+		 * WSC 2.0.5: Section 7.4:
+		 * If an out-of-band mechanism is used as the configuration
+		 * method, the device password is expressed in hexadecimal
+		 * using ASCII character (two characters per octet, uppercase
+		 * letters only).
+		 */
+		for (i = 0; wsc->device_password[i]; i++) {
+			if (wsc->device_password[i] >= 'a' &&
+					wsc->device_password[i] <= 'f')
+				wsc->device_password[i] =
+					'A' + wsc->device_password[i] - 'a';
+		}
+	} else
+		wsc->device_password = strdup("00000000");
+
+	if (!load_hexencoded(settings, "E-SNonce1", wsc->e_snonce1, 16))
+		l_getrandom(wsc->e_snonce1, 16);
+
+	if (!load_hexencoded(settings, "E-SNonce2", wsc->e_snonce2, 16))
+		l_getrandom(wsc->e_snonce2, 16);
 
 	return true;
 }
