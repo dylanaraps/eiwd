@@ -324,6 +324,11 @@ static inline const unsigned char *wsc_attr_iter_get_data(
 	return iter->data;
 }
 
+static inline unsigned int wsc_attr_iter_get_pos(struct wsc_attr_iter *iter)
+{
+	return iter->pos;
+}
+
 struct wsc_primary_device_type {
 	uint16_t category;
 	uint8_t oui[3];

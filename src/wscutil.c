@@ -700,6 +700,11 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 			parse_error = true;
 			goto done;
 		}
+
+		if (wsc_attr_iter_get_pos(&iter) != len) {
+			parse_error = true;
+			goto done;
+		}
 	}
 
 	/*
