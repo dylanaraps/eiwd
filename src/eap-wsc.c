@@ -41,11 +41,21 @@ static struct l_key *dh5_prime;
 
 struct eap_wsc_state {
 	struct wsc_m1 *m1;
+	uint8_t *sent_pdu;
+	size_t sent_len;
 	struct l_key *private;
 	char *device_password;
 	uint8_t e_snonce1[16];
 	uint8_t e_snonce2[16];
 };
+
+static inline void eap_wsc_state_set_sent_pdu(struct eap_wsc_state *wsc,
+						uint8_t *pdu, size_t len)
+{
+	l_free(wsc->sent_pdu);
+	wsc->sent_pdu = pdu;
+	wsc->sent_len = len;
+}
 
 static int eap_wsc_probe(struct eap_state *eap, const char *name)
 {
@@ -69,6 +79,11 @@ static void eap_wsc_remove(struct eap_state *eap)
 
 	l_free(wsc->device_password);
 	l_key_free(wsc->private);
+
+	l_free(wsc->sent_pdu);
+	wsc->sent_pdu = 0;
+	wsc->sent_len = 0;
+
 	l_free(wsc->m1);
 	l_free(wsc);
 }
