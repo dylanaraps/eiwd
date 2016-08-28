@@ -207,6 +207,20 @@ Wireless daemon
   Priority: Medium
   Complexity: C8
 
+- Add support for EAP retransmissions
+
+  EAP protocol supports the concept of re-transmissions.  Namely a packet might
+  be lost or not properly processed by the peer.  If the peer sends us a
+  duplicate request, then our current behavior is to simply drop it on the
+  floor.
+
+  Previously generated request will need to be cached somewhere, either by the
+  method or by the overall EAP state machine.  Duplicate requests can then be
+  served from the cache.
+
+  Priority: High
+  Complexity: C4
+
 - Add unit test data with 2nd RSNE in Authenticator 3/4 message
 
   The specification allows the AP to send a second RSN element in its 4-way
