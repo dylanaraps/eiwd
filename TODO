@@ -231,6 +231,15 @@ Wireless daemon
   Priority: High
   Complexity: C2
 
+- EAPoL should take EAP timeouts into consideration
+
+  EAPoL state machine currently uses its own (very short) timeout for the
+  4-Way handshake / session key generation.  This timeout does not take into
+  account the fact that EAP authentication might need to be performed first.
+
+  Priority: High
+  Complexity: C1
+
 - Add unit test data with 2nd RSNE in Authenticator 3/4 message
 
   The specification allows the AP to send a second RSN element in its 4-way
