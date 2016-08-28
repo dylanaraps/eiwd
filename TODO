@@ -221,6 +221,16 @@ Wireless daemon
   Priority: High
   Complexity: C4
 
+- Let EAP methods configure timeouts
+
+  Different EAP methods might have different recommendations for various
+  timeouts.  E.g. retransmit timeout, overall timeout, etc.  The EAP framework
+  should be updated to enable EAP methods to configure these timeouts
+  accordingly.  A sane default should also be provided.
+
+  Priority: High
+  Complexity: C2
+
 - Add unit test data with 2nd RSNE in Authenticator 3/4 message
 
   The specification allows the AP to send a second RSN element in its 4-way
