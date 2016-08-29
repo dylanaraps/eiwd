@@ -70,6 +70,7 @@ struct eap_wsc_state {
 	uint8_t e_snonce1[16];
 	uint8_t e_snonce2[16];
 	enum state state;
+	struct l_checksum *hmac_auth_key;
 };
 
 static inline void eap_wsc_state_set_sent_pdu(struct eap_wsc_state *wsc,
@@ -78,6 +79,26 @@ static inline void eap_wsc_state_set_sent_pdu(struct eap_wsc_state *wsc,
 	l_free(wsc->sent_pdu);
 	wsc->sent_pdu = pdu;
 	wsc->sent_len = len;
+}
+
+static inline bool authenticator_check(struct eap_wsc_state *wsc,
+					const uint8_t *pdu, size_t len)
+{
+	uint8_t authenticator[8];
+	struct iovec iov[2];
+
+	iov[0].iov_base = wsc->sent_pdu;
+	iov[0].iov_len = wsc->sent_len;
+	iov[1].iov_base = (void *) pdu;
+	iov[1].iov_len = len - 12;
+	l_checksum_updatev(wsc->hmac_auth_key, iov, 2);
+	l_checksum_get_digest(wsc->hmac_auth_key, authenticator, 8);
+
+	/* Authenticator is the last 8 bytes of the message */
+	if (memcmp(authenticator, pdu + len - 8, 8))
+		return false;
+
+	return true;
 }
 
 static int eap_wsc_probe(struct eap_state *eap, const char *name)
@@ -107,6 +128,7 @@ static void eap_wsc_remove(struct eap_state *eap)
 	wsc->sent_pdu = 0;
 	wsc->sent_len = 0;
 
+	l_checksum_free(wsc->hmac_auth_key);
 	l_free(wsc->m1);
 	l_free(wsc);
 }
