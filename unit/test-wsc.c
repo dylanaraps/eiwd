@@ -1300,6 +1300,43 @@ static void wsc_test_build_m4(const void *data)
 	l_free(out);
 }
 
+static const unsigned char m4_encrypted_settings[] = {
+	0x10, 0x3f, 0x00, 0x10, 0xaf, 0xbe, 0xbc, 0x19, 0x44, 0xdf, 0xf3, 0x40,
+	0x3c, 0xdc, 0x70, 0xc0, 0x63, 0x63, 0xc7, 0x53, 0x10, 0x1e, 0x00, 0x08,
+	0x47, 0x82, 0x81, 0xb3, 0x1e, 0xe0, 0xa4, 0xcb,
+};
+
+struct m4_encrypted_settings_data {
+	struct wsc_m4_encrypted_settings expected;
+	const void *pdu;
+	unsigned int len;
+};
+
+static const struct m4_encrypted_settings_data m4_encrypted_settings_data_1 = {
+	.pdu = m4_encrypted_settings,
+	.len = sizeof(m4_encrypted_settings),
+	.expected = {
+		.r_snonce1 = { 0xaf, 0xbe, 0xbc, 0x19, 0x44, 0xdf, 0xf3, 0x40,
+			0x3c, 0xdc, 0x70, 0xc0, 0x63, 0x63, 0xc7, 0x53 },
+		.authenticator = { 0x47, 0x82, 0x81, 0xb3, 0x1e, 0xe0,
+					0xa4, 0xcb },
+	},
+};
+
+static void wsc_test_parse_m4_encrypted_settings(const void *data)
+{
+	const struct m4_encrypted_settings_data *test = data;
+	struct wsc_m4_encrypted_settings m4es;
+	const struct wsc_m4_encrypted_settings *expected = &test->expected;
+	int r;
+
+	r = wsc_parse_m4_encrypted_settings(test->pdu, test->len, &m4es);
+	assert(r == 0);
+
+	assert(!memcmp(expected->r_snonce1, m4es.r_snonce1, 16));
+	assert(!memcmp(expected->authenticator, m4es.authenticator, 8));
+}
+
 static const unsigned char eap_wsc_m5[] = {
 	0x01, 0x00, 0x00, 0x86, 0x02, 0xa9, 0x00, 0x86, 0xfe, 0x00, 0x37, 0x2a,
 	0x00, 0x00, 0x00, 0x01, 0x04, 0x00, 0x10, 0x4a, 0x00, 0x01, 0x10, 0x10,
@@ -1565,6 +1602,10 @@ int main(int argc, char *argv[])
 
 	l_test_add("/wsc/parse/m4 1", wsc_test_parse_m4, &m4_data_1);
 	l_test_add("/wsc/build/m4 1", wsc_test_build_m4, &m4_data_1);
+
+	l_test_add("/wsc/parse/m4 encrypted settings 1",
+			wsc_test_parse_m4_encrypted_settings,
+			&m4_encrypted_settings_data_1);
 
 	l_test_add("/wsc/parse/m5 1", wsc_test_parse_m5, &m5_data_1);
 	l_test_add("/wsc/build/m5 1", wsc_test_build_m5, &m5_data_1);
