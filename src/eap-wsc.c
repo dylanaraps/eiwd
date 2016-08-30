@@ -70,8 +70,8 @@ struct eap_wsc_state {
 	uint8_t e_snonce1[16];
 	uint8_t e_snonce2[16];
 	enum state state;
-	struct wsc_session_key keys;
 	struct l_checksum *hmac_auth_key;
+	struct l_cipher *aes_cbc_128;
 };
 
 static inline void eap_wsc_state_set_sent_pdu(struct eap_wsc_state *wsc,
@@ -146,6 +146,8 @@ static void eap_wsc_remove(struct eap_state *eap)
 	wsc->sent_len = 0;
 
 	l_checksum_free(wsc->hmac_auth_key);
+	l_cipher_free(wsc->aes_cbc_128);
+
 	l_free(wsc->m1);
 	l_free(wsc);
 }
@@ -276,6 +278,7 @@ static void eap_wsc_handle_m2(struct eap_state *eap,
 	struct l_checksum *hmac_sha256;
 	struct iovec iov[3];
 	uint8_t kdk[32];
+	struct wsc_session_key keys;
 	bool r;
 
 	/* Spec unclear what to do here, see comments in eap_wsc_send_nack */
@@ -320,20 +323,30 @@ static void eap_wsc_handle_m2(struct eap_state *eap,
 	l_checksum_get_digest(hmac_sha256, kdk, sizeof(kdk));
 	l_checksum_free(hmac_sha256);
 
-	if (!wsc_kdf(kdk, &wsc->keys, sizeof(wsc->keys)))
+	if (!wsc_kdf(kdk, &keys, sizeof(keys)))
 		return;
 
 	wsc->hmac_auth_key = l_checksum_new_hmac(L_CHECKSUM_SHA256,
-						wsc->keys.auth_key,
-						sizeof(wsc->keys.auth_key));
+						keys.auth_key,
+						sizeof(keys.auth_key));
 	if (!authenticator_check(wsc, pdu, len)) {
 		l_checksum_free(wsc->hmac_auth_key);
 		wsc->hmac_auth_key = NULL;
-		return;
+		goto clear_keys;
 	}
 
 	/* Everything checks out, lets build M3 */
 	eap_wsc_send_m3(eap, pdu, len, &m2);
+
+	/*
+	 * AuthKey is uploaded into the kernel, once we upload KeyWrapKey,
+	 * the keys variable is no longer useful.  Make sure to wipe it
+	 */
+	wsc->aes_cbc_128 = l_cipher_new(L_CIPHER_AES_CBC, keys.keywrap_key,
+						sizeof(keys.keywrap_key));
+
+clear_keys:
+	memset(&keys, 0, sizeof(keys));
 }
 
 static void eap_wsc_handle_request(struct eap_state *eap,
