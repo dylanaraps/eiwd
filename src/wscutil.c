@@ -509,6 +509,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 	case WSC_ATTR_E_HASH1:
 	case WSC_ATTR_E_HASH2:
 		return extract_hash;
+	case WSC_ATTR_E_SNONCE1:
+		return extract_nonce;
 	case WSC_ATTR_ENCRYPTED_SETTINGS:
 		return extract_encrypted_settings;
 	case WSC_ATTR_ENCRYPTION_TYPE_FLAGS:
@@ -1186,6 +1188,17 @@ int wsc_parse_m5(const uint8_t *pdu, uint32_t len, struct wsc_m5 *out,
 		return -EBADMSG;
 
 	return 0;
+}
+
+int wsc_parse_m5_encrypted_settings(const uint8_t *pdu, uint32_t len,
+					struct wsc_m5_encrypted_settings *out)
+{
+	memset(out, 0, sizeof(*out));
+
+	return wsc_parse_attrs(pdu, len, NULL, NULL,
+			WSC_ATTR_KEY_WRAP_AUTHENTICATOR, out->authenticator,
+			REQUIRED(E_SNONCE1, out->e_snonce1),
+			WSC_ATTR_INVALID);
 }
 
 int wsc_parse_nack(const uint8_t *pdu, uint32_t len, struct wsc_nack *out)
