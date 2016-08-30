@@ -191,6 +191,78 @@ static void eap_wsc_send_nack(struct eap_state *eap,
 		return;
 }
 
+static void eap_wsc_send_m3(struct eap_state *eap,
+				const uint8_t *m2_pdu, size_t m2_len,
+				const struct wsc_m2 *m2)
+{
+	struct eap_wsc_state *wsc = eap_get_data(eap);
+	uint8_t psk1[16];
+	uint8_t psk2[16];
+	size_t len;
+	size_t len_half1;
+	struct wsc_m3 m3;
+	struct iovec iov[4];
+	uint8_t *pdu;
+	size_t pdu_len;
+
+	len = strlen(wsc->device_password);
+
+	/* WSC 2.0.5, Section 7.4:
+	 * In case the UTF8 representation of the DevicePassword length is an
+	 * odd number (N), the first half of DevicePassword will have length
+	 * of N/2+1 and the second half of the DevicePassword will have length
+	 * of N/2.
+	 */
+	len_half1 = len / 2;
+	if ((len % 2) == 1)
+		len_half1 += 1;
+
+	l_checksum_update(wsc->hmac_auth_key, wsc->device_password, len_half1);
+	l_checksum_get_digest(wsc->hmac_auth_key, psk1, sizeof(psk1));
+
+	l_checksum_update(wsc->hmac_auth_key, wsc->device_password + len_half1,
+					len / 2);
+	l_checksum_get_digest(wsc->hmac_auth_key, psk2, sizeof(psk2));
+
+	m3.version2 = true;
+	memcpy(m3.registrar_nonce, m2->registrar_nonce,
+						sizeof(m3.registrar_nonce));
+
+	/* WSC 2.0.5, Section 7.4:
+	 * The Enrollee creates two 128-bit secret nonces, E-S1, E-S2 and then
+	 * computes:
+	 * E-Hash1 = HMACAuthKey(E-S1 || PSK1 || PKE || PKR)
+	 * E-Hash2 = HMACAuthKey(E-S2 || PSK2 || PKE || PKR)
+	 */
+	iov[0].iov_base = wsc->e_snonce1;
+	iov[0].iov_len = sizeof(wsc->e_snonce1);
+	iov[1].iov_base = psk1;
+	iov[1].iov_len = sizeof(psk1);
+	iov[2].iov_base = wsc->m1->public_key;
+	iov[2].iov_len = sizeof(wsc->m1->public_key);
+	iov[3].iov_base = (void *) m2->public_key;
+	iov[3].iov_len = sizeof(m2->public_key);
+	l_checksum_updatev(wsc->hmac_auth_key, iov, 4);
+	l_checksum_get_digest(wsc->hmac_auth_key,
+					m3.e_hash1, sizeof(m3.e_hash1));
+
+	iov[0].iov_base = wsc->e_snonce2;
+	iov[0].iov_len = sizeof(wsc->e_snonce2);
+	iov[1].iov_base = psk2;
+	iov[1].iov_len = sizeof(psk2);
+	l_checksum_updatev(wsc->hmac_auth_key, iov, 4);
+	l_checksum_get_digest(wsc->hmac_auth_key,
+					m3.e_hash2, sizeof(m3.e_hash2));
+
+	pdu = wsc_build_m3(&m3, &pdu_len);
+	if (!pdu)
+		return;
+
+	authenticator_put(wsc, m2_pdu, m2_len, pdu, pdu_len);
+	eap_wsc_send_response(eap, pdu, pdu_len);
+	wsc->state = STATE_EXPECT_M4;
+}
+
 static void eap_wsc_handle_m2(struct eap_state *eap,
 					const uint8_t *pdu, size_t len)
 {
@@ -261,6 +333,7 @@ static void eap_wsc_handle_m2(struct eap_state *eap,
 	}
 
 	/* Everything checks out, lets build M3 */
+	eap_wsc_send_m3(eap, pdu, len, &m2);
 }
 
 static void eap_wsc_handle_request(struct eap_state *eap,
