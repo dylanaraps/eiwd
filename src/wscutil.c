@@ -1463,6 +1463,13 @@ static void build_enrollee_nonce(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_bytes(builder, nonce, 16);
 }
 
+static void build_key_wrap_authenticator(struct wsc_attr_builder *builder,
+						const uint8_t *authenticator)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_KEY_WRAP_AUTHENTICATOR);
+	wsc_attr_builder_put_bytes(builder, authenticator, 8);
+}
+
 static void build_mac_address(struct wsc_attr_builder *builder,
 							const uint8_t *addr)
 {
@@ -1554,6 +1561,13 @@ static void build_r_hash2(struct wsc_attr_builder *builder,
 {
 	wsc_attr_builder_start_attr(builder, WSC_ATTR_R_HASH2);
 	wsc_attr_builder_put_bytes(builder, r_hash2, 32);
+}
+
+static void build_r_snonce1(struct wsc_attr_builder *builder,
+							const uint8_t *nonce)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_R_SNONCE1);
+	wsc_attr_builder_put_bytes(builder, nonce, 16);
 }
 
 static void build_serial_number(struct wsc_attr_builder *builder,
@@ -1770,6 +1784,19 @@ done:
 
 	ret = wsc_attr_builder_free(builder, false, out_len);
 	return ret;
+}
+
+uint8_t *wsc_build_m4_encrypted_settings(
+				const struct wsc_m4_encrypted_settings *in,
+				size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+
+	builder = wsc_attr_builder_new(256);
+	build_r_snonce1(builder, in->r_snonce1);
+	build_key_wrap_authenticator(builder, in->authenticator);
+
+	return wsc_attr_builder_free(builder, false, out_len);
 }
 
 uint8_t *wsc_build_m5(const struct wsc_m5 *m5, const uint8_t *encrypted,
