@@ -1749,6 +1749,32 @@ done:
 	return ret;
 }
 
+uint8_t *wsc_build_m5(const struct wsc_m5 *m5, const uint8_t *encrypted,
+			size_t encrypted_len, size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+	uint8_t *ret;
+
+	builder = wsc_attr_builder_new(256);
+	build_version(builder, 0x10);
+	build_message_type(builder, WSC_MESSAGE_TYPE_M5);
+	build_registrar_nonce(builder, m5->registrar_nonce);
+
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_ENCRYPTED_SETTINGS);
+	wsc_attr_builder_put_bytes(builder, encrypted, encrypted_len);
+
+	if (!m5->version2)
+		goto done;
+
+	START_WFA_VENDOR_EXTENSION();
+
+done:
+	build_authenticator(builder, m5->authenticator);
+
+	ret = wsc_attr_builder_free(builder, false, out_len);
+	return ret;
+}
+
 uint8_t *wsc_build_nack(const struct wsc_nack *nack, size_t *out_len)
 {
 	struct wsc_attr_builder *builder;

@@ -491,6 +491,8 @@ uint8_t *wsc_build_m2(const struct wsc_m2 *m2, size_t *out_len);
 uint8_t *wsc_build_m3(const struct wsc_m3 *m3, size_t *out_len);
 uint8_t *wsc_build_m4(const struct wsc_m4 *m4, const uint8_t *encrypted,
 			size_t encrypted_len, size_t *out_len);
+uint8_t *wsc_build_m5(const struct wsc_m5 *m5, const uint8_t *encrypted,
+			size_t encrypted_len, size_t *out_len);
 
 uint8_t *wsc_build_nack(const struct wsc_nack *nack, size_t *out_len);
 
