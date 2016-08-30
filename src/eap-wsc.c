@@ -118,6 +118,22 @@ static inline void authenticator_put(struct eap_wsc_state *wsc,
 	l_checksum_get_digest(wsc->hmac_auth_key, cur_msg + cur_msg_len - 8, 8);
 }
 
+static inline bool keywrap_authenticator_check(struct eap_wsc_state *wsc,
+						const uint8_t *pdu, size_t len)
+{
+	uint8_t authenticator[8];
+
+	/* We omit the included KeyWrapAuthenticator element from the hash */
+	l_checksum_update(wsc->hmac_auth_key, pdu, len - 12);
+	l_checksum_get_digest(wsc->hmac_auth_key, authenticator, 8);
+
+	/* KeyWrapAuthenticator is the last 8 bytes of the message */
+	if (memcmp(authenticator, pdu + len - 8, 8))
+		return false;
+
+	return true;
+}
+
 static int eap_wsc_probe(struct eap_state *eap, const char *name)
 {
 	struct eap_wsc_state *wsc;
