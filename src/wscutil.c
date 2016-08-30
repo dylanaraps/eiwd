@@ -591,6 +591,7 @@ static bool verify_version2(struct wsc_wfa_ext_iter *ext_iter)
 static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 				bool *out_version2,
 				struct wsc_wfa_ext_iter *ext_iter,
+				enum wsc_attr authenticator_type,
 				uint8_t *authenticator,
 				enum wsc_attr type, ...)
 {
@@ -645,6 +646,9 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 		}
 
 		if (e2 == NULL) {
+			if (!ext_iter)
+				break;
+
 			if (wsc_attr_iter_get_type(&iter)
 					!= WSC_ATTR_VENDOR_EXTENSION)
 				break;
@@ -685,8 +689,7 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 
 	/* Authenticator element must be the last element */
 	if (authenticator) {
-		while (wsc_attr_iter_get_type(&iter) !=
-						WSC_ATTR_AUTHENTICATOR) {
+		while (wsc_attr_iter_get_type(&iter) != authenticator_type) {
 			if (!wsc_attr_iter_next(&iter)) {
 				have_required = false;
 				goto done;
@@ -762,7 +765,8 @@ done:
 	if (parse_error)
 		return -EBADMSG;
 
-	*out_version2 = version2;
+	if (out_version2)
+		*out_version2 = version2;
 
 	return 0;
 }
@@ -829,7 +833,7 @@ int wsc_parse_beacon(const unsigned char *pdu, unsigned int len,
 
 	memset(out, 0, sizeof(struct wsc_beacon));
 
-	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, NULL,
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, 0, NULL,
 		REQUIRED(VERSION, &version),
 		REQUIRED(WSC_STATE, &out->state),
 		OPTIONAL(AP_SETUP_LOCKED, &out->ap_setup_locked),
@@ -881,7 +885,7 @@ int wsc_parse_probe_response(const unsigned char *pdu, unsigned int len,
 
 	memset(out, 0, sizeof(struct wsc_probe_response));
 
-	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, NULL,
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, 0, NULL,
 		REQUIRED(VERSION, &version),
 		REQUIRED(WSC_STATE, &out->state),
 		OPTIONAL(AP_SETUP_LOCKED, &out->ap_setup_locked),
@@ -941,7 +945,7 @@ int wsc_parse_probe_request(const unsigned char *pdu, unsigned int len,
 
 	memset(out, 0, sizeof(struct wsc_probe_request));
 
-	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, NULL,
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, 0, NULL,
 		REQUIRED(VERSION, &version),
 		REQUIRED(REQUEST_TYPE, &out->request_type),
 		REQUIRED(CONFIGURATION_METHODS, &out->config_methods),
@@ -988,7 +992,7 @@ int wsc_parse_m1(const uint8_t *pdu, uint32_t len, struct wsc_m1 *out)
 
 	memset(out, 0, sizeof(struct wsc_m1));
 
-	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, NULL,
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, 0, NULL,
 		REQUIRED(VERSION, &version),
 		REQUIRED(MESSAGE_TYPE, &msg_type),
 		REQUIRED(UUID_E, &out->uuid_e),
@@ -1050,7 +1054,8 @@ int wsc_parse_m2(const uint8_t *pdu, uint32_t len, struct wsc_m2 *out)
 
 	memset(out, 0, sizeof(struct wsc_m2));
 
-	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, out->authenticator,
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
+		WSC_ATTR_AUTHENTICATOR, out->authenticator,
 		REQUIRED(VERSION, &version),
 		REQUIRED(MESSAGE_TYPE, &msg_type),
 		REQUIRED(ENROLLEE_NONCE, &out->enrollee_nonce),
@@ -1096,7 +1101,8 @@ int wsc_parse_m3(const uint8_t *pdu, uint32_t len, struct wsc_m3 *out)
 
 	memset(out, 0, sizeof(struct wsc_m3));
 
-	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, out->authenticator,
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
+		WSC_ATTR_AUTHENTICATOR, out->authenticator,
 		REQUIRED(VERSION, &version),
 		REQUIRED(MESSAGE_TYPE, &msg_type),
 		REQUIRED(REGISTRAR_NONCE, &out->registrar_nonce),
@@ -1123,7 +1129,8 @@ int wsc_parse_m4(const uint8_t *pdu, uint32_t len, struct wsc_m4 *out,
 
 	memset(out, 0, sizeof(struct wsc_m4));
 
-	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, out->authenticator,
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
+		WSC_ATTR_AUTHENTICATOR, out->authenticator,
 		REQUIRED(VERSION, &version),
 		REQUIRED(MESSAGE_TYPE, &msg_type),
 		REQUIRED(ENROLLEE_NONCE, &out->enrollee_nonce),
@@ -1151,7 +1158,8 @@ int wsc_parse_m5(const uint8_t *pdu, uint32_t len, struct wsc_m5 *out,
 
 	memset(out, 0, sizeof(struct wsc_m5));
 
-	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, out->authenticator,
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
+		WSC_ATTR_AUTHENTICATOR, out->authenticator,
 		REQUIRED(VERSION, &version),
 		REQUIRED(MESSAGE_TYPE, &msg_type),
 		REQUIRED(REGISTRAR_NONCE, &out->registrar_nonce),
@@ -1176,7 +1184,7 @@ int wsc_parse_nack(const uint8_t *pdu, uint32_t len, struct wsc_nack *out)
 
 	memset(out, 0, sizeof(struct wsc_nack));
 
-	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, NULL,
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, 0, NULL,
 		REQUIRED(VERSION, &version),
 		REQUIRED(MESSAGE_TYPE, &msg_type),
 		REQUIRED(ENROLLEE_NONCE, &out->enrollee_nonce),
