@@ -70,6 +70,7 @@ struct eap_wsc_state {
 	uint8_t e_snonce1[16];
 	uint8_t e_snonce2[16];
 	enum state state;
+	struct wsc_session_key keys;
 	struct l_checksum *hmac_auth_key;
 };
 
@@ -148,6 +149,104 @@ static void eap_wsc_send_response(struct eap_state *eap,
 	eap_wsc_state_set_sent_pdu(wsc, pdu, len);
 }
 
+static void eap_wsc_send_nack(struct eap_state *eap,
+					enum wsc_configuration_error error)
+{
+	/*
+	 * WSC 2.0.5, Table 34, Configuration Error 0 states:
+	 * "- not valid for WSC_NACK except when a station acts as an External
+	 * Registrar (to learn the current AP settings after M7 with
+	 * configuration error = 0)"
+	 *
+	 * However, section 7.7.3 states:
+	 * "Once M5 is sent, for example, if anything but M6 is received,
+	 * the Enrollee will respond with a NACK message."
+	 *
+	 * Section 7.1 states:
+	 * "If a message is received with either an invalid nonce or an invalid
+	 * Authenticator attribute, the recipient shall silently ignore this
+	 * message."
+	 *
+	 * So it is entirely unclear what to do in the situation of an
+	 * out-of-order message being sent.  To centralize decision making,
+	 * callers will call this function with error 0.
+	 */
+	if (error == WSC_CONFIGURATION_ERROR_NO_ERROR)
+		return;
+}
+
+static void eap_wsc_handle_m2(struct eap_state *eap,
+					const uint8_t *pdu, size_t len)
+{
+	struct eap_wsc_state *wsc = eap_get_data(eap);
+	struct wsc_m2 m2;
+	struct l_key *remote_public;
+	uint8_t shared_secret[192];
+	size_t shared_secret_len = sizeof(shared_secret);
+	struct l_checksum *sha256;
+	uint8_t dhkey[32];
+	struct l_checksum *hmac_sha256;
+	struct iovec iov[3];
+	uint8_t kdk[32];
+	bool r;
+
+	/* Spec unclear what to do here, see comments in eap_wsc_send_nack */
+	if (wsc_parse_m2(pdu, len, &m2) != 0) {
+		eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_NO_ERROR);
+		return;
+	}
+
+	remote_public = l_key_new(L_KEY_RAW,
+					m2.public_key, sizeof(m2.public_key));
+	if (!remote_public)
+		return;
+
+	r = l_key_compute_dh_secret(remote_public, wsc->private, dh5_prime,
+					shared_secret, &shared_secret_len);
+	l_key_free(remote_public);
+
+	if (!r)
+		return;
+
+	sha256 = l_checksum_new(L_CHECKSUM_SHA256);
+	if (!sha256)
+		return;
+
+	l_checksum_update(sha256, shared_secret, shared_secret_len);
+	l_checksum_get_digest(sha256, dhkey, sizeof(dhkey));
+	l_checksum_free(sha256);
+
+	hmac_sha256 = l_checksum_new_hmac(L_CHECKSUM_SHA256,
+							dhkey, sizeof(dhkey));
+	if (!hmac_sha256)
+		return;
+
+	iov[0].iov_base = wsc->m1->enrollee_nonce;
+	iov[0].iov_len = 16;
+	iov[1].iov_base = wsc->m1->addr;
+	iov[1].iov_len = 6;
+	iov[2].iov_base = m2.registrar_nonce;
+	iov[2].iov_len = 16;
+
+	l_checksum_updatev(hmac_sha256, iov, 3);
+	l_checksum_get_digest(hmac_sha256, kdk, sizeof(kdk));
+	l_checksum_free(hmac_sha256);
+
+	if (!wsc_kdf(kdk, &wsc->keys, sizeof(wsc->keys)))
+		return;
+
+	wsc->hmac_auth_key = l_checksum_new_hmac(L_CHECKSUM_SHA256,
+						wsc->keys.auth_key,
+						sizeof(wsc->keys.auth_key));
+	if (!authenticator_check(wsc, pdu, len)) {
+		l_checksum_free(wsc->hmac_auth_key);
+		wsc->hmac_auth_key = NULL;
+		return;
+	}
+
+	/* Everything checks out, lets build M3 */
+}
+
 static void eap_wsc_handle_request(struct eap_state *eap,
 					const uint8_t *pkt, size_t len)
 {
@@ -183,6 +282,14 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 		wsc->state = STATE_EXPECT_M2;
 		break;
 	case STATE_EXPECT_M2:
+		if (op != WSC_OP_MSG)
+			return;
+
+		if (len <= 2)
+			return;
+
+		eap_wsc_handle_m2(eap, pkt + 2, len - 2);
+		break;
 	case STATE_EXPECT_M4:
 		break;
 	}
