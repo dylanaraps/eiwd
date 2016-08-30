@@ -307,8 +307,12 @@ static void eap_wsc_handle_m2(struct eap_state *eap,
 	l_checksum_get_digest(sha256, dhkey, sizeof(dhkey));
 	l_checksum_free(sha256);
 
+	memset(shared_secret, 0, shared_secret_len);
+
 	hmac_sha256 = l_checksum_new_hmac(L_CHECKSUM_SHA256,
 							dhkey, sizeof(dhkey));
+	memset(dhkey, 0, sizeof(dhkey));
+
 	if (!hmac_sha256)
 		return;
 
@@ -323,7 +327,9 @@ static void eap_wsc_handle_m2(struct eap_state *eap,
 	l_checksum_get_digest(hmac_sha256, kdk, sizeof(kdk));
 	l_checksum_free(hmac_sha256);
 
-	if (!wsc_kdf(kdk, &keys, sizeof(keys)))
+	r = wsc_kdf(kdk, &keys, sizeof(keys));
+	memset(kdk, 0, sizeof(kdk));
+	if (!r)
 		return;
 
 	wsc->hmac_auth_key = l_checksum_new_hmac(L_CHECKSUM_SHA256,
