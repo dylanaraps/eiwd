@@ -355,12 +355,12 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 	if (flags != 0)
 		return;
 
-	switch (wsc->state) {
-	case STATE_EXPECT_START:
-		if (op != WSC_OP_START)
+	switch (op) {
+	case WSC_OP_START:
+		if (len != 2)
 			return;
 
-		if (len != 2)
+		if (wsc->state != STATE_EXPECT_START)
 			return;
 
 		pdu = wsc_build_m1(wsc->m1, &pdu_len);
@@ -369,14 +369,28 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 
 		eap_wsc_send_response(eap, pdu, pdu_len);
 		wsc->state = STATE_EXPECT_M2;
+		return;
+	case WSC_OP_NACK:
+		/* TODO: Process NACK and respond with NACK */
+		return;
+	case WSC_OP_ACK:
+	case WSC_OP_DONE:
+		/* Should never receive these as Enrollee */
+		return;
+	case WSC_OP_FRAG_ACK:
+		/* TODO: Handle fragmentation */
+		return;
+	case WSC_OP_MSG:
 		break;
+	}
+
+	if (len <= 2)
+		return;
+
+	switch (wsc->state) {
+	case STATE_EXPECT_START:
+		return;
 	case STATE_EXPECT_M2:
-		if (op != WSC_OP_MSG)
-			return;
-
-		if (len <= 2)
-			return;
-
 		eap_wsc_handle_m2(eap, pkt + 2, len - 2);
 		break;
 	case STATE_EXPECT_M4:
