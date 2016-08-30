@@ -546,6 +546,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 	case WSC_ATTR_R_HASH1:
 	case WSC_ATTR_R_HASH2:
 		return extract_hash;
+	case WSC_ATTR_R_SNONCE1:
+		return extract_nonce;
 	case WSC_ATTR_SELECTED_REGISTRAR:
 		return extract_bool;
 	case WSC_ATTR_SELECTED_REGISTRAR_CONFIGURATION_METHODS:
@@ -1146,6 +1148,17 @@ int wsc_parse_m4(const uint8_t *pdu, uint32_t len, struct wsc_m4 *out,
 		return -EBADMSG;
 
 	return 0;
+}
+
+int wsc_parse_m4_encrypted_settings(const uint8_t *pdu, uint32_t len,
+					struct wsc_m4_encrypted_settings *out)
+{
+	memset(out, 0, sizeof(*out));
+
+	return wsc_parse_attrs(pdu, len, NULL, NULL,
+			WSC_ATTR_KEY_WRAP_AUTHENTICATOR, out->authenticator,
+			REQUIRED(R_SNONCE1, out->r_snonce1),
+			WSC_ATTR_INVALID);
 }
 
 int wsc_parse_m5(const uint8_t *pdu, uint32_t len, struct wsc_m5 *out,
