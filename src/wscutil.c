@@ -186,6 +186,15 @@ static bool extract_hash(struct wsc_attr_iter *iter, void *data)
 	return true;
 }
 
+static bool extract_authenticator(struct wsc_attr_iter *iter, void *data)
+{
+	if (wsc_attr_iter_get_length(iter) != 8)
+		return false;
+
+	memcpy(data, wsc_attr_iter_get_data(iter), 8);
+	return true;
+}
+
 static bool extract_ascii_string(struct wsc_attr_iter *iter, void *data,
 					unsigned int max_len)
 {
@@ -262,15 +271,6 @@ static bool extract_association_state(struct wsc_attr_iter *iter, void *data)
 		return false;
 
 	*out = as;
-	return true;
-}
-
-static bool extract_authenticator(struct wsc_attr_iter *iter, void *data)
-{
-	if (wsc_attr_iter_get_length(iter) != 8)
-		return false;
-
-	memcpy(data, wsc_attr_iter_get_data(iter), 8);
 	return true;
 }
 
@@ -515,6 +515,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_uint16;
 	case WSC_ATTR_ENROLLEE_NONCE:
 		return extract_nonce;
+	case WSC_ATTR_KEY_WRAP_AUTHENTICATOR:
+		return extract_authenticator;
 	case WSC_ATTR_MAC_ADDRESS:
 		return extract_mac_address;
 	case WSC_ATTR_MANUFACTURER:
