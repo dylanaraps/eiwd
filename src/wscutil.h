@@ -454,6 +454,12 @@ struct wsc_m4 {
 	uint8_t authenticator[8];
 };
 
+struct wsc_m5 {
+	bool version2;
+	uint8_t registrar_nonce[16];
+	uint8_t authenticator[8];
+};
+
 struct wsc_nack {
 	bool version2;
 	uint8_t enrollee_nonce[16];
@@ -472,6 +478,8 @@ int wsc_parse_m1(const uint8_t *pdu, uint32_t len, struct wsc_m1 *out);
 int wsc_parse_m2(const uint8_t *pdu, uint32_t len, struct wsc_m2 *out);
 int wsc_parse_m3(const uint8_t *pdu, uint32_t len, struct wsc_m3 *out);
 int wsc_parse_m4(const uint8_t *pdu, uint32_t len, struct wsc_m4 *out,
+						struct iovec *out_encrypted);
+int wsc_parse_m5(const uint8_t *pdu, uint32_t len, struct wsc_m5 *out,
 						struct iovec *out_encrypted);
 
 int wsc_parse_nack(const uint8_t *pdu, uint32_t len, struct wsc_nack *out);
