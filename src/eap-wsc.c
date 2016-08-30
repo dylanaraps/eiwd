@@ -102,6 +102,22 @@ static inline bool authenticator_check(struct eap_wsc_state *wsc,
 	return true;
 }
 
+static inline void authenticator_put(struct eap_wsc_state *wsc,
+					const uint8_t *prev_msg,
+					size_t prev_msg_len,
+					uint8_t *cur_msg, size_t cur_msg_len)
+{
+	struct iovec iov[2];
+
+	iov[0].iov_base = (void *) prev_msg;
+	iov[0].iov_len = prev_msg_len;
+	iov[1].iov_base = cur_msg;
+	iov[1].iov_len = cur_msg_len - 12;
+
+	l_checksum_updatev(wsc->hmac_auth_key, iov, 2);
+	l_checksum_get_digest(wsc->hmac_auth_key, cur_msg + cur_msg_len - 8, 8);
+}
+
 static int eap_wsc_probe(struct eap_state *eap, const char *name)
 {
 	struct eap_wsc_state *wsc;
