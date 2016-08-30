@@ -134,6 +134,59 @@ static inline bool keywrap_authenticator_check(struct eap_wsc_state *wsc,
 	return true;
 }
 
+static uint8_t *encrypted_settings_decrypt(struct eap_wsc_state *wsc,
+						const uint8_t *pdu,
+						size_t len,
+						size_t *out_len)
+{
+	size_t encrypted_len;
+	uint8_t *decrypted;
+	unsigned int i;
+	uint8_t pad;
+
+	/* WSC 2.0.5, Section 12, Encrypted Settings:
+	 * "The Data field of the Encrypted Settings attribute includes an
+	 * initialization vector (IV) followed by a set of encrypted Wi-Fi
+	 * Simple Configuration TLV attributes."
+	 *
+	 * Account for the IV being in the beginning 16 bytes
+	 */
+	if (len < 16 )
+		return NULL;
+
+	encrypted_len = len - 16;
+	if (encrypted_len < 16 || encrypted_len % 16)
+		return NULL;
+
+	decrypted = l_malloc(encrypted_len);
+
+	l_cipher_set_iv(wsc->aes_cbc_128, pdu, 16);
+
+	if (!l_cipher_decrypt(wsc->aes_cbc_128, pdu + 16,
+						decrypted, encrypted_len))
+		goto fail;
+
+	/* Check that the pad value is sane */
+	pad = decrypted[encrypted_len - 1];
+	if (pad > encrypted_len)
+		goto fail;
+
+	for (i = 0; i < pad; i++) {
+		if (decrypted[encrypted_len - pad + i] == pad)
+			continue;
+
+		goto fail;
+	}
+
+	*out_len = encrypted_len - pad;
+
+	return decrypted;
+
+fail:
+	l_free(decrypted);
+	return NULL;
+}
+
 static int eap_wsc_probe(struct eap_state *eap, const char *name)
 {
 	struct eap_wsc_state *wsc;
