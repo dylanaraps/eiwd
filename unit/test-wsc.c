@@ -1726,6 +1726,8 @@ static void wsc_test_pbc_handshake(const void *data)
 					"c12698739faf385920ba659d524c71c9");
 	l_settings_set_string(settings, "WSC", "IV1",
 					"9a31f84b4672f2ccf63c845eed3464ec");
+	l_settings_set_string(settings, "WSC", "IV2",
+					"4e3a4cf088176989e148d4c10b96e8fd");
 
 	eapol_sm_set_8021x_config(sm, settings);
 	l_settings_free(settings);
@@ -1750,6 +1752,11 @@ static void wsc_test_pbc_handshake(const void *data)
 	VERIFY_RESET(verify, eap_wsc_m5);
 	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_m4,
 				sizeof(eap_wsc_m4));
+	assert(verify.response_sent);
+
+	VERIFY_RESET(verify, eap_wsc_m7);
+	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_m6,
+				sizeof(eap_wsc_m6));
 	assert(verify.response_sent);
 
 	eapol_cancel(1);
