@@ -56,6 +56,7 @@ enum state {
 	STATE_EXPECT_START = 0,
 	STATE_EXPECT_M2,
 	STATE_EXPECT_M4,
+	STATE_EXPECT_M6,
 };
 
 static struct l_key *dh5_generator;
@@ -140,6 +141,13 @@ static inline bool keywrap_authenticator_check(struct eap_wsc_state *wsc,
 	return true;
 }
 
+static inline void keywrap_authenticator_put(struct eap_wsc_state *wsc,
+						uint8_t *pdu, size_t len)
+{
+	l_checksum_update(wsc->hmac_auth_key, pdu, len - 12);
+	l_checksum_get_digest(wsc->hmac_auth_key, pdu + len - 8, 8);
+}
+
 static uint8_t *encrypted_settings_decrypt(struct eap_wsc_state *wsc,
 						const uint8_t *pdu,
 						size_t len,
@@ -191,6 +199,36 @@ static uint8_t *encrypted_settings_decrypt(struct eap_wsc_state *wsc,
 fail:
 	l_free(decrypted);
 	return NULL;
+}
+
+static bool encrypted_settings_encrypt(struct eap_wsc_state *wsc,
+						const uint8_t *iv,
+						const uint8_t *in,
+						size_t in_len,
+						uint8_t *out,
+						size_t *out_len)
+{
+	size_t len = 0;
+	unsigned int i;
+	uint8_t pad;
+
+	l_cipher_set_iv(wsc->aes_cbc_128, iv, 16);
+	memcpy(out, iv, 16);
+	len += 16;
+
+	memcpy(out + len, in, in_len);
+	len += in_len;
+
+	pad = 16 - in_len % 16;
+
+	for (i = 0; i < pad; i++)
+		out[len++] = pad;
+
+	if (!l_cipher_encrypt(wsc->aes_cbc_128, out + 16, out + 16, len - 16))
+		return false;
+
+	*out_len = len;
+	return true;
 }
 
 static int eap_wsc_probe(struct eap_state *eap, const char *name)
@@ -270,6 +308,45 @@ static void eap_wsc_send_nack(struct eap_state *eap,
 		return;
 }
 
+static void eap_wsc_send_m5(struct eap_state *eap,
+				const uint8_t *m4_pdu, size_t m4_len)
+{
+	struct eap_wsc_state *wsc = eap_get_data(eap);
+	struct wsc_m5_encrypted_settings m5es;
+	struct wsc_m5 m5;
+	uint8_t *pdu;
+	size_t pdu_len;
+	/* 20 for SNonce, 12 for Authenticator, 16 for IV + up to 16 pad */
+	uint8_t encrypted[64];
+	size_t encrypted_len;
+	bool r;
+
+	memcpy(m5es.e_snonce1, wsc->e_snonce1, sizeof(wsc->e_snonce1));
+	pdu = wsc_build_m5_encrypted_settings(&m5es, &pdu_len);
+	if (!pdu)
+		return;
+
+	keywrap_authenticator_put(wsc, pdu, pdu_len);
+	r = encrypted_settings_encrypt(wsc, wsc->iv1, pdu, pdu_len,
+						encrypted, &encrypted_len);
+	l_free(pdu);
+
+	if (!r)
+		return;
+
+	m5.version2 = true;
+	memcpy(m5.registrar_nonce, wsc->m2->registrar_nonce,
+						sizeof(m5.registrar_nonce));
+
+	pdu = wsc_build_m5(&m5, encrypted, encrypted_len, &pdu_len);
+	if (!pdu)
+		return;
+
+	authenticator_put(wsc, m4_pdu, m4_len, pdu, pdu_len);
+	eap_wsc_send_response(eap, pdu, pdu_len);
+	wsc->state = STATE_EXPECT_M6;
+}
+
 static void eap_wsc_handle_m4(struct eap_state *eap,
 					const uint8_t *pdu, size_t len)
 {
@@ -333,6 +410,8 @@ static void eap_wsc_handle_m4(struct eap_state *eap,
 
 	/* Now store R_Hash2 so we can verify it when we receive M6 */
 	memcpy(wsc->r_hash2, m4.r_hash2, sizeof(m4.r_hash2));
+
+	eap_wsc_send_m5(eap, pdu, len);
 
 	return;
 
@@ -564,6 +643,8 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 		break;
 	case STATE_EXPECT_M4:
 		eap_wsc_handle_m4(eap, pkt + 2, len - 2);
+		break;
+	case STATE_EXPECT_M6:
 		break;
 	}
 }
