@@ -148,6 +148,35 @@ static inline void keywrap_authenticator_put(struct eap_wsc_state *wsc,
 	l_checksum_get_digest(wsc->hmac_auth_key, pdu + len - 8, 8);
 }
 
+static inline bool r_hash_check(struct eap_wsc_state *wsc,
+				uint8_t *r_snonce,
+				uint8_t *psk,
+				uint8_t *r_hash_expected)
+{
+	struct iovec iov[4];
+	uint8_t r_hash[32];
+
+	/*
+	 * WSC 2.0.5, Section 7.4:
+	 * The Registrar creates two 128-bit secret nonces, R-S1, R-S2 and
+	 * then computes
+	 * R-Hash1 = HMACAuthKey(R-S1 || PSK1 || PKE || PKR)
+	 * R-Hash2 = HMACAuthKey(R-S2 || PSK2 || PKE || PKR)
+	 */
+	iov[0].iov_base = r_snonce;
+	iov[0].iov_len = 16;
+	iov[1].iov_base = psk;
+	iov[1].iov_len = 16;
+	iov[2].iov_base = wsc->m1->public_key;
+	iov[2].iov_len = sizeof(wsc->m1->public_key);
+	iov[3].iov_base = wsc->m2->public_key;
+	iov[3].iov_len = sizeof(wsc->m2->public_key);
+	l_checksum_updatev(wsc->hmac_auth_key, iov, 4);
+	l_checksum_get_digest(wsc->hmac_auth_key, r_hash, sizeof(r_hash));
+
+	return !memcmp(r_hash, r_hash_expected, sizeof(r_hash));
+}
+
 static uint8_t *encrypted_settings_decrypt(struct eap_wsc_state *wsc,
 						const uint8_t *pdu,
 						size_t len,
@@ -356,8 +385,6 @@ static void eap_wsc_handle_m4(struct eap_state *eap,
 	uint8_t *decrypted;
 	size_t decrypted_len;
 	struct wsc_m4_encrypted_settings m4es;
-	struct iovec iov[4];
-	uint8_t r_hash1[32];
 
 	/* Spec unclear what to do here, see comments in eap_wsc_send_nack */
 	if (wsc_parse_m4(pdu, len, &m4, &encrypted) != 0) {
@@ -382,27 +409,8 @@ static void eap_wsc_handle_m4(struct eap_state *eap,
 
 	l_free(decrypted);
 
-	/*
-	 * Since we have obtained R-SNonce1, we can now verify R-Hash1.
-	 *
-	 * WSC 2.0.5, Section 7.4:
-	 * The Registrar creates two 128-bit secret nonces, R-S1, R-S2 and
-	 * then computes
-	 * R-Hash1 = HMACAuthKey(R-S1 || PSK1 || PKE || PKR)
-	 * R-Hash2 = HMACAuthKey(R-S2 || PSK2 || PKE || PKR)
-	 */
-	iov[0].iov_base = m4es.r_snonce1;
-	iov[0].iov_len = sizeof(m4es.r_snonce1);
-	iov[1].iov_base = wsc->psk1;
-	iov[1].iov_len = sizeof(wsc->psk1);
-	iov[2].iov_base = wsc->m1->public_key;
-	iov[2].iov_len = sizeof(wsc->m1->public_key);
-	iov[3].iov_base = wsc->m2->public_key;
-	iov[3].iov_len = sizeof(wsc->m2->public_key);
-	l_checksum_updatev(wsc->hmac_auth_key, iov, 4);
-	l_checksum_get_digest(wsc->hmac_auth_key, r_hash1, sizeof(r_hash1));
-
-	if (memcmp(r_hash1, m4.r_hash1, sizeof(r_hash1))) {
+	/* Since we have obtained R-SNonce1, we can now verify R-Hash1. */
+	if (!r_hash_check(wsc, m4es.r_snonce1, wsc->psk1, m4.r_hash1)) {
 		eap_wsc_send_nack(eap,
 			WSC_CONFIGURATION_ERROR_DEVICE_PASSWORD_AUTH_FAILURE);
 		return;
@@ -410,9 +418,7 @@ static void eap_wsc_handle_m4(struct eap_state *eap,
 
 	/* Now store R_Hash2 so we can verify it when we receive M6 */
 	memcpy(wsc->r_hash2, m4.r_hash2, sizeof(m4.r_hash2));
-
 	eap_wsc_send_m5(eap, pdu, len);
-
 	return;
 
 invalid_settings:
