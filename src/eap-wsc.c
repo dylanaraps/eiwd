@@ -70,6 +70,8 @@ struct eap_wsc_state {
 	char *device_password;
 	uint8_t e_snonce1[16];
 	uint8_t e_snonce2[16];
+	uint8_t iv1[16];
+	uint8_t iv2[16];
 	uint8_t psk1[16];
 	uint8_t psk2[16];
 	uint8_t r_hash2[32];
@@ -780,6 +782,12 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 
 	if (!load_hexencoded(settings, "E-SNonce2", wsc->e_snonce2, 16))
 		l_getrandom(wsc->e_snonce2, 16);
+
+	if (!load_hexencoded(settings, "IV1", wsc->iv1, 16))
+		l_getrandom(wsc->iv1, 16);
+
+	if (!load_hexencoded(settings, "IV2", wsc->iv2, 16))
+		l_getrandom(wsc->iv2, 16);
 
 	return true;
 }
