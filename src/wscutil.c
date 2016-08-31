@@ -1201,6 +1201,33 @@ int wsc_parse_m5_encrypted_settings(const uint8_t *pdu, uint32_t len,
 			WSC_ATTR_INVALID);
 }
 
+int wsc_parse_m6(const uint8_t *pdu, uint32_t len, struct wsc_m6 *out,
+						struct iovec *out_encrypted)
+{
+	int r;
+	struct wsc_wfa_ext_iter iter;
+	uint8_t version;
+	enum wsc_message_type msg_type;
+
+	memset(out, 0, sizeof(struct wsc_m6));
+
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter,
+		WSC_ATTR_AUTHENTICATOR, out->authenticator,
+		REQUIRED(VERSION, &version),
+		REQUIRED(MESSAGE_TYPE, &msg_type),
+		REQUIRED(ENROLLEE_NONCE, &out->enrollee_nonce),
+		REQUIRED(ENCRYPTED_SETTINGS, out_encrypted),
+		WSC_ATTR_INVALID);
+
+	if (r < 0)
+		return r;
+
+	if (msg_type != WSC_MESSAGE_TYPE_M6)
+		return -EBADMSG;
+
+	return 0;
+}
+
 int wsc_parse_nack(const uint8_t *pdu, uint32_t len, struct wsc_nack *out)
 {
 	int r;
