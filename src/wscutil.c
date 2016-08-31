@@ -1629,6 +1629,13 @@ static void build_r_snonce1(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_bytes(builder, nonce, 16);
 }
 
+static void build_r_snonce2(struct wsc_attr_builder *builder,
+							const uint8_t *nonce)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_R_SNONCE2);
+	wsc_attr_builder_put_bytes(builder, nonce, 16);
+}
+
 static void build_serial_number(struct wsc_attr_builder *builder,
 						const char *serial_number)
 {
@@ -1921,6 +1928,19 @@ done:
 
 	ret = wsc_attr_builder_free(builder, false, out_len);
 	return ret;
+}
+
+uint8_t *wsc_build_m6_encrypted_settings(
+				const struct wsc_m6_encrypted_settings *in,
+				size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+
+	builder = wsc_attr_builder_new(256);
+	build_r_snonce2(builder, in->r_snonce2);
+	build_key_wrap_authenticator(builder, in->authenticator);
+
+	return wsc_attr_builder_free(builder, false, out_len);
 }
 
 uint8_t *wsc_build_nack(const struct wsc_nack *nack, size_t *out_len)
