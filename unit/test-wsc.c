@@ -1499,6 +1499,43 @@ static void wsc_test_build_m6(const void *data)
 	l_free(out);
 }
 
+static const unsigned char m6_encrypted_settings[] = {
+	0x10, 0x40, 0x00, 0x10, 0x57, 0x29, 0x13, 0xb5, 0x89, 0xf1, 0x50, 0x7e,
+	0x4d, 0x5c, 0x88, 0xda, 0x25, 0x9b, 0xce, 0xf0, 0x10, 0x1e, 0x00, 0x08,
+	0x72, 0x8c, 0x3c, 0xf8, 0xd4, 0xd2, 0xb1, 0xa1,
+};
+
+struct m6_encrypted_settings_data {
+	struct wsc_m6_encrypted_settings expected;
+	const void *pdu;
+	unsigned int len;
+};
+
+static const struct m6_encrypted_settings_data m6_encrypted_settings_data_1 = {
+	.pdu = m6_encrypted_settings,
+	.len = sizeof(m6_encrypted_settings),
+	.expected = {
+		.r_snonce2 = { 0x57, 0x29, 0x13, 0xb5, 0x89, 0xf1, 0x50, 0x7e,
+			0x4d, 0x5c, 0x88, 0xda, 0x25, 0x9b, 0xce, 0xf0 },
+		.authenticator = { 0x72, 0x8c, 0x3c, 0xf8, 0xd4, 0xd2,
+					0xb1, 0xa1 },
+	},
+};
+
+static void wsc_test_parse_m6_encrypted_settings(const void *data)
+{
+	const struct m6_encrypted_settings_data *test = data;
+	struct wsc_m6_encrypted_settings m6es;
+	const struct wsc_m6_encrypted_settings *expected = &test->expected;
+	int r;
+
+	r = wsc_parse_m6_encrypted_settings(test->pdu, test->len, &m6es);
+	assert(r == 0);
+
+	assert(!memcmp(expected->r_snonce2, m6es.r_snonce2, 16));
+	assert(!memcmp(expected->authenticator, m6es.authenticator, 8));
+}
+
 static const uint8_t eap_identity_req[] = {
 	0x01, 0x00, 0x00, 0x05, 0x01, 0x00, 0x00, 0x05, 0x01
 };
@@ -1727,6 +1764,10 @@ int main(int argc, char *argv[])
 
 	l_test_add("/wsc/parse/m6 1", wsc_test_parse_m6, &m6_data_1);
 	l_test_add("/wsc/build/m6 1", wsc_test_build_m6, &m6_data_1);
+
+	l_test_add("/wsc/parse/m6 encrypted settings 1",
+			wsc_test_parse_m6_encrypted_settings,
+			&m6_encrypted_settings_data_1);
 
 	l_test_add("/wsc/handshake/PBC Handshake Test",
 						wsc_test_pbc_handshake, NULL);
