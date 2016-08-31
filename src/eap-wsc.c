@@ -63,6 +63,7 @@ static struct l_key *dh5_prime;
 
 struct eap_wsc_state {
 	struct wsc_m1 *m1;
+	struct wsc_m2 *m2;
 	uint8_t *sent_pdu;
 	size_t sent_len;
 	struct l_key *private;
@@ -218,6 +219,8 @@ static void eap_wsc_remove(struct eap_state *eap)
 	l_cipher_free(wsc->aes_cbc_128);
 
 	l_free(wsc->m1);
+	l_free(wsc->m2);
+
 	l_free(wsc);
 }
 
@@ -263,10 +266,10 @@ static void eap_wsc_send_nack(struct eap_state *eap,
 }
 
 static void eap_wsc_send_m3(struct eap_state *eap,
-				const uint8_t *m2_pdu, size_t m2_len,
-				const struct wsc_m2 *m2)
+				const uint8_t *m2_pdu, size_t m2_len)
 {
 	struct eap_wsc_state *wsc = eap_get_data(eap);
+	struct wsc_m2 *m2 = wsc->m2;
 	uint8_t psk1[16];
 	uint8_t psk2[16];
 	size_t len;
@@ -311,7 +314,7 @@ static void eap_wsc_send_m3(struct eap_state *eap,
 	iov[1].iov_len = sizeof(psk1);
 	iov[2].iov_base = wsc->m1->public_key;
 	iov[2].iov_len = sizeof(wsc->m1->public_key);
-	iov[3].iov_base = (void *) m2->public_key;
+	iov[3].iov_base = m2->public_key;
 	iov[3].iov_len = sizeof(m2->public_key);
 	l_checksum_updatev(wsc->hmac_auth_key, iov, 4);
 	l_checksum_get_digest(wsc->hmac_auth_key,
@@ -338,7 +341,6 @@ static void eap_wsc_handle_m2(struct eap_state *eap,
 					const uint8_t *pdu, size_t len)
 {
 	struct eap_wsc_state *wsc = eap_get_data(eap);
-	struct wsc_m2 m2;
 	struct l_key *remote_public;
 	uint8_t shared_secret[192];
 	size_t shared_secret_len = sizeof(shared_secret);
@@ -350,14 +352,18 @@ static void eap_wsc_handle_m2(struct eap_state *eap,
 	struct wsc_session_key keys;
 	bool r;
 
+	/* TODO: Check to see if message is M2D first */
+	if (!wsc->m2)
+		wsc->m2 = l_new(struct wsc_m2, 1);
+
 	/* Spec unclear what to do here, see comments in eap_wsc_send_nack */
-	if (wsc_parse_m2(pdu, len, &m2) != 0) {
+	if (wsc_parse_m2(pdu, len, wsc->m2) != 0) {
 		eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_NO_ERROR);
 		return;
 	}
 
-	remote_public = l_key_new(L_KEY_RAW,
-					m2.public_key, sizeof(m2.public_key));
+	remote_public = l_key_new(L_KEY_RAW, wsc->m2->public_key,
+						sizeof(wsc->m2->public_key));
 	if (!remote_public)
 		return;
 
@@ -389,7 +395,7 @@ static void eap_wsc_handle_m2(struct eap_state *eap,
 	iov[0].iov_len = 16;
 	iov[1].iov_base = wsc->m1->addr;
 	iov[1].iov_len = 6;
-	iov[2].iov_base = m2.registrar_nonce;
+	iov[2].iov_base = wsc->m2->registrar_nonce;
 	iov[2].iov_len = 16;
 
 	l_checksum_updatev(hmac_sha256, iov, 3);
@@ -411,7 +417,7 @@ static void eap_wsc_handle_m2(struct eap_state *eap,
 	}
 
 	/* Everything checks out, lets build M3 */
-	eap_wsc_send_m3(eap, pdu, len, &m2);
+	eap_wsc_send_m3(eap, pdu, len);
 
 	/*
 	 * AuthKey is uploaded into the kernel, once we upload KeyWrapKey,
