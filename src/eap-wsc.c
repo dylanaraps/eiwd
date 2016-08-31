@@ -337,6 +337,54 @@ static void eap_wsc_send_nack(struct eap_state *eap,
 		return;
 }
 
+static void eap_wsc_handle_m6(struct eap_state *eap,
+					const uint8_t *pdu, size_t len)
+{
+	struct eap_wsc_state *wsc = eap_get_data(eap);
+	struct wsc_m6 m6;
+	struct iovec encrypted;
+	uint8_t *decrypted;
+	size_t decrypted_len;
+	struct wsc_m6_encrypted_settings m6es;
+
+	/* Spec unclear what to do here, see comments in eap_wsc_send_nack */
+	if (wsc_parse_m6(pdu, len, &m6, &encrypted) != 0) {
+		eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_NO_ERROR);
+		return;
+	}
+
+	if (!authenticator_check(wsc, pdu, len))
+		return;
+
+	decrypted = encrypted_settings_decrypt(wsc, encrypted.iov_base,
+							encrypted.iov_len,
+							&decrypted_len);
+	if (!decrypted)
+		goto send_nack;
+
+	if (wsc_parse_m6_encrypted_settings(decrypted, decrypted_len, &m6es))
+		goto invalid_settings;
+
+	if (!keywrap_authenticator_check(wsc, decrypted, decrypted_len))
+		goto invalid_settings;
+
+	l_free(decrypted);
+
+	/* We now have R-SNonce2, verify R-Hash2 stored in eap_wsc_handle_m4 */
+	if (!r_hash_check(wsc, m6es.r_snonce2, wsc->psk2, wsc->r_hash2)) {
+		eap_wsc_send_nack(eap,
+			WSC_CONFIGURATION_ERROR_DEVICE_PASSWORD_AUTH_FAILURE);
+		return;
+	}
+
+	return;
+
+invalid_settings:
+	l_free(decrypted);
+send_nack:
+	eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_DECRYPTION_CRC_FAILURE);
+}
+
 static void eap_wsc_send_m5(struct eap_state *eap,
 				const uint8_t *m4_pdu, size_t m4_len)
 {
@@ -651,6 +699,7 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 		eap_wsc_handle_m4(eap, pkt + 2, len - 2);
 		break;
 	case STATE_EXPECT_M6:
+		eap_wsc_handle_m6(eap, pkt + 2, len - 2);
 		break;
 	}
 }
