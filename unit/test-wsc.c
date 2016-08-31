@@ -1536,6 +1536,21 @@ static void wsc_test_parse_m6_encrypted_settings(const void *data)
 	assert(!memcmp(expected->authenticator, m6es.authenticator, 8));
 }
 
+static void wsc_test_build_m6_encrypted_settings(const void *data)
+{
+	const struct m6_encrypted_settings_data *test = data;
+	uint8_t *out;
+	size_t out_len;
+
+	out = wsc_build_m6_encrypted_settings(&test->expected, &out_len);
+	assert(out);
+
+	assert(out_len == test->len);
+	assert(!memcmp(test->pdu, out, test->len));
+
+	l_free(out);
+}
+
 static const uint8_t eap_identity_req[] = {
 	0x01, 0x00, 0x00, 0x05, 0x01, 0x00, 0x00, 0x05, 0x01
 };
@@ -1767,6 +1782,9 @@ int main(int argc, char *argv[])
 
 	l_test_add("/wsc/parse/m6 encrypted settings 1",
 			wsc_test_parse_m6_encrypted_settings,
+			&m6_encrypted_settings_data_1);
+	l_test_add("/wsc/build/m6 encrypted settings 1",
+			wsc_test_build_m6_encrypted_settings,
 			&m6_encrypted_settings_data_1);
 
 	l_test_add("/wsc/handshake/PBC Handshake Test",
