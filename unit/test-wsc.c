@@ -1642,6 +1642,17 @@ static const uint8_t eap_wsc_start[] = {
 	0x00, 0x00, 0x00, 0x01, 0x01, 0x00,
 };
 
+struct verify_data {
+	bool response_sent;
+	const void *expected;
+	size_t expected_len;
+};
+
+#define VERIFY_RESET(verify, e)				\
+	verify.response_sent = false;			\
+	verify.expected = e;				\
+	verify.expected_len = sizeof(e)
+
 static void verify_deauthenticate(uint32_t ifindex, const uint8_t *aa,
 				const uint8_t *spa, uint16_t reason_code,
 				void *user_data)
@@ -1649,67 +1660,19 @@ static void verify_deauthenticate(uint32_t ifindex, const uint8_t *aa,
 	assert(true);
 }
 
-static int verify_8021x_identity_resp(uint32_t ifindex, const uint8_t *aa_addr,
+static int verify_8021x(uint32_t ifindex, const uint8_t *aa_addr,
 					const uint8_t *sta_addr,
 					const struct eapol_frame *ef,
 					void *user_data)
 {
-	bool *response_sent = user_data;
+	struct verify_data *data = user_data;
 	size_t len = sizeof(struct eapol_header) +
 		L_BE16_TO_CPU(ef->header.packet_len);
 
-	assert(len == sizeof(eap_identity_resp));
-	assert(!memcmp(ef, eap_identity_resp, sizeof(eap_identity_resp)));
+	assert(len == data->expected_len);
+	assert(!memcmp(ef, data->expected, data->expected_len));
 
-	*response_sent = true;
-
-	return 0;
-}
-
-static int verify_8021x_wsc_m1(uint32_t ifindex, const uint8_t *aa_addr,
-			const uint8_t *sta_addr, const struct eapol_frame *ef,
-			void *user_data)
-{
-	bool *response_sent = user_data;
-	size_t len = sizeof(struct eapol_header) +
-		L_BE16_TO_CPU(ef->header.packet_len);
-
-	assert(len == sizeof(eap_wsc_m1_2));
-	assert(!memcmp(ef, eap_wsc_m1_2, sizeof(eap_wsc_m1_2)));
-
-	*response_sent = true;
-
-	return 0;
-}
-
-static int verify_8021x_wsc_m3(uint32_t ifindex, const uint8_t *aa_addr,
-			const uint8_t *sta_addr, const struct eapol_frame *ef,
-			void *user_data)
-{
-	bool *response_sent = user_data;
-	size_t len = sizeof(struct eapol_header) +
-		L_BE16_TO_CPU(ef->header.packet_len);
-
-	assert(len == sizeof(eap_wsc_m3));
-	assert(!memcmp(ef, eap_wsc_m3, sizeof(eap_wsc_m3)));
-
-	*response_sent = true;
-
-	return 0;
-}
-
-static int verify_8021x_wsc_m5(uint32_t ifindex, const uint8_t *aa_addr,
-			const uint8_t *sta_addr, const struct eapol_frame *ef,
-			void *user_data)
-{
-	bool *response_sent = user_data;
-	size_t len = sizeof(struct eapol_header) +
-		L_BE16_TO_CPU(ef->header.packet_len);
-
-	assert(len == sizeof(eap_wsc_m5));
-	assert(!memcmp(ef, eap_wsc_m5, sizeof(eap_wsc_m5)));
-
-	*response_sent = true;
+	data->response_sent = true;
 
 	return 0;
 }
@@ -1718,7 +1681,7 @@ static void wsc_test_pbc_handshake(const void *data)
 {
 	static uint8_t ap_address[] = { 0x24, 0xa2, 0xe1, 0xec, 0x17, 0x04 };
 	static uint8_t sta_address[] = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 };
-	bool response_sent;
+	struct verify_data verify;
 	struct eapol_sm *sm;
 	char *hex;
 	struct l_settings *settings;
@@ -1729,7 +1692,8 @@ static void wsc_test_pbc_handshake(const void *data)
 	sm = eapol_sm_new();
 	eapol_sm_set_authenticator_address(sm, ap_address);
 	eapol_sm_set_supplicant_address(sm, sta_address);
-	eapol_sm_set_tx_user_data(sm, &response_sent);
+	__eapol_set_tx_packet_func(verify_8021x);
+	eapol_sm_set_tx_user_data(sm, &verify);
 
 	settings = l_settings_new();
 	l_settings_set_string(settings, "Security", "EAP-Identity",
@@ -1768,29 +1732,25 @@ static void wsc_test_pbc_handshake(const void *data)
 
 	eapol_start(1, NULL, sm);
 
-	__eapol_set_tx_packet_func(verify_8021x_identity_resp);
-	response_sent = false;
+	VERIFY_RESET(verify, eap_identity_resp);
 	__eapol_rx_packet(1, sta_address, ap_address, eap_identity_req,
 				sizeof(eap_identity_req));
-	assert(response_sent);
+	assert(verify.response_sent);
 
-	__eapol_set_tx_packet_func(verify_8021x_wsc_m1);
-	response_sent = false;
+	VERIFY_RESET(verify, eap_wsc_m1_2);
 	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_start,
 				sizeof(eap_wsc_start));
-	assert(response_sent);
+	assert(verify.response_sent);
 
-	__eapol_set_tx_packet_func(verify_8021x_wsc_m3);
-	response_sent = false;
+	VERIFY_RESET(verify, eap_wsc_m3);
 	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_m2_2,
 				sizeof(eap_wsc_m2_2));
-	assert(response_sent);
+	assert(verify.response_sent);
 
-	__eapol_set_tx_packet_func(verify_8021x_wsc_m5);
-	response_sent = false;
+	VERIFY_RESET(verify, eap_wsc_m5);
 	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_m4,
 				sizeof(eap_wsc_m4));
-	assert(response_sent);
+	assert(verify.response_sent);
 
 	eapol_cancel(1);
 	eapol_exit();
