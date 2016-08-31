@@ -1690,6 +1690,22 @@ static void wsc_test_parse_m8(const void *data)
 					encrypted.iov_base, encrypted.iov_len));
 }
 
+static void wsc_test_build_m8(const void *data)
+{
+	const struct m8_data *test = data;
+	uint8_t *out;
+	size_t out_len;
+
+	out = wsc_build_m8(&test->expected, test->expected_encrypted,
+				test->expected_encrypted_size, &out_len);
+	assert(out);
+
+	assert(out_len == test->len);
+	assert(!memcmp(test->pdu, out, test->len));
+
+	l_free(out);
+}
+
 static const uint8_t eap_identity_req[] = {
 	0x01, 0x00, 0x00, 0x05, 0x01, 0x00, 0x00, 0x05, 0x01
 };
@@ -1897,6 +1913,7 @@ int main(int argc, char *argv[])
 	l_test_add("/wsc/build/m7 1", wsc_test_build_m7, &m7_data_1);
 
 	l_test_add("/wsc/parse/m8 1", wsc_test_parse_m8, &m8_data_1);
+	l_test_add("/wsc/build/m8 1", wsc_test_build_m8, &m8_data_1);
 
 	l_test_add("/wsc/handshake/PBC Handshake Test",
 						wsc_test_pbc_handshake, NULL);
