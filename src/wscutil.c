@@ -2055,6 +2055,32 @@ uint8_t *wsc_build_m7_encrypted_settings(
 	return wsc_attr_builder_free(builder, false, out_len);
 }
 
+uint8_t *wsc_build_m8(const struct wsc_m8 *m8, const uint8_t *encrypted,
+			size_t encrypted_len, size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+	uint8_t *ret;
+
+	builder = wsc_attr_builder_new(256);
+	build_version(builder, 0x10);
+	build_message_type(builder, WSC_MESSAGE_TYPE_M8);
+	build_enrollee_nonce(builder, m8->enrollee_nonce);
+
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_ENCRYPTED_SETTINGS);
+	wsc_attr_builder_put_bytes(builder, encrypted, encrypted_len);
+
+	if (!m8->version2)
+		goto done;
+
+	START_WFA_VENDOR_EXTENSION();
+
+done:
+	build_authenticator(builder, m8->authenticator);
+
+	ret = wsc_attr_builder_free(builder, false, out_len);
+	return ret;
+}
+
 uint8_t *wsc_build_nack(const struct wsc_nack *nack, size_t *out_len)
 {
 	struct wsc_attr_builder *builder;
