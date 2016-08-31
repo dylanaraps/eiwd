@@ -72,6 +72,7 @@ struct eap_wsc_state {
 	uint8_t e_snonce2[16];
 	uint8_t psk1[16];
 	uint8_t psk2[16];
+	uint8_t r_hash2[32];
 	enum state state;
 	struct l_checksum *hmac_auth_key;
 	struct l_cipher *aes_cbc_128;
@@ -265,6 +266,78 @@ static void eap_wsc_send_nack(struct eap_state *eap,
 	 */
 	if (error == WSC_CONFIGURATION_ERROR_NO_ERROR)
 		return;
+}
+
+static void eap_wsc_handle_m4(struct eap_state *eap,
+					const uint8_t *pdu, size_t len)
+{
+	struct eap_wsc_state *wsc = eap_get_data(eap);
+	struct wsc_m4 m4;
+	struct iovec encrypted;
+	uint8_t *decrypted;
+	size_t decrypted_len;
+	struct wsc_m4_encrypted_settings m4es;
+	struct iovec iov[4];
+	uint8_t r_hash1[32];
+
+	/* Spec unclear what to do here, see comments in eap_wsc_send_nack */
+	if (wsc_parse_m4(pdu, len, &m4, &encrypted) != 0) {
+		eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_NO_ERROR);
+		return;
+	}
+
+	if (!authenticator_check(wsc, pdu, len))
+		return;
+
+	decrypted = encrypted_settings_decrypt(wsc, encrypted.iov_base,
+							encrypted.iov_len,
+							&decrypted_len);
+	if (!decrypted)
+		goto send_nack;
+
+	if (wsc_parse_m4_encrypted_settings(decrypted, decrypted_len, &m4es))
+		goto invalid_settings;
+
+	if (!keywrap_authenticator_check(wsc, decrypted, decrypted_len))
+		goto invalid_settings;
+
+	l_free(decrypted);
+
+	/*
+	 * Since we have obtained R-SNonce1, we can now verify R-Hash1.
+	 *
+	 * WSC 2.0.5, Section 7.4:
+	 * The Registrar creates two 128-bit secret nonces, R-S1, R-S2 and
+	 * then computes
+	 * R-Hash1 = HMACAuthKey(R-S1 || PSK1 || PKE || PKR)
+	 * R-Hash2 = HMACAuthKey(R-S2 || PSK2 || PKE || PKR)
+	 */
+	iov[0].iov_base = m4es.r_snonce1;
+	iov[0].iov_len = sizeof(m4es.r_snonce1);
+	iov[1].iov_base = wsc->psk1;
+	iov[1].iov_len = sizeof(wsc->psk1);
+	iov[2].iov_base = wsc->m1->public_key;
+	iov[2].iov_len = sizeof(wsc->m1->public_key);
+	iov[3].iov_base = wsc->m2->public_key;
+	iov[3].iov_len = sizeof(wsc->m2->public_key);
+	l_checksum_updatev(wsc->hmac_auth_key, iov, 4);
+	l_checksum_get_digest(wsc->hmac_auth_key, r_hash1, sizeof(r_hash1));
+
+	if (memcmp(r_hash1, m4.r_hash1, sizeof(r_hash1))) {
+		eap_wsc_send_nack(eap,
+			WSC_CONFIGURATION_ERROR_DEVICE_PASSWORD_AUTH_FAILURE);
+		return;
+	}
+
+	/* Now store R_Hash2 so we can verify it when we receive M6 */
+	memcpy(wsc->r_hash2, m4.r_hash2, sizeof(m4.r_hash2));
+
+	return;
+
+invalid_settings:
+	l_free(decrypted);
+send_nack:
+	eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_DECRYPTION_CRC_FAILURE);
 }
 
 static void eap_wsc_send_m3(struct eap_state *eap,
@@ -488,6 +561,7 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 		eap_wsc_handle_m2(eap, pkt + 2, len - 2);
 		break;
 	case STATE_EXPECT_M4:
+		eap_wsc_handle_m4(eap, pkt + 2, len - 2);
 		break;
 	}
 }
