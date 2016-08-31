@@ -70,6 +70,8 @@ struct eap_wsc_state {
 	char *device_password;
 	uint8_t e_snonce1[16];
 	uint8_t e_snonce2[16];
+	uint8_t psk1[16];
+	uint8_t psk2[16];
 	enum state state;
 	struct l_checksum *hmac_auth_key;
 	struct l_cipher *aes_cbc_128;
@@ -270,8 +272,6 @@ static void eap_wsc_send_m3(struct eap_state *eap,
 {
 	struct eap_wsc_state *wsc = eap_get_data(eap);
 	struct wsc_m2 *m2 = wsc->m2;
-	uint8_t psk1[16];
-	uint8_t psk2[16];
 	size_t len;
 	size_t len_half1;
 	struct wsc_m3 m3;
@@ -292,11 +292,11 @@ static void eap_wsc_send_m3(struct eap_state *eap,
 		len_half1 += 1;
 
 	l_checksum_update(wsc->hmac_auth_key, wsc->device_password, len_half1);
-	l_checksum_get_digest(wsc->hmac_auth_key, psk1, sizeof(psk1));
+	l_checksum_get_digest(wsc->hmac_auth_key, wsc->psk1, sizeof(wsc->psk1));
 
 	l_checksum_update(wsc->hmac_auth_key, wsc->device_password + len_half1,
 					len / 2);
-	l_checksum_get_digest(wsc->hmac_auth_key, psk2, sizeof(psk2));
+	l_checksum_get_digest(wsc->hmac_auth_key, wsc->psk2, sizeof(wsc->psk2));
 
 	m3.version2 = true;
 	memcpy(m3.registrar_nonce, m2->registrar_nonce,
@@ -310,8 +310,8 @@ static void eap_wsc_send_m3(struct eap_state *eap,
 	 */
 	iov[0].iov_base = wsc->e_snonce1;
 	iov[0].iov_len = sizeof(wsc->e_snonce1);
-	iov[1].iov_base = psk1;
-	iov[1].iov_len = sizeof(psk1);
+	iov[1].iov_base = wsc->psk1;
+	iov[1].iov_len = sizeof(wsc->psk1);
 	iov[2].iov_base = wsc->m1->public_key;
 	iov[2].iov_len = sizeof(wsc->m1->public_key);
 	iov[3].iov_base = m2->public_key;
@@ -322,8 +322,8 @@ static void eap_wsc_send_m3(struct eap_state *eap,
 
 	iov[0].iov_base = wsc->e_snonce2;
 	iov[0].iov_len = sizeof(wsc->e_snonce2);
-	iov[1].iov_base = psk2;
-	iov[1].iov_len = sizeof(psk2);
+	iov[1].iov_base = wsc->psk2;
+	iov[1].iov_len = sizeof(wsc->psk2);
 	l_checksum_updatev(wsc->hmac_auth_key, iov, 4);
 	l_checksum_get_digest(wsc->hmac_auth_key,
 					m3.e_hash2, sizeof(m3.e_hash2));
