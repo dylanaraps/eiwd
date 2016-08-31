@@ -1499,6 +1499,22 @@ static int verify_8021x_wsc_m3(uint32_t ifindex, const uint8_t *aa_addr,
 	return 0;
 }
 
+static int verify_8021x_wsc_m5(uint32_t ifindex, const uint8_t *aa_addr,
+			const uint8_t *sta_addr, const struct eapol_frame *ef,
+			void *user_data)
+{
+	bool *response_sent = user_data;
+	size_t len = sizeof(struct eapol_header) +
+		L_BE16_TO_CPU(ef->header.packet_len);
+
+	assert(len == sizeof(eap_wsc_m5));
+	assert(!memcmp(ef, eap_wsc_m5, sizeof(eap_wsc_m5)));
+
+	*response_sent = true;
+
+	return 0;
+}
+
 static void wsc_test_pbc_handshake(const void *data)
 {
 	static uint8_t ap_address[] = { 0x24, 0xa2, 0xe1, 0xec, 0x17, 0x04 };
@@ -1545,6 +1561,8 @@ static void wsc_test_pbc_handshake(const void *data)
 					"fdbb480ee6f572f3591cc3b364f2185b");
 	l_settings_set_string(settings, "WSC", "E-SNonce2",
 					"c12698739faf385920ba659d524c71c9");
+	l_settings_set_string(settings, "WSC", "IV1",
+					"9a31f84b4672f2ccf63c845eed3464ec");
 
 	eapol_sm_set_8021x_config(sm, settings);
 	l_settings_free(settings);
@@ -1567,6 +1585,12 @@ static void wsc_test_pbc_handshake(const void *data)
 	response_sent = false;
 	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_m2_2,
 				sizeof(eap_wsc_m2_2));
+	assert(response_sent);
+
+	__eapol_set_tx_packet_func(verify_8021x_wsc_m5);
+	response_sent = false;
+	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_m4,
+				sizeof(eap_wsc_m4));
 	assert(response_sent);
 
 	eapol_cancel(1);
