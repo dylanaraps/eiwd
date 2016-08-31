@@ -541,6 +541,8 @@ uint8_t *wsc_build_m6(const struct wsc_m6 *m6, const uint8_t *encrypted,
 uint8_t *wsc_build_m6_encrypted_settings(
 				const struct wsc_m6_encrypted_settings *in,
 				size_t *out_len);
+uint8_t *wsc_build_m7(const struct wsc_m7 *m7, const uint8_t *encrypted,
+			size_t encrypted_len, size_t *out_len);
 
 uint8_t *wsc_build_nack(const struct wsc_nack *nack, size_t *out_len);
 
