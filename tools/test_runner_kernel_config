@@ -8,6 +8,7 @@ scripts/config --enable CONFIG_CRYPTO_USER_API_AKCIPHER
 scripts/config --enable CONFIG_CRYPTO_USER_API_SKCIPHER
 scripts/config --enable CONFIG_CRYPTO_USER_API_HASH
 scripts/config --enable CONFIG_KEY_DH_OPERATIONS
+scripts/config --enable CONFIG_ASYMMETRIC_KEY_TYPE
 scripts/config --enable CONFIG_PKCS8_PRIVATE_KEY_PARSER
 
 scripts/config --enable CONFIG_HW_RANDOM_VIRTIO
