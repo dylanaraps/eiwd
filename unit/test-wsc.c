@@ -1720,8 +1720,28 @@ static const unsigned char m8_encrypted_settings[] = {
 	0x3b, 0x3b, 0xe7, 0x9e, 0x72, 0x06, 0x46,
 };
 
+struct wsc_credential creds_1[1] = {
+	{
+		.ssid = "TestWPA",
+		.ssid_len = 7,
+		.auth_type = WSC_AUTHENTICATION_TYPE_WPA2_PERSONAL,
+		.encryption_type = WSC_ENCRYPTION_TYPE_AES,
+		.network_key = { 0x34, 0x36, 0x30, 0x34, 0x44, 0x30, 0x31, 0x46,
+			0x46, 0x44, 0x42, 0x30, 0x42, 0x32, 0x39, 0x32, 0x45,
+			0x33, 0x37, 0x37, 0x33, 0x32, 0x44, 0x44, 0x34, 0x45,
+			0x31, 0x31, 0x43, 0x32, 0x34, 0x30, 0x31, 0x31, 0x35,
+			0x34, 0x32, 0x38, 0x39, 0x41, 0x30, 0x39, 0x41, 0x33,
+			0x33, 0x41, 0x44, 0x37, 0x30, 0x34, 0x31, 0x37, 0x37,
+			0x41, 0x42, 0x30, 0x44, 0x31, 0x42, 0x37, 0x35, 0x38,
+			0x44, 0x30 },
+		.network_key_len = 64,
+		.addr = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 },
+	},
+};
+
 struct m8_encrypted_settings_data {
 	struct wsc_m8_encrypted_settings expected;
+	struct wsc_credential *creds;
 	unsigned int n_creds;
 	const void *pdu;
 	unsigned int len;
@@ -1730,6 +1750,7 @@ struct m8_encrypted_settings_data {
 static const struct m8_encrypted_settings_data m8_encrypted_settings_data_1 = {
 	.pdu = m8_encrypted_settings,
 	.len = sizeof(m8_encrypted_settings),
+	.creds = creds_1,
 	.n_creds = 1,
 	.expected = {
 		.authenticator = { 0xe8, 0x3b, 0x3b, 0xe7, 0x9e, 0x72,
@@ -1744,6 +1765,7 @@ static void wsc_test_parse_m8_encrypted_settings(const void *data)
 	const struct wsc_m8_encrypted_settings *expected = &test->expected;
 	struct iovec creds[10];
 	size_t n_creds = 10;
+	size_t i;
 	int r;
 
 	r = wsc_parse_m8_encrypted_settings(test->pdu, test->len, &m8es,
@@ -1759,6 +1781,23 @@ static void wsc_test_parse_m8_encrypted_settings(const void *data)
 	}
 
 	assert(n_creds == test->n_creds);
+
+	for (i = 0; i < n_creds; i++) {
+		struct wsc_credential cred;
+
+		assert(!wsc_parse_credential(creds[i].iov_base,
+						creds[i].iov_len,
+						&cred));
+
+		assert(test->creds[i].ssid_len == cred.ssid_len);
+		assert(!memcmp(test->creds[i].ssid, cred.ssid, cred.ssid_len));
+		assert(test->creds[i].auth_type == cred.auth_type);
+		assert(test->creds[i].encryption_type == cred.encryption_type);
+		assert(test->creds[i].network_key_len == cred.network_key_len);
+		assert(!memcmp(test->creds[i].network_key, cred.network_key,
+							cred.network_key_len));
+		assert(!memcmp(test->creds[i].addr, cred.addr, 6));
+	}
 
 	assert(!memcmp(expected->authenticator, m8es.authenticator, 8));
 }
