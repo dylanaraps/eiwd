@@ -498,6 +498,13 @@ struct wsc_m8 {
 	uint8_t authenticator[8];
 };
 
+struct wsc_m8_encrypted_settings {
+	uint8_t new_password[64];
+	uint8_t new_password_len;
+	enum wsc_device_password_id device_password_id;
+	uint8_t authenticator[8];
+};
+
 struct wsc_nack {
 	bool version2;
 	uint8_t enrollee_nonce[16];
@@ -533,6 +540,9 @@ int wsc_parse_m7_encrypted_settings(const uint8_t *pdu, uint32_t len,
 					struct wsc_m7_encrypted_settings *out);
 int wsc_parse_m8(const uint8_t *pdu, uint32_t len, struct wsc_m8 *out,
 						struct iovec *out_encrypted);
+int wsc_parse_m8_encrypted_settings(const uint8_t *pdu, uint32_t len,
+					struct wsc_m8_encrypted_settings *out,
+					struct iovec *iov, size_t *iovcnt);
 
 int wsc_parse_nack(const uint8_t *pdu, uint32_t len, struct wsc_nack *out);
 

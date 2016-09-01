@@ -361,6 +361,21 @@ static bool extract_model_number(struct wsc_attr_iter *iter, void *data)
 	return extract_ascii_string(iter, data, 32);
 }
 
+static bool extract_new_password(struct wsc_attr_iter *iter, void *data)
+{
+	struct iovec *new_password = data;
+	unsigned int len;
+
+	len = wsc_attr_iter_get_length(iter);
+	if (len > 64)
+		return false;
+
+	new_password->iov_len = len;
+	new_password->iov_base = (void *) wsc_attr_iter_get_data(iter);
+
+	return true;
+}
+
 static bool extract_os_version(struct wsc_attr_iter *iter, void *data)
 {
 	uint32_t v;
@@ -530,6 +545,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_model_name;
 	case WSC_ATTR_MODEL_NUMBER:
 		return extract_model_number;
+	case WSC_ATTR_NEW_PASSWORD:
+		return extract_new_password;
 	case WSC_ATTR_OS_VERSION:
 		return extract_os_version;
 	case WSC_ATTR_PUBLIC_KEY:
@@ -1302,6 +1319,80 @@ int wsc_parse_m8(const uint8_t *pdu, uint32_t len, struct wsc_m8 *out,
 
 	if (msg_type != WSC_MESSAGE_TYPE_M8)
 		return -EBADMSG;
+
+	return 0;
+}
+
+int wsc_parse_m8_encrypted_settings(const uint8_t *pdu, uint32_t len,
+					struct wsc_m8_encrypted_settings *out,
+					struct iovec *iov, size_t *iovcnt)
+{
+	struct wsc_attr_iter iter;
+	size_t n_cred = 0;
+
+	memset(out, 0, sizeof(*out));
+	wsc_attr_iter_init(&iter, pdu, len);
+
+	if (!wsc_attr_iter_next(&iter))
+		return -EBADMSG;
+
+	while (wsc_attr_iter_get_type(&iter) == WSC_ATTR_CREDENTIAL) {
+		if (n_cred < *iovcnt) {
+			iov[n_cred].iov_base =
+				(void *) wsc_attr_iter_get_data(&iter);
+			iov[n_cred].iov_len = wsc_attr_iter_get_length(&iter);
+			n_cred += 1;
+		}
+
+		if (!wsc_attr_iter_next(&iter))
+			return -EBADMSG;
+	}
+
+	/* At least one Credential element is required */
+	if (!n_cred)
+		return -EBADMSG;
+
+	if (wsc_attr_iter_get_type(&iter) == WSC_ATTR_NEW_PASSWORD) {
+		struct iovec np;
+
+		if (!extract_new_password(&iter, &np))
+			return -EBADMSG;
+
+		memcpy(out->new_password, np.iov_base, np.iov_len);
+		out->new_password_len = np.iov_len;
+
+		if (!wsc_attr_iter_next(&iter))
+			return -EBADMSG;
+
+		/*
+		 * According to WSC 2.0.5, Table 21, Device Password ID is
+		 * "Required if New Password is included."
+		 */
+		if (wsc_attr_iter_get_type(&iter) !=
+					WSC_ATTR_DEVICE_PASSWORD_ID)
+			return -EBADMSG;
+	}
+
+	if (wsc_attr_iter_get_type(&iter) == WSC_ATTR_DEVICE_PASSWORD_ID) {
+		extract_device_password_id(&iter, &out->device_password_id);
+
+		if (!wsc_attr_iter_next(&iter))
+			return -EBADMSG;
+	}
+
+	while (wsc_attr_iter_get_type(&iter) !=
+					WSC_ATTR_KEY_WRAP_AUTHENTICATOR) {
+		if (!wsc_attr_iter_next(&iter))
+			return -EBADMSG;
+	}
+
+	if (!extract_authenticator(&iter, &out->authenticator))
+		return -EBADMSG;
+
+	if (wsc_attr_iter_get_pos(&iter) != len)
+		return -EBADMSG;
+
+	*iovcnt = n_cred;
 
 	return 0;
 }
