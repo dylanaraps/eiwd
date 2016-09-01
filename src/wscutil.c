@@ -361,6 +361,21 @@ static bool extract_model_number(struct wsc_attr_iter *iter, void *data)
 	return extract_ascii_string(iter, data, 32);
 }
 
+static bool extract_network_key(struct wsc_attr_iter *iter, void *data)
+{
+	struct iovec *network_key = data;
+	unsigned int len;
+
+	len = wsc_attr_iter_get_length(iter);
+	if (len > 64)
+		return false;
+
+	network_key->iov_len = len;
+	network_key->iov_base = (void *) wsc_attr_iter_get_data(iter);
+
+	return true;
+}
+
 static bool extract_new_password(struct wsc_attr_iter *iter, void *data)
 {
 	struct iovec *new_password = data;
@@ -466,6 +481,21 @@ static bool extract_serial_number(struct wsc_attr_iter *iter, void *data)
 	return extract_ascii_string(iter, data, 32);
 }
 
+static bool extract_ssid(struct wsc_attr_iter *iter, void *data)
+{
+	struct iovec *ssid = data;
+	unsigned int len;
+
+	len = wsc_attr_iter_get_length(iter);
+	if (len > 32)
+		return false;
+
+	ssid->iov_len = len;
+	ssid->iov_base = (void *) wsc_attr_iter_get_data(iter);
+
+	return true;
+}
+
 static bool extract_version(struct wsc_attr_iter *iter, void *data)
 {
 	uint8_t *out = data;
@@ -507,6 +537,7 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_bool;
 	case WSC_ATTR_ASSOCIATION_STATE:
 		return extract_association_state;
+	case WSC_ATTR_AUTHENTICATION_TYPE:
 	case WSC_ATTR_AUTHENTICATION_TYPE_FLAGS:
 		return extract_uint16;
 	case WSC_ATTR_AUTHENTICATOR:
@@ -529,6 +560,7 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_nonce;
 	case WSC_ATTR_ENCRYPTED_SETTINGS:
 		return extract_encrypted_settings;
+	case WSC_ATTR_ENCRYPTION_TYPE:
 	case WSC_ATTR_ENCRYPTION_TYPE_FLAGS:
 		return extract_uint16;
 	case WSC_ATTR_ENROLLEE_NONCE:
@@ -545,8 +577,14 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_model_name;
 	case WSC_ATTR_MODEL_NUMBER:
 		return extract_model_number;
+	case WSC_ATTR_NETWORK_INDEX:
+		return extract_uint8;
+	case WSC_ATTR_NETWORK_KEY:
+		return extract_network_key;
 	case WSC_ATTR_NEW_PASSWORD:
 		return extract_new_password;
+	case WSC_ATTR_NETWORK_KEY_INDEX:
+		return extract_uint8;
 	case WSC_ATTR_OS_VERSION:
 		return extract_os_version;
 	case WSC_ATTR_PUBLIC_KEY:
@@ -575,6 +613,8 @@ static attr_handler handler_for_type(enum wsc_attr type)
 		return extract_uint16;
 	case WSC_ATTR_SERIAL_NUMBER:
 		return extract_serial_number;
+	case WSC_ATTR_SSID:
+		return extract_ssid;
 	case WSC_ATTR_VERSION:
 		return extract_version;
 	case WSC_ATTR_WSC_STATE:
@@ -846,6 +886,48 @@ static bool wfa_extract_registrar_configuration_methods(
 
 #define VERSION2(attr, out) \
 	WSC_ATTR_ ## attr, ATTR_FLAG_VERSION2, out
+
+int wsc_parse_credential(const uint8_t *pdu, uint32_t len,
+						struct wsc_credential *out)
+{
+	uint8_t network_index;
+	struct iovec ssid;
+	uint8_t network_key_index;
+	struct iovec network_key;
+	int r;
+
+	memset(out, 0, sizeof(*out));
+
+	r = wsc_parse_attrs(pdu, len, NULL, NULL, 0, NULL,
+		REQUIRED(NETWORK_INDEX, &network_index),
+		REQUIRED(SSID, &ssid),
+		REQUIRED(AUTHENTICATION_TYPE, &out->auth_type),
+		REQUIRED(ENCRYPTION_TYPE, &out->encryption_type),
+		OPTIONAL(NETWORK_KEY_INDEX, &network_key_index),
+		REQUIRED(NETWORK_KEY, &network_key),
+		REQUIRED(MAC_ADDRESS, &out->addr),
+		/* TODO: Parse EAP attributes */
+		WSC_ATTR_INVALID);
+
+	if (r < 0)
+		return r;
+
+	memcpy(out->ssid, ssid.iov_base, ssid.iov_len);
+	out->ssid_len = ssid.iov_len;
+
+	while (out->ssid_len > 0 && out->ssid[out->ssid_len - 1] == 0)
+		out->ssid_len -= 1;
+
+	if (!out->ssid_len)
+		return -EBADMSG;
+
+	memcpy(out->network_key, network_key.iov_base, network_key.iov_len);
+	out->network_key_len = network_key.iov_len;
+
+	/* TODO: Parse Network Key Shareable inside WFA EXT */
+
+	return 0;
+}
 
 int wsc_parse_beacon(const unsigned char *pdu, unsigned int len,
 				struct wsc_beacon *out)

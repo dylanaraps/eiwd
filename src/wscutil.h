@@ -329,6 +329,16 @@ static inline unsigned int wsc_attr_iter_get_pos(struct wsc_attr_iter *iter)
 	return iter->pos;
 }
 
+struct wsc_credential {
+	uint8_t ssid[32];
+	uint8_t ssid_len;
+	uint16_t auth_type;
+	uint16_t encryption_type;
+	uint8_t network_key[64];
+	uint8_t network_key_len;
+	uint8_t addr[6];
+};
+
 struct wsc_primary_device_type {
 	uint16_t category;
 	uint8_t oui[3];
@@ -511,6 +521,9 @@ struct wsc_nack {
 	uint8_t registrar_nonce[16];
 	enum wsc_configuration_error configuration_error;
 };
+
+int wsc_parse_credential(const uint8_t *pdu, uint32_t len,
+						struct wsc_credential *out);
 
 int wsc_parse_beacon(const unsigned char *pdu, unsigned int len,
 				struct wsc_beacon *out);
