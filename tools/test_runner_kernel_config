@@ -7,8 +7,16 @@ scripts/config --enable CONFIG_VLAN_8021Q
 scripts/config --enable CONFIG_CRYPTO_USER_API_AKCIPHER
 scripts/config --enable CONFIG_CRYPTO_USER_API_SKCIPHER
 scripts/config --enable CONFIG_CRYPTO_USER_API_HASH
+scripts/config --enable CONFIG_CRYPTO_RSA
+scripts/config --enable CONFIG_CRYPTO_AES_X86_64
+scripts/config --enable CONFIG_CRYPTO_AES_NI_INTEL
+scripts/config --enable CONFIG_CRYPTO_SHA1_SSSE3
+scripts/config --enable CONFIG_CRYPTO_SHA256_SSSE3
 scripts/config --enable CONFIG_KEY_DH_OPERATIONS
 scripts/config --enable CONFIG_ASYMMETRIC_KEY_TYPE
+scripts/config --enable CONFIG_ASYMMETRIC_PUBLIC_KEY_SUBTYPE
+scripts/config --enable CONFIG_X509_CERTIFICATE_PARSER
+scripts/config --enable CONFIG_PKCS7_MESSAGE_PARSER
 scripts/config --enable CONFIG_PKCS8_PRIVATE_KEY_PARSER
 
 scripts/config --enable CONFIG_HW_RANDOM_VIRTIO
