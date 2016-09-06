@@ -618,14 +618,14 @@ int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 	info.pbac = util_is_bit_set(data[1], 4);
 	info.extended_key_id = util_is_bit_set(data[1], 5);
 
-	RSNE_ADVANCE(data, len, 2);
-
 	/*
 	 * BIP—default group management cipher suite in an RSNA with
 	 * management frame protection enabled
 	 */
 	if (info.mfpc)
 		info.group_management_cipher = IE_RSN_CIPHER_SUITE_BIP;
+
+	RSNE_ADVANCE(data, len, 2);
 
 	/* Parse PMKID Count field */
 	if (len < 2)
