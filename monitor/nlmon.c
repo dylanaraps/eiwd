@@ -3277,7 +3277,7 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_INACTIVITY_TIMEOUT,
 			"Inactivity Timeout", ATTR_U16 },
 	{ NL80211_ATTR_RX_SIGNAL_DBM,
-			"RX Signal dBm", ATTR_U32 },
+			"RX Signal dBm", ATTR_S32 },
 	{ NL80211_ATTR_BG_SCAN_PERIOD,
 			"Background Scan Period", ATTR_U16 },
 	{ NL80211_ATTR_WDEV,
