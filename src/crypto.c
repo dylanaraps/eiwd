@@ -578,3 +578,50 @@ exit:
 
 	return r;
 }
+
+/* Defined in 802.11-2012, Section 11.6.1.7.5 PTK */
+bool crypto_derive_ft_ptk(const uint8_t *pmk_r1, const uint8_t *pmk_r1_name,
+				const uint8_t *addr1, const uint8_t *addr2,
+				const uint8_t *nonce1, const uint8_t *nonce2,
+				struct crypto_ptk *out_ptk, size_t ptk_len,
+				uint8_t *out_ptk_name)
+{
+	uint8_t context[ETH_ALEN * 2 + 64];
+	struct l_checksum *sha256;
+	bool r = false;
+	struct iovec iov[3] = {
+		[0] = { .iov_base = (uint8_t *) pmk_r1_name, .iov_len = 16 },
+		[1] = { .iov_base = "FT-PTKN", .iov_len = 7 },
+		[2] = { .iov_base = context, .iov_len = sizeof(context) },
+	};
+
+	memcpy(context, nonce1, 32);
+
+	memcpy(context + 32, nonce2, 32);
+
+	memcpy(context + 64, addr1, ETH_ALEN);
+
+	memcpy(context + 64 + ETH_ALEN, addr2, ETH_ALEN);
+
+	if (!kdf_sha256(pmk_r1, 32, "FT-PTK", 6, context, sizeof(context),
+				out_ptk, ptk_len))
+		goto exit;
+
+	sha256 = l_checksum_new(L_CHECKSUM_SHA256);
+	if (!sha256) {
+		memset(out_ptk, 0, ptk_len);
+		goto exit;
+	}
+
+	l_checksum_updatev(sha256, iov, 3);
+	l_checksum_get_digest(sha256, out_ptk_name, 16);
+
+	l_checksum_free(sha256);
+
+	r = true;
+
+exit:
+	memset(context, 0, sizeof(context));
+
+	return r;
+}

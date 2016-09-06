@@ -91,3 +91,8 @@ bool crypto_derive_pmk_r1(const uint8_t *pmk_r0,
 				const uint8_t *pmk_r0_name,
 				uint8_t *out_pmk_r1,
 				uint8_t *out_pmk_r1_name);
+bool crypto_derive_ft_ptk(const uint8_t *pmk_r1, const uint8_t *pmk_r1_name,
+				const uint8_t *addr1, const uint8_t *addr2,
+				const uint8_t *nonce1, const uint8_t *nonce2,
+				struct crypto_ptk *out_ptk, size_t ptk_len,
+				uint8_t *out_ptk_name);
