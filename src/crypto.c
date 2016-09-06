@@ -535,3 +535,46 @@ exit:
 
 	return r;
 }
+
+/* Defined in 802.11-2012, Section 11.6.1.7.4 PMK-R1 */
+bool crypto_derive_pmk_r1(const uint8_t *pmk_r0,
+				const uint8_t *r1khid, const uint8_t *s1khid,
+				const uint8_t *pmk_r0_name,
+				uint8_t *out_pmk_r1,
+				uint8_t *out_pmk_r1_name)
+{
+	uint8_t context[2 * ETH_ALEN];
+	struct l_checksum *sha256;
+	bool r = false;
+	struct iovec iov[3] = {
+		[0] = { .iov_base = "FT-R1N", .iov_len = 6 },
+		[1] = { .iov_base = (uint8_t *) pmk_r0_name, .iov_len = 16 },
+		[2] = { .iov_base = context, .iov_len = sizeof(context) },
+	};
+
+	memcpy(context, r1khid, ETH_ALEN);
+
+	memcpy(context + ETH_ALEN, s1khid, ETH_ALEN);
+
+	if (!kdf_sha256(pmk_r0, 32, "FT-R1", 5, context, sizeof(context),
+				out_pmk_r1, 32))
+		goto exit;
+
+	sha256 = l_checksum_new(L_CHECKSUM_SHA256);
+	if (!sha256) {
+		memset(out_pmk_r1, 0, 32);
+		goto exit;
+	}
+
+	l_checksum_updatev(sha256, iov, 3);
+	l_checksum_get_digest(sha256, out_pmk_r1_name, 16);
+
+	l_checksum_free(sha256);
+
+	r = true;
+
+exit:
+	memset(context, 0, sizeof(context));
+
+	return r;
+}

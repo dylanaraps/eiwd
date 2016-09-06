@@ -86,3 +86,8 @@ bool crypto_derive_pmk_r0(const uint8_t *xxkey,
 				const uint8_t *r0khid, size_t r0kh_len,
 				const uint8_t *s0khid, uint8_t *out_pmk_r0,
 				uint8_t *out_pmk_r0_name);
+bool crypto_derive_pmk_r1(const uint8_t *pmk_r0,
+				const uint8_t *r1khid, const uint8_t *s1khid,
+				const uint8_t *pmk_r0_name,
+				uint8_t *out_pmk_r1,
+				uint8_t *out_pmk_r1_name);
