@@ -478,3 +478,60 @@ bool crypto_derive_pairwise_ptk(const uint8_t *pmk,
 					(uint8_t *) out_ptk, ptk_len,
 					use_sha256);
 }
+
+/* Defined in 802.11-2012, Section 11.6.1.7.3 PMK-R0 */
+bool crypto_derive_pmk_r0(const uint8_t *xxkey,
+				const uint8_t *ssid, size_t ssid_len,
+				uint16_t mdid,
+				const uint8_t *r0khid, size_t r0kh_len,
+				const uint8_t *s0khid, uint8_t *out_pmk_r0,
+				uint8_t *out_pmk_r0_name)
+{
+	uint8_t context[512];
+	size_t pos = 0;
+	uint8_t output[48];
+	struct l_checksum *sha256;
+	bool r = false;
+	struct iovec iov[2] = {
+		[0] = { .iov_base = "FT-R0N", .iov_len = 6 },
+		[1] = { .iov_base = output + 32, .iov_len = 16 },
+	};
+
+	context[pos++] = ssid_len;
+
+	memcpy(context + pos, ssid, ssid_len);
+	pos += ssid_len;
+
+	l_put_le16(mdid, context + pos);
+	pos += 2;
+
+	context[pos++] = r0kh_len;
+
+	memcpy(context + pos, r0khid, r0kh_len);
+	pos += r0kh_len;
+
+	memcpy(context + pos, s0khid, ETH_ALEN);
+	pos += ETH_ALEN;
+
+	if (!kdf_sha256(xxkey, 32, "FT-R0", 5, context, pos, output, 48))
+		goto exit;
+
+	sha256 = l_checksum_new(L_CHECKSUM_SHA256);
+	if (!sha256)
+		goto exit;
+
+	l_checksum_updatev(sha256, iov, 2);
+	l_checksum_get_digest(sha256, out_pmk_r0_name, 16);
+
+	l_checksum_free(sha256);
+
+	memcpy(out_pmk_r0, output, 32);
+
+	r = true;
+
+exit:
+	memset(context, 0, pos);
+	memset(output, 0, 48);
+
+	return r;
+}
