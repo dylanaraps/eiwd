@@ -1483,9 +1483,19 @@ static void eapol_eap_results_cb(const uint8_t *msk_data, size_t msk_len,
 	 * RFC5247 explains AAA-Key refers to the MSK and confirms the
 	 * first 32 bytes of the MSK are used.  MSK is at least 64 octets
 	 * long per RFC3748.  Note WEP derives the PTK from MSK differently.
+	 *
+	 * In a Fast Transition initial mobility domain association the PMK
+	 * maps to the XXKey except with EAP:
+	 * 802.11 11.6.1.7.3:
+	 *    "If the AKM negotiated is 00-0F-AC:3, then XXKey shall be the
+	 *    second 256 bits of the MSK (which is derived from the IEEE
+	 *    802.1X authentication), i.e., XXKey = L(MSK, 256, 256)."
 	 */
 
-	eapol_sm_set_pmk(sm, msk_data);
+	if (sm->akm_suite == IE_RSN_AKM_SUITE_FT_OVER_8021X)
+		eapol_sm_set_pmk(sm, msk_data + 32);
+	else
+		eapol_sm_set_pmk(sm, msk_data);
 }
 
 void eapol_sm_set_8021x_config(struct eapol_sm *sm, struct l_settings *settings)
