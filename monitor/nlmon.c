@@ -788,9 +788,9 @@ static void print_ie_rsn(unsigned int level, const char *label,
 		goto end;
 
 	for (i = 0; i < count; i += 16) {
-		const char *bytes = data;
+		const uint8_t *bytes = data;
 
-		print_attr(level + 1, "PKMKID: %02x:%02x:%02x:%02x:"
+		print_attr(level + 1, "PMKID: %02x:%02x:%02x:%02x:"
 			"%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x:"
 			"%02x:%02x:%02x:%02x",
 			bytes[i], bytes[i + 1],
