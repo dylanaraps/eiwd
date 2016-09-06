@@ -764,11 +764,11 @@ static void print_ie_rsn(unsigned int level, const char *label,
 			sizeof(bytemask), rsn_capabilities_bitfield);
 
 	count = (*((uint8_t *)data) & 0x0c) >> 2;
-	print_attr(level + 1, "RSN capabilities: bits  3 - 4: %s per PTKSA",
+	print_attr(level + 1, "RSN capabilities: bits  2 - 3: %s per PTKSA",
 		rsn_capabilities_replay_counter[count]);
 
 	count = (*((uint8_t *)data) & 0x30) >> 4;
-	print_attr(level + 1, "RSN capabilities: bits  5 - 6: %s per GTKSA",
+	print_attr(level + 1, "RSN capabilities: bits  4 - 5: %s per GTKSA",
 		rsn_capabilities_replay_counter[count]);
 
 	bytemask[0] = 0xc0;
