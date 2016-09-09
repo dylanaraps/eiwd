@@ -58,6 +58,7 @@ enum state {
 	STATE_EXPECT_M4,
 	STATE_EXPECT_M6,
 	STATE_EXPECT_M8,
+	STATE_FINISHED,
 };
 
 static struct l_key *dh5_generator;
@@ -336,6 +337,80 @@ static void eap_wsc_send_nack(struct eap_state *eap,
 	 */
 	if (error == WSC_CONFIGURATION_ERROR_NO_ERROR)
 		return;
+}
+
+static void eap_wsc_send_done(struct eap_state *eap)
+{
+	struct eap_wsc_state *wsc = eap_get_data(eap);
+	struct wsc_done done;
+	uint8_t *pdu;
+	size_t pdu_len;
+	uint8_t buf[256];
+
+	done.version2 = true;
+	memcpy(done.enrollee_nonce, wsc->m1->enrollee_nonce,
+						sizeof(done.enrollee_nonce));
+	memcpy(done.registrar_nonce, wsc->m2->registrar_nonce,
+						sizeof(done.registrar_nonce));
+
+	pdu = wsc_build_wsc_done(&done, &pdu_len);
+	if (!pdu)
+		return;
+
+	buf[12] = WSC_OP_DONE;
+	buf[13] = 0;
+	memcpy(buf + 14, pdu, pdu_len);
+
+	eap_send_response(eap, EAP_TYPE_EXPANDED, buf, pdu_len + 14);
+	l_free(pdu);
+}
+
+static void eap_wsc_handle_m8(struct eap_state *eap,
+					const uint8_t *pdu, size_t len)
+{
+	struct eap_wsc_state *wsc = eap_get_data(eap);
+	struct wsc_m8 m8;
+	struct iovec encrypted;
+	uint8_t *decrypted;
+	size_t decrypted_len;
+	struct wsc_m8_encrypted_settings m8es;
+	struct iovec creds[3];
+	size_t n_creds;
+
+	/* Spec unclear what to do here, see comments in eap_wsc_send_nack */
+	if (wsc_parse_m8(pdu, len, &m8, &encrypted) != 0) {
+		eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_NO_ERROR);
+		return;
+	}
+
+	if (!authenticator_check(wsc, pdu, len))
+		return;
+
+	decrypted = encrypted_settings_decrypt(wsc, encrypted.iov_base,
+							encrypted.iov_len,
+							&decrypted_len);
+	if (!decrypted)
+		goto send_nack;
+
+	n_creds = L_ARRAY_SIZE(creds);
+
+	if (wsc_parse_m8_encrypted_settings(decrypted, decrypted_len,
+						&m8es, creds, &n_creds))
+		goto invalid_settings;
+
+	if (!keywrap_authenticator_check(wsc, decrypted, decrypted_len))
+		goto invalid_settings;
+
+	l_free(decrypted);
+
+	eap_wsc_send_done(eap);
+	wsc->state = STATE_FINISHED;
+	return;
+
+invalid_settings:
+	l_free(decrypted);
+send_nack:
+	eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_DECRYPTION_CRC_FAILURE);
 }
 
 static void eap_wsc_send_m7(struct eap_state *eap,
@@ -743,7 +818,11 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 		eap_wsc_handle_m6(eap, pkt + 2, len - 2);
 		break;
 	case STATE_EXPECT_M8:
+		eap_wsc_handle_m8(eap, pkt + 2, len - 2);
 		break;
+	case STATE_FINISHED:
+		eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_NO_ERROR);
+		return;
 	}
 }
 
