@@ -515,6 +515,12 @@ struct wsc_m8_encrypted_settings {
 	uint8_t authenticator[8];
 };
 
+struct wsc_ack {
+	bool version2;
+	uint8_t enrollee_nonce[16];
+	uint8_t registrar_nonce[16];
+};
+
 struct wsc_nack {
 	bool version2;
 	uint8_t enrollee_nonce[16];
@@ -563,6 +569,7 @@ int wsc_parse_m8_encrypted_settings(const uint8_t *pdu, uint32_t len,
 					struct wsc_m8_encrypted_settings *out,
 					struct iovec *iov, size_t *iovcnt);
 
+int wsc_parse_wsc_ack(const uint8_t *pdu, uint32_t len, struct wsc_ack *out);
 int wsc_parse_nack(const uint8_t *pdu, uint32_t len, struct wsc_nack *out);
 
 int wsc_parse_wsc_done(const uint8_t *pdu, uint32_t len, struct wsc_done *out);
