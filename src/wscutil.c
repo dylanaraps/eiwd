@@ -1505,6 +1505,31 @@ int wsc_parse_nack(const uint8_t *pdu, uint32_t len, struct wsc_nack *out)
 	return 0;
 }
 
+int wsc_parse_wsc_done(const uint8_t *pdu, uint32_t len, struct wsc_done *out)
+{
+	int r;
+	struct wsc_wfa_ext_iter iter;
+	uint8_t version;
+	enum wsc_message_type msg_type;
+
+	memset(out, 0, sizeof(struct wsc_done));
+
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, 0, NULL,
+		REQUIRED(VERSION, &version),
+		REQUIRED(MESSAGE_TYPE, &msg_type),
+		REQUIRED(ENROLLEE_NONCE, &out->enrollee_nonce),
+		REQUIRED(REGISTRAR_NONCE, &out->registrar_nonce),
+		WSC_ATTR_INVALID);
+
+	if (r < 0)
+		return r;
+
+	if (msg_type != WSC_MESSAGE_TYPE_WSC_DONE)
+		return -EBADMSG;
+
+	return 0;
+}
+
 struct wsc_attr_builder {
 	size_t capacity;
 	uint8_t *buf;

@@ -522,6 +522,12 @@ struct wsc_nack {
 	enum wsc_configuration_error configuration_error;
 };
 
+struct wsc_done {
+	bool version2;
+	uint8_t enrollee_nonce[16];
+	uint8_t registrar_nonce[16];
+};
+
 int wsc_parse_credential(const uint8_t *pdu, uint32_t len,
 						struct wsc_credential *out);
 
@@ -558,6 +564,8 @@ int wsc_parse_m8_encrypted_settings(const uint8_t *pdu, uint32_t len,
 					struct iovec *iov, size_t *iovcnt);
 
 int wsc_parse_nack(const uint8_t *pdu, uint32_t len, struct wsc_nack *out);
+
+int wsc_parse_wsc_done(const uint8_t *pdu, uint32_t len, struct wsc_done *out);
 
 uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
 				size_t *out_len);
