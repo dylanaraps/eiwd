@@ -2304,6 +2304,27 @@ done:
 	return ret;
 }
 
+uint8_t *wsc_build_wsc_ack(const struct wsc_ack *ack, size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+	uint8_t *ret;
+
+	builder = wsc_attr_builder_new(256);
+	build_version(builder, 0x10);
+	build_message_type(builder, WSC_MESSAGE_TYPE_WSC_ACK);
+	build_enrollee_nonce(builder, ack->enrollee_nonce);
+	build_registrar_nonce(builder, ack->registrar_nonce);
+
+	if (!ack->version2)
+		goto done;
+
+	START_WFA_VENDOR_EXTENSION();
+
+done:
+	ret = wsc_attr_builder_free(builder, false, out_len);
+	return ret;
+}
+
 uint8_t *wsc_build_nack(const struct wsc_nack *nack, size_t *out_len)
 {
 	struct wsc_attr_builder *builder;
