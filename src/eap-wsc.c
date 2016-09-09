@@ -316,6 +316,12 @@ static void eap_wsc_send_response(struct eap_state *eap,
 static void eap_wsc_send_nack(struct eap_state *eap,
 					enum wsc_configuration_error error)
 {
+	struct eap_wsc_state *wsc = eap_get_data(eap);
+	struct wsc_nack nack;
+	uint8_t *pdu;
+	size_t pdu_len;
+	uint8_t buf[256];
+
 	/*
 	 * WSC 2.0.5, Table 34, Configuration Error 0 states:
 	 * "- not valid for WSC_NACK except when a station acts as an External
@@ -337,6 +343,29 @@ static void eap_wsc_send_nack(struct eap_state *eap,
 	 */
 	if (error == WSC_CONFIGURATION_ERROR_NO_ERROR)
 		return;
+
+	nack.version2 = true;
+	memcpy(nack.enrollee_nonce, wsc->m1->enrollee_nonce,
+						sizeof(nack.enrollee_nonce));
+
+	if (wsc->m2)
+		memcpy(nack.registrar_nonce, wsc->m2->registrar_nonce,
+						sizeof(nack.registrar_nonce));
+	else
+		memset(nack.registrar_nonce, 0, sizeof(nack.registrar_nonce));
+
+	nack.configuration_error = error;
+
+	pdu = wsc_build_wsc_nack(&nack, &pdu_len);
+	if (!pdu)
+		return;
+
+	buf[12] = WSC_OP_NACK;
+	buf[13] = 0;
+	memcpy(buf + 14, pdu, pdu_len);
+
+	eap_send_response(eap, EAP_TYPE_EXPANDED, buf, pdu_len + 14);
+	l_free(pdu);
 }
 
 static void eap_wsc_send_done(struct eap_state *eap)
