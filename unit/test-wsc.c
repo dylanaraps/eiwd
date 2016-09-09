@@ -35,6 +35,7 @@
 #include "src/eap.h"
 #include "src/crypto.h"
 #include "src/util.h"
+#include "src/mpdu.h"
 
 static const unsigned char wsc_attrs1[] = {
 	0x10, 0x4a, 0x00, 0x01, 0x10, 0x10, 0x44, 0x00, 0x01, 0x02, 0x10, 0x41,
@@ -1882,8 +1883,13 @@ static const uint8_t eap_wsc_start[] = {
 	0x00, 0x00, 0x00, 0x01, 0x01, 0x00,
 };
 
+static const uint8_t eap_fail[] = {
+	0x01, 0x00, 0x00, 0x04, 0x04, 0xab, 0x00, 0x04,
+};
+
 struct verify_data {
 	bool response_sent;
+	bool eapol_failed;
 	const void *expected;
 	size_t expected_len;
 };
@@ -1897,7 +1903,10 @@ static void verify_deauthenticate(uint32_t ifindex, const uint8_t *aa,
 				const uint8_t *spa, uint16_t reason_code,
 				void *user_data)
 {
-	assert(true);
+	struct verify_data *data = user_data;
+
+	assert(reason_code == MPDU_REASON_CODE_IEEE8021X_FAILED);
+	data->eapol_failed = true;
 }
 
 static int verify_8021x(uint32_t ifindex, const uint8_t *aa_addr,
@@ -1927,13 +1936,15 @@ static void wsc_test_pbc_handshake(const void *data)
 	struct l_settings *settings;
 
 	eapol_init();
-	__eapol_set_deauthenticate_func(verify_deauthenticate);
 
 	sm = eapol_sm_new();
 	eapol_sm_set_authenticator_address(sm, ap_address);
 	eapol_sm_set_supplicant_address(sm, sta_address);
 	__eapol_set_tx_packet_func(verify_8021x);
 	eapol_sm_set_tx_user_data(sm, &verify);
+
+	__eapol_set_deauthenticate_func(verify_deauthenticate);
+	eapol_sm_set_user_data(sm, &verify);
 
 	settings = l_settings_new();
 	l_settings_set_string(settings, "Security", "EAP-Identity",
@@ -1999,7 +2010,15 @@ static void wsc_test_pbc_handshake(const void *data)
 				sizeof(eap_wsc_m6));
 	assert(verify.response_sent);
 
-	eapol_cancel(1);
+	VERIFY_RESET(verify, eap_wsc_done);
+	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_m8,
+				sizeof(eap_wsc_m8));
+	assert(verify.response_sent);
+
+	__eapol_rx_packet(1, sta_address, ap_address,
+						eap_fail, sizeof(eap_fail));
+	assert(verify.eapol_failed);
+
 	eapol_exit();
 }
 
