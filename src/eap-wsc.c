@@ -783,6 +783,34 @@ clear_keys:
 	memset(&keys, 0, sizeof(keys));
 }
 
+static void eap_wsc_handle_nack(struct eap_state *eap,
+					const uint8_t *pdu, size_t len)
+{
+	struct eap_wsc_state *wsc = eap_get_data(eap);
+	struct wsc_nack nack;
+
+	if (wsc_parse_wsc_nack(pdu, len, &nack) != 0)
+		return;
+
+	if (memcmp(nack.enrollee_nonce, wsc->m1->enrollee_nonce,
+						sizeof(nack.enrollee_nonce)))
+		return;
+
+	if (!wsc->m2)
+		return;
+
+	if (memcmp(nack.registrar_nonce, wsc->m2->registrar_nonce,
+						sizeof(nack.registrar_nonce)))
+		return;
+
+	/*
+	 * The spec is completely unclear what the NACK error should be set
+	 * to.  Our choice is to reflect back what the request error code is
+	 * in the response.
+	 */
+	eap_wsc_send_nack(eap, nack.configuration_error);
+}
+
 static void eap_wsc_handle_request(struct eap_state *eap,
 					const uint8_t *pkt, size_t len)
 {
@@ -818,7 +846,10 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 		wsc->state = STATE_EXPECT_M2;
 		return;
 	case WSC_OP_NACK:
-		/* TODO: Process NACK and respond with NACK */
+		if (len <= 2)
+			return;
+
+		eap_wsc_handle_nack(eap, pkt + 2, len - 2);
 		return;
 	case WSC_OP_ACK:
 	case WSC_OP_DONE:
