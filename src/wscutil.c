@@ -1504,7 +1504,7 @@ int wsc_parse_wsc_ack(const uint8_t *pdu, uint32_t len, struct wsc_ack *out)
 	return 0;
 }
 
-int wsc_parse_nack(const uint8_t *pdu, uint32_t len, struct wsc_nack *out)
+int wsc_parse_wsc_nack(const uint8_t *pdu, uint32_t len, struct wsc_nack *out)
 {
 	int r;
 	struct wsc_wfa_ext_iter iter;
@@ -2325,7 +2325,7 @@ done:
 	return ret;
 }
 
-uint8_t *wsc_build_nack(const struct wsc_nack *nack, size_t *out_len)
+uint8_t *wsc_build_wsc_nack(const struct wsc_nack *nack, size_t *out_len)
 {
 	struct wsc_attr_builder *builder;
 	uint8_t *ret;
