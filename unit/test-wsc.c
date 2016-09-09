@@ -1847,6 +1847,24 @@ static void wsc_test_parse_wsc_done(const void *data)
 	assert(!memcmp(expected->registrar_nonce, done.registrar_nonce, 16));
 }
 
+static void wsc_test_build_wsc_done(const void *data)
+{
+	const struct wsc_done_data *test = data;
+	struct wsc_done done;
+	uint8_t *out;
+	size_t out_len;
+
+	memcpy(&done, &test->expected, sizeof(done));
+
+	out = wsc_build_wsc_done(&done, &out_len);
+	assert(out);
+
+	assert(out_len == test->len);
+	assert(!memcmp(test->pdu, out, test->len));
+
+	l_free(out);
+}
+
 static const uint8_t eap_identity_req[] = {
 	0x01, 0x00, 0x00, 0x05, 0x01, 0x00, 0x00, 0x05, 0x01
 };
@@ -2061,6 +2079,8 @@ int main(int argc, char *argv[])
 			&m8_encrypted_settings_data_1);
 
 	l_test_add("/wsc/parse/wsc_done 1", wsc_test_parse_wsc_done,
+							&wsc_done_data_1);
+	l_test_add("/wsc/build/wsc_done 1", wsc_test_build_wsc_done,
 							&wsc_done_data_1);
 
 	l_test_add("/wsc/handshake/PBC Handshake Test",
