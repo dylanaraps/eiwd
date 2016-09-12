@@ -1941,7 +1941,7 @@ static void wsc_test_pbc_handshake(const void *data)
 	eapol_sm_set_authenticator_address(sm, ap_address);
 	eapol_sm_set_supplicant_address(sm, sta_address);
 	__eapol_set_tx_packet_func(verify_8021x);
-	eapol_sm_set_tx_user_data(sm, &verify);
+	__eapol_set_tx_user_data(&verify);
 
 	__eapol_set_deauthenticate_func(verify_deauthenticate);
 	eapol_sm_set_user_data(sm, &verify);
@@ -1986,37 +1986,31 @@ static void wsc_test_pbc_handshake(const void *data)
 	eapol_start(1, NULL, sm);
 
 	VERIFY_RESET(verify, eap_identity_resp);
-	__eapol_rx_packet(1, sta_address, ap_address, eap_identity_req,
-				sizeof(eap_identity_req));
+	__eapol_rx_packet(1, ap_address, eap_identity_req,
+						sizeof(eap_identity_req));
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_m1_2);
-	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_start,
-				sizeof(eap_wsc_start));
+	__eapol_rx_packet(1, ap_address, eap_wsc_start, sizeof(eap_wsc_start));
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_m3);
-	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_m2_2,
-				sizeof(eap_wsc_m2_2));
+	__eapol_rx_packet(1, ap_address, eap_wsc_m2_2, sizeof(eap_wsc_m2_2));
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_m5);
-	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_m4,
-				sizeof(eap_wsc_m4));
+	__eapol_rx_packet(1, ap_address, eap_wsc_m4, sizeof(eap_wsc_m4));
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_m7);
-	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_m6,
-				sizeof(eap_wsc_m6));
+	__eapol_rx_packet(1, ap_address, eap_wsc_m6, sizeof(eap_wsc_m6));
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_done);
-	__eapol_rx_packet(1, sta_address, ap_address, eap_wsc_m8,
-				sizeof(eap_wsc_m8));
+	__eapol_rx_packet(1, ap_address, eap_wsc_m8, sizeof(eap_wsc_m8));
 	assert(verify.response_sent);
 
-	__eapol_rx_packet(1, sta_address, ap_address,
-						eap_fail, sizeof(eap_fail));
+	__eapol_rx_packet(1, ap_address, eap_fail, sizeof(eap_fail));
 	assert(verify.eapol_failed);
 
 	eapol_exit();

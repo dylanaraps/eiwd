@@ -1754,12 +1754,12 @@ static void eapol_sm_test_ptk(const void *data)
 	eapol_start(1, NULL, sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
-	__eapol_rx_packet(1, spa, aa, eapol_key_data_3,
+	__eapol_rx_packet(1, aa, eapol_key_data_3,
 					sizeof(eapol_key_data_3));
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
-	__eapol_rx_packet(1, spa, aa, eapol_key_data_5,
+	__eapol_rx_packet(1, aa, eapol_key_data_5,
 					sizeof(eapol_key_data_5));
 	assert(verify_step4_called);
 
@@ -1814,17 +1814,17 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 	eapol_start(1, NULL, sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
-	__eapol_rx_packet(1, spa, aa, eapol_key_data_7,
+	__eapol_rx_packet(1, aa, eapol_key_data_7,
 				sizeof(eapol_key_data_7));
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
-	__eapol_rx_packet(1, spa, aa, eapol_key_data_9,
+	__eapol_rx_packet(1, aa, eapol_key_data_9,
 					sizeof(eapol_key_data_9));
 	assert(verify_step4_called);
 
 	__eapol_set_tx_packet_func(verify_step2_gtk);
-	__eapol_rx_packet(1, spa, aa, eapol_key_data_11,
+	__eapol_rx_packet(1, aa, eapol_key_data_11,
 					sizeof(eapol_key_data_11));
 	assert(verify_gtk_step2_called);
 
@@ -1877,17 +1877,17 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 	eapol_start(1, NULL, sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
-	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_13,
+	__eapol_rx_packet(1, ap_address, eapol_key_data_13,
 					sizeof(eapol_key_data_13));
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
-	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_15,
+	__eapol_rx_packet(1, ap_address, eapol_key_data_15,
 					sizeof(eapol_key_data_15));
 	assert(verify_step4_called);
 
 	__eapol_set_tx_packet_func(verify_step2_gtk);
-	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_17,
+	__eapol_rx_packet(1, ap_address, eapol_key_data_17,
 					sizeof(eapol_key_data_17));
 	assert(verify_gtk_step2_called);
 
@@ -1941,17 +1941,17 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 	eapol_start(1, NULL, sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
-	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_19,
+	__eapol_rx_packet(1, ap_address, eapol_key_data_19,
 					sizeof(eapol_key_data_19));
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
-	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_21,
+	__eapol_rx_packet(1, ap_address, eapol_key_data_21,
 					sizeof(eapol_key_data_21));
 	assert(verify_step4_called);
 
 	__eapol_set_tx_packet_func(verify_step2_gtk);
-	__eapol_rx_packet(1, sta_address, ap_address, eapol_key_data_23,
+	__eapol_rx_packet(1, ap_address, eapol_key_data_23,
 					sizeof(eapol_key_data_23));
 	assert(verify_gtk_step2_called);
 
@@ -2153,7 +2153,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	sm = eapol_sm_new();
 	eapol_sm_set_authenticator_address(sm, ap_address);
 	eapol_sm_set_supplicant_address(sm, sta_address);
-	eapol_sm_set_tx_user_data(sm, s);
+	__eapol_set_tx_user_data(s);
 
 	settings = l_settings_new();
 	l_settings_load_from_data(settings, config, strlen(config));
@@ -2170,8 +2170,8 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 
 	__eapol_set_tx_packet_func(verify_8021x_identity_resp);
 	s->pending_req = 1;
-	__eapol_rx_packet(1, sta_address, ap_address, eap_identity_req,
-				sizeof(eap_identity_req));
+	__eapol_rx_packet(1, ap_address, eap_identity_req,
+						sizeof(eap_identity_req));
 	assert(!s->pending_req);
 
 	s->tls = l_tls_new(true, s->app_data_cb, eapol_sm_test_tls_test_write,
@@ -2234,7 +2234,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 
 		s->pending_req = 1;
 
-		__eapol_rx_packet(1, sta_address, ap_address, tx_buf, tx_len);
+		__eapol_rx_packet(1, ap_address, tx_buf, tx_len);
 
 		assert(!s->pending_req);
 
@@ -2254,8 +2254,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 
 			s->pending_req = 1;
 
-			__eapol_rx_packet(1, sta_address, ap_address,
-						tx_buf, tx_len);
+			__eapol_rx_packet(1, ap_address, tx_buf, tx_len);
 
 			assert(!s->pending_req);
 		}
@@ -2274,7 +2273,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	tx_buf[tx_len++] = 0x00;
 	tx_buf[tx_len++] = 0x04; /* Length */
 
-	__eapol_rx_packet(1, sta_address, ap_address, tx_buf, tx_len);
+	__eapol_rx_packet(1, ap_address, tx_buf, tx_len);
 
 	memcpy(step1_buf, eapol_key_data_13, sizeof(eapol_key_data_13));
 	step1 = (struct eapol_key *)
@@ -2313,8 +2312,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	expected_step2_frame_size = sizeof(eapol_key_data_14);
 
 	__eapol_set_tx_packet_func(verify_step2);
-	__eapol_rx_packet(1, sta_address, ap_address, step1_buf,
-				sizeof(eapol_key_data_13));
+	__eapol_rx_packet(1, ap_address, step1_buf, sizeof(eapol_key_data_13));
 	assert(verify_step2_called);
 
 	verify_step4_called = false;
@@ -2325,8 +2323,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	__eapol_set_tx_packet_func(verify_step4);
 	__eapol_set_install_tk_func(verify_install_tk);
 	eapol_sm_set_user_data(sm, ptk->tk);
-	__eapol_rx_packet(1, sta_address, ap_address, step3_buf,
-				sizeof(eapol_key_data_15));
+	__eapol_rx_packet(1, ap_address, step3_buf, sizeof(eapol_key_data_15));
 	assert(verify_step4_called);
 	assert(verify_install_tk_called);
 
@@ -2508,7 +2505,7 @@ static void eapol_sm_test_eap_nak(const void *data)
 	sm = eapol_sm_new();
 	eapol_sm_set_authenticator_address(sm, ap_address);
 	eapol_sm_set_supplicant_address(sm, sta_address);
-	eapol_sm_set_tx_user_data(sm, &s);
+	__eapol_set_tx_user_data(&s);
 
 	settings = l_settings_new();
 	l_settings_load_from_data(settings, eapol_8021x_config,
@@ -2526,19 +2523,19 @@ static void eapol_sm_test_eap_nak(const void *data)
 
 	__eapol_set_tx_packet_func(verify_8021x_identity_resp);
 	s.pending_req = 1;
-	__eapol_rx_packet(1, sta_address, ap_address, eap_identity_req,
+	__eapol_rx_packet(1, ap_address, eap_identity_req,
 				sizeof(eap_identity_req));
 	assert(!s.pending_req);
 
 	s.pending_req = 1;
 	__eapol_set_tx_packet_func(verify_8021x_eap_nak);
-	__eapol_rx_packet(1, sta_address, ap_address, eap_ttls_start_req,
+	__eapol_rx_packet(1, ap_address, eap_ttls_start_req,
 				sizeof(eap_ttls_start_req));
 	assert(!s.pending_req);
 
 	eap_nak_verify_deauthenticate_called = false;
 	__eapol_set_deauthenticate_func(eap_nak_verify_deauthenticate);
-	__eapol_rx_packet(1, sta_address, ap_address, eap_failure,
+	__eapol_rx_packet(1, ap_address, eap_failure,
 				sizeof(eap_failure));
 	assert(eap_nak_verify_deauthenticate_called);
 
