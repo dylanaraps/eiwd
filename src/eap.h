@@ -40,6 +40,8 @@ typedef void (*eap_key_material_func_t)(const uint8_t *msk_data, size_t msk_len,
 				const uint8_t *iv, size_t iv_len,
 				void *user_data);
 typedef void (*eap_complete_func_t)(enum eap_result result, void *user_data);
+typedef void (*eap_event_func_t)(unsigned int event, const void *event_data,
+							void *user_data);
 
 struct eap_state *eap_new(eap_tx_packet_func_t tx_packet,
 			eap_complete_func_t complete, void *user_data);
@@ -50,6 +52,7 @@ bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
 
 void eap_set_key_material_func(struct eap_state *eap,
 				eap_key_material_func_t func);
+void eap_set_event_func(struct eap_state *eap, eap_event_func_t func);
 
 void eap_set_mtu(struct eap_state *eap, size_t mtu);
 size_t eap_get_mtu(struct eap_state *eap);
@@ -128,6 +131,8 @@ void eap_start_complete_timeout(struct eap_state *eap);
 
 void eap_method_success(struct eap_state *eap);
 void eap_method_error(struct eap_state *eap);
+void eap_method_event(struct eap_state *eap, unsigned int type,
+							const void *data);
 
 void eap_save_last_id(struct eap_state *eap, uint8_t *last_id);
 void eap_restore_last_id(struct eap_state *eap, uint8_t last_id);

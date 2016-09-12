@@ -37,6 +37,7 @@ struct eap_state {
 	eap_tx_packet_func_t tx_packet;
 	eap_key_material_func_t set_key_material;
 	eap_complete_func_t complete;
+	eap_event_func_t event_func;
 	void *user_data;
 	size_t mtu;
 
@@ -75,6 +76,11 @@ void eap_set_key_material_func(struct eap_state *eap,
 				eap_key_material_func_t func)
 {
 	eap->set_key_material = func;
+}
+
+void eap_set_event_func(struct eap_state *eap, eap_event_func_t func)
+{
+	eap->event_func = func;
 }
 
 void eap_free(struct eap_state *eap)
@@ -408,6 +414,14 @@ void eap_set_key_material(struct eap_state *eap,
 
 	eap->set_key_material(msk_data, msk_len, emsk_data, emsk_len,
 				iv, iv_len, eap->user_data);
+}
+
+void eap_method_event(struct eap_state *eap, unsigned int id, const void *data)
+{
+	if (!eap->event_func)
+		return;
+
+	eap->event_func(id, data, eap->user_data);
 }
 
 void eap_method_success(struct eap_state *eap)
