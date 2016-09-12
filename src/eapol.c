@@ -32,6 +32,7 @@
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
 #include <arpa/inet.h>
+#include <linux/filter.h>
 #include <ell/ell.h>
 
 #include "crypto.h"
@@ -42,12 +43,131 @@
 #include "eap.h"
 
 struct l_queue *state_machines;
-eapol_tx_packet_func_t tx_packet = NULL;
+
 eapol_get_nonce_func_t get_nonce = NULL;
 eapol_install_tk_func_t install_tk = NULL;
 eapol_install_gtk_func_t install_gtk = NULL;
 eapol_deauthenticate_func_t deauthenticate = NULL;
 eapol_rekey_offload_func_t rekey_offload = NULL;
+
+static struct l_io *pae_io;
+eapol_tx_packet_func_t tx_packet = NULL;
+void *tx_user_data;
+
+/*
+ * BPF filter to match skb->dev->type == 1 (ARPHRD_ETHER) and
+ * match skb->protocol == 0x888e (PAE).
+ */
+static struct sock_filter pae_filter[] = {
+	{ 0x28,  0,  0, 0xfffff01c },	/* ldh #hatype		*/
+	{ 0x15,  0,  3, 0x00000001 },	/* jne #1, drop		*/
+	{ 0x28,  0,  0, 0xfffff000 },	/* ldh #proto		*/
+	{ 0x15,  0,  1, 0x0000888e },	/* jne #0x888e, drop	*/
+	{ 0x06,  0,  0, 0xffffffff },	/* ret #-1		*/
+	{ 0x06,  0,  0, 0000000000 },	/* drop: ret #0		*/
+};
+
+static const struct sock_fprog pae_fprog = { .len = 6, .filter = pae_filter };
+
+static struct l_io *pae_open(void)
+{
+	struct l_io *io;
+	int fd;
+
+	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK,
+							htons(ETH_P_ALL));
+	if (fd < 0)
+		return NULL;
+
+	if (setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER,
+					&pae_fprog, sizeof(pae_fprog)) < 0) {
+		close(fd);
+		return NULL;
+	}
+
+	io = l_io_new(fd);
+	l_io_set_close_on_destroy(io, true);
+
+	return io;
+}
+
+static bool pae_read(struct l_io *io, void *user_data)
+{
+	int fd = l_io_get_fd(io);
+	struct sockaddr_ll sll;
+	socklen_t sll_len;
+	ssize_t bytes;
+	uint8_t frame[2304]; /* IEEE Std 802.11 ch. 8.2.3 */
+
+	memset(&sll, 0, sizeof(sll));
+	sll_len = sizeof(sll);
+
+	bytes = recvfrom(fd, frame, sizeof(frame), 0,
+				(struct sockaddr *) &sll, &sll_len);
+	if (bytes <= 0) {
+		l_error("EAPoL read socket: %s", strerror(errno));
+		return false;
+	}
+
+	if (sll.sll_halen != ETH_ALEN)
+		return true;
+
+	__eapol_rx_packet(sll.sll_ifindex, sll.sll_addr, frame, bytes);
+
+	return true;
+}
+
+static void pae_destroy()
+{
+	pae_io = NULL;
+}
+
+static void pae_write(uint32_t ifindex, const uint8_t *aa, const uint8_t *spa,
+			const struct eapol_frame *ef)
+{
+	size_t frame_size;
+	struct sockaddr_ll sll;
+	ssize_t r;
+	int fd;
+
+	if (!pae_io) {
+		if (tx_packet) /* Used for unit tests */
+			tx_packet(ifindex, aa, spa, ef, tx_user_data);
+
+		return;
+	}
+
+	fd = l_io_get_fd(pae_io);
+
+	memset(&sll, 0, sizeof(sll));
+	sll.sll_family = AF_PACKET;
+	sll.sll_ifindex = ifindex;
+	sll.sll_protocol = htons(ETH_P_PAE);
+	sll.sll_halen = ETH_ALEN;
+	memcpy(sll.sll_addr, aa, ETH_ALEN);
+
+	frame_size = sizeof(struct eapol_header) +
+			L_BE16_TO_CPU(ef->header.packet_len);
+
+	r = sendto(fd, ef, frame_size, 0,
+			(struct sockaddr *) &sll, sizeof(sll));
+	if (r < 0)
+		l_error("EAPoL write socket: %s", strerror(errno));
+}
+
+void eapol_pae_open()
+{
+	pae_io = pae_open();
+	if (!pae_io)
+		return;
+
+	l_io_set_read_handler(pae_io, pae_read, NULL, pae_destroy);
+}
+
+void eapol_pae_close()
+{
+	l_io_destroy(pae_io);
+}
 
 #define VERIFY_IS_ZERO(field)					\
 	do {							\
@@ -604,9 +724,7 @@ struct eapol_sm {
 	uint8_t anonce[32];
 	uint8_t ptk[64];
 	void *user_data;
-	void *tx_user_data;
 	struct l_timeout *timeout;
-	struct l_io *io;
 	bool have_snonce:1;
 	bool have_replay:1;
 	bool ptk_complete:1;
@@ -623,7 +741,6 @@ static void eapol_sm_destroy(void *value)
 	l_free(sm->own_ie);
 
 	l_timeout_remove(sm->timeout);
-	l_io_destroy(sm->io);
 
 	if (sm->eap)
 		eap_free(sm->eap);
@@ -746,11 +863,6 @@ void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data)
 	sm->user_data = user_data;
 }
 
-void eapol_sm_set_tx_user_data(struct eapol_sm *sm, void *user_data)
-{
-	sm->tx_user_data = user_data;
-}
-
 uint32_t eapol_sm_get_pairwise_cipher(struct eapol_sm *sm)
 {
 	return sm->pairwise_cipher;
@@ -800,36 +912,6 @@ static void eapol_timeout(struct l_timeout *timeout, void *user_data)
 
 	handshake_failed(sm->ifindex, sm,
 				MPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT);
-}
-
-static void eapol_tx_packet(struct eapol_sm *sm, const struct eapol_frame *ef)
-{
-	size_t frame_size;
-	struct sockaddr_ll sll;
-	ssize_t r;
-	int fd;
-
-	if (!sm->io) {
-		tx_packet(sm->ifindex, sm->aa, sm->spa, ef, sm->tx_user_data);
-		return;
-	}
-
-	fd = l_io_get_fd(sm->io);
-
-	memset(&sll, 0, sizeof(sll));
-	sll.sll_family = AF_PACKET;
-	sll.sll_ifindex = sm->ifindex;
-	sll.sll_protocol = htons(ETH_P_PAE);
-	sll.sll_halen = ETH_ALEN;
-	memcpy(sll.sll_addr, sm->aa, ETH_ALEN);
-
-	frame_size = sizeof(struct eapol_header) +
-			L_BE16_TO_CPU(ef->header.packet_len);
-
-	r = sendto(fd, ef, frame_size, 0,
-			(struct sockaddr *) &sll, sizeof(sll));
-	if (r < 0)
-		l_error("EAPoL write socket: %s", strerror(errno));
 }
 
 static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
@@ -883,7 +965,7 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 	}
 
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
-	eapol_tx_packet(sm, (struct eapol_frame *) step2);
+	pae_write(sm->ifindex, sm->aa, sm->spa, (struct eapol_frame *) step2);
 	l_free(step2);
 
 	l_timeout_remove(sm->timeout);
@@ -1208,7 +1290,7 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 		goto fail;
 
 	memcpy(step4->key_mic_data, mic, sizeof(mic));
-	eapol_tx_packet(sm, (struct eapol_frame *) step4);
+	pae_write(sm->ifindex, sm->aa, sm->spa, (struct eapol_frame *) step4);
 
 	sm->ptk_complete = true;
 
@@ -1290,7 +1372,7 @@ static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
 		goto done;
 
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
-	eapol_tx_packet(sm, (struct eapol_frame *) step2);
+	pae_write(sm->ifindex, sm->aa, sm->spa, (struct eapol_frame *) step2);
 
 	if (install_gtk) {
 		uint32_t cipher =
@@ -1304,9 +1386,7 @@ done:
 	l_free(step2);
 }
 
-static struct eapol_sm *eapol_find_sm(uint32_t ifindex,
-						const uint8_t *spa,
-						const uint8_t *aa)
+static struct eapol_sm *eapol_find_sm(uint32_t ifindex, const uint8_t *aa)
 {
 	const struct l_queue_entry *entry;
 	struct eapol_sm *sm;
@@ -1318,10 +1398,7 @@ static struct eapol_sm *eapol_find_sm(uint32_t ifindex,
 		if (sm->ifindex != ifindex)
 			continue;
 
-		if (memcmp(sm->spa, spa, 6))
-			continue;
-
-		if (memcmp(sm->aa, aa, 6))
+		if (memcmp(sm->aa, aa, ETH_ALEN))
 			continue;
 
 		return sm;
@@ -1441,7 +1518,7 @@ static void eapol_eap_msg_cb(const uint8_t *eap_data, size_t len,
 
 	memcpy(frame->data, eap_data, len);
 
-	eapol_tx_packet(sm, frame);
+	pae_write(sm->ifindex, sm->aa, sm->spa, frame);
 }
 
 /* This respresentes the eapTimout, eapFail and eapSuccess messages */
@@ -1569,10 +1646,10 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 	}
 }
 
-void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
+void __eapol_rx_packet(uint32_t ifindex, const uint8_t *aa,
 					const uint8_t *frame, size_t len)
 {
-	struct eapol_sm *sm = eapol_find_sm(ifindex, spa, aa);
+	struct eapol_sm *sm = eapol_find_sm(ifindex, aa);
 
 	if (!sm)
 		return;
@@ -1585,7 +1662,7 @@ void __eapol_update_replay_counter(uint32_t ifindex, const uint8_t *spa,
 {
 	struct eapol_sm *sm;
 
-	sm = eapol_find_sm(ifindex, spa, aa);
+	sm = eapol_find_sm(ifindex, aa);
 
 	if (!sm)
 		return;
@@ -1599,6 +1676,11 @@ void __eapol_update_replay_counter(uint32_t ifindex, const uint8_t *spa,
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func)
 {
 	tx_packet = func;
+}
+
+void __eapol_set_tx_user_data(void *user_data)
+{
+	tx_user_data = user_data;
 }
 
 void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func)
@@ -1626,70 +1708,6 @@ void __eapol_set_rekey_offload_func(eapol_rekey_offload_func_t func)
 	rekey_offload = func;
 }
 
-struct l_io *eapol_open_pae(uint32_t index)
-{
-	struct l_io *io;
-	struct sockaddr_ll sll;
-	int fd;
-
-	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC, htons(ETH_P_PAE));
-	if (fd < 0) {
-		l_error("Failed to create PAE socket %s (%d)",
-						strerror(errno), errno);
-		return NULL;
-	}
-
-	memset(&sll, 0, sizeof(sll));
-	sll.sll_family = AF_PACKET;
-	sll.sll_protocol = htons(ETH_P_PAE);
-	sll.sll_ifindex = index;
-
-	if (bind(fd, (struct sockaddr *) &sll, sizeof(sll)) < 0) {
-		l_error("Failed to bind PAE socket %s (%d)",
-						strerror(errno), errno);
-		close(fd);
-		return NULL;
-	}
-
-	io = l_io_new(fd);
-	if (!io) {
-		l_error("Failed to create IO handling for PAE socket ");
-		close(fd);
-		return NULL;
-	}
-
-	l_io_set_close_on_destroy(io, true);
-
-	return io;
-}
-
-static bool eapol_read(struct l_io *io, void *user_data)
-{
-	struct eapol_sm *sm = user_data;
-	int fd = l_io_get_fd(io);
-	struct sockaddr_ll sll;
-	socklen_t sll_len;
-	ssize_t bytes;
-	uint8_t frame[2304]; /* IEEE Std 802.11 ch. 8.2.3 */
-
-	memset(&sll, 0, sizeof(sll));
-	sll_len = sizeof(sll);
-
-	bytes = recvfrom(fd, frame, sizeof(frame), 0,
-				(struct sockaddr *) &sll, &sll_len);
-	if (bytes <= 0) {
-		l_error("EAPoL read socket: %s", strerror(errno));
-		return false;
-	}
-
-	if (memcmp(sm->aa, sll.sll_addr, 6))
-		return true;
-
-	eapol_rx_packet(sm, frame, bytes);
-
-	return true;
-}
-
 static bool eapol_get_nonce(uint8_t nonce[])
 {
 	return l_getrandom(nonce, 32);
@@ -1699,11 +1717,6 @@ void eapol_start(uint32_t ifindex, struct l_io *io, struct eapol_sm *sm)
 {
 	sm->ifindex = ifindex;
 	sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);
-
-	if (io) {
-		sm->io = io;
-		l_io_set_read_handler(io, eapol_read, sm, NULL);
-	}
 
 	l_queue_push_head(state_machines, sm);
 }

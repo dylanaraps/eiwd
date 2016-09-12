@@ -1125,25 +1125,8 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	netdev->connect_cb = cb;
 	netdev->user_data = user_data;
 	memcpy(netdev->remote_addr, bss->addr, ETH_ALEN);
-
 	netdev->connected = true;
-
 	netdev->sm = sm;
-	if (netdev->sm) {
-		/*
-		 * Due to timing / race conditions, it is possible for
-		 * EAPoL packets to arrive before the netdev events
-		 * are received.  Here we 'prime' the socket, so that
-		 * the data is available as soon as we call eapol_start
-		 *
-		 * If this isn't done, then we might 'miss' the first EAPoL
-		 * packet from the AP, and have to wait for the AP to
-		 * retransmit.  This delays our handshake by 1-2 seconds
-		 */
-		netdev->eapol_io = eapol_open_pae(netdev->index);
-		if (!netdev->eapol_io)
-			l_error("Failed to open PAE socket");
-	}
 
 	return 0;
 }
@@ -1507,6 +1490,9 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 
 	l_queue_push_tail(netdev_list, netdev);
 
+	if (l_queue_length(netdev_list) == 1)
+		eapol_pae_open();
+
 	l_debug("Created interface %s[%d]", netdev->name, netdev->index);
 
 	/* Query interface flags */
@@ -1729,4 +1715,6 @@ void netdev_shutdown(void)
 
 	l_queue_destroy(netdev_list, netdev_free);
 	netdev_list = NULL;
+
+	eapol_pae_close();
 }

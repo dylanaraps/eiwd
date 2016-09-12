@@ -164,10 +164,11 @@ struct eapol_key *eapol_create_gtk_2_of_2(
 				uint64_t key_replay_counter,
 				bool is_wpa, uint8_t wpa_key_id);
 
-void __eapol_rx_packet(uint32_t ifindex, const uint8_t *spa, const uint8_t *aa,
+void __eapol_rx_packet(uint32_t ifindex, const uint8_t *aa,
 			const uint8_t *frame, size_t len);
-
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func);
+void __eapol_set_tx_user_data(void *user_data);
+
 void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func);
 void __eapol_set_install_tk_func(eapol_install_tk_func_t func);
 void __eapol_set_install_gtk_func(eapol_install_gtk_func_t func);
@@ -196,16 +197,16 @@ void eapol_sm_set_ap_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie,
 bool eapol_sm_set_own_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie,
 				size_t len);
 void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data);
-void eapol_sm_set_tx_user_data(struct eapol_sm *sm, void *user_data);
 
 uint32_t eapol_sm_get_pairwise_cipher(struct eapol_sm *sm);
 uint32_t eapol_sm_get_group_cipher(struct eapol_sm *sm);
 const uint8_t *eapol_sm_get_own_ie(struct eapol_sm *sm, size_t *out_ie_len);
 
-struct l_io *eapol_open_pae(uint32_t index);
-
 void eapol_start(uint32_t ifindex, struct l_io *io, struct eapol_sm *sm);
 void eapol_cancel(uint32_t ifindex);
+
+void eapol_pae_open();
+void eapol_pae_close();
 
 bool eapol_init();
 bool eapol_exit();
