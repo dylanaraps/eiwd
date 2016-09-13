@@ -33,6 +33,7 @@
 #include "src/wscutil.h"
 #include "src/eapol.h"
 #include "src/eap.h"
+#include "src/eap-wsc.h"
 #include "src/crypto.h"
 #include "src/util.h"
 #include "src/mpdu.h"
@@ -1892,6 +1893,9 @@ struct verify_data {
 	bool eapol_failed;
 	const void *expected;
 	size_t expected_len;
+	struct wsc_credential *expected_creds;
+	unsigned int n_creds;
+	unsigned int cur_cred;
 };
 
 #define VERIFY_RESET(verify, e)				\
@@ -1926,6 +1930,22 @@ static int verify_8021x(uint32_t ifindex, const uint8_t *aa_addr,
 	return 0;
 }
 
+static void verify_credential(unsigned int event, const void *event_data,
+					void *user_data)
+{
+	struct verify_data *data = user_data;
+	const struct wsc_credential *cred;
+
+	if (event != EAP_WSC_EVENT_CREDENTIAL_OBTAINED)
+		assert(false);
+
+	cred = event_data;
+	assert(!memcmp(cred, data->expected_creds + data->cur_cred,
+						sizeof(struct wsc_credential)));
+
+	data->cur_cred += 1;
+}
+
 static void wsc_test_pbc_handshake(const void *data)
 {
 	static uint8_t ap_address[] = { 0x24, 0xa2, 0xe1, 0xec, 0x17, 0x04 };
@@ -1945,6 +1965,7 @@ static void wsc_test_pbc_handshake(const void *data)
 
 	__eapol_set_deauthenticate_func(verify_deauthenticate);
 	eapol_sm_set_user_data(sm, &verify);
+	eapol_sm_set_event_func(sm, verify_credential);
 
 	settings = l_settings_new();
 	l_settings_set_string(settings, "Security", "EAP-Identity",
@@ -2007,8 +2028,12 @@ static void wsc_test_pbc_handshake(const void *data)
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_done);
+	verify.expected_creds = creds_1;
+	verify.n_creds = 1;
+	verify.cur_cred = 0;
 	__eapol_rx_packet(1, ap_address, eap_wsc_m8, sizeof(eap_wsc_m8));
 	assert(verify.response_sent);
+	assert(verify.cur_cred == 1);
 
 	__eapol_rx_packet(1, ap_address, eap_fail, sizeof(eap_fail));
 	assert(verify.eapol_failed);
