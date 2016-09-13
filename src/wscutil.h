@@ -590,6 +590,10 @@ int wsc_parse_wsc_done(const uint8_t *pdu, uint32_t len, struct wsc_done *out);
 
 uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
 				size_t *out_len);
+uint8_t *wsc_build_association_request(
+		const struct wsc_association_request *association_request,
+		size_t *out_len);
+
 uint8_t *wsc_build_m1(const struct wsc_m1 *m1, size_t *out_len);
 uint8_t *wsc_build_m2(const struct wsc_m2 *m2, size_t *out_len);
 uint8_t *wsc_build_m3(const struct wsc_m3 *m3, size_t *out_len);

@@ -2050,6 +2050,27 @@ done:
 	return ret;
 }
 
+uint8_t *wsc_build_association_request(
+		const struct wsc_association_request *association_request,
+		size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+	uint8_t *ret;
+
+	builder = wsc_attr_builder_new(128);
+	build_version(builder, 0x10);
+	build_request_type(builder, association_request->request_type);
+
+	if (!association_request->version2)
+		goto done;
+
+	START_WFA_VENDOR_EXTENSION();
+
+done:
+	ret = wsc_attr_builder_free(builder, false, out_len);
+	return ret;
+}
+
 uint8_t *wsc_build_m1(const struct wsc_m1 *m1, size_t *out_len)
 {
 	struct wsc_attr_builder *builder;
