@@ -52,6 +52,14 @@ struct wsc {
 	uint32_t scan_id;
 };
 
+static struct l_dbus_message *wsc_error_session_overlap(
+						struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg,
+					IWD_WSC_INTERFACE ".SessionOverlap",
+					"Multiple sessions detected");
+}
+
 static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 				struct l_queue *bss_list, void *userdata)
 {
@@ -109,7 +117,7 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 		case SCAN_BAND_2_4_GHZ:
 			if (bss_2g) {
 				l_debug("2G Session overlap error");
-				return false;
+				goto session_overlap;
 			}
 
 			bss_2g = bss;
@@ -119,7 +127,7 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 		case SCAN_BAND_5_GHZ:
 			if (bss_5g) {
 				l_debug("5G Session overlap error");
-				return false;
+				goto session_overlap;
 			}
 
 			bss_5g = bss;
@@ -133,7 +141,7 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 
 	if (bss_2g && bss_5g && memcmp(uuid_2g, uuid_5g, 16)) {
 		l_debug("Found two PBC APs on different bands");
-		return false;
+		goto session_overlap;
 	}
 
 	if (bss_5g)
@@ -150,6 +158,15 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 
 	l_debug("Found AP to connect to: %s",
 			util_address_to_string(target->addr));
+
+	return false;
+
+session_overlap:
+	dbus_pending_reply(&wsc->pending,
+				wsc_error_session_overlap(wsc->pending));
+
+	l_free(wsc->wsc_ies);
+	wsc->wsc_ies = 0;
 
 	return false;
 }
