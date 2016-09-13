@@ -23,11 +23,5 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-struct wsc_sm;
-
-struct wsc_sm *wsc_sm_new_pushbutton(uint32_t ifindex, const uint8_t *addr,
-					uint32_t bands);
-void wsc_sm_free(struct wsc_sm *wsc_sm);
-
 bool wsc_init(struct l_genl_family *in);
 bool wsc_exit();

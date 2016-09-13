@@ -43,24 +43,19 @@
 static struct l_genl_family *nl80211 = NULL;
 static uint32_t device_watch = 0;
 
-struct wsc_sm {
-	uint32_t ifindex;
+struct wsc {
+	struct device *device;
+	struct l_dbus_message *pending;
 	uint8_t *wsc_ies;
 	size_t wsc_ies_size;
 	struct l_timeout *walk_timer;
 	uint32_t scan_id;
 };
 
-struct wsc {
-	struct device *device;
-	struct l_dbus_message *pending;
-	struct wsc_sm *sm;
-};
-
 static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 				struct l_queue *bss_list, void *userdata)
 {
-	struct wsc_sm *sm = userdata;
+	struct wsc *wsc = userdata;
 	struct scan_bss *bss_2g;
 	struct scan_bss *bss_5g;
 	struct scan_bss *target;
@@ -72,7 +67,7 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 	bss_2g = NULL;
 	bss_5g = NULL;
 
-	sm->scan_id = 0;
+	wsc->scan_id = 0;
 
 	for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
 				bss_entry = bss_entry->next) {
@@ -147,9 +142,9 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 		target = bss_2g;
 	else {
 		l_debug("No PBC APs found, running the scan again");
-		sm->scan_id = scan_active(sm->ifindex,
-						sm->wsc_ies, sm->wsc_ies_size,
-						NULL, scan_results, sm, NULL);
+		wsc->scan_id = scan_active(device_get_ifindex(wsc->device),
+						wsc->wsc_ies, wsc->wsc_ies_size,
+						NULL, scan_results, wsc, NULL);
 		return false;
 	}
 
@@ -159,12 +154,12 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 	return false;
 }
 
-struct wsc_sm *wsc_sm_new_pushbutton(uint32_t ifindex, const uint8_t *addr,
-					uint32_t bands)
+static bool wsc_start_pushbutton(struct wsc *wsc)
 {
 	static const uint8_t wfa_oui[] = { 0x00, 0x50, 0xF2 };
-	struct wsc_sm *sm;
 	struct wsc_probe_request req;
+	struct wiphy *wiphy = device_get_wiphy(wsc->device);
+	uint32_t bands;
 	uint8_t *wsc_data;
 	size_t wsc_data_size;
 
@@ -177,8 +172,8 @@ struct wsc_sm *wsc_sm_new_pushbutton(uint32_t ifindex, const uint8_t *addr,
 	req.config_methods = WSC_CONFIGURATION_METHOD_VIRTUAL_PUSH_BUTTON |
 				WSC_CONFIGURATION_METHOD_KEYPAD;
 
-	if (!wsc_uuid_from_addr(addr, req.uuid_e))
-		return NULL;
+	if (!wsc_uuid_from_addr(device_get_address(wsc->device), req.uuid_e))
+		return false;
 
 	/* TODO: Grab from configuration file ? */
 	req.primary_device_type.category = 255;
@@ -186,6 +181,7 @@ struct wsc_sm *wsc_sm_new_pushbutton(uint32_t ifindex, const uint8_t *addr,
 	req.primary_device_type.oui_type = 0x04;
 	req.primary_device_type.subcategory = 0;
 
+	bands = wiphy_get_supported_bands(wiphy);
 	if (bands & SCAN_BAND_2_4_GHZ)
 		req.rf_bands |= WSC_RF_BAND_2_4_GHZ;
 	if (bands & SCAN_BAND_5_GHZ)
@@ -198,35 +194,30 @@ struct wsc_sm *wsc_sm_new_pushbutton(uint32_t ifindex, const uint8_t *addr,
 
 	wsc_data = wsc_build_probe_request(&req, &wsc_data_size);
 	if (!wsc_data)
-		return NULL;
+		return false;
 
-	sm = l_new(struct wsc_sm, 1);
-	sm->wsc_ies = ie_tlv_encapsulate_wsc_payload(wsc_data, wsc_data_size,
-							&sm->wsc_ies_size);
+	wsc->wsc_ies = ie_tlv_encapsulate_wsc_payload(wsc_data, wsc_data_size,
+							&wsc->wsc_ies_size);
 	l_free(wsc_data);
 
-	if (!sm->wsc_ies) {
-		l_free(sm);
-		return NULL;
-	}
+	if (!wsc->wsc_ies)
+		return false;
 
-	sm->ifindex = ifindex;
-	sm->scan_id = scan_active(ifindex, sm->wsc_ies, sm->wsc_ies_size,
-					NULL, scan_results, sm, NULL);
-
-	return sm;
+	wsc->scan_id = scan_active(device_get_ifindex(wsc->device),
+					wsc->wsc_ies, wsc->wsc_ies_size,
+					NULL, scan_results, wsc, NULL);
+	return true;
 }
 
-void wsc_sm_free(struct wsc_sm *sm)
+static void wsc_abort(struct wsc *wsc)
 {
-	l_free(sm->wsc_ies);
+	l_free(wsc->wsc_ies);
+	wsc->wsc_ies = 0;
 
-	if (sm->scan_id > 0) {
-		scan_cancel(sm->ifindex, sm->scan_id);
-		sm->scan_id = 0;
+	if (wsc->scan_id > 0) {
+		scan_cancel(device_get_ifindex(wsc->device), wsc->scan_id);
+		wsc->scan_id = 0;
 	}
-
-	l_free(sm);
 }
 
 static struct l_dbus_message *wsc_push_button(struct l_dbus *dbus,
@@ -240,10 +231,8 @@ static struct l_dbus_message *wsc_push_button(struct l_dbus *dbus,
 	if (wsc->pending)
 		return dbus_error_busy(message);
 
-	/* TODO: Parse wiphy bands to set the RF Bands properly below */
-	wsc->sm = wsc_sm_new_pushbutton(device_get_ifindex(wsc->device),
-				device_get_address(wsc->device),
-				SCAN_BAND_2_4_GHZ | SCAN_BAND_5_GHZ);
+	if (!wsc_start_pushbutton(wsc))
+		return dbus_error_failed(message);
 
 	wsc->pending = l_dbus_message_ref(message);
 	return NULL;
@@ -266,8 +255,7 @@ static struct l_dbus_message *wsc_cancel(struct l_dbus *dbus,
 
 	dbus_pending_reply(&wsc->pending, dbus_error_aborted(wsc->pending));
 
-	wsc_sm_free(wsc->sm);
-	wsc->sm = NULL;
+	wsc_abort(wsc);
 
 	return reply;
 }
@@ -288,8 +276,7 @@ static void wsc_free(void *userdata)
 		dbus_pending_reply(&wsc->pending,
 					dbus_error_not_available(wsc->pending));
 
-		wsc_sm_free(wsc->sm);
-		wsc->sm = NULL;
+		wsc_abort(wsc);
 	}
 
 	l_free(wsc);
