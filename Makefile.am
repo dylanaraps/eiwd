@@ -73,7 +73,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/network.h src/network.c \
 					src/wscutil.h src/wscutil.c \
 					src/wsc.h src/wsc.c \
-					src/eap-wsc.c \
+					src/eap-wsc.h src/eap-wsc.c \
 					src/eap.h src/eap.c \
 					src/eap-tls.c src/eap-ttls.c \
 					src/backtrace.h src/backtrace.c \
@@ -189,7 +189,7 @@ unit_test_wsc_SOURCES = unit/test-wsc.c src/wscutil.h src/wscutil.c \
 				src/eapol.h src/eapol.c \
 				src/eap.h src/eap.c \
 				src/util.h src/util.c \
-				src/eap-wsc.c
+				src/eap-wsc.h src/eap-wsc.c
 unit_test_wsc_LDADD = ell/libell-internal.la
 
 TESTS = $(unit_tests)

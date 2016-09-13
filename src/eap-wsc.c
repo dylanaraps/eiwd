@@ -33,6 +33,7 @@
 #include "eap.h"
 #include "wscutil.h"
 #include "util.h"
+#include "eap-wsc.h"
 
 #define EAP_WSC_OFFSET 12
 
@@ -405,6 +406,7 @@ static void eap_wsc_handle_m8(struct eap_state *eap,
 	struct wsc_m8_encrypted_settings m8es;
 	struct iovec creds[3];
 	size_t n_creds;
+	size_t i;
 
 	/* Spec unclear what to do here, see comments in eap_wsc_send_nack */
 	if (wsc_parse_m8(pdu, len, &m8, &encrypted) != 0) {
@@ -429,6 +431,16 @@ static void eap_wsc_handle_m8(struct eap_state *eap,
 
 	if (!keywrap_authenticator_check(wsc, decrypted, decrypted_len))
 		goto invalid_settings;
+
+	for (i = 0; i < n_creds; i++) {
+		struct wsc_credential cred;
+
+		if (wsc_parse_credential(creds[i].iov_base, creds[i].iov_len,
+						&cred) != 0)
+			continue;
+
+		eap_method_event(eap, EAP_WSC_EVENT_CREDENTIAL_OBTAINED, &cred);
+	}
 
 	l_free(decrypted);
 
