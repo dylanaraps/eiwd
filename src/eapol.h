@@ -125,6 +125,9 @@ typedef void (*eapol_rekey_offload_func_t)(uint32_t ifindex,
 					const uint8_t *kck,
 					uint64_t replay_counter,
 					void *user_data);
+typedef void (*eapol_sm_event_func_t)(unsigned int event,
+							const void *event_data,
+							void *user_data);
 
 bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 				uint8_t *mic);
@@ -197,6 +200,7 @@ void eapol_sm_set_ap_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie,
 bool eapol_sm_set_own_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie,
 				size_t len);
 void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data);
+void eapol_sm_set_event_func(struct eapol_sm *sm, eapol_sm_event_func_t func);
 
 uint32_t eapol_sm_get_pairwise_cipher(struct eapol_sm *sm);
 uint32_t eapol_sm_get_group_cipher(struct eapol_sm *sm);

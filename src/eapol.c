@@ -723,6 +723,7 @@ struct eapol_sm {
 	uint8_t snonce[32];
 	uint8_t anonce[32];
 	uint8_t ptk[64];
+	eapol_sm_event_func_t event_func;
 	void *user_data;
 	struct l_timeout *timeout;
 	bool have_snonce:1;
@@ -861,6 +862,11 @@ bool eapol_sm_set_own_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie,
 void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data)
 {
 	sm->user_data = user_data;
+}
+
+void eapol_sm_set_event_func(struct eapol_sm *sm, eapol_sm_event_func_t func)
+{
+	sm->event_func = func;
 }
 
 uint32_t eapol_sm_get_pairwise_cipher(struct eapol_sm *sm)
@@ -1575,6 +1581,17 @@ static void eapol_eap_results_cb(const uint8_t *msk_data, size_t msk_len,
 		eapol_sm_set_pmk(sm, msk_data);
 }
 
+static void eapol_eap_event_cb(unsigned int event,
+				const void *event_data, void *user_data)
+{
+	struct eapol_sm *sm = user_data;
+
+	if (!sm->event_func)
+		return;
+
+	sm->event_func(event, event_data, sm->user_data);
+}
+
 void eapol_sm_set_8021x_config(struct eapol_sm *sm, struct l_settings *settings)
 {
 	sm->eap = eap_new(eapol_eap_msg_cb, eapol_eap_complete_cb, sm);
@@ -1582,9 +1599,11 @@ void eapol_sm_set_8021x_config(struct eapol_sm *sm, struct l_settings *settings)
 	if (!sm->eap)
 		return;
 
-	eap_set_key_material_func(sm->eap, eapol_eap_results_cb);
+	if (!eap_load_settings(sm->eap, settings, "EAP-"))
+		return;
 
-	eap_load_settings(sm->eap, settings, "EAP-");
+	eap_set_key_material_func(sm->eap, eapol_eap_results_cb);
+	eap_set_event_func(sm->eap, eapol_eap_event_cb);
 }
 
 static void eapol_rx_packet(struct eapol_sm *sm,
