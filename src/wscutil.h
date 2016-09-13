@@ -593,6 +593,9 @@ uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
 uint8_t *wsc_build_association_request(
 		const struct wsc_association_request *association_request,
 		size_t *out_len);
+uint8_t *wsc_build_association_response(
+		const struct wsc_association_response *association_response,
+		size_t *out_len);
 
 uint8_t *wsc_build_m1(const struct wsc_m1 *m1, size_t *out_len);
 uint8_t *wsc_build_m2(const struct wsc_m2 *m2, size_t *out_len);

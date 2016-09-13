@@ -1938,6 +1938,13 @@ static void build_request_type(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_u8(builder, type);
 }
 
+static void build_response_type(struct wsc_attr_builder *builder,
+						enum wsc_response_type type)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_RESPONSE_TYPE);
+	wsc_attr_builder_put_u8(builder, type);
+}
+
 static void build_rf_bands(struct wsc_attr_builder *builder, uint8_t rf_bands)
 {
 	wsc_attr_builder_start_attr(builder, WSC_ATTR_RF_BANDS);
@@ -2062,6 +2069,27 @@ uint8_t *wsc_build_association_request(
 	build_request_type(builder, association_request->request_type);
 
 	if (!association_request->version2)
+		goto done;
+
+	START_WFA_VENDOR_EXTENSION();
+
+done:
+	ret = wsc_attr_builder_free(builder, false, out_len);
+	return ret;
+}
+
+uint8_t *wsc_build_association_response(
+		const struct wsc_association_response *association_response,
+		size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+	uint8_t *ret;
+
+	builder = wsc_attr_builder_new(128);
+	build_version(builder, 0x10);
+	build_response_type(builder, association_response->response_type);
+
+	if (!association_response->version2)
 		goto done;
 
 	START_WFA_VENDOR_EXTENSION();
