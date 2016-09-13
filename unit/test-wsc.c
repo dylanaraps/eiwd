@@ -2004,7 +2004,7 @@ static void wsc_test_pbc_handshake(const void *data)
 	eapol_sm_set_8021x_config(sm, settings);
 	l_settings_free(settings);
 
-	eapol_start(1, NULL, sm);
+	eapol_start(1, sm);
 
 	VERIFY_RESET(verify, eap_identity_resp);
 	__eapol_rx_packet(1, ap_address, eap_identity_req,
