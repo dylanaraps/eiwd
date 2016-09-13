@@ -1732,7 +1732,7 @@ static bool eapol_get_nonce(uint8_t nonce[])
 	return l_getrandom(nonce, 32);
 }
 
-void eapol_start(uint32_t ifindex, struct l_io *io, struct eapol_sm *sm)
+void eapol_start(uint32_t ifindex, struct eapol_sm *sm)
 {
 	sm->ifindex = ifindex;
 	sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);

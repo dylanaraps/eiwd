@@ -206,7 +206,7 @@ uint32_t eapol_sm_get_pairwise_cipher(struct eapol_sm *sm);
 uint32_t eapol_sm_get_group_cipher(struct eapol_sm *sm);
 const uint8_t *eapol_sm_get_own_ie(struct eapol_sm *sm, size_t *out_ie_len);
 
-void eapol_start(uint32_t ifindex, struct l_io *io, struct eapol_sm *sm);
+void eapol_start(uint32_t ifindex, struct eapol_sm *sm);
 void eapol_cancel(uint32_t ifindex);
 
 void eapol_pae_open();

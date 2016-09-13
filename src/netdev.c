@@ -62,7 +62,6 @@ struct netdev {
 	netdev_disconnect_cb_t disconnect_cb;
 	void *user_data;
 	struct eapol_sm *sm;
-	struct l_io *eapol_io;
 	uint8_t remote_addr[ETH_ALEN];
 	uint32_t pairwise_new_key_cmd_id;
 	uint32_t pairwise_set_key_cmd_id;
@@ -271,9 +270,6 @@ static void netdev_connect_free(struct netdev *netdev)
 	if (netdev->sm) {
 		eapol_sm_free(netdev->sm);
 		netdev->sm = NULL;
-
-		l_io_destroy(netdev->eapol_io);
-		netdev->eapol_io = NULL;
 	}
 
 	if (netdev->eapol_active) {
@@ -993,11 +989,10 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 		goto error;
 
 	if (netdev->sm) {
-		eapol_start(netdev->index, netdev->eapol_io, netdev->sm);
+		eapol_start(netdev->index, netdev->sm);
 		netdev->eapol_active = true;
 
 		netdev->sm = NULL;
-		netdev->eapol_io = NULL;
 
 		if (netdev->event_filter)
 			netdev->event_filter(netdev,
