@@ -31,6 +31,7 @@ enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy,
 struct wiphy *wiphy_find(int wiphy_id);
 
 const char *wiphy_get_path(struct wiphy *wiphy);
+uint32_t wiphy_get_supported_bands(struct wiphy *wiphy);
 
 bool wiphy_init(struct l_genl_family *in);
 bool wiphy_exit(void);

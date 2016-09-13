@@ -109,6 +109,14 @@ const char *wiphy_get_path(struct wiphy *wiphy)
 	return path;
 }
 
+uint32_t wiphy_get_supported_bands(struct wiphy *wiphy)
+{
+	if (!wiphy->supported_freqs)
+		return 0;
+
+	return scan_freq_set_get_bands(wiphy->supported_freqs);
+}
+
 static void wiphy_print_basic_info(struct wiphy *wiphy)
 {
 	uint32_t bands;
