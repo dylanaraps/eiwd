@@ -1088,6 +1088,26 @@ done:
 	return 0;
 }
 
+int wsc_parse_association_request(const uint8_t *pdu, uint32_t len,
+					struct wsc_association_request *out)
+{
+	int r;
+	struct wsc_wfa_ext_iter iter;
+	uint8_t version;
+
+	memset(out, 0, sizeof(struct wsc_association_request));
+
+	r = wsc_parse_attrs(pdu, len, &out->version2, &iter, 0, NULL,
+		REQUIRED(VERSION, &version),
+		REQUIRED(REQUEST_TYPE, &out->request_type),
+		WSC_ATTR_INVALID);
+
+	if (r < 0)
+		return r;
+
+	return 0;
+}
+
 int wsc_parse_association_response(const uint8_t *pdu, uint32_t len,
 					struct wsc_association_response *out)
 {
