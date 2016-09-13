@@ -399,6 +399,11 @@ struct wsc_probe_request {
 	struct wsc_primary_device_type requested_device_type;
 };
 
+struct wsc_association_response {
+	bool version2;
+	enum wsc_response_type response_type;
+};
+
 struct wsc_m1 {
 	bool version2;
 	uint8_t uuid_e[16];
@@ -543,6 +548,8 @@ int wsc_parse_probe_response(const unsigned char *pdu, unsigned int len,
 				struct wsc_probe_response *out);
 int wsc_parse_probe_request(const unsigned char *pdu, unsigned int len,
 				struct wsc_probe_request *out);
+int wsc_parse_association_response(const uint8_t *pdu, uint32_t len,
+					struct wsc_association_response *out);
 
 int wsc_parse_m1(const uint8_t *pdu, uint32_t len, struct wsc_m1 *out);
 int wsc_parse_m2(const uint8_t *pdu, uint32_t len, struct wsc_m2 *out);
