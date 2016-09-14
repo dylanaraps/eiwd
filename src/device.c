@@ -662,6 +662,9 @@ void device_connect_network(struct device *device, struct network *network,
 	if (netdev_connect(device->netdev, bss, sm,
 					device_netdev_event,
 					device_connect_cb, device) < 0) {
+		if (sm)
+			eapol_sm_free(sm);
+
 		dbus_pending_reply(&device->connect_pending,
 				dbus_error_failed(device->connect_pending));
 		return;
