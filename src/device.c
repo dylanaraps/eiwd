@@ -78,82 +78,18 @@ struct device {
 	struct netdev *netdev;
 };
 
-static struct l_queue *device_watches = NULL;
-static uint32_t device_next_watch_id = 0;
-
+static struct watchlist device_watches;
 static struct l_queue *device_list;
 
-static void device_watchlist_item_free(void *userdata)
-{
-	struct device_watchlist_item *item = userdata;
-
-	if (item->destroy)
-		item->destroy(item->userdata);
-
-	l_free(item);
-}
-
-static bool device_watchlist_item_match(const void *a, const void *b)
-{
-	const struct device_watchlist_item *item = a;
-	uint32_t id = L_PTR_TO_UINT(b);
-
-	return item->id == id;
-}
-
-uint32_t device_watch_add(device_watch_func_t added,
-				device_watch_func_t removed,
+uint32_t device_watch_add(device_watch_func_t func,
 				void *userdata, device_destroy_func_t destroy)
 {
-	struct device_watchlist_item *item;
-
-	item = l_new(struct device_watchlist_item, 1);
-	item->id = ++device_next_watch_id;
-	item->added = added;
-	item->removed = removed;
-	item->userdata = userdata;
-	item->destroy = destroy;
-
-	l_queue_push_tail(device_watches, item);
-
-	return item->id;
+	return watchlist_add(&device_watches, func, userdata, destroy);
 }
 
 bool device_watch_remove(uint32_t id)
 {
-	struct device_watchlist_item *item;
-
-	item = l_queue_remove_if(device_watches, device_watchlist_item_match,
-							L_UINT_TO_PTR(id));
-	if (!item)
-		return false;
-
-	device_watchlist_item_free(item);
-	return true;
-}
-
-void __device_watch_call_added(struct device *device)
-{
-	const struct l_queue_entry *e;
-
-	for (e = l_queue_get_entries(device_watches); e; e = e->next) {
-		struct device_watchlist_item *item = e->data;
-
-		if (item->added)
-			item->added(device, item->userdata);
-	}
-}
-
-void __device_watch_call_removed(struct device *device)
-{
-	const struct l_queue_entry *e;
-
-	for (e = l_queue_get_entries(device_watches); e; e = e->next) {
-		struct device_watchlist_item *item = e->data;
-
-		if (item->removed)
-			item->removed(device, item->userdata);
-	}
+	return watchlist_remove(&device_watches, id);
 }
 
 void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
@@ -1113,7 +1049,8 @@ static void device_netdev_notify(struct netdev *netdev,
 	case NETDEV_WATCH_EVENT_UP:
 		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 
-		__device_watch_call_added(device);
+		WATCHLIST_NOTIFY(&device_watches, device_watch_func_t,
+						device, DEVICE_EVENT_INSERTED);
 
 		l_dbus_property_changed(dbus, device_get_path(device),
 					IWD_DEVICE_INTERFACE, "Powered");
@@ -1155,7 +1092,8 @@ static void device_netdev_notify(struct netdev *netdev,
 		l_queue_destroy(device->networks_sorted, NULL);
 		device->networks_sorted = l_queue_new();
 
-		__device_watch_call_removed(device);
+		WATCHLIST_NOTIFY(&device_watches, device_watch_func_t,
+						device, DEVICE_EVENT_REMOVED);
 
 		l_dbus_property_changed(dbus, device_get_path(device),
 					IWD_DEVICE_INTERFACE, "Powered");
@@ -1221,7 +1159,8 @@ static void device_free(void *user)
 	watchlist_destroy(&device->state_watches);
 
 	if (device->state != DEVICE_STATE_OFF)
-		__device_watch_call_removed(device);
+		WATCHLIST_NOTIFY(&device_watches, device_watch_func_t,
+						device, DEVICE_EVENT_REMOVED);
 
 	dbus = dbus_get_bus();
 	l_dbus_unregister_object(dbus, device_get_path(device));
@@ -1255,7 +1194,7 @@ bool device_init(void)
 					NULL, true))
 		return false;
 
-	device_watches = l_queue_new();
+	watchlist_init(&device_watches);
 	device_list = l_queue_new();
 
 	return true;
@@ -1269,7 +1208,7 @@ bool device_exit(void)
 	l_queue_destroy(device_list, device_free);
 	device_list = NULL;
 
-	l_queue_destroy(device_watches, device_watchlist_item_free);
+	watchlist_destroy(&device_watches);
 
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_DEVICE_INTERFACE);
 

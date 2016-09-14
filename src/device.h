@@ -27,6 +27,11 @@ struct wiphy;
 struct netdev;
 struct device;
 
+enum device_event {
+	DEVICE_EVENT_INSERTED,
+	DEVICE_EVENT_REMOVED,
+};
+
 enum device_state {
 	DEVICE_STATE_OFF = 0,		/* Interface down */
 	DEVICE_STATE_DISCONNECTED,	/* Disconnected, no auto-connect */
@@ -36,17 +41,15 @@ enum device_state {
 	DEVICE_STATE_DISCONNECTING,
 };
 
-typedef void (*device_watch_func_t)(struct device *device, void *userdata);
+typedef void (*device_watch_func_t)(struct device *device,
+					enum device_event event,
+					void *userdata);
 typedef void (*device_state_watch_func_t)(enum device_state, void *userdata);
 typedef void (*device_destroy_func_t)(void *userdata);
 
-uint32_t device_watch_add(device_watch_func_t added,
-				device_watch_func_t removed,
+uint32_t device_watch_add(device_watch_func_t func,
 				void *userdata, device_destroy_func_t destroy);
 bool device_watch_remove(uint32_t id);
-
-void __device_watch_call_added(struct device *device);
-void __device_watch_call_removed(struct device *device);
 
 struct network *device_get_connected_network(struct device *device);
 const char *device_get_path(struct device *device);

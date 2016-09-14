@@ -323,6 +323,17 @@ static void device_disappeared(struct device *device, void *userdata)
 					IWD_WSC_INTERFACE);
 }
 
+static void device_event(struct device *device, enum device_event event,
+								void *userdata)
+{
+	switch (event) {
+	case DEVICE_EVENT_INSERTED:
+		return device_appeared(device, userdata);
+	case DEVICE_EVENT_REMOVED:
+		return device_disappeared(device, userdata);
+	}
+}
+
 bool wsc_init(struct l_genl_family *in)
 {
 	if (!l_dbus_register_interface(dbus_get_bus(), IWD_WSC_INTERFACE,
@@ -330,8 +341,7 @@ bool wsc_init(struct l_genl_family *in)
 					wsc_free, false))
 		return false;
 
-	device_watch = device_watch_add(device_appeared, device_disappeared,
-						NULL, NULL);
+	device_watch = device_watch_add(device_event, NULL, NULL);
 	if (!device_watch)
 		return false;
 
