@@ -194,6 +194,7 @@ static bool __scan_active_start(struct l_genl_family *nl80211,
 							32 + extra_ie_size);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
 	l_genl_msg_enter_nested(msg, NL80211_ATTR_SCAN_SSIDS);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, 0, NULL);
 	l_genl_msg_leave_nested(msg);
 
 	if (extra_ie && extra_ie_size)
