@@ -503,7 +503,7 @@ bool device_remove_state_watch(struct device *device, uint32_t id)
 	return watchlist_remove(&device->state_watches, id);
 }
 
-void device_enter_state(struct device *device, enum device_state state)
+static void device_enter_state(struct device *device, enum device_state state)
 {
 	struct l_dbus *dbus = dbus_get_bus();
 	bool disconnected;

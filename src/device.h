@@ -61,7 +61,6 @@ uint32_t device_add_state_watch(struct device *device,
 					device_destroy_func_t destroy);
 bool device_remove_state_watch(struct device *device, uint32_t id);
 
-void device_enter_state(struct device *device, enum device_state state);
 void device_connect_network(struct device *device, struct network *network,
 				struct scan_bss *bss,
 				struct l_dbus_message *message);
