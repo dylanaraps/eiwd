@@ -76,6 +76,10 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 				struct eapol_sm *sm,
 				netdev_event_func_t event_filter,
 				netdev_connect_cb_t cb, void *user_data);
+int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
+				struct eapol_sm *sm,
+				netdev_event_func_t event_filter,
+				netdev_connect_cb_t cb, void *user_data);
 int netdev_disconnect(struct netdev *netdev,
 				netdev_disconnect_cb_t cb, void *user_data);
 

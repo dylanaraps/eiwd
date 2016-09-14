@@ -47,6 +47,7 @@
 #include "src/device.h"
 #include "src/scan.h"
 #include "src/netdev.h"
+#include "src/wscutil.h"
 
 struct netdev {
 	uint32_t index;
@@ -1093,20 +1094,13 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 	return msg;
 }
 
-int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
-				struct eapol_sm *sm,
-				netdev_event_func_t event_filter,
-				netdev_connect_cb_t cb, void *user_data)
+static int netdev_connect_common(struct netdev *netdev,
+					struct l_genl_msg *cmd_connect,
+					struct scan_bss *bss,
+					struct eapol_sm *sm,
+					netdev_event_func_t event_filter,
+					netdev_connect_cb_t cb, void *user_data)
 {
-	struct l_genl_msg *cmd_connect;
-
-	if (netdev->connected)
-		return -EISCONN;
-
-	cmd_connect = netdev_build_cmd_connect(netdev, bss, sm);
-	if (!cmd_connect)
-		return -EINVAL;
-
 	netdev->connect_cmd_id = l_genl_family_send(nl80211, cmd_connect,
 							netdev_cmd_connect_cb,
 							netdev, NULL);
@@ -1124,6 +1118,68 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	netdev->sm = sm;
 
 	return 0;
+
+}
+
+int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
+				struct eapol_sm *sm,
+				netdev_event_func_t event_filter,
+				netdev_connect_cb_t cb, void *user_data)
+{
+	struct l_genl_msg *cmd_connect;
+
+	if (netdev->connected)
+		return -EISCONN;
+
+	cmd_connect = netdev_build_cmd_connect(netdev, bss, sm);
+	if (!cmd_connect)
+		return -EINVAL;
+
+	return netdev_connect_common(netdev, cmd_connect, bss, sm,
+						event_filter, cb, user_data);
+}
+
+int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
+				struct eapol_sm *sm,
+				netdev_event_func_t event_filter,
+				netdev_connect_cb_t cb, void *user_data)
+{
+	struct l_genl_msg *cmd_connect;
+	struct wsc_association_request request;
+	uint8_t *pdu;
+	size_t pdu_len;
+	void *ie;
+	size_t ie_len;
+
+	if (netdev->connected)
+		return -EISCONN;
+
+	cmd_connect = netdev_build_cmd_connect(netdev, bss, NULL);
+	if (!cmd_connect)
+		return -EINVAL;
+
+	request.version2 = true;
+	request.request_type = WSC_REQUEST_TYPE_ENROLLEE_OPEN_8021X;
+
+	pdu = wsc_build_association_request(&request, &pdu_len);
+	if (!pdu)
+		goto error;
+
+	ie = ie_tlv_encapsulate_wsc_payload(pdu, pdu_len, &ie_len);
+	l_free(pdu);
+
+	if (!ie)
+		goto error;
+
+	l_genl_msg_append_attr(cmd_connect, NL80211_ATTR_IE, ie_len, ie);
+	l_free(ie);
+
+	return netdev_connect_common(netdev, cmd_connect, bss, sm,
+						event_filter, cb, user_data);
+
+error:
+	l_genl_msg_unref(cmd_connect);
+	return -ENOMEM;
 }
 
 int netdev_disconnect(struct netdev *netdev,
