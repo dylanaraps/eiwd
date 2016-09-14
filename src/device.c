@@ -486,7 +486,6 @@ static void periodic_scan_trigger(int err, void *user_data)
 	device->scanning = true;
 	l_dbus_property_changed(dbus, device_get_path(device),
 				IWD_DEVICE_INTERFACE, "Scanning");
-
 }
 
 void device_enter_state(struct device *device, enum device_state state)
