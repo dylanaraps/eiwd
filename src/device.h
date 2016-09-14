@@ -55,7 +55,6 @@ uint32_t device_get_ifindex(struct device *device);
 const uint8_t *device_get_address(struct device *device);
 
 void device_enter_state(struct device *device, enum device_state state);
-void device_disassociated(struct device *device);
 void device_connect_network(struct device *device, struct network *network,
 				struct scan_bss *bss,
 				struct l_dbus_message *message);

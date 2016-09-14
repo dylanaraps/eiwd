@@ -528,7 +528,7 @@ void device_enter_state(struct device *device, enum device_state state)
 	device->state = state;
 }
 
-void device_disassociated(struct device *device)
+static void device_disassociated(struct device *device)
 {
 	struct network *network = device->connected_network;
 	struct l_dbus *dbus = dbus_get_bus();
