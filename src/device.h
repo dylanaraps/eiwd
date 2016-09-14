@@ -37,6 +37,7 @@ enum device_state {
 };
 
 typedef void (*device_watch_func_t)(struct device *device, void *userdata);
+typedef void (*device_state_watch_func_t)(enum device_state, void *userdata);
 typedef void (*device_destroy_func_t)(void *userdata);
 
 uint32_t device_watch_add(device_watch_func_t added,
@@ -53,6 +54,12 @@ bool device_is_busy(struct device *device);
 struct wiphy *device_get_wiphy(struct device *device);
 uint32_t device_get_ifindex(struct device *device);
 const uint8_t *device_get_address(struct device *device);
+
+uint32_t device_add_state_watch(struct device *device,
+					device_state_watch_func_t func,
+					void *user_data,
+					device_destroy_func_t destroy);
+bool device_remove_state_watch(struct device *device, uint32_t id);
 
 void device_enter_state(struct device *device, enum device_state state);
 void device_connect_network(struct device *device, struct network *network,

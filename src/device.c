@@ -41,6 +41,7 @@
 #include "src/dbus.h"
 #include "src/network.h"
 #include "src/device.h"
+#include "src/watchlist.h"
 
 struct device_watchlist_item {
 	uint32_t id;
@@ -71,6 +72,7 @@ struct device {
 	struct l_dbus_message *disconnect_pending;
 	bool scanning;
 	uint32_t netdev_watch_id;
+	struct watchlist state_watches;
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
@@ -488,6 +490,19 @@ static void periodic_scan_trigger(int err, void *user_data)
 				IWD_DEVICE_INTERFACE, "Scanning");
 }
 
+uint32_t device_add_state_watch(struct device *device,
+					device_state_watch_func_t func,
+					void *user_data,
+					device_destroy_func_t destroy)
+{
+	return watchlist_add(&device->state_watches, func, user_data, destroy);
+}
+
+bool device_remove_state_watch(struct device *device, uint32_t id)
+{
+	return watchlist_remove(&device->state_watches, id);
+}
+
 void device_enter_state(struct device *device, enum device_state state)
 {
 	struct l_dbus *dbus = dbus_get_bus();
@@ -525,6 +540,9 @@ void device_enter_state(struct device *device, enum device_state state)
 					IWD_DEVICE_INTERFACE, "State");
 
 	device->state = state;
+
+	WATCHLIST_NOTIFY(&device->state_watches,
+					device_state_watch_func_t, state);
 }
 
 static void device_disassociated(struct device *device)
@@ -1158,6 +1176,7 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	device = l_new(struct device, 1);
 	device->bss_list = l_queue_new();
 	device->networks = l_hashmap_new();
+	watchlist_init(&device->state_watches);
 	l_hashmap_set_hash_function(device->networks, l_str_hash);
 	l_hashmap_set_compare_function(device->networks,
 				(l_hashmap_compare_func_t) strcmp);
@@ -1198,6 +1217,8 @@ static void device_free(void *user)
 	if (device->connect_pending)
 		dbus_pending_reply(&device->connect_pending,
 				dbus_error_aborted(device->connect_pending));
+
+	watchlist_destroy(&device->state_watches);
 
 	if (device->state != DEVICE_STATE_OFF)
 		__device_watch_call_removed(device);
