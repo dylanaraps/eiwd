@@ -667,6 +667,9 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 	bool have_required = true;
 	bool parse_error = false;
 
+	if (ext_iter) /* In case of no WFA extension */
+		wsc_wfa_ext_iter_init(ext_iter, NULL, 0);
+
 	wsc_attr_iter_init(&iter, pdu, len);
 
 	va_start(args, type);
