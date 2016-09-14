@@ -6,67 +6,66 @@ import dbus
 import dbus.mainloop.glib
 
 _dbus2py = {
-	dbus.String : str,
-	dbus.UInt32 : int,
-	dbus.Int32 : int,
-	dbus.Int16 : int,
-	dbus.UInt16 : int,
-	dbus.UInt64 : int,
-	dbus.Int64 : int,
-	dbus.Byte : int,
-	dbus.Boolean : bool,
-	dbus.ByteArray : str,
-	dbus.ObjectPath : str
-    }
+    dbus.String : str,
+    dbus.UInt32 : int,
+    dbus.Int32 : int,
+    dbus.Int16 : int,
+    dbus.UInt16 : int,
+    dbus.UInt64 : int,
+    dbus.Int64 : int,
+    dbus.Byte : int,
+    dbus.Boolean : bool,
+    dbus.ByteArray : str,
+    dbus.ObjectPath : str
+}
 
 def dbus2py(d):
-	t = type(d)
-	if t in _dbus2py:
-		return _dbus2py[t](d)
-	if t is dbus.Dictionary:
-		return dict([(dbus2py(k), dbus2py(v)) for k, v in d.items()])
-	if t is dbus.Array and d.signature == "y":
-		return "".join([chr(b) for b in d])
-	if t is dbus.Array or t is list:
-		return [dbus2py(v) for v in d]
-	if t is dbus.Struct or t is tuple:
-		return tuple([dbus2py(v) for v in d])
-	return d
+    t = type(d)
+    if t in _dbus2py:
+        return _dbus2py[t](d)
+    if t is dbus.Dictionary:
+        return dict([(dbus2py(k), dbus2py(v)) for k, v in d.items()])
+    if t is dbus.Array and d.signature == "y":
+        return "".join([chr(b) for b in d])
+    if t is dbus.Array or t is list:
+        return [dbus2py(v) for v in d]
+    if t is dbus.Struct or t is tuple:
+        return tuple([dbus2py(v) for v in d])
+    return d
 
 def pretty(d):
-	d = dbus2py(d)
-	t = type(d)
+    d = dbus2py(d)
+    t = type(d)
 
-	if t in (dict, tuple, list) and len(d) > 0:
-		if t is dict:
-			d = ", ".join(["%s = %s" % (k, pretty(v))
-					for k, v in d.items()])
-			return "{ %s }" % d
+    if t in (dict, tuple, list) and len(d) > 0:
+        if t is dict:
+            d = ", ".join(["%s = %s" % (k, pretty(v)) for k, v in d.items()])
+            return "{ %s }" % d
 
-		d = " ".join([pretty(e) for e in d])
+        d = " ".join([pretty(e) for e in d])
 
-		if t is tuple:
-			return "( %s )" % d
+        if t is tuple:
+            return "( %s )" % d
 
-	if t is str:
-		return "%s" % d
+    if t is str:
+        return "%s" % d
 
-	return str(d)
+    return str(d)
 
 def property_changed(name, value, path, interface):
-	iface = interface[interface.rfind(".") + 1:]
-	print("{%s} [%s] %s = %s" % (iface, path, name, pretty(value)))
+    iface = interface[interface.rfind(".") + 1:]
+    print("{%s} [%s] %s = %s" % (iface, path, name, pretty(value)))
 
 if __name__ == '__main__':
-	dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
-	bus = dbus.SystemBus()
+    bus = dbus.SystemBus()
 
-	bus.add_signal_receiver(property_changed,
-				bus_name="net.connman.iwd",
-				signal_name = "PropertyChanged",
-				path_keyword="path",
-				interface_keyword="interface")
+    bus.add_signal_receiver(property_changed,
+                            bus_name="net.connman.iwd",
+                            signal_name = "PropertyChanged",
+                            path_keyword="path",
+                            interface_keyword="interface")
 
-	mainloop = GLib.MainLoop()
-	mainloop.run()
+    mainloop = GLib.MainLoop()
+    mainloop.run()
