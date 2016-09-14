@@ -406,6 +406,11 @@ struct wiphy *device_get_wiphy(struct device *device)
 	return device->wiphy;
 }
 
+struct netdev *device_get_netdev(struct device *device)
+{
+	return device->netdev;
+}
+
 uint32_t device_get_ifindex(struct device *device)
 {
 	return device->index;
