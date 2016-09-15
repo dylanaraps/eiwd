@@ -1933,6 +1933,18 @@ static void print_wsc_model_number(unsigned int level, const char *label,
 	print_wsc_ascii_string(level, label, data, size, 32);
 }
 
+static void print_wsc_os_version(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	uint32_t version;
+
+	if (size != 4)
+		return;
+
+	version = l_get_be32(data);
+	print_attr(level, "%s: %u", label, version & 0x7fffffff);
+}
+
 static void print_wsc_primary_device_type(unsigned int level, const char *label,
 						const void *data, uint16_t size)
 {
@@ -2212,6 +2224,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
 	{ WSC_ATTR_NETWORK_KEY_INDEX,		"Network Key Index (Reserved)",
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
+	{ WSC_ATTR_OS_VERSION,			"OS Version",
+		ATTR_CUSTOM,	{ .function = print_wsc_os_version } },
 	{ WSC_ATTR_PORTABLE_DEVICE,		"Portable Device",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_PRIMARY_DEVICE_TYPE,		"Primary Device Type",
