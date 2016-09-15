@@ -1772,6 +1772,41 @@ static void print_wsc_manufacturer(unsigned int level, const char *label,
 	print_wsc_ascii_string(level, label, data, size, 64);
 }
 
+static void print_wsc_message_type(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	static const char *message_type_table[] = {
+		"Reserved",
+		"Beacon",
+		"Probe Request",
+		"Probe Response",
+		"M1",
+		"M2",
+		"M2D",
+		"M3",
+		"M4",
+		"M5",
+		"M6",
+		"M7",
+		"M8",
+		"WSC_ACK",
+		"WSC_NACK",
+		"WSC_DONE"
+	};
+	const char *s = "Reserved";
+	uint8_t t = ((uint8_t *) data)[0];
+
+	if (size != 1) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	if (t <= 0x0f)
+		s = message_type_table[t];
+
+	print_attr(level, "%s: %s", label, s);
+}
+
 static void print_wsc_model_name(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
@@ -2033,6 +2068,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_MANUFACTURER,		"Manufacturer",
 		ATTR_CUSTOM,	{ .function = print_wsc_manufacturer } },
+	{ WSC_ATTR_MESSAGE_TYPE,		"Message Type",
+		ATTR_CUSTOM,	{ .function = print_wsc_message_type } },
 	{ WSC_ATTR_MODEL_NAME,			"Model Name",
 		ATTR_CUSTOM,	{ .function = print_wsc_model_name } },
 	{ WSC_ATTR_MODEL_NUMBER,		"Model Number",
