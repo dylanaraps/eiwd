@@ -1833,6 +1833,34 @@ static void print_wsc_device_password_id(unsigned int level, const char *label,
 		print_attr(level, "%s: Random via OOB (%02x)", label, v);
 }
 
+static void print_wsc_encryption_type_flags(unsigned int level,
+						const char *label,
+						const void *data, uint16_t size)
+{
+	uint16_t v;
+
+	if (size != 2)
+		return;
+
+	v = l_get_be16(data);
+	print_attr(level, "%s:", label);
+
+	if (v & WSC_ENCRYPTION_TYPE_NONE)
+		print_attr(level + 1, "None");
+
+	if (v & WSC_ENCRYPTION_TYPE_WEP)
+		print_attr(level + 1, "WEP");
+
+	if (v & WSC_ENCRYPTION_TYPE_TKIP)
+		print_attr(level + 1, "TKIP");
+
+	if (v & WSC_ENCRYPTION_TYPE_AES)
+		print_attr(level + 1, "AES");
+
+	if (v & 0xfff0)
+		print_attr(level + 1, "Unknown: %04x", v & 0xfff0);
+}
+
 static void print_wsc_mac_address(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
@@ -2150,6 +2178,9 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_device_name } },
 	{ WSC_ATTR_DEVICE_PASSWORD_ID,		"Device Password Id",
 		ATTR_CUSTOM,	{ .function = print_wsc_device_password_id } },
+	{ WSC_ATTR_ENCRYPTION_TYPE_FLAGS,	"Encryption Type Flags",
+		ATTR_CUSTOM,	{ .function =
+					print_wsc_encryption_type_flags } },
 	{ WSC_ATTR_KEY_PROVIDED_AUTOMATICALLY,	"Key Provided Automatically",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_MAC_ADDRESS,			"MAC Address",
