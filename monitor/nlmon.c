@@ -1775,6 +1775,28 @@ static void print_wsc_config_methods(unsigned int level, const char *label,
 		print_attr(level + 1, "Unknown: %04x", v);
 }
 
+static void print_wsc_connection_type_flags(unsigned int level,
+						const char *label,
+						const void *data, uint16_t size)
+{
+	uint8_t v;
+
+	if (size != 1)
+		return;
+
+	v = *((uint8_t *) data);
+	print_attr(level, "%s:", label);
+
+	if (v & WSC_CONNECTION_TYPE_ESS)
+		print_attr(level + 1, "ESS");
+
+	if (v & WSC_CONNECTION_TYPE_IBSS)
+		print_attr(level + 1, "IBSS");
+
+	if (v & 0xfffc)
+		print_attr(level + 1, "Unknown: %04x", v & 0xfffc);
+}
+
 static void print_wsc_device_name(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
@@ -2121,6 +2143,9 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_configuration_error } },
 	{ WSC_ATTR_CONFIGURATION_METHODS,	"Configuration Methods",
 		ATTR_CUSTOM,	{ .function = print_wsc_config_methods } },
+	{ WSC_ATTR_CONNECTION_TYPE_FLAGS,	"Connection Type Flags",
+		ATTR_CUSTOM,	{ .function =
+					print_wsc_connection_type_flags } },
 	{ WSC_ATTR_DEVICE_NAME,			"Device Name",
 		ATTR_CUSTOM,	{ .function = print_wsc_device_name } },
 	{ WSC_ATTR_DEVICE_PASSWORD_ID,		"Device Password Id",
