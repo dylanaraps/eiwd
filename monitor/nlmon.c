@@ -4761,6 +4761,117 @@ static struct l_io *open_packet(const char *name)
 	return io;
 }
 
+static void print_eap_wsc(const uint8_t *eap_wsc, uint32_t size)
+{
+	const char *str;
+
+	if (size < 2)
+		return;
+
+	switch (eap_wsc[0]) {
+	case 0x01:
+		str = "WSC-Start";
+		break;
+	case 0x02:
+		str = "WSC-Ack";
+		break;
+	case 0x03:
+		str = "WSC-Nack";
+		break;
+	case 0x04:
+		str = "WSC-Msg";
+		break;
+	case 0x05:
+		str = "WSC-Done";
+		break;
+	case 0x06:
+		str = "WSC-Frag-Ack";
+		break;
+	default:
+		str = "Reserved";
+		break;
+	}
+
+	print_attr(1, "Op-Code: %u (%s)", eap_wsc[0], str);
+	print_attr(1, "Flags: %02x", eap_wsc[1]);
+
+	if (eap_wsc[1] == 0)
+		print_wsc_attributes(2, "EAP-WSC Payload",
+						eap_wsc + 2, size - 2);
+}
+
+static void print_eap(const void *data, uint32_t size)
+{
+	static const uint8_t wfa_smi[3] = { 0x00, 0x37, 0x2a };
+	const uint8_t *eap = data;
+	const char *str;
+
+	if (size < 5)
+		return;
+
+	switch (eap[0]) {
+	case 0x01:
+		str = "Request";
+		break;
+	case 0x02:
+		str = "Response";
+		break;
+	case 0x03:
+		str = "Success";
+		break;
+	case 0x04:
+		str = "Failure";
+		break;
+	default:
+		str = "Reserved";
+		break;
+	};
+
+	print_attr(1, "Code: %u (%s)", eap[0], str);
+	print_attr(1, "Identifier: %u", eap[1]);
+	print_attr(1, "Length: %u", l_get_be16(eap + 2));
+
+	switch (eap[4]) {
+	case 1:
+		str = "Identity";
+		break;
+	case 2:
+		str = "Notification";
+		break;
+	case 3:
+		str = "Nak";
+		break;
+	case 4:
+		str = "MD5 Challenge";
+		break;
+	case 13:
+		str = "TLS EAP";
+		break;
+	case 21:
+		str = "TTLS";
+		break;
+	case 254:
+		str = "Expanded";
+		break;
+	default:
+		str = "Reserved";
+		break;
+	}
+
+	print_attr(1, "Type: %u (%s)", eap[4], str);
+
+	if (eap[4] == 254) {
+		if (size < 12)
+			return;
+
+		if (memcmp(eap + 5, wfa_smi, 3))
+			return;
+
+		if (l_get_be32(eap + 8) == 1)
+			print_eap_wsc(eap + 12, size - 12);
+	}
+}
+
 void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 					uint8_t type, int index,
 					const void *data, uint32_t size)
@@ -4843,6 +4954,8 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 	case 0x03:
 		print_eapol_key(data, size);
 		break;
+	case 0x00:
+		print_eap(data + 4, size - 4);
 	}
 }
 
