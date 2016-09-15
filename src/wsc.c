@@ -37,6 +37,8 @@
 #include "src/wscutil.h"
 #include "src/util.h"
 #include "src/wsc.h"
+#include "src/eapol.h"
+#include "src/eap-wsc.h"
 
 #define WALK_TIME 120
 
@@ -58,6 +60,126 @@ static struct l_dbus_message *wsc_error_session_overlap(
 	return l_dbus_message_new_error(msg,
 					IWD_WSC_INTERFACE ".SessionOverlap",
 					"Multiple sessions detected");
+}
+
+static void wsc_connect_cb(struct netdev *netdev, enum netdev_result result,
+					void *user_data)
+{
+	struct wsc *wsc = user_data;
+
+	l_debug("%d, result: %d", device_get_ifindex(wsc->device), result);
+
+	if (wsc->pending) {
+		struct l_dbus_message *reply;
+
+		switch (result) {
+		case NETDEV_RESULT_ABORTED:
+			reply = dbus_error_aborted(wsc->pending);
+			break;
+		default:
+			reply = l_dbus_message_new_method_return(wsc->pending);
+			l_dbus_message_set_arguments(reply, "");
+			break;
+		}
+
+		dbus_pending_reply(&wsc->pending, reply);
+	}
+}
+
+static void wsc_credential_obtained(struct wsc *wsc,
+					const struct wsc_credential *cred)
+{
+	char *hex;
+
+	l_debug("Obtained credenials for SSID: %s, address: %s",
+			util_ssid_to_utf8(cred->ssid_len, cred->ssid),
+			util_address_to_string(cred->addr));
+
+	l_debug("auth_type: %02x, encryption_type: %02x",
+			cred->auth_type, cred->encryption_type);
+
+	hex = l_util_hexstring(cred->network_key, cred->network_key_len);
+	l_debug("Key (%d): %s", cred->network_key_len, hex);
+	l_free(hex);
+
+	if (!util_ssid_is_utf8(cred->ssid_len, cred->ssid)) {
+		l_warn("Ignoring Credentials with non-UTF8 SSID");
+		return;
+	}
+}
+
+static void wsc_eapol_event(uint32_t event, const void *event_data,
+							void *user_data)
+{
+	struct wsc *wsc = user_data;
+
+	switch (event) {
+	case EAP_WSC_EVENT_CREDENTIAL_OBTAINED:
+		wsc_credential_obtained(wsc,
+				(const struct wsc_credential *) event_data);
+		break;
+	default:
+		l_debug("Got event: %d", event);
+	}
+}
+
+static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
+					void *user_data)
+{
+	switch (event) {
+	case NETDEV_EVENT_AUTHENTICATING:
+	case NETDEV_EVENT_ASSOCIATING:
+		break;
+	case NETDEV_EVENT_4WAY_HANDSHAKE:
+		l_info("Running EAP-WSC");
+		break;
+	case NETDEV_EVENT_LOST_BEACON:
+		l_debug("Lost beacon");
+		break;
+	case NETDEV_EVENT_DISCONNECT_BY_AP:
+		l_debug("Disconnect by AP");
+		break;
+	default:
+		l_debug("Unexpected event");
+		break;
+	};
+}
+
+static void wsc_connect(struct wsc *wsc, struct scan_bss *bss)
+{
+	struct eapol_sm *sm = eapol_sm_new();
+	struct l_settings *settings = l_settings_new();
+
+	eapol_sm_set_authenticator_address(sm, bss->addr);
+	eapol_sm_set_supplicant_address(sm, device_get_address(wsc->device));
+
+	eapol_sm_set_user_data(sm, wsc);
+	eapol_sm_set_event_func(sm, wsc_eapol_event);
+
+	l_settings_set_string(settings, "Security", "EAP-Identity",
+					"WFA-SimpleConfig-Enrollee-1-0");
+	l_settings_set_string(settings, "Security", "EAP-Method", "WSC");
+
+	l_settings_set_uint(settings, "WSC", "RFBand", WSC_RF_BAND_2_4_GHZ);
+	l_settings_set_uint(settings, "WSC", "ConfigurationMethods",
+				WSC_CONFIGURATION_METHOD_VIRTUAL_DISPLAY_PIN |
+				WSC_CONFIGURATION_METHOD_VIRTUAL_PUSH_BUTTON |
+				WSC_CONFIGURATION_METHOD_KEYPAD);
+	l_settings_set_string(settings, "WSC", "PrimaryDeviceType",
+					"0-00000000-0");
+	l_settings_set_string(settings, "WSC", "EnrolleeMAC",
+		util_address_to_string(device_get_address(wsc->device)));
+
+	eapol_sm_set_8021x_config(sm, settings);
+	l_settings_free(settings);
+
+	if (netdev_connect_wsc(device_get_netdev(wsc->device), bss, sm,
+					wsc_netdev_event,
+					wsc_connect_cb, wsc) == 0)
+		return;
+
+	eapol_sm_free(sm);
+	dbus_pending_reply(&wsc->pending, dbus_error_failed(wsc->pending));
 }
 
 static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
@@ -156,8 +278,12 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 		return false;
 	}
 
+	l_free(wsc->wsc_ies);
+	wsc->wsc_ies = 0;
+
 	l_debug("Found AP to connect to: %s",
 			util_address_to_string(target->addr));
+	wsc_connect(wsc, target);
 
 	return false;
 
