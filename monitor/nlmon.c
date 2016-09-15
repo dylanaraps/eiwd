@@ -1482,6 +1482,13 @@ static void print_wsc_byte(unsigned int level, const char *label,
 	print_attr(level, "%s: %u", label, bytes[0]);
 }
 
+static void print_wsc_bytes(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	print_attr(level, "%s: (len: %d)", label, size);
+	print_hexdump(level + 1, data, size);
+}
+
 static void print_wsc_bool(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
@@ -2178,9 +2185,17 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_device_name } },
 	{ WSC_ATTR_DEVICE_PASSWORD_ID,		"Device Password Id",
 		ATTR_CUSTOM,	{ .function = print_wsc_device_password_id } },
+	{ WSC_ATTR_E_HASH1,			"E-Hash1",
+		ATTR_CUSTOM,	{ .function = print_wsc_bytes } },
+	{ WSC_ATTR_E_HASH2,			"E-Hash2",
+		ATTR_CUSTOM,	{ .function = print_wsc_bytes } },
+	{ WSC_ATTR_ENCRYPTED_SETTINGS,		"Encrypted Settings",
+		ATTR_CUSTOM,	{ .function = print_wsc_bytes } },
 	{ WSC_ATTR_ENCRYPTION_TYPE_FLAGS,	"Encryption Type Flags",
 		ATTR_CUSTOM,	{ .function =
 					print_wsc_encryption_type_flags } },
+	{ WSC_ATTR_ENROLLEE_NONCE,		"Enrollee Nonce",
+		ATTR_CUSTOM,	{ .function = print_wsc_bytes } },
 	{ WSC_ATTR_KEY_PROVIDED_AUTOMATICALLY,	"Key Provided Automatically",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_MAC_ADDRESS,			"MAC Address",
@@ -2205,6 +2220,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
 	{ WSC_ATTR_PSK_MAX,			"PSK Max",
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
+	{ WSC_ATTR_PUBLIC_KEY,			"Public Key",
+		ATTR_CUSTOM,	{ .function = print_wsc_bytes } },
 	{ WSC_ATTR_RADIO_ENABLED,		"Radio Enabled",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_REBOOT,			"Reboot",
@@ -2215,12 +2232,18 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_REGISTRAR_MAX,		"Registrar Max",
 		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
+	{ WSC_ATTR_REGISTRAR_NONCE,		"Registrar Nonce",
+		ATTR_CUSTOM,	{ .function = print_wsc_bytes } },
 	{ WSC_ATTR_REQUEST_TYPE,		"Request Type",
 		ATTR_CUSTOM,	{ .function = print_wsc_request_type } },
 	{ WSC_ATTR_RESPONSE_TYPE,		"Response Type",
 		ATTR_CUSTOM,	{ .function = print_wsc_response_type } },
 	{ WSC_ATTR_RF_BANDS,			"RF Bands",
 		ATTR_CUSTOM,	{ .function = print_wsc_rf_bands } },
+	{ WSC_ATTR_R_HASH1,			"R_Hash1",
+		ATTR_CUSTOM,	{ .function = print_wsc_bytes } },
+	{ WSC_ATTR_R_HASH2,			"R_Hash2",
+		ATTR_CUSTOM,	{ .function = print_wsc_bytes } },
 	{ WSC_ATTR_SELECTED_REGISTRAR,		"Selected Registrar",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_SERIAL_NUMBER,		"Serial Number",
