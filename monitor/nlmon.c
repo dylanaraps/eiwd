@@ -1628,6 +1628,18 @@ static void print_wsc_auth_type_flags(unsigned int level, const char *label,
 		print_attr(level + 1, "Unknown: %04x", v & 0xffc0);
 }
 
+static void print_wsc_authenticator(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *a = data;
+
+	if (size != 8)
+		return;
+
+	print_attr(level, "%s: %02x%02x%02x%02x%02x%02x%02x%02x",
+			label, a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
+}
+
 static void print_wsc_configuration_error(unsigned int level, const char *label,
 						const void *data, uint16_t size)
 {
@@ -2103,6 +2115,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_association_state } },
 	{ WSC_ATTR_AUTHENTICATION_TYPE_FLAGS,	"Authentication Type Flags",
 		ATTR_CUSTOM,	{ .function = print_wsc_auth_type_flags } },
+	{ WSC_ATTR_AUTHENTICATOR,		"Authenticator",
+		ATTR_CUSTOM,	{ .function = print_wsc_authenticator } },
 	{ WSC_ATTR_CONFIGURATION_ERROR,		"Configuration Error",
 		ATTR_CUSTOM,	{ .function = print_wsc_configuration_error } },
 	{ WSC_ATTR_CONFIGURATION_METHODS,	"Configuration Methods",
