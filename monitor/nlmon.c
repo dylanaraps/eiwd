@@ -1766,6 +1766,18 @@ static void print_wsc_device_password_id(unsigned int level, const char *label,
 		print_attr(level, "%s: Random via OOB (%02x)", label, v);
 }
 
+static void print_wsc_mac_address(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const char *str;
+
+	if (size != 6)
+		return;
+
+	str = util_address_to_string(data);
+	print_attr(level, "%s: %s", label, str);
+}
+
 static void print_wsc_manufacturer(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
@@ -2066,6 +2078,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_device_password_id } },
 	{ WSC_ATTR_KEY_PROVIDED_AUTOMATICALLY,	"Key Provided Automatically",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
+	{ WSC_ATTR_MAC_ADDRESS,			"MAC Address",
+		ATTR_CUSTOM,	{ .function = print_wsc_mac_address } },
 	{ WSC_ATTR_MANUFACTURER,		"Manufacturer",
 		ATTR_CUSTOM,	{ .function = print_wsc_manufacturer } },
 	{ WSC_ATTR_MESSAGE_TYPE,		"Message Type",
