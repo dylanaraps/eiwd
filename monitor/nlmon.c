@@ -1595,6 +1595,39 @@ static void print_wsc_association_state(unsigned int level, const char *label,
 		print_attr(level, "%s: %s", label, state_table[state]);
 }
 
+static void print_wsc_auth_type_flags(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	uint16_t v;
+
+	if (size != 2)
+		return;
+
+	v = l_get_be16(data);
+	print_attr(level, "%s:", label);
+
+	if (v & WSC_AUTHENTICATION_TYPE_OPEN)
+		print_attr(level + 1, "Open");
+
+	if (v & WSC_AUTHENTICATION_TYPE_WPA_PERSONAL)
+		print_attr(level + 1, "WPA-Personal");
+
+	if (v & WSC_AUTHENTICATION_TYPE_SHARED)
+		print_attr(level + 1, "Shared");
+
+	if (v & WSC_AUTHENTICATION_TYPE_WPA_ENTERPRISE)
+		print_attr(level + 1, "WPA-Enterprise");
+
+	if (v & WSC_AUTHENTICATION_TYPE_WPA2_ENTERPRISE)
+		print_attr(level + 1, "WPA2-Enterprise");
+
+	if (v & WSC_AUTHENTICATION_TYPE_WPA2_PERSONAL)
+		print_attr(level + 1, "WPA2-Personal");
+
+	if (v & 0xffc0)
+		print_attr(level + 1, "Unknown: %04x", v & 0xffc0);
+}
+
 static void print_wsc_configuration_error(unsigned int level, const char *label,
 						const void *data, uint16_t size)
 {
@@ -2068,6 +2101,8 @@ static struct attr_entry wsc_attr_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
 	{ WSC_ATTR_ASSOCIATION_STATE,		"Association State",
 		ATTR_CUSTOM,	{ .function = print_wsc_association_state } },
+	{ WSC_ATTR_AUTHENTICATION_TYPE_FLAGS,	"Authentication Type Flags",
+		ATTR_CUSTOM,	{ .function = print_wsc_auth_type_flags } },
 	{ WSC_ATTR_CONFIGURATION_ERROR,		"Configuration Error",
 		ATTR_CUSTOM,	{ .function = print_wsc_configuration_error } },
 	{ WSC_ATTR_CONFIGURATION_METHODS,	"Configuration Methods",
