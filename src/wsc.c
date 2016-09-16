@@ -145,6 +145,22 @@ static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
 	};
 }
 
+static inline enum wsc_rf_band freq_to_rf_band(uint32_t freq)
+{
+	enum scan_band band;
+
+	scan_freq_to_channel(freq, &band);
+
+	switch (band) {
+	case SCAN_BAND_2_4_GHZ:
+		return WSC_RF_BAND_2_4_GHZ;
+	case SCAN_BAND_5_GHZ:
+		return WSC_RF_BAND_5_0_GHZ;
+	}
+
+	return WSC_RF_BAND_2_4_GHZ;
+}
+
 static void wsc_connect(struct wsc *wsc, struct scan_bss *bss)
 {
 	struct eapol_sm *sm = eapol_sm_new();
@@ -160,7 +176,8 @@ static void wsc_connect(struct wsc *wsc, struct scan_bss *bss)
 					"WFA-SimpleConfig-Enrollee-1-0");
 	l_settings_set_string(settings, "Security", "EAP-Method", "WSC");
 
-	l_settings_set_uint(settings, "WSC", "RFBand", WSC_RF_BAND_2_4_GHZ);
+	l_settings_set_uint(settings, "WSC", "RFBand",
+					freq_to_rf_band(bss->frequency));
 	l_settings_set_uint(settings, "WSC", "ConfigurationMethods",
 				WSC_CONFIGURATION_METHOD_VIRTUAL_DISPLAY_PIN |
 				WSC_CONFIGURATION_METHOD_VIRTUAL_PUSH_BUTTON |
