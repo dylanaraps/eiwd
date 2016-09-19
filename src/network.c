@@ -58,6 +58,22 @@ struct network {
 
 static struct l_queue *networks = NULL;
 
+static bool network_settings_load(struct network *network)
+{
+	const char *strtype;
+
+	if (network->settings)
+		return true;
+
+	strtype = security_to_str(network_get_security(network));
+	if (!strtype)
+		return false;
+
+	network->settings = storage_network_open(strtype, network->info->ssid);
+
+	return network->settings != NULL;
+}
+
 static int timespec_compare(const void *a, const void *b, void *user_data)
 {
 	const struct network_info *ni_a = a;
@@ -303,22 +319,6 @@ int network_get_signal_strength(const struct network *network)
 struct l_settings *network_get_settings(const struct network *network)
 {
 	return network->settings;
-}
-
-bool network_settings_load(struct network *network)
-{
-	const char *strtype;
-
-	if (network->settings)
-		return true;
-
-	strtype = security_to_str(network_get_security(network));
-	if (!strtype)
-		return false;
-
-	network->settings = storage_network_open(strtype, network->info->ssid);
-
-	return network->settings != NULL;
 }
 
 void network_sync_psk(struct network *network)
