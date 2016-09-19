@@ -74,6 +74,15 @@ static bool network_settings_load(struct network *network)
 	return network->settings != NULL;
 }
 
+static void network_settings_close(struct network *network)
+{
+	if (!network->settings)
+		return;
+
+	l_settings_free(network->settings);
+	network->settings = NULL;
+}
+
 static int timespec_compare(const void *a, const void *b, void *user_data)
 {
 	const struct network_info *ni_a = a;
@@ -334,15 +343,6 @@ void network_sync_psk(struct network *network)
 						"PreSharedKey", hex);
 	l_free(hex);
 	storage_network_sync("psk", network->info->ssid, network->settings);
-}
-
-void network_settings_close(struct network *network)
-{
-	if (!network->settings)
-		return;
-
-	l_settings_free(network->settings);
-	network->settings = NULL;
 }
 
 int network_autoconnect(struct network *network, struct scan_bss *bss)

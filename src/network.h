@@ -44,7 +44,6 @@ const unsigned char *network_get_psk(const struct network *network);
 int network_get_signal_strength(const struct network *network);
 struct l_settings *network_get_settings(const struct network *network);
 
-void network_settings_close(struct network *network);
 void network_sync_psk(struct network *network);
 
 int network_autoconnect(struct network *network, struct scan_bss *bss);
