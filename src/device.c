@@ -105,7 +105,7 @@ void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
 }
 
 static const char *iwd_network_get_path(struct device *device,
-					const uint8_t *ssid, size_t ssid_len,
+					const char *ssid,
 					enum security security)
 {
 	static char path[256];
@@ -113,7 +113,7 @@ static const char *iwd_network_get_path(struct device *device,
 
 	pos = snprintf(path, sizeof(path), "%s/", device_get_path(device));
 
-	for (i = 0; i < ssid_len && pos < sizeof(path); i++)
+	for (i = 0; ssid[i] && pos < sizeof(path); i++)
 		pos += snprintf(path + pos, sizeof(path) - pos, "%02x",
 								ssid[i]);
 
@@ -222,6 +222,7 @@ static void process_bss(struct device *device, struct scan_bss *bss,
 	const char *path;
 	double rankmod;
 	struct autoconnect_entry *entry;
+	char ssid[33];
 
 	l_debug("Found BSS '%s' with SSID: %s, freq: %u, rank: %u, "
 			"strength: %i",
@@ -233,6 +234,9 @@ static void process_bss(struct device *device, struct scan_bss *bss,
 		l_warn("Ignoring BSS with non-UTF8 SSID");
 		return;
 	}
+
+	memcpy(ssid, bss->ssid, bss->ssid_len);
+	ssid[bss->ssid_len] = '\0';
 
 	/*
 	 * If both an RSN and a WPA elements are present currently
@@ -270,13 +274,11 @@ static void process_bss(struct device *device, struct scan_bss *bss,
 	} else
 		security = scan_get_security(bss->capability, NULL);
 
-	path = iwd_network_get_path(device, bss->ssid, bss->ssid_len,
-					security);
+	path = iwd_network_get_path(device, ssid, security);
 
 	network = l_hashmap_lookup(device->networks, path);
 	if (!network) {
-		network = network_create(device, bss->ssid, bss->ssid_len,
-						security);
+		network = network_create(device, ssid, security);
 
 		if (!network_register(network, path)) {
 			network_remove(network, -EINVAL);

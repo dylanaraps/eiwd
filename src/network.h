@@ -32,8 +32,7 @@ bool network_connected(struct network *network);
 void network_disconnected(struct network *network);
 bool network_rankmod(const struct network *network, double *rankmod);
 
-struct network *network_create(struct device *device,
-				uint8_t *ssid, uint8_t ssid_len,
+struct network *network_create(struct device *device, const char *ssid,
 				enum security security);
 
 const char *network_get_ssid(const struct network *network);

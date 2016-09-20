@@ -278,15 +278,14 @@ static void network_info_put(struct network_info *network)
 	network_info_free(network);
 }
 
-struct network *network_create(struct device *device,
-				uint8_t *ssid, uint8_t ssid_len,
+struct network *network_create(struct device *device, const char *ssid,
 				enum security security)
 {
 	struct network *network;
 
 	network = l_new(struct network, 1);
 	network->device = device;
-	network->info = network_info_get((char *) ssid, security);
+	network->info = network_info_get(ssid, security);
 
 	network->bss_list = l_queue_new();
 
