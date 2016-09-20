@@ -427,6 +427,22 @@ void network_bss_list_clear(struct network *network)
 	network->bss_list = l_queue_new();
 }
 
+struct scan_bss *network_bss_find_by_addr(struct network *network,
+						const uint8_t *addr)
+{
+	const struct l_queue_entry *bss_entry;
+
+	for (bss_entry = l_queue_get_entries(network->bss_list); bss_entry;
+						bss_entry = bss_entry->next) {
+		struct scan_bss *bss = bss_entry->data;
+
+		if (!memcmp(bss->addr, addr, sizeof(bss->addr)))
+			return bss;
+	}
+
+	return NULL;
+}
+
 static struct scan_bss *network_select_bss(struct wiphy *wiphy,
 						struct network *network)
 {
