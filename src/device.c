@@ -446,6 +446,14 @@ bool device_remove_state_watch(struct device *device, uint32_t id)
 	return watchlist_remove(&device->state_watches, id);
 }
 
+struct network *device_network_find(struct device *device, const char *ssid,
+					enum security security)
+{
+	const char *path = iwd_network_get_path(device, ssid, security);
+
+	return l_hashmap_lookup(device->networks, path);
+}
+
 static void device_enter_state(struct device *device, enum device_state state)
 {
 	struct l_dbus *dbus = dbus_get_bus();

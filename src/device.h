@@ -22,6 +22,7 @@
 
 #include <stdbool.h>
 
+enum security;
 struct scan_bss;
 struct wiphy;
 struct netdev;
@@ -64,6 +65,9 @@ uint32_t device_add_state_watch(struct device *device,
 					void *user_data,
 					device_destroy_func_t destroy);
 bool device_remove_state_watch(struct device *device, uint32_t id);
+
+struct network *device_network_find(struct device *device, const char *ssid,
+					enum security security);
 
 void device_connect_network(struct device *device, struct network *network,
 				struct scan_bss *bss,
