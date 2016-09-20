@@ -66,6 +66,7 @@ uint32_t device_add_state_watch(struct device *device,
 					device_destroy_func_t destroy);
 bool device_remove_state_watch(struct device *device, uint32_t id);
 
+void device_set_scan_results(struct device *device, struct l_queue *bss_list);
 struct network *device_network_find(struct device *device, const char *ssid,
 					enum security security);
 

@@ -319,10 +319,12 @@ static bool bss_match(const void *a, const void *b)
 	return !memcmp(bss_a->addr, bss_b->addr, sizeof(bss_a->addr));
 }
 
-static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
-				struct l_queue *bss_list, void *userdata)
+/*
+ * Used when scan results were obtained; either from passive scan running
+ * inside device.c or active scans running in other state machines, e.g. wsc.c
+ */
+void device_set_scan_results(struct device *device, struct l_queue *bss_list)
 {
-	struct device *device = userdata;
 	struct network *network;
 	const struct l_queue_entry *bss_entry;
 	struct timespec now;
@@ -375,7 +377,14 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 
 	if (device->state == DEVICE_STATE_AUTOCONNECT)
 		device_autoconnect_next(device);
+}
 
+static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
+				struct l_queue *bss_list, void *userdata)
+{
+	struct device *device = userdata;
+
+	device_set_scan_results(device, bss_list);
 	return true;
 }
 
