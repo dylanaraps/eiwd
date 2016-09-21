@@ -42,6 +42,7 @@
 #include "src/common.h"
 #include "src/storage.h"
 #include "src/iwd.h"
+#include "src/network.h"
 
 #define WALK_TIME 120
 
@@ -77,6 +78,54 @@ static struct l_dbus_message *wsc_error_no_credentials(
 {
 	return l_dbus_message_new_error(msg, IWD_WSC_INTERFACE ".NoCredentials",
 					"No usable credentials obtained");
+}
+
+static struct l_dbus_message *wsc_error_not_reachable(
+						struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_WSC_INTERFACE ".NotReachable",
+					"Credentials obtained, but network is "
+					"unreachable");
+}
+
+static void wsc_try_credentials(struct wsc *wsc)
+{
+	unsigned int i;
+	struct network *network;
+	struct scan_bss *bss;
+
+	for (i = 0; i < wsc->n_creds; i++) {
+		network = device_network_find(wsc->device,
+						wsc->creds[i].ssid,
+						wsc->creds[i].security);
+		if (!network)
+			continue;
+
+		bss = network_bss_find_by_addr(network, wsc->creds[i].addr);
+
+		if (!bss)
+			bss = network_bss_select(network);
+
+		if (!bss)
+			continue;
+
+		if (wsc->creds[i].security == SECURITY_PSK &&
+				!network_set_psk(network, wsc->creds[i].psk))
+			continue;
+
+		device_connect_network(wsc->device, network, bss, wsc->pending);
+		l_dbus_message_unref(wsc->pending);
+		wsc->pending = NULL;
+
+		goto done;
+	}
+
+	dbus_pending_reply(&wsc->pending,
+					wsc_error_not_reachable(wsc->pending));
+	/* TODO: Go back to auto-connect mode ? */
+done:
+	memset(wsc->creds, 0, sizeof(wsc->creds));
+	wsc->n_creds = 0;
 }
 
 static void wsc_store_credentials(struct wsc *wsc)
@@ -128,6 +177,7 @@ static void wsc_connect_cb(struct netdev *netdev, enum netdev_result result,
 					wsc_error_no_credentials(wsc->pending));
 		} else {
 			wsc_store_credentials(wsc);
+			wsc_try_credentials(wsc);
 		}
 
 		return;
@@ -439,11 +489,13 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 	l_free(wsc->wsc_ies);
 	wsc->wsc_ies = 0;
 
+	device_set_scan_results(wsc->device, bss_list);
+
 	l_debug("Found AP to connect to: %s",
 			util_address_to_string(target->addr));
 	wsc_connect(wsc, target);
 
-	return false;
+	return true;
 
 session_overlap:
 	dbus_pending_reply(&wsc->pending,
