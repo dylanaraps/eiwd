@@ -40,6 +40,7 @@
 #include "src/eap-wsc.h"
 #include "src/crypto.h"
 #include "src/common.h"
+#include "src/storage.h"
 #include "src/iwd.h"
 
 #define WALK_TIME 120
@@ -71,28 +72,77 @@ static struct l_dbus_message *wsc_error_session_overlap(
 					"Multiple sessions detected");
 }
 
+static struct l_dbus_message *wsc_error_no_credentials(
+						struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_WSC_INTERFACE ".NoCredentials",
+					"No usable credentials obtained");
+}
+
+static void wsc_store_credentials(struct wsc *wsc)
+{
+	unsigned int i;
+
+	for (i = 0; i < wsc->n_creds; i++) {
+		enum security security = wsc->creds[i].security;
+		const char *ssid = wsc->creds[i].ssid;
+		struct l_settings *settings = l_settings_new();
+
+		l_debug("Storing credential for '%s(%s)'", ssid,
+						security_to_str(security));
+
+		if (security == SECURITY_PSK) {
+			char *hex = l_util_hexstring(wsc->creds[i].psk,
+						sizeof(wsc->creds[i].psk));
+
+			l_settings_set_value(settings, "Security",
+							"PreSharedKey", hex);
+			l_free(hex);
+		}
+
+		storage_network_sync(security_to_str(security), ssid, settings);
+		l_settings_free(settings);
+
+		/*
+		 * TODO: Mark this network as known.  We might be getting
+		 * multiple credentials from WSC, so there is a possibility
+		 * that the network is not known and / or not in scan results.
+		 * In both cases, the network should be considered for
+		 * auto-connect.  Note, since we sync the settings, the next
+		 * reboot will put the network on the known list.
+		 */
+	}
+}
+
 static void wsc_connect_cb(struct netdev *netdev, enum netdev_result result,
 					void *user_data)
 {
 	struct wsc *wsc = user_data;
+	struct l_dbus_message *reply;
 
 	l_debug("%d, result: %d", device_get_ifindex(wsc->device), result);
 
-	if (wsc->pending) {
-		struct l_dbus_message *reply;
-
-		switch (result) {
-		case NETDEV_RESULT_ABORTED:
-			reply = dbus_error_aborted(wsc->pending);
-			break;
-		default:
-			reply = l_dbus_message_new_method_return(wsc->pending);
-			l_dbus_message_set_arguments(reply, "");
-			break;
+	if (result == NETDEV_RESULT_HANDSHAKE_FAILED) {
+		if (wsc->n_creds == 0) {
+			dbus_pending_reply(&wsc->pending,
+					wsc_error_no_credentials(wsc->pending));
+		} else {
+			wsc_store_credentials(wsc);
 		}
 
-		dbus_pending_reply(&wsc->pending, reply);
+		return;
 	}
+
+	switch (result) {
+	case NETDEV_RESULT_ABORTED:
+		reply = dbus_error_aborted(wsc->pending);
+		break;
+	default:
+		reply = dbus_error_failed(wsc->pending);
+		break;
+	}
+
+	dbus_pending_reply(&wsc->pending, reply);
 }
 
 static void wsc_credential_obtained(struct wsc *wsc,
