@@ -373,13 +373,16 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 		psk = l_settings_get_value(network->settings, "Security",
 						"PreSharedKey");
 
-		if (!psk)
+		if (!psk) {
+			network_settings_close(network);
 			return -ENOKEY;
+		}
 
 		l_free(network->psk);
 		network->psk = l_util_from_hexstring(psk, &len);
 
 		if (network->psk && len != 32) {
+			network_settings_close(network);
 			l_free(network->psk);
 			network->psk = NULL;
 			return -ENOKEY;
