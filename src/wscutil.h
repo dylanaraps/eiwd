@@ -334,7 +334,7 @@ struct wsc_credential {
 	uint8_t ssid_len;
 	uint16_t auth_type;
 	uint16_t encryption_type;
-	uint8_t network_key[64];
+	uint8_t network_key[65];	/* max 64 + space for null terminator */
 	uint8_t network_key_len;
 	uint8_t addr[6];
 };

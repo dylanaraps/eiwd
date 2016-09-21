@@ -32,13 +32,15 @@
 #include "src/device.h"
 #include "src/wiphy.h"
 #include "src/scan.h"
-#include "src/mpdu.h"
 #include "src/ie.h"
 #include "src/wscutil.h"
 #include "src/util.h"
 #include "src/wsc.h"
 #include "src/eapol.h"
 #include "src/eap-wsc.h"
+#include "src/crypto.h"
+#include "src/common.h"
+#include "src/iwd.h"
 
 #define WALK_TIME 120
 
@@ -52,6 +54,13 @@ struct wsc {
 	size_t wsc_ies_size;
 	struct l_timeout *walk_timer;
 	uint32_t scan_id;
+	struct {
+		char ssid[33];
+		enum security security;
+		uint8_t psk[32];
+		uint8_t addr[6];
+	} creds[3];
+	uint32_t n_creds;
 };
 
 static struct l_dbus_message *wsc_error_session_overlap(
@@ -89,7 +98,8 @@ static void wsc_connect_cb(struct netdev *netdev, enum netdev_result result,
 static void wsc_credential_obtained(struct wsc *wsc,
 					const struct wsc_credential *cred)
 {
-	char *hex;
+	uint16_t auth_mask;
+	unsigned int i;
 
 	l_debug("Obtained credenials for SSID: %s, address: %s",
 			util_ssid_to_utf8(cred->ssid_len, cred->ssid),
@@ -98,14 +108,95 @@ static void wsc_credential_obtained(struct wsc *wsc,
 	l_debug("auth_type: %02x, encryption_type: %02x",
 			cred->auth_type, cred->encryption_type);
 
-	hex = l_util_hexstring(cred->network_key, cred->network_key_len);
-	l_debug("Key (%d): %s", cred->network_key_len, hex);
-	l_free(hex);
+	l_debug("Key (%u): %.*s", cred->network_key_len,
+				cred->network_key_len, cred->network_key);
+
+	if (wsc->n_creds == L_ARRAY_SIZE(wsc->creds)) {
+		l_warn("Maximum number of credentials obtained, ignoring...");
+		return;
+	}
 
 	if (!util_ssid_is_utf8(cred->ssid_len, cred->ssid)) {
 		l_warn("Ignoring Credentials with non-UTF8 SSID");
 		return;
 	}
+
+	memcpy(wsc->creds[wsc->n_creds].ssid, cred->ssid, cred->ssid_len);
+	wsc->creds[wsc->n_creds].ssid[cred->ssid_len] = '\0';
+
+	/* We only support open/personal wpa/personal wpa2 */
+	auth_mask = WSC_AUTHENTICATION_TYPE_OPEN |
+			WSC_AUTHENTICATION_TYPE_WPA_PERSONAL |
+			WSC_AUTHENTICATION_TYPE_WPA2_PERSONAL;
+	if ((cred->auth_type & auth_mask) == 0) {
+		l_warn("Ignoring Credentials with unsupported auth_type");
+		return;
+	}
+
+	if (cred->auth_type & WSC_AUTHENTICATION_TYPE_OPEN) {
+		auth_mask &= ~WSC_AUTHENTICATION_TYPE_OPEN;
+
+		if (cred->auth_type & auth_mask) {
+			l_warn("Ignoring mixed open/wpa credentials");
+			return;
+		}
+
+		wsc->creds[wsc->n_creds].security = SECURITY_NONE;
+	} else
+		wsc->creds[wsc->n_creds].security = SECURITY_PSK;
+
+	switch (wsc->creds[wsc->n_creds].security) {
+	case SECURITY_NONE:
+		if (cred->network_key_len != 0) {
+			l_warn("ignoring invalid open key length");
+			return;
+		}
+
+		break;
+	case SECURITY_PSK:
+		if (cred->network_key_len == 64) {
+			unsigned char *decoded;
+			const char *hex = (const char *) cred->network_key;
+
+			decoded = l_util_from_hexstring(hex, NULL);
+			if (!decoded) {
+				l_warn("Ignoring non-hex network_key");
+				return;
+			}
+
+			memcpy(wsc->creds[wsc->n_creds].psk, decoded, 32);
+			l_free(decoded);
+		} else {
+			const char *passphrase =
+				(const char *) cred->network_key;
+			/*
+			 * wscutil should memset cred->network_key to 0 prior
+			 * to copying in the contents of the passphrase
+			 */
+			if (crypto_psk_from_passphrase(passphrase,
+					cred->ssid, cred->ssid_len,
+					wsc->creds[wsc->n_creds].psk) != 0) {
+				l_warn("Ignoring invalid passphrase");
+				return;
+			}
+		}
+
+		break;
+	default:
+		return;
+	}
+
+	for (i = 0; i < wsc->n_creds; i++) {
+		if (strcmp(wsc->creds[i].ssid, wsc->creds[wsc->n_creds].ssid))
+			continue;
+
+		l_warn("Found duplicate credentials for SSID: %s",
+				wsc->creds[i].ssid);
+		return;
+	}
+
+	memcpy(wsc->creds[wsc->n_creds].addr, cred->addr, 6);
+	wsc->n_creds += 1;
 }
 
 static void wsc_eapol_event(uint32_t event, const void *event_data,
