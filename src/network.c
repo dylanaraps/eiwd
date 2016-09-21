@@ -443,10 +443,11 @@ struct scan_bss *network_bss_find_by_addr(struct network *network,
 	return NULL;
 }
 
-static struct scan_bss *network_select_bss(struct wiphy *wiphy,
-						struct network *network)
+/* Selects what we think is the best BSS to connect to */
+struct scan_bss *network_bss_select(struct network *network)
 {
 	struct l_queue *bss_list = network->bss_list;
+	struct wiphy *wiphy = device_get_wiphy(network->device);
 	const struct l_queue_entry *bss_entry;
 
 	switch (network_get_security(network)) {
@@ -484,7 +485,6 @@ static void passphrase_callback(enum agent_result result,
 				void *user_data)
 {
 	struct network *network = user_data;
-	struct wiphy *wiphy = device_get_wiphy(network->device);
 	struct scan_bss *bss;
 
 	l_debug("result %d", result);
@@ -496,7 +496,7 @@ static void passphrase_callback(enum agent_result result,
 		goto err;
 	}
 
-	bss = network_select_bss(wiphy, network);
+	bss = network_bss_select(network);
 
 	/* Did all good BSSes go away while we waited */
 	if (!bss) {
@@ -603,7 +603,7 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	 * agent this may not be the final choice because BSS visibility can
 	 * change while we wait for the agent.
 	 */
-	bss = network_select_bss(device_get_wiphy(device), network);
+	bss = network_bss_select(network);
 
 	/* None of the BSSes is compatible with our stack */
 	if (!bss)
@@ -735,7 +735,7 @@ void network_rank_update(struct network *network)
 
 	/*
 	 * Theoretically there may be difference between the BSS selection
-	 * here and in network_select_bss but those should be rare cases.
+	 * here and in network_bss_select but those should be rare cases.
 	 */
 	struct scan_bss *best_bss = l_queue_peek_head(network->bss_list);
 
