@@ -39,7 +39,7 @@ const char *network_get_ssid(const struct network *network);
 struct device *network_get_device(const struct network *network);
 const char *network_get_path(const struct network *network);
 enum security network_get_security(const struct network *network);
-const unsigned char *network_get_psk(const struct network *network);
+const uint8_t *network_get_psk(const struct network *network);
 int network_get_signal_strength(const struct network *network);
 struct l_settings *network_get_settings(const struct network *network);
 

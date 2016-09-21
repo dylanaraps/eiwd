@@ -312,7 +312,7 @@ enum security network_get_security(const struct network *network)
 	return network->info->type;
 }
 
-const unsigned char *network_get_psk(const struct network *network)
+const uint8_t *network_get_psk(const struct network *network)
 {
 	return network->psk;
 }
