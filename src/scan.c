@@ -375,8 +375,10 @@ bool scan_cancel(uint32_t ifindex, uint32_t id)
 	if (sr->id == id && sr->triggered) {
 		sr->callback = NULL;
 
-		if (sr->destroy)
+		if (sr->destroy) {
 			sr->destroy(sr->userdata);
+			sr->destroy = NULL;
+		}
 
 		return true;
 	}
