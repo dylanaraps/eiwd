@@ -43,6 +43,7 @@ const uint8_t *network_get_psk(const struct network *network);
 int network_get_signal_strength(const struct network *network);
 struct l_settings *network_get_settings(const struct network *network);
 
+bool network_set_psk(struct network *network, const uint8_t *psk);
 void network_sync_psk(struct network *network);
 
 int network_autoconnect(struct network *network, struct scan_bss *bss);

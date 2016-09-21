@@ -317,6 +317,16 @@ const uint8_t *network_get_psk(const struct network *network)
 	return network->psk;
 }
 
+bool network_set_psk(struct network *network, const uint8_t *psk)
+{
+	if (network->info->type != SECURITY_PSK)
+		return false;
+
+	l_free(network->psk);
+	network->psk = l_memdup(psk, 32);
+	return true;
+}
+
 int network_get_signal_strength(const struct network *network)
 {
 	struct scan_bss *best_bss = l_queue_peek_head(network->bss_list);
