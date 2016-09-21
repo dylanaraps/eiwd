@@ -457,7 +457,7 @@ bool agent_init(struct l_dbus *dbus)
 {
 	if (!l_dbus_register_interface(dbus, IWD_AGENT_MANAGER_INTERFACE,
 						setup_agent_interface,
-						NULL, true)) {
+						NULL, false)) {
 		l_info("Unable to register %s interface",
 				IWD_AGENT_MANAGER_INTERFACE);
 		return false;

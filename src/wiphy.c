@@ -395,6 +395,12 @@ static void wiphy_register(struct wiphy *wiphy)
 					IWD_WIPHY_INTERFACE, wiphy))
 		l_info("Unable to add the %s interface to %s",
 				IWD_WIPHY_INTERFACE, wiphy_get_path(wiphy));
+
+	if (!l_dbus_object_add_interface(dbus, wiphy_get_path(wiphy),
+					L_DBUS_INTERFACE_PROPERTIES, NULL))
+		l_info("Unable to add the %s interface to %s",
+				L_DBUS_INTERFACE_PROPERTIES,
+				wiphy_get_path(wiphy));
 }
 
 static void wiphy_dump_done(void *user)
@@ -724,7 +730,7 @@ bool wiphy_init(struct l_genl_family *in)
 	if (!l_dbus_register_interface(dbus_get_bus(),
 					IWD_WIPHY_INTERFACE,
 					setup_wiphy_interface,
-					NULL, true))
+					NULL, false))
 		l_error("Unable to register the %s interface",
 				IWD_WIPHY_INTERFACE);
 

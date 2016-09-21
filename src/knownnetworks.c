@@ -142,7 +142,7 @@ bool known_networks_init(void)
 
 	if (!l_dbus_register_interface(dbus, IWD_KNOWN_NETWORKS_INTERFACE,
 						setup_known_networks_interface,
-						NULL, true)) {
+						NULL, false)) {
 		l_info("Unable to register %s interface",
 				IWD_KNOWN_NETWORKS_INTERFACE);
 		return false;

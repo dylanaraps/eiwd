@@ -1156,6 +1156,11 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 					IWD_DEVICE_INTERFACE, device))
 		l_info("Unable to register %s interface", IWD_DEVICE_INTERFACE);
 
+	if (!l_dbus_object_add_interface(dbus, device_get_path(device),
+					L_DBUS_INTERFACE_PROPERTIES, device))
+		l_info("Unable to register %s interface",
+				L_DBUS_INTERFACE_PROPERTIES);
+
 	scan_ifindex_add(device->index);
 
 	device_netdev_notify(netdev, netdev_get_is_up(netdev) ?
@@ -1218,7 +1223,7 @@ bool device_init(void)
 	if (!l_dbus_register_interface(dbus_get_bus(),
 					IWD_DEVICE_INTERFACE,
 					setup_device_interface,
-					NULL, true))
+					NULL, false))
 		return false;
 
 	watchlist_init(&device_watches);

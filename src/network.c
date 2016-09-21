@@ -684,6 +684,11 @@ bool network_register(struct network *network, const char *path)
 		return false;
 	}
 
+	if (!l_dbus_object_add_interface(dbus_get_bus(), path,
+					L_DBUS_INTERFACE_PROPERTIES, network))
+		l_info("Unable to register %s interface",
+						L_DBUS_INTERFACE_PROPERTIES);
+
 	network->object_path = strdup(path);
 
 	return true;
@@ -718,7 +723,7 @@ void network_remove(struct network *network, int reason)
 void network_init()
 {
 	if (!l_dbus_register_interface(dbus_get_bus(), IWD_NETWORK_INTERFACE,
-					setup_network_interface, NULL, true))
+					setup_network_interface, NULL, false))
 		l_error("Unable to register %s interface",
 						IWD_NETWORK_INTERFACE);
 
