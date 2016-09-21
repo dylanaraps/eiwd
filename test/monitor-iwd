@@ -52,9 +52,10 @@ def pretty(d):
 
     return str(d)
 
-def property_changed(name, value, path, interface):
+def properties_changed(interface, changed, invalidated, path):
     iface = interface[interface.rfind(".") + 1:]
-    print("{%s} [%s] %s = %s" % (iface, path, name, pretty(value)))
+    for name, value in changed.items():
+        print("{%s} [%s] %s = %s" % (iface, path, name, pretty(value)))
 
 relevant_ifaces = [ "net.connman.iwd.Device",
                     "net.connman.iwd.Adapter",
@@ -83,11 +84,11 @@ if __name__ == '__main__':
 
     bus = dbus.SystemBus()
 
-    bus.add_signal_receiver(property_changed,
+    bus.add_signal_receiver(properties_changed,
                             bus_name="net.connman.iwd",
-                            signal_name = "PropertyChanged",
-                            path_keyword="path",
-                            interface_keyword="interface")
+                            dbus_interface="org.freedesktop.DBus.Properties",
+                            signal_name="PropertiesChanged",
+                            path_keyword="path")
 
     bus.add_signal_receiver(interfaces_added, bus_name="net.connman.iwd",
                             dbus_interface="org.freedesktop.DBus.ObjectManager",
