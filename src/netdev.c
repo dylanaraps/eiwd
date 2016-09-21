@@ -68,6 +68,7 @@ struct netdev {
 	uint32_t pairwise_set_key_cmd_id;
 	uint32_t group_new_key_cmd_id;
 	uint32_t connect_cmd_id;
+	uint32_t disconnect_cmd_id;
 
 	struct l_queue *watches;
 	uint32_t next_watch_id;
@@ -315,6 +316,15 @@ static void netdev_free(void *data)
 						netdev->user_data);
 
 		netdev_connect_free(netdev);
+	} else if (netdev->disconnect_cmd_id) {
+		l_genl_family_cancel(nl80211, netdev->disconnect_cmd_id);
+		netdev->disconnect_cmd_id = 0;
+
+		if (netdev->disconnect_cb)
+			netdev->disconnect_cb(netdev, true, netdev->user_data);
+
+		netdev->disconnect_cb = NULL;
+		netdev->user_data = NULL;
 	}
 
 	device_remove(netdev->device);
@@ -486,7 +496,7 @@ static void netdev_cmd_deauthenticate_cb(struct l_genl_msg *msg,
 	bool r;
 
 	if (!netdev->disconnect_cb)
-		return;
+		goto done;
 
 	if (l_genl_msg_get_error(msg) < 0)
 		r = false;
@@ -494,6 +504,9 @@ static void netdev_cmd_deauthenticate_cb(struct l_genl_msg *msg,
 		r = true;
 
 	netdev->disconnect_cb(netdev, r, netdev->user_data);
+	netdev->disconnect_cb = NULL;
+done:
+	netdev->user_data = NULL;
 }
 
 static struct l_genl_msg *netdev_build_cmd_deauthenticate(struct netdev *netdev,
@@ -1194,8 +1207,10 @@ int netdev_disconnect(struct netdev *netdev,
 
 	deauthenticate = netdev_build_cmd_deauthenticate(netdev,
 					MPDU_REASON_CODE_DEAUTH_LEAVING);
-	if (!l_genl_family_send(nl80211, deauthenticate,
-				netdev_cmd_deauthenticate_cb, netdev, NULL)) {
+	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, deauthenticate,
+				netdev_cmd_deauthenticate_cb, netdev, NULL);
+
+	if (!netdev->disconnect_cmd_id) {
 		l_genl_msg_unref(deauthenticate);
 		return -EIO;
 	}
