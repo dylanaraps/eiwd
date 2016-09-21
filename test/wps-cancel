@@ -1,0 +1,13 @@
+#!/usr/bin/python3
+
+import sys
+import dbus
+
+if (len(sys.argv) != 2):
+    print("Usage: %s <device>" % (sys.argv[0]))
+    sys.exit(1)
+
+bus = dbus.SystemBus()
+wsc = dbus.Interface(bus.get_object("net.connman.iwd", sys.argv[1]),
+                                    "net.connman.iwd.WiFiSimpleConfiguration")
+wsc.Cancel()
