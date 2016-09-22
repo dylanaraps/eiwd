@@ -468,7 +468,7 @@ static void netdev_disconnect_event(struct l_genl_msg *msg,
 
 	l_debug("");
 
-	if (!netdev->connected)
+	if (!netdev->connected || netdev->disconnect_cmd_id > 0)
 		return;
 
 	if (!l_genl_attr_init(&attr, msg)) {
@@ -905,7 +905,6 @@ static void netdev_handshake_failed(uint32_t ifindex,
 	l_error("4-Way Handshake failed for ifindex: %d", ifindex);
 
 	netdev->eapol_active = false;
-	netdev->connected = false;
 
 	netdev->result = NETDEV_RESULT_HANDSHAKE_FAILED;
 	msg = netdev_build_cmd_deauthenticate(netdev, reason_code);
