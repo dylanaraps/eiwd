@@ -56,6 +56,8 @@ struct wsc {
 	size_t wsc_ies_size;
 	struct l_timeout *walk_timer;
 	uint32_t scan_id;
+	struct scan_bss *target;
+	uint32_t device_state_watch;
 	struct {
 		char ssid[33];
 		enum security security;
@@ -361,10 +363,13 @@ static inline enum wsc_rf_band freq_to_rf_band(uint32_t freq)
 	return WSC_RF_BAND_2_4_GHZ;
 }
 
-static void wsc_connect(struct wsc *wsc, struct scan_bss *bss)
+static void wsc_connect(struct wsc *wsc)
 {
 	struct eapol_sm *sm = eapol_sm_new();
 	struct l_settings *settings = l_settings_new();
+	struct scan_bss *bss = wsc->target;
+
+	wsc->target = NULL;
 
 	eapol_sm_set_authenticator_address(sm, bss->addr);
 	eapol_sm_set_supplicant_address(sm, device_get_address(wsc->device));
@@ -396,6 +401,57 @@ static void wsc_connect(struct wsc *wsc, struct scan_bss *bss)
 		return;
 
 	eapol_sm_free(sm);
+	dbus_pending_reply(&wsc->pending, dbus_error_failed(wsc->pending));
+}
+
+static void device_state_watch(enum device_state state, void *userdata)
+{
+	struct wsc *wsc = userdata;
+
+	if (state != DEVICE_STATE_DISCONNECTED)
+		return;
+
+	l_debug("%p", wsc);
+
+	device_remove_state_watch(wsc->device, wsc->device_state_watch);
+	wsc->device_state_watch = 0;
+
+	wsc_connect(wsc);
+}
+
+static void wsc_check_can_connect(struct wsc *wsc, struct scan_bss *target)
+{
+	l_debug("%p", wsc);
+
+	/*
+	 * For now we assign the targe pointer directly, since we should not
+	 * be triggering any more scans while disconnecting / connecting
+	 */
+	wsc->target = target;
+	device_set_autoconnect(wsc->device, false);
+
+	switch (device_get_state(wsc->device)) {
+	case DEVICE_STATE_DISCONNECTED:
+		wsc_connect(wsc);
+		return;
+	case DEVICE_STATE_CONNECTING:
+	case DEVICE_STATE_CONNECTED:
+		if (device_disconnect(wsc->device) < 0)
+			goto error;
+
+		/* fall through */
+	case DEVICE_STATE_DISCONNECTING:
+		wsc->device_state_watch =
+			device_add_state_watch(wsc->device, device_state_watch,
+							wsc, NULL);
+		return;
+	case DEVICE_STATE_AUTOCONNECT:
+	case DEVICE_STATE_OFF:
+		l_warn("wsc_check_can_connect: invalid device state");
+		break;
+	}
+error:
+	wsc->target = NULL;
 	dbus_pending_reply(&wsc->pending, dbus_error_failed(wsc->pending));
 }
 
@@ -527,7 +583,7 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 
 	l_debug("Found AP to connect to: %s",
 			util_address_to_string(target->addr));
-	wsc_connect(wsc, target);
+	wsc_check_can_connect(wsc, target);
 
 	return true;
 
@@ -627,6 +683,13 @@ static struct l_dbus_message *wsc_cancel(struct l_dbus *dbus,
 		return dbus_error_not_available(message);
 
 	wsc_cancel_scan(wsc);
+
+	if (wsc->device_state_watch) {
+		device_remove_state_watch(wsc->device, wsc->device_state_watch);
+		wsc->device_state_watch = 0;
+		wsc->target = NULL;
+	}
+
 	dbus_pending_reply(&wsc->pending, dbus_error_aborted(wsc->pending));
 
 	reply = l_dbus_message_new_method_return(message);
@@ -648,6 +711,12 @@ static void wsc_free(void *userdata)
 	struct wsc *wsc = userdata;
 
 	wsc_cancel_scan(wsc);
+
+	if (wsc->device_state_watch) {
+		device_remove_state_watch(wsc->device, wsc->device_state_watch);
+		wsc->device_state_watch = 0;
+		wsc->target = NULL;
+	}
 
 	if (wsc->pending)
 		dbus_pending_reply(&wsc->pending,
