@@ -1202,6 +1202,9 @@ int netdev_disconnect(struct netdev *netdev,
 	if (!netdev->connected)
 		return -ENOTCONN;
 
+	if (netdev->disconnect_cmd_id)
+		return -EINPROGRESS;
+
 	netdev->result = NETDEV_RESULT_ABORTED;
 	netdev_connect_failed(NULL, netdev);
 
