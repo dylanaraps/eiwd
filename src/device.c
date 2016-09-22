@@ -70,12 +70,13 @@ struct device {
 	struct l_queue *autoconnect_list;
 	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
-	bool scanning;
 	uint32_t netdev_watch_id;
 	struct watchlist state_watches;
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
+
+	bool scanning : 1;
 };
 
 static struct watchlist device_watches;
@@ -999,8 +1000,9 @@ static bool device_property_get_scanning(struct l_dbus *dbus,
 					void *user_data)
 {
 	struct device *device = user_data;
+	bool scanning = device->scanning;
 
-	l_dbus_message_builder_append_basic(builder, 'b', &device->scanning);
+	l_dbus_message_builder_append_basic(builder, 'b', &scanning);
 
 	return true;
 }
