@@ -512,20 +512,27 @@ static void netdev_cmd_deauthenticate_cb(struct l_genl_msg *msg,
 								void *user_data)
 {
 	struct netdev *netdev = user_data;
+	void *disconnect_data;
+	netdev_disconnect_cb_t disconnect_cb;
 	bool r;
 
-	if (!netdev->disconnect_cb)
-		goto done;
+
+	if (!netdev->disconnect_cb) {
+		netdev->user_data = NULL;
+		return;
+	}
+
+	disconnect_data = netdev->user_data;
+	disconnect_cb = netdev->disconnect_cb;
+	netdev->user_data = NULL;
+	netdev->disconnect_cb = NULL;
 
 	if (l_genl_msg_get_error(msg) < 0)
 		r = false;
 	else
 		r = true;
 
-	netdev->disconnect_cb(netdev, r, netdev->user_data);
-	netdev->disconnect_cb = NULL;
-done:
-	netdev->user_data = NULL;
+	disconnect_cb(netdev, r, disconnect_data);
 }
 
 static struct l_genl_msg *netdev_build_cmd_deauthenticate(struct netdev *netdev,
