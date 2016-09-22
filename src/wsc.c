@@ -133,7 +133,7 @@ static void wsc_try_credentials(struct wsc *wsc)
 
 	dbus_pending_reply(&wsc->pending,
 					wsc_error_not_reachable(wsc->pending));
-	/* TODO: Go back to auto-connect mode ? */
+	device_set_autoconnect(wsc->device, true);
 done:
 	memset(wsc->creds, 0, sizeof(wsc->creds));
 	wsc->n_creds = 0;
@@ -178,32 +178,31 @@ static void wsc_connect_cb(struct netdev *netdev, enum netdev_result result,
 					void *user_data)
 {
 	struct wsc *wsc = user_data;
-	struct l_dbus_message *reply;
 
 	l_debug("%d, result: %d", device_get_ifindex(wsc->device), result);
 
-	if (result == NETDEV_RESULT_HANDSHAKE_FAILED) {
-		if (wsc->n_creds == 0) {
-			dbus_pending_reply(&wsc->pending,
-					wsc_error_no_credentials(wsc->pending));
-		} else {
-			wsc_store_credentials(wsc);
-			wsc_try_credentials(wsc);
-		}
-
+	if (result == NETDEV_RESULT_HANDSHAKE_FAILED && wsc->n_creds > 0) {
+		wsc_store_credentials(wsc);
+		wsc_try_credentials(wsc);
 		return;
 	}
 
 	switch (result) {
 	case NETDEV_RESULT_ABORTED:
-		reply = dbus_error_aborted(wsc->pending);
+		dbus_pending_reply(&wsc->pending,
+					dbus_error_aborted(wsc->pending));
+		return;
+	case NETDEV_RESULT_HANDSHAKE_FAILED:
+		dbus_pending_reply(&wsc->pending,
+					wsc_error_no_credentials(wsc->pending));
 		break;
 	default:
-		reply = dbus_error_failed(wsc->pending);
+		dbus_pending_reply(&wsc->pending,
+					dbus_error_failed(wsc->pending));
 		break;
 	}
 
-	dbus_pending_reply(&wsc->pending, reply);
+	device_set_autoconnect(wsc->device, true);
 }
 
 static void wsc_credential_obtained(struct wsc *wsc,
