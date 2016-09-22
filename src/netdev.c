@@ -75,6 +75,7 @@ struct netdev {
 	uint32_t next_watch_id;
 
 	bool connected : 1;
+	bool operational : 1;
 	bool eapol_active : 1;
 	bool rekey_offload_support : 1;
 };
@@ -280,6 +281,7 @@ static void netdev_connect_free(struct netdev *netdev)
 		netdev->eapol_active = false;
 	}
 
+	netdev->operational = false;
 	netdev->connected = false;
 	netdev->connect_cb = NULL;
 	netdev->event_filter = NULL;
@@ -561,6 +563,8 @@ static void netdev_operstate_cb(bool success, void *user_data)
 							netdev, NULL);
 		return;
 	}
+
+	netdev->operational = true;
 
 	if (netdev->connect_cb) {
 		netdev->connect_cb(netdev, NETDEV_RESULT_OK, netdev->user_data);
@@ -1205,8 +1209,13 @@ int netdev_disconnect(struct netdev *netdev,
 	if (netdev->disconnect_cmd_id)
 		return -EINPROGRESS;
 
-	netdev->result = NETDEV_RESULT_ABORTED;
-	netdev_connect_failed(NULL, netdev);
+	/* Only perform this if we haven't successfully fully associated yet */
+	if (!netdev->operational) {
+		netdev->result = NETDEV_RESULT_ABORTED;
+		netdev_connect_failed(NULL, netdev);
+	} else {
+		netdev_connect_free(netdev);
+	}
 
 	deauthenticate = netdev_build_cmd_deauthenticate(netdev,
 					MPDU_REASON_CODE_DEAUTH_LEAVING);
