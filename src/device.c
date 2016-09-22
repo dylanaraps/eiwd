@@ -77,6 +77,7 @@ struct device {
 	struct netdev *netdev;
 
 	bool scanning : 1;
+	bool autoconnect : 1;
 };
 
 static struct watchlist device_watches;
@@ -598,6 +599,7 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 
 	network_connected(device->connected_network);
 	device_enter_state(device, DEVICE_STATE_CONNECTED);
+	device->autoconnect = true;
 }
 
 static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
@@ -629,6 +631,22 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 	case NETDEV_EVENT_DISCONNECT_BY_AP:
 		device_disconnect_by_ap(device);
 	};
+}
+
+bool device_set_autoconnect(struct device *device, bool autoconnect)
+{
+	if (device->autoconnect == autoconnect)
+		return true;
+
+	device->autoconnect = autoconnect;
+
+	if (device->state == DEVICE_STATE_DISCONNECTED && autoconnect)
+		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
+
+	if (device->state == DEVICE_STATE_AUTOCONNECT && !autoconnect)
+		device_enter_state(device, DEVICE_STATE_DISCONNECTED);
+
+	return true;
 }
 
 void device_connect_network(struct device *device, struct network *network,
@@ -760,7 +778,6 @@ static void device_disconnect_cb(struct netdev *netdev, bool success,
 					void *user_data)
 {
 	struct device *device = user_data;
-	bool trigger_autoconnect = true;
 
 	l_debug("%d, success: %d", device->index, success);
 
@@ -777,17 +794,11 @@ static void device_disconnect_cb(struct netdev *netdev, bool success,
 
 		dbus_pending_reply(&device->disconnect_pending, reply);
 
-		/*
-		 * If the disconnect was triggered by the user, don't
-		 * autoconnect.  Wait for user's explicit instructions to scan
-		 * and connect to the network
-		 */
-		trigger_autoconnect = false;
 	}
 
 	device_enter_state(device, DEVICE_STATE_DISCONNECTED);
 
-	if (trigger_autoconnect)
+	if (device->autoconnect)
 		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 }
 
@@ -835,8 +846,13 @@ static struct l_dbus_message *device_dbus_disconnect(struct l_dbus *dbus,
 
 	l_debug("");
 
-	result = device_disconnect(device);
+	/*
+	 * Disconnect was triggered by the user, don't autoconnect. Wait for
+	 * the user's explicit instructions to scan and connect to the network
+	 */
+	device_set_autoconnect(device, false);
 
+	result = device_disconnect(device);
 	if (result == -EBUSY)
 		return dbus_error_busy(message);
 
@@ -1156,6 +1172,7 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	device->index = ifindex;
 	device->wiphy = wiphy;
 	device->netdev = netdev;
+	device->autoconnect = true;
 
 	l_queue_push_head(device_list, device);
 
