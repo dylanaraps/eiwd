@@ -88,6 +88,15 @@ static struct l_dbus_message *wsc_error_not_reachable(
 					"unreachable");
 }
 
+static struct l_dbus_message *wsc_error_walk_time_expired(
+						struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg,
+					IWD_WSC_INTERFACE ".WalkTimeExpired",
+					"No APs in PushButton mode found in "
+					"the alloted time");
+}
+
 static void wsc_try_credentials(struct wsc *wsc)
 {
 	unsigned int i;
@@ -390,6 +399,33 @@ static void wsc_connect(struct wsc *wsc, struct scan_bss *bss)
 	dbus_pending_reply(&wsc->pending, dbus_error_failed(wsc->pending));
 }
 
+static void wsc_cancel_scan(struct wsc *wsc)
+{
+	l_free(wsc->wsc_ies);
+	wsc->wsc_ies = 0;
+
+	if (wsc->scan_id > 0) {
+		scan_cancel(device_get_ifindex(wsc->device), wsc->scan_id);
+		wsc->scan_id = 0;
+	}
+
+	if (wsc->walk_timer) {
+		l_timeout_remove(wsc->walk_timer);
+		wsc->walk_timer = NULL;
+	}
+}
+
+static void walk_timeout(struct l_timeout *timeout, void *user_data)
+{
+	struct wsc *wsc = user_data;
+
+	wsc_cancel_scan(wsc);
+
+	if (wsc->pending)
+		dbus_pending_reply(&wsc->pending,
+				wsc_error_walk_time_expired(wsc->pending));
+}
+
 static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 				struct l_queue *bss_list, void *userdata)
 {
@@ -486,9 +522,7 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 		return false;
 	}
 
-	l_free(wsc->wsc_ies);
-	wsc->wsc_ies = 0;
-
+	wsc_cancel_scan(wsc);
 	device_set_scan_results(wsc->device, bss_list);
 
 	l_debug("Found AP to connect to: %s",
@@ -498,11 +532,9 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 	return true;
 
 session_overlap:
+	wsc_cancel_scan(wsc);
 	dbus_pending_reply(&wsc->pending,
 				wsc_error_session_overlap(wsc->pending));
-
-	l_free(wsc->wsc_ies);
-	wsc->wsc_ies = 0;
 
 	return false;
 }
@@ -559,18 +591,9 @@ static bool wsc_start_pushbutton(struct wsc *wsc)
 	wsc->scan_id = scan_active(device_get_ifindex(wsc->device),
 					wsc->wsc_ies, wsc->wsc_ies_size,
 					NULL, scan_results, wsc, NULL);
+	wsc->walk_timer = l_timeout_create(WALK_TIME, walk_timeout, wsc, NULL);
+
 	return true;
-}
-
-static void wsc_abort(struct wsc *wsc)
-{
-	l_free(wsc->wsc_ies);
-	wsc->wsc_ies = 0;
-
-	if (wsc->scan_id > 0) {
-		scan_cancel(device_get_ifindex(wsc->device), wsc->scan_id);
-		wsc->scan_id = 0;
-	}
 }
 
 static struct l_dbus_message *wsc_push_button(struct l_dbus *dbus,
@@ -603,12 +626,11 @@ static struct l_dbus_message *wsc_cancel(struct l_dbus *dbus,
 	if (!wsc->pending)
 		return dbus_error_not_available(message);
 
-	reply = l_dbus_message_new_method_return(message);
-	l_dbus_message_set_arguments(reply, "");
-
+	wsc_cancel_scan(wsc);
 	dbus_pending_reply(&wsc->pending, dbus_error_aborted(wsc->pending));
 
-	wsc_abort(wsc);
+	reply = l_dbus_message_new_method_return(message);
+	l_dbus_message_set_arguments(reply, "");
 
 	return reply;
 }
@@ -625,12 +647,11 @@ static void wsc_free(void *userdata)
 {
 	struct wsc *wsc = userdata;
 
-	if (wsc->pending) {
+	wsc_cancel_scan(wsc);
+
+	if (wsc->pending)
 		dbus_pending_reply(&wsc->pending,
 					dbus_error_not_available(wsc->pending));
-
-		wsc_abort(wsc);
-	}
 
 	l_free(wsc);
 }
