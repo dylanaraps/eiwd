@@ -1009,12 +1009,7 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 	if (!status_code || *status_code != 0)
 		goto error;
 
-	if (netdev->sm) {
-		eapol_start(netdev->index, netdev->sm);
-		netdev->eapol_active = true;
-
-		netdev->sm = NULL;
-
+	if (netdev->eapol_active) {
 		if (netdev->event_filter)
 			netdev->event_filter(netdev,
 					NETDEV_EVENT_4WAY_HANDSHAKE,
@@ -1054,6 +1049,19 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 			netdev->event_filter(netdev,
 						NETDEV_EVENT_ASSOCIATING,
 						netdev->user_data);
+
+		/*
+		 * We start the eapol state machine here, in case the PAE
+		 * socket receives EAPoL packets before the nl80211 socket
+		 * receives the connected event.  The logical sequence of
+		 * events can be reversed (e.g. connect_event, then PAE data)
+		 * due to scheduling
+		 */
+		if (netdev->sm) {
+			eapol_start(netdev->index, netdev->sm);
+			netdev->eapol_active = true;
+			netdev->sm = NULL;
+		}
 
 		return;
 	}
