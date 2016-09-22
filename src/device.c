@@ -432,6 +432,11 @@ const uint8_t *device_get_address(struct device *device)
 	return netdev_get_address(device->netdev);
 }
 
+enum device_state device_get_state(struct device *device)
+{
+	return device->state;
+}
+
 static void periodic_scan_trigger(int err, void *user_data)
 {
 	struct device *device = user_data;
