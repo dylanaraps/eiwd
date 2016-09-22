@@ -82,6 +82,18 @@ bool watchlist_remove(struct watchlist *watchlist, unsigned int id)
 {
 	struct watchlist_item *item;
 
+	if (watchlist->in_notify) {
+		item = l_queue_find(watchlist->items, watchlist_item_match,
+							L_UINT_TO_PTR(id));
+		if (!item)
+			return false;
+
+		item->id = 0;	/* Mark stale */
+		watchlist->stale_items = true;
+
+		return true;
+	}
+
 	item = l_queue_remove_if(watchlist->items, watchlist_item_match,
 							L_UINT_TO_PTR(id));
 	if (!item)
@@ -104,4 +116,19 @@ void watchlist_free(struct watchlist *watchlist)
 {
 	l_queue_destroy(watchlist->items, watchlist_item_free);
 	l_free(watchlist);
+}
+
+void __watchlist_prune_stale(struct watchlist *watchlist)
+{
+	struct watchlist_item *item;
+
+	while ((item = l_queue_remove_if(watchlist->items, watchlist_item_match,
+							L_UINT_TO_PTR(0)))) {
+		if (item->destroy)
+			item->destroy(item->notify_data);
+
+		l_free(item);
+	}
+
+	watchlist->stale_items = false;
 }
