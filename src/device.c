@@ -1212,11 +1212,11 @@ static void device_free(void *user)
 		dbus_pending_reply(&device->connect_pending,
 				dbus_error_aborted(device->connect_pending));
 
-	watchlist_destroy(&device->state_watches);
-
 	if (device->state != DEVICE_STATE_OFF)
 		WATCHLIST_NOTIFY(&device_watches, device_watch_func_t,
 						device, DEVICE_EVENT_REMOVED);
+
+	watchlist_destroy(&device->state_watches);
 
 	dbus = dbus_get_bus();
 	l_dbus_unregister_object(dbus, device_get_path(device));
