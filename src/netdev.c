@@ -319,6 +319,8 @@ static void netdev_connect_failed(struct l_genl_msg *msg, void *user_data)
 	void *connect_data = netdev->user_data;
 	enum netdev_result result = netdev->result;
 
+	netdev->disconnect_cmd_id = 0;
+
 	/* Done this way to allow re-entract netdev_connect calls */
 	netdev_connect_free(netdev);
 
@@ -516,6 +518,7 @@ static void netdev_cmd_deauthenticate_cb(struct l_genl_msg *msg,
 	netdev_disconnect_cb_t disconnect_cb;
 	bool r;
 
+	netdev->disconnect_cmd_id = 0;
 
 	if (!netdev->disconnect_cb) {
 		netdev->user_data = NULL;
