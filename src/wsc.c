@@ -52,6 +52,7 @@ static uint32_t device_watch = 0;
 struct wsc {
 	struct device *device;
 	struct l_dbus_message *pending;
+	struct l_dbus_message *pending_cancel;
 	uint8_t *wsc_ies;
 	size_t wsc_ies_size;
 	struct l_timeout *walk_timer;
@@ -65,6 +66,8 @@ struct wsc {
 		uint8_t addr[6];
 	} creds[3];
 	uint32_t n_creds;
+
+	bool wsc_association : 1;
 };
 
 static struct l_dbus_message *wsc_error_session_overlap(
@@ -174,12 +177,31 @@ static void wsc_store_credentials(struct wsc *wsc)
 	}
 }
 
+static void wsc_disconnect_cb(struct netdev *netdev, bool success,
+							void *user_data)
+{
+	struct wsc *wsc = user_data;
+	struct l_dbus_message *reply;
+
+	l_debug("%p, success: %d", wsc, success);
+
+	wsc->wsc_association = false;
+
+	reply = l_dbus_message_new_method_return(wsc->pending_cancel);
+	l_dbus_message_set_arguments(reply, "");
+	dbus_pending_reply(&wsc->pending_cancel, reply);
+
+	device_set_autoconnect(wsc->device, true);
+}
+
 static void wsc_connect_cb(struct netdev *netdev, enum netdev_result result,
 					void *user_data)
 {
 	struct wsc *wsc = user_data;
 
 	l_debug("%d, result: %d", device_get_ifindex(wsc->device), result);
+
+	wsc->wsc_association = false;
 
 	if (result == NETDEV_RESULT_HANDSHAKE_FAILED && wsc->n_creds > 0) {
 		wsc_store_credentials(wsc);
@@ -396,11 +418,14 @@ static void wsc_connect(struct wsc *wsc)
 
 	if (netdev_connect_wsc(device_get_netdev(wsc->device), bss, sm,
 					wsc_netdev_event,
-					wsc_connect_cb, wsc) == 0)
+					wsc_connect_cb, wsc) < 0) {
+		eapol_sm_free(sm);
+		dbus_pending_reply(&wsc->pending,
+					dbus_error_failed(wsc->pending));
 		return;
+	}
 
-	eapol_sm_free(sm);
-	dbus_pending_reply(&wsc->pending, dbus_error_failed(wsc->pending));
+	wsc->wsc_association = true;
 }
 
 static void device_state_watch(enum device_state state, void *userdata)
@@ -689,6 +714,20 @@ static struct l_dbus_message *wsc_cancel(struct l_dbus *dbus,
 		wsc->target = NULL;
 	}
 
+	if (wsc->wsc_association) {
+		int r;
+
+		r = netdev_disconnect(device_get_netdev(wsc->device),
+					wsc_disconnect_cb, wsc);
+		if (r == 0) {
+			wsc->pending_cancel = l_dbus_message_ref(message);
+			return NULL;
+		}
+
+		l_warn("Unable to initiate disconnect: %s", strerror(-r));
+		wsc->wsc_association = false;
+	}
+
 	dbus_pending_reply(&wsc->pending, dbus_error_aborted(wsc->pending));
 
 	reply = l_dbus_message_new_method_return(message);
@@ -720,6 +759,10 @@ static void wsc_free(void *userdata)
 	if (wsc->pending)
 		dbus_pending_reply(&wsc->pending,
 					dbus_error_not_available(wsc->pending));
+
+	if (wsc->pending_cancel)
+		dbus_pending_reply(&wsc->pending_cancel,
+				dbus_error_aborted(wsc->pending_cancel));
 
 	l_free(wsc);
 }
