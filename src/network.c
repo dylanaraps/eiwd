@@ -150,8 +150,6 @@ bool network_connected(struct network *network)
 		 * Write an empty settings file to keep track of the
 		 * last connected time.  This will also make iwd autoconnect
 		 * to this network in the future.
-		 * Current policy is that network becomes a Known Network
-		 * only on a successful connect.
 		 */
 		if (!network_settings_load(network))
 			return false;
@@ -217,9 +215,18 @@ static const double rankmod_table[] = {
 
 bool network_rankmod(const struct network *network, double *rankmod)
 {
-	int n = network_find_rank_index(network->info);
+	int n;
 	int nmax;
 
+	/*
+	 * Current policy is that only networks successfully connected
+	 * to at least once are autoconnectable.  Known Networks that
+	 * we have never connected to are not.
+	 */
+	if (!network->info->connected_time.tv_sec)
+		return false;
+
+	n = network_find_rank_index(network->info);
 	if (n == -1)
 		return false;
 
