@@ -142,6 +142,7 @@ static const struct {
 					MS_NOSUID|MS_NODEV|MS_STRICTATIME },
 	{ "tmpfs",    "/run",     "mode=0755",
 					MS_NOSUID|MS_NODEV|MS_STRICTATIME },
+	{ "tmpfs",    "/var/lib/iwd", "mode=0755", 0 },
 	{ "tmpfs",    "/tmp",              NULL, 0 },
 	{ "debugfs",  "/sys/kernel/debug", NULL, 0 },
 	{ }
