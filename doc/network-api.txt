@@ -17,6 +17,7 @@ Methods		void Connect()
 					 new.connman.iwd.NoAgent
 					 new.connman.iwd.NotSupported
 					 new.connman.iwd.Timeout
+					 net.connman.iwd.InProgress
 
 Properties	string Name [readonly]
 
