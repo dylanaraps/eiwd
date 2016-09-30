@@ -176,6 +176,22 @@ radio_confs=rad0:rad1
 # Default: 20 seconds.
 #max_test_exec_interval_sec=5
 
+# List of directory names inside of a test configuration directory for which
+# the symlinks will be created inside of /tmp. Such directories can be used
+# to specify an absolute path to the needed files inside of IWD and Hostapd
+# configuration files.
+# Example:
+#	 <some path>/test1/certs
+#		           misc
+#
+# certs and misc directories will be respectively mapped to:
+#
+#	 /tmp/certs
+#	      misc
+#
+# This field is optional.
+#abs_path_dir_list=certs:misc
+
 #
 # The following two configuration groups are examples of the radio
 # configurations.
