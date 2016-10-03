@@ -783,6 +783,7 @@ static bool find_test_configuration(const char *path, int level,
 #define HW_CONFIG_SETUP_NUM_RADIOS	"num_radios"
 #define HW_CONFIG_SETUP_RADIO_CONFS	"radio_confs"
 #define HW_CONFIG_SETUP_MAX_EXEC_SEC	"max_test_exec_interval_sec"
+#define HW_CONFIG_SETUP_ABS_PATH_DIRS	"abs_path_dir_list"
 
 static struct l_settings *read_hw_config(const char *test_dir_path)
 {
@@ -1062,6 +1063,72 @@ static pid_t start_iwd(void)
 static void terminate_iwd(pid_t iwd_pid)
 {
 	kill_process(iwd_pid);
+}
+
+static bool create_absolute_path_dirs(char **abs_path_dirs,
+					const char *config_dir_path)
+{
+	size_t i = 0;
+
+	if (!abs_path_dirs)
+		return true;
+
+	while (abs_path_dirs[i]) {
+		char *link_dir;
+		char *target_dir = l_strdup_printf("%s/%s", config_dir_path,
+							abs_path_dirs[i]);
+
+		if (!path_exist(target_dir)) {
+			l_error("No such directory: %s", target_dir);
+			l_free(target_dir);
+			return false;
+		}
+
+		link_dir = l_strdup_printf("%s/%s", "/tmp", abs_path_dirs[i]);
+
+		if (symlink(target_dir, link_dir) < 0) {
+			l_error("Failed to create symlink for %s: %s",
+						target_dir, strerror(errno));
+
+			l_free(target_dir);
+			l_free(link_dir);
+			return false;
+		}
+
+		l_free(target_dir);
+		l_free(link_dir);
+		i++;
+	}
+
+	return true;
+}
+
+static bool remove_absolute_path_dirs(char **abs_path_dirs,
+					const char *config_dir_path)
+{
+	size_t i = 0;
+
+	if (!abs_path_dirs)
+		return true;
+
+	while (abs_path_dirs[i]) {
+		char *link_dir;
+
+		link_dir = l_strdup_printf("%s/%s", "/tmp", abs_path_dirs[i]);
+
+		if (unlink(link_dir) < 0) {
+			l_error("Failed to remove symlink for %s: %s",
+						link_dir, strerror(errno));
+
+			l_free(link_dir);
+			return false;
+		}
+
+		l_free(link_dir);
+		i++;
+	}
+
+	return true;
 }
 
 #define CONSOLE_LN_DEFAULT	"\x1B[0m"
@@ -1347,6 +1414,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 	pid_t hostapd_pids[HWSIM_RADIOS_MAX];
 	pid_t iwd_pid, medium_pid;
 	char *config_dir_path;
+	char **abs_path_dirs = NULL;
 	struct l_settings *hw_settings;
 	struct l_hashmap *if_name_map;
 	struct l_queue *test_queue;
@@ -1380,6 +1448,14 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 	l_info("Configuring network...");
 
+	abs_path_dirs =
+		l_settings_get_string_list(hw_settings, HW_CONFIG_GROUP_SETUP,
+						HW_CONFIG_SETUP_ABS_PATH_DIRS,
+									':');
+
+	if (!create_absolute_path_dirs(abs_path_dirs, config_dir_path))
+		goto exit_hwsim;
+
 	if (!configure_hw_radios(hw_settings, hwsim_radio_ids, if_name_map))
 		goto exit_hwsim;
 
@@ -1409,6 +1485,8 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 	l_info("Destructing network...");
 
+	remove_absolute_path_dirs(abs_path_dirs, config_dir_path);
+
 	terminate_iwd(iwd_pid);
 	terminate_medium(medium_pid);
 
@@ -1420,6 +1498,7 @@ exit_hwsim:
 
 	l_hashmap_destroy(if_name_map, hashmap_string_destroy);
 	l_settings_free(hw_settings);
+	l_strfreev(abs_path_dirs);
 }
 
 struct stat_totals {
