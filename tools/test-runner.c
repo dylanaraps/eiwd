@@ -704,13 +704,24 @@ static void destroy_hostapd_instances(pid_t hostapd_pids[])
 
 #define TEST_TOP_DIR_DEFAULT_NAME	"autotests"
 #define TEST_DIR_PREFIX			"test"
-#define TEST_FILE_SUFFIX1		"Test"
-#define TEST_FILE_SUFFIX2		"Test.py"
 
-static int is_test_file(const char *file)
+static bool is_test_file(const char *file)
 {
-	return l_str_has_suffix(file, TEST_FILE_SUFFIX1) ||
-		l_str_has_suffix(file, TEST_FILE_SUFFIX2);
+	size_t i;
+	static const char * const test_file_extension_table[] = {
+		"test",
+		"test.py",
+		"Test",
+		"Test.py",
+		NULL
+	};
+
+	for (i = 0; test_file_extension_table[i]; i++) {
+		if (l_str_has_suffix(file, test_file_extension_table[i]))
+			return true;
+	}
+
+	return false;
 }
 
 static int is_test_dir(const char *dir)
