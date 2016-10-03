@@ -12,11 +12,11 @@ Methods		void Connect()
 			network.
 
 			Possible errors: net.connman.iwd.Aborted
-					 new.connman.iwd.Busy
-					 new.connman.iwd.Failed
-					 new.connman.iwd.NoAgent
-					 new.connman.iwd.NotSupported
-					 new.connman.iwd.Timeout
+					 net.connman.iwd.Busy
+					 net.connman.iwd.Failed
+					 net.connman.iwd.NoAgent
+					 net.connman.iwd.NotSupported
+					 net.connman.iwd.Timeout
 					 net.connman.iwd.InProgress
 
 Properties	string Name [readonly]

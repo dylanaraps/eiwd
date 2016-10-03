@@ -10,15 +10,15 @@ Methods		void Scan()
 			Schedule a network scan.
 
 			Possible errors: net.connman.iwd.Busy
-					 new.connman.iwd.Failed
+					 net.connman.iwd.Failed
 
 		void Disconnect()
 
 			Disconnect from the network
 
 			Possible errors: net.connman.iwd.Busy
-					 new.connman.iwd.Failed
-					 new.connman.iwd.NotConnected
+					 net.connman.iwd.Failed
+					 net.connman.iwd.NotConnected
 
 		array(osns) GetOrderedNetworks()
 
