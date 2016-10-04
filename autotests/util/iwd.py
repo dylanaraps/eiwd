@@ -284,13 +284,14 @@ class Device(IWDDBusAbstract):
             ordered_networks.append(ordered_network)
         return ordered_networks
 
-    def __str__(self):
-        return 'Device: ' + self.device_path + '\n'\
-                '\tName:\t\t' + self.name + '\n'\
-                '\tAddress:\t' + self.address + '\n'\
-                '\tState:\t\t' + str(self.state) + '\n'\
-                '\tPowered:\t' + str(self.powered) + '\n'
-                #'\tConn-d net:\t' + str(self.connected_network) + '\n'
+    def __str__(self, prefix = ''):
+        return prefix + 'Device: ' + self.device_path + '\n'\
+               + prefix + '\tName:\t\t' + self.name + '\n'\
+               + prefix + '\tAddress:\t' + self.address + '\n'\
+               + prefix + '\tState:\t\t' + str(self.state) + '\n'\
+               + prefix + '\tPowered:\t' + str(self.powered) + '\n'\
+               + prefix + '\tConnected net:\t' + str(self.connected_network) +\
+                                                                            '\n'
 
 
 class Network(IWDDBusAbstract):
