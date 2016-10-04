@@ -86,6 +86,7 @@ void bss_get_supported_ciphers(struct scan_bss *bss,
 				uint16_t *group_ciphers);
 
 uint8_t scan_freq_to_channel(uint32_t freq, enum scan_band *out_band);
+uint32_t scan_channel_to_freq(uint8_t channel, enum scan_band band);
 
 struct scan_freq_set *scan_freq_set_new(void);
 void scan_freq_set_free(struct scan_freq_set *freqs);

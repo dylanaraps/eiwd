@@ -1092,6 +1092,27 @@ uint8_t scan_freq_to_channel(uint32_t freq, enum scan_band *out_band)
 	return 0;
 }
 
+uint32_t scan_channel_to_freq(uint8_t channel, enum scan_band band)
+{
+	if (band == SCAN_BAND_2_4_GHZ) {
+		if (channel >= 1 && channel <= 13)
+			return 2407 + 5 * channel;
+
+		if (channel == 14)
+			return 2484;
+	}
+
+	if (band == SCAN_BAND_5_GHZ) {
+		if (channel >= 1 && channel <= 179)
+			return 5000 + 5 * channel;
+
+		if (channel >= 181 && channel <= 199)
+			return 4000 + 5 * channel;
+	}
+
+	return 0;
+}
+
 struct scan_freq_set {
 	uint16_t channels_2ghz;
 	struct l_uintset *channels_5ghz;
