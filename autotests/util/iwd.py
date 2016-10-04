@@ -593,7 +593,7 @@ class IWD(AsyncOpAbstract):
            removes any associated meta-data.  If the network is
            currently connected, then it is automatically disconnected'''
         self._known_network_manager.ForgetNetwork(
-                                    known_network.name, known_network.type,
+                                    known_network.name, str(known_network.type),
                                     dbus_interface=IWD_KNOWN_NETWORKS_INTERFACE,
                                     reply_handler=self._success,
                                     error_handler=self._failure)
