@@ -483,9 +483,23 @@ class IWD(AsyncOpAbstract):
     _agent_manager_if = None
     _known_network_manager_if = None
 
-    def __init__(self):
+    def __init__(self, start_iwd_daemon = False):
         global mainloop
         mainloop = GLib.MainLoop()
+
+        if not start_iwd_daemon:
+            return
+
+        import subprocess
+        iwd_proc = subprocess.Popen('iwd')
+
+        tries = 0
+        while not self._bus.name_has_owner(IWD_SERVICE):
+            if tries > 20:
+                iwd_proc.terminate()
+                raise TimeoutError('IWD has failed to start')
+            tries += 1
+            time.sleep(0.05)
 
     @property
     def _object_manager(self):
