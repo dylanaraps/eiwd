@@ -172,6 +172,16 @@ class Device(IWDDBusAbstract):
         with its properties and methods
     '''
     _iface_name = IWD_DEVICE_INTERFACE
+    _wps_manager_if = None
+
+    @property
+    def _wps_manager(self):
+        if self._wps_manager_if is None:
+            _wps_manager_if =\
+                dbus.Interface(self._bus.get_object(IWD_SERVICE,
+                                                    self.device_path),
+                               IWD_WSC_INTERFACE)
+        return _wps_manager_if
 
     @property
     def device_path(self):
@@ -283,6 +293,18 @@ class Device(IWDDBusAbstract):
             ordered_network = OrderedNetwork(bus_obj)
             ordered_networks.append(ordered_network)
         return ordered_networks
+
+    def wps_push_button(self):
+        self._wps_manager.PushButton(dbus_interface=IWD_WSC_INTERFACE,
+                                     reply_handler=self._success,
+                                     error_handler=self._failure)
+        self._wait_for_async_op()
+
+    def wps_cancel(self):
+        self._wps_manager.Cancel(dbus_interface=IWD_WSC_INTERFACE,
+                                 reply_handler=self._success,
+                                 error_handler=self._failure)
+        self._wait_for_async_op()
 
     def __str__(self, prefix = ''):
         return prefix + 'Device: ' + self.device_path + '\n'\
