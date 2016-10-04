@@ -218,7 +218,7 @@ class Device(IWDDBusAbstract):
 
             @rtype: object (Network)
         '''
-        return self._properties('ConnectedNetwork')
+        return self._properties.get('ConnectedNetwork')
 
     @property
     def powered(self):
@@ -379,8 +379,8 @@ class KnownNetwork():
     def __init__(self, n_n_object):
         self._name = n_n_object['Name']
         self._type = NetworkType.from_string(n_n_object['Type'])
-        self._last_connected_time = n_n_object['LastConnectedTime']
-        self._last_seen_time = n_n_object['LastSeenTime']
+        self._last_connected_time = n_n_object.get('LastConnectedTime')
+        self._last_seen_time = n_n_object.get('LastSeenTime')
 
     def __str__(self, prefix = ''):
         return prefix + 'Known Network:\n' \
