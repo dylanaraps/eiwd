@@ -927,6 +927,8 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 	struct eapol_key *step2;
 	uint8_t mic[16];
 	bool use_sha256;
+	enum crypto_cipher cipher;
+	size_t ptk_size;
 
 	if (!eapol_verify_ptk_1_of_4(ek)) {
 		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
@@ -949,10 +951,13 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 	else
 		use_sha256 = false;
 
+	cipher = ie_rsn_cipher_suite_to_cipher(sm->pairwise_cipher);
+
+	ptk_size = sizeof(struct crypto_ptk) + crypto_cipher_key_len(cipher);
+
 	crypto_derive_pairwise_ptk(sm->pmk, sm->spa, sm->aa,
 					sm->anonce, sm->snonce,
-					ptk, sizeof(sm->ptk),
-					use_sha256);
+					ptk, ptk_size, use_sha256);
 
 	step2 = eapol_create_ptk_2_of_4(sm->protocol_version,
 					ek->key_descriptor_version,
