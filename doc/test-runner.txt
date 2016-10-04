@@ -192,6 +192,11 @@ radio_confs=rad0:rad1
 # This field is optional.
 #abs_path_dir_list=certs:misc
 
+# Flag to prevent test-runner from starting IWD. Therefore, it may later be
+# started from the python test cases.
+# This field is optional. Default: 1 (true)
+#start_iwd=0
+
 #
 # The following two configuration groups are examples of the radio
 # configurations.
