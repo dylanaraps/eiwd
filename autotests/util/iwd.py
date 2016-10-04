@@ -382,8 +382,13 @@ class KnownNetwork():
         self._last_connected_time = n_n_object['LastConnectedTime']
         self._last_seen_time = n_n_object['LastSeenTime']
 
-    def __str__(self):
-        return 'Name' + self.name + ' Type' + self.type
+    def __str__(self, prefix = ''):
+        return prefix + 'Known Network:\n' \
+                + prefix + '\tName:\t' + self.name + '\n' \
+                + prefix + '\tType:\t' + str(self.type) + '\n' \
+                + prefix + '\tLast connected:\t' + self.last_connected_time + \
+                                                                         '\n' \
+                + prefix + '\tLast seen:\t' + self.last_seen_time
 
 
 class OrderedNetwork(object):
