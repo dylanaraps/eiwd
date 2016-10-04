@@ -243,7 +243,7 @@ bool eapol_verify_mic(const uint8_t *kck, const struct eapol_key *frame)
 
 	l_checksum_updatev(checksum, iov, 3);
 	l_checksum_get_digest(checksum, mic, 16);
-	l_free(checksum);
+	l_checksum_free(checksum);
 
 	if (!memcmp(frame->key_mic_data, mic, 16))
 		return true;
