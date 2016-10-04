@@ -37,6 +37,7 @@ typedef bool (*scan_notify_func_t)(uint32_t wiphy, uint32_t ifindex,
 					struct l_queue *bss_list,
 					void *userdata);
 typedef void (*scan_destroy_func_t)(void *userdata);
+typedef void (*scan_freq_set_func_t)(uint32_t freq, void *userdata);
 
 struct scan_freq_set;
 struct ie_rsn_info;
@@ -93,6 +94,8 @@ void scan_freq_set_free(struct scan_freq_set *freqs);
 bool scan_freq_set_add(struct scan_freq_set *freqs, uint32_t freq);
 bool scan_freq_set_contains(struct scan_freq_set *freqs, uint32_t freq);
 uint32_t scan_freq_set_get_bands(struct scan_freq_set *freqs);
+void scan_freq_set_foreach(struct scan_freq_set *freqs,
+				scan_freq_set_func_t func, void *user_data);
 
 bool scan_ifindex_add(uint32_t ifindex);
 bool scan_ifindex_remove(uint32_t ifindex);

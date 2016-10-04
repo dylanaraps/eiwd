@@ -1189,6 +1189,27 @@ uint32_t scan_freq_set_get_bands(struct scan_freq_set *freqs)
 	return bands;
 }
 
+void scan_freq_set_foreach(struct scan_freq_set *freqs,
+				scan_freq_set_func_t func, void *user_data)
+{
+	uint8_t channel;
+	uint32_t freq;
+
+	for (channel = 1; channel <= 14; channel++)
+		if (freqs->channels_2ghz & (1 << (channel - 1))) {
+			freq = scan_channel_to_freq(channel, SCAN_BAND_2_4_GHZ);
+
+			func(freq, user_data);
+		}
+
+	for (channel = 1; channel <= 200; channel++)
+		if (l_uintset_contains(freqs->channels_5ghz, channel)) {
+			freq = scan_channel_to_freq(channel, SCAN_BAND_5_GHZ);
+
+			func(freq, user_data);
+		}
+}
+
 bool scan_init(struct l_genl_family *in)
 {
 	nl80211 = in;
