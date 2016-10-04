@@ -708,6 +708,11 @@ struct eapol_key *eapol_create_gtk_2_of_2(
 	return step2;
 }
 
+struct eapol_buffer {
+	size_t len;
+	uint8_t data[0];
+};
+
 struct eapol_sm {
 	enum eapol_protocol_version protocol_version;
 	uint32_t ifindex;
@@ -732,8 +737,10 @@ struct eapol_sm {
 	bool ptk_complete:1;
 	bool wpa_ie:1;
 	bool have_pmk:1;
+	bool started:1;
 	bool use_eapol_start:1;
 	struct eap_state *eap;
+	struct eapol_buffer *early_frame;
 };
 
 static void eapol_sm_destroy(void *value)
@@ -748,6 +755,8 @@ static void eapol_sm_destroy(void *value)
 
 	if (sm->eap)
 		eap_free(sm->eap);
+
+	l_free(sm->early_frame);
 
 	l_free(sm);
 }
@@ -1643,6 +1652,26 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 {
 	const struct eapol_header *eh;
 
+	if (!sm->started) {
+		struct eapol_buffer *buf;
+
+		/*
+		 * If the state machine hasn't started yet save the frame
+		 * for processing later.
+		 */
+		if (sm->early_frame) /* Is the 1-element queue full */
+			return;
+
+		buf = l_malloc(sizeof(struct eapol_buffer) + len);
+
+		buf->len = len;
+		memcpy(buf->data, frame, len);
+
+		sm->early_frame = buf;
+
+		return;
+	}
+
 	/* Validate Header */
 	if (len < sizeof(struct eapol_header))
 		return;
@@ -1767,10 +1796,18 @@ static bool eapol_get_nonce(uint8_t nonce[])
 	return l_getrandom(nonce, 32);
 }
 
-void eapol_start(uint32_t ifindex, struct eapol_sm *sm)
+void eapol_register(uint32_t ifindex, struct eapol_sm *sm)
 {
 	sm->ifindex = ifindex;
+
+	l_queue_push_head(state_machines, sm);
+}
+
+void eapol_start(struct eapol_sm *sm)
+{
 	sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);
+
+	sm->started = true;
 
 	if (sm->use_eapol_start) {
 		/*
@@ -1781,7 +1818,14 @@ void eapol_start(uint32_t ifindex, struct eapol_sm *sm)
 				l_timeout_create(1, send_eapol_start, sm, NULL);
 	}
 
-	l_queue_push_head(state_machines, sm);
+	/* Process any frames received early due to scheduling */
+	if (sm->early_frame) {
+		struct eapol_buffer *tmp = sm->early_frame;
+
+		sm->early_frame = NULL;
+		eapol_rx_packet(sm, tmp->data, tmp->len);
+		l_free(tmp);
+	}
 }
 
 void eapol_cancel(uint32_t ifindex)

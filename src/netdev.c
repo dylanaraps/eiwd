@@ -1017,6 +1017,13 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 		goto error;
 
 	if (netdev->eapol_active) {
+		/*
+		 * Start processing EAPoL frames now that the state machine
+		 * has all the input data even in FT mode.
+		 */
+		eapol_start(netdev->sm);
+		netdev->sm = NULL;
+
 		if (netdev->event_filter)
 			netdev->event_filter(netdev,
 					NETDEV_EVENT_4WAY_HANDSHAKE,
@@ -1058,16 +1065,15 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 						netdev->user_data);
 
 		/*
-		 * We start the eapol state machine here, in case the PAE
+		 * We register the eapol state machine here, in case the PAE
 		 * socket receives EAPoL packets before the nl80211 socket
 		 * receives the connected event.  The logical sequence of
 		 * events can be reversed (e.g. connect_event, then PAE data)
 		 * due to scheduling
 		 */
 		if (netdev->sm) {
-			eapol_start(netdev->index, netdev->sm);
+			eapol_register(netdev->index, netdev->sm);
 			netdev->eapol_active = true;
-			netdev->sm = NULL;
 		}
 
 		return;
