@@ -260,6 +260,13 @@ follows:
 
 	and uncomment it by removing the '#' sign.
 
+	For WPS tests uncomment the following:
+
+		#CONFIG_WPS=y
+
+	Note: You may need to pre-install: 'gnutls-devel' and 'libgcrypt-devel'
+	libraries.
+
 	$ make install
 
 Note: If 'make install' fails with the netlink warnings you may need to
