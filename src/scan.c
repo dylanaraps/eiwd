@@ -774,7 +774,7 @@ static void scan_bss_compute_rank(struct scan_bss *bss)
 		 * Section 6.5.5.2
 		 */
 		factor = factor * max / 108 + RANK_MIN_SUPPORTED_RATE_FACTOR;
-		bss->rank *= factor;
+		rank *= factor;
 	}
 
 	irank = rank;
