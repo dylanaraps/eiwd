@@ -1958,6 +1958,7 @@ static void wsc_test_pbc_handshake(const void *data)
 	eapol_init();
 
 	sm = eapol_sm_new();
+	eapol_register(1, sm);
 	eapol_sm_set_authenticator_address(sm, ap_address);
 	eapol_sm_set_supplicant_address(sm, sta_address);
 	__eapol_set_tx_packet_func(verify_8021x);
@@ -2004,7 +2005,7 @@ static void wsc_test_pbc_handshake(const void *data)
 	eapol_sm_set_8021x_config(sm, settings);
 	l_settings_free(settings);
 
-	eapol_start(1, sm);
+	eapol_start(sm);
 
 	VERIFY_RESET(verify, eap_identity_resp);
 	__eapol_rx_packet(1, ap_address, eap_identity_req,
