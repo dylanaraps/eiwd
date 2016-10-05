@@ -784,6 +784,7 @@ static bool find_test_configuration(const char *path, int level,
 #define HW_CONFIG_SETUP_RADIO_CONFS	"radio_confs"
 #define HW_CONFIG_SETUP_MAX_EXEC_SEC	"max_test_exec_interval_sec"
 #define HW_CONFIG_SETUP_ABS_PATH_DIRS	"abs_path_dir_list"
+#define HW_CONFIG_SETUP_START_IWD	"start_iwd"
 
 static struct l_settings *read_hw_config(const char *test_dir_path)
 {
@@ -1063,6 +1064,20 @@ static pid_t start_iwd(void)
 static void terminate_iwd(pid_t iwd_pid)
 {
 	kill_process(iwd_pid);
+}
+
+static void terminate_all_iwd(void)
+{
+	char *argv[3];
+	pid_t pid;
+
+	argv[0] = "killall";
+	argv[1] = "iwd";
+	argv[2] = NULL;
+
+	pid = execute_program(argv, true);
+	if (pid < 0)
+		l_error("Failed to kill all IWD instances");
 }
 
 static bool create_absolute_path_dirs(char **abs_path_dirs,
@@ -1412,13 +1427,15 @@ static void create_network_and_run_tests(const void *key, void *value,
 {
 	int hwsim_radio_ids[HWSIM_RADIOS_MAX];
 	pid_t hostapd_pids[HWSIM_RADIOS_MAX];
-	pid_t iwd_pid, medium_pid;
+	pid_t iwd_pid = -1;
+	pid_t medium_pid = -1;
 	char *config_dir_path;
 	char **abs_path_dirs = NULL;
 	struct l_settings *hw_settings;
 	struct l_hashmap *if_name_map;
 	struct l_queue *test_queue;
 	struct l_queue *test_stats_queue;
+	bool start_iwd_daemon = true;
 
 	if (!key || !value)
 		return;
@@ -1472,9 +1489,14 @@ static void create_network_and_run_tests(const void *key, void *value,
 						if_name_map, hostapd_pids))
 		goto exit_hostapd;
 
-	iwd_pid = start_iwd();
-	if (iwd_pid == -1)
-		goto exit_hostapd;
+	l_settings_get_bool(hw_settings, HW_CONFIG_GROUP_SETUP,
+				HW_CONFIG_SETUP_START_IWD, &start_iwd_daemon);
+
+	if (start_iwd_daemon) {
+		iwd_pid = start_iwd();
+		if (iwd_pid == -1)
+			goto exit_hostapd;
+	}
 
 	if (chdir(config_dir_path) < 0) {
 		l_error("Failed to change directory");
@@ -1487,7 +1509,11 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 	remove_absolute_path_dirs(abs_path_dirs, config_dir_path);
 
-	terminate_iwd(iwd_pid);
+	if (iwd_pid > 0)
+		terminate_iwd(iwd_pid);
+	else
+		terminate_all_iwd();
+
 	terminate_medium(medium_pid);
 
 exit_hostapd:
