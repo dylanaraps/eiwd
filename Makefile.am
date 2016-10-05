@@ -38,7 +38,6 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/siphash-private.h \
 			ell/siphash.c \
 			ell/hwdb.h ell/hwdb.c \
-			ell/cipher-private.h \
 			ell/cipher.h ell/cipher.c \
 			ell/random.h ell/random.c \
 			ell/uintset.h ell/uintset.c \
