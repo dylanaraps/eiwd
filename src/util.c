@@ -26,6 +26,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <sys/uio.h>
 
 #include <ell/string.h>
 #include <ell/genl.h>
