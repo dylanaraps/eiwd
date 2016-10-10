@@ -533,7 +533,10 @@ static void device_disassociated(struct device *device)
 					IWD_NETWORK_INTERFACE, "Connected");
 	}
 
-	device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
+	device_enter_state(device, DEVICE_STATE_DISCONNECTED);
+
+	if (device->autoconnect)
+		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 }
 
 static void device_lost_beacon(struct device *device)
