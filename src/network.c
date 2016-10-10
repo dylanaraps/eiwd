@@ -79,6 +79,9 @@ static void network_settings_close(struct network *network)
 	if (!network->settings)
 		return;
 
+	l_free(network->psk);
+	network->psk = NULL;
+
 	l_settings_free(network->settings);
 	network->settings = NULL;
 }
@@ -400,8 +403,6 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 
 		if (network->psk && len != 32) {
 			network_settings_close(network);
-			l_free(network->psk);
-			network->psk = NULL;
 			return -ENOKEY;
 		}
 
@@ -550,9 +551,6 @@ static void passphrase_callback(enum agent_result result,
 
 err:
 	network_settings_close(network);
-
-	l_free(network->psk);
-	network->psk = NULL;
 }
 
 static struct l_dbus_message *network_connect_psk(struct network *network,
@@ -720,8 +718,6 @@ void network_remove(struct network *network, int reason)
 		network_unregister(network, reason);
 
 	l_queue_destroy(network->bss_list, NULL);
-	l_free(network->psk);
-
 	network_info_put(network->info);
 
 	l_free(network);
