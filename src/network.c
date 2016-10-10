@@ -148,7 +148,10 @@ bool network_connected(struct network *network)
 		return false;
 
 	err = storage_network_touch(strtype, network->info->ssid);
-	if (err == -ENOENT) {
+	switch (err) {
+	case 0:
+		break;
+	case -ENOENT:
 		/*
 		 * Write an empty settings file to keep track of the
 		 * last connected time.  This will also make iwd autoconnect
@@ -159,8 +162,10 @@ bool network_connected(struct network *network)
 
 		storage_network_sync(strtype, network->info->ssid,
 					network->settings);
-	} else
+		break;
+	default:
 		return false;
+	}
 
 	err = storage_network_get_mtime(strtype, network->info->ssid,
 					&network->info->connected_time);
