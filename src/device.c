@@ -591,8 +591,10 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 	}
 
 	if (result != NETDEV_RESULT_OK) {
-		if (result != NETDEV_RESULT_ABORTED)
+		if (result != NETDEV_RESULT_ABORTED) {
+			network_connect_failed(device->connected_network);
 			device_disassociated(device);
+		}
 
 		return;
 	}
