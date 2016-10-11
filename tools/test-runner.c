@@ -54,7 +54,7 @@
 #define CMDLINE_MAX			2048
 
 #define BIN_IW				"iw"
-#define BIN_HWSIM			"./hwsim"
+#define BIN_HWSIM			"hwsim"
 
 #define HWSIM_RADIOS_MAX		100
 #define TEST_MAX_EXEC_TIME_SEC		20
@@ -553,12 +553,6 @@ static bool list_hwsim_radios(void)
 	char *argv[3];
 	pid_t pid;
 
-	if (chdir(exec_home + 5) < 0) {
-		l_error("Failed to change home test directory: %s",
-							strerror(errno));
-		return false;
-	}
-
 	argv[0] = BIN_HWSIM;
 	argv[1] = "--list";
 	argv[2] = NULL;
@@ -584,12 +578,6 @@ static int create_hwsim_radio(const char *radio_name,
 	char *argv[7];
 	pid_t pid;
 
-	if (chdir(exec_home + 5) < 0) {
-		l_error("Failed to change home test directory: %s",
-							strerror(errno));
-		return -1;
-	}
-
 	/*TODO add the rest of params*/
 	argv[0] = BIN_HWSIM;
 	argv[1] = "--create";
@@ -614,12 +602,6 @@ static bool destroy_hwsim_radio(int radio_id)
 
 	sprintf(destroy_param, "--destroy=%d", radio_id);
 
-	if (chdir(exec_home + 5) < 0) {
-		l_error("Failed to change home test directory: %s",
-							strerror(errno));
-		return false;
-	}
-
 	argv[0] = BIN_HWSIM;
 	argv[1] = destroy_param;
 	argv[2] = NULL;
@@ -634,12 +616,6 @@ static bool destroy_hwsim_radio(int radio_id)
 static pid_t register_hwsim_as_trans_medium(void)
 {
 	char *argv[3];
-
-	if (chdir(exec_home + 5) < 0) {
-		l_error("Failed to change home test directory: %s",
-							strerror(errno));
-		return false;
-	}
 
 	argv[0] = BIN_HWSIM;
 	argv[1] = "--register";
