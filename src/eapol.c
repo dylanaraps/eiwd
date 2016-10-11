@@ -932,6 +932,9 @@ static void send_eapol_start(struct l_timeout *timeout, void *user_data)
 	l_timeout_remove(sm->eapol_start_timeout);
 	sm->eapol_start_timeout = NULL;
 
+	if (!sm->protocol_version)
+		sm->protocol_version = EAPOL_PROTOCOL_VERSION_2001;
+
 	frame->header.protocol_version = sm->protocol_version;
 	frame->header.packet_type = 1;
 	l_put_be16(0, &frame->header.packet_len);
