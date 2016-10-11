@@ -349,6 +349,8 @@ static void wsc_eapol_event(uint32_t event, const void *event_data,
 static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
 					void *user_data)
 {
+	struct wsc *wsc = user_data;
+
 	switch (event) {
 	case NETDEV_EVENT_AUTHENTICATING:
 	case NETDEV_EVENT_ASSOCIATING:
@@ -361,6 +363,8 @@ static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
 		break;
 	case NETDEV_EVENT_DISCONNECT_BY_AP:
 		l_debug("Disconnect by AP");
+		wsc_connect_cb(device_get_netdev(wsc->device),
+				NETDEV_RESULT_HANDSHAKE_FAILED, wsc);
 		break;
 	default:
 		l_debug("Unexpected event");
