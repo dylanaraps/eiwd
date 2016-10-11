@@ -415,6 +415,7 @@ static void wsc_connect(struct wsc *wsc)
 
 	eapol_sm_set_8021x_config(sm, settings);
 	l_settings_free(settings);
+	eapol_sm_set_use_eapol_start(sm, true);
 
 	if (netdev_connect_wsc(device_get_netdev(wsc->device), bss, sm,
 					wsc_netdev_event,
