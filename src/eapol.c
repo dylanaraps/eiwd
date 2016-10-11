@@ -726,11 +726,13 @@ struct eapol_sm {
 	eapol_sm_event_func_t event_func;
 	void *user_data;
 	struct l_timeout *timeout;
+	struct l_timeout *eapol_start_timeout;
 	bool have_snonce:1;
 	bool have_replay:1;
 	bool ptk_complete:1;
 	bool wpa_ie:1;
 	bool have_pmk:1;
+	bool use_eapol_start:1;
 	struct eap_state *eap;
 };
 
@@ -742,6 +744,7 @@ static void eapol_sm_destroy(void *value)
 	l_free(sm->own_ie);
 
 	l_timeout_remove(sm->timeout);
+	l_timeout_remove(sm->eapol_start_timeout);
 
 	if (sm->eap)
 		eap_free(sm->eap);
@@ -918,6 +921,22 @@ static void eapol_timeout(struct l_timeout *timeout, void *user_data)
 
 	handshake_failed(sm->ifindex, sm,
 				MPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT);
+}
+
+static void send_eapol_start(struct l_timeout *timeout, void *user_data)
+{
+	struct eapol_sm *sm = user_data;
+	uint8_t buf[sizeof(struct eapol_frame)];
+	struct eapol_frame *frame = (struct eapol_frame *) buf;
+
+	l_timeout_remove(sm->eapol_start_timeout);
+	sm->eapol_start_timeout = NULL;
+
+	frame->header.protocol_version = sm->protocol_version;
+	frame->header.packet_type = 1;
+	l_put_be16(0, &frame->header.packet_len);
+
+	pae_write(sm->ifindex, sm->aa, sm->spa, frame);
 }
 
 static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
@@ -1611,6 +1630,11 @@ void eapol_sm_set_8021x_config(struct eapol_sm *sm, struct l_settings *settings)
 	eap_set_event_func(sm->eap, eapol_eap_event_cb);
 }
 
+void eapol_sm_set_use_eapol_start(struct eapol_sm *sm, bool enabled)
+{
+	sm->use_eapol_start = enabled;
+}
+
 static void eapol_rx_packet(struct eapol_sm *sm,
 					const uint8_t *frame, size_t len)
 {
@@ -1638,6 +1662,9 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 
 	switch (eh->packet_type) {
 	case 0: /* EAPOL-EAP */
+		l_timeout_remove(sm->eapol_start_timeout);
+		sm->eapol_start_timeout = 0;
+
 		if (!sm->eap) {
 			/* If we're not configured for EAP, send a NAK */
 			sm->eap = eap_new(eapol_eap_msg_cb,
@@ -1741,6 +1768,15 @@ void eapol_start(uint32_t ifindex, struct eapol_sm *sm)
 {
 	sm->ifindex = ifindex;
 	sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);
+
+	if (sm->use_eapol_start) {
+		/*
+		 * We start a short timeout, if EAP packets are not received
+		 * from AP, then we send the EAPoL-Start
+		 */
+		sm->eapol_start_timeout =
+				l_timeout_create(1, send_eapol_start, sm, NULL);
+	}
 
 	l_queue_push_head(state_machines, sm);
 }
