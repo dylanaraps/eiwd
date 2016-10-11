@@ -1056,8 +1056,7 @@ static void terminate_all_iwd(void)
 		l_error("Failed to kill all IWD instances");
 }
 
-static bool create_absolute_path_dirs(char **abs_path_dirs,
-					const char *config_dir_path)
+static bool create_absolute_path_dirs(char **abs_path_dirs)
 {
 	size_t i = 0;
 
@@ -1066,8 +1065,9 @@ static bool create_absolute_path_dirs(char **abs_path_dirs,
 
 	while (abs_path_dirs[i]) {
 		char *link_dir;
-		char *target_dir = l_strdup_printf("%s/%s", config_dir_path,
-							abs_path_dirs[i]);
+		char *target_dir;
+
+		target_dir = realpath(abs_path_dirs[i], NULL);
 
 		if (!path_exist(target_dir)) {
 			l_error("No such directory: %s", target_dir);
@@ -1075,27 +1075,29 @@ static bool create_absolute_path_dirs(char **abs_path_dirs,
 			return false;
 		}
 
-		link_dir = l_strdup_printf("%s/%s", "/tmp", abs_path_dirs[i]);
+		link_dir = l_strdup_printf("%s%s", "/tmp",
+						rindex(target_dir, '/'));
 
 		if (symlink(target_dir, link_dir) < 0) {
-			l_error("Failed to create symlink for %s: %s",
-						target_dir, strerror(errno));
+			l_error("Failed to create symlink %s for %s: %s",
+					link_dir, target_dir, strerror(errno));
 
 			l_free(target_dir);
 			l_free(link_dir);
 			return false;
 		}
 
+		l_free(abs_path_dirs[i]);
 		l_free(target_dir);
-		l_free(link_dir);
+
+		abs_path_dirs[i] = link_dir;
 		i++;
 	}
 
 	return true;
 }
 
-static bool remove_absolute_path_dirs(char **abs_path_dirs,
-					const char *config_dir_path)
+static bool remove_absolute_path_dirs(char **abs_path_dirs)
 {
 	size_t i = 0;
 
@@ -1103,19 +1105,13 @@ static bool remove_absolute_path_dirs(char **abs_path_dirs,
 		return true;
 
 	while (abs_path_dirs[i]) {
-		char *link_dir;
-
-		link_dir = l_strdup_printf("%s/%s", "/tmp", abs_path_dirs[i]);
-
-		if (unlink(link_dir) < 0) {
+		if (unlink(abs_path_dirs[i]) < 0) {
 			l_error("Failed to remove symlink for %s: %s",
-						link_dir, strerror(errno));
+					abs_path_dirs[i], strerror(errno));
 
-			l_free(link_dir);
 			return false;
 		}
 
-		l_free(link_dir);
 		i++;
 	}
 
@@ -1446,7 +1442,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 						HW_CONFIG_SETUP_ABS_PATH_DIRS,
 									':');
 
-	if (!create_absolute_path_dirs(abs_path_dirs, config_dir_path))
+	if (!create_absolute_path_dirs(abs_path_dirs))
 		goto exit_hwsim;
 
 	if (!configure_hw_radios(hw_settings, hwsim_radio_ids, if_name_map))
@@ -1483,7 +1479,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 	l_info("Destructing network...");
 
-	remove_absolute_path_dirs(abs_path_dirs, config_dir_path);
+	remove_absolute_path_dirs(abs_path_dirs);
 
 	if (iwd_pid > 0)
 		terminate_iwd(iwd_pid);
