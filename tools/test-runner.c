@@ -1437,6 +1437,12 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 	l_info("Configuring network...");
 
+	if (chdir(config_dir_path) < 0) {
+		l_error("Failed to change to test directory: %s",
+							strerror(errno));
+		goto exit_hwsim;
+	}
+
 	abs_path_dirs =
 		l_settings_get_string_list(hw_settings, HW_CONFIG_GROUP_SETUP,
 						HW_CONFIG_SETUP_ABS_PATH_DIRS,
@@ -1468,11 +1474,6 @@ static void create_network_and_run_tests(const void *key, void *value,
 		iwd_pid = start_iwd();
 		if (iwd_pid == -1)
 			goto exit_hostapd;
-	}
-
-	if (chdir(config_dir_path) < 0) {
-		l_error("Failed to change directory");
-		goto exit_hostapd;
 	}
 
 	run_py_tests(hw_settings, test_queue, test_stats_queue);
