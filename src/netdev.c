@@ -467,6 +467,8 @@ static void netdev_disconnect_event(struct l_genl_msg *msg,
 	const void *data;
 	uint16_t reason_code = 0;
 	bool disconnect_by_ap = false;
+	netdev_event_func_t event_filter;
+	void *event_data;
 
 	l_debug("");
 
@@ -497,11 +499,13 @@ static void netdev_disconnect_event(struct l_genl_msg *msg,
 	l_info("Received Deauthentication event, reason: %hu, from_ap: %s",
 			reason_code, disconnect_by_ap ? "true" : "false");
 
-	if (disconnect_by_ap && netdev->event_filter)
-		netdev->event_filter(netdev, NETDEV_EVENT_DISCONNECT_BY_AP,
-							netdev->user_data);
-
+	event_filter = netdev->event_filter;
+	event_data = netdev->user_data;
 	netdev_connect_free(netdev);
+
+	if (disconnect_by_ap && event_filter)
+		event_filter(netdev, NETDEV_EVENT_DISCONNECT_BY_AP,
+							event_data);
 }
 
 static void netdev_deauthenticate_event(struct l_genl_msg *msg,
