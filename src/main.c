@@ -76,15 +76,13 @@ static void usage(void)
 		"Usage:\n");
 	printf("\tiwd [options]\n");
 	printf("Options:\n"
-		"\t-B, --dbus-debug       Enable DBus debugging\n"
-		"\t-K, --kdbus            Setup Kernel D-Bus\n"
+		"\t-B, --dbus-debug       Enable D-Bus debugging\n"
 		"\t-i, --interfaces       Interfaces to manage\n"
 		"\t-I, --nointerfaces     Interfaces to ignore\n"
 		"\t-h, --help             Show help options\n");
 }
 
 static const struct option main_options[] = {
-	{ "kdbus",        no_argument,       NULL, 'K' },
 	{ "dbus-debug",   no_argument,       NULL, 'B' },
 	{ "version",      no_argument,       NULL, 'v' },
 	{ "interfaces",   required_argument, NULL, 'i' },
@@ -131,7 +129,6 @@ static void nl80211_vanished(void *user_data)
 
 int main(int argc, char *argv[])
 {
-	bool enable_kdbus = false;
 	bool enable_dbus_debug = false;
 	struct l_signal *signal;
 	sigset_t mask;
@@ -142,14 +139,11 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "KBi:I:vh", main_options, NULL);
+		opt = getopt_long(argc, argv, "Bi:I:vh", main_options, NULL);
 		if (opt < 0)
 			break;
 
 		switch (opt) {
-		case 'K':
-			enable_kdbus = true;
-			break;
 		case 'B':
 			enable_dbus_debug = true;
 			break;
@@ -193,7 +187,7 @@ int main(int argc, char *argv[])
 
 	l_info("Wireless daemon version %s", VERSION);
 
-	if (!dbus_init(enable_dbus_debug, enable_kdbus)) {
+	if (!dbus_init(enable_dbus_debug)) {
 		exit_status = EXIT_FAILURE;
 		goto done;
 	}

@@ -28,8 +28,6 @@
 #include <stdio.h>
 #include <ell/ell.h>
 
-#include "src/kdbus.h"
-
 static void signal_handler(struct l_signal *signal, uint32_t signo,
 				void *user_data)
 {
@@ -63,8 +61,6 @@ static void signal_message(struct l_dbus_message *message, void *user_data)
 
 int main(int argc, char *argv[])
 {
-	char *bus_name;
-	char bus_address[64];
 	int exit_status;
 	struct l_dbus *dbus;
 	struct l_signal *signal;
@@ -82,19 +78,7 @@ int main(int argc, char *argv[])
 	l_log_set_stderr();
 	l_debug_enable("*");
 
-	bus_name = kdbus_lookup_bus();
-	if (!bus_name) {
-		exit_status = EXIT_FAILURE;
-		goto done;
-	}
-
-	l_debug("Bus location: %s", bus_name);
-
-	snprintf(bus_address, sizeof(bus_address), "kernel:path=%s", bus_name);
-
-	l_free(bus_name);
-
-	dbus = l_dbus_new(bus_address);
+	dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
 	if (!dbus) {
 		exit_status = EXIT_FAILURE;
 		goto done;

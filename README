@@ -48,34 +48,6 @@ will happen when building the Wireless daemon and it will then be linked
 internally.
 
 
-Kernel dependencies
-===================
-
-In order to use this daemon and control utility the kdbus kernel module
-is required. The development repositories can be found here:
-
-	https://github.com/gregkh/kdbus
-	https://code.google.com/p/d-bus/
-
-The daemon will start its own private bus that is located at the /dev/kdbus
-device hierarchy:
-
-	/dev/kdbus
-	|--- control
-	`--- 0-iwd
-	     `--- bus
-
-When started as root, the new private bus will be /dev/kdbus/0-iwd/bus
-and it can be verified with the busctl utility from systemd:
-
-	# busctl --address=kernel:path=/dev/kdbus/0-iwd/bus
-	NAME       PID  PROCESS     USER      CONNECTION    CONNECTION-NAME
-	:1.1     62151  iwd         root      :1.1          iwd
-	:1.2     62153  busctl      root      :1.2          sd-busctl
-
-Clients talking to the daemon must specifiy the private bus address.
-
-
 Netlink monitoring
 ==================
 
