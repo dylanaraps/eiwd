@@ -135,7 +135,7 @@ static void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 	size_t bufsize;
 	struct cb_data *cb_data = NULL;
 
-	bufsize = NLMSG_LENGTH(sizeof(struct ifinfomsg)) +
+	bufsize = sizeof(struct ifinfomsg) +
 		RTA_SPACE(sizeof(uint8_t)) + RTA_SPACE(sizeof(uint8_t));
 
 	rtmmsg = l_malloc(bufsize);
@@ -227,7 +227,7 @@ int netdev_set_powered(struct netdev *netdev, bool powered,
 	size_t bufsize;
 	struct set_powered_cb_data *cb_data = NULL;
 
-	bufsize = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+	bufsize = sizeof(struct ifinfomsg);
 
 	rtmmsg = l_malloc(bufsize);
 	memset(rtmmsg, 0, bufsize);
@@ -1601,15 +1601,15 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	l_debug("Created interface %s[%d]", netdev->name, netdev->index);
 
 	/* Query interface flags */
-	bufsize = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+	bufsize = sizeof(struct ifinfomsg);
 	rtmmsg = l_malloc(bufsize);
 	memset(rtmmsg, 0, bufsize);
 
 	rtmmsg->ifi_family = AF_UNSPEC;
 	rtmmsg->ifi_index = *ifindex;
 
-	l_netlink_send(rtnl, RTM_GETLINK, 0, rtmmsg, sizeof(struct ifinfomsg),
-			netdev_getlink_cb, netdev, NULL);
+	l_netlink_send(rtnl, RTM_GETLINK, 0, rtmmsg, bufsize,
+					netdev_getlink_cb, netdev, NULL);
 
 	l_free(rtmmsg);
 }
