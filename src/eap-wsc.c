@@ -838,13 +838,16 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 	op = pkt[0];
 	flags = pkt[1];
 
+	pkt += 2;
+	len -= 2;
+
 	/* TODO: Handle fragmentation */
 	if (flags != 0)
 		return;
 
 	switch (op) {
 	case WSC_OP_START:
-		if (len != 2)
+		if (len)
 			return;
 
 		if (wsc->state != STATE_EXPECT_START)
@@ -858,10 +861,10 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 		wsc->state = STATE_EXPECT_M2;
 		return;
 	case WSC_OP_NACK:
-		if (len <= 2)
+		if (!len)
 			return;
 
-		eap_wsc_handle_nack(eap, pkt + 2, len - 2);
+		eap_wsc_handle_nack(eap, pkt, len);
 		return;
 	case WSC_OP_ACK:
 	case WSC_OP_DONE:
@@ -874,23 +877,23 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 		break;
 	}
 
-	if (len <= 2)
+	if (!len)
 		return;
 
 	switch (wsc->state) {
 	case STATE_EXPECT_START:
 		return;
 	case STATE_EXPECT_M2:
-		eap_wsc_handle_m2(eap, pkt + 2, len - 2);
+		eap_wsc_handle_m2(eap, pkt, len);
 		break;
 	case STATE_EXPECT_M4:
-		eap_wsc_handle_m4(eap, pkt + 2, len - 2);
+		eap_wsc_handle_m4(eap, pkt, len);
 		break;
 	case STATE_EXPECT_M6:
-		eap_wsc_handle_m6(eap, pkt + 2, len - 2);
+		eap_wsc_handle_m6(eap, pkt, len);
 		break;
 	case STATE_EXPECT_M8:
-		eap_wsc_handle_m8(eap, pkt + 2, len - 2);
+		eap_wsc_handle_m8(eap, pkt, len);
 		break;
 	case STATE_FINISHED:
 		eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_NO_ERROR);
