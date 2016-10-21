@@ -35,7 +35,7 @@
 #include "util.h"
 #include "eap-wsc.h"
 
-#define EAP_WSC_OFFSET 12
+#define EAP_WSC_HEADER_LEN 14
 
 /* WSC v2.0.5, Section 7.7.1 */
 enum wsc_op {
@@ -363,9 +363,10 @@ static void eap_wsc_send_nack(struct eap_state *eap,
 
 	buf[12] = WSC_OP_NACK;
 	buf[13] = 0;
-	memcpy(buf + 14, pdu, pdu_len);
+	memcpy(buf + EAP_WSC_HEADER_LEN, pdu, pdu_len);
 
-	eap_send_response(eap, EAP_TYPE_EXPANDED, buf, pdu_len + 14);
+	eap_send_response(eap, EAP_TYPE_EXPANDED, buf,
+						pdu_len + EAP_WSC_HEADER_LEN);
 	l_free(pdu);
 }
 
@@ -389,9 +390,10 @@ static void eap_wsc_send_done(struct eap_state *eap)
 
 	buf[12] = WSC_OP_DONE;
 	buf[13] = 0;
-	memcpy(buf + 14, pdu, pdu_len);
+	memcpy(buf + EAP_WSC_HEADER_LEN, pdu, pdu_len);
 
-	eap_send_response(eap, EAP_TYPE_EXPANDED, buf, pdu_len + 14);
+	eap_send_response(eap, EAP_TYPE_EXPANDED, buf,
+						pdu_len + EAP_WSC_HEADER_LEN);
 	l_free(pdu);
 }
 
