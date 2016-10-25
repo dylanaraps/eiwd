@@ -116,6 +116,10 @@ typedef void (*eapol_install_gtk_func_t)(uint32_t ifindex, uint8_t key_index,
 					const uint8_t *gtk, uint8_t gtk_len,
 					const uint8_t *rsc, uint8_t rsc_len,
 					uint32_t cipher, void *user_data);
+typedef void (*eapol_install_igtk_func_t)(uint32_t ifindex, uint8_t key_index,
+					const uint8_t *igtk, uint8_t igtk_len,
+					const uint8_t *ipn, uint8_t ipn_len,
+					uint32_t cipher, void *user_data);
 typedef void (*eapol_deauthenticate_func_t)(uint32_t ifindex, const uint8_t *aa,
 						const uint8_t *spa,
 						uint16_t reason_code,
@@ -175,6 +179,7 @@ void __eapol_set_tx_user_data(void *user_data);
 void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func);
 void __eapol_set_install_tk_func(eapol_install_tk_func_t func);
 void __eapol_set_install_gtk_func(eapol_install_gtk_func_t func);
+void __eapol_set_install_igtk_func(eapol_install_igtk_func_t func);
 void __eapol_set_deauthenticate_func(eapol_deauthenticate_func_t func);
 void __eapol_set_rekey_offload_func(eapol_rekey_offload_func_t func);
 void __eapol_update_replay_counter(uint32_t ifindex, const uint8_t *spa,

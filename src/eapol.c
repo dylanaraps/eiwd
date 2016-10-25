@@ -47,6 +47,7 @@ struct l_queue *state_machines;
 eapol_get_nonce_func_t get_nonce = NULL;
 eapol_install_tk_func_t install_tk = NULL;
 eapol_install_gtk_func_t install_gtk = NULL;
+eapol_install_igtk_func_t install_igtk = NULL;
 eapol_deauthenticate_func_t deauthenticate = NULL;
 eapol_rekey_offload_func_t rekey_offload = NULL;
 
@@ -722,6 +723,7 @@ struct eapol_sm {
 	uint8_t *own_ie;
 	enum ie_rsn_cipher_suite pairwise_cipher;
 	enum ie_rsn_cipher_suite group_cipher;
+	enum ie_rsn_cipher_suite group_management_cipher;
 	enum ie_rsn_akm_suite akm_suite;
 	uint8_t pmk[32];
 	uint64_t replay_counter;
@@ -739,6 +741,7 @@ struct eapol_sm {
 	bool have_pmk:1;
 	bool started:1;
 	bool use_eapol_start:1;
+	bool mfpc:1;
 	struct eap_state *eap;
 	struct eapol_buffer *early_frame;
 };
@@ -836,7 +839,9 @@ static bool eapol_sm_setup_own_ciphers(struct eapol_sm *sm,
 	sm->akm_suite = info->akm_suites;
 	sm->pairwise_cipher = info->pairwise_ciphers;
 	sm->group_cipher = info->group_cipher;
+	sm->group_management_cipher = info->group_management_cipher;
 
+	sm->mfpc = info->mfpc;
 	return true;
 }
 
@@ -1015,12 +1020,12 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 	sm->timeout = NULL;
 }
 
-static const uint8_t *eapol_find_gtk_kde(const uint8_t *data, size_t data_len,
-						size_t *out_gtk_len)
+static const uint8_t *eapol_find_kde(const uint8_t *data, size_t data_len,
+						size_t *out_len,
+						const unsigned char *oui)
 {
-	static const unsigned char gtk_oui[] = { 0x00, 0x0f, 0xac, 0x01 };
 	struct ie_tlv_iter iter;
-	const uint8_t *gtk;
+	const uint8_t *result;
 	unsigned int len;
 
 	ie_tlv_iter_init(&iter, data, data_len);
@@ -1034,18 +1039,37 @@ static const uint8_t *eapol_find_gtk_kde(const uint8_t *data, size_t data_len,
 			return NULL;
 
 		/* Check OUI */
-		gtk = ie_tlv_iter_get_data(&iter);
-		if (memcmp(gtk, gtk_oui, 4))
+		result = ie_tlv_iter_get_data(&iter);
+		if (memcmp(result, oui, 4))
 			continue;
 
-		if (out_gtk_len)
-			*out_gtk_len = len - 4;
+		if (out_len)
+			*out_len = len - 4;
 
-		return gtk + 4;
+		return result + 4;
 	}
 
 	return NULL;
 }
+
+static const uint8_t *eapol_find_gtk_kde(const uint8_t *data, size_t data_len,
+						size_t *out_gtk_len)
+{
+	static const unsigned char gtk_oui[] = { 0x00, 0x0f, 0xac, 0x01 };
+
+	return eapol_find_kde(data, data_len,
+				out_gtk_len, gtk_oui);
+}
+
+static const uint8_t *eapol_find_igtk_kde(const uint8_t *data, size_t data_len,
+						size_t *out_igtk_len)
+{
+	static const unsigned char igtk_oui[] = { 0x00, 0x0f, 0xac, 0x09 };
+
+	return eapol_find_kde(data, data_len,
+				out_igtk_len, igtk_oui);
+}
+
 
 static const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len,
 					const uint8_t **optional)
@@ -1194,9 +1218,12 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	uint8_t mic[16];
 	const uint8_t *gtk;
 	size_t gtk_len;
+	const uint8_t *igtk;
+	size_t igtk_len;
 	const uint8_t *rsne;
 	const uint8_t *optional_rsne = NULL;
 	uint8_t gtk_key_index;
+	uint8_t igtk_key_index;
 	enum ie_rsn_cipher_suite pairwise = sm->pairwise_cipher;
 
 	if (!eapol_verify_ptk_3_of_4(ek, sm->wpa_ie)) {
@@ -1319,6 +1346,22 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	} else
 		gtk = NULL;
 
+	if (sm->mfpc) {
+		igtk = eapol_find_igtk_kde(decrypted_key_data,
+					decrypted_key_data_size,
+					&igtk_len);
+		if (!igtk || igtk_len < 8) {
+			handshake_failed(ifindex, sm,
+				MPDU_REASON_CODE_UNSPECIFIED);
+			return;
+		}
+
+		igtk_key_index = util_bit_field(igtk[0], 0, 2);
+		igtk += 2;
+		igtk_len -= 2;
+	} else
+		igtk = NULL;
+
 	step4 = eapol_create_ptk_4_of_4(sm->protocol_version,
 					ek->key_descriptor_version,
 					sm->replay_counter, sm->wpa_ie);
@@ -1351,6 +1394,16 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 				ek->key_rsc, 6, cipher, sm->user_data);
 	}
 
+	if (igtk && install_igtk) {
+		uint32_t cipher =
+			ie_rsn_cipher_suite_to_cipher(
+				sm->group_management_cipher);
+
+		install_igtk(sm->ifindex, igtk_key_index, igtk + 6,
+				igtk_len - 6, igtk, 6, cipher,
+				sm->user_data);
+	}
+
 	if (rekey_offload)
 		rekey_offload(sm->ifindex, ptk->kek, ptk->kck,
 			sm->replay_counter, sm->user_data);
@@ -1371,6 +1424,9 @@ static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
 	const uint8_t *gtk;
 	size_t gtk_len;
 	uint8_t gtk_key_index;
+	const uint8_t *igtk;
+	size_t igtk_len;
+	uint8_t igtk_key_index;
 
 	if (!eapol_verify_gtk_1_of_2(ek, sm->wpa_ie)) {
 		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
@@ -1399,6 +1455,19 @@ static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
 	} else
 		gtk_key_index = ek->wpa_key_id;
 
+	if (sm->mfpc) {
+		igtk = eapol_find_igtk_kde(decrypted_key_data,
+					decrypted_key_data_size,
+					&igtk_len);
+		if (!igtk || igtk_len < 8)
+			return;
+
+		igtk_key_index = util_bit_field(igtk[0], 0, 2);
+		igtk += 2;
+		igtk_len -= 2;
+	} else
+		igtk = NULL;
+
 	step2 = eapol_create_gtk_2_of_2(sm->protocol_version,
 					ek->key_descriptor_version,
 					sm->replay_counter, sm->wpa_ie,
@@ -1423,6 +1492,16 @@ static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
 
 		install_gtk(sm->ifindex, gtk_key_index, gtk, gtk_len,
 				ek->key_rsc, 6, cipher, sm->user_data);
+	}
+
+	if (igtk && install_igtk) {
+		uint32_t cipher =
+			ie_rsn_cipher_suite_to_cipher(
+				sm->group_management_cipher);
+
+		install_igtk(sm->ifindex, igtk_key_index, igtk + 6,
+				igtk_len - 6, igtk, 6, cipher,
+				sm->user_data);
 	}
 
 done:
@@ -1780,6 +1859,11 @@ void __eapol_set_install_tk_func(eapol_install_tk_func_t func)
 void __eapol_set_install_gtk_func(eapol_install_gtk_func_t func)
 {
 	install_gtk = func;
+}
+
+void __eapol_set_install_igtk_func(eapol_install_igtk_func_t func)
+{
+	install_igtk = func;
 }
 
 void __eapol_set_deauthenticate_func(eapol_deauthenticate_func_t func)
