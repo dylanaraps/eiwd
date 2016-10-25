@@ -74,6 +74,9 @@ enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy, uint16_t mask)
 	if (mask & IE_RSN_CIPHER_SUITE_TKIP)
 		return IE_RSN_CIPHER_SUITE_TKIP;
 
+	if (mask & IE_RSN_CIPHER_SUITE_BIP)
+		return IE_RSN_CIPHER_SUITE_BIP;
+
 	return 0;
 }
 static void wiphy_free(void *data)
