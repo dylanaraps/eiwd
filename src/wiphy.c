@@ -140,8 +140,7 @@ static void wiphy_print_basic_info(struct wiphy *wiphy)
 		l_info("%s", buf);
 	}
 
-	if (wiphy->pairwise_ciphers &
-			(IE_RSN_CIPHER_SUITE_CCMP | IE_RSN_CIPHER_SUITE_TKIP)) {
+	if (wiphy->pairwise_ciphers) {
 		int len = 0;
 
 		len += sprintf(buf + len, "\tCiphers:");
@@ -151,6 +150,9 @@ static void wiphy_print_basic_info(struct wiphy *wiphy)
 
 		if (wiphy->pairwise_ciphers & IE_RSN_CIPHER_SUITE_TKIP)
 			len += sprintf(buf + len, " TKIP");
+
+		if (wiphy->pairwise_ciphers & IE_RSN_CIPHER_SUITE_BIP)
+			len += sprintf(buf + len, " BIP");
 
 		l_info("%s", buf);
 	}
