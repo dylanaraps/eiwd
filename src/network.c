@@ -378,15 +378,15 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 		break;
 	case SECURITY_PSK:
 	{
-		uint16_t pairwise_ciphers, group_ciphers;
+		struct ie_rsn_info rsn;
 		const char *psk;
 		size_t len;
 
-		bss_get_supported_ciphers(bss,
-					&pairwise_ciphers, &group_ciphers);
+		memset(&rsn, 0, sizeof(rsn));
+		scan_bss_get_rsn_info(bss, &rsn);
 
-		if (!wiphy_select_cipher(wiphy, pairwise_ciphers) ||
-				!wiphy_select_cipher(wiphy, group_ciphers)) {
+		if (!wiphy_select_cipher(wiphy, rsn.pairwise_ciphers) ||
+				!wiphy_select_cipher(wiphy, rsn.group_cipher)) {
 			l_debug("Cipher mis-match");
 			return -ENETUNREACH;
 		}
@@ -487,14 +487,14 @@ struct scan_bss *network_bss_select(struct network *network)
 		for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
 				bss_entry = bss_entry->next) {
 			struct scan_bss *bss = bss_entry->data;
-			uint16_t pairwise_ciphers, group_ciphers;
+			struct ie_rsn_info rsn;
 
-			bss_get_supported_ciphers(bss, &pairwise_ciphers,
-							&group_ciphers);
+			memset(&rsn, 0, sizeof(rsn));
+			scan_bss_get_rsn_info(bss, &rsn);
 
-			if (wiphy_select_cipher(wiphy, pairwise_ciphers) &&
+			if (wiphy_select_cipher(wiphy, rsn.pairwise_ciphers) &&
 					wiphy_select_cipher(wiphy,
-							group_ciphers))
+							rsn.group_cipher))
 				return bss;
 		}
 

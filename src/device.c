@@ -220,6 +220,8 @@ static void process_bss(struct device *device, struct scan_bss *bss,
 			struct timespec *timestamp)
 {
 	struct network *network;
+	struct ie_rsn_info info;
+	int r;
 	enum security security;
 	const char *path;
 	double rankmod;
@@ -240,41 +242,20 @@ static void process_bss(struct device *device, struct scan_bss *bss,
 	memcpy(ssid, bss->ssid, bss->ssid_len);
 	ssid[bss->ssid_len] = '\0';
 
-	/*
-	 * If both an RSN and a WPA elements are present currently
-	 * RSN takes priority and the WPA IE is ignored.
-	 */
-	if (bss->rsne) {
-		struct ie_rsn_info rsne;
-		int res = ie_parse_rsne_from_data(bss->rsne, bss->rsne[1] + 2,
-							&rsne);
-		if (res < 0) {
-			l_debug("Cannot parse RSN field (%d, %s)",
-					res, strerror(-res));
+	memset(&info, 0, sizeof(info));
+	r = scan_bss_get_rsn_info(bss, &info);
+	if (r < 0) {
+		if (r != -ENOENT)
 			return;
-		}
 
-		security = scan_get_security(bss->capability, &rsne);
-
-		if (security == SECURITY_PSK)
-			bss->sha256 =
-				rsne.akm_suites & IE_RSN_AKM_SUITE_PSK_SHA256;
-		else if (security == SECURITY_8021X)
-			bss->sha256 =
-				rsne.akm_suites & IE_RSN_AKM_SUITE_8021X_SHA256;
-	} else if (bss->wpa) {
-		struct ie_rsn_info wpa;
-		int res = ie_parse_wpa_from_data(bss->wpa, bss->wpa[1] + 2,
-									&wpa);
-		if (res < 0) {
-			l_debug("Cannot parse WPA IE (%d, %s)",
-						res, strerror(-res));
-			return;
-		}
-
-		security = scan_get_security(bss->capability, &wpa);
-	} else
 		security = scan_get_security(bss->capability, NULL);
+	} else
+		security = scan_get_security(bss->capability, &info);
+
+	if (security == SECURITY_PSK)
+		bss->sha256 = info.akm_suites & IE_RSN_AKM_SUITE_PSK_SHA256;
+	else if (security == SECURITY_8021X)
+		bss->sha256 = info.akm_suites & IE_RSN_AKM_SUITE_8021X_SHA256;
 
 	path = iwd_network_get_path(device, ssid, security);
 
@@ -664,7 +645,7 @@ void device_connect_network(struct device *device, struct network *network,
 	struct eapol_sm *sm = NULL;
 
 	if (security == SECURITY_PSK || security == SECURITY_8021X) {
-		uint16_t pairwise_ciphers, group_ciphers;
+		struct ie_rsn_info bss_info;
 		uint8_t rsne_buf[256];
 		struct ie_rsn_info info;
 
@@ -685,12 +666,13 @@ void device_connect_network(struct device *device, struct network *network,
 				bss->sha256 ? IE_RSN_AKM_SUITE_8021X_SHA256 :
 						IE_RSN_AKM_SUITE_8021X;
 
-		bss_get_supported_ciphers(bss,
-					&pairwise_ciphers, &group_ciphers);
+		memset(&bss_info, 0, sizeof(bss_info));
+		scan_bss_get_rsn_info(bss, &bss_info);
 
 		info.pairwise_ciphers = wiphy_select_cipher(wiphy,
-							pairwise_ciphers);
-		info.group_cipher = wiphy_select_cipher(wiphy, group_ciphers);
+						bss_info.pairwise_ciphers);
+		info.group_cipher = wiphy_select_cipher(wiphy,
+						bss_info.group_cipher);
 
 		/* RSN takes priority */
 		if (bss->rsne) {

@@ -82,9 +82,7 @@ enum security scan_get_security(enum ie_bss_capability bss_cap,
 void scan_bss_free(struct scan_bss *bss);
 int scan_bss_rank_compare(const void *a, const void *b, void *user);
 
-void bss_get_supported_ciphers(struct scan_bss *bss,
-				uint16_t *pairwise_ciphers,
-				uint16_t *group_ciphers);
+int scan_bss_get_rsn_info(struct scan_bss *bss, struct ie_rsn_info *info);
 
 uint8_t scan_freq_to_channel(uint32_t freq, enum scan_band *out_band);
 uint32_t scan_channel_to_freq(uint8_t channel, enum scan_band band);
