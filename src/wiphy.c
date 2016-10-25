@@ -52,7 +52,7 @@ struct wiphy {
 	uint32_t feature_flags;
 	bool support_scheduled_scan:1;
 	bool support_rekey_offload:1;
-	uint16_t pairwise_ciphers;
+	uint16_t supported_ciphers;
 	struct scan_freq_set *supported_freqs;
 	char *model_str;
 	char *vendor_str;
@@ -65,7 +65,7 @@ static struct l_queue *wiphy_list = NULL;
 
 enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy, uint16_t mask)
 {
-	mask &= wiphy->pairwise_ciphers;
+	mask &= wiphy->supported_ciphers;
 
 	/* CCMP is our first choice, TKIP second */
 	if (mask & IE_RSN_CIPHER_SUITE_CCMP)
@@ -140,18 +140,18 @@ static void wiphy_print_basic_info(struct wiphy *wiphy)
 		l_info("%s", buf);
 	}
 
-	if (wiphy->pairwise_ciphers) {
+	if (wiphy->supported_ciphers) {
 		int len = 0;
 
 		len += sprintf(buf + len, "\tCiphers:");
 
-		if (wiphy->pairwise_ciphers & IE_RSN_CIPHER_SUITE_CCMP)
+		if (wiphy->supported_ciphers & IE_RSN_CIPHER_SUITE_CCMP)
 			len += sprintf(buf + len, " CCMP");
 
-		if (wiphy->pairwise_ciphers & IE_RSN_CIPHER_SUITE_TKIP)
+		if (wiphy->supported_ciphers & IE_RSN_CIPHER_SUITE_TKIP)
 			len += sprintf(buf + len, " TKIP");
 
-		if (wiphy->pairwise_ciphers & IE_RSN_CIPHER_SUITE_BIP)
+		if (wiphy->supported_ciphers & IE_RSN_CIPHER_SUITE_BIP)
 			len += sprintf(buf + len, " BIP");
 
 		l_info("%s", buf);
@@ -185,19 +185,19 @@ static void parse_supported_ciphers(struct wiphy *wiphy, const void *data,
 
 		switch (cipher) {
 		case CRYPTO_CIPHER_CCMP:
-			wiphy->pairwise_ciphers |= IE_RSN_CIPHER_SUITE_CCMP;
+			wiphy->supported_ciphers |= IE_RSN_CIPHER_SUITE_CCMP;
 			break;
 		case CRYPTO_CIPHER_TKIP:
-			wiphy->pairwise_ciphers |= IE_RSN_CIPHER_SUITE_TKIP;
+			wiphy->supported_ciphers |= IE_RSN_CIPHER_SUITE_TKIP;
 			break;
 		case CRYPTO_CIPHER_WEP40:
-			wiphy->pairwise_ciphers |= IE_RSN_CIPHER_SUITE_WEP40;
+			wiphy->supported_ciphers |= IE_RSN_CIPHER_SUITE_WEP40;
 			break;
 		case CRYPTO_CIPHER_WEP104:
-			wiphy->pairwise_ciphers |= IE_RSN_CIPHER_SUITE_WEP104;
+			wiphy->supported_ciphers |= IE_RSN_CIPHER_SUITE_WEP104;
 			break;
 		case CRYPTO_CIPHER_BIP:
-			wiphy->pairwise_ciphers |= IE_RSN_CIPHER_SUITE_BIP;
+			wiphy->supported_ciphers |= IE_RSN_CIPHER_SUITE_BIP;
 			break;
 		default:	/* TODO: Support other ciphers */
 			break;
