@@ -591,6 +591,15 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 			}
 
 			break;
+		case IE_TYPE_RM_ENABLED_CAPABILITIES:
+			if (iter.len != 5)
+				break;
+
+			/* Only interested in Neighbor Reports */
+
+			bss->cap_rm_neighbor_report =
+				(iter.data[0] & IE_RM_CAP_NEIGHBOR_REPORT) > 0;
+			break;
 		}
 	}
 

@@ -244,6 +244,11 @@ struct ie_ft_info {
 	uint8_t igtk_len;
 };
 
+/* See chapter 8.4.2.47 for radio measurement capability details */
+enum ie_rm_capability {
+	IE_RM_CAP_NEIGHBOR_REPORT = 0x0002,
+};
+
 void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 			unsigned int len);
 void ie_tlv_iter_recurse(struct ie_tlv_iter *iter,

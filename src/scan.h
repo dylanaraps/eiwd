@@ -60,6 +60,7 @@ struct scan_bss {
 	uint16_t rank;
 	bool sha256:1;
 	bool mde_present : 1;
+	bool cap_rm_neighbor_report : 1;
 };
 
 uint32_t scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
