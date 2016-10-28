@@ -584,6 +584,13 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 				bss->wpa = l_memdup(iter.data - 2,
 								iter.len + 2);
 			break;
+		case IE_TYPE_MOBILITY_DOMAIN:
+			if (!bss->mde_present && iter.len == 3) {
+				memcpy(bss->mde, iter.data, iter.len);
+				bss->mde_present = true;
+			}
+
+			break;
 		}
 	}
 

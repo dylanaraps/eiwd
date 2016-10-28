@@ -52,12 +52,14 @@ struct scan_bss {
 	uint8_t *wpa;
 	uint8_t *wsc;		/* Concatenated WSC IEs */
 	ssize_t wsc_size;	/* Size of Concatenated WSC IEs */
+	uint8_t mde[3];
 	uint8_t ssid[32];
 	uint8_t ssid_len;
 	struct l_uintset *supported_rates;
 	uint8_t utilization;
 	uint16_t rank;
 	bool sha256:1;
+	bool mde_present : 1;
 };
 
 uint32_t scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
