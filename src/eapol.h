@@ -197,14 +197,10 @@ void eapol_sm_set_pmk(struct eapol_sm *sm, const uint8_t *pmk);
 void eapol_sm_set_8021x_config(struct eapol_sm *sm,
 				struct l_settings *settings);
 void eapol_sm_set_use_eapol_start(struct eapol_sm *sm, bool enabled);
-void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
-				size_t len);
-bool eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
-				size_t len);
-void eapol_sm_set_ap_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie,
-				size_t len);
-bool eapol_sm_set_own_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie,
-				size_t len);
+void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie);
+bool eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie);
+void eapol_sm_set_ap_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie);
+bool eapol_sm_set_own_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie);
 void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data);
 void eapol_sm_set_event_func(struct eapol_sm *sm, eapol_sm_event_func_t func);
 

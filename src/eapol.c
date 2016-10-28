@@ -801,30 +801,24 @@ void eapol_sm_set_pmk(struct eapol_sm *sm, const uint8_t *pmk)
 }
 
 static void eapol_sm_set_ap_ie(struct eapol_sm *sm, const uint8_t *ie,
-				size_t len, bool is_wpa)
+				bool is_wpa)
 {
-	if (ie[1] + 2u != len)
-		return;
-
 	l_free(sm->ap_ie);
-	sm->ap_ie = l_memdup(ie, len);
+	sm->ap_ie = l_memdup(ie, ie[1] + 2u);
 	sm->wpa_ie = is_wpa;
 }
 
 static void eapol_sm_set_own_ie(struct eapol_sm *sm, const uint8_t *ie,
-				size_t len, bool is_wpa)
+				bool is_wpa)
 {
-	if (ie[1] + 2u != len)
-		return;
-
 	l_free(sm->own_ie);
-	sm->own_ie = l_memdup(ie, len);
+	sm->own_ie = l_memdup(ie, ie[1] + 2u);
 	sm->wpa_ie = is_wpa;
 }
 
-void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie, size_t len)
+void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie)
 {
-	eapol_sm_set_ap_ie(sm, rsn_ie, len, false);
+	eapol_sm_set_ap_ie(sm, rsn_ie, false);
 }
 
 static bool eapol_sm_setup_own_ciphers(struct eapol_sm *sm,
@@ -845,12 +839,11 @@ static bool eapol_sm_setup_own_ciphers(struct eapol_sm *sm,
 	return true;
 }
 
-bool eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
-				size_t len)
+bool eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie)
 {
 	struct ie_rsn_info info;
 
-	eapol_sm_set_own_ie(sm, rsn_ie, len, false);
+	eapol_sm_set_own_ie(sm, rsn_ie, false);
 
 	if (ie_parse_rsne_from_data(rsn_ie, rsn_ie[1] + 2, &info) < 0)
 		return false;
@@ -858,17 +851,16 @@ bool eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie,
 	return eapol_sm_setup_own_ciphers(sm, &info);
 }
 
-void eapol_sm_set_ap_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie, size_t len)
+void eapol_sm_set_ap_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie)
 {
-	eapol_sm_set_ap_ie(sm, wpa_ie, len, true);
+	eapol_sm_set_ap_ie(sm, wpa_ie, true);
 }
 
-bool eapol_sm_set_own_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie,
-				size_t len)
+bool eapol_sm_set_own_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie)
 {
 	struct ie_rsn_info info;
 
-	eapol_sm_set_own_ie(sm, wpa_ie, len, true);
+	eapol_sm_set_own_ie(sm, wpa_ie, true);
 
 	if (ie_parse_wpa_from_data(wpa_ie, wpa_ie[1] + 2, &info) < 0)
 		return false;

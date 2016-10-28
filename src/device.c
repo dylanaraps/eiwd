@@ -677,12 +677,12 @@ void device_connect_network(struct device *device, struct network *network,
 		/* RSN takes priority */
 		if (bss->rsne) {
 			ie_build_rsne(&info, rsne_buf);
-			eapol_sm_set_ap_rsn(sm, bss->rsne, bss->rsne[1] + 2);
-			eapol_sm_set_own_rsn(sm, rsne_buf, rsne_buf[1] + 2);
+			eapol_sm_set_ap_rsn(sm, bss->rsne);
+			eapol_sm_set_own_rsn(sm, rsne_buf);
 		} else {
 			ie_build_wpa(&info, rsne_buf);
-			eapol_sm_set_ap_wpa(sm, bss->wpa, bss->wpa[1] + 2);
-			eapol_sm_set_own_wpa(sm, rsne_buf, rsne_buf[1] + 2);
+			eapol_sm_set_ap_wpa(sm, bss->wpa);
+			eapol_sm_set_own_wpa(sm, rsne_buf);
 		}
 
 		if (security == SECURITY_PSK)
