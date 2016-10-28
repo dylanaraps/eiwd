@@ -600,6 +600,16 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 			bss->cap_rm_neighbor_report =
 				(iter.data[0] & IE_RM_CAP_NEIGHBOR_REPORT) > 0;
 			break;
+		case IE_TYPE_COUNTRY:
+			if (bss->cc_present || iter.len < 6)
+				break;
+
+			bss->cc[0] = iter.data[0];
+			bss->cc[1] = iter.data[1];
+			bss->cc[2] = iter.data[2];
+			bss->cc_present = true;
+
+			break;
 		}
 	}
 

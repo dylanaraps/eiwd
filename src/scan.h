@@ -57,9 +57,11 @@ struct scan_bss {
 	uint8_t ssid_len;
 	struct l_uintset *supported_rates;
 	uint8_t utilization;
+	uint8_t cc[3];
 	uint16_t rank;
 	bool sha256:1;
 	bool mde_present : 1;
+	bool cc_present : 1;
 	bool cap_rm_neighbor_report : 1;
 };
 
