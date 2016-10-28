@@ -1747,11 +1747,10 @@ static void eapol_sm_test_ptk(const void *data)
 	eapol_sm_set_supplicant_address(sm, spa);
 
 	r =  eapol_sm_set_own_rsn(sm,
-				eapol_key_data_4 + sizeof(struct eapol_key),
-				eapol_key_test_4.key_data_len);
+				eapol_key_data_4 + sizeof(struct eapol_key));
 	assert(r);
 
-	eapol_sm_set_ap_rsn(sm, ap_rsne, sizeof(ap_rsne));
+	eapol_sm_set_ap_rsn(sm, ap_rsne);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
@@ -1808,11 +1807,10 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 	eapol_sm_set_supplicant_address(sm, spa);
 
 	r = eapol_sm_set_own_rsn(sm,
-				eapol_key_data_8 + sizeof(struct eapol_key),
-				eapol_key_test_8.key_data_len);
+				eapol_key_data_8 + sizeof(struct eapol_key));
 	assert(r);
 
-	eapol_sm_set_ap_rsn(sm, ap_rsne, sizeof(ap_rsne));
+	eapol_sm_set_ap_rsn(sm, ap_rsne);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
@@ -1872,11 +1870,10 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 	eapol_sm_set_authenticator_address(sm, ap_address);
 	eapol_sm_set_supplicant_address(sm, sta_address);
 	r = eapol_sm_set_own_wpa(sm,
-				eapol_key_data_14 + sizeof(struct eapol_key),
-				eapol_key_test_14.key_data_len);
+				eapol_key_data_14 + sizeof(struct eapol_key));
 	assert(r);
 
-	eapol_sm_set_ap_wpa(sm, ap_wpa_ie, sizeof(ap_wpa_ie));
+	eapol_sm_set_ap_wpa(sm, ap_wpa_ie);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
@@ -1937,11 +1934,10 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 	eapol_sm_set_supplicant_address(sm, sta_address);
 
 	r = eapol_sm_set_own_wpa(sm,
-				eapol_key_data_20 + sizeof(struct eapol_key),
-				eapol_key_test_20.key_data_len);
+				eapol_key_data_20 + sizeof(struct eapol_key));
 	assert(r);
 
-	eapol_sm_set_ap_wpa(sm, ap_wpa_ie, sizeof(ap_wpa_ie));
+	eapol_sm_set_ap_wpa(sm, ap_wpa_ie);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
@@ -2166,11 +2162,10 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	l_settings_free(settings);
 
 	r = eapol_sm_set_own_wpa(sm,
-				eapol_key_data_20 + sizeof(struct eapol_key),
-				eapol_key_test_20.key_data_len);
+				eapol_key_data_20 + sizeof(struct eapol_key));
 	assert(r);
 
-	eapol_sm_set_ap_wpa(sm, ap_wpa_ie, sizeof(ap_wpa_ie));
+	eapol_sm_set_ap_wpa(sm, ap_wpa_ie);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_8021x_identity_resp);
@@ -2520,11 +2515,10 @@ static void eapol_sm_test_eap_nak(const void *data)
 	l_settings_free(settings);
 
 	r = eapol_sm_set_own_wpa(sm,
-				eapol_key_data_20 + sizeof(struct eapol_key),
-				eapol_key_test_20.key_data_len);
+				eapol_key_data_20 + sizeof(struct eapol_key));
 	assert(r);
 
-	eapol_sm_set_ap_wpa(sm, ap_wpa_ie, sizeof(ap_wpa_ie));
+	eapol_sm_set_ap_wpa(sm, ap_wpa_ie);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_8021x_identity_resp);
