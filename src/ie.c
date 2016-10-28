@@ -1416,3 +1416,151 @@ bool ie_build_mobility_domain(uint16_t mdid, bool ft_over_ds, bool resource_req,
 
 	return true;
 }
+
+int ie_parse_fast_bss_transition(struct ie_tlv_iter *iter,
+				struct ie_ft_info *info)
+{
+	const uint8_t *data;
+	uint8_t len, subelem_id, subelem_len;
+
+	len = ie_tlv_iter_get_length(iter);
+	if (len < 82)
+		return -EINVAL;
+
+	data = ie_tlv_iter_get_data(iter);
+
+	memset(info, 0, sizeof(*info));
+
+	info->mic_element_count = data[1];
+
+	memcpy(info->mic, data + 2, 16);
+
+	memcpy(info->anonce, data + 18, 32);
+
+	memcpy(info->snonce, data + 50, 32);
+
+	len -= 82;
+	data += 82;
+
+	while (len >= 2) {
+		subelem_id = *data++;
+		subelem_len = *data++;
+
+		switch (subelem_id) {
+		case 1:
+			if (subelem_len != 6)
+				return -EINVAL;
+
+			memcpy(info->r1khid, data, 6);
+			info->r1khid_present = true;
+
+			break;
+
+		case 2:
+			if (subelem_len < 35 || subelem_len > 51)
+				return -EINVAL;
+
+			memcpy(info->gtk, data, subelem_len);
+			info->gtk_len = subelem_len;
+
+			break;
+		case 3:
+
+			if (subelem_len < 1 || subelem_len > 48)
+				return -EINVAL;
+
+			memcpy(info->r0khid, data, subelem_len);
+			info->r0khid_len = subelem_len;
+
+			break;
+
+		case 4:
+			if (subelem_len < 1)
+				return -EINVAL;
+
+			memcpy(info->igtk, data, subelem_len);
+			info->igtk_len = subelem_len;
+
+			break;
+		}
+
+		data += subelem_len;
+		len -= subelem_len + 2;
+	}
+
+	if (len)
+		return -EINVAL;
+
+	return 0;
+}
+
+int ie_parse_fast_bss_transition_from_data(const uint8_t *data, uint8_t len,
+				struct ie_ft_info *info)
+{
+	struct ie_tlv_iter iter;
+
+	ie_tlv_iter_init(&iter, data, len);
+
+	if (!ie_tlv_iter_next(&iter))
+		return -EMSGSIZE;
+
+	if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_FAST_BSS_TRANSITION)
+		return -EPROTOTYPE;
+
+	return ie_parse_fast_bss_transition(&iter, info);
+}
+
+bool ie_build_fast_bss_transition(const struct ie_ft_info *info, uint8_t *to)
+{
+	uint8_t *len;
+
+	*to++ = IE_TYPE_FAST_BSS_TRANSITION;
+
+	len = to++;
+	*len = 82;
+
+	to[0] = 0x00;
+	to[1] = info->mic_element_count;
+
+	memcpy(to + 2, info->mic, 16);
+
+	memcpy(to + 18, info->anonce, 32);
+
+	memcpy(to + 50, info->snonce, 32);
+
+	to += 82;
+
+	if (info->r1khid_present) {
+		to[0] = 1;
+		to[1] = 6;
+		memcpy(to + 2, info->r1khid, 6);
+		to += 8;
+		*len += 8;
+	}
+
+	if (info->gtk_len) {
+		to[0] = 2;
+		to[1] = info->gtk_len;
+		memcpy(to + 2, info->gtk, info->gtk_len);
+		to += 2 + info->gtk_len;
+		*len += 2 + info->gtk_len;
+	}
+
+	if (info->r0khid_len) {
+		to[0] = 3;
+		to[1] = info->r0khid_len;
+		memcpy(to + 2, info->r0khid, info->r0khid_len);
+		to += 2 + info->r0khid_len;
+		*len += 2 + info->r0khid_len;
+	}
+
+	if (info->igtk_len) {
+		to[0] = 4;
+		to[1] = info->igtk_len;
+		memcpy(to + 2, info->igtk, info->igtk_len);
+		to += 2 + info->igtk_len;
+		*len += 2 + info->igtk_len;
+	}
+
+	return true;
+}

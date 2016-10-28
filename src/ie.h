@@ -229,6 +229,21 @@ enum ie_bss_capability {
 	IE_BSS_CAP_PRIVACY = 0x0010,
 };
 
+struct ie_ft_info {
+	uint8_t mic_element_count;
+	uint8_t mic[16];
+	uint8_t anonce[32];
+	uint8_t snonce[32];
+	uint8_t r0khid[48];
+	size_t r0khid_len;
+	uint8_t r1khid[6];
+	bool r1khid_present:1;
+	uint8_t gtk[51];
+	uint8_t gtk_len;
+	uint8_t igtk[255];
+	uint8_t igtk_len;
+};
+
 void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 			unsigned int len);
 void ie_tlv_iter_recurse(struct ie_tlv_iter *iter,
@@ -299,3 +314,9 @@ int ie_parse_mobility_domain_from_data(const uint8_t *data, uint8_t len,
 				bool *ft_over_ds, bool *resource_req);
 bool ie_build_mobility_domain(uint16_t mdid, bool ft_over_ds,
 				bool resource_req, uint8_t *to);
+
+int ie_parse_fast_bss_transition(struct ie_tlv_iter *iter,
+				struct ie_ft_info *info);
+int ie_parse_fast_bss_transition_from_data(const uint8_t *data, uint8_t len,
+				struct ie_ft_info *info);
+bool ie_build_fast_bss_transition(const struct ie_ft_info *info, uint8_t *to);
