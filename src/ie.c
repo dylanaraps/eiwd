@@ -1362,3 +1362,57 @@ int ie_parse_supported_rates_from_data(const uint8_t *data, uint8_t len,
 
 	return ie_parse_supported_rates(&iter, set);
 }
+
+int ie_parse_mobility_domain(struct ie_tlv_iter *iter, uint16_t *mdid,
+				bool *ft_over_ds, bool *resource_req)
+{
+	const uint8_t *data;
+
+	if (ie_tlv_iter_get_length(iter) != 3)
+		return -EINVAL;
+
+	data = ie_tlv_iter_get_data(iter);
+
+	if (mdid)
+		*mdid = l_get_le16(data);
+
+	if (ft_over_ds)
+		*ft_over_ds = (data[2] & 0x01) > 0;
+
+	if (resource_req)
+		*resource_req = (data[2] & 0x02) > 0;
+
+	return 0;
+}
+
+int ie_parse_mobility_domain_from_data(const uint8_t *data, uint8_t len,
+				uint16_t *mdid,
+				bool *ft_over_ds, bool *resource_req)
+{
+	struct ie_tlv_iter iter;
+
+	ie_tlv_iter_init(&iter, data, len);
+
+	if (!ie_tlv_iter_next(&iter))
+		return -EMSGSIZE;
+
+	if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_MOBILITY_DOMAIN)
+		return -EPROTOTYPE;
+
+	return ie_parse_mobility_domain(&iter, mdid, ft_over_ds, resource_req);
+}
+
+bool ie_build_mobility_domain(uint16_t mdid, bool ft_over_ds, bool resource_req,
+				uint8_t *to)
+{
+	*to++ = IE_TYPE_MOBILITY_DOMAIN;
+
+	*to++ = 3;
+
+	l_put_le16(mdid, to);
+	to[2] =
+		(ft_over_ds ? 0x01 : 0) |
+		(resource_req ? 0x02 : 0);
+
+	return true;
+}

@@ -291,3 +291,11 @@ int ie_parse_supported_rates(struct ie_tlv_iter *iter,
 				struct l_uintset **set);
 int ie_parse_supported_rates_from_data(const uint8_t *data, uint8_t len,
 				struct l_uintset **set);
+
+int ie_parse_mobility_domain(struct ie_tlv_iter *iter, uint16_t *mdid,
+				bool *ft_over_ds, bool *resource_req);
+int ie_parse_mobility_domain_from_data(const uint8_t *data, uint8_t len,
+				uint16_t *mdid,
+				bool *ft_over_ds, bool *resource_req);
+bool ie_build_mobility_domain(uint16_t mdid, bool ft_over_ds,
+				bool resource_req, uint8_t *to);
