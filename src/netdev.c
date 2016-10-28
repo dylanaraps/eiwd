@@ -67,6 +67,7 @@ struct netdev {
 	uint32_t pairwise_new_key_cmd_id;
 	uint32_t pairwise_set_key_cmd_id;
 	uint32_t group_new_key_cmd_id;
+	uint32_t group_management_new_key_cmd_id;
 	uint32_t connect_cmd_id;
 	uint32_t disconnect_cmd_id;
 	enum netdev_result result;
@@ -301,6 +302,12 @@ static void netdev_connect_free(struct netdev *netdev)
 	if (netdev->group_new_key_cmd_id) {
 		l_genl_family_cancel(nl80211, netdev->group_new_key_cmd_id);
 		netdev->group_new_key_cmd_id = 0;
+	}
+
+	if (netdev->group_management_new_key_cmd_id) {
+		l_genl_family_cancel(nl80211,
+			netdev->group_management_new_key_cmd_id);
+		netdev->group_management_new_key_cmd_id = 0;
 	}
 
 	if (netdev->connect_cmd_id) {
@@ -606,6 +613,10 @@ static void netdev_setting_keys_failed(struct netdev *netdev,
 	l_genl_family_cancel(nl80211, netdev->group_new_key_cmd_id);
 	netdev->group_new_key_cmd_id = 0;
 
+	l_genl_family_cancel(nl80211,
+		netdev->group_management_new_key_cmd_id);
+	netdev->group_management_new_key_cmd_id = 0;
+
 	netdev->result = NETDEV_RESULT_KEY_SETTING_FAILED;
 	msg = netdev_build_cmd_deauthenticate(netdev,
 						MPDU_REASON_CODE_UNSPECIFIED);
@@ -673,18 +684,33 @@ error:
 	netdev_setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
 }
 
+static void netdev_new_group_management_key_cb(struct l_genl_msg *msg,
+					void *data)
+{
+	struct netdev *netdev = data;
+
+	netdev->group_management_new_key_cmd_id = 0;
+
+	if (l_genl_msg_get_error(msg) < 0) {
+		l_error("New Key for Group Mgmt failed for ifindex: %d",
+				netdev->index);
+		netdev_setting_keys_failed(netdev,
+			MPDU_REASON_CODE_UNSPECIFIED);
+	}
+}
+
 static struct l_genl_msg *netdev_build_cmd_new_key_group(struct netdev *netdev,
 					uint32_t cipher, uint8_t key_id,
-					const uint8_t *gtk, size_t gtk_len,
-					const uint8_t *rsc, size_t rsc_len)
+					const uint8_t *key, size_t key_len,
+					const uint8_t *ctr, size_t ctr_len)
 {
 	struct l_genl_msg *msg;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_NEW_KEY, 512);
 
-	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_DATA, gtk_len, gtk);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_DATA, key_len, key);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_CIPHER, 4, &cipher);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_SEQ, rsc_len, rsc);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_SEQ, ctr_len, ctr);
 
 	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY_DEFAULT_TYPES);
 	l_genl_msg_append_attr(msg, NL80211_KEY_DEFAULT_TYPE_MULTICAST,
@@ -754,6 +780,52 @@ static void netdev_set_gtk(uint32_t ifindex, uint8_t key_index,
 						netdev, NULL);
 
 	if (netdev->group_new_key_cmd_id > 0)
+		return;
+
+	l_genl_msg_unref(msg);
+	netdev_setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+}
+
+static void netdev_set_igtk(uint32_t ifindex, uint8_t key_index,
+				const uint8_t *igtk, uint8_t igtk_len,
+				const uint8_t *ipn, uint8_t ipn_len,
+				uint32_t cipher, void *user_data)
+{
+	uint8_t igtk_buf[16];
+	struct netdev *netdev;
+	struct l_genl_msg *msg;
+
+	netdev = netdev_find(ifindex);
+
+	l_debug("%d", netdev->index);
+
+	switch (cipher) {
+	case CRYPTO_CIPHER_BIP:
+		memcpy(igtk_buf, igtk, 16);
+		break;
+	default:
+		l_error("Unexpected cipher: %x", cipher);
+		netdev_setting_keys_failed(netdev,
+					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
+		return;
+	}
+
+	if (crypto_cipher_key_len(cipher) != igtk_len) {
+		l_error("Unexpected key length: %d", igtk_len);
+		netdev_setting_keys_failed(netdev,
+					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
+		return;
+	}
+
+	msg = netdev_build_cmd_new_key_group(netdev, cipher, key_index,
+						igtk_buf, igtk_len,
+						ipn, ipn_len);
+	netdev->group_management_new_key_cmd_id =
+			l_genl_family_send(nl80211, msg,
+				netdev_new_group_management_key_cb,
+				netdev, NULL);
+
+	if (netdev->group_management_new_key_cmd_id > 0)
 		return;
 
 	l_genl_msg_unref(msg);
@@ -1782,6 +1854,7 @@ bool netdev_init(struct l_genl_family *in,
 
 	__eapol_set_install_tk_func(netdev_set_tk);
 	__eapol_set_install_gtk_func(netdev_set_gtk);
+	__eapol_set_install_igtk_func(netdev_set_igtk);
 	__eapol_set_deauthenticate_func(netdev_handshake_failed);
 	__eapol_set_rekey_offload_func(netdev_set_rekey_offload);
 
