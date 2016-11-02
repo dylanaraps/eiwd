@@ -1349,14 +1349,43 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 		rsne = eapol_find_wpa_ie(decrypted_key_data,
 					decrypted_key_data_size);
 
-	if (!rsne) {
-		handshake_failed(ifindex, sm, MPDU_REASON_CODE_IE_DIFFERENT);
-		return;
-	}
+	if (!rsne)
+		goto error_ie_different;
 
-	if (!eapol_ap_ie_matches(rsne, sm->ap_ie, sm->wpa_ie)) {
-		handshake_failed(ifindex, sm, MPDU_REASON_CODE_IE_DIFFERENT);
-		return;
+	if (!eapol_ap_ie_matches(rsne, sm->ap_ie, sm->wpa_ie))
+		goto error_ie_different;
+
+	if (sm->akm_suite & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
+				IE_RSN_AKM_SUITE_FT_USING_PSK |
+				IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256)) {
+		struct ie_tlv_iter iter;
+		struct ie_rsn_info ie_info;
+
+		ie_parse_rsne_from_data(rsne, rsne[1] + 2, &ie_info);
+
+		if (ie_info.num_pmkids != 1 || memcmp(ie_info.pmkids,
+							sm->pmk_r1_name, 16))
+			goto error_ie_different;
+
+		ie_tlv_iter_init(&iter, decrypted_key_data,
+					decrypted_key_data_size);
+
+		while (ie_tlv_iter_next(&iter))
+			switch (ie_tlv_iter_get_tag(&iter)) {
+			case IE_TYPE_MOBILITY_DOMAIN:
+				if (memcmp(ie_tlv_iter_get_data(&iter) - 2,
+						sm->mde, sm->mde[1] + 2))
+					goto error_ie_different;
+
+				break;
+
+			case IE_TYPE_FAST_BSS_TRANSITION:
+				if (memcmp(ie_tlv_iter_get_data(&iter) - 2,
+						sm->fte, sm->fte[1] + 2))
+					goto error_ie_different;
+
+				break;
+			}
 	}
 
 	/*
@@ -1369,18 +1398,12 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 		struct ie_rsn_info info2;
 		uint16_t override;
 
-		if (ie_parse_rsne_from_data(rsne, rsne[1] + 2, &info1) < 0) {
-			handshake_failed(ifindex, sm,
-						MPDU_REASON_CODE_IE_DIFFERENT);
-			return;
-		}
+		if (ie_parse_rsne_from_data(rsne, rsne[1] + 2, &info1) < 0)
+			goto error_ie_different;
 
 		if (ie_parse_rsne_from_data(optional_rsne, optional_rsne[1] + 2,
-						&info2) < 0) {
-			handshake_failed(ifindex, sm,
-						MPDU_REASON_CODE_IE_DIFFERENT);
-			return;
-		}
+						&info2) < 0)
+			goto error_ie_different;
 
 		/*
 		 * 11.6.2:
@@ -1402,11 +1425,8 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 		 * - Check that rsne2 pairwise_ciphers is a subset of rsne
 		 */
 		if (info1.akm_suites != info2.akm_suites ||
-				info1.group_cipher != info2.group_cipher) {
-			handshake_failed(ifindex, sm,
-						MPDU_REASON_CODE_IE_DIFFERENT);
-			return;
-		}
+				info1.group_cipher != info2.group_cipher)
+			goto error_ie_different;
 
 		override = info2.pairwise_ciphers;
 
@@ -1506,6 +1526,11 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 
 fail:
 	l_free(step4);
+
+	return;
+
+error_ie_different:
+	handshake_failed(ifindex, sm, MPDU_REASON_CODE_IE_DIFFERENT);
 }
 
 static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
