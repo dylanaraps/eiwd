@@ -721,6 +721,8 @@ struct eapol_sm {
 	uint8_t aa[6];
 	uint8_t *ap_ie;
 	uint8_t *own_ie;
+	uint8_t *mde;
+	uint8_t *fte;
 	enum ie_rsn_cipher_suite pairwise_cipher;
 	enum ie_rsn_cipher_suite group_cipher;
 	enum ie_rsn_cipher_suite group_management_cipher;
@@ -744,6 +746,11 @@ struct eapol_sm {
 	bool mfpc:1;
 	struct eap_state *eap;
 	struct eapol_buffer *early_frame;
+	uint8_t ssid[32];
+	size_t ssid_len;
+	uint8_t r0khid[48];
+	size_t r0khid_len;
+	uint8_t r1khid[6];
 };
 
 static void eapol_sm_destroy(void *value)
@@ -752,6 +759,8 @@ static void eapol_sm_destroy(void *value)
 
 	l_free(sm->ap_ie);
 	l_free(sm->own_ie);
+	l_free(sm->mde);
+	l_free(sm->fte);
 
 	l_timeout_remove(sm->timeout);
 	l_timeout_remove(sm->eapol_start_timeout);
@@ -876,6 +885,38 @@ void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data)
 void eapol_sm_set_event_func(struct eapol_sm *sm, eapol_sm_event_func_t func)
 {
 	sm->event_func = func;
+}
+
+void eapol_sm_set_ssid(struct eapol_sm *sm, const uint8_t *ssid,
+			size_t ssid_len)
+{
+	memcpy(sm->ssid, ssid, ssid_len);
+	sm->ssid_len = ssid_len;
+}
+
+void eapol_sm_set_mde(struct eapol_sm *sm, const uint8_t *mde)
+{
+	if (sm->mde)
+		l_free(sm->mde);
+
+	sm->mde = mde ? l_memdup(mde, mde[1] + 2) : NULL;
+}
+
+void eapol_sm_set_fte(struct eapol_sm *sm, const uint8_t *fte)
+{
+	if (sm->fte)
+		l_free(sm->fte);
+
+	sm->fte = fte ? l_memdup(fte, fte[1] + 2) : NULL;
+}
+
+void eapol_sm_set_kh_ids(struct eapol_sm *sm, const uint8_t *r0khid,
+				size_t r0khid_len, const uint8_t *r1khid)
+{
+	memcpy(sm->r0khid, r0khid, r0khid_len);
+	sm->r0khid_len = r0khid_len;
+
+	memcpy(sm->r1khid, r1khid, 6);
 }
 
 uint32_t eapol_sm_get_pairwise_cipher(struct eapol_sm *sm)

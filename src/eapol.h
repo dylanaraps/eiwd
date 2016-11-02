@@ -203,6 +203,12 @@ void eapol_sm_set_ap_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie);
 bool eapol_sm_set_own_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie);
 void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data);
 void eapol_sm_set_event_func(struct eapol_sm *sm, eapol_sm_event_func_t func);
+void eapol_sm_set_ssid(struct eapol_sm *sm, const uint8_t *ssid,
+			size_t ssid_len);
+void eapol_sm_set_mde(struct eapol_sm *sm, const uint8_t *mde);
+void eapol_sm_set_fte(struct eapol_sm *sm, const uint8_t *fte);
+void eapol_sm_set_kh_ids(struct eapol_sm *sm, const uint8_t *r0khid,
+				size_t r0khid_len, const uint8_t *r1khid);
 
 uint32_t eapol_sm_get_pairwise_cipher(struct eapol_sm *sm);
 uint32_t eapol_sm_get_group_cipher(struct eapol_sm *sm);
