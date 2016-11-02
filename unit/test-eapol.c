@@ -34,6 +34,7 @@
 #include "src/crypto.h"
 #include "src/ie.h"
 #include "src/eap.h"
+#include "src/handshake.h"
 
 /* Our nonce to use + its size */
 static const uint8_t *snonce;
@@ -1920,12 +1921,13 @@ static void eapol_sm_test_ptk(const void *data)
 	static uint8_t ap_address[] = { 0x24, 0xa2, 0xe1, 0xec, 0x17, 0x04 };
 	static uint8_t sta_address[] = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 };
 	bool r;
+	struct handshake_state *hs;
 	struct eapol_sm *sm;
 
 	eapol_init();
 
 	snonce = eapol_key_test_4.key_nonce;
-	__eapol_set_get_nonce_func(test_nonce);
+	__handshake_set_get_nonce_func(test_nonce);
 
 	aa = ap_address;
 	spa = sta_address;
@@ -1936,21 +1938,22 @@ static void eapol_sm_test_ptk(const void *data)
 	expected_step4_frame = eapol_key_data_6;
 	expected_step4_frame_size = sizeof(eapol_key_data_6);
 
-	sm = eapol_sm_new();
-	eapol_register(1, sm);
+	hs = handshake_state_new(1);
+	sm = eapol_sm_new(hs);
+	eapol_register(sm);
 
 	/* key_data_3 uses 2004 while key_data_3 uses 2001, so force 2001 */
 	eapol_sm_set_protocol_version(sm, EAPOL_PROTOCOL_VERSION_2001);
 
-	eapol_sm_set_pmk(sm, psk);
-	eapol_sm_set_authenticator_address(sm, aa);
-	eapol_sm_set_supplicant_address(sm, spa);
+	handshake_state_set_pmk(hs, psk);
+	handshake_state_set_authenticator_address(hs, aa);
+	handshake_state_set_supplicant_address(hs, spa);
 
-	r =  eapol_sm_set_own_rsn(sm,
+	r =  handshake_state_set_own_rsn(hs,
 				eapol_key_data_4 + sizeof(struct eapol_key));
 	assert(r);
 
-	eapol_sm_set_ap_rsn(sm, ap_rsne);
+	handshake_state_set_ap_rsn(hs, ap_rsne);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
@@ -1963,7 +1966,8 @@ static void eapol_sm_test_ptk(const void *data)
 					sizeof(eapol_key_data_5));
 	assert(verify_step4_called);
 
-	eapol_cancel(1);
+	eapol_sm_free(sm);
+	handshake_state_free(hs);
 	eapol_exit();
 }
 
@@ -1981,12 +1985,13 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 	static uint8_t ap_address[] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 };
 	static uint8_t sta_address[] = { 0x02, 0x00, 0x00, 0x00, 0x01, 0x00 };
 	bool r;
+	struct handshake_state *hs;
 	struct eapol_sm *sm;
 
 	eapol_init();
 
 	snonce = eapol_key_test_8.key_nonce;
-	__eapol_set_get_nonce_func(test_nonce);
+	__handshake_set_get_nonce_func(test_nonce);
 
 	aa = ap_address;
 	spa = sta_address;
@@ -2000,17 +2005,19 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 	expected_gtk_step2_frame = eapol_key_data_12;
 	expected_gtk_step2_frame_size = sizeof(eapol_key_data_12);
 
-	sm = eapol_sm_new();
-	eapol_register(1, sm);
-	eapol_sm_set_pmk(sm, psk);
-	eapol_sm_set_authenticator_address(sm, aa);
-	eapol_sm_set_supplicant_address(sm, spa);
+	hs = handshake_state_new(1);
+	sm = eapol_sm_new(hs);
+	eapol_register(sm);
 
-	r = eapol_sm_set_own_rsn(sm,
+	handshake_state_set_pmk(hs, psk);
+	handshake_state_set_authenticator_address(hs, aa);
+	handshake_state_set_supplicant_address(hs, spa);
+
+	r = handshake_state_set_own_rsn(hs,
 				eapol_key_data_8 + sizeof(struct eapol_key));
 	assert(r);
 
-	eapol_sm_set_ap_rsn(sm, ap_rsne);
+	handshake_state_set_ap_rsn(hs, ap_rsne);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
@@ -2028,7 +2035,8 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 					sizeof(eapol_key_data_11));
 	assert(verify_gtk_step2_called);
 
-	eapol_cancel(1);
+	eapol_sm_free(sm);
+	handshake_state_free(hs);
 	eapol_exit();
 }
 
@@ -2046,11 +2054,12 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 	static uint8_t ap_address[] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 };
 	static uint8_t sta_address[] = { 0x02, 0x00, 0x00, 0x00, 0x01, 0x00 };
 	bool r;
+	struct handshake_state *hs;
 	struct eapol_sm *sm;
 
 	eapol_init();
 	snonce = eapol_key_test_14.key_nonce;
-	__eapol_set_get_nonce_func(test_nonce);
+	__handshake_set_get_nonce_func(test_nonce);
 
 	aa = ap_address;
 	spa = sta_address;
@@ -2064,16 +2073,18 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 	expected_gtk_step2_frame = eapol_key_data_18;
 	expected_gtk_step2_frame_size = sizeof(eapol_key_data_18);
 
-	sm = eapol_sm_new();
-	eapol_register(1, sm);
-	eapol_sm_set_pmk(sm, psk);
-	eapol_sm_set_authenticator_address(sm, ap_address);
-	eapol_sm_set_supplicant_address(sm, sta_address);
-	r = eapol_sm_set_own_wpa(sm,
+	hs = handshake_state_new(1);
+	sm = eapol_sm_new(hs);
+	eapol_register(sm);
+
+	handshake_state_set_pmk(hs, psk);
+	handshake_state_set_authenticator_address(hs, ap_address);
+	handshake_state_set_supplicant_address(hs, sta_address);
+	r = handshake_state_set_own_wpa(hs,
 				eapol_key_data_14 + sizeof(struct eapol_key));
 	assert(r);
 
-	eapol_sm_set_ap_wpa(sm, ap_wpa_ie);
+	handshake_state_set_ap_wpa(hs, ap_wpa_ie);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
@@ -2091,7 +2102,8 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 					sizeof(eapol_key_data_17));
 	assert(verify_gtk_step2_called);
 
-	eapol_cancel(1);
+	eapol_sm_free(sm);
+	handshake_state_free(hs);
 	eapol_exit();
 }
 
@@ -2109,11 +2121,12 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 	static uint8_t ap_address[] = { 0x24, 0xa2, 0xe1, 0xec, 0x17, 0x04 };
 	static uint8_t sta_address[] = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 };
 	bool r;
+	struct handshake_state *hs;
 	struct eapol_sm *sm;
 
 	eapol_init();
 	snonce = eapol_key_test_20.key_nonce;
-	__eapol_set_get_nonce_func(test_nonce);
+	__handshake_set_get_nonce_func(test_nonce);
 
 	aa = ap_address;
 	spa = sta_address;
@@ -2127,17 +2140,19 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 	expected_gtk_step2_frame = eapol_key_data_24;
 	expected_gtk_step2_frame_size = sizeof(eapol_key_data_24);
 
-	sm = eapol_sm_new();
-	eapol_register(1, sm);
-	eapol_sm_set_pmk(sm, psk);
-	eapol_sm_set_authenticator_address(sm, ap_address);
-	eapol_sm_set_supplicant_address(sm, sta_address);
+	hs = handshake_state_new(1);
+	sm = eapol_sm_new(hs);
+	eapol_register(sm);
 
-	r = eapol_sm_set_own_wpa(sm,
+	handshake_state_set_pmk(hs, psk);
+	handshake_state_set_authenticator_address(hs, ap_address);
+	handshake_state_set_supplicant_address(hs, sta_address);
+
+	r = handshake_state_set_own_wpa(hs,
 				eapol_key_data_20 + sizeof(struct eapol_key));
 	assert(r);
 
-	eapol_sm_set_ap_wpa(sm, ap_wpa_ie);
+	handshake_state_set_ap_wpa(hs, ap_wpa_ie);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
@@ -2155,7 +2170,8 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 					sizeof(eapol_key_data_23));
 	assert(verify_gtk_step2_called);
 
-	eapol_cancel(1);
+	eapol_sm_free(sm);
+	handshake_state_free(hs);
 	eapol_exit();
 }
 
@@ -2333,6 +2349,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	static uint8_t ap_address[] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 };
 	static uint8_t sta_address[] = { 0x02, 0x00, 0x00, 0x00, 0x01, 0x00 };
 	bool r;
+	struct handshake_state *hs;
 	struct eapol_sm *sm;
 	struct l_settings *settings;
 	uint8_t tx_buf[2000];
@@ -2347,26 +2364,29 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	spa = sta_address;
 
 	eapol_init();
-	__eapol_set_get_nonce_func(test_nonce);
+	__handshake_set_get_nonce_func(test_nonce);
 	__eapol_set_deauthenticate_func(verify_deauthenticate);
 
-	sm = eapol_sm_new();
-	eapol_register(1, sm);
-	eapol_sm_set_authenticator_address(sm, ap_address);
-	eapol_sm_set_supplicant_address(sm, sta_address);
+	hs = handshake_state_new(1);
+	sm = eapol_sm_new(hs);
+	eapol_register(sm);
+
+	handshake_state_set_authenticator_address(hs, ap_address);
+	handshake_state_set_supplicant_address(hs, sta_address);
 	__eapol_set_tx_user_data(s);
 
-	settings = l_settings_new();
-	l_settings_load_from_data(settings, config, strlen(config));
-	eapol_sm_set_8021x_config(sm, settings);
-	l_settings_free(settings);
-
-	r = eapol_sm_set_own_wpa(sm,
+	r = handshake_state_set_own_wpa(hs,
 				eapol_key_data_20 + sizeof(struct eapol_key));
 	assert(r);
 
-	eapol_sm_set_ap_wpa(sm, ap_wpa_ie);
+	handshake_state_set_ap_wpa(hs, ap_wpa_ie);
+
+	settings = l_settings_new();
+	l_settings_load_from_data(settings, config, strlen(config));
+	handshake_state_set_8021x_config(hs, settings);
 	eapol_start(sm);
+
+	l_settings_free(settings);
 
 	__eapol_set_tx_packet_func(verify_8021x_identity_resp);
 	s->pending_req = 1;
@@ -2521,13 +2541,14 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	expected_step4_frame_size = sizeof(eapol_key_data_16);
 
 	__eapol_set_tx_packet_func(verify_step4);
-	__eapol_set_install_tk_func(verify_install_tk);
+	__handshake_set_install_tk_func(verify_install_tk);
 	eapol_sm_set_user_data(sm, ptk->tk);
 	__eapol_rx_packet(1, ap_address, step3_buf, sizeof(eapol_key_data_15));
 	assert(verify_step4_called);
 	assert(verify_install_tk_called);
 
-	eapol_cancel(1);
+	eapol_sm_free(sm);
+	handshake_state_free(hs);
 	eapol_exit();
 }
 
@@ -2691,6 +2712,7 @@ static void eapol_sm_test_eap_nak(const void *data)
 	static uint8_t ap_address[] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 };
 	static uint8_t sta_address[] = { 0x02, 0x00, 0x00, 0x00, 0x01, 0x00 };
 	bool r;
+	struct handshake_state *hs;
 	struct eapol_sm *sm;
 	struct l_settings *settings;
 	struct eapol_8021x_tls_test_state s;
@@ -2699,27 +2721,30 @@ static void eapol_sm_test_eap_nak(const void *data)
 	spa = sta_address;
 
 	eapol_init();
-	__eapol_set_get_nonce_func(test_nonce);
+	__handshake_set_get_nonce_func(test_nonce);
 	__eapol_set_deauthenticate_func(verify_deauthenticate);
 
-	sm = eapol_sm_new();
-	eapol_register(1, sm);
-	eapol_sm_set_authenticator_address(sm, ap_address);
-	eapol_sm_set_supplicant_address(sm, sta_address);
+	hs = handshake_state_new(1);
+	sm = eapol_sm_new(hs);
+	eapol_register(sm);
+
+	handshake_state_set_authenticator_address(hs, ap_address);
+	handshake_state_set_supplicant_address(hs, sta_address);
 	__eapol_set_tx_user_data(&s);
+
+	r = handshake_state_set_own_wpa(hs,
+				eapol_key_data_20 + sizeof(struct eapol_key));
+	assert(r);
+
+	handshake_state_set_ap_wpa(hs, ap_wpa_ie);
 
 	settings = l_settings_new();
 	l_settings_load_from_data(settings, eapol_8021x_config,
 					strlen(eapol_8021x_config));
-	eapol_sm_set_8021x_config(sm, settings);
-	l_settings_free(settings);
-
-	r = eapol_sm_set_own_wpa(sm,
-				eapol_key_data_20 + sizeof(struct eapol_key));
-	assert(r);
-
-	eapol_sm_set_ap_wpa(sm, ap_wpa_ie);
+	handshake_state_set_8021x_config(hs, settings);
 	eapol_start(sm);
+
+	l_settings_free(settings);
 
 	__eapol_set_tx_packet_func(verify_8021x_identity_resp);
 	s.pending_req = 1;
@@ -2739,7 +2764,7 @@ static void eapol_sm_test_eap_nak(const void *data)
 				sizeof(eap_failure));
 	assert(eap_nak_verify_deauthenticate_called);
 
-	eapol_cancel(1);
+	handshake_state_free(hs);
 	eapol_exit();
 }
 
@@ -2778,12 +2803,13 @@ static void eapol_ft_handshake_test(const void *data)
 	const uint8_t ap_address[] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 };
 	const uint8_t sta_address[] = { 0x02, 0x00, 0x00, 0x00, 0x02, 0x00 };
 	const char *ssid = "TestFT";
+	struct handshake_state *hs;
 	struct eapol_sm *sm;
 
 	eapol_init();
 
 	snonce = eapol_key_test_26.key_nonce;
-	__eapol_set_get_nonce_func(test_nonce);
+	__handshake_set_get_nonce_func(test_nonce);
 
 	aa = ap_address;
 	spa = sta_address;
@@ -2794,18 +2820,20 @@ static void eapol_ft_handshake_test(const void *data)
 	expected_step4_frame = eapol_key_data_28;
 	expected_step4_frame_size = sizeof(eapol_key_data_28);
 
-	sm = eapol_sm_new();
-	eapol_register(1, sm);
-	eapol_sm_set_pmk(sm, psk);
-	eapol_sm_set_authenticator_address(sm, aa);
-	eapol_sm_set_supplicant_address(sm, spa);
-	eapol_sm_set_ssid(sm, (void *) ssid, strlen(ssid));
+	hs = handshake_state_new(1);
+	sm = eapol_sm_new(hs);
+	eapol_register(sm);
 
-	eapol_sm_set_own_rsn(sm, own_rsne);
-	eapol_sm_set_ap_rsn(sm, ap_rsne);
-	eapol_sm_set_mde(sm, mde);
-	eapol_sm_set_fte(sm, fte);
-	eapol_sm_set_kh_ids(sm, r0khid, strlen((void *) r0khid), r1khid);
+	handshake_state_set_pmk(hs, psk);
+	handshake_state_set_authenticator_address(hs, aa);
+	handshake_state_set_supplicant_address(hs, spa);
+	handshake_state_set_ssid(hs, (void *) ssid, strlen(ssid));
+
+	handshake_state_set_own_rsn(hs, own_rsne);
+	handshake_state_set_ap_rsn(hs, ap_rsne);
+	handshake_state_set_mde(hs, mde);
+	handshake_state_set_fte(hs, fte);
+	handshake_state_set_kh_ids(hs, r0khid, strlen((void *) r0khid), r1khid);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
@@ -2816,7 +2844,8 @@ static void eapol_ft_handshake_test(const void *data)
 	__eapol_rx_packet(1, aa, eapol_key_data_27, sizeof(eapol_key_data_27));
 	assert(verify_step4_called);
 
-	eapol_cancel(1);
+	eapol_sm_free(sm);
+	handshake_state_free(hs);
 	eapol_exit();
 }
 
