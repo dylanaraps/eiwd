@@ -671,6 +671,19 @@ static bool network_property_is_connected(struct l_dbus *dbus,
 	return true;
 }
 
+static bool network_property_get_device(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct network *network = user_data;
+
+	l_dbus_message_builder_append_basic(builder, 'o',
+					device_get_path(network->device));
+
+	return true;
+}
+
 static void setup_network_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Connect", 0,
@@ -683,6 +696,9 @@ static void setup_network_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_property(interface, "Connected", 0, "b",
 					network_property_is_connected,
 					NULL);
+
+	l_dbus_interface_property(interface, "Device", 0, "o",
+					network_property_get_device, NULL);
 }
 
 bool network_register(struct network *network, const char *path)
