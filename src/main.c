@@ -45,9 +45,11 @@
 
 #include "src/backtrace.h"
 
+static struct l_settings *iwd_config;
 static struct l_timeout *timeout = NULL;
 static const char *interfaces;
 static const char *nointerfaces;
+static const char *config_dir;
 
 static void main_loop_quit(struct l_timeout *timeout, void *user_data)
 {
@@ -70,6 +72,11 @@ static void signal_handler(struct l_signal *signal, uint32_t signo,
 	}
 }
 
+const struct l_settings *iwd_get_config(void)
+{
+	return iwd_config;
+}
+
 static void usage(void)
 {
 	printf("iwd - Wireless daemon\n"
@@ -79,6 +86,7 @@ static void usage(void)
 		"\t-B, --dbus-debug       Enable D-Bus debugging\n"
 		"\t-i, --interfaces       Interfaces to manage\n"
 		"\t-I, --nointerfaces     Interfaces to ignore\n"
+		"\t-c, --config           Configuration directory to use\n"
 		"\t-h, --help             Show help options\n");
 }
 
@@ -87,6 +95,7 @@ static const struct option main_options[] = {
 	{ "version",      no_argument,       NULL, 'v' },
 	{ "interfaces",   required_argument, NULL, 'i' },
 	{ "nointerfaces", required_argument, NULL, 'I' },
+	{ "config",       required_argument, NULL, 'c' },
 	{ "help",         no_argument,       NULL, 'h' },
 	{ }
 };
@@ -135,11 +144,12 @@ int main(int argc, char *argv[])
 	int exit_status;
 	struct l_genl *genl;
 	struct l_genl_family *nl80211;
+	char *config_path;
 
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "Bi:I:vh", main_options, NULL);
+		opt = getopt_long(argc, argv, "Bi:I:c:vh", main_options, NULL);
 		if (opt < 0)
 			break;
 
@@ -156,6 +166,9 @@ int main(int argc, char *argv[])
 		case 'v':
 			printf("%s\n", VERSION);
 			return EXIT_SUCCESS;
+		case 'c':
+			config_dir = optarg;
+			break;
 		case 'h':
 			usage();
 			return EXIT_SUCCESS;
@@ -186,6 +199,18 @@ int main(int argc, char *argv[])
 #endif
 
 	l_info("Wireless daemon version %s", VERSION);
+
+	if (!config_dir)
+		config_dir = CONFIGDIR;
+
+	config_path = l_strdup_printf("/%s/%s", config_dir, "iwd.conf");
+
+	iwd_config = l_settings_new();
+
+	if (!l_settings_load_from_file(iwd_config, config_path))
+		l_warn("Failed to load configuration file %s", config_path);
+
+	l_free(config_path);
 
 	if (!dbus_init(enable_dbus_debug)) {
 		exit_status = EXIT_FAILURE;
@@ -244,6 +269,8 @@ fail_genl:
 	dbus_exit();
 
 done:
+	l_settings_free(iwd_config);
+
 	l_signal_remove(signal);
 	l_timeout_remove(timeout);
 
