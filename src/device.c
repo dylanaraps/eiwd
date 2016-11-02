@@ -252,11 +252,6 @@ static void process_bss(struct device *device, struct scan_bss *bss,
 	} else
 		security = scan_get_security(bss->capability, &info);
 
-	if (security == SECURITY_PSK)
-		bss->sha256 = info.akm_suites & IE_RSN_AKM_SUITE_PSK_SHA256;
-	else if (security == SECURITY_8021X)
-		bss->sha256 = info.akm_suites & IE_RSN_AKM_SUITE_8021X_SHA256;
-
 	path = iwd_network_get_path(device, ssid, security);
 
 	network = l_hashmap_lookup(device->networks, path);
@@ -635,6 +630,42 @@ bool device_set_autoconnect(struct device *device, bool autoconnect)
 	return true;
 }
 
+static enum ie_rsn_akm_suite device_select_akm_suite(struct network *network,
+						struct scan_bss *bss,
+						struct ie_rsn_info *info)
+{
+	enum security security = network_get_security(network);
+
+	/*
+	 * If FT is available, use FT authentication to keep the door open
+	 * for fast transitions.  Otherwise use SHA256 version if present.
+	 */
+
+	if (security == SECURITY_8021X) {
+		if ((info->akm_suites & IE_RSN_AKM_SUITE_FT_OVER_8021X) &&
+				bss->rsne && bss->mde_present)
+			return IE_RSN_AKM_SUITE_FT_OVER_8021X;
+
+		if (info->akm_suites & IE_RSN_AKM_SUITE_8021X_SHA256)
+			return IE_RSN_AKM_SUITE_8021X_SHA256;
+
+		if (info->akm_suites & IE_RSN_AKM_SUITE_8021X)
+			return IE_RSN_AKM_SUITE_8021X;
+	} else if (security == SECURITY_PSK) {
+		if ((info->akm_suites & IE_RSN_AKM_SUITE_FT_USING_PSK) &&
+				bss->rsne && bss->mde_present)
+			return IE_RSN_AKM_SUITE_FT_USING_PSK;
+
+		if (info->akm_suites & IE_RSN_AKM_SUITE_PSK_SHA256)
+			return IE_RSN_AKM_SUITE_PSK_SHA256;
+
+		if (info->akm_suites & IE_RSN_AKM_SUITE_PSK)
+			return IE_RSN_AKM_SUITE_PSK;
+	}
+
+	return 0;
+}
+
 void device_connect_network(struct device *device, struct network *network,
 				struct scan_bss *bss,
 				struct l_dbus_message *message)
@@ -651,17 +682,16 @@ void device_connect_network(struct device *device, struct network *network,
 
 		memset(&info, 0, sizeof(info));
 
-		if (security == SECURITY_PSK)
-			info.akm_suites =
-				bss->sha256 ? IE_RSN_AKM_SUITE_PSK_SHA256 :
-						IE_RSN_AKM_SUITE_PSK;
-		else
-			info.akm_suites =
-				bss->sha256 ? IE_RSN_AKM_SUITE_8021X_SHA256 :
-						IE_RSN_AKM_SUITE_8021X;
-
 		memset(&bss_info, 0, sizeof(bss_info));
 		scan_bss_get_rsn_info(bss, &bss_info);
+
+		info.akm_suites = device_select_akm_suite(network, bss,
+								&bss_info);
+
+		if (!info.akm_suites) {
+			l_dbus_send(dbus, dbus_error_not_supported(message));
+			return;
+		}
 
 		info.pairwise_ciphers = wiphy_select_cipher(wiphy,
 						bss_info.pairwise_ciphers);
@@ -669,6 +699,11 @@ void device_connect_network(struct device *device, struct network *network,
 						bss_info.group_cipher);
 		info.group_management_cipher = wiphy_select_cipher(wiphy,
 				bss_info.group_management_cipher);
+
+		if (!info.pairwise_ciphers || !info.group_cipher) {
+			l_dbus_send(dbus, dbus_error_not_supported(message));
+			return;
+		}
 
 		if (info.group_management_cipher == 0 && bss_info.mfpr) {
 			l_dbus_send(dbus, dbus_error_not_supported(message));
