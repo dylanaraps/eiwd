@@ -37,6 +37,8 @@
 #include "src/crypto.h"
 #include "src/util.h"
 #include "src/mpdu.h"
+#include "src/ie.h"
+#include "src/handshake.h"
 
 static const unsigned char wsc_attrs1[] = {
 	0x10, 0x4a, 0x00, 0x01, 0x10, 0x10, 0x44, 0x00, 0x01, 0x02, 0x10, 0x41,
@@ -1951,19 +1953,22 @@ static void wsc_test_pbc_handshake(const void *data)
 	static uint8_t ap_address[] = { 0x24, 0xa2, 0xe1, 0xec, 0x17, 0x04 };
 	static uint8_t sta_address[] = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 };
 	struct verify_data verify;
+	struct handshake_state *hs;
 	struct eapol_sm *sm;
 	char *hex;
 	struct l_settings *settings;
 
 	eapol_init();
 
-	sm = eapol_sm_new();
-	eapol_register(1, sm);
-	eapol_sm_set_authenticator_address(sm, ap_address);
-	eapol_sm_set_supplicant_address(sm, sta_address);
+	hs = handshake_state_new(1);
+	sm = eapol_sm_new(hs);
+	eapol_register(sm);
+
+	handshake_state_set_authenticator_address(hs, ap_address);
+	handshake_state_set_supplicant_address(hs, sta_address);
+
 	__eapol_set_tx_packet_func(verify_8021x);
 	__eapol_set_tx_user_data(&verify);
-
 	__eapol_set_deauthenticate_func(verify_deauthenticate);
 	eapol_sm_set_user_data(sm, &verify);
 	eapol_sm_set_event_func(sm, verify_credential);
@@ -2002,10 +2007,10 @@ static void wsc_test_pbc_handshake(const void *data)
 	l_settings_set_string(settings, "WSC", "IV2",
 					"4e3a4cf088176989e148d4c10b96e8fd");
 
-	eapol_sm_set_8021x_config(sm, settings);
-	l_settings_free(settings);
-
+	handshake_state_set_8021x_config(hs, settings);
 	eapol_start(sm);
+
+	l_settings_free(settings);
 
 	VERIFY_RESET(verify, eap_identity_resp);
 	__eapol_rx_packet(1, ap_address, eap_identity_req,
@@ -2039,6 +2044,7 @@ static void wsc_test_pbc_handshake(const void *data)
 	__eapol_rx_packet(1, ap_address, eap_fail, sizeof(eap_fail));
 	assert(verify.eapol_failed);
 
+	handshake_state_free(hs);
 	eapol_exit();
 }
 
