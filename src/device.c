@@ -649,12 +649,6 @@ void device_connect_network(struct device *device, struct network *network,
 		uint8_t rsne_buf[256];
 		struct ie_rsn_info info;
 
-		sm = eapol_sm_new();
-
-		eapol_sm_set_authenticator_address(sm, bss->addr);
-		eapol_sm_set_supplicant_address(sm,
-				netdev_get_address(device->netdev));
-
 		memset(&info, 0, sizeof(info));
 
 		if (security == SECURITY_PSK)
@@ -681,6 +675,12 @@ void device_connect_network(struct device *device, struct network *network,
 			return;
 		} else if (info.group_management_cipher != 0)
 			info.mfpc = true;
+
+		sm = eapol_sm_new();
+
+		eapol_sm_set_authenticator_address(sm, bss->addr);
+		eapol_sm_set_supplicant_address(sm,
+				netdev_get_address(device->netdev));
 
 		/* RSN takes priority */
 		if (bss->rsne) {
