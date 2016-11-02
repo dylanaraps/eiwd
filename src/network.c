@@ -492,6 +492,10 @@ struct scan_bss *network_bss_select(struct network *network)
 			memset(&rsn, 0, sizeof(rsn));
 			scan_bss_get_rsn_info(bss, &rsn);
 
+			if (rsn.mfpr && !wiphy_select_cipher(wiphy,
+					rsn.group_management_cipher))
+				continue;
+
 			if (wiphy_select_cipher(wiphy, rsn.pairwise_ciphers) &&
 					wiphy_select_cipher(wiphy,
 							rsn.group_cipher))
