@@ -1564,3 +1564,62 @@ bool ie_build_fast_bss_transition(const struct ie_ft_info *info, uint8_t *to)
 
 	return true;
 }
+
+enum nr_subelem_id {
+	NR_SUBELEM_ID_TSF_INFO			= 1,
+	NR_SUBELEM_ID_CONDENSED_COUNTRY_STR	= 2,
+	NR_SUBELEM_ID_BSS_TRANSITION_PREF	= 3,
+	NR_SUBELEM_ID_BSS_TERMINATION_DURATION	= 4,
+	NR_SUBELEM_ID_BEARING			= 5,
+	NR_SUBELEM_ID_WIDE_BW_CHANNEL		= 6,
+	/* Remaining defined subelements use the IE_TYPE_* ID values */
+};
+
+int ie_parse_neighbor_report(struct ie_tlv_iter *iter,
+				struct ie_neighbor_report_info *info)
+{
+	unsigned int len = ie_tlv_iter_get_length(iter);
+	const uint8_t *data = ie_tlv_iter_get_data(iter);
+	struct ie_tlv_iter opt_iter;
+
+	if (len < 13)
+		return -EINVAL;
+
+	memset(info, 0, sizeof(*info));
+
+	memcpy(info->addr, data + 0, 6);
+
+	info->ht = util_is_bit_set(data[8], 3);
+	info->md = util_is_bit_set(data[8], 2);
+	info->immediate_block_ack = util_is_bit_set(data[8], 1);
+	info->delayed_block_ack = util_is_bit_set(data[8], 0);
+	info->rm = util_is_bit_set(data[9], 7);
+	info->apsd = util_is_bit_set(data[9], 6);
+	info->qos = util_is_bit_set(data[9], 5);
+	info->spectrum_mgmt = util_is_bit_set(data[9], 4);
+	info->key_scope = util_is_bit_set(data[9], 3);
+	info->security = util_is_bit_set(data[9], 2);
+	info->reachable = util_bit_field(data[9], 0, 2);
+
+	info->oper_class = data[10];
+
+	info->channel_num = data[11];
+
+	info->phy_type = data[12];
+
+	ie_tlv_iter_init(&opt_iter, data + 13, len - 13);
+
+	while (ie_tlv_iter_next(&opt_iter)) {
+		if (ie_tlv_iter_get_tag(&opt_iter) !=
+				NR_SUBELEM_ID_BSS_TRANSITION_PREF)
+			continue;
+
+		if (ie_tlv_iter_get_length(&opt_iter) != 1)
+			continue;
+
+		info->bss_transition_pref = ie_tlv_iter_get_data(&opt_iter)[0];
+		info->bss_transition_pref_present = true;
+	}
+
+	return 0;
+}

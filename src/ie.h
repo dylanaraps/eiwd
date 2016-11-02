@@ -249,6 +249,26 @@ enum ie_rm_capability {
 	IE_RM_CAP_NEIGHBOR_REPORT = 0x0002,
 };
 
+struct ie_neighbor_report_info {
+	uint8_t addr[6];
+	uint8_t reachable;
+	bool spectrum_mgmt : 1;
+	bool qos : 1;
+	bool apsd : 1;
+	bool rm : 1;
+	bool delayed_block_ack : 1;
+	bool immediate_block_ack : 1;
+	bool security : 1;
+	bool key_scope : 1;
+	bool md : 1;
+	bool ht : 1;
+	uint8_t oper_class;
+	uint8_t channel_num;
+	uint8_t phy_type;
+	uint8_t bss_transition_pref;
+	bool bss_transition_pref_present : 1;
+};
+
 void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 			unsigned int len);
 void ie_tlv_iter_recurse(struct ie_tlv_iter *iter,
@@ -325,3 +345,6 @@ int ie_parse_fast_bss_transition(struct ie_tlv_iter *iter,
 int ie_parse_fast_bss_transition_from_data(const uint8_t *data, uint8_t len,
 				struct ie_ft_info *info);
 bool ie_build_fast_bss_transition(const struct ie_ft_info *info, uint8_t *to);
+
+int ie_parse_neighbor_report(struct ie_tlv_iter *iter,
+				struct ie_neighbor_report_info *info);
