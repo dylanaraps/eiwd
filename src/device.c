@@ -1040,6 +1040,19 @@ static bool device_property_get_state(struct l_dbus *dbus,
 	return true;
 }
 
+static bool device_property_get_adapter(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct device *device = user_data;
+
+	l_dbus_message_builder_append_basic(builder, 'o',
+					wiphy_get_path(device->wiphy));
+
+	return true;
+}
+
 static void setup_device_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Scan", 0,
@@ -1064,6 +1077,8 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 					device_property_get_scanning, NULL);
 	l_dbus_interface_property(interface, "State", 0, "s",
 					device_property_get_state, NULL);
+	l_dbus_interface_property(interface, "Adapter", 0, "o",
+					device_property_get_adapter, NULL);
 }
 
 static bool device_remove_network(const void *key, void *data, void *user_data)
