@@ -8,4 +8,5 @@ fi
     ./configure --enable-maintainer-mode \
 		--enable-debug \
 		--localstatedir=/var \
-		--prefix=/usr $*
+		--prefix=/usr $* \
+		--sysconfdir=/etc/iwd
