@@ -83,6 +83,8 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/iwd.h
 src_iwd_LDADD = ell/libell-internal.la -ldl
 
+sysconf_DATA = src/iwd.conf
+
 client_iwctl_SOURCES = client/main.c
 client_iwctl_LDADD = ell/libell-internal.la
 
