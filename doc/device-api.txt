@@ -89,3 +89,7 @@ Properties	string Name [readonly]
 			Reflects whether the device is currently scanning
 			for networks.  net.connman.iwd.Network objects are
 			updated when this property goes from true to false.
+
+		object Adapter [readonly]
+
+			The object path of the adapter the device belongs to.
