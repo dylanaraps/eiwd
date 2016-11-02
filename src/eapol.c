@@ -732,6 +732,10 @@ struct eapol_sm {
 	uint8_t snonce[32];
 	uint8_t anonce[32];
 	uint8_t ptk[64];
+	uint8_t pmk_r0[32];
+	uint8_t pmk_r0_name[16];
+	uint8_t pmk_r1[32];
+	uint8_t pmk_r1_name[16];
 	eapol_sm_event_func_t event_func;
 	void *user_data;
 	struct l_timeout *timeout;
@@ -997,26 +1001,26 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 	struct eapol_key *step2;
 	uint8_t mic[16];
 	bool use_sha256;
+	uint8_t *ies;
+	size_t ies_len;
 	enum crypto_cipher cipher;
 	size_t ptk_size;
 
-	if (!eapol_verify_ptk_1_of_4(ek)) {
-		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
-		return;
-	}
+	if (!eapol_verify_ptk_1_of_4(ek))
+		goto error_unspecified;
 
-	if (!get_nonce(sm->snonce)) {
-		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
-		return;
-	}
+	if (!get_nonce(sm->snonce))
+		goto error_unspecified;
 
 	sm->have_snonce = true;
 	sm->ptk_complete = false;
 
 	memcpy(sm->anonce, ek->key_nonce, sizeof(ek->key_nonce));
 
-	if (sm->akm_suite == IE_RSN_AKM_SUITE_8021X_SHA256 ||
-			sm->akm_suite == IE_RSN_AKM_SUITE_PSK_SHA256)
+	if (sm->akm_suite & (IE_RSN_AKM_SUITE_8021X_SHA256 |
+			IE_RSN_AKM_SUITE_PSK_SHA256 |
+			IE_RSN_AKM_SUITE_SAE_SHA256 |
+			IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256))
 		use_sha256 = true;
 	else
 		use_sha256 = false;
@@ -1025,16 +1029,70 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 
 	ptk_size = sizeof(struct crypto_ptk) + crypto_cipher_key_len(cipher);
 
-	crypto_derive_pairwise_ptk(sm->pmk, sm->spa, sm->aa,
-					sm->anonce, sm->snonce,
-					ptk, ptk_size, use_sha256);
+	if (sm->akm_suite & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
+				IE_RSN_AKM_SUITE_FT_USING_PSK |
+				IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256)) {
+		uint16_t mdid;
+		uint8_t ptk_name[16];
+		struct ie_rsn_info rsn_info;
+
+		if (!sm->mde || !sm->fte)
+			goto error_unspecified;
+
+		ie_parse_mobility_domain_from_data(sm->mde, sm->mde[1] + 2,
+							&mdid, NULL, NULL);
+
+		if (!crypto_derive_pmk_r0(sm->pmk, sm->ssid, sm->ssid_len, mdid,
+						sm->r0khid, sm->r0khid_len,
+						sm->spa,
+						sm->pmk_r0, sm->pmk_r0_name))
+			goto error_unspecified;
+
+		if (!crypto_derive_pmk_r1(sm->pmk_r0, sm->r1khid, sm->spa,
+						sm->pmk_r0_name,
+						sm->pmk_r1, sm->pmk_r1_name))
+			goto error_unspecified;
+
+		if (!crypto_derive_ft_ptk(sm->pmk_r1, sm->pmk_r1_name, sm->aa,
+						sm->spa, sm->snonce, sm->anonce,
+						ptk, ptk_size, ptk_name))
+			goto error_unspecified;
+
+		/*
+		 * Rebuild the RSNE to include the PMKR1Name and append
+		 * MDE + FTE.
+		 */
+		ies = alloca(512);
+
+		if (ie_parse_rsne_from_data(sm->own_ie, sm->own_ie[1] + 2,
+						&rsn_info) < 0)
+			goto error_unspecified;
+
+		rsn_info.num_pmkids = 1;
+		rsn_info.pmkids = sm->pmk_r1_name;
+
+		ie_build_rsne(&rsn_info, ies);
+		ies_len = ies[1] + 2;
+
+		memcpy(ies + ies_len, sm->mde, sm->mde[1] + 2);
+		ies_len += sm->mde[1] + 2;
+
+		memcpy(ies + ies_len, sm->fte, sm->fte[1] + 2);
+		ies_len += sm->fte[1] + 2;
+	} else {
+		crypto_derive_pairwise_ptk(sm->pmk, sm->spa, sm->aa,
+						sm->anonce, sm->snonce,
+						ptk, ptk_size, use_sha256);
+
+		ies_len = sm->own_ie[1] + 2;
+		ies = sm->own_ie;
+	}
 
 	step2 = eapol_create_ptk_2_of_4(sm->protocol_version,
 					ek->key_descriptor_version,
 					sm->replay_counter,
 					sm->snonce,
-					sm->own_ie[1] + 2, sm->own_ie,
-					sm->wpa_ie);
+					ies_len, ies, sm->wpa_ie);
 
 	if (!eapol_calculate_mic(ptk->kck, step2, mic)) {
 		l_info("MIC calculation failed. "
@@ -1051,6 +1109,11 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 
 	l_timeout_remove(sm->timeout);
 	sm->timeout = NULL;
+
+	return;
+
+error_unspecified:
+	handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
 }
 
 static const uint8_t *eapol_find_kde(const uint8_t *data, size_t data_len,
