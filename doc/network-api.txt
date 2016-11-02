@@ -27,3 +27,7 @@ Properties	string Name [readonly]
 
 			Reflects whether the device is connected to this
 			network.
+
+		object Device [readonly]
+
+			The object path of the device the network belongs to.
