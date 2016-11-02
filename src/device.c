@@ -72,6 +72,7 @@ struct device {
 	struct l_dbus_message *disconnect_pending;
 	uint32_t netdev_watch_id;
 	struct watchlist state_watches;
+	uint8_t *connected_mde;
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
@@ -502,6 +503,9 @@ static void device_disassociated(struct device *device)
 		device->connected_bss = NULL;
 		device->connected_network = NULL;
 
+		l_free(device->connected_mde);
+		device->connected_mde = NULL;
+
 		l_dbus_property_changed(dbus, device_get_path(device),
 					IWD_DEVICE_INTERFACE,
 					"ConnectedNetwork");
@@ -674,11 +678,14 @@ void device_connect_network(struct device *device, struct network *network,
 	struct wiphy *wiphy = device->wiphy;
 	struct l_dbus *dbus = dbus_get_bus();
 	struct eapol_sm *sm = NULL;
+	bool add_mde = false;
+	uint8_t *mde;
 
 	if (security == SECURITY_PSK || security == SECURITY_8021X) {
 		struct ie_rsn_info bss_info;
 		uint8_t rsne_buf[256];
 		struct ie_rsn_info info;
+		const char *ssid;
 
 		memset(&info, 0, sizeof(info));
 
@@ -717,6 +724,9 @@ void device_connect_network(struct device *device, struct network *network,
 		eapol_sm_set_supplicant_address(sm,
 				netdev_get_address(device->netdev));
 
+		ssid = network_get_ssid(network);
+		eapol_sm_set_ssid(sm, (void *) ssid, strlen(ssid));
+
 		/* RSN takes priority */
 		if (bss->rsne) {
 			ie_build_rsne(&info, rsne_buf);
@@ -733,15 +743,39 @@ void device_connect_network(struct device *device, struct network *network,
 		else
 			eapol_sm_set_8021x_config(sm,
 					network_get_settings(network));
+
+		if (info.akm_suites & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
+					IE_RSN_AKM_SUITE_FT_USING_PSK |
+					IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256))
+			add_mde = true;
 	}
+
+	if (security == SECURITY_NONE)
+		/* Perform FT association if available */
+		add_mde = bss->mde_present;
+
+	if (add_mde) {
+		mde = l_malloc(5);
+
+		/* The MDE advertised by the BSS must be passed verbatim */
+		mde[0] = IE_TYPE_MOBILITY_DOMAIN;
+		mde[1] = 3;
+		memcpy(mde + 2, bss->mde, 3);
+
+		if (sm)
+			eapol_sm_set_mde(sm, mde);
+	} else
+		mde = NULL;
 
 	device->connect_pending = l_dbus_message_ref(message);
 
-	if (netdev_connect(device->netdev, bss, sm, NULL,
+	if (netdev_connect(device->netdev, bss, sm, mde,
 					device_netdev_event,
 					device_connect_cb, device) < 0) {
 		if (sm)
 			eapol_sm_free(sm);
+
+		l_free(mde);
 
 		dbus_pending_reply(&device->connect_pending,
 				dbus_error_failed(device->connect_pending));
@@ -750,6 +784,7 @@ void device_connect_network(struct device *device, struct network *network,
 
 	device->connected_bss = bss;
 	device->connected_network = network;
+	device->connected_mde = mde;
 
 	device_enter_state(device, DEVICE_STATE_CONNECTING);
 
@@ -856,6 +891,9 @@ int device_disconnect(struct device *device)
 
 	device->connected_bss = NULL;
 	device->connected_network = NULL;
+
+	l_free(device->connected_mde);
+	device->connected_mde = NULL;
 
 	l_dbus_property_changed(dbus, device_get_path(device),
 				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
@@ -1167,6 +1205,9 @@ static void device_netdev_notify(struct netdev *netdev,
 			device->connected_bss = NULL;
 			device->connected_network = NULL;
 
+			l_free(device->connected_mde);
+			device->connected_mde = NULL;
+
 			l_dbus_property_changed(dbus, device_get_path(device),
 						IWD_DEVICE_INTERFACE,
 						"ConnectedNetwork");
@@ -1274,6 +1315,8 @@ static void device_free(void *user)
 	l_queue_destroy(device->autoconnect_list, l_free);
 
 	netdev_watch_remove(device->netdev, device->netdev_watch_id);
+
+	l_free(device->connected_mde);
 
 	scan_ifindex_remove(device->index);
 	l_free(device);
