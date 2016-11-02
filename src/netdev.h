@@ -73,7 +73,7 @@ const char *netdev_get_name(struct netdev *netdev);
 bool netdev_get_is_up(struct netdev *netdev);
 
 int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
-				struct eapol_sm *sm,
+				struct eapol_sm *sm, const uint8_t *mde,
 				netdev_event_func_t event_filter,
 				netdev_connect_cb_t cb, void *user_data);
 int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,

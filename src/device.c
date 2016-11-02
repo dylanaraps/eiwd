@@ -737,7 +737,7 @@ void device_connect_network(struct device *device, struct network *network,
 
 	device->connect_pending = l_dbus_message_ref(message);
 
-	if (netdev_connect(device->netdev, bss, sm,
+	if (netdev_connect(device->netdev, bss, sm, NULL,
 					device_netdev_event,
 					device_connect_cb, device) < 0) {
 		if (sm)

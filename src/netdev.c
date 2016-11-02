@@ -71,6 +71,7 @@ struct netdev {
 	uint32_t connect_cmd_id;
 	uint32_t disconnect_cmd_id;
 	enum netdev_result result;
+	uint8_t *mde;
 
 	struct l_queue *watches;
 	uint32_t next_watch_id;
@@ -317,6 +318,9 @@ static void netdev_connect_free(struct netdev *netdev)
 		l_genl_family_cancel(nl80211, netdev->disconnect_cmd_id);
 		netdev->disconnect_cmd_id = 0;
 	}
+
+	l_free(netdev->mde);
+	netdev->mde = NULL;
 }
 
 static void netdev_connect_failed(struct l_genl_msg *msg, void *user_data)
@@ -1060,6 +1064,8 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 	uint16_t type, len;
 	const void *data;
 	const uint16_t *status_code = NULL;
+	const uint8_t *ies = NULL;
+	size_t ies_len;
 
 	l_debug("");
 
@@ -1081,12 +1087,92 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 				status_code = data;
 
 			break;
+		case NL80211_ATTR_RESP_IE:
+			ies = data;
+			ies_len = len;
+			break;
 		}
 	}
 
 	/* AP Rejected the authenticate / associate */
 	if (!status_code || *status_code != 0)
 		goto error;
+
+	/* Check 802.11r IEs */
+	if (netdev->mde && !ies)
+		goto error;
+
+	if (ies) {
+		struct ie_tlv_iter iter;
+		const uint8_t *mde = NULL;
+		const uint8_t *fte = NULL;
+
+		ie_tlv_iter_init(&iter, ies, ies_len);
+
+		while (ie_tlv_iter_next(&iter)) {
+			switch (ie_tlv_iter_get_tag(&iter)) {
+			case IE_TYPE_MOBILITY_DOMAIN:
+				if (mde)
+					goto error;
+
+				mde = ie_tlv_iter_get_data(&iter) - 2;
+				break;
+
+			case IE_TYPE_FAST_BSS_TRANSITION:
+				if (fte)
+					goto error;
+
+				fte = ie_tlv_iter_get_data(&iter) - 2;
+				break;
+			}
+		}
+
+		/* An MD IE identical to the one we sent must be present */
+		if (netdev->mde && (!mde || memcmp(netdev->mde,
+						mde, netdev->mde[1] + 2)))
+			goto error;
+
+		/*
+		 * An FT IE is required in an initial mobility domain
+		 * association and re-associations in an RSN but not present
+		 * in a non-RSN (12.4.2 vs. 12.4.3).
+		 */
+
+		if (netdev->mde && !netdev->sm && fte)
+			goto error;
+
+		if (netdev->mde && netdev->sm) {
+			struct ie_ft_info ft_info;
+			uint8_t zeros[32];
+
+			if (!fte)
+				goto error;
+
+			eapol_sm_set_fte(netdev->sm, fte);
+
+			if (ie_parse_fast_bss_transition_from_data(fte,
+								fte[1] + 2,
+								&ft_info) < 0)
+				goto error;
+
+			/*
+			 * 12.4.2: "The FTE shall have a MIC information
+			 * element count of zero (i.e., no MIC present)
+			 * and have ANonce, SNonce, and MIC fields set to 0."
+			 */
+			memset(zeros, 0, 32);
+
+			if (ft_info.mic_element_count != 0 ||
+					memcmp(ft_info.mic, zeros, 16) ||
+					memcmp(ft_info.anonce, zeros, 32) ||
+					memcmp(ft_info.snonce, zeros, 32))
+				goto error;
+
+			eapol_sm_set_kh_ids(netdev->sm, ft_info.r0khid,
+						ft_info.r0khid_len,
+						ft_info.r1khid);
+		}
+	}
 
 	if (netdev->eapol_active) {
 		/*
@@ -1157,10 +1243,13 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 
 static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 							struct scan_bss *bss,
-							struct eapol_sm *sm)
+							struct eapol_sm *sm,
+							const uint8_t *mde)
 {
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
+	struct iovec iov[2];
+	int iov_elems = 0;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_CONNECT, 512);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
@@ -1201,10 +1290,21 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 		l_genl_msg_append_attr(msg, NL80211_ATTR_CONTROL_PORT, 0, NULL);
 
 		ie = eapol_sm_get_own_ie(sm, &ie_len);
-		if (ie)
-			l_genl_msg_append_attr(msg, NL80211_ATTR_IE,
-								ie_len, ie);
+		if (ie) {
+			iov[iov_elems].iov_base = (void *) ie;
+			iov[iov_elems].iov_len = ie_len;
+			iov_elems += 1;
+		}
 	}
+
+	if (mde) {
+		iov[iov_elems].iov_base = (void *) mde;
+		iov[iov_elems].iov_len = mde[1] + 2;
+		iov_elems += 1;
+	}
+
+	if (iov_elems)
+		l_genl_msg_append_attrv(msg, NL80211_ATTR_IE, iov, iov_elems);
 
 	return msg;
 }
@@ -1213,6 +1313,7 @@ static int netdev_connect_common(struct netdev *netdev,
 					struct l_genl_msg *cmd_connect,
 					struct scan_bss *bss,
 					struct eapol_sm *sm,
+					const uint8_t *mde,
 					netdev_event_func_t event_filter,
 					netdev_connect_cb_t cb, void *user_data)
 {
@@ -1232,12 +1333,16 @@ static int netdev_connect_common(struct netdev *netdev,
 	netdev->connected = true;
 	netdev->sm = sm;
 
+	if (mde)
+		netdev->mde = l_memdup(mde, mde[1] + 2);
+
 	return 0;
 
 }
 
 int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 				struct eapol_sm *sm,
+				const uint8_t *mde,
 				netdev_event_func_t event_filter,
 				netdev_connect_cb_t cb, void *user_data)
 {
@@ -1246,11 +1351,11 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	if (netdev->connected)
 		return -EISCONN;
 
-	cmd_connect = netdev_build_cmd_connect(netdev, bss, sm);
+	cmd_connect = netdev_build_cmd_connect(netdev, bss, sm, mde);
 	if (!cmd_connect)
 		return -EINVAL;
 
-	return netdev_connect_common(netdev, cmd_connect, bss, sm,
+	return netdev_connect_common(netdev, cmd_connect, bss, sm, mde,
 						event_filter, cb, user_data);
 }
 
@@ -1269,7 +1374,7 @@ int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
 	if (netdev->connected)
 		return -EISCONN;
 
-	cmd_connect = netdev_build_cmd_connect(netdev, bss, NULL);
+	cmd_connect = netdev_build_cmd_connect(netdev, bss, NULL, NULL);
 	if (!cmd_connect)
 		return -EINVAL;
 
@@ -1289,7 +1394,7 @@ int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
 	l_genl_msg_append_attr(cmd_connect, NL80211_ATTR_IE, ie_len, ie);
 	l_free(ie);
 
-	return netdev_connect_common(netdev, cmd_connect, bss, sm,
+	return netdev_connect_common(netdev, cmd_connect, bss, sm, NULL,
 						event_filter, cb, user_data);
 
 error:
