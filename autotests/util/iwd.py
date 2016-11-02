@@ -13,6 +13,7 @@ from abc import ABCMeta, abstractmethod
 from enum import Enum
 
 IWD_STORAGE_DIR =               '/var/lib/iwd'
+IWD_CONFIG_DIR =                '/etc/iwd'
 
 DBUS_OBJECT_MANAGER =           'org.freedesktop.DBus.ObjectManager'
 DBUS_PROPERTIES =               'org.freedesktop.DBus.Properties'
@@ -511,7 +512,8 @@ class IWD(AsyncOpAbstract):
     _agent_manager_if = None
     _known_network_manager_if = None
 
-    def __init__(self, start_iwd_daemon = False):
+    def __init__(self, start_iwd_daemon = False,
+                                               iwd_config_dir = IWD_CONFIG_DIR):
         global mainloop
         mainloop = GLib.MainLoop()
 
@@ -519,7 +521,7 @@ class IWD(AsyncOpAbstract):
             return
 
         import subprocess
-        iwd_proc = subprocess.Popen('iwd')
+        iwd_proc = subprocess.Popen(['iwd', '-c', iwd_config_dir])
 
         tries = 0
         while not self._bus.name_has_owner(IWD_SERVICE):
