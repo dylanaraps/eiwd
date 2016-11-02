@@ -36,6 +36,7 @@
 #include "src/wscutil.h"
 #include "src/util.h"
 #include "src/wsc.h"
+#include "src/handshake.h"
 #include "src/eapol.h"
 #include "src/eap-wsc.h"
 #include "src/crypto.h"
@@ -66,6 +67,7 @@ struct wsc {
 		uint8_t addr[6];
 	} creds[3];
 	uint32_t n_creds;
+	struct l_settings *eap_settings;
 
 	bool wsc_association : 1;
 };
@@ -202,6 +204,9 @@ static void wsc_connect_cb(struct netdev *netdev, enum netdev_result result,
 	l_debug("%d, result: %d", device_get_ifindex(wsc->device), result);
 
 	wsc->wsc_association = false;
+
+	l_settings_free(wsc->eap_settings);
+	wsc->eap_settings = NULL;
 
 	if (result == NETDEV_RESULT_HANDSHAKE_FAILED && wsc->n_creds > 0) {
 		wsc_store_credentials(wsc);
@@ -390,14 +395,17 @@ static inline enum wsc_rf_band freq_to_rf_band(uint32_t freq)
 
 static void wsc_connect(struct wsc *wsc)
 {
-	struct eapol_sm *sm = eapol_sm_new();
+	struct handshake_state *hs;
+	struct eapol_sm *sm;
 	struct l_settings *settings = l_settings_new();
 	struct scan_bss *bss = wsc->target;
+	uint32_t ifindex = netdev_get_ifindex(device_get_netdev(wsc->device));
 
 	wsc->target = NULL;
 
-	eapol_sm_set_authenticator_address(sm, bss->addr);
-	eapol_sm_set_supplicant_address(sm, device_get_address(wsc->device));
+	hs = handshake_state_new(ifindex);
+
+	sm = eapol_sm_new(hs);
 
 	eapol_sm_set_user_data(sm, wsc);
 	eapol_sm_set_event_func(sm, wsc_eapol_event);
@@ -417,11 +425,12 @@ static void wsc_connect(struct wsc *wsc)
 	l_settings_set_string(settings, "WSC", "EnrolleeMAC",
 		util_address_to_string(device_get_address(wsc->device)));
 
-	eapol_sm_set_8021x_config(sm, settings);
-	l_settings_free(settings);
+	handshake_state_set_8021x_config(hs, settings);
+	wsc->eap_settings = settings;
+
 	eapol_sm_set_use_eapol_start(sm, true);
 
-	if (netdev_connect_wsc(device_get_netdev(wsc->device), bss, sm,
+	if (netdev_connect_wsc(device_get_netdev(wsc->device), bss, hs, sm,
 					wsc_netdev_event,
 					wsc_connect_cb, wsc) < 0) {
 		eapol_sm_free(sm);
@@ -768,6 +777,9 @@ static void wsc_free(void *userdata)
 	if (wsc->pending_cancel)
 		dbus_pending_reply(&wsc->pending_cancel,
 				dbus_error_aborted(wsc->pending_cancel));
+
+	if (wsc->eap_settings)
+		l_settings_free(wsc->eap_settings);
 
 	l_free(wsc);
 }

@@ -43,6 +43,7 @@
 #include "src/ie.h"
 #include "src/mpdu.h"
 #include "src/eapol.h"
+#include "src/handshake.h"
 #include "src/crypto.h"
 #include "src/device.h"
 #include "src/scan.h"
@@ -63,6 +64,7 @@ struct netdev {
 	netdev_disconnect_cb_t disconnect_cb;
 	void *user_data;
 	struct eapol_sm *sm;
+	struct handshake_state *handshake;
 	uint8_t remote_addr[ETH_ALEN];
 	uint32_t pairwise_new_key_cmd_id;
 	uint32_t pairwise_set_key_cmd_id;
@@ -78,7 +80,6 @@ struct netdev {
 
 	bool connected : 1;
 	bool operational : 1;
-	bool eapol_active : 1;
 	bool rekey_offload_support : 1;
 };
 
@@ -278,9 +279,9 @@ static void netdev_connect_free(struct netdev *netdev)
 		netdev->sm = NULL;
 	}
 
-	if (netdev->eapol_active) {
-		eapol_cancel(netdev->index);
-		netdev->eapol_active = false;
+	if (netdev->handshake) {
+		handshake_state_free(netdev->handshake);
+		netdev->handshake = NULL;
 	}
 
 	netdev->operational = false;
@@ -987,7 +988,7 @@ static void netdev_handshake_failed(uint32_t ifindex,
 
 	l_error("4-Way Handshake failed for ifindex: %d", ifindex);
 
-	netdev->eapol_active = false;
+	netdev->sm = NULL;
 
 	netdev->result = NETDEV_RESULT_HANDSHAKE_FAILED;
 	msg = netdev_build_cmd_deauthenticate(netdev, reason_code);
@@ -1138,17 +1139,17 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 		 * in a non-RSN (12.4.2 vs. 12.4.3).
 		 */
 
-		if (netdev->mde && !netdev->sm && fte)
+		if (netdev->mde && !netdev->handshake && fte)
 			goto error;
 
-		if (netdev->mde && netdev->sm) {
+		if (netdev->mde && netdev->handshake) {
 			struct ie_ft_info ft_info;
 			uint8_t zeros[32];
 
 			if (!fte)
 				goto error;
 
-			eapol_sm_set_fte(netdev->sm, fte);
+			handshake_state_set_fte(netdev->handshake, fte);
 
 			if (ie_parse_fast_bss_transition_from_data(fte,
 								fte[1] + 2,
@@ -1168,19 +1169,19 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 					memcmp(ft_info.snonce, zeros, 32))
 				goto error;
 
-			eapol_sm_set_kh_ids(netdev->sm, ft_info.r0khid,
-						ft_info.r0khid_len,
-						ft_info.r1khid);
+			handshake_state_set_kh_ids(netdev->handshake,
+							ft_info.r0khid,
+							ft_info.r0khid_len,
+							ft_info.r1khid);
 		}
 	}
 
-	if (netdev->eapol_active) {
+	if (netdev->sm) {
 		/*
 		 * Start processing EAPoL frames now that the state machine
 		 * has all the input data even in FT mode.
 		 */
 		eapol_start(netdev->sm);
-		netdev->sm = NULL;
 
 		if (netdev->event_filter)
 			netdev->event_filter(netdev,
@@ -1229,9 +1230,11 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 		 * events can be reversed (e.g. connect_event, then PAE data)
 		 * due to scheduling
 		 */
-		if (netdev->sm) {
-			eapol_register(netdev->index, netdev->sm);
-			netdev->eapol_active = true;
+		if (netdev->handshake) {
+			if (!netdev->sm)
+				netdev->sm = eapol_sm_new(netdev->handshake);
+
+			eapol_register(netdev->sm);
 		}
 
 		return;
@@ -1242,9 +1245,9 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 }
 
 static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
-							struct scan_bss *bss,
-							struct eapol_sm *sm,
-							const uint8_t *mde)
+						struct scan_bss *bss,
+						struct handshake_state *hs,
+						const uint8_t *mde)
 {
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
@@ -1263,14 +1266,10 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 	if (bss->capability & IE_BSS_CAP_PRIVACY)
 		l_genl_msg_append_attr(msg, NL80211_ATTR_PRIVACY, 0, NULL);
 
-	if (sm) {
-		uint32_t cipher;
+	if (hs) {
 		uint32_t nl_cipher;
-		size_t ie_len;
-		const uint8_t *ie;
 
-		cipher = eapol_sm_get_pairwise_cipher(sm);
-		if (cipher == IE_RSN_CIPHER_SUITE_CCMP)
+		if (hs->pairwise_cipher == IE_RSN_CIPHER_SUITE_CCMP)
 			nl_cipher = CRYPTO_CIPHER_CCMP;
 		else
 			nl_cipher = CRYPTO_CIPHER_TKIP;
@@ -1278,8 +1277,7 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 		l_genl_msg_append_attr(msg, NL80211_ATTR_CIPHER_SUITES_PAIRWISE,
 					4, &nl_cipher);
 
-		cipher = eapol_sm_get_group_cipher(sm);
-		if (cipher == IE_RSN_CIPHER_SUITE_CCMP)
+		if (hs->group_cipher == IE_RSN_CIPHER_SUITE_CCMP)
 			nl_cipher = CRYPTO_CIPHER_CCMP;
 		else
 			nl_cipher = CRYPTO_CIPHER_TKIP;
@@ -1289,10 +1287,9 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 
 		l_genl_msg_append_attr(msg, NL80211_ATTR_CONTROL_PORT, 0, NULL);
 
-		ie = eapol_sm_get_own_ie(sm, &ie_len);
-		if (ie) {
-			iov[iov_elems].iov_base = (void *) ie;
-			iov[iov_elems].iov_len = ie_len;
+		if (hs->own_ie) {
+			iov[iov_elems].iov_base = (void *) hs->own_ie;
+			iov[iov_elems].iov_len = hs->own_ie[1] + 2;
 			iov_elems += 1;
 		}
 	}
@@ -1312,8 +1309,8 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 static int netdev_connect_common(struct netdev *netdev,
 					struct l_genl_msg *cmd_connect,
 					struct scan_bss *bss,
-					struct eapol_sm *sm,
-					const uint8_t *mde,
+					struct handshake_state *hs,
+					struct eapol_sm *sm, const uint8_t *mde,
 					netdev_event_func_t event_filter,
 					netdev_connect_cb_t cb, void *user_data)
 {
@@ -1331,18 +1328,23 @@ static int netdev_connect_common(struct netdev *netdev,
 	netdev->user_data = user_data;
 	memcpy(netdev->remote_addr, bss->addr, ETH_ALEN);
 	netdev->connected = true;
+	netdev->handshake = hs;
 	netdev->sm = sm;
 
 	if (mde)
 		netdev->mde = l_memdup(mde, mde[1] + 2);
+
+	if (hs) {
+		handshake_state_set_authenticator_address(hs, bss->addr);
+		handshake_state_set_supplicant_address(hs, netdev->addr);
+	}
 
 	return 0;
 
 }
 
 int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
-				struct eapol_sm *sm,
-				const uint8_t *mde,
+				struct handshake_state *hs, const uint8_t *mde,
 				netdev_event_func_t event_filter,
 				netdev_connect_cb_t cb, void *user_data)
 {
@@ -1351,16 +1353,16 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	if (netdev->connected)
 		return -EISCONN;
 
-	cmd_connect = netdev_build_cmd_connect(netdev, bss, sm, mde);
+	cmd_connect = netdev_build_cmd_connect(netdev, bss, hs, mde);
 	if (!cmd_connect)
 		return -EINVAL;
 
-	return netdev_connect_common(netdev, cmd_connect, bss, sm, mde,
+	return netdev_connect_common(netdev, cmd_connect, bss, hs, NULL, mde,
 						event_filter, cb, user_data);
 }
 
 int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
-				struct eapol_sm *sm,
+				struct handshake_state *hs, struct eapol_sm *sm,
 				netdev_event_func_t event_filter,
 				netdev_connect_cb_t cb, void *user_data)
 {
@@ -1394,7 +1396,7 @@ int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
 	l_genl_msg_append_attr(cmd_connect, NL80211_ATTR_IE, ie_len, ie);
 	l_free(ie);
 
-	return netdev_connect_common(netdev, cmd_connect, bss, sm, NULL,
+	return netdev_connect_common(netdev, cmd_connect, bss, hs, sm, NULL,
 						event_filter, cb, user_data);
 
 error:
@@ -1957,9 +1959,10 @@ bool netdev_init(struct l_genl_family *in,
 								NULL, NULL))
 		l_error("Registering for MLME notification failed");
 
-	__eapol_set_install_tk_func(netdev_set_tk);
-	__eapol_set_install_gtk_func(netdev_set_gtk);
-	__eapol_set_install_igtk_func(netdev_set_igtk);
+	__handshake_set_install_tk_func(netdev_set_tk);
+	__handshake_set_install_gtk_func(netdev_set_gtk);
+	__handshake_set_install_igtk_func(netdev_set_igtk);
+
 	__eapol_set_deauthenticate_func(netdev_handshake_failed);
 	__eapol_set_rekey_offload_func(netdev_set_rekey_offload);
 

@@ -48,6 +48,7 @@ enum eapol_key_descriptor_version {
 };
 
 struct eapol_sm;
+struct handshake_state;
 
 struct eapol_header {
 	uint8_t protocol_version;
@@ -108,22 +109,6 @@ typedef int (*eapol_tx_packet_func_t)(uint32_t ifindex, const uint8_t *aa,
 				const uint8_t *spa,
 				const struct eapol_frame *ef,
 				void *user_data);
-typedef bool (*eapol_get_nonce_func_t)(uint8_t nonce[]);
-typedef void (*eapol_install_tk_func_t)(uint32_t ifindex, const uint8_t *aa,
-					const uint8_t *tk, uint32_t cipher,
-					void *user_data);
-typedef void (*eapol_install_gtk_func_t)(uint32_t ifindex, uint8_t key_index,
-					const uint8_t *gtk, uint8_t gtk_len,
-					const uint8_t *rsc, uint8_t rsc_len,
-					uint32_t cipher, void *user_data);
-typedef void (*eapol_install_igtk_func_t)(uint32_t ifindex, uint8_t key_index,
-					const uint8_t *igtk, uint8_t igtk_len,
-					const uint8_t *ipn, uint8_t ipn_len,
-					uint32_t cipher, void *user_data);
-typedef void (*eapol_deauthenticate_func_t)(uint32_t ifindex, const uint8_t *aa,
-						const uint8_t *spa,
-						uint16_t reason_code,
-						void *user_data);
 typedef void (*eapol_rekey_offload_func_t)(uint32_t ifindex,
 					const uint8_t *kek,
 					const uint8_t *kck,
@@ -132,6 +117,10 @@ typedef void (*eapol_rekey_offload_func_t)(uint32_t ifindex,
 typedef void (*eapol_sm_event_func_t)(unsigned int event,
 							const void *event_data,
 							void *user_data);
+typedef void (*eapol_deauthenticate_func_t)(uint32_t ifindex, const uint8_t *aa,
+						const uint8_t *spa,
+						uint16_t reason_code,
+						void *user_data);
 
 bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 				uint8_t *mic);
@@ -176,47 +165,23 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *aa,
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func);
 void __eapol_set_tx_user_data(void *user_data);
 
-void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func);
-void __eapol_set_install_tk_func(eapol_install_tk_func_t func);
-void __eapol_set_install_gtk_func(eapol_install_gtk_func_t func);
-void __eapol_set_install_igtk_func(eapol_install_igtk_func_t func);
 void __eapol_set_deauthenticate_func(eapol_deauthenticate_func_t func);
 void __eapol_set_rekey_offload_func(eapol_rekey_offload_func_t func);
 void __eapol_update_replay_counter(uint32_t ifindex, const uint8_t *spa,
 				const uint8_t *aa, uint64_t replay_counter);
 
-struct eapol_sm *eapol_sm_new();
+struct eapol_sm *eapol_sm_new(struct handshake_state *hs);
 void eapol_sm_free(struct eapol_sm *sm);
 
 void eapol_sm_set_protocol_version(struct eapol_sm *sm,
 				enum eapol_protocol_version protocol_version);
 
-void eapol_sm_set_supplicant_address(struct eapol_sm *sm, const uint8_t *spa);
-void eapol_sm_set_authenticator_address(struct eapol_sm *sm, const uint8_t *aa);
-void eapol_sm_set_pmk(struct eapol_sm *sm, const uint8_t *pmk);
-void eapol_sm_set_8021x_config(struct eapol_sm *sm,
-				struct l_settings *settings);
 void eapol_sm_set_use_eapol_start(struct eapol_sm *sm, bool enabled);
-void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie);
-bool eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie);
-void eapol_sm_set_ap_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie);
-bool eapol_sm_set_own_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie);
 void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data);
 void eapol_sm_set_event_func(struct eapol_sm *sm, eapol_sm_event_func_t func);
-void eapol_sm_set_ssid(struct eapol_sm *sm, const uint8_t *ssid,
-			size_t ssid_len);
-void eapol_sm_set_mde(struct eapol_sm *sm, const uint8_t *mde);
-void eapol_sm_set_fte(struct eapol_sm *sm, const uint8_t *fte);
-void eapol_sm_set_kh_ids(struct eapol_sm *sm, const uint8_t *r0khid,
-				size_t r0khid_len, const uint8_t *r1khid);
 
-uint32_t eapol_sm_get_pairwise_cipher(struct eapol_sm *sm);
-uint32_t eapol_sm_get_group_cipher(struct eapol_sm *sm);
-const uint8_t *eapol_sm_get_own_ie(struct eapol_sm *sm, size_t *out_ie_len);
-
-void eapol_register(uint32_t ifindex, struct eapol_sm *sm);
+void eapol_register(struct eapol_sm *sm);
 void eapol_start(struct eapol_sm *sm);
-void eapol_cancel(uint32_t ifindex);
 
 void eapol_pae_open();
 void eapol_pae_close();

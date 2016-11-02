@@ -34,7 +34,7 @@
 #include "src/common.h"
 #include "src/util.h"
 #include "src/ie.h"
-#include "src/eapol.h"
+#include "src/handshake.h"
 #include "src/wiphy.h"
 #include "src/scan.h"
 #include "src/netdev.h"
@@ -677,7 +677,7 @@ void device_connect_network(struct device *device, struct network *network,
 	enum security security = network_get_security(network);
 	struct wiphy *wiphy = device->wiphy;
 	struct l_dbus *dbus = dbus_get_bus();
-	struct eapol_sm *sm = NULL;
+	struct handshake_state *hs = NULL;
 	bool add_mde = false;
 	uint8_t *mde;
 
@@ -718,31 +718,27 @@ void device_connect_network(struct device *device, struct network *network,
 		} else if (info.group_management_cipher != 0)
 			info.mfpc = true;
 
-		sm = eapol_sm_new();
-
-		eapol_sm_set_authenticator_address(sm, bss->addr);
-		eapol_sm_set_supplicant_address(sm,
-				netdev_get_address(device->netdev));
+		hs = handshake_state_new(netdev_get_ifindex(device->netdev));
 
 		ssid = network_get_ssid(network);
-		eapol_sm_set_ssid(sm, (void *) ssid, strlen(ssid));
+		handshake_state_set_ssid(hs, (void *) ssid, strlen(ssid));
 
 		/* RSN takes priority */
 		if (bss->rsne) {
 			ie_build_rsne(&info, rsne_buf);
-			eapol_sm_set_ap_rsn(sm, bss->rsne);
-			eapol_sm_set_own_rsn(sm, rsne_buf);
+			handshake_state_set_ap_rsn(hs, bss->rsne);
+			handshake_state_set_own_rsn(hs, rsne_buf);
 		} else {
 			ie_build_wpa(&info, rsne_buf);
-			eapol_sm_set_ap_wpa(sm, bss->wpa);
-			eapol_sm_set_own_wpa(sm, rsne_buf);
+			handshake_state_set_ap_wpa(hs, bss->wpa);
+			handshake_state_set_own_wpa(hs, rsne_buf);
 		}
 
 		if (security == SECURITY_PSK)
-			eapol_sm_set_pmk(sm, network_get_psk(network));
+			handshake_state_set_pmk(hs, network_get_psk(network));
 		else
-			eapol_sm_set_8021x_config(sm,
-					network_get_settings(network));
+			handshake_state_set_8021x_config(hs,
+						network_get_settings(network));
 
 		if (info.akm_suites & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
 					IE_RSN_AKM_SUITE_FT_USING_PSK |
@@ -762,18 +758,18 @@ void device_connect_network(struct device *device, struct network *network,
 		mde[1] = 3;
 		memcpy(mde + 2, bss->mde, 3);
 
-		if (sm)
-			eapol_sm_set_mde(sm, mde);
+		if (hs)
+			handshake_state_set_mde(hs, mde);
 	} else
 		mde = NULL;
 
 	device->connect_pending = l_dbus_message_ref(message);
 
-	if (netdev_connect(device->netdev, bss, sm, mde,
+	if (netdev_connect(device->netdev, bss, hs, mde,
 					device_netdev_event,
 					device_connect_cb, device) < 0) {
-		if (sm)
-			eapol_sm_free(sm);
+		if (hs)
+			handshake_state_free(hs);
 
 		l_free(mde);
 

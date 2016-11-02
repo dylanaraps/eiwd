@@ -41,13 +41,10 @@
 #include "util.h"
 #include "mpdu.h"
 #include "eap.h"
+#include "handshake.h"
 
 struct l_queue *state_machines;
 
-eapol_get_nonce_func_t get_nonce = NULL;
-eapol_install_tk_func_t install_tk = NULL;
-eapol_install_gtk_func_t install_gtk = NULL;
-eapol_install_igtk_func_t install_igtk = NULL;
 eapol_deauthenticate_func_t deauthenticate = NULL;
 eapol_rekey_offload_func_t rekey_offload = NULL;
 
@@ -715,56 +712,23 @@ struct eapol_buffer {
 };
 
 struct eapol_sm {
+	struct handshake_state *handshake;
 	enum eapol_protocol_version protocol_version;
-	uint32_t ifindex;
-	uint8_t spa[6];
-	uint8_t aa[6];
-	uint8_t *ap_ie;
-	uint8_t *own_ie;
-	uint8_t *mde;
-	uint8_t *fte;
-	enum ie_rsn_cipher_suite pairwise_cipher;
-	enum ie_rsn_cipher_suite group_cipher;
-	enum ie_rsn_cipher_suite group_management_cipher;
-	enum ie_rsn_akm_suite akm_suite;
-	uint8_t pmk[32];
 	uint64_t replay_counter;
-	uint8_t snonce[32];
-	uint8_t anonce[32];
-	uint8_t ptk[64];
-	uint8_t pmk_r0[32];
-	uint8_t pmk_r0_name[16];
-	uint8_t pmk_r1[32];
-	uint8_t pmk_r1_name[16];
 	eapol_sm_event_func_t event_func;
 	void *user_data;
 	struct l_timeout *timeout;
 	struct l_timeout *eapol_start_timeout;
-	bool have_snonce:1;
 	bool have_replay:1;
-	bool ptk_complete:1;
-	bool wpa_ie:1;
-	bool have_pmk:1;
 	bool started:1;
 	bool use_eapol_start:1;
-	bool mfpc:1;
 	struct eap_state *eap;
 	struct eapol_buffer *early_frame;
-	uint8_t ssid[32];
-	size_t ssid_len;
-	uint8_t r0khid[48];
-	size_t r0khid_len;
-	uint8_t r1khid[6];
 };
 
 static void eapol_sm_destroy(void *value)
 {
 	struct eapol_sm *sm = value;
-
-	l_free(sm->ap_ie);
-	l_free(sm->own_ie);
-	l_free(sm->mde);
-	l_free(sm->fte);
 
 	l_timeout_remove(sm->timeout);
 	l_timeout_remove(sm->eapol_start_timeout);
@@ -775,13 +739,17 @@ static void eapol_sm_destroy(void *value)
 	l_free(sm->early_frame);
 
 	l_free(sm);
+
+	l_queue_remove(state_machines, sm);
 }
 
-struct eapol_sm *eapol_sm_new()
+struct eapol_sm *eapol_sm_new(struct handshake_state *hs)
 {
 	struct eapol_sm *sm;
 
 	sm = l_new(struct eapol_sm, 1);
+
+	sm->handshake = hs;
 
 	return sm;
 }
@@ -797,90 +765,6 @@ void eapol_sm_set_protocol_version(struct eapol_sm *sm,
 	sm->protocol_version = protocol_version;
 }
 
-void eapol_sm_set_supplicant_address(struct eapol_sm *sm, const uint8_t *spa)
-{
-	memcpy(sm->spa, spa, sizeof(sm->spa));
-}
-
-void eapol_sm_set_authenticator_address(struct eapol_sm *sm, const uint8_t *aa)
-{
-	memcpy(sm->aa, aa, sizeof(sm->aa));
-}
-
-void eapol_sm_set_pmk(struct eapol_sm *sm, const uint8_t *pmk)
-{
-	memcpy(sm->pmk, pmk, sizeof(sm->pmk));
-	sm->have_pmk = true;
-}
-
-static void eapol_sm_set_ap_ie(struct eapol_sm *sm, const uint8_t *ie,
-				bool is_wpa)
-{
-	l_free(sm->ap_ie);
-	sm->ap_ie = l_memdup(ie, ie[1] + 2u);
-	sm->wpa_ie = is_wpa;
-}
-
-static void eapol_sm_set_own_ie(struct eapol_sm *sm, const uint8_t *ie,
-				bool is_wpa)
-{
-	l_free(sm->own_ie);
-	sm->own_ie = l_memdup(ie, ie[1] + 2u);
-	sm->wpa_ie = is_wpa;
-}
-
-void eapol_sm_set_ap_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie)
-{
-	eapol_sm_set_ap_ie(sm, rsn_ie, false);
-}
-
-static bool eapol_sm_setup_own_ciphers(struct eapol_sm *sm,
-				const struct ie_rsn_info *info)
-{
-	if (__builtin_popcount(info->pairwise_ciphers) != 1)
-		return false;
-
-	if (__builtin_popcount(info->akm_suites) != 1)
-		return false;
-
-	sm->akm_suite = info->akm_suites;
-	sm->pairwise_cipher = info->pairwise_ciphers;
-	sm->group_cipher = info->group_cipher;
-	sm->group_management_cipher = info->group_management_cipher;
-
-	sm->mfpc = info->mfpc;
-	return true;
-}
-
-bool eapol_sm_set_own_rsn(struct eapol_sm *sm, const uint8_t *rsn_ie)
-{
-	struct ie_rsn_info info;
-
-	eapol_sm_set_own_ie(sm, rsn_ie, false);
-
-	if (ie_parse_rsne_from_data(rsn_ie, rsn_ie[1] + 2, &info) < 0)
-		return false;
-
-	return eapol_sm_setup_own_ciphers(sm, &info);
-}
-
-void eapol_sm_set_ap_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie)
-{
-	eapol_sm_set_ap_ie(sm, wpa_ie, true);
-}
-
-bool eapol_sm_set_own_wpa(struct eapol_sm *sm, const uint8_t *wpa_ie)
-{
-	struct ie_rsn_info info;
-
-	eapol_sm_set_own_ie(sm, wpa_ie, true);
-
-	if (ie_parse_wpa_from_data(wpa_ie, wpa_ie[1] + 2, &info) < 0)
-		return false;
-
-	return eapol_sm_setup_own_ciphers(sm, &info);
-}
-
 void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data)
 {
 	sm->user_data = user_data;
@@ -891,78 +775,13 @@ void eapol_sm_set_event_func(struct eapol_sm *sm, eapol_sm_event_func_t func)
 	sm->event_func = func;
 }
 
-void eapol_sm_set_ssid(struct eapol_sm *sm, const uint8_t *ssid,
-			size_t ssid_len)
-{
-	memcpy(sm->ssid, ssid, ssid_len);
-	sm->ssid_len = ssid_len;
-}
-
-void eapol_sm_set_mde(struct eapol_sm *sm, const uint8_t *mde)
-{
-	if (sm->mde)
-		l_free(sm->mde);
-
-	sm->mde = mde ? l_memdup(mde, mde[1] + 2) : NULL;
-}
-
-void eapol_sm_set_fte(struct eapol_sm *sm, const uint8_t *fte)
-{
-	if (sm->fte)
-		l_free(sm->fte);
-
-	sm->fte = fte ? l_memdup(fte, fte[1] + 2) : NULL;
-}
-
-void eapol_sm_set_kh_ids(struct eapol_sm *sm, const uint8_t *r0khid,
-				size_t r0khid_len, const uint8_t *r1khid)
-{
-	memcpy(sm->r0khid, r0khid, r0khid_len);
-	sm->r0khid_len = r0khid_len;
-
-	memcpy(sm->r1khid, r1khid, 6);
-}
-
-uint32_t eapol_sm_get_pairwise_cipher(struct eapol_sm *sm)
-{
-	return sm->pairwise_cipher;
-}
-
-uint32_t eapol_sm_get_group_cipher(struct eapol_sm *sm)
-{
-	return sm->group_cipher;
-}
-
-const uint8_t *eapol_sm_get_own_ie(struct eapol_sm *sm, size_t *out_ie_len)
-{
-	if (!sm->own_ie)
-		return NULL;
-
-	*out_ie_len = sm->own_ie[1] + 2;
-	return sm->own_ie;
-}
-
-static bool eapol_sm_ifindex_match(void *data, void *user_data)
-{
-	struct eapol_sm *sm = data;
-	uint32_t ifindex = L_PTR_TO_UINT(user_data);
-
-	if (sm->ifindex != ifindex)
-		return false;
-
-	eapol_sm_free(sm);
-
-	return true;
-}
-
-static inline void handshake_failed(uint32_t ifindex, struct eapol_sm *sm,
-					uint16_t reason_code)
+static inline void handshake_failed(struct eapol_sm *sm, uint16_t reason_code)
 {
 	if (deauthenticate)
-		deauthenticate(ifindex, sm->aa, sm->spa, reason_code,
-				sm->user_data);
+		deauthenticate(sm->handshake->ifindex,
+				sm->handshake->aa, sm->handshake->spa,
+				reason_code, sm->user_data);
 
-	l_queue_remove(state_machines, sm);
 	eapol_sm_free(sm);
 }
 
@@ -971,8 +790,13 @@ static void eapol_timeout(struct l_timeout *timeout, void *user_data)
 	struct eapol_sm *sm = user_data;
 
 	sm->timeout = NULL;
-	handshake_failed(sm->ifindex, sm,
-				MPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT);
+	handshake_failed(sm, MPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT);
+}
+
+static void eapol_write(struct eapol_sm *sm, const struct eapol_frame *ef)
+{
+	pae_write(sm->handshake->ifindex,
+			sm->handshake->aa, sm->handshake->spa, ef);
 }
 
 static void send_eapol_start(struct l_timeout *timeout, void *user_data)
@@ -991,72 +815,36 @@ static void send_eapol_start(struct l_timeout *timeout, void *user_data)
 	frame->header.packet_type = 1;
 	l_put_be16(0, &frame->header.packet_len);
 
-	pae_write(sm->ifindex, sm->aa, sm->spa, frame);
+	eapol_write(sm, frame);
 }
 
-static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
+static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 					const struct eapol_key *ek)
 {
-	struct crypto_ptk *ptk = (struct crypto_ptk *) sm->ptk;
+	const struct crypto_ptk *ptk;
 	struct eapol_key *step2;
 	uint8_t mic[16];
-	bool use_sha256;
 	uint8_t *ies;
 	size_t ies_len;
-	enum crypto_cipher cipher;
-	size_t ptk_size;
+	const uint8_t *own_ie = sm->handshake->own_ie;
 
 	if (!eapol_verify_ptk_1_of_4(ek))
 		goto error_unspecified;
 
-	if (!get_nonce(sm->snonce))
+	handshake_state_new_snonce(sm->handshake);
+
+	handshake_state_set_anonce(sm->handshake, ek->key_nonce);
+
+	if (!handshake_state_derive_ptk(sm->handshake))
 		goto error_unspecified;
 
-	sm->have_snonce = true;
-	sm->ptk_complete = false;
-
-	memcpy(sm->anonce, ek->key_nonce, sizeof(ek->key_nonce));
-
-	if (sm->akm_suite & (IE_RSN_AKM_SUITE_8021X_SHA256 |
-			IE_RSN_AKM_SUITE_PSK_SHA256 |
-			IE_RSN_AKM_SUITE_SAE_SHA256 |
-			IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256))
-		use_sha256 = true;
-	else
-		use_sha256 = false;
-
-	cipher = ie_rsn_cipher_suite_to_cipher(sm->pairwise_cipher);
-
-	ptk_size = sizeof(struct crypto_ptk) + crypto_cipher_key_len(cipher);
-
-	if (sm->akm_suite & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
-				IE_RSN_AKM_SUITE_FT_USING_PSK |
-				IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256)) {
-		uint16_t mdid;
-		uint8_t ptk_name[16];
+	if (sm->handshake->akm_suite &
+			(IE_RSN_AKM_SUITE_FT_OVER_8021X |
+			 IE_RSN_AKM_SUITE_FT_USING_PSK |
+			 IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256)) {
 		struct ie_rsn_info rsn_info;
-
-		if (!sm->mde || !sm->fte)
-			goto error_unspecified;
-
-		ie_parse_mobility_domain_from_data(sm->mde, sm->mde[1] + 2,
-							&mdid, NULL, NULL);
-
-		if (!crypto_derive_pmk_r0(sm->pmk, sm->ssid, sm->ssid_len, mdid,
-						sm->r0khid, sm->r0khid_len,
-						sm->spa,
-						sm->pmk_r0, sm->pmk_r0_name))
-			goto error_unspecified;
-
-		if (!crypto_derive_pmk_r1(sm->pmk_r0, sm->r1khid, sm->spa,
-						sm->pmk_r0_name,
-						sm->pmk_r1, sm->pmk_r1_name))
-			goto error_unspecified;
-
-		if (!crypto_derive_ft_ptk(sm->pmk_r1, sm->pmk_r1_name, sm->aa,
-						sm->spa, sm->snonce, sm->anonce,
-						ptk, ptk_size, ptk_name))
-			goto error_unspecified;
+		const uint8_t *mde = sm->handshake->mde;
+		const uint8_t *fte = sm->handshake->fte;
 
 		/*
 		 * Rebuild the RSNE to include the PMKR1Name and append
@@ -1064,47 +852,45 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 		 */
 		ies = alloca(512);
 
-		if (ie_parse_rsne_from_data(sm->own_ie, sm->own_ie[1] + 2,
+		if (ie_parse_rsne_from_data(own_ie, own_ie[1] + 2,
 						&rsn_info) < 0)
 			goto error_unspecified;
 
 		rsn_info.num_pmkids = 1;
-		rsn_info.pmkids = sm->pmk_r1_name;
+		rsn_info.pmkids = sm->handshake->pmk_r1_name;
 
 		ie_build_rsne(&rsn_info, ies);
 		ies_len = ies[1] + 2;
 
-		memcpy(ies + ies_len, sm->mde, sm->mde[1] + 2);
-		ies_len += sm->mde[1] + 2;
+		memcpy(ies + ies_len, mde, mde[1] + 2);
+		ies_len += mde[1] + 2;
 
-		memcpy(ies + ies_len, sm->fte, sm->fte[1] + 2);
-		ies_len += sm->fte[1] + 2;
+		memcpy(ies + ies_len, fte, fte[1] + 2);
+		ies_len += fte[1] + 2;
 	} else {
-		crypto_derive_pairwise_ptk(sm->pmk, sm->spa, sm->aa,
-						sm->anonce, sm->snonce,
-						ptk, ptk_size, use_sha256);
-
-		ies_len = sm->own_ie[1] + 2;
-		ies = sm->own_ie;
+		ies_len = own_ie[1] + 2;
+		ies = (uint8_t *) own_ie;
 	}
 
 	step2 = eapol_create_ptk_2_of_4(sm->protocol_version,
 					ek->key_descriptor_version,
 					sm->replay_counter,
-					sm->snonce,
-					ies_len, ies, sm->wpa_ie);
+					sm->handshake->snonce, ies_len, ies,
+					sm->handshake->wpa_ie);
+
+	ptk = handshake_state_get_ptk(sm->handshake);
 
 	if (!eapol_calculate_mic(ptk->kck, step2, mic)) {
 		l_info("MIC calculation failed. "
 			"Ensure Kernel Crypto is available.");
 		l_free(step2);
-		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
+		handshake_failed(sm, MPDU_REASON_CODE_UNSPECIFIED);
 
 		return;
 	}
 
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
-	pae_write(sm->ifindex, sm->aa, sm->spa, (struct eapol_frame *) step2);
+	eapol_write(sm, (struct eapol_frame *) step2);
 	l_free(step2);
 
 	l_timeout_remove(sm->timeout);
@@ -1113,59 +899,8 @@ static void eapol_handle_ptk_1_of_4(uint32_t ifindex, struct eapol_sm *sm,
 	return;
 
 error_unspecified:
-	handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
+	handshake_failed(sm, MPDU_REASON_CODE_UNSPECIFIED);
 }
-
-static const uint8_t *eapol_find_kde(const uint8_t *data, size_t data_len,
-						size_t *out_len,
-						const unsigned char *oui)
-{
-	struct ie_tlv_iter iter;
-	const uint8_t *result;
-	unsigned int len;
-
-	ie_tlv_iter_init(&iter, data, data_len);
-
-	while (ie_tlv_iter_next(&iter)) {
-		if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_VENDOR_SPECIFIC)
-			continue;
-
-		len = ie_tlv_iter_get_length(&iter);
-		if (len < 4)		/* Take care of padding */
-			return NULL;
-
-		/* Check OUI */
-		result = ie_tlv_iter_get_data(&iter);
-		if (memcmp(result, oui, 4))
-			continue;
-
-		if (out_len)
-			*out_len = len - 4;
-
-		return result + 4;
-	}
-
-	return NULL;
-}
-
-static const uint8_t *eapol_find_gtk_kde(const uint8_t *data, size_t data_len,
-						size_t *out_gtk_len)
-{
-	static const unsigned char gtk_oui[] = { 0x00, 0x0f, 0xac, 0x01 };
-
-	return eapol_find_kde(data, data_len,
-				out_gtk_len, gtk_oui);
-}
-
-static const uint8_t *eapol_find_igtk_kde(const uint8_t *data, size_t data_len,
-						size_t *out_igtk_len)
-{
-	static const unsigned char igtk_oui[] = { 0x00, 0x0f, 0xac, 0x09 };
-
-	return eapol_find_kde(data, data_len,
-				out_igtk_len, igtk_oui);
-}
-
 
 static const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len,
 					const uint8_t **optional)
@@ -1211,105 +946,12 @@ static const uint8_t *eapol_find_wpa_ie(const uint8_t *data, size_t data_len)
 	return NULL;
 }
 
-/*
- * This function performs a match of the RSN/WPA IE obtained from the scan
- * results vs the RSN/WPA IE obtained as part of the 4-way handshake.  If they
- * don't match, the EAPoL packet must be silently discarded.
- */
-static bool eapol_ap_ie_matches(const uint8_t *eapol_ie,
-				const uint8_t *scan_ie, bool is_wpa)
-{
-	struct ie_rsn_info eapol_info;
-	struct ie_rsn_info scan_info;
-
-	/*
-	 * First check that the sizes match, if they do, run a bitwise
-	 * comparison.
-	 */
-	if (eapol_ie[1] == scan_ie[1] &&
-			!memcmp(eapol_ie + 2, scan_ie + 2, eapol_ie[1]))
-		return true;
-
-	/*
-	 * Otherwise we have to parse the IEs and compare the individual
-	 * fields
-	 */
-	if (!is_wpa) {
-		if (ie_parse_rsne_from_data(eapol_ie, eapol_ie[1] + 2,
-						&eapol_info) < 0)
-			return false;
-
-		if (ie_parse_rsne_from_data(scan_ie, scan_ie[1] + 2,
-						&scan_info) < 0)
-			return false;
-	} else {
-		if (ie_parse_wpa_from_data(eapol_ie, eapol_ie[1] + 2,
-						&eapol_info) < 0)
-			return false;
-
-		if (ie_parse_wpa_from_data(scan_ie, scan_ie[1] + 2,
-						&scan_info) < 0)
-			return false;
-	}
-
-	if (eapol_info.group_cipher != scan_info.group_cipher)
-		return false;
-
-	if (eapol_info.pairwise_ciphers != scan_info.pairwise_ciphers)
-		return false;
-
-	if (eapol_info.akm_suites != scan_info.akm_suites)
-		return false;
-
-	if (eapol_info.preauthentication != scan_info.preauthentication)
-		return false;
-
-	if (eapol_info.no_pairwise != scan_info.no_pairwise)
-		return false;
-
-	if (eapol_info.ptksa_replay_counter != scan_info.ptksa_replay_counter)
-		return false;
-
-	if (eapol_info.gtksa_replay_counter != scan_info.gtksa_replay_counter)
-		return false;
-
-	if (eapol_info.mfpr != scan_info.mfpr)
-		return false;
-
-	if (eapol_info.mfpc != scan_info.mfpc)
-		return false;
-
-	if (eapol_info.peerkey_enabled != scan_info.peerkey_enabled)
-		return false;
-
-	if (eapol_info.spp_a_msdu_capable != scan_info.spp_a_msdu_capable)
-		return false;
-
-	if (eapol_info.spp_a_msdu_required != scan_info.spp_a_msdu_required)
-		return false;
-
-	if (eapol_info.pbac != scan_info.pbac)
-		return false;
-
-	if (eapol_info.extended_key_id != scan_info.extended_key_id)
-		return false;
-
-	/* We don't check the PMKIDs since these might actually be different */
-
-	if (eapol_info.group_management_cipher !=
-			scan_info.group_management_cipher)
-		return false;
-
-	return true;
-}
-
-static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
-					struct eapol_sm *sm,
+static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 					const struct eapol_key *ek,
 					const uint8_t *decrypted_key_data,
 					size_t decrypted_key_data_size)
 {
-	struct crypto_ptk *ptk = (struct crypto_ptk *) sm->ptk;
+	const struct crypto_ptk *ptk;
 	struct eapol_key *step4;
 	uint8_t mic[16];
 	const uint8_t *gtk;
@@ -1320,10 +962,9 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	const uint8_t *optional_rsne = NULL;
 	uint8_t gtk_key_index;
 	uint8_t igtk_key_index;
-	enum ie_rsn_cipher_suite pairwise = sm->pairwise_cipher;
 
-	if (!eapol_verify_ptk_3_of_4(ek, sm->wpa_ie)) {
-		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
+	if (!eapol_verify_ptk_3_of_4(ek, sm->handshake->wpa_ie)) {
+		handshake_failed(sm, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
 
@@ -1332,7 +973,7 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	 * discards the message if ... or if the ANonce value in Message 3
 	 * differs from the ANonce value in Message 1"
 	 */
-	if (memcmp(sm->anonce, ek->key_nonce, sizeof(ek->key_nonce)))
+	if (memcmp(sm->handshake->anonce, ek->key_nonce, sizeof(ek->key_nonce)))
 		return;
 
 	/*
@@ -1341,7 +982,7 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	 * not identical to that the STA received in the Beacon or Probe
 	 * Response frame, the STA shall disassociate.
 	 */
-	if (!sm->wpa_ie)
+	if (!sm->handshake->wpa_ie)
 		rsne = eapol_find_rsne(decrypted_key_data,
 					decrypted_key_data_size,
 					&optional_rsne);
@@ -1352,19 +993,23 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	if (!rsne)
 		goto error_ie_different;
 
-	if (!eapol_ap_ie_matches(rsne, sm->ap_ie, sm->wpa_ie))
+	if (!handshake_util_ap_ie_matches(rsne, sm->handshake->ap_ie,
+						sm->handshake->wpa_ie))
 		goto error_ie_different;
 
-	if (sm->akm_suite & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
-				IE_RSN_AKM_SUITE_FT_USING_PSK |
-				IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256)) {
+	if (sm->handshake->akm_suite &
+			(IE_RSN_AKM_SUITE_FT_OVER_8021X |
+			 IE_RSN_AKM_SUITE_FT_USING_PSK |
+			 IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256)) {
 		struct ie_tlv_iter iter;
 		struct ie_rsn_info ie_info;
+		const uint8_t *mde = sm->handshake->mde;
+		const uint8_t *fte = sm->handshake->fte;
 
 		ie_parse_rsne_from_data(rsne, rsne[1] + 2, &ie_info);
 
 		if (ie_info.num_pmkids != 1 || memcmp(ie_info.pmkids,
-							sm->pmk_r1_name, 16))
+						sm->handshake->pmk_r1_name, 16))
 			goto error_ie_different;
 
 		ie_tlv_iter_init(&iter, decrypted_key_data,
@@ -1374,14 +1019,14 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 			switch (ie_tlv_iter_get_tag(&iter)) {
 			case IE_TYPE_MOBILITY_DOMAIN:
 				if (memcmp(ie_tlv_iter_get_data(&iter) - 2,
-						sm->mde, sm->mde[1] + 2))
+						mde, mde[1] + 2))
 					goto error_ie_different;
 
 				break;
 
 			case IE_TYPE_FAST_BSS_TRANSITION:
 				if (memcmp(ie_tlv_iter_get_data(&iter) - 2,
-						sm->fte, sm->fte[1] + 2))
+						fte, fte[1] + 2))
 					goto error_ie_different;
 
 				break;
@@ -1433,24 +1078,24 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 		if (override == info1.pairwise_ciphers ||
 				!(info1.pairwise_ciphers & override) ||
 				__builtin_popcount(override) != 1) {
-			handshake_failed(ifindex, sm,
+			handshake_failed(sm,
 				MPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER);
 			return;
 		}
 
-		pairwise = override;
+		handshake_state_override_pairwise_cipher(sm->handshake,
+								override);
 	}
 
 	/*
 	 * TODO: Handle IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC case
 	 */
-	if (!sm->wpa_ie) {
-		gtk = eapol_find_gtk_kde(decrypted_key_data,
-						decrypted_key_data_size,
-						&gtk_len);
+	if (!sm->handshake->wpa_ie) {
+		gtk = handshake_util_find_gtk_kde(decrypted_key_data,
+							decrypted_key_data_size,
+							&gtk_len);
 		if (!gtk || gtk_len < 8) {
-			handshake_failed(ifindex, sm,
-						MPDU_REASON_CODE_UNSPECIFIED);
+			handshake_failed(sm, MPDU_REASON_CODE_UNSPECIFIED);
 			return;
 		}
 
@@ -1462,13 +1107,12 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 	} else
 		gtk = NULL;
 
-	if (sm->mfpc) {
-		igtk = eapol_find_igtk_kde(decrypted_key_data,
-					decrypted_key_data_size,
-					&igtk_len);
+	if (sm->handshake->mfp) {
+		igtk = handshake_util_find_igtk_kde(decrypted_key_data,
+							decrypted_key_data_size,
+							&igtk_len);
 		if (!igtk || igtk_len < 8) {
-			handshake_failed(ifindex, sm,
-				MPDU_REASON_CODE_UNSPECIFIED);
+			handshake_failed(sm, MPDU_REASON_CODE_UNSPECIFIED);
 			return;
 		}
 
@@ -1480,7 +1124,10 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 
 	step4 = eapol_create_ptk_4_of_4(sm->protocol_version,
 					ek->key_descriptor_version,
-					sm->replay_counter, sm->wpa_ie);
+					sm->replay_counter,
+					sm->handshake->wpa_ie);
+
+	ptk = handshake_state_get_ptk(sm->handshake);
 
 	/*
 	 * 802.11-2012, Section 11.6.6.4, step b):
@@ -1492,37 +1139,21 @@ static void eapol_handle_ptk_3_of_4(uint32_t ifindex,
 		goto fail;
 
 	memcpy(step4->key_mic_data, mic, sizeof(mic));
-	pae_write(sm->ifindex, sm->aa, sm->spa, (struct eapol_frame *) step4);
+	eapol_write(sm, (struct eapol_frame *) step4);
 
-	sm->ptk_complete = true;
+	handshake_state_install_ptk(sm->handshake);
 
-	if (install_tk) {
-		uint32_t cipher = ie_rsn_cipher_suite_to_cipher(pairwise);
+	if (gtk)
+		handshake_state_install_gtk(sm->handshake, gtk_key_index,
+						gtk, gtk_len, ek->key_rsc, 6);
 
-		install_tk(sm->ifindex, sm->aa, ptk->tk, cipher, sm->user_data);
-	}
-
-	if (gtk && install_gtk) {
-		uint32_t cipher =
-			ie_rsn_cipher_suite_to_cipher(sm->group_cipher);
-
-		install_gtk(sm->ifindex, gtk_key_index, gtk, gtk_len,
-				ek->key_rsc, 6, cipher, sm->user_data);
-	}
-
-	if (igtk && install_igtk) {
-		uint32_t cipher =
-			ie_rsn_cipher_suite_to_cipher(
-				sm->group_management_cipher);
-
-		install_igtk(sm->ifindex, igtk_key_index, igtk + 6,
-				igtk_len - 6, igtk, 6, cipher,
-				sm->user_data);
-	}
+	if (igtk)
+		handshake_state_install_igtk(sm->handshake, igtk_key_index,
+						igtk, igtk_len);
 
 	if (rekey_offload)
-		rekey_offload(sm->ifindex, ptk->kek, ptk->kck,
-			sm->replay_counter, sm->user_data);
+		rekey_offload(sm->handshake->ifindex, ptk->kek, ptk->kck,
+				sm->replay_counter, sm->user_data);
 
 fail:
 	l_free(step4);
@@ -1530,16 +1161,15 @@ fail:
 	return;
 
 error_ie_different:
-	handshake_failed(ifindex, sm, MPDU_REASON_CODE_IE_DIFFERENT);
+	handshake_failed(sm, MPDU_REASON_CODE_IE_DIFFERENT);
 }
 
-static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
-					struct eapol_sm *sm,
+static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 					const struct eapol_key *ek,
 					const uint8_t *decrypted_key_data,
 					size_t decrypted_key_data_size)
 {
-	struct crypto_ptk *ptk = (struct crypto_ptk *) sm->ptk;
+	const struct crypto_ptk *ptk;
 	struct eapol_key *step2;
 	uint8_t mic[16];
 	const uint8_t *gtk;
@@ -1549,15 +1179,15 @@ static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
 	size_t igtk_len;
 	uint8_t igtk_key_index;
 
-	if (!eapol_verify_gtk_1_of_2(ek, sm->wpa_ie)) {
-		handshake_failed(ifindex, sm, MPDU_REASON_CODE_UNSPECIFIED);
+	if (!eapol_verify_gtk_1_of_2(ek, sm->handshake->wpa_ie)) {
+		handshake_failed(sm, MPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
 
-	if (!sm->wpa_ie) {
-		gtk = eapol_find_gtk_kde(decrypted_key_data,
-						decrypted_key_data_size,
-						&gtk_len);
+	if (!sm->handshake->wpa_ie) {
+		gtk = handshake_util_find_gtk_kde(decrypted_key_data,
+							decrypted_key_data_size,
+							&gtk_len);
 
 		if (!gtk || gtk_len < 8)
 			return;
@@ -1569,17 +1199,17 @@ static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
 			return;
 	}
 
-	if (!sm->wpa_ie) {
+	if (!sm->handshake->wpa_ie) {
 		gtk_key_index = util_bit_field(gtk[0], 0, 2);
 		gtk += 2;
 		gtk_len -= 2;
 	} else
 		gtk_key_index = ek->wpa_key_id;
 
-	if (sm->mfpc) {
-		igtk = eapol_find_igtk_kde(decrypted_key_data,
-					decrypted_key_data_size,
-					&igtk_len);
+	if (sm->handshake->mfp) {
+		igtk = handshake_util_find_igtk_kde(decrypted_key_data,
+							decrypted_key_data_size,
+							&igtk_len);
 		if (!igtk || igtk_len < 8)
 			return;
 
@@ -1591,38 +1221,28 @@ static void eapol_handle_gtk_1_of_2(uint32_t ifindex,
 
 	step2 = eapol_create_gtk_2_of_2(sm->protocol_version,
 					ek->key_descriptor_version,
-					sm->replay_counter, sm->wpa_ie,
-					ek->wpa_key_id);
+					sm->replay_counter,
+					sm->handshake->wpa_ie, ek->wpa_key_id);
 
 	/*
 	 * 802.11-2012, Section 11.6.7.3, step b):
 	 * Verifies that the MIC is valid, i.e., it uses the KCK that is
 	 * part of the PTK to verify that there is no data integrity error.
 	 */
-	ptk = (struct crypto_ptk *) sm->ptk;
+	ptk = handshake_state_get_ptk(sm->handshake);
 
 	if (!eapol_calculate_mic(ptk->kck, step2, mic))
 		goto done;
 
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
-	pae_write(sm->ifindex, sm->aa, sm->spa, (struct eapol_frame *) step2);
+	eapol_write(sm, (struct eapol_frame *) step2);
 
-	if (install_gtk) {
-		uint32_t cipher =
-			ie_rsn_cipher_suite_to_cipher(sm->group_cipher);
+	handshake_state_install_gtk(sm->handshake, gtk_key_index,
+					gtk, gtk_len, ek->key_rsc, 6);
 
-		install_gtk(sm->ifindex, gtk_key_index, gtk, gtk_len,
-				ek->key_rsc, 6, cipher, sm->user_data);
-	}
-
-	if (igtk && install_igtk) {
-		uint32_t cipher =
-			ie_rsn_cipher_suite_to_cipher(
-				sm->group_management_cipher);
-
-		install_igtk(sm->ifindex, igtk_key_index, igtk + 6,
-				igtk_len - 6, igtk, 6, cipher,
-				sm->user_data);
+	if (igtk) {
+		handshake_state_install_igtk(sm->handshake, igtk_key_index,
+						igtk, igtk_len);
 	}
 
 done:
@@ -1638,10 +1258,10 @@ static struct eapol_sm *eapol_find_sm(uint32_t ifindex, const uint8_t *aa)
 					entry = entry->next) {
 		sm = entry->data;
 
-		if (sm->ifindex != ifindex)
+		if (sm->handshake->ifindex != ifindex)
 			continue;
 
-		if (memcmp(sm->aa, aa, ETH_ALEN))
+		if (memcmp(sm->handshake->aa, aa, ETH_ALEN))
 			continue;
 
 		return sm;
@@ -1650,11 +1270,11 @@ static struct eapol_sm *eapol_find_sm(uint32_t ifindex, const uint8_t *aa)
 	return NULL;
 }
 
-static void eapol_key_handle(struct eapol_sm *sm, uint32_t ifindex,
+static void eapol_key_handle(struct eapol_sm *sm,
 				const uint8_t *frame, size_t len)
 {
 	const struct eapol_key *ek;
-	struct crypto_ptk *ptk;
+	const struct crypto_ptk *ptk;
 	uint8_t *decrypted_key_data = NULL;
 	size_t key_data_len = 0;
 	uint64_t replay_counter;
@@ -1668,9 +1288,11 @@ static void eapol_key_handle(struct eapol_sm *sm, uint32_t ifindex,
 		return;
 
 	/* Further Descriptor Type check */
-	if (!sm->wpa_ie && ek->descriptor_type != EAPOL_DESCRIPTOR_TYPE_80211)
+	if (!sm->handshake->wpa_ie &&
+			ek->descriptor_type != EAPOL_DESCRIPTOR_TYPE_80211)
 		return;
-	else if (sm->wpa_ie && ek->descriptor_type != EAPOL_DESCRIPTOR_TYPE_WPA)
+	else if (sm->handshake->wpa_ie &&
+			ek->descriptor_type != EAPOL_DESCRIPTOR_TYPE_WPA)
 		return;
 
 	replay_counter = L_BE64_TO_CPU(ek->key_replay_counter);
@@ -1690,21 +1312,21 @@ static void eapol_key_handle(struct eapol_sm *sm, uint32_t ifindex,
 	sm->replay_counter = replay_counter;
 	sm->have_replay = true;
 
-	ptk = (struct crypto_ptk *) sm->ptk;
+	ptk = handshake_state_get_ptk(sm->handshake);
 
 	if (ek->key_mic) {
 		/* Haven't received step 1 yet, so no ptk */
-		if (!sm->have_snonce)
+		if (!sm->handshake->have_snonce)
 			return;
 
 		if (!eapol_verify_mic(ptk->kck, ek))
 			return;
 	}
 
-	if ((ek->encrypted_key_data && !sm->wpa_ie) ||
-			(ek->key_type == 0 && sm->wpa_ie)) {
+	if ((ek->encrypted_key_data && !sm->handshake->wpa_ie) ||
+			(ek->key_type == 0 && sm->handshake->wpa_ie)) {
 		/* Haven't received step 1 yet, so no ptk */
-		if (!sm->have_snonce)
+		if (!sm->handshake->have_snonce)
 			return;
 
 		decrypted_key_data = eapol_decrypt_key_data(ptk->kek, ek,
@@ -1716,29 +1338,28 @@ static void eapol_key_handle(struct eapol_sm *sm, uint32_t ifindex,
 
 	if (ek->key_type == 0) {
 		/* Only GTK handshake allowed after PTK handshake complete */
-		if (!sm->ptk_complete)
+		if (!sm->handshake->ptk_complete)
 			goto done;
 
 		if (!decrypted_key_data)
 			goto done;
 
-		eapol_handle_gtk_1_of_2(ifindex, sm, ek,
-					decrypted_key_data,
+		eapol_handle_gtk_1_of_2(sm, ek, decrypted_key_data,
 					key_data_len);
 		goto done;
 	}
 
 	/* If no MIC, then assume packet 1, otherwise packet 3 */
 	if (!ek->key_mic)
-		eapol_handle_ptk_1_of_4(ifindex, sm, ek);
+		eapol_handle_ptk_1_of_4(sm, ek);
 	else {
-		if (sm->ptk_complete)
+		if (sm->handshake->ptk_complete)
 			goto done;
 
 		if (!key_data_len)
 			goto done;
 
-		eapol_handle_ptk_3_of_4(ifindex, sm, ek,
+		eapol_handle_ptk_3_of_4(sm, ek,
 					decrypted_key_data ?: ek->key_data,
 					key_data_len);
 	}
@@ -1761,7 +1382,7 @@ static void eapol_eap_msg_cb(const uint8_t *eap_data, size_t len,
 
 	memcpy(frame->data, eap_data, len);
 
-	pae_write(sm->ifindex, sm->aa, sm->spa, frame);
+	eapol_write(sm, frame);
 }
 
 /* This respresentes the eapTimout, eapFail and eapSuccess messages */
@@ -1777,8 +1398,7 @@ static void eapol_eap_complete_cb(enum eap_result result, void *user_data)
 	sm->eap = NULL;
 
 	if (result != EAP_RESULT_SUCCESS)
-		handshake_failed(sm->ifindex, sm,
-					MPDU_REASON_CODE_IEEE8021X_FAILED);
+		handshake_failed(sm, MPDU_REASON_CODE_IEEE8021X_FAILED);
 }
 
 /* This respresentes the eapResults message */
@@ -1812,10 +1432,10 @@ static void eapol_eap_results_cb(const uint8_t *msk_data, size_t msk_len,
 	 *    802.1X authentication), i.e., XXKey = L(MSK, 256, 256)."
 	 */
 
-	if (sm->akm_suite == IE_RSN_AKM_SUITE_FT_OVER_8021X)
-		eapol_sm_set_pmk(sm, msk_data + 32);
+	if (sm->handshake->akm_suite == IE_RSN_AKM_SUITE_FT_OVER_8021X)
+		handshake_state_set_pmk(sm->handshake, msk_data + 32);
 	else
-		eapol_sm_set_pmk(sm, msk_data);
+		handshake_state_set_pmk(sm->handshake, msk_data);
 }
 
 static void eapol_eap_event_cb(unsigned int event,
@@ -1827,20 +1447,6 @@ static void eapol_eap_event_cb(unsigned int event,
 		return;
 
 	sm->event_func(event, event_data, sm->user_data);
-}
-
-void eapol_sm_set_8021x_config(struct eapol_sm *sm, struct l_settings *settings)
-{
-	sm->eap = eap_new(eapol_eap_msg_cb, eapol_eap_complete_cb, sm);
-
-	if (!sm->eap)
-		return;
-
-	if (!eap_load_settings(sm->eap, settings, "EAP-"))
-		return;
-
-	eap_set_key_material_func(sm->eap, eapol_eap_results_cb);
-	eap_set_event_func(sm->eap, eapol_eap_event_cb);
 }
 
 void eapol_sm_set_use_eapol_start(struct eapol_sm *sm, bool enabled)
@@ -1919,10 +1525,10 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 		if (sm->eap) /* An EAP negotiation in progress? */
 			return;
 
-		if (!sm->have_pmk)
+		if (!sm->handshake->have_pmk)
 			return;
 
-		eapol_key_handle(sm, sm->ifindex, frame, len);
+		eapol_key_handle(sm, frame, len);
 		break;
 
 	default:
@@ -1967,26 +1573,6 @@ void __eapol_set_tx_user_data(void *user_data)
 	tx_user_data = user_data;
 }
 
-void __eapol_set_get_nonce_func(eapol_get_nonce_func_t func)
-{
-	get_nonce = func;
-}
-
-void __eapol_set_install_tk_func(eapol_install_tk_func_t func)
-{
-	install_tk = func;
-}
-
-void __eapol_set_install_gtk_func(eapol_install_gtk_func_t func)
-{
-	install_gtk = func;
-}
-
-void __eapol_set_install_igtk_func(eapol_install_igtk_func_t func)
-{
-	install_igtk = func;
-}
-
 void __eapol_set_deauthenticate_func(eapol_deauthenticate_func_t func)
 {
 	deauthenticate = func;
@@ -1997,20 +1583,14 @@ void __eapol_set_rekey_offload_func(eapol_rekey_offload_func_t func)
 	rekey_offload = func;
 }
 
-static bool eapol_get_nonce(uint8_t nonce[])
+void eapol_register(struct eapol_sm *sm)
 {
-	return l_getrandom(nonce, 32);
-}
-
-void eapol_register(uint32_t ifindex, struct eapol_sm *sm)
-{
-	sm->ifindex = ifindex;
-
 	l_queue_push_head(state_machines, sm);
 }
 
 void eapol_start(struct eapol_sm *sm)
 {
+
 	sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);
 
 	sm->started = true;
@@ -2024,6 +1604,24 @@ void eapol_start(struct eapol_sm *sm)
 				l_timeout_create(1, send_eapol_start, sm, NULL);
 	}
 
+	if (sm->handshake->settings_8021x) {
+		sm->eap = eap_new(eapol_eap_msg_cb, eapol_eap_complete_cb, sm);
+
+		if (!sm->eap)
+			goto eap_error;
+
+		if (!eap_load_settings(sm->eap, sm->handshake->settings_8021x,
+					"EAP-")) {
+			eap_free(sm->eap);
+			sm->eap = NULL;
+
+			goto eap_error;
+		}
+
+		eap_set_key_material_func(sm->eap, eapol_eap_results_cb);
+		eap_set_event_func(sm->eap, eapol_eap_event_cb);
+	}
+
 	/* Process any frames received early due to scheduling */
 	if (sm->early_frame) {
 		struct eapol_buffer *tmp = sm->early_frame;
@@ -2032,18 +1630,17 @@ void eapol_start(struct eapol_sm *sm)
 		eapol_rx_packet(sm, tmp->data, tmp->len);
 		l_free(tmp);
 	}
-}
 
-void eapol_cancel(uint32_t ifindex)
-{
-	l_queue_foreach_remove(state_machines, eapol_sm_ifindex_match,
-					L_UINT_TO_PTR(ifindex));
+	return;
+
+eap_error:
+	l_error("Error initializing EAP for ifindex %i",
+			(int) sm->handshake->ifindex);
 }
 
 bool eapol_init()
 {
 	state_machines = l_queue_new();
-	get_nonce = eapol_get_nonce;
 
 	eap_init();
 
@@ -2056,7 +1653,6 @@ bool eapol_exit()
 		l_warn("stale eapol state machines found");
 
 	l_queue_destroy(state_machines, eapol_sm_destroy);
-	get_nonce = NULL;
 
 	eap_exit();
 
