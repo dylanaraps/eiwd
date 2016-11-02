@@ -673,6 +673,14 @@ void device_connect_network(struct device *device, struct network *network,
 						bss_info.pairwise_ciphers);
 		info.group_cipher = wiphy_select_cipher(wiphy,
 						bss_info.group_cipher);
+		info.group_management_cipher = wiphy_select_cipher(wiphy,
+				bss_info.group_management_cipher);
+
+		if (info.group_management_cipher == 0 && bss_info.mfpr) {
+			l_dbus_send(dbus, dbus_error_not_supported(message));
+			return;
+		} else if (info.group_management_cipher != 0)
+			info.mfpc = true;
 
 		/* RSN takes priority */
 		if (bss->rsne) {
