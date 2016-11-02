@@ -761,6 +761,7 @@ static bool find_test_configuration(const char *path, int level,
 #define HW_CONFIG_SETUP_MAX_EXEC_SEC	"max_test_exec_interval_sec"
 #define HW_CONFIG_SETUP_ABS_PATH_DIRS	"abs_path_dir_list"
 #define HW_CONFIG_SETUP_START_IWD	"start_iwd"
+#define HW_CONFIG_SETUP_IWD_CONF_DIR	"iwd_config_dir"
 
 static struct l_settings *read_hw_config(const char *test_dir_path)
 {
@@ -1027,12 +1028,14 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 	return true;
 }
 
-static pid_t start_iwd(void)
+static pid_t start_iwd(const char *config_dir)
 {
-	char *argv[2];
+	char *argv[4];
 
 	argv[0] = "iwd";
-	argv[1] = NULL;
+	argv[1] = "-c";
+	argv[2] = (char *) config_dir;
+	argv[3] = NULL;
 
 	return execute_program(argv, false);
 }
@@ -1402,6 +1405,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 	pid_t iwd_pid = -1;
 	pid_t medium_pid = -1;
 	char *config_dir_path;
+	char *iwd_config_dir;
 	char **abs_path_dirs = NULL;
 	struct l_settings *hw_settings;
 	struct l_hashmap *if_name_map;
@@ -1471,7 +1475,15 @@ static void create_network_and_run_tests(const void *key, void *value,
 				HW_CONFIG_SETUP_START_IWD, &start_iwd_daemon);
 
 	if (start_iwd_daemon) {
-		iwd_pid = start_iwd();
+		iwd_config_dir =
+			l_settings_get_string(hw_settings,
+						HW_CONFIG_GROUP_SETUP,
+						HW_CONFIG_SETUP_IWD_CONF_DIR);
+		if (!iwd_config_dir)
+			iwd_config_dir = CONFIGDIR;
+
+		iwd_pid = start_iwd(iwd_config_dir);
+
 		if (iwd_pid == -1)
 			goto exit_hostapd;
 	}
