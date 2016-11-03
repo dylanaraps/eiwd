@@ -759,7 +759,7 @@ static bool find_test_configuration(const char *path, int level,
 #define HW_CONFIG_SETUP_NUM_RADIOS	"num_radios"
 #define HW_CONFIG_SETUP_RADIO_CONFS	"radio_confs"
 #define HW_CONFIG_SETUP_MAX_EXEC_SEC	"max_test_exec_interval_sec"
-#define HW_CONFIG_SETUP_ABS_PATH_DIRS	"abs_path_dir_list"
+#define HW_CONFIG_SETUP_TMPFS_EXTRAS	"tmpfs_extra_stuff"
 #define HW_CONFIG_SETUP_START_IWD	"start_iwd"
 #define HW_CONFIG_SETUP_IWD_CONF_DIR	"iwd_config_dir"
 
@@ -1059,18 +1059,18 @@ static void terminate_all_iwd(void)
 		l_error("Failed to kill all IWD instances");
 }
 
-static bool create_absolute_path_dirs(char **abs_path_dirs)
+static bool create_tmpfs_extra_stuff(char **tmpfs_extra_stuff)
 {
 	size_t i = 0;
 
-	if (!abs_path_dirs)
+	if (!tmpfs_extra_stuff)
 		return true;
 
-	while (abs_path_dirs[i]) {
+	while (tmpfs_extra_stuff[i]) {
 		char *link_dir;
 		char *target_dir;
 
-		target_dir = realpath(abs_path_dirs[i], NULL);
+		target_dir = realpath(tmpfs_extra_stuff[i], NULL);
 
 		if (!path_exist(target_dir)) {
 			l_error("No such directory: %s", target_dir);
@@ -1090,27 +1090,27 @@ static bool create_absolute_path_dirs(char **abs_path_dirs)
 			return false;
 		}
 
-		l_free(abs_path_dirs[i]);
+		l_free(tmpfs_extra_stuff[i]);
 		l_free(target_dir);
 
-		abs_path_dirs[i] = link_dir;
+		tmpfs_extra_stuff[i] = link_dir;
 		i++;
 	}
 
 	return true;
 }
 
-static bool remove_absolute_path_dirs(char **abs_path_dirs)
+static bool remove_absolute_path_dirs(char **tmpfs_extra_stuff)
 {
 	size_t i = 0;
 
-	if (!abs_path_dirs)
+	if (!tmpfs_extra_stuff)
 		return true;
 
-	while (abs_path_dirs[i]) {
-		if (unlink(abs_path_dirs[i]) < 0) {
+	while (tmpfs_extra_stuff[i]) {
+		if (unlink(tmpfs_extra_stuff[i]) < 0) {
 			l_error("Failed to remove symlink for %s: %s",
-					abs_path_dirs[i], strerror(errno));
+					tmpfs_extra_stuff[i], strerror(errno));
 
 			return false;
 		}
@@ -1406,7 +1406,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 	pid_t medium_pid = -1;
 	char *config_dir_path;
 	char *iwd_config_dir;
-	char **abs_path_dirs = NULL;
+	char **tmpfs_extra_stuff = NULL;
 	struct l_settings *hw_settings;
 	struct l_hashmap *if_name_map;
 	struct l_queue *test_queue;
@@ -1447,12 +1447,12 @@ static void create_network_and_run_tests(const void *key, void *value,
 		goto exit_hwsim;
 	}
 
-	abs_path_dirs =
+	tmpfs_extra_stuff =
 		l_settings_get_string_list(hw_settings, HW_CONFIG_GROUP_SETUP,
-						HW_CONFIG_SETUP_ABS_PATH_DIRS,
+						HW_CONFIG_SETUP_TMPFS_EXTRAS,
 									':');
 
-	if (!create_absolute_path_dirs(abs_path_dirs))
+	if (!create_tmpfs_extra_stuff(tmpfs_extra_stuff))
 		goto exit_hwsim;
 
 	if (!configure_hw_radios(hw_settings, hwsim_radio_ids, if_name_map))
@@ -1492,7 +1492,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 	l_info("Destructing network...");
 
-	remove_absolute_path_dirs(abs_path_dirs);
+	remove_absolute_path_dirs(tmpfs_extra_stuff);
 
 	if (iwd_pid > 0)
 		terminate_iwd(iwd_pid);
@@ -1509,7 +1509,7 @@ exit_hwsim:
 
 	l_hashmap_destroy(if_name_map, hashmap_string_destroy);
 	l_settings_free(hw_settings);
-	l_strfreev(abs_path_dirs);
+	l_strfreev(tmpfs_extra_stuff);
 }
 
 struct stat_totals {
