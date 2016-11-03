@@ -46,7 +46,7 @@
 #include "src/backtrace.h"
 
 static struct l_settings *iwd_config;
-static struct l_timeout *timeout = NULL;
+static struct l_timeout *timeout;
 static const char *interfaces;
 static const char *nointerfaces;
 static const char *config_dir;
