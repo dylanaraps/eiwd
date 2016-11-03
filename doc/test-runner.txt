@@ -176,8 +176,8 @@ radio_confs=rad0:rad1
 # Default: 20 seconds.
 #max_test_exec_interval_sec=5
 
-# List of directory names inside of a test configuration directory for which
-# the symlinks will be created inside of /tmp. Such directories can be used
+# List of paths inside of a test configuration directory for which
+# the symlinks will be created inside of /tmp. Such paths can be used
 # to specify an absolute path to the needed files inside of IWD and Hostapd
 # configuration files.
 # Example:
@@ -190,7 +190,7 @@ radio_confs=rad0:rad1
 #	      misc
 #
 # This field is optional.
-#abs_path_dir_list=certs:misc
+#tmpfs_extra_stuff=certs:misc
 
 # Flag to prevent test-runner from starting IWD. Therefore, it may later be
 # started from the python test cases.
