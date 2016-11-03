@@ -82,6 +82,7 @@ struct eap_wsc_state {
 	enum state state;
 	struct l_checksum *hmac_auth_key;
 	struct l_cipher *aes_cbc_128;
+	size_t tx_frag_offset;
 };
 
 static inline void eap_wsc_state_set_sent_pdu(struct eap_wsc_state *wsc,
@@ -287,7 +288,7 @@ static void eap_wsc_remove(struct eap_state *eap)
 	l_key_free(wsc->private);
 
 	l_free(wsc->sent_pdu);
-	wsc->sent_pdu = 0;
+	wsc->sent_pdu = NULL;
 	wsc->sent_len = 0;
 
 	l_checksum_free(wsc->hmac_auth_key);
@@ -299,19 +300,57 @@ static void eap_wsc_remove(struct eap_state *eap)
 	l_free(wsc);
 }
 
-static void eap_wsc_send_response(struct eap_state *eap,
-						uint8_t *pdu, size_t len)
+static void eap_wsc_send_fragment(struct eap_state *eap)
 {
 	struct eap_wsc_state *wsc = eap_get_data(eap);
-	uint8_t buf[len + 14];
+	size_t mtu = eap_get_mtu(eap);
+	uint8_t buf[mtu];
+	size_t len = wsc->sent_len - wsc->tx_frag_offset;
+	size_t header_len = EAP_WSC_HEADER_LEN;
 
 	buf[12] = WSC_OP_MSG;
-	buf[13] = 0;
-	memcpy(buf + 14, pdu, len);
 
-	eap_send_response(eap, EAP_TYPE_EXPANDED, buf, len + 14);
+	if (len > mtu - EAP_WSC_HEADER_LEN) {
+		len = mtu - EAP_WSC_HEADER_LEN;
+		buf[13] = WSC_FLAG_MF;
+	} else {
+		buf[13] = 0;
+	}
 
-	eap_wsc_state_set_sent_pdu(wsc, pdu, len);
+	if (!wsc->tx_frag_offset) {
+		buf[13] |= WSC_FLAG_LF;
+
+		l_put_be16(wsc->sent_len, &buf[14]);
+		len -= 2;
+		header_len += 2;
+	}
+
+	memcpy(buf + header_len, wsc->sent_pdu + wsc->tx_frag_offset, len);
+	eap_send_response(eap, EAP_TYPE_EXPANDED, buf, header_len + len);
+	wsc->tx_frag_offset += len;
+}
+
+static void eap_wsc_send_response(struct eap_state *eap,
+						uint8_t *pdu, size_t pdu_len)
+{
+	struct eap_wsc_state *wsc = eap_get_data(eap);
+	size_t msg_len = pdu_len + EAP_WSC_HEADER_LEN;
+
+	eap_wsc_state_set_sent_pdu(wsc, pdu, pdu_len);
+
+	if (msg_len <= eap_get_mtu(eap)) {
+		uint8_t buf[msg_len];
+
+		buf[12] = WSC_OP_MSG;
+		buf[13] = 0;
+		memcpy(buf + EAP_WSC_HEADER_LEN, pdu, pdu_len);
+
+		eap_send_response(eap, EAP_TYPE_EXPANDED, buf, msg_len);
+		return;
+	}
+
+	wsc->tx_frag_offset = 0;
+	eap_wsc_send_fragment(eap);
 }
 
 static void eap_wsc_send_nack(struct eap_state *eap,
@@ -873,7 +912,8 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 		/* Should never receive these as Enrollee */
 		return;
 	case WSC_OP_FRAG_ACK:
-		/* TODO: Handle fragmentation */
+		if (wsc->tx_frag_offset && wsc->tx_frag_offset < wsc->sent_len)
+			eap_wsc_send_fragment(eap);
 		return;
 	case WSC_OP_MSG:
 		break;
