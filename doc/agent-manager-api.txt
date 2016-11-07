@@ -1,0 +1,22 @@
+Agent hierarchy
+===============
+
+Service		net.connman.iwd
+Interface	net.connman.iwd.AgentManager
+Object path	/
+
+Methods		void RegisterAgent(object path)
+
+			Register new agent for handling user requests.
+
+			Possible Errors: [service].Error.InvalidArguments
+					 [service].Error.Failed
+					 [service].Error.AlreadyExists
+
+		void UnregisterAgent(object path)
+
+			Unregister an existing agent.
+
+			Possible Errors: [service].Error.InvalidArguments
+					 [service].Error.Failed
+					 [service].Error.NotFound
