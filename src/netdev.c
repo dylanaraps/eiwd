@@ -138,7 +138,7 @@ static void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 	size_t bufsize;
 	struct cb_data *cb_data = NULL;
 
-	bufsize = sizeof(struct ifinfomsg) +
+	bufsize = NLMSG_ALIGN(sizeof(struct ifinfomsg)) +
 		RTA_SPACE(sizeof(uint8_t)) + RTA_SPACE(sizeof(uint8_t));
 
 	rtmmsg = l_malloc(bufsize);
@@ -147,7 +147,7 @@ static void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 	rtmmsg->ifi_family = AF_UNSPEC;
 	rtmmsg->ifi_index = ifindex;
 
-	rta_buf = rtmmsg + 1;
+	rta_buf = (void *) rtmmsg + NLMSG_ALIGN(sizeof(struct ifinfomsg));
 
 	rta_buf += rta_add_u8(rta_buf, IFLA_LINKMODE, linkmode);
 	rta_buf += rta_add_u8(rta_buf, IFLA_OPERSTATE, operstate);
@@ -230,7 +230,7 @@ int netdev_set_powered(struct netdev *netdev, bool powered,
 	size_t bufsize;
 	struct set_powered_cb_data *cb_data = NULL;
 
-	bufsize = sizeof(struct ifinfomsg);
+	bufsize = NLMSG_ALIGN(sizeof(struct ifinfomsg));
 
 	rtmmsg = l_malloc(bufsize);
 	memset(rtmmsg, 0, bufsize);
@@ -1780,7 +1780,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	l_debug("Created interface %s[%d]", netdev->name, netdev->index);
 
 	/* Query interface flags */
-	bufsize = sizeof(struct ifinfomsg);
+	bufsize = NLMSG_ALIGN(sizeof(struct ifinfomsg));
 	rtmmsg = l_malloc(bufsize);
 	memset(rtmmsg, 0, bufsize);
 
