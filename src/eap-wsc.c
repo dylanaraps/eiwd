@@ -35,7 +35,8 @@
 #include "util.h"
 #include "eap-wsc.h"
 
-#define EAP_WSC_HEADER_LEN 14
+#define EAP_WSC_HEADER_LEN	14
+#define EAP_WSC_PDU_MAX_LEN	4096
 
 /* WSC v2.0.5, Section 7.7.1 */
 enum wsc_op {
@@ -82,6 +83,9 @@ struct eap_wsc_state {
 	enum state state;
 	struct l_checksum *hmac_auth_key;
 	struct l_cipher *aes_cbc_128;
+	uint8_t *rx_pdu_buf;
+	size_t rx_pdu_buf_len;
+	size_t rx_pdu_buf_offset;
 	size_t tx_frag_offset;
 };
 
@@ -291,6 +295,13 @@ static void eap_wsc_remove(struct eap_state *eap)
 	wsc->sent_pdu = NULL;
 	wsc->sent_len = 0;
 
+	if (wsc->rx_pdu_buf) {
+		l_free(wsc->rx_pdu_buf);
+		wsc->rx_pdu_buf = NULL;
+		wsc->rx_pdu_buf_len = 0;
+		wsc->rx_pdu_buf_offset = 0;
+	}
+
 	l_checksum_free(wsc->hmac_auth_key);
 	l_cipher_free(wsc->aes_cbc_128);
 
@@ -434,6 +445,16 @@ static void eap_wsc_send_done(struct eap_state *eap)
 	eap_send_response(eap, EAP_TYPE_EXPANDED, buf,
 						pdu_len + EAP_WSC_HEADER_LEN);
 	l_free(pdu);
+}
+
+static void eap_wsc_send_frag_ack(struct eap_state *eap)
+{
+	uint8_t buf[EAP_WSC_HEADER_LEN];
+
+	buf[12] = WSC_OP_FRAG_ACK;
+	buf[13] = 0;
+
+	eap_send_response(eap, EAP_TYPE_EXPANDED, buf, EAP_WSC_HEADER_LEN);
 }
 
 static void eap_wsc_handle_m8(struct eap_state *eap,
@@ -872,6 +893,7 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 	uint8_t flags;
 	uint8_t *pdu;
 	size_t pdu_len;
+	size_t rx_header_offset = 0;
 
 	if (len < 2)
 		return;
@@ -881,10 +903,6 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 
 	pkt += 2;
 	len -= 2;
-
-	/* TODO: Handle fragmentation */
-	if (flags != 0)
-		return;
 
 	switch (op) {
 	case WSC_OP_START:
@@ -916,6 +934,66 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 			eap_wsc_send_fragment(eap);
 		return;
 	case WSC_OP_MSG:
+		if (flags & WSC_FLAG_LF) {
+			if (wsc->rx_pdu_buf ||
+					!(flags & WSC_FLAG_MF) || len < 2)
+				goto invalid_frag;
+
+			wsc->rx_pdu_buf_len = l_get_be16(pkt);
+
+			if (!wsc->rx_pdu_buf_len ||
+					wsc->rx_pdu_buf_len >
+							EAP_WSC_PDU_MAX_LEN) {
+				l_warn("Fragmented pkt size is outside of "
+					"alowed boundaries [1, %u]",
+					EAP_WSC_PDU_MAX_LEN);
+				return;
+			}
+
+			if (wsc->rx_pdu_buf_len < len) {
+				l_warn("Fragmented pkt size is smaller than "
+					"the received packet");
+				return;
+			}
+
+			wsc->rx_pdu_buf = l_malloc(wsc->rx_pdu_buf_len);
+			wsc->rx_pdu_buf_offset = 0;
+
+			rx_header_offset = 2;
+		}
+
+		if (wsc->rx_pdu_buf) {
+			pdu_len = len - rx_header_offset;
+
+			if (wsc->rx_pdu_buf_len <
+					(wsc->rx_pdu_buf_offset + pdu_len)) {
+				l_error("Request fragment pkt size mismatch");
+				goto invalid_frag;
+			}
+
+			memcpy(wsc->rx_pdu_buf + wsc->rx_pdu_buf_offset,
+					pkt + rx_header_offset, pdu_len);
+			wsc->rx_pdu_buf_offset += pdu_len;
+		}
+
+		if (flags & WSC_FLAG_MF) {
+			if (!wsc->rx_pdu_buf) {
+				eap_method_error(eap);
+				return;
+			}
+
+			eap_wsc_send_frag_ack(eap);
+			return;
+		} else if (wsc->rx_pdu_buf) {
+			if (wsc->rx_pdu_buf_len != wsc->rx_pdu_buf_offset) {
+				l_error("Request fragment pkt size mismatch");
+				goto invalid_frag;
+			}
+
+			pkt = wsc->rx_pdu_buf;
+			len = wsc->rx_pdu_buf_len;
+		}
+
 		break;
 	}
 
@@ -941,6 +1019,18 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 		eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_NO_ERROR);
 		return;
 	}
+
+	if (wsc->rx_pdu_buf) {
+		l_free(wsc->rx_pdu_buf);
+		wsc->rx_pdu_buf = NULL;
+		wsc->rx_pdu_buf_len = 0;
+		wsc->rx_pdu_buf_offset = 0;
+	}
+
+	return;
+
+invalid_frag:
+	eap_method_error(eap);
 }
 
 static bool load_hexencoded(struct l_settings *settings, const char *key,
