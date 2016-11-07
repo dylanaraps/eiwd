@@ -590,7 +590,7 @@ static void eap_ttls_handle_request(struct eap_state *eap,
 	 * response instead of passing the TLS alert.
 	 */
 
-	if (ttls->tx_pkt_len <= eap_get_mtu(eap)) {
+	if (ttls->tx_pkt_len + 6 <= eap_get_mtu(eap)) {
 		/*
 		 * Response fits in a single response packet, prepend the
 		 * 6-byte header (no length) before the data.
