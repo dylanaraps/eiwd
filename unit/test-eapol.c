@@ -2542,11 +2542,12 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__handshake_set_install_tk_func(verify_install_tk);
-	eapol_sm_set_user_data(sm, ptk->tk);
+	handshake_state_set_user_data(hs, ptk->tk);
 	__eapol_rx_packet(1, ap_address, step3_buf, sizeof(eapol_key_data_15));
 	assert(verify_step4_called);
 	assert(verify_install_tk_called);
 
+	__handshake_set_install_tk_func(NULL);
 	eapol_sm_free(sm);
 	handshake_state_free(hs);
 	eapol_exit();
