@@ -90,6 +90,7 @@ void handshake_state_set_user_data(struct handshake_state *s, void *user_data);
 void handshake_state_set_pmk(struct handshake_state *s, const uint8_t *pmk);
 void handshake_state_set_8021x_config(struct handshake_state *s,
 					struct l_settings *settings);
+struct l_settings *handshake_state_get_8021x_config(struct handshake_state *s);
 void handshake_state_set_ap_rsn(struct handshake_state *s,
 					const uint8_t *rsn_ie);
 bool handshake_state_set_own_rsn(struct handshake_state *s,

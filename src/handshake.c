@@ -115,6 +115,11 @@ void handshake_state_set_8021x_config(struct handshake_state *s,
 	s->settings_8021x = settings;
 }
 
+struct l_settings *handshake_state_get_8021x_config(struct handshake_state *s)
+{
+	return s->settings_8021x;
+}
+
 static void handshake_state_set_ap_ie(struct handshake_state *s,
 					const uint8_t *ie, bool is_wpa)
 {
