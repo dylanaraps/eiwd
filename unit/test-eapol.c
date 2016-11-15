@@ -2363,6 +2363,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	aa = ap_address;
 	spa = sta_address;
 
+	eap_init(0);
 	eapol_init();
 	__handshake_set_get_nonce_func(test_nonce);
 	__eapol_set_deauthenticate_func(verify_deauthenticate);
@@ -2551,6 +2552,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	eapol_sm_free(sm);
 	handshake_state_free(hs);
 	eapol_exit();
+	eap_exit();
 }
 
 static void eapol_sm_test_eap_tls(const void *data)
@@ -2721,6 +2723,7 @@ static void eapol_sm_test_eap_nak(const void *data)
 	aa = ap_address;
 	spa = sta_address;
 
+	eap_init(0);
 	eapol_init();
 	__handshake_set_get_nonce_func(test_nonce);
 	__eapol_set_deauthenticate_func(verify_deauthenticate);
@@ -2767,6 +2770,7 @@ static void eapol_sm_test_eap_nak(const void *data)
 
 	handshake_state_free(hs);
 	eapol_exit();
+	eap_exit();
 }
 
 static void eapol_ft_handshake_test(const void *data)

@@ -1958,6 +1958,7 @@ static void wsc_test_pbc_handshake(const void *data)
 	char *hex;
 	struct l_settings *settings;
 
+	eap_init(1400);
 	eapol_init();
 
 	hs = handshake_state_new(1);
@@ -2046,6 +2047,7 @@ static void wsc_test_pbc_handshake(const void *data)
 
 	handshake_state_free(hs);
 	eapol_exit();
+	eap_exit();
 }
 
 int main(int argc, char *argv[])
