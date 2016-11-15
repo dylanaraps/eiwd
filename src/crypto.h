@@ -31,6 +31,18 @@ enum crypto_cipher {
 	CRYPTO_CIPHER_BIP = 0x000fac06,
 };
 
+enum crypto_akm {
+	CRYPTO_AKM_8021X = 0x000fac01,
+	CRYPTO_AKM_PSK = 0x000fac02,
+	CRYPTO_AKM_FT_OVER_8021X = 0x000fac03,
+	CRYPTO_AKM_FT_USING_PSK = 0x000fac04,
+	CRYPTO_AKM_8021X_SHA256 = 0x000fac05,
+	CRYPTO_AKM_PSK_SHA256 = 0x000fac06,
+	CRYPTO_AKM_TDLS = 0x000fac07,
+	CRYPTO_AKM_SAE_SHA256 = 0x000fac08,
+	CRYPTO_AKM_FT_OVER_SAE_SHA256 = 0x000fac09,
+};
+
 struct crypto_ptk {
 	uint8_t kck[16];
 	uint8_t kek[16];
