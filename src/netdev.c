@@ -1244,6 +1244,32 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 	netdev_connect_failed(NULL, netdev);
 }
 
+static unsigned int ie_rsn_akm_suite_to_nl80211(enum ie_rsn_akm_suite akm)
+{
+	switch (akm) {
+	case IE_RSN_AKM_SUITE_8021X:
+		return CRYPTO_AKM_8021X;
+	case IE_RSN_AKM_SUITE_PSK:
+		return CRYPTO_AKM_PSK;
+	case IE_RSN_AKM_SUITE_FT_OVER_8021X:
+		return CRYPTO_AKM_FT_OVER_8021X;
+	case IE_RSN_AKM_SUITE_FT_USING_PSK:
+		return CRYPTO_AKM_FT_USING_PSK;
+	case IE_RSN_AKM_SUITE_8021X_SHA256:
+		return CRYPTO_AKM_8021X_SHA256;
+	case IE_RSN_AKM_SUITE_PSK_SHA256:
+		return CRYPTO_AKM_PSK_SHA256;
+	case IE_RSN_AKM_SUITE_TDLS:
+		return CRYPTO_AKM_TDLS;
+	case IE_RSN_AKM_SUITE_SAE_SHA256:
+		return CRYPTO_AKM_SAE_SHA256;
+	case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
+		return CRYPTO_AKM_FT_OVER_SAE_SHA256;
+	}
+
+	return 0;
+}
+
 static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 						struct scan_bss *bss,
 						struct handshake_state *hs,
@@ -1268,6 +1294,8 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 
 	if (hs) {
 		uint32_t nl_cipher;
+		uint32_t nl_akm;
+		uint32_t wpa_version;
 
 		if (hs->pairwise_cipher == IE_RSN_CIPHER_SUITE_CCMP)
 			nl_cipher = CRYPTO_CIPHER_CCMP;
@@ -1284,6 +1312,19 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 
 		l_genl_msg_append_attr(msg, NL80211_ATTR_CIPHER_SUITE_GROUP,
 					4, &nl_cipher);
+
+		nl_akm = ie_rsn_akm_suite_to_nl80211(hs->akm_suite);
+		if (nl_akm)
+			l_genl_msg_append_attr(msg, NL80211_ATTR_AKM_SUITES,
+							4, &nl_akm);
+
+		if (hs->wpa_ie)
+			wpa_version = NL80211_WPA_VERSION_1;
+		else
+			wpa_version = NL80211_WPA_VERSION_2;
+
+		l_genl_msg_append_attr(msg, NL80211_ATTR_WPA_VERSIONS,
+						4, &wpa_version);
 
 		l_genl_msg_append_attr(msg, NL80211_ATTR_CONTROL_PORT, 0, NULL);
 
