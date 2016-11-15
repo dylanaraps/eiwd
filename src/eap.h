@@ -59,7 +59,7 @@ size_t eap_get_mtu(struct eap_state *eap);
 
 void eap_rx_packet(struct eap_state *eap, const uint8_t *pkt, size_t len);
 
-void eap_init(void);
+void eap_init(uint32_t default_mtu);
 void eap_exit(void);
 
 /* EAP method API */

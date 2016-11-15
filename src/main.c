@@ -37,6 +37,7 @@
 #include "src/wiphy.h"
 #include "src/dbus.h"
 #include "src/network.h"
+#include "src/eap.h"
 #include "src/eapol.h"
 #include "src/scan.h"
 #include "src/wsc.h"
@@ -145,6 +146,7 @@ int main(int argc, char *argv[])
 	struct l_genl *genl;
 	struct l_genl_family *nl80211;
 	char *config_path;
+	uint32_t eap_mtu;
 
 	for (;;) {
 		int opt;
@@ -244,6 +246,10 @@ int main(int argc, char *argv[])
 	l_genl_family_set_watches(nl80211, nl80211_appeared, nl80211_vanished,
 								nl80211, NULL);
 
+	if (!l_settings_get_uint(iwd_config, "EAP", "mtu", &eap_mtu))
+		eap_mtu = 1400; /* on WiFi the real MTU is around 2304 */
+
+	eap_init(eap_mtu);
 	eapol_init();
 	network_init();
 	known_networks_init();
@@ -256,6 +262,7 @@ int main(int argc, char *argv[])
 	known_networks_exit();
 	network_exit();
 	eapol_exit();
+	eap_exit();
 
 	l_genl_family_unref(nl80211);
 

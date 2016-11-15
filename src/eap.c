@@ -31,6 +31,7 @@
 
 #include "eap.h"
 
+static uint32_t default_mtu;
 struct l_queue *eap_methods;
 
 struct eap_state {
@@ -58,7 +59,7 @@ struct eap_state *eap_new(eap_tx_packet_func_t tx_packet,
 	eap = l_new(struct eap_state, 1);
 
 	eap->last_id = -1;
-	eap->mtu = 1024;
+	eap->mtu = default_mtu;
 
 	eap->tx_packet = tx_packet;
 	eap->complete = complete;
@@ -504,10 +505,20 @@ static void __eap_method_disable(struct eap_method_desc *start,
 extern struct eap_method_desc __start___eap[];
 extern struct eap_method_desc __stop___eap[];
 
-void eap_init(void)
+void eap_init(uint32_t mtu)
 {
 	eap_methods = l_queue_new();
 	__eap_method_enable(__start___eap, __stop___eap);
+
+	/*
+	 * RFC 3748, Section 3.1, [4], "Minimum MTU":
+	 * EAP is capable of functioning on lower layers that
+	 *        provide an EAP MTU size of 1020 octets or greater.
+	 */
+	if (mtu == 0)
+		default_mtu = 1020;
+	else
+		default_mtu = mtu;
 }
 
 void eap_exit(void)

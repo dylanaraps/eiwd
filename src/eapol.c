@@ -1642,8 +1642,6 @@ bool eapol_init()
 {
 	state_machines = l_queue_new();
 
-	eap_init();
-
 	return true;
 }
 
@@ -1653,8 +1651,6 @@ bool eapol_exit()
 		l_warn("stale eapol state machines found");
 
 	l_queue_destroy(state_machines, eapol_sm_destroy);
-
-	eap_exit();
 
 	return true;
 }
