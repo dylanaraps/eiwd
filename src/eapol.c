@@ -167,12 +167,21 @@ void eapol_pae_close()
 	l_io_destroy(pae_io);
 }
 
+static inline bool mem_is_zero(const uint8_t *field, size_t size)
+{
+	size_t i;
+
+	for (i = 0; i < size; i++)
+		if (field[i] != 0)
+			return false;
+
+	return true;
+}
+
 #define VERIFY_IS_ZERO(field)					\
 	do {							\
-		unsigned int i;					\
-		for (i = 0; i < sizeof(field); i++)		\
-			if ((field)[i] != 0)			\
-				return false;			\
+		if (!mem_is_zero((field), sizeof((field))))	\
+			return false;				\
 	} while (false)						\
 
 /*
@@ -474,7 +483,8 @@ bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek, bool is_wpa)
 	/* 0 (Version 2) or random (Version 1) */
 	if (ek->key_descriptor_version ==
 			EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES)
-		VERIFY_IS_ZERO(ek->eapol_key_iv);
+		L_WARN_ON(!mem_is_zero(ek->eapol_key_iv,
+						sizeof(ek->eapol_key_iv)));
 
 	return true;
 }
