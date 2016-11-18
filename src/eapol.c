@@ -760,6 +760,7 @@ struct eapol_sm *eapol_sm_new(struct handshake_state *hs)
 	sm = l_new(struct eapol_sm, 1);
 
 	sm->handshake = hs;
+	sm->use_eapol_start = true;
 
 	return sm;
 }
@@ -1532,8 +1533,18 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 		break;
 
 	case 3: /* EAPOL-Key */
-		if (sm->eap) /* An EAP negotiation in progress? */
+		if (sm->eap) {
+			/*
+			 * Either this is an error (EAP negotiation in
+			 * progress) or the server is giving us a chance to
+			 * use a cached PMK.  We don't yet cache PMKs so
+			 * send an EAPOL-Start if we haven't sent one yet.
+			 */
+			if (sm->eapol_start_timeout)
+				send_eapol_start(NULL, sm);
+
 			return;
+		}
 
 		if (!sm->handshake->have_pmk)
 			return;
