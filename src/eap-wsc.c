@@ -87,6 +87,7 @@ struct eap_wsc_state {
 	size_t rx_pdu_buf_len;
 	size_t rx_pdu_buf_offset;
 	size_t tx_frag_offset;
+	size_t tx_last_frag_len;
 };
 
 static inline void eap_wsc_state_set_sent_pdu(struct eap_wsc_state *wsc,
@@ -338,7 +339,8 @@ static void eap_wsc_send_fragment(struct eap_state *eap)
 
 	memcpy(buf + header_len, wsc->sent_pdu + wsc->tx_frag_offset, len);
 	eap_send_response(eap, EAP_TYPE_EXPANDED, buf, header_len + len);
-	wsc->tx_frag_offset += len;
+
+	wsc->tx_last_frag_len = len;
 }
 
 static void eap_wsc_send_response(struct eap_state *eap,
@@ -930,8 +932,15 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 		/* Should never receive these as Enrollee */
 		return;
 	case WSC_OP_FRAG_ACK:
-		if (wsc->tx_frag_offset && wsc->tx_frag_offset < wsc->sent_len)
+		if (wsc->tx_last_frag_len &&
+				(wsc->tx_frag_offset + wsc->tx_last_frag_len) <
+								wsc->sent_len) {
+			wsc->tx_frag_offset += wsc->tx_last_frag_len;
+			wsc->tx_last_frag_len = 0;
+
 			eap_wsc_send_fragment(eap);
+		}
+
 		return;
 	case WSC_OP_MSG:
 		if (flags & WSC_FLAG_LF) {
