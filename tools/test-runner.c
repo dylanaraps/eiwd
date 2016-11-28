@@ -59,6 +59,11 @@
 #define HWSIM_RADIOS_MAX		100
 #define TEST_MAX_EXEC_TIME_SEC		20
 
+static enum action {
+	ACTION_AUTO_TEST,
+	ACTION_UNIT_TEST,
+} test_action;
+
 static const char *own_binary;
 static char **test_argv;
 static int test_argc;
@@ -68,7 +73,8 @@ const char *debug_filter;
 static const char *qemu_binary;
 static const char *kernel_image;
 static const char *exec_home;
-static const char *test_dir_list = "";
+static const char *test_action_params;
+static char top_level_path[PATH_MAX];
 
 static const char * const qemu_table[] = {
 	"qemu-system-x86_64",
@@ -271,13 +277,15 @@ static void start_qemu(void)
 			"root=/dev/root "
 			"rootflags=trans=virtio,version=9p2000.u "
 			"acpi=off pci=noacpi noapic quiet ro "
-			"mac80211_hwsim.radios=0 "
-			"init=%s TESTHOME=%s TESTVERBOUT=%u "
-			"DEBUG_FILTER=\'%s\' "
-			"TESTDIRLIST=\'%s\' TESTARGS=\'%s\' PATH=\'%s\'",
+			"mac80211_hwsim.radios=0 init=%s TESTHOME=%s "
+			"TESTVERBOUT=%u DEBUG_FILTER=\'%s\'"
+			"TEST_ACTION=%u TEST_ACTION_PARAMS=\'%s\' "
+			"TESTARGS=\'%s\' PATH=\'%s\'",
 			initcmd, cwd, verbose_out,
 			enable_debug ? debug_filter : "",
-			test_dir_list, testargs,
+			test_action,
+			test_action_params ? test_action_params : "",
+			testargs,
 			getenv("PATH"));
 
 	argv = alloca(sizeof(qemu_argv) + sizeof(char *) * 5);
@@ -1610,25 +1618,14 @@ static void test_stat_queue_entry_destroy(void *data)
 	l_free(ts);
 }
 
-static void run_command(char *cmdname)
+static void run_auto_tests(void)
 {
-	char top_level_path[PATH_MAX];
 	char test_home_path[PATH_MAX];
 	char env_path[PATH_MAX];
-	char *ptr;
 	int i;
 	struct l_hashmap *test_config_map;
 	struct l_queue *test_stat_queue;
 	char **test_config_dirs;
-
-	ptr = strrchr(exec_home, '/');
-	if (!ptr)
-		exit(EXIT_FAILURE);
-
-	i = ptr - exec_home;
-
-	strncpy(top_level_path, exec_home + 5, i - 5);
-	top_level_path[i - 5] = '\0';
 
 	sprintf(env_path, "%s/src:%s/tools:%s", top_level_path, top_level_path,
 								getenv("PATH"));
@@ -1647,7 +1644,7 @@ static void run_command(char *cmdname)
 	if (!test_config_map)
 		return;
 
-	test_config_dirs = l_strsplit(test_dir_list, ',');
+	test_config_dirs = l_strsplit(test_action_params, ',');
 
 	if (test_config_dirs[0]) {
 		i = 0;
@@ -1713,12 +1710,42 @@ exit:
 	l_hashmap_destroy(test_config_map, NULL);
 }
 
+static void run_unit_tests(void)
+{
+	size_t i;
+	char *argv[2];
+	char *unit_test_abs_path;
+	char **unit_tests = l_strsplit(test_action_params, ',');
+
+	if (!unit_tests || !unit_tests[0])
+		goto exit;
+
+	for (i = 0; unit_tests[i]; i++) {
+		unit_test_abs_path =
+			l_strdup_printf("%s%s%s", top_level_path, "/unit/",
+								unit_tests[i]);
+
+		argv[0] = unit_test_abs_path;
+		argv[1] = NULL;
+
+		execute_program(argv, true);
+
+		l_free(unit_test_abs_path);
+	}
+
+exit:
+	l_strfreev(unit_tests);
+}
+
 static void run_tests(void)
 {
 	char cmdline[CMDLINE_MAX], *ptr, *cmds;
+	char *test_action_str;
 	FILE *fp;
+	int i;
 
 	fp = fopen("/proc/cmdline", "re");
+
 	if (!fp) {
 		l_error("Failed to open kernel command line");
 		return;
@@ -1733,6 +1760,7 @@ static void run_tests(void)
 	}
 
 	ptr = strstr(cmdline, "PATH=");
+
 	if (!ptr) {
 		l_error("No $PATH section found");
 		return;
@@ -1742,6 +1770,7 @@ static void run_tests(void)
 	setenv("PATH", ptr, true);
 
 	ptr = strstr(cmdline, "TESTARGS=");
+
 	if (!ptr) {
 		l_error("No test command section found");
 		return;
@@ -1749,6 +1778,7 @@ static void run_tests(void)
 
 	cmds = ptr + 10;
 	ptr = strchr(cmds, '\'');
+
 	if (!ptr) {
 		l_error("Malformed test command section");
 		return;
@@ -1757,27 +1787,44 @@ static void run_tests(void)
 	*ptr = '\0';
 
 	ptr = strstr(cmdline, "TESTVERBOUT=1");
+
 	if (ptr) {
 		l_info("Enable verbose output");
 		verbose_out = true;
 	}
 
-	ptr = strstr(cmdline, "TESTDIRLIST=");
-	if (!ptr) {
-		l_error("No test configuration directory list section found");
-		return;
+	ptr = strstr(cmdline, "TEST_ACTION_PARAMS=");
+
+	if (ptr) {
+		test_action_params = ptr + 20;
+		ptr = strchr(test_action_params, '\'');
+
+		if (!ptr) {
+			l_error("Malformed test action parameters section");
+			return;
+		}
+
+		*ptr = '\0';
 	}
 
-	test_dir_list = ptr + 13;
-	ptr = strchr(test_dir_list, '\'');
-	if (!ptr) {
-		l_error("Malformed test configuration directory list section");
-		return;
-	}
+	ptr = strstr(cmdline, "TEST_ACTION=");
 
-	*ptr = '\0';
+	if (ptr) {
+		test_action_str = ptr + 12;
+		ptr = strchr(test_action_str, ' ');
+
+		if (!ptr) {
+			l_error("Malformed test action parameters section");
+			return;
+		}
+
+		*ptr = '\0';
+
+		test_action = (enum action) atoi(test_action_str);
+	}
 
 	ptr = strstr(cmdline, "DEBUG_FILTER=");
+
 	if (ptr) {
 		debug_filter = ptr + 14;
 
@@ -1798,35 +1845,58 @@ static void run_tests(void)
 	}
 
 	ptr = strstr(cmdline, "TESTHOME=");
+
 	if (ptr) {
 		exec_home = ptr + 4;
 		ptr = strpbrk(exec_home + 9, " \r\n");
+
 		if (ptr)
 			*ptr = '\0';
 	}
 
-	run_command(cmds);
+	ptr = strrchr(exec_home, '/');
+
+	if (!ptr)
+		exit(EXIT_FAILURE);
+
+	i = ptr - exec_home;
+
+	strncpy(top_level_path, exec_home + 5, i - 5);
+	top_level_path[i - 5] = '\0';
+
+	switch (test_action) {
+	case ACTION_AUTO_TEST:
+		run_auto_tests();
+		break;
+	case ACTION_UNIT_TEST:
+		run_unit_tests();
+		break;
+	}
 }
 
 static void usage(void)
 {
-	l_info("testrunner - Automated test execution utility\n"
+	l_info("test-runner - Automated test execution utility\n"
 		"Usage:\n");
 	l_info("\ttest-runner [options] [--] <command> [args]\n");
 	l_info("Options:\n"
 		"\t-q, --qemu <path>	QEMU binary\n"
 		"\t-k, --kernel <image>	Kernel image (bzImage)\n"
-		"\t-t, --testdirs <dirs>	Comma separated list of the "
-						"test configuration\n\t\t\t\t"
-						"directories to run\n"
 		"\t-v, --verbose		Enable verbose output\n"
 		"\t-h, --help		Show help options\n");
+	l_info("Commands:\n"
+		"\t-A, --auto-tests <dirs>	Comma separated list of the "
+						"test configuration\n\t\t\t\t"
+						"directories to run\n"
+		"\t-U, --unit-tests <tests>	Comma separated list of the "
+						"unit tests to run\n");
 }
 
 static const struct option main_options[] = {
+	{ "auto-tests",	required_argument, NULL, 'A' },
+	{ "unit-tests",	required_argument, NULL, 'U' },
 	{ "qemu",	required_argument, NULL, 'q' },
 	{ "kernel",	required_argument, NULL, 'k' },
-	{ "testdirs",	required_argument, NULL, 't' },
 	{ "verbose",	no_argument,       NULL, 'v' },
 	{ "debug",	optional_argument, NULL, 'd' },
 	{ "help",	no_argument,       NULL, 'h' },
@@ -1835,6 +1905,8 @@ static const struct option main_options[] = {
 
 int main(int argc, char *argv[])
 {
+	uint8_t actions = 0;
+
 	l_log_set_stderr();
 
 	if (getpid() == 1 && getppid() == 0) {
@@ -1852,19 +1924,28 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "q:k:t:vh", main_options, NULL);
+		opt = getopt_long(argc, argv, "A:U:q:k:vdh", main_options,
+									NULL);
 		if (opt < 0)
 			break;
 
 		switch (opt) {
+		case 'A':
+			test_action = ACTION_AUTO_TEST;
+			test_action_params = optarg;
+			actions++;
+			break;
+		case 'U':
+			test_action = ACTION_UNIT_TEST;
+			test_action_params = optarg;
+			actions++;
+			verbose_out = true;
+			break;
 		case 'q':
 			qemu_binary = optarg;
 			break;
 		case 'k':
 			kernel_image = optarg;
-			break;
-		case 't':
-			test_dir_list = optarg;
 			break;
 		case 'd':
 			enable_debug = true;
@@ -1891,6 +1972,14 @@ int main(int argc, char *argv[])
 		l_error("Invalid command line parameters");
 		return EXIT_FAILURE;
 	}
+
+	if (actions > 1) {
+		l_error("Only one action can be specified");
+		return EXIT_FAILURE;
+	}
+
+	if (!actions)
+		test_action = ACTION_AUTO_TEST;
 
 	own_binary = argv[0];
 	test_argv = argv + optind;
