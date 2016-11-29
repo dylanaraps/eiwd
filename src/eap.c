@@ -173,17 +173,25 @@ static void eap_send_identity_response(struct eap_state *eap, char *identity)
 	eap_send_response(eap, EAP_TYPE_IDENTITY, buf, len + 5);
 }
 
-static void eap_handle_request(struct eap_state *eap,
+static void eap_handle_request(struct eap_state *eap, uint16_t id,
 				const uint8_t *pkt, size_t len)
 {
 	enum eap_type type;
 	uint8_t buf[10];
 	int buf_len;
+	void (*op)(struct eap_state *eap,
+				const uint8_t *pkt, size_t len);
 
 	if (len < 1)
 		/* Invalid packets to be ignored */
 		return;
 
+	if (id == eap->last_id)
+		op = eap->method->handle_retransmit;
+	else
+		op = eap->method->handle_request;
+
+	eap->last_id = id;
 	type = pkt[0];
 
 	if (type >= __EAP_TYPE_MIN_METHOD) {
@@ -196,7 +204,7 @@ static void eap_handle_request(struct eap_state *eap,
 		}
 
 		if (type != EAP_TYPE_EXPANDED) {
-			eap->method->handle_request(eap, pkt + 1, len - 1);
+			op(eap, pkt + 1, len - 1);
 			return;
 		}
 
@@ -207,7 +215,7 @@ static void eap_handle_request(struct eap_state *eap,
 		if (len < 8)
 			return;
 
-		eap->method->handle_request(eap, pkt + 8, len - 8);
+		op(eap, pkt + 8, len - 8);
 		return;
 	}
 
@@ -266,22 +274,7 @@ void eap_rx_packet(struct eap_state *eap, const uint8_t *pkt, size_t len)
 
 	switch ((enum eap_code) code) {
 	case EAP_CODE_REQUEST:
-		if (id == eap->last_id) {
-			/*
-			 * We should resend the last response if this ever
-			 * happens and if one was sent already.  This can
-			 * happen if the request_credentials callback needs
-			 * to wait for user input.  We can assume a reliable
-			 * lower layer but the retransmission behaviour is
-			 * decided by the authenticator (Section 4.3).
-			 */
-
-			return;
-		}
-
-		eap->last_id = id;
-
-		eap_handle_request(eap, pkt + 4, eap_len - 4);
+		eap_handle_request(eap, id, pkt + 4, eap_len - 4);
 		return;
 
 	case EAP_CODE_FAILURE:

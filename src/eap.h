@@ -98,6 +98,8 @@ struct eap_method {
 
 	void (*handle_request)(struct eap_state *eap,
 				const uint8_t *pkt, size_t len);
+	void (*handle_retransmit)(struct eap_state *eap,
+				const uint8_t *pkt, size_t len);
 };
 
 struct eap_method_desc {
