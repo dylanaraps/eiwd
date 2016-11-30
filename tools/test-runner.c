@@ -307,7 +307,7 @@ static void start_qemu(void)
 
 	if (has_virt) {
 		argv[pos++] = "-cpu";
-		argv[pos++] = "host";
+		argv[pos++] = "host,level=9";
 		argv[pos++] = "-enable-kvm";
 	}
 
