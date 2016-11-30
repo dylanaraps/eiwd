@@ -1042,6 +1042,59 @@ invalid_frag:
 	eap_method_error(eap);
 }
 
+static void eap_wsc_handle_retransmit(struct eap_state *eap,
+						const uint8_t *pkt, size_t len)
+{
+	struct eap_wsc_state *wsc = eap_get_data(eap);
+	uint8_t op;
+	uint8_t flags;
+
+	if (len < 2)
+		return;
+
+	op = pkt[0];
+
+	switch (op) {
+	case WSC_OP_NACK:
+		eap_wsc_handle_nack(eap, pkt + 2, len - 2);
+		return;
+	case WSC_OP_ACK:
+	case WSC_OP_DONE:
+		/* Should never receive these as Enrollee */
+		return;
+	case WSC_OP_MSG:
+		flags = pkt[1];
+
+		if (flags & WSC_FLAG_MF) {
+			if (!wsc->rx_pdu_buf) {
+				eap_method_error(eap);
+				return;
+			}
+
+			eap_wsc_send_frag_ack(eap);
+			return;
+		}
+	}
+
+	if (!wsc->sent_pdu || !wsc->sent_len) {
+		eap_method_error(eap);
+		return;
+	}
+
+	if (wsc->sent_len + EAP_WSC_HEADER_LEN > eap_get_mtu(eap)) {
+		eap_wsc_send_fragment(eap);
+	} else {
+		size_t msg_len = wsc->sent_len + EAP_WSC_HEADER_LEN;
+		uint8_t buf[msg_len];
+
+		buf[12] = WSC_OP_MSG;
+		buf[13] = 0;
+		memcpy(buf + EAP_WSC_HEADER_LEN, wsc->sent_pdu, wsc->sent_len);
+
+		eap_send_response(eap, EAP_TYPE_EXPANDED, buf, msg_len);
+	}
+}
+
 static bool load_hexencoded(struct l_settings *settings, const char *key,
 						uint8_t *to, size_t len)
 {
@@ -1275,6 +1328,7 @@ static struct eap_method eap_wsc = {
 	.probe = eap_wsc_probe,
 	.remove = eap_wsc_remove,
 	.handle_request = eap_wsc_handle_request,
+	.handle_retransmit = eap_wsc_handle_retransmit,
 	.load_settings = eap_wsc_load_settings,
 };
 
