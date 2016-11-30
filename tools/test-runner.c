@@ -1313,7 +1313,7 @@ start_next_test:
 	if (!py_test)
 		return;
 
-	argv[0] = "python";
+	argv[0] = "python3";
 	argv[1] = py_test;
 	argv[2] = NULL;
 
