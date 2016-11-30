@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2015  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2015-2016  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -2050,6 +2050,124 @@ static void wsc_test_pbc_handshake(const void *data)
 	eap_exit();
 }
 
+static void wsc_test_retransmission_no_fragmentation(const void *data)
+{
+	static uint8_t ap_address[] = { 0x24, 0xa2, 0xe1, 0xec, 0x17, 0x04 };
+	static uint8_t sta_address[] = { 0xa0, 0xa8, 0xcd, 0x1c, 0x7e, 0xc9 };
+	struct verify_data verify;
+	struct handshake_state *hs;
+	struct eapol_sm *sm;
+	char *hex;
+	struct l_settings *settings;
+
+	eap_init(1400);
+	eapol_init();
+
+	hs = handshake_state_new(1);
+	sm = eapol_sm_new(hs);
+	eapol_register(sm);
+
+	handshake_state_set_authenticator_address(hs, ap_address);
+	handshake_state_set_supplicant_address(hs, sta_address);
+
+	__eapol_set_tx_packet_func(verify_8021x);
+	__eapol_set_tx_user_data(&verify);
+	__eapol_set_deauthenticate_func(verify_deauthenticate);
+	eapol_sm_set_user_data(sm, &verify);
+	eapol_sm_set_event_func(sm, verify_credential);
+
+	settings = l_settings_new();
+	l_settings_set_string(settings, "Security", "EAP-Identity",
+					"WFA-SimpleConfig-Enrollee-1-0");
+	l_settings_set_string(settings, "Security", "EAP-Method", "WSC");
+
+	l_settings_set_uint(settings, "WSC", "RFBand", WSC_RF_BAND_2_4_GHZ);
+	l_settings_set_uint(settings, "WSC", "ConfigurationMethods",
+				WSC_CONFIGURATION_METHOD_VIRTUAL_DISPLAY_PIN |
+				WSC_CONFIGURATION_METHOD_KEYPAD |
+				WSC_CONFIGURATION_METHOD_DISPLAY |
+				WSC_CONFIGURATION_METHOD_NFC_INTERFACE);
+	l_settings_set_string(settings, "WSC", "PrimaryDeviceType",
+					"0-00000000-0");
+	l_settings_set_string(settings, "WSC", "EnrolleeMAC",
+					util_address_to_string(sta_address));
+
+	hex = l_util_hexstring(m1_data_2.expected.enrollee_nonce, 16);
+	l_settings_set_string(settings, "WSC", "EnrolleeNonce", hex);
+	l_free(hex);
+
+	hex = l_util_hexstring(m1_data_2.private_key,
+						m1_data_2.private_key_size);
+	l_settings_set_string(settings, "WSC", "PrivateKey", hex);
+	l_free(hex);
+
+	l_settings_set_string(settings, "WSC", "E-SNonce1",
+					"fdbb480ee6f572f3591cc3b364f2185b");
+	l_settings_set_string(settings, "WSC", "E-SNonce2",
+					"c12698739faf385920ba659d524c71c9");
+	l_settings_set_string(settings, "WSC", "IV1",
+					"9a31f84b4672f2ccf63c845eed3464ec");
+	l_settings_set_string(settings, "WSC", "IV2",
+					"4e3a4cf088176989e148d4c10b96e8fd");
+
+	handshake_state_set_8021x_config(hs, settings);
+	eapol_start(sm);
+
+	l_settings_free(settings);
+
+	VERIFY_RESET(verify, eap_identity_resp);
+	__eapol_rx_packet(1, ap_address, eap_identity_req,
+						sizeof(eap_identity_req));
+	assert(verify.response_sent);
+	__eapol_rx_packet(1, ap_address, eap_identity_req,
+						sizeof(eap_identity_req));
+	assert(verify.response_sent);
+
+	VERIFY_RESET(verify, eap_wsc_m1_2);
+	__eapol_rx_packet(1, ap_address, eap_wsc_start, sizeof(eap_wsc_start));
+	assert(verify.response_sent);
+	__eapol_rx_packet(1, ap_address, eap_wsc_start, sizeof(eap_wsc_start));
+	assert(verify.response_sent);
+
+	VERIFY_RESET(verify, eap_wsc_m3);
+	__eapol_rx_packet(1, ap_address, eap_wsc_m2_2, sizeof(eap_wsc_m2_2));
+	assert(verify.response_sent);
+	__eapol_rx_packet(1, ap_address, eap_wsc_m2_2, sizeof(eap_wsc_m2_2));
+	assert(verify.response_sent);
+
+	VERIFY_RESET(verify, eap_wsc_m3);
+	__eapol_rx_packet(1, ap_address, eap_wsc_m2_2, sizeof(eap_wsc_m2_2));
+	assert(verify.response_sent);
+
+	VERIFY_RESET(verify, eap_wsc_m5);
+	__eapol_rx_packet(1, ap_address, eap_wsc_m4, sizeof(eap_wsc_m4));
+	assert(verify.response_sent);
+	__eapol_rx_packet(1, ap_address, eap_wsc_m4, sizeof(eap_wsc_m4));
+	assert(verify.response_sent);
+
+	VERIFY_RESET(verify, eap_wsc_m7);
+	__eapol_rx_packet(1, ap_address, eap_wsc_m6, sizeof(eap_wsc_m6));
+	assert(verify.response_sent);
+	__eapol_rx_packet(1, ap_address, eap_wsc_m6, sizeof(eap_wsc_m6));
+	assert(verify.response_sent);
+
+	VERIFY_RESET(verify, eap_wsc_done);
+	verify.expected_creds = creds_1;
+	verify.n_creds = 1;
+	verify.cur_cred = 0;
+	__eapol_rx_packet(1, ap_address, eap_wsc_m8, sizeof(eap_wsc_m8));
+	assert(verify.response_sent);
+	assert(verify.cur_cred == 1);
+
+	__eapol_rx_packet(1, ap_address, eap_fail, sizeof(eap_fail));
+	assert(verify.eapol_failed);
+	__eapol_rx_packet(1, ap_address, eap_fail, sizeof(eap_fail));
+	assert(verify.eapol_failed);
+
+	handshake_state_free(hs);
+	eapol_exit();
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -2132,6 +2250,9 @@ int main(int argc, char *argv[])
 
 	l_test_add("/wsc/handshake/PBC Handshake Test",
 						wsc_test_pbc_handshake, NULL);
+
+	l_test_add("/wsc/retransmission/no fragmentation",
+				wsc_test_retransmission_no_fragmentation, NULL);
 
 	return l_test_run();
 }
