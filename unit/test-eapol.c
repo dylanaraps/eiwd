@@ -2625,7 +2625,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	__eapol_set_tx_user_data(s);
 
 	r = handshake_state_set_own_wpa(hs,
-				eapol_key_data_20 + sizeof(struct eapol_key));
+				eapol_key_data_14 + sizeof(struct eapol_key));
 	assert(r);
 
 	handshake_state_set_ap_wpa(hs, ap_wpa_ie);
