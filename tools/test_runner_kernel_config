@@ -12,6 +12,7 @@ scripts/config --enable CONFIG_CRYPTO_AES_X86_64
 scripts/config --enable CONFIG_CRYPTO_AES_NI_INTEL
 scripts/config --enable CONFIG_CRYPTO_SHA1_SSSE3
 scripts/config --enable CONFIG_CRYPTO_SHA256_SSSE3
+scripts/config --enable CONFIG_CRYPTO_ECB
 scripts/config --enable CONFIG_KEY_DH_OPERATIONS
 scripts/config --enable CONFIG_ASYMMETRIC_KEY_TYPE
 scripts/config --enable CONFIG_ASYMMETRIC_PUBLIC_KEY_SUBTYPE
