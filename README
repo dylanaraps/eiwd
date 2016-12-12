@@ -116,3 +116,13 @@ virtual radio devices.
 
 The radio id assigned to each virtual device is its internal id used
 by the Wireless device.
+
+
+Information
+===========
+
+Mailing list:
+	https://lists.01.org/mailman/listinfo/iwd
+
+IRC:
+	irc://irc.freenode.net/#iwd
