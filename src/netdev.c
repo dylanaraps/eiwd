@@ -323,6 +323,7 @@ static void netdev_connect_failed(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
 	netdev_connect_cb_t connect_cb = netdev->connect_cb;
+	netdev_event_func_t event_filter = netdev->event_filter;
 	void *connect_data = netdev->user_data;
 	enum netdev_result result = netdev->result;
 
@@ -333,6 +334,9 @@ static void netdev_connect_failed(struct l_genl_msg *msg, void *user_data)
 
 	if (connect_cb)
 		connect_cb(netdev, result, connect_data);
+	else if (event_filter)
+		event_filter(netdev, NETDEV_EVENT_DISCONNECT_BY_SME,
+				connect_data);
 }
 
 static void netdev_free(void *data)

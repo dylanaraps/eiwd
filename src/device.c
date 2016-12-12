@@ -615,6 +615,10 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 		break;
 	case NETDEV_EVENT_DISCONNECT_BY_AP:
 		device_disconnect_by_ap(device);
+		break;
+	case NETDEV_EVENT_DISCONNECT_BY_SME:
+		device_disassociated(device);
+		break;
 	};
 }
 
