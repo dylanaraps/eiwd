@@ -73,7 +73,6 @@ struct netdev {
 	uint32_t connect_cmd_id;
 	uint32_t disconnect_cmd_id;
 	enum netdev_result result;
-	uint8_t *mde;
 
 	struct l_queue *watches;
 	uint32_t next_watch_id;
@@ -319,9 +318,6 @@ static void netdev_connect_free(struct netdev *netdev)
 		l_genl_family_cancel(nl80211, netdev->disconnect_cmd_id);
 		netdev->disconnect_cmd_id = 0;
 	}
-
-	l_free(netdev->mde);
-	netdev->mde = NULL;
 }
 
 static void netdev_connect_failed(struct l_genl_msg *msg, void *user_data)
@@ -1101,13 +1097,14 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 		goto error;
 
 	/* Check 802.11r IEs */
-	if (netdev->mde && !ies)
+	if (netdev->handshake->mde && !ies)
 		goto error;
 
 	if (ies) {
 		struct ie_tlv_iter iter;
 		const uint8_t *mde = NULL;
 		const uint8_t *fte = NULL;
+		const uint8_t *sent_mde = netdev->handshake->mde;
 
 		ie_tlv_iter_init(&iter, ies, ies_len);
 
@@ -1130,8 +1127,8 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 		}
 
 		/* An MD IE identical to the one we sent must be present */
-		if (netdev->mde && (!mde || memcmp(netdev->mde,
-						mde, netdev->mde[1] + 2)))
+		if (sent_mde && (!mde || memcmp(sent_mde, mde,
+						sent_mde[1] + 2)))
 			goto error;
 
 		/*
@@ -1140,10 +1137,10 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 		 * in a non-RSN (12.4.2 vs. 12.4.3).
 		 */
 
-		if (netdev->mde && !is_rsn && fte)
+		if (sent_mde && !is_rsn && fte)
 			goto error;
 
-		if (netdev->mde && is_rsn) {
+		if (sent_mde && is_rsn) {
 			struct ie_ft_info ft_info;
 			uint8_t zeros[32];
 
@@ -1269,8 +1266,7 @@ static unsigned int ie_rsn_akm_suite_to_nl80211(enum ie_rsn_akm_suite akm)
 
 static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 						struct scan_bss *bss,
-						struct handshake_state *hs,
-						const uint8_t *mde)
+						struct handshake_state *hs)
 {
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
@@ -1337,9 +1333,9 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 		iov_elems += 1;
 	}
 
-	if (mde) {
-		iov[iov_elems].iov_base = (void *) mde;
-		iov[iov_elems].iov_len = mde[1] + 2;
+	if (hs->mde) {
+		iov[iov_elems].iov_base = (void *) hs->mde;
+		iov[iov_elems].iov_len = hs->mde[1] + 2;
 		iov_elems += 1;
 	}
 
@@ -1353,7 +1349,7 @@ static int netdev_connect_common(struct netdev *netdev,
 					struct l_genl_msg *cmd_connect,
 					struct scan_bss *bss,
 					struct handshake_state *hs,
-					struct eapol_sm *sm, const uint8_t *mde,
+					struct eapol_sm *sm,
 					netdev_event_func_t event_filter,
 					netdev_connect_cb_t cb, void *user_data)
 {
@@ -1374,9 +1370,6 @@ static int netdev_connect_common(struct netdev *netdev,
 	netdev->handshake = hs;
 	netdev->sm = sm;
 
-	if (mde)
-		netdev->mde = l_memdup(mde, mde[1] + 2);
-
 	handshake_state_set_authenticator_address(hs, bss->addr);
 	handshake_state_set_supplicant_address(hs, netdev->addr);
 
@@ -1385,7 +1378,7 @@ static int netdev_connect_common(struct netdev *netdev,
 }
 
 int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
-				struct handshake_state *hs, const uint8_t *mde,
+				struct handshake_state *hs,
 				netdev_event_func_t event_filter,
 				netdev_connect_cb_t cb, void *user_data)
 {
@@ -1396,14 +1389,14 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	if (netdev->connected)
 		return -EISCONN;
 
-	cmd_connect = netdev_build_cmd_connect(netdev, bss, hs, mde);
+	cmd_connect = netdev_build_cmd_connect(netdev, bss, hs);
 	if (!cmd_connect)
 		return -EINVAL;
 
 	if (is_rsn)
 		sm = eapol_sm_new(hs);
 
-	return netdev_connect_common(netdev, cmd_connect, bss, hs, sm, mde,
+	return netdev_connect_common(netdev, cmd_connect, bss, hs, sm,
 						event_filter, cb, user_data);
 }
 
@@ -1425,7 +1418,7 @@ int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
 	if (netdev->connected)
 		return -EISCONN;
 
-	cmd_connect = netdev_build_cmd_connect(netdev, bss, hs, NULL);
+	cmd_connect = netdev_build_cmd_connect(netdev, bss, hs);
 	if (!cmd_connect)
 		return -EINVAL;
 
@@ -1449,7 +1442,7 @@ int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
 	eapol_sm_set_user_data(sm, user_data);
 	eapol_sm_set_event_func(sm, eapol_cb);
 
-	return netdev_connect_common(netdev, cmd_connect, bss, hs, sm, NULL,
+	return netdev_connect_common(netdev, cmd_connect, bss, hs, sm,
 						event_filter, cb, user_data);
 
 error:
