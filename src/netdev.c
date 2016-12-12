@@ -65,7 +65,6 @@ struct netdev {
 	void *user_data;
 	struct eapol_sm *sm;
 	struct handshake_state *handshake;
-	uint8_t remote_addr[ETH_ALEN];
 	uint32_t pairwise_new_key_cmd_id;
 	uint32_t pairwise_set_key_cmd_id;
 	uint32_t group_new_key_cmd_id;
@@ -460,7 +459,7 @@ static void netdev_rekey_offload_event(struct l_genl_msg *msg,
 			replay_ctr = *((uint64_t *) data);
 			__eapol_update_replay_counter(netdev->index,
 							netdev->addr,
-							netdev->remote_addr,
+							netdev->handshake->aa,
 							replay_ctr);
 			return;
 		}
@@ -559,7 +558,7 @@ static struct l_genl_msg *netdev_build_cmd_deauthenticate(struct netdev *netdev,
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
-							netdev->remote_addr);
+							netdev->handshake->aa);
 
 	return msg;
 }
@@ -655,8 +654,8 @@ static struct l_genl_msg *netdev_build_cmd_set_station(struct netdev *netdev)
 	msg = l_genl_msg_new_sized(NL80211_CMD_SET_STATION, 512);
 
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC,
-						ETH_ALEN, netdev->remote_addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
+						netdev->handshake->aa);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_FLAGS2,
 				sizeof(struct nl80211_sta_flag_update), &flags);
 
@@ -1365,7 +1364,6 @@ static int netdev_connect_common(struct netdev *netdev,
 	netdev->event_filter = event_filter;
 	netdev->connect_cb = cb;
 	netdev->user_data = user_data;
-	memcpy(netdev->remote_addr, bss->addr, ETH_ALEN);
 	netdev->connected = true;
 	netdev->handshake = hs;
 	netdev->sm = sm;
