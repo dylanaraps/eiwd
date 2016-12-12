@@ -37,7 +37,6 @@
 #include "src/util.h"
 #include "src/wsc.h"
 #include "src/handshake.h"
-#include "src/eapol.h"
 #include "src/eap-wsc.h"
 #include "src/crypto.h"
 #include "src/common.h"
@@ -396,7 +395,6 @@ static inline enum wsc_rf_band freq_to_rf_band(uint32_t freq)
 static void wsc_connect(struct wsc *wsc)
 {
 	struct handshake_state *hs;
-	struct eapol_sm *sm;
 	struct l_settings *settings = l_settings_new();
 	struct scan_bss *bss = wsc->target;
 	uint32_t ifindex = netdev_get_ifindex(device_get_netdev(wsc->device));
@@ -404,11 +402,6 @@ static void wsc_connect(struct wsc *wsc)
 	wsc->target = NULL;
 
 	hs = handshake_state_new(ifindex);
-
-	sm = eapol_sm_new(hs);
-
-	eapol_sm_set_user_data(sm, wsc);
-	eapol_sm_set_event_func(sm, wsc_eapol_event);
 
 	l_settings_set_string(settings, "Security", "EAP-Identity",
 					"WFA-SimpleConfig-Enrollee-1-0");
@@ -428,12 +421,9 @@ static void wsc_connect(struct wsc *wsc)
 	handshake_state_set_8021x_config(hs, settings);
 	wsc->eap_settings = settings;
 
-	eapol_sm_set_use_eapol_start(sm, true);
-
-	if (netdev_connect_wsc(device_get_netdev(wsc->device), bss, hs, sm,
-					wsc_netdev_event,
-					wsc_connect_cb, wsc) < 0) {
-		eapol_sm_free(sm);
+	if (netdev_connect_wsc(device_get_netdev(wsc->device), bss, hs,
+					wsc_netdev_event, wsc_connect_cb,
+					wsc_eapol_event, wsc) < 0) {
 		dbus_pending_reply(&wsc->pending,
 					dbus_error_failed(wsc->pending));
 		return;

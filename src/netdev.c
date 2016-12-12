@@ -1230,12 +1230,8 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 		 * events can be reversed (e.g. connect_event, then PAE data)
 		 * due to scheduling
 		 */
-		if (netdev->handshake) {
-			if (!netdev->sm)
-				netdev->sm = eapol_sm_new(netdev->handshake);
-
+		if (netdev->sm)
 			eapol_register(netdev->sm);
-		}
 
 		return;
 	}
@@ -1396,6 +1392,8 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 				netdev_connect_cb_t cb, void *user_data)
 {
 	struct l_genl_msg *cmd_connect;
+	struct eapol_sm *sm = NULL;
+	bool is_rsn = hs != NULL;
 
 	if (netdev->connected)
 		return -EISCONN;
@@ -1404,14 +1402,19 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	if (!cmd_connect)
 		return -EINVAL;
 
-	return netdev_connect_common(netdev, cmd_connect, bss, hs, NULL, mde,
+	if (is_rsn)
+		sm = eapol_sm_new(hs);
+
+	return netdev_connect_common(netdev, cmd_connect, bss, hs, sm, mde,
 						event_filter, cb, user_data);
 }
 
 int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
-				struct handshake_state *hs, struct eapol_sm *sm,
+				struct handshake_state *hs,
 				netdev_event_func_t event_filter,
-				netdev_connect_cb_t cb, void *user_data)
+				netdev_connect_cb_t cb,
+				netdev_eapol_event_func_t eapol_cb,
+				void *user_data)
 {
 	struct l_genl_msg *cmd_connect;
 	struct wsc_association_request request;
@@ -1419,6 +1422,7 @@ int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
 	size_t pdu_len;
 	void *ie;
 	size_t ie_len;
+	struct eapol_sm *sm;
 
 	if (netdev->connected)
 		return -EISCONN;
@@ -1442,6 +1446,10 @@ int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
 
 	l_genl_msg_append_attr(cmd_connect, NL80211_ATTR_IE, ie_len, ie);
 	l_free(ie);
+
+	sm = eapol_sm_new(hs);
+	eapol_sm_set_user_data(sm, user_data);
+	eapol_sm_set_event_func(sm, eapol_cb);
 
 	return netdev_connect_common(netdev, cmd_connect, bss, hs, sm, NULL,
 						event_filter, cb, user_data);

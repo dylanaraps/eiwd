@@ -66,6 +66,9 @@ typedef void (*netdev_watch_func_t)(struct netdev *netdev,
 typedef void (*netdev_set_powered_cb_t)(struct netdev *netdev, int result,
 					void *user_data);
 typedef void (*netdev_destroy_func_t)(void *user_data);
+typedef void (*netdev_eapol_event_func_t)(unsigned int event,
+					const void *event_data,
+					void *user_data);
 
 const uint8_t *netdev_get_address(struct netdev *netdev);
 uint32_t netdev_get_ifindex(struct netdev *netdev);
@@ -78,9 +81,11 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 				netdev_event_func_t event_filter,
 				netdev_connect_cb_t cb, void *user_data);
 int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
-				struct handshake_state *hs, struct eapol_sm *sm,
+				struct handshake_state *hs,
 				netdev_event_func_t event_filter,
-				netdev_connect_cb_t cb, void *user_data);
+				netdev_connect_cb_t cb,
+				netdev_eapol_event_func_t eapol_cb,
+				void *user_data);
 int netdev_disconnect(struct netdev *netdev,
 				netdev_disconnect_cb_t cb, void *user_data);
 
