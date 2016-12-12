@@ -677,9 +677,11 @@ void device_connect_network(struct device *device, struct network *network,
 	enum security security = network_get_security(network);
 	struct wiphy *wiphy = device->wiphy;
 	struct l_dbus *dbus = dbus_get_bus();
-	struct handshake_state *hs = NULL;
+	struct handshake_state *hs;
 	bool add_mde = false;
 	uint8_t *mde;
+
+	hs = handshake_state_new(netdev_get_ifindex(device->netdev));
 
 	if (security == SECURITY_PSK || security == SECURITY_8021X) {
 		struct ie_rsn_info bss_info;
@@ -717,8 +719,6 @@ void device_connect_network(struct device *device, struct network *network,
 			return;
 		} else if (info.group_management_cipher != 0)
 			info.mfpc = true;
-
-		hs = handshake_state_new(netdev_get_ifindex(device->netdev));
 
 		ssid = network_get_ssid(network);
 		handshake_state_set_ssid(hs, (void *) ssid, strlen(ssid));
@@ -758,8 +758,7 @@ void device_connect_network(struct device *device, struct network *network,
 		mde[1] = 3;
 		memcpy(mde + 2, bss->mde, 3);
 
-		if (hs)
-			handshake_state_set_mde(hs, mde);
+		handshake_state_set_mde(hs, mde);
 	} else
 		mde = NULL;
 
@@ -768,8 +767,7 @@ void device_connect_network(struct device *device, struct network *network,
 	if (netdev_connect(device->netdev, bss, hs, mde,
 					device_netdev_event,
 					device_connect_cb, device) < 0) {
-		if (hs)
-			handshake_state_free(hs);
+		handshake_state_free(hs);
 
 		l_free(mde);
 
