@@ -1224,7 +1224,7 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 		if (!igtk || igtk_len < 8)
 			return;
 
-		igtk_key_index = util_bit_field(igtk[0], 0, 2);
+		igtk_key_index = l_get_le16(igtk);;
 		igtk += 2;
 		igtk_len -= 2;
 	} else
