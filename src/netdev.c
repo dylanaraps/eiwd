@@ -1314,9 +1314,9 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 					4, &nl_cipher);
 
 		if (hs->mfp) {
-			bool mfp = true;
+			uint32_t use_mfp = NL80211_MFP_REQUIRED;
 			l_genl_msg_append_attr(msg, NL80211_ATTR_USE_MFP,
-					4, &mfp);
+								4, &use_mfp);
 		}
 
 		nl_akm = ie_rsn_akm_suite_to_nl80211(hs->akm_suite);
