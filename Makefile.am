@@ -201,6 +201,7 @@ unit_test_wsc_SOURCES = unit/test-wsc.c src/wscutil.h src/wscutil.c \
 unit_test_wsc_LDADD = ell/libell-internal.la
 
 unit_test_eap_mschapv2_SOURCES = src/eap-mschapv2.h src/eap-mschapv2.c \
+				src/eap.c src/eap.h \
 				unit/test-eap-mschapv2.c
 
 unit_test_eap_mschapv2_LDADD = ell/libell-internal.la

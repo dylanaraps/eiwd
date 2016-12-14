@@ -20,10 +20,54 @@
  *
  */
 
-#include <ell/ell.h>
 #include <ctype.h>
+#include <stdio.h>
+#include <errno.h>
+#include <ell/ell.h>
 
+#include "eap.h"
 #include "eap-mschapv2.h"
+
+#define MSCHAPV2_CHAL_LEN 16
+#define MSCHAPV2_NT_RESPONSE_LEN 24
+#define MSCHAPV2_AUTH_RESPONSE_LEN 20
+#define MSCHAPV2_MASTER_KEY_LEN 16
+
+#define MSCHAPV2_OP_CHALLENGE 1
+#define MSCHAPV2_OP_RESPONSE 2
+#define MSCHAPV2_OP_SUCCESS 3
+#define MSCHAPV2_OP_FAILURE 4
+
+struct eap_mschapv2_state {
+	uint8_t password_hash[16];
+	char *user;
+	size_t user_len;
+	uint8_t current_id;
+
+	uint8_t peer_challenge[MSCHAPV2_CHAL_LEN];
+	uint8_t server_challenge[MSCHAPV2_CHAL_LEN];
+};
+
+struct mschapv2_header {
+	uint8_t op_code;
+	uint8_t mschap_id;
+	uint16_t mschap_len;
+} __attribute__((packed));
+
+struct mschapv2_value {
+	uint8_t peer_challenge[MSCHAPV2_CHAL_LEN];
+	uint8_t reserved[8];
+	uint8_t nt_response[MSCHAPV2_NT_RESPONSE_LEN];
+	uint8_t flags;
+} __attribute__((packed));
+
+struct mschapv2_response {
+	struct mschapv2_header hdr;
+	/* This will always be sizeof(value) */
+	uint8_t val_length;
+	struct mschapv2_value value;
+	char name[0];
+} __attribute__((packed));
 
 /**
  * Generate the asymetric start keys from our mschapv2 master key for MPPE
@@ -353,3 +397,322 @@ bool mschapv2_generate_authenticator_response(
 
 	return true;
 }
+
+static int eap_mschapv2_probe(struct eap_state *eap, const char *name)
+{
+	struct eap_mschapv2_state *state;
+
+	if (strcasecmp(name, "MSCHAPV2"))
+		return -ENOTSUP;
+
+	state = l_new(struct eap_mschapv2_state, 1);
+
+	eap_set_data(eap, state);
+
+	return 0;
+}
+
+static void eap_mschapv2_free(struct eap_mschapv2_state *state)
+{
+	l_free(state->user);
+
+	l_free(state);
+}
+
+static void eap_mschapv2_remove(struct eap_state *eap)
+{
+	struct eap_mschapv2_state *state;
+
+	state = eap_get_data(eap);
+	eap_set_data(eap, NULL);
+
+	eap_mschapv2_free(state);
+}
+
+static bool eap_mschapv2_send_response(struct eap_state *eap)
+{
+	struct eap_mschapv2_state *state = eap_get_data(eap);
+	size_t size = sizeof(struct mschapv2_response) + state->user_len;
+	uint8_t output[size + 5];
+	struct mschapv2_response *response =
+				(struct mschapv2_response *) (output + 5);
+	bool ret;
+
+	ret = mschapv2_generate_nt_response(state->password_hash,
+						state->peer_challenge,
+						state->server_challenge,
+						state->user,
+						response->value.nt_response);
+
+	if (!ret)
+		return false;
+
+	response->hdr.op_code = MSCHAPV2_OP_RESPONSE;
+	response->hdr.mschap_id = state->current_id;
+	response->hdr.mschap_len = L_BE16_TO_CPU(size);
+	response->val_length = sizeof(struct mschapv2_value);
+
+	memcpy(response->value.peer_challenge, state->peer_challenge,
+							MSCHAPV2_CHAL_LEN);
+	memcpy(response->name, state->user, state->user_len);
+
+	eap_send_response(eap, EAP_TYPE_MSCHAPV2, output, sizeof(output));
+
+	return true;
+}
+
+static void eap_mschapv2_handle_challenge(struct eap_state *eap,
+						const uint8_t *pkt, size_t len)
+{
+	struct eap_mschapv2_state *state = eap_get_data(eap);
+
+	if (pkt[0] != MSCHAPV2_CHAL_LEN) {
+		l_error("MSCHAPV2-Challenge had unexpected length: %x",
+								pkt[0]);
+		goto err;
+	}
+
+	if (len - 1 < MSCHAPV2_CHAL_LEN) {
+		l_error("MSCHAPV2-Challenge packet was to short for challenge");
+		goto err;
+	}
+
+	memcpy(state->server_challenge, pkt + 1, MSCHAPV2_CHAL_LEN);
+	l_getrandom(state->peer_challenge, MSCHAPV2_CHAL_LEN);
+
+	if (eap_mschapv2_send_response(eap))
+		return;
+
+err:
+	eap_method_error(eap);
+}
+
+/*
+ * We need to verify the authenticator response from the server
+ * and generate the master session key.
+ */
+static void eap_mschapv2_handle_success(struct eap_state *eap,
+					const uint8_t *pkt, size_t len)
+{
+	struct eap_mschapv2_state *state = eap_get_data(eap);
+	uint8_t nt_response[24];
+	uint8_t password_hash_hash[16];
+	uint8_t master_key[16];
+	uint8_t session_key[32];
+	char authenticator_resp[42];
+	struct l_checksum *check;
+	bool ret;
+
+	uint8_t buffer[5 + 1];
+
+	check = l_checksum_new(L_CHECKSUM_MD4);
+	if (!check)
+		goto err;
+
+	l_checksum_update(check, state->password_hash, 16);
+	l_checksum_get_digest(check, password_hash_hash, 16);
+	l_checksum_free(check);
+
+	ret = mschapv2_generate_nt_response(state->password_hash,
+						state->peer_challenge,
+						state->server_challenge,
+						state->user, nt_response);
+
+	if (!ret)
+		goto err;
+
+	ret = mschapv2_generate_authenticator_response(password_hash_hash,
+						nt_response,
+						state->peer_challenge,
+						state->server_challenge,
+						state->user,
+						authenticator_resp);
+
+	if (!ret)
+		goto err;
+
+	/*
+	 * For iwd timing attacks are unlikly because media access will
+	 * influence timing. If this code is ever taken out of iwd, memcmp
+	 * should be replaced by a constant time memcmp
+	 */
+	if (len < 42 || memcmp(authenticator_resp, pkt, 42)) {
+		l_warn("Authenticator response didn't match");
+		goto err;
+	}
+
+
+	ret = mschapv2_get_master_key(password_hash_hash, nt_response,
+								master_key);
+	ret &= mschapv2_get_asymmetric_start_key(master_key, session_key,
+							16, false, true);
+	ret &= mschapv2_get_asymmetric_start_key(master_key, session_key + 16,
+							16, false, false);
+
+	if (!ret)
+		goto err;
+
+	eap_method_success(eap);
+	/* The eapol set_key_material only needs msk, and that's all we got */
+	eap_set_key_material(eap, session_key, 32, NULL, 0, NULL, 0);
+
+	buffer[5] = MSCHAPV2_OP_SUCCESS;
+	eap_send_response(eap, EAP_TYPE_MSCHAPV2, buffer, sizeof(buffer));
+
+	return;
+
+err:
+	eap_method_error(eap);
+}
+
+static void eap_mschapv2_handle_failure(struct eap_state *eap,
+					const uint8_t *pkt, size_t len)
+{
+	/*
+	 * From what I have seen, we can't prompt the user in any useful way
+	 * yet, so we can't do any proper error handling.
+	 * The values we can read from this are defined in:
+	 * https://tools.ietf.org/html/draft-ietf-pppext-mschap-v2-01
+	 * Section 9
+	 *
+	 * At the current point, this will be a fail.
+	 */
+	l_debug("");
+	eap_method_error(eap);
+}
+
+static void eap_mschapv2_handle_request(struct eap_state *eap,
+					const uint8_t *pkt, size_t len)
+{
+	struct eap_mschapv2_state *state = eap_get_data(eap);
+	const struct mschapv2_header *hdr = (struct mschapv2_header *) pkt;
+	size_t size = sizeof(*hdr);
+
+	if (len < sizeof(struct mschapv2_header) + 1) {
+		l_error("EAP-MSCHAPV2 packet too short");
+		goto err;
+	}
+
+	state->current_id = hdr->mschap_id;
+
+	if (L_BE16_TO_CPU(hdr->mschap_len) != len) {
+		l_error("EAP-MSCHAPV2 packet contains invalid length");
+		goto err;
+	}
+
+	switch (hdr->op_code) {
+	case MSCHAPV2_OP_CHALLENGE:
+		eap_mschapv2_handle_challenge(eap, pkt + size, len - size);
+		break;
+	case MSCHAPV2_OP_SUCCESS:
+		eap_mschapv2_handle_success(eap, pkt + size, len - size);
+		break;
+	case MSCHAPV2_OP_FAILURE:
+		eap_mschapv2_handle_failure(eap, pkt + size, len - size);
+		break;
+	default:
+		l_error("Got unknown OP-Code in MSCHPV2 packet: %x",
+							hdr->op_code);
+		goto err;
+	}
+
+	return;
+
+err:
+	eap_method_error(eap);
+}
+
+static bool set_password_from_string(struct eap_mschapv2_state *state,
+						const char *password)
+{
+	if (!l_utf8_validate(password, strlen(password), NULL))
+		return false;
+
+	return mschapv2_nt_password_hash(password, state->password_hash);
+}
+
+static void set_user_name(struct eap_mschapv2_state *state, const char *user)
+{
+	const char *pos;
+
+	if (!user)
+		return;
+
+	for (pos = user; *pos; ++pos) {
+		if (*pos == '\\') {
+			state->user = l_strdup(pos + 1);
+			return;
+		}
+	}
+
+	state->user = l_strdup(user);
+}
+
+static bool eap_mschapv2_load_settings(struct eap_state *eap,
+					struct l_settings *settings,
+					const char *prefix)
+{
+	struct eap_mschapv2_state *state = eap_get_data(eap);
+	const char *password;
+	char setting[64];
+
+	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
+	set_user_name(state,
+			l_settings_get_value(settings, "Security", setting));
+
+	if (!state->user)
+		return false;
+
+	state->user_len = strlen(state->user);
+
+	/* Either read the password-hash from hexdump or password and hash it */
+	snprintf(setting, sizeof(setting), "%sPassword-Hash", prefix);
+	password = l_settings_get_value(settings, "Security", setting);
+	if (password) {
+		unsigned char *tmp;
+		size_t len;
+
+		tmp = l_util_from_hexstring(password, &len);
+		if (len != 16) {
+			l_error("Read an impossible password hash");
+			l_free(tmp);
+			return false;
+		}
+
+		memcpy(state->password_hash, tmp, 16);
+		l_free(tmp);
+	} else {
+		snprintf(setting, sizeof(setting), "%sPassword", prefix);
+		password = l_settings_get_value(settings, "Security",
+								setting);
+		if (!password || !set_password_from_string(state, password))
+			return false;
+	}
+
+	return true;
+}
+
+static struct eap_method eap_mschapv2 = {
+	.request_type = EAP_TYPE_MSCHAPV2,
+	.exports_msk = true,
+	.name = "MSCHAPV2",
+
+	.probe = eap_mschapv2_probe,
+	.remove = eap_mschapv2_remove,
+	.handle_request = eap_mschapv2_handle_request,
+	.load_settings = eap_mschapv2_load_settings,
+};
+
+static int eap_mschapv2_init(void)
+{
+	l_debug("");
+	return eap_register_method(&eap_mschapv2);
+}
+
+static void eap_mschapv2_exit(void)
+{
+	l_debug("");
+	eap_unregister_method(&eap_mschapv2);
+}
+
+EAP_METHOD_BUILTIN(eap_mschapv2, eap_mschapv2_init, eap_mschapv2_exit)
