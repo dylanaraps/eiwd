@@ -27,6 +27,9 @@ OS:
 	 9. <iwd>/tools/hwsim	0.0
 	10. <iwd>/src/iwd	0.0
 
+Note: You will need ell-key-crypto branch, not the master branch from the tree
+in step 2 above.
+
 Note: The test-runner mounts host's file system in readonly mode and executes
 the above binaries inside of an emulated environment directly from it.
 
