@@ -1,0 +1,355 @@
+/*
+ *
+ *  Wireless daemon for Linux
+ *
+ *  Copyright (C) 2016  Markus Ongyerth. All rights reserved.
+ *
+ *  This library is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU Lesser General Public
+ *  License as published by the Free Software Foundation; either
+ *  version 2.1 of the License, or (at your option) any later version.
+ *
+ *  This library is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *  Lesser General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this library; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ *
+ */
+
+#include <ell/ell.h>
+#include <ctype.h>
+
+#include "eap-mschapv2.h"
+
+/**
+ * Generate the asymetric start keys from our mschapv2 master key for MPPE
+ * This function is specified in:
+ * https://tools.ietf.org/html/draft-ietf-pppext-mschapv2-keys-02
+ *
+ * @master_key: The master key
+ * @session_key: the destination
+ * @session_len: The length of the requested key in octets (<= 20)
+ * @server: if the key should be generated for server side
+ * @send:  if the send or the receive key should be generated
+ *
+ * Returns: true on success, false if hash/encrypt couldn't be done
+ **/
+bool mschapv2_get_asymmetric_start_key(const uint8_t master_key[static 16],
+				uint8_t *session_key, size_t session_len,
+				bool server, bool send)
+{
+	static const uint8_t magic2[] = {
+		0x4f, 0x6e, 0x20, 0x74, 0x68, 0x65, 0x20, 0x63, 0x6c, 0x69,
+		0x65, 0x6e, 0x74, 0x20, 0x73, 0x69, 0x64, 0x65, 0x2c, 0x20,
+		0x74, 0x68, 0x69, 0x73, 0x20, 0x69, 0x73, 0x20, 0x74, 0x68,
+		0x65, 0x20, 0x73, 0x65, 0x6e, 0x64, 0x20, 0x6b, 0x65, 0x79,
+		0x3b, 0x20, 0x6f, 0x6e, 0x20, 0x74, 0x68, 0x65, 0x20, 0x73,
+		0x65, 0x72, 0x76, 0x65, 0x72, 0x20, 0x73, 0x69, 0x64, 0x65,
+		0x2c, 0x20, 0x69, 0x74, 0x20, 0x69, 0x73, 0x20, 0x74, 0x68,
+		0x65, 0x20, 0x72, 0x65, 0x63, 0x65, 0x69, 0x76, 0x65, 0x20,
+		0x6b, 0x65, 0x79, 0x2e
+	};
+	static const uint8_t magic3[] = {
+		0x4f, 0x6e, 0x20, 0x74, 0x68, 0x65, 0x20, 0x63, 0x6c, 0x69,
+		0x65, 0x6e, 0x74, 0x20, 0x73, 0x69, 0x64, 0x65, 0x2c, 0x20,
+		0x74, 0x68, 0x69, 0x73, 0x20, 0x69, 0x73, 0x20, 0x74, 0x68,
+		0x65, 0x20, 0x72, 0x65, 0x63, 0x65, 0x69, 0x76, 0x65, 0x20,
+		0x6b, 0x65, 0x79, 0x3b, 0x20, 0x6f, 0x6e, 0x20, 0x74, 0x68,
+		0x65, 0x20, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x20, 0x73,
+		0x69, 0x64, 0x65, 0x2c, 0x20, 0x69, 0x74, 0x20, 0x69, 0x73,
+		0x20, 0x74, 0x68, 0x65, 0x20, 0x73, 0x65, 0x6e, 0x64, 0x20,
+		0x6b, 0x65, 0x79, 0x2e
+	};
+	static const uint8_t shs_pad1[] = {
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+	};
+
+	static const uint8_t shs_pad2[] = {
+		0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2,
+		0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2,
+		0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2,
+		0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2, 0xf2
+	};
+	const uint8_t *magic;
+	struct l_checksum *check;
+
+	if (send == server)
+		magic = magic3;
+	else
+		magic = magic2;
+
+	check = l_checksum_new(L_CHECKSUM_SHA1);
+	if (!check)
+		return false;
+
+	l_checksum_update(check, master_key, 16);
+	l_checksum_update(check, shs_pad1, 40);
+	l_checksum_update(check, magic, 84);
+	l_checksum_update(check, shs_pad2, 40);
+	l_checksum_get_digest(check, session_key, session_len);
+
+	l_checksum_free(check);
+
+	return true;
+}
+
+/**
+ * Generate the master key for MPPE from mschapv2
+ * This function is specified in:
+ * https://tools.ietf.org/html/draft-ietf-pppext-mschapv2-keys-02
+ *
+ * @pw_hash_hash: The MD4 hash of the password hash
+ * @nt_response: The nt_response generated for mschapv2
+ * @master_key: The destination
+ *
+ * Returns: true on success, false if hash/encrypt couldn't be done
+ **/
+bool mschapv2_get_master_key(const uint8_t pw_hash_hash[static 16],
+					const uint8_t nt_response[static 24],
+					uint8_t master_key[static 16])
+{
+	static const uint8_t magic[] = {
+		0x54, 0x68, 0x69, 0x73, 0x20, 0x69, 0x73, 0x20, 0x74,
+		0x68, 0x65, 0x20, 0x4d, 0x50, 0x50, 0x45, 0x20, 0x4d,
+		0x61, 0x73, 0x74, 0x65, 0x72, 0x20, 0x4b, 0x65, 0x79
+	};
+	struct l_checksum *check;
+
+	check = l_checksum_new(L_CHECKSUM_SHA1);
+	if (!check)
+		return false;
+
+	l_checksum_update(check, pw_hash_hash, 16);
+	l_checksum_update(check, nt_response, 24);
+	l_checksum_update(check, magic, sizeof(magic));
+
+	l_checksum_get_digest(check, master_key, 16);
+	l_checksum_free(check);
+
+	return true;
+}
+
+/**
+ * Internal function to generate the challenge used in nt_response
+ * https://tools.ietf.org/html/rfc2759
+ *
+ * @peer_challenge: The challenge generated by the peer (us)
+ * @server_challenge: The challenge generated by the authenticator
+ * @user: The username utf8 encoded
+ * @challenge: The destination
+ *
+ * Returns: true on success, false if hash/encrypt couldn't be done
+ **/
+static bool mschapv2_challenge_hash(const uint8_t *peer_challenge,
+				const uint8_t *server_challenge,
+				const char *user, uint8_t challenge[static 8])
+{
+	struct l_checksum *check;
+
+	check = l_checksum_new(L_CHECKSUM_SHA1);
+	if (!check)
+		return false;
+
+	l_checksum_update(check, peer_challenge, 16);
+	l_checksum_update(check, server_challenge, 16);
+	l_checksum_update(check, user, strlen(user));
+
+	l_checksum_get_digest(check, challenge, 8);
+	l_checksum_free(check);
+
+	return true;
+}
+
+/**
+ * Hash the utf8 encoded nt password.
+ * It is asumed, that the password is valid utf8!
+ * The rfc says "unicode-char", but never specifies which encoding.
+ * This function converts the password to ucs-2.
+ * The example in the code uses LE for the unicode chars, so it is forced here.
+ * https://tools.ietf.org/html/draft-ietf-pppext-mschap-00#ref-8
+ */
+bool mschapv2_nt_password_hash(const char *password, uint8_t hash[static 16])
+{
+	size_t size = l_utf8_strlen(password);
+	size_t bsize = strlen(password);
+	uint16_t buffer[size];
+	unsigned int i, pos;
+	struct l_checksum *check;
+
+	for (i = 0, pos = 0; i < size; ++i) {
+		wchar_t val;
+		pos += l_utf8_get_codepoint(password + pos, bsize - pos, &val);
+
+		if (val > 0xFFFF) {
+			l_error("Encountered password with value not valid in ucs-2");
+			return false;
+		}
+
+		buffer[i] = L_CPU_TO_LE16(val);
+	}
+
+	check = l_checksum_new(L_CHECKSUM_MD4);
+	if (!check)
+		return false;
+
+	l_checksum_update(check, (uint8_t *) buffer, size * 2);
+	l_checksum_get_digest(check, hash, 16);
+	l_checksum_free(check);
+
+	return true;
+}
+
+/**
+ * Internal function for generate_nt_response.
+ * The DES keys specified for generate_nt_response are 56bit, while the api we
+ * use takes 64bit keys, so we have to generate the parity bits.
+ **/
+static bool mschapv2_des_encrypt(const uint8_t challenge[static 8],
+						const uint8_t key[static 7],
+						uint8_t cipher_text[static 8])
+{
+	uint8_t pkey[8], tmp;
+	int i;
+	struct l_cipher *cipher;
+	uint8_t next;
+
+	for (i = 0, next = 0; i < 7; ++i) {
+		tmp = key[i];
+		pkey[i] = (tmp >> i) | next | 1;
+		next = tmp << (7 - i);
+	}
+
+	pkey[i] = next | 1;
+
+	cipher = l_cipher_new(L_CIPHER_DES, pkey, 8);
+	if (!cipher)
+		return false;
+
+	l_cipher_encrypt(cipher, challenge, cipher_text, 8);
+	l_cipher_free(cipher);
+
+	return true;
+}
+
+/**
+ * Generate the nt_response for mschapv2.
+ * This function is specified in:
+ * https://tools.ietf.org/html/rfc2759
+ *
+ * @password_hash: The MD4 hash of the ucs2 encoded user password
+ * @peer_challenge: the challenge generated by the peer (us)
+ * @server_challenge: the challenge generated by the authenticator
+ * @user: The username, utf8 encoded
+ * @nt_response: The destination
+ *
+ * Returns: true on success, false if hash/encrypt couldn't be done
+ **/
+bool mschapv2_generate_nt_response(const uint8_t password_hash[static 16],
+				const uint8_t peer_challenge[static 16],
+				const uint8_t server_challenge[static 16],
+				const char *user, uint8_t response[static 24])
+{
+	uint8_t challenge[8];
+	uint8_t buffer[21];
+
+	memset(buffer, 0, sizeof(buffer));
+	memcpy(buffer, password_hash, 16);
+
+	if (!mschapv2_challenge_hash(peer_challenge, server_challenge, user,
+								challenge))
+		return false;
+
+	if (!mschapv2_des_encrypt(challenge, buffer + 0, response + 0)
+	    || !mschapv2_des_encrypt(challenge, buffer + 7, response + 8)
+	    || !mschapv2_des_encrypt(challenge, buffer + 14, response + 16))
+		return false;
+
+	return true;
+}
+
+/**
+ * Generate the mschapv2 authenticator response for verifying authenticator
+ * This function is specified in:
+ * https://tools.ietf.org/html/rfc2759
+ *
+ * @password_hash_hash: The MD4 hash of the password hash
+ * @nt_response: The nt_response generated for this exchange
+ * @peer_challenge: The challenge generated by the peer (us)
+ * @server_challenge: The challenge generated by the authenticator
+ * @user: The username utf8 encoded
+ * @response: The destination
+ *
+ * Returns: true on success, false if hash/encrypt couldn't be done
+ **/
+bool mschapv2_generate_authenticator_response(
+				const uint8_t pw_hash_hash[static 16],
+				const uint8_t nt_response[static 24],
+				const uint8_t peer_challenge[static 16],
+				const uint8_t server_challenge[static 16],
+				const char *user, char response[static 42])
+{
+	static const uint8_t magic1[] =
+		{ 0x4D, 0x61, 0x67, 0x69, 0x63, 0x20, 0x73, 0x65, 0x72, 0x76,
+		  0x65, 0x72, 0x20, 0x74, 0x6F, 0x20, 0x63, 0x6C, 0x69, 0x65,
+		  0x6E, 0x74, 0x20, 0x73, 0x69, 0x67, 0x6E, 0x69, 0x6E, 0x67,
+		  0x20, 0x63, 0x6F, 0x6E, 0x73, 0x74, 0x61, 0x6E, 0x74};
+
+	static const uint8_t magic2[] =
+		{ 0x50, 0x61, 0x64, 0x20, 0x74, 0x6F, 0x20, 0x6D, 0x61, 0x6B,
+		  0x65, 0x20, 0x69, 0x74, 0x20, 0x64, 0x6F, 0x20, 0x6D, 0x6F,
+		  0x72, 0x65, 0x20, 0x74, 0x68, 0x61, 0x6E, 0x20, 0x6F, 0x6E,
+		  0x65, 0x20, 0x69, 0x74, 0x65, 0x72, 0x61, 0x74, 0x69, 0x6F,
+		  0x6E};
+
+	uint8_t digest[20];
+	uint8_t challenge[8];
+	char *ascii;
+	int i;
+	struct l_checksum *check;
+
+	check = l_checksum_new(L_CHECKSUM_SHA1);
+	if (!check)
+		return false;
+
+	l_checksum_update(check, pw_hash_hash, 16);
+	l_checksum_update(check, nt_response, 24);
+	l_checksum_update(check, magic1, sizeof(magic1));
+	l_checksum_get_digest(check, digest, sizeof(digest));
+	l_checksum_free(check);
+
+	if (!mschapv2_challenge_hash(peer_challenge, server_challenge, user,
+								challenge))
+		return false;
+
+	check = l_checksum_new(L_CHECKSUM_SHA1);
+	if (!check)
+		return false;
+
+	l_checksum_update(check, digest, sizeof(digest));
+	l_checksum_update(check, challenge, sizeof(challenge));
+	l_checksum_update(check, magic2, sizeof(magic2));
+	l_checksum_get_digest(check, digest, sizeof(digest));
+	l_checksum_free(check);
+
+	response[0] = 'S';
+	response[1] = '=';
+
+	ascii = l_util_hexstring(digest, sizeof(digest));
+	if (!ascii)
+		return false;
+
+	for (i = 0; i < 40; ++i) {
+		response[i + 2] = toupper(ascii[i]);
+	}
+
+	l_free(ascii);
+
+	return true;
+}
