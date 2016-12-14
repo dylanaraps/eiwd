@@ -10,6 +10,7 @@ scripts/config --enable CONFIG_CRYPTO_USER_API_HASH
 scripts/config --enable CONFIG_CRYPTO_RSA
 scripts/config --enable CONFIG_CRYPTO_AES_X86_64
 scripts/config --enable CONFIG_CRYPTO_AES_NI_INTEL
+scripts/config --enable CONFIG_CRYPTO_MD4
 scripts/config --enable CONFIG_CRYPTO_SHA1_SSSE3
 scripts/config --enable CONFIG_CRYPTO_SHA256_SSSE3
 scripts/config --enable CONFIG_CRYPTO_ECB
