@@ -117,7 +117,7 @@ unit_tests = unit/test-cmac-aes \
 		unit/test-kdf-sha256 \
 		unit/test-crypto unit/test-eapol unit/test-mpdu \
 		unit/test-ie unit/test-ssid-to-utf8 unit/test-ssid-security \
-		unit/test-arc4 unit/test-wsc
+		unit/test-arc4 unit/test-wsc unit/test-eap-mschapv2
 
 ell_pem_files = cert-ca-key.pem cert-client-key.pem cert-client-key-pkcs8.pem \
 		cert-server-key.pem cert-server-key-pkcs8.pem \
@@ -199,6 +199,11 @@ unit_test_wsc_SOURCES = unit/test-wsc.c src/wscutil.h src/wscutil.c \
 				src/util.h src/util.c \
 				src/eap-wsc.h src/eap-wsc.c
 unit_test_wsc_LDADD = ell/libell-internal.la
+
+unit_test_eap_mschapv2_SOURCES = src/eap-mschapv2.h src/eap-mschapv2.c \
+				unit/test-eap-mschapv2.c
+
+unit_test_eap_mschapv2_LDADD = ell/libell-internal.la
 
 TESTS = $(unit_tests)
 
