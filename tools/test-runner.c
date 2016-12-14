@@ -1720,6 +1720,9 @@ static void run_unit_tests(void)
 	if (!unit_tests || !unit_tests[0])
 		goto exit;
 
+	if (chdir(top_level_path) < 0)
+		goto exit;
+
 	for (i = 0; unit_tests[i]; i++) {
 		unit_test_abs_path =
 			l_strdup_printf("%s%s%s", top_level_path, "/unit/",
