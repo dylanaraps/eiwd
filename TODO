@@ -196,31 +196,6 @@ Wireless simulator
 Wireless daemon
 ===============
 
-- Add support for EAP based authentication and key generation
-
-  Provide full EAP support for enterprise wireless.  However it should be
-  possible to build wireless daemon without EAP support.
-
-  It is also intended that this EAP code can be utilized as shared library
-  and be beneficial for systemd-networkd for wired authentication.
-
-  Priority: Medium
-  Complexity: C8
-
-- Add support for EAP retransmissions
-
-  EAP protocol supports the concept of re-transmissions.  Namely a packet might
-  be lost or not properly processed by the peer.  If the peer sends us a
-  duplicate request, then our current behavior is to simply drop it on the
-  floor.
-
-  Previously generated request will need to be cached somewhere, either by the
-  method or by the overall EAP state machine.  Duplicate requests can then be
-  served from the cache.
-
-  Priority: High
-  Complexity: C4
-
 - Let EAP methods configure timeouts
 
   Different EAP methods might have different recommendations for various
@@ -339,13 +314,6 @@ Wireless daemon
 
   Priority: Low
   Complexity: C8
-
-- Add support for Protected Management Frames (PMF) from 802.11w.  This allows
-  the management frames to be encrypted and thus secured.  In particular, this
-  is extremely important for 802.11r (FT) and 802.11k (RRM) support.
-
-  Priority: High
-  Complexity: C4
 
 - Add support for Tunneled Direct Link Setup (TDLS) from 802.11z.
 
