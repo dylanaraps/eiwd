@@ -656,7 +656,7 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 				struct wsc_wfa_ext_iter *ext_iter,
 				enum wsc_attr authenticator_type,
 				uint8_t *authenticator,
-				enum wsc_attr type, ...)
+				int type, ...)
 {
 	struct wsc_attr_iter iter;
 	struct l_queue *entries;
