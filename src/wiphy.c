@@ -363,7 +363,7 @@ static void wiphy_register(struct wiphy *wiphy)
 	wiphy->soft_rfkill = rfkill_get_soft_state(wiphy->id);
 	wiphy->hard_rfkill = rfkill_get_hard_state(wiphy->id);
 
-	if (wiphy->name && hwdb) {
+	if (hwdb) {
 		char modalias[128];
 		ssize_t len;
 		struct l_hwdb_entry *entries = NULL, *kv;
