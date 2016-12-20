@@ -329,7 +329,7 @@ static void netdev_connect_failed(struct l_genl_msg *msg, void *user_data)
 
 	netdev->disconnect_cmd_id = 0;
 
-	/* Done this way to allow re-entract netdev_connect calls */
+	/* Done this way to allow re-entrant netdev_connect calls */
 	netdev_connect_free(netdev);
 
 	if (connect_cb)
