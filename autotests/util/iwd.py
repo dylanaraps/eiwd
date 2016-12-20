@@ -511,6 +511,7 @@ class IWD(AsyncOpAbstract):
     _object_manager_if = None
     _agent_manager_if = None
     _known_network_manager_if = None
+    _iwd_proc = None
 
     def __init__(self, start_iwd_daemon = False,
                                                iwd_config_dir = IWD_CONFIG_DIR):
@@ -530,6 +531,15 @@ class IWD(AsyncOpAbstract):
                 raise TimeoutError('IWD has failed to start')
             tries += 1
             time.sleep(0.05)
+
+        self._iwd_proc = iwd_proc
+
+    def __del__(self):
+        if self._iwd_proc is None:
+            return
+
+        self._iwd_proc.terminate()
+        self._iwd_proc.wait()
 
     @property
     def _object_manager(self):
