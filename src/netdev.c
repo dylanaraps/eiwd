@@ -1463,6 +1463,10 @@ int netdev_disconnect(struct netdev *netdev,
 	if (netdev->disconnect_cmd_id)
 		return -EINPROGRESS;
 
+	/* Build deauthenticate prior to handshake_state being cleared */
+	deauthenticate = netdev_build_cmd_deauthenticate(netdev,
+					MPDU_REASON_CODE_DEAUTH_LEAVING);
+
 	/* Only perform this if we haven't successfully fully associated yet */
 	if (!netdev->operational) {
 		netdev->result = NETDEV_RESULT_ABORTED;
@@ -1471,8 +1475,6 @@ int netdev_disconnect(struct netdev *netdev,
 		netdev_connect_free(netdev);
 	}
 
-	deauthenticate = netdev_build_cmd_deauthenticate(netdev,
-					MPDU_REASON_CODE_DEAUTH_LEAVING);
 	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, deauthenticate,
 				netdev_cmd_deauthenticate_cb, netdev, NULL);
 
