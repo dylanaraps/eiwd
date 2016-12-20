@@ -1053,20 +1053,6 @@ static void terminate_iwd(pid_t iwd_pid)
 	kill_process(iwd_pid);
 }
 
-static void terminate_all_iwd(void)
-{
-	char *argv[3];
-	pid_t pid;
-
-	argv[0] = "killall";
-	argv[1] = "iwd";
-	argv[2] = NULL;
-
-	pid = execute_program(argv, true);
-	if (pid < 0)
-		l_error("Failed to kill all IWD instances");
-}
-
 static bool create_tmpfs_extra_stuff(char **tmpfs_extra_stuff)
 {
 	size_t i = 0;
@@ -1502,10 +1488,9 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 	remove_absolute_path_dirs(tmpfs_extra_stuff);
 
+	/* Script has responsibility to cleanup any iwd instances it started */
 	if (iwd_pid > 0)
 		terminate_iwd(iwd_pid);
-	else
-		terminate_all_iwd();
 
 	terminate_medium(medium_pid);
 
