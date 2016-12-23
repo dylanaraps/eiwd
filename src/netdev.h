@@ -70,6 +70,9 @@ typedef void (*netdev_destroy_func_t)(void *user_data);
 typedef void (*netdev_eapol_event_func_t)(unsigned int event,
 					const void *event_data,
 					void *user_data);
+typedef void (*netdev_neighbor_report_cb_t)(struct netdev *netdev,
+					const uint8_t *reports,
+					size_t reports_len, void *user_data);
 
 const uint8_t *netdev_get_address(struct netdev *netdev);
 uint32_t netdev_get_ifindex(struct netdev *netdev);
@@ -93,6 +96,9 @@ int netdev_disconnect(struct netdev *netdev,
 int netdev_set_powered(struct netdev *netdev, bool powered,
 				netdev_set_powered_cb_t cb, void *user_data,
 				netdev_destroy_func_t destroy);
+
+int netdev_neighbor_report_req(struct netdev *netdev,
+				netdev_neighbor_report_cb_t cb);
 
 struct netdev *netdev_find(int ifindex);
 

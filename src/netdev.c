@@ -58,10 +58,12 @@ struct netdev {
 	struct device *device;
 	struct wiphy *wiphy;
 	unsigned int ifi_flags;
+	uint32_t frequency;
 
 	netdev_event_func_t event_filter;
 	netdev_connect_cb_t connect_cb;
 	netdev_disconnect_cb_t disconnect_cb;
+	netdev_neighbor_report_cb_t neighbor_report_cb;
 	void *user_data;
 	struct eapol_sm *sm;
 	struct handshake_state *handshake;
@@ -72,6 +74,7 @@ struct netdev {
 	uint32_t connect_cmd_id;
 	uint32_t disconnect_cmd_id;
 	enum netdev_result result;
+	struct l_timeout *neighbor_report_timeout;
 
 	struct l_queue *watches;
 	uint32_t next_watch_id;
@@ -286,6 +289,7 @@ static void netdev_connect_free(struct netdev *netdev)
 	netdev->connected = false;
 	netdev->connect_cb = NULL;
 	netdev->event_filter = NULL;
+	netdev->neighbor_report_cb = NULL;
 	netdev->user_data = NULL;
 	netdev->result = NETDEV_RESULT_OK;
 
@@ -358,6 +362,9 @@ static void netdev_free(void *data)
 		netdev->disconnect_cb = NULL;
 		netdev->user_data = NULL;
 	}
+
+	if (netdev->neighbor_report_cb)
+		l_timeout_remove(netdev->neighbor_report_timeout);
 
 	device_remove(netdev->device);
 
@@ -1371,12 +1378,12 @@ static int netdev_connect_common(struct netdev *netdev,
 	netdev->connected = true;
 	netdev->handshake = hs;
 	netdev->sm = sm;
+	netdev->frequency = bss->frequency;
 
 	handshake_state_set_authenticator_address(hs, bss->addr);
 	handshake_state_set_supplicant_address(hs, netdev->addr);
 
 	return 0;
-
 }
 
 int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
@@ -1485,6 +1492,94 @@ int netdev_disconnect(struct netdev *netdev,
 
 	netdev->disconnect_cb = cb;
 	netdev->user_data = user_data;
+
+	return 0;
+}
+
+static uint32_t netdev_send_action_frame(struct netdev *netdev,
+					const uint8_t *to,
+					const uint8_t *body, size_t body_len,
+					l_genl_msg_func_t callback)
+{
+	struct l_genl_msg *msg;
+	const uint16_t frame_type = 0x00d0;
+	uint8_t action_frame[24 + body_len];
+	uint32_t id;
+
+	memset(action_frame, 0, 24);
+
+	l_put_le16(frame_type, action_frame + 0);
+	memcpy(action_frame + 4, to, 6);
+	memcpy(action_frame + 10, netdev->addr, 6);
+	memcpy(action_frame + 16, netdev->handshake->aa, 6);
+	memcpy(action_frame + 24, body, body_len);
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_FRAME, 128 + body_len);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4,
+				&netdev->frequency);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_FRAME, sizeof(action_frame),
+				action_frame);
+
+	id = l_genl_family_send(nl80211, msg, callback, netdev, NULL);
+
+	if (!id)
+		l_genl_msg_unref(msg);
+
+	return id;
+}
+
+static void netdev_neighbor_report_req_cb(struct l_genl_msg *msg,
+						void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	if (!netdev->neighbor_report_cb)
+		return;
+
+	if (l_genl_msg_get_error(msg) < 0) {
+		netdev->neighbor_report_cb(netdev, NULL, 0, netdev->user_data);
+
+		netdev->neighbor_report_cb = NULL;
+
+		l_timeout_remove(netdev->neighbor_report_timeout);
+	}
+}
+
+static void netdev_neighbor_report_timeout(struct l_timeout *timeout,
+						void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	netdev->neighbor_report_cb(netdev, NULL, 0, netdev->user_data);
+
+	netdev->neighbor_report_cb = NULL;
+}
+
+int netdev_neighbor_report_req(struct netdev *netdev,
+				netdev_neighbor_report_cb_t cb)
+{
+	const uint8_t action_frame[] = {
+		0x05, /* Category: Radio Measurement */
+		0x04, /* Radio Measurement Action: Neighbor Report Request */
+		0x01, /* Dialog Token: a non-zero value (unused) */
+	};
+
+	if (netdev->neighbor_report_cb || !netdev->connected)
+		return -EBUSY;
+
+	if (!netdev_send_action_frame(netdev, netdev->handshake->aa,
+					action_frame, sizeof(action_frame),
+					netdev_neighbor_report_req_cb))
+		return -EIO;
+
+	netdev->neighbor_report_cb = cb;
+
+	/* Set a 3-second timeout */
+	netdev->neighbor_report_timeout =
+		l_timeout_create(3, netdev_neighbor_report_timeout,
+					netdev, NULL);
 
 	return 0;
 }
