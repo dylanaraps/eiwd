@@ -81,6 +81,7 @@ uint32_t netdev_get_ifindex(struct netdev *netdev);
 uint32_t netdev_get_iftype(struct netdev *netdev);
 const char *netdev_get_name(struct netdev *netdev);
 bool netdev_get_is_up(struct netdev *netdev);
+struct handshake_state *netdev_get_handshake(struct netdev *netdev);
 
 int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 				struct handshake_state *hs,

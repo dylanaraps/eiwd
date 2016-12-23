@@ -191,6 +191,11 @@ bool netdev_get_is_up(struct netdev *netdev)
 	return (netdev->ifi_flags & IFF_UP) != 0;
 }
 
+struct handshake_state *netdev_get_handshake(struct netdev *netdev)
+{
+	return netdev->handshake;
+}
+
 struct set_powered_cb_data {
 	struct netdev *netdev;
 	netdev_set_powered_cb_t callback;
