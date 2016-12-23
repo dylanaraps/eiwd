@@ -249,13 +249,50 @@ static void scan_done(struct l_genl_msg *msg, void *userdata)
 		sr->trigger(0, sr->userdata);
 }
 
+struct scan_freq_append_data {
+	struct l_genl_msg *msg;
+	int count;
+};
+
+static void scan_freq_append(uint32_t freq, void *user_data)
+{
+	struct scan_freq_append_data *data = user_data;
+
+	l_genl_msg_append_attr(data->msg, data->count++, 4, &freq);
+}
+
+static void scan_build_attr_scan_frequencies(struct l_genl_msg *msg,
+						struct scan_freq_set *freqs)
+{
+	struct scan_freq_append_data append_data = { msg, 0 };
+
+	l_genl_msg_enter_nested(msg, NL80211_ATTR_SCAN_FREQUENCIES);
+
+	scan_freq_set_foreach(freqs, scan_freq_append, &append_data);
+
+	l_genl_msg_leave_nested(msg);
+}
+
+static void scan_freq_count(uint32_t freq, void *user_data)
+{
+	int *count = user_data;
+
+	*count += 1;
+}
+
 static struct l_genl_msg *scan_build_cmd(uint32_t ifindex, bool passive,
 					const struct scan_parameters *params)
 {
 	struct l_genl_msg *msg;
+	int n_channels = 0;
+
+	if (params->freqs)
+		scan_freq_set_foreach(params->freqs, scan_freq_count,
+					&n_channels);
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN,
-						32 + params->extra_ie_size);
+						32 + params->extra_ie_size +
+						4 * n_channels);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
 
 	if (!passive) {
@@ -268,6 +305,9 @@ static struct l_genl_msg *scan_build_cmd(uint32_t ifindex, bool passive,
 		l_genl_msg_append_attr(msg, NL80211_ATTR_IE,
 						params->extra_ie_size,
 						params->extra_ie);
+
+	if (params->freqs)
+		scan_build_attr_scan_frequencies(msg, params->freqs);
 
 	return msg;
 }

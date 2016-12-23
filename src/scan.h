@@ -67,6 +67,7 @@ struct scan_bss {
 struct scan_parameters {
 	const uint8_t *extra_ie;
 	size_t extra_ie_size;
+	struct scan_freq_set *freqs;
 };
 
 uint32_t scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
