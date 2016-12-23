@@ -72,7 +72,6 @@ struct device {
 	struct l_dbus_message *disconnect_pending;
 	uint32_t netdev_watch_id;
 	struct watchlist state_watches;
-	uint8_t *connected_mde;
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
@@ -503,9 +502,6 @@ static void device_reset_connection_state(struct device *device)
 	device->connected_bss = NULL;
 	device->connected_network = NULL;
 
-	l_free(device->connected_mde);
-	device->connected_mde = NULL;
-
 	l_dbus_property_changed(dbus, device_get_path(device),
 				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
 	l_dbus_property_changed(dbus, network_get_path(network),
@@ -789,7 +785,6 @@ void device_connect_network(struct device *device, struct network *network,
 
 	device->connected_bss = bss;
 	device->connected_network = network;
-	device->connected_mde = mde;
 
 	device_enter_state(device, DEVICE_STATE_CONNECTING);
 
@@ -1290,8 +1285,6 @@ static void device_free(void *user)
 	l_queue_destroy(device->autoconnect_list, l_free);
 
 	netdev_watch_remove(device->netdev, device->netdev_watch_id);
-
-	l_free(device->connected_mde);
 
 	scan_ifindex_remove(device->index);
 	l_free(device);
