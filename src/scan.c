@@ -66,8 +66,7 @@ struct scan_request {
 	scan_destroy_func_t destroy;
 	bool passive:1; /* Active or Passive scan? */
 	bool triggered:1;
-	uint8_t *extra_ie;
-	size_t extra_ie_size;
+	struct l_genl_msg *start_cmd;
 };
 
 struct scan_context {
@@ -106,6 +105,7 @@ static void scan_request_free(void *data)
 {
 	struct scan_request *sr = data;
 
+	l_genl_msg_unref(sr->start_cmd);
 	free(sr);
 }
 
@@ -166,45 +166,17 @@ bool scan_ifindex_remove(uint32_t ifindex)
 	return true;
 }
 
-static bool __scan_passive_start(struct l_genl_family *nl80211,
-					uint32_t ifindex,
-					scan_func_t callback, void *user_data)
+static bool scan_send_start(struct l_genl_msg **msg,
+			scan_func_t callback, void *user_data)
 {
-	struct l_genl_msg *msg;
+	if (!l_genl_family_send(nl80211, *msg, callback,
+				user_data, NULL)) {
+		l_error("Sending NL80211_CMD_TRIGGER_SCAN failed");
 
-	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN, 16);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
-
-	if (!l_genl_family_send(nl80211, msg, callback, user_data, NULL)) {
-		l_error("Starting passive scan failed");
 		return false;
 	}
 
-	return true;
-}
-
-static bool __scan_active_start(struct l_genl_family *nl80211,
-					uint32_t ifindex,
-					uint8_t *extra_ie, size_t extra_ie_size,
-					scan_func_t callback, void *user_data)
-{
-	struct l_genl_msg *msg;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN,
-							32 + extra_ie_size);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
-	l_genl_msg_enter_nested(msg, NL80211_ATTR_SCAN_SSIDS);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, 0, NULL);
-	l_genl_msg_leave_nested(msg);
-
-	if (extra_ie && extra_ie_size)
-		l_genl_msg_append_attr(msg, NL80211_ATTR_IE, extra_ie_size,
-						extra_ie);
-
-	if (!l_genl_family_send(nl80211, msg, callback, user_data, NULL)) {
-		l_error("Starting active scan failed");
-		return false;
-	}
+	*msg = NULL;
 
 	return true;
 }
@@ -214,7 +186,6 @@ static void start_next_scan_request(void *userdata)
 	uint32_t ifindex = L_PTR_TO_UINT(userdata);
 	struct scan_context *sc;
 	struct scan_request *sr;
-	bool r;
 
 	sc = l_queue_find(scan_contexts, scan_context_match,
 				L_UINT_TO_PTR(ifindex));
@@ -224,16 +195,7 @@ static void start_next_scan_request(void *userdata)
 
 	sr = l_queue_peek_head(sc->requests);
 
-	if (sr->passive)
-		r = __scan_passive_start(nl80211, ifindex, scan_done, sc);
-	else
-		r = __scan_active_start(nl80211, ifindex,
-						sr->extra_ie, sr->extra_ie_size,
-						scan_done, sc);
-
-	if (!r) {
-		l_error("Could not send CMD_TRIGGER_SCAN");
-
+	if (!scan_send_start(&sr->start_cmd, scan_done, sc)) {
 		if (sr->destroy)
 			sr->destroy(sr->userdata);
 
@@ -287,15 +249,37 @@ static void scan_done(struct l_genl_msg *msg, void *userdata)
 		sr->trigger(0, sr->userdata);
 }
 
+static struct l_genl_msg *scan_build_cmd(uint32_t ifindex, bool passive,
+					const struct scan_parameters *params)
+{
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN,
+						32 + params->extra_ie_size);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+
+	if (!passive) {
+		l_genl_msg_enter_nested(msg, NL80211_ATTR_SCAN_SSIDS);
+		l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, 0, NULL);
+		l_genl_msg_leave_nested(msg);
+	}
+
+	if (params->extra_ie && params->extra_ie_size)
+		l_genl_msg_append_attr(msg, NL80211_ATTR_IE,
+						params->extra_ie_size,
+						params->extra_ie);
+
+	return msg;
+}
+
 static uint32_t scan_common(uint32_t ifindex, bool passive,
-				uint8_t *extra_ie, size_t extra_ie_size,
+				const struct scan_parameters *params,
 				scan_trigger_func_t trigger,
 				scan_notify_func_t notify, void *userdata,
 				scan_destroy_func_t destroy)
 {
 	struct scan_context *sc;
 	struct scan_request *sr;
-	bool r;
 
 	sc = l_queue_find(scan_contexts, scan_context_match,
 				L_UINT_TO_PTR(ifindex));
@@ -309,9 +293,11 @@ static uint32_t scan_common(uint32_t ifindex, bool passive,
 	sr->userdata = userdata;
 	sr->destroy = destroy;
 	sr->passive = passive;
-	sr->extra_ie = extra_ie;
-	sr->extra_ie_size = extra_ie_size;
 	sr->id = ++next_scan_request_id;
+
+	sr->start_cmd = scan_build_cmd(ifindex, passive, params);
+	if (!sr->start_cmd)
+		goto error;
 
 	if (l_queue_length(sc->requests) > 0)
 		goto done;
@@ -319,18 +305,13 @@ static uint32_t scan_common(uint32_t ifindex, bool passive,
 	if (sc->state != SCAN_STATE_NOT_RUNNING)
 		goto done;
 
-	if (passive)
-		r = __scan_passive_start(nl80211, ifindex, scan_done, sc);
-	else
-		r = __scan_active_start(nl80211, ifindex,
-						extra_ie, extra_ie_size,
-						scan_done, sc);
+	if (scan_send_start(&sr->start_cmd, scan_done, sc))
+		goto done;
 
-	if (!r) {
-		scan_request_free(sr);
-		return 0;
-	}
+error:
+	scan_request_free(sr);
 
+	return 0;
 done:
 	l_queue_push_tail(sc->requests, sr);
 
@@ -341,20 +322,32 @@ uint32_t scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
 			scan_notify_func_t notify, void *userdata,
 			scan_destroy_func_t destroy)
 {
-	return scan_common(ifindex, true, NULL, 0, trigger, notify,
+	struct scan_parameters params = {};
+
+	return scan_common(ifindex, true, &params, trigger, notify,
 							userdata, destroy);
 }
 
-/*
- * @extra_ie data is passed by reference.  So it must be valid at least until
- * the @trigger callback is called.
- */
 uint32_t scan_active(uint32_t ifindex, uint8_t *extra_ie, size_t extra_ie_size,
 			scan_trigger_func_t trigger,
 			scan_notify_func_t notify, void *userdata,
 			scan_destroy_func_t destroy)
 {
-	return scan_common(ifindex, false, extra_ie, extra_ie_size,
+	struct scan_parameters params = {};
+
+	params.extra_ie = extra_ie;
+	params.extra_ie_size = extra_ie_size;
+
+	return scan_common(ifindex, false, &params,
+					trigger, notify, userdata, destroy);
+}
+
+uint32_t scan_active_full(uint32_t ifindex,
+			const struct scan_parameters *params,
+			scan_trigger_func_t trigger, scan_notify_func_t notify,
+			void *userdata, scan_destroy_func_t destroy)
+{
+	return scan_common(ifindex, false, params,
 					trigger, notify, userdata, destroy);
 }
 
@@ -436,6 +429,23 @@ static void scan_periodic_done(struct l_genl_msg *msg, void *user_data)
 		sc->sp.trigger(0, sc->sp.userdata);
 }
 
+static bool scan_periodic_send_start(struct scan_context *sc)
+{
+	struct scan_parameters params = {};
+	struct l_genl_msg *msg;
+
+	msg = scan_build_cmd(sc->ifindex, true, &params);
+	if (!msg)
+		return false;
+
+	if (!scan_send_start(&msg, scan_periodic_done, sc)) {
+		l_genl_msg_unref(msg);
+		return false;
+	}
+
+	return true;
+}
+
 void scan_periodic_start(uint32_t ifindex, scan_trigger_func_t trigger,
 				scan_notify_func_t func, void *userdata)
 {
@@ -461,7 +471,7 @@ void scan_periodic_start(uint32_t ifindex, scan_trigger_func_t trigger,
 	sc->sp.retry = false;
 	sc->sp.rearm = false;
 
-	__scan_passive_start(nl80211, ifindex, scan_periodic_done, sc);
+	scan_periodic_send_start(sc);
 }
 
 bool scan_periodic_stop(uint32_t ifindex)
@@ -501,7 +511,8 @@ static void scan_periodic_timeout(struct l_timeout *timeout, void *user_data)
 	l_debug("scan_periodic_timeout: %u", sc->ifindex);
 
 	sc->sp.interval *= 2;
-	__scan_passive_start(nl80211, sc->ifindex, scan_periodic_done, sc);
+
+	scan_periodic_send_start(sc);
 }
 
 static void scan_periodic_rearm(struct scan_context *sc)
@@ -925,9 +936,8 @@ static void get_scan_done(void *user)
 		l_idle_oneshot(start_next_scan_request,
 					L_UINT_TO_PTR(sc->ifindex), NULL);
 	} else if (sc->sp.retry) {
-		__scan_passive_start(nl80211, sc->ifindex,
-						scan_periodic_done, sc);
-		sc->sp.retry = false;
+		if (scan_periodic_send_start(sc))
+			sc->sp.retry = false;
 	} else if (sc->sp.rearm) {
 		scan_periodic_rearm(sc);
 	}

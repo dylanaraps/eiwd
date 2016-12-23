@@ -64,6 +64,11 @@ struct scan_bss {
 	bool cap_rm_neighbor_report : 1;
 };
 
+struct scan_parameters {
+	const uint8_t *extra_ie;
+	size_t extra_ie_size;
+};
+
 uint32_t scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
 			scan_notify_func_t notify, void *userdata,
 			scan_destroy_func_t destroy);
@@ -71,6 +76,10 @@ uint32_t scan_active(uint32_t ifindex, uint8_t *extra_ie, size_t extra_ie_size,
 			scan_trigger_func_t trigger,
 			scan_notify_func_t notify, void *userdata,
 			scan_destroy_func_t destroy);
+uint32_t scan_active_full(uint32_t ifindex,
+			const struct scan_parameters *params,
+			scan_trigger_func_t trigger, scan_notify_func_t notify,
+			void *userdata, scan_destroy_func_t destroy);
 bool scan_cancel(uint32_t ifindex, uint32_t id);
 
 void scan_periodic_start(uint32_t ifindex, scan_trigger_func_t trigger,
