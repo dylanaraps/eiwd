@@ -1489,6 +1489,75 @@ int netdev_disconnect(struct netdev *netdev,
 	return 0;
 }
 
+static void netdev_action_frame_event(struct netdev *netdev,
+					const uint8_t *data, size_t len)
+{
+	uint8_t category;
+
+	if (len < 1) {
+		l_debug("Action frame too short");
+		return;
+	}
+
+	category = data[0];
+
+	switch (category) {
+	default:
+		l_debug("Unknown action frame category %u received", category);
+		break;
+	}
+}
+
+static void netdev_mgmt_frame_event(struct l_genl_msg *msg,
+					struct netdev *netdev)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len, body_len = 0;
+	const void *data, *body = NULL;
+	uint16_t frame_type;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_FRAME:
+			if (body)
+				return;
+
+			body = data;
+			body_len = len;
+			break;
+		}
+	}
+
+	if (!body || body_len < 25)
+		return;
+
+	frame_type = l_get_le16(body + 0);
+
+	if (memcmp(body + 4, netdev->addr, 6))
+		return;
+
+	/* Is this a management frame */
+	if (((frame_type >> 2) & 3) != 0) {
+		l_debug("Unknown frame of type %04x received",
+				(unsigned) frame_type);
+		return;
+	}
+
+	switch ((frame_type >> 4) & 15) {
+	case 0xd: /* Action frame */
+		netdev_action_frame_event(netdev, body + 24, body_len - 24);
+		break;
+
+	default:
+		l_debug("Unknown frame of type %04x received",
+				(unsigned) frame_type);
+		break;
+	}
+}
+
 static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = NULL;
@@ -1543,6 +1612,48 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 	case NL80211_CMD_SET_REKEY_OFFLOAD:
 		netdev_rekey_offload_event(msg, netdev);
+		break;
+	}
+}
+
+static void netdev_unicast_notify(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = NULL;
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	uint8_t cmd;
+
+	cmd = l_genl_msg_get_command(msg);
+	if (!cmd)
+		return;
+
+	l_debug("Unicast notification %u", cmd);
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_IFINDEX:
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid interface index attribute");
+				return;
+			}
+
+			netdev = netdev_find(*((uint32_t *) data));
+			break;
+		}
+	}
+
+	if (!netdev) {
+		l_warn("Unicast notification is missing ifindex attribute");
+		return;
+	}
+
+	switch (cmd) {
+	case NL80211_CMD_FRAME:
+		netdev_mgmt_frame_event(msg, netdev);
 		break;
 	}
 }
@@ -1970,6 +2081,7 @@ bool netdev_init(struct l_genl_family *in,
 				const char *whitelist, const char *blacklist)
 {
 	struct l_genl_msg *msg;
+	struct l_genl *genl = l_genl_family_get_genl(in);
 
 	if (rtnl)
 		return false;
@@ -2008,6 +2120,10 @@ bool netdev_init(struct l_genl_family *in,
 	if (!l_genl_family_register(nl80211, "mlme", netdev_mlme_notify,
 								NULL, NULL))
 		l_error("Registering for MLME notification failed");
+
+	if (!l_genl_set_unicast_handler(genl, netdev_unicast_notify,
+								NULL, NULL))
+		l_error("Registering for unicast notification failed");
 
 	__handshake_set_install_tk_func(netdev_set_tk);
 	__handshake_set_install_gtk_func(netdev_set_gtk);
