@@ -489,29 +489,34 @@ static void device_enter_state(struct device *device, enum device_state state)
 					device_state_watch_func_t, state);
 }
 
-static void device_disassociated(struct device *device)
+static void device_reset_connection_state(struct device *device)
 {
 	struct network *network = device->connected_network;
 	struct l_dbus *dbus = dbus_get_bus();
 
+	if (!network)
+		return;
+
+	if (device->state == DEVICE_STATE_CONNECTED)
+		network_disconnected(network);
+
+	device->connected_bss = NULL;
+	device->connected_network = NULL;
+
+	l_free(device->connected_mde);
+	device->connected_mde = NULL;
+
+	l_dbus_property_changed(dbus, device_get_path(device),
+				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
+	l_dbus_property_changed(dbus, network_get_path(network),
+				IWD_NETWORK_INTERFACE, "Connected");
+}
+
+static void device_disassociated(struct device *device)
+{
 	l_debug("%d", device->index);
 
-	if (network) {
-		if (device->state == DEVICE_STATE_CONNECTED)
-			network_disconnected(network);
-
-		device->connected_bss = NULL;
-		device->connected_network = NULL;
-
-		l_free(device->connected_mde);
-		device->connected_mde = NULL;
-
-		l_dbus_property_changed(dbus, device_get_path(device),
-					IWD_DEVICE_INTERFACE,
-					"ConnectedNetwork");
-		l_dbus_property_changed(dbus, network_get_path(network),
-					IWD_NETWORK_INTERFACE, "Connected");
-	}
+	device_reset_connection_state(device);
 
 	device_enter_state(device, DEVICE_STATE_DISCONNECTED);
 
@@ -869,9 +874,6 @@ static void device_disconnect_cb(struct netdev *netdev, bool success,
 
 int device_disconnect(struct device *device)
 {
-	struct network *network = device->connected_network;
-	struct l_dbus *dbus = dbus_get_bus();
-
 	if (device->state == DEVICE_STATE_DISCONNECTING)
 		return -EBUSY;
 
@@ -886,19 +888,7 @@ int device_disconnect(struct device *device)
 	 * connected so we may as well indicate now that we're no longer
 	 * connected.
 	 */
-	if (device->state == DEVICE_STATE_CONNECTED)
-		network_disconnected(network);
-
-	device->connected_bss = NULL;
-	device->connected_network = NULL;
-
-	l_free(device->connected_mde);
-	device->connected_mde = NULL;
-
-	l_dbus_property_changed(dbus, device_get_path(device),
-				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
-	l_dbus_property_changed(dbus, network_get_path(network),
-				IWD_NETWORK_INTERFACE, "Connected");
+	device_reset_connection_state(device);
 
 	device_enter_state(device, DEVICE_STATE_DISCONNECTING);
 
@@ -1199,22 +1189,7 @@ static void device_netdev_notify(struct netdev *netdev,
 			dbus_pending_reply(&device->connect_pending,
 				dbus_error_aborted(device->connect_pending));
 
-		if (device->connected_network) {
-			struct network *network = device->connected_network;
-
-			device->connected_bss = NULL;
-			device->connected_network = NULL;
-
-			l_free(device->connected_mde);
-			device->connected_mde = NULL;
-
-			l_dbus_property_changed(dbus, device_get_path(device),
-						IWD_DEVICE_INTERFACE,
-						"ConnectedNetwork");
-			l_dbus_property_changed(dbus, network_get_path(network),
-						IWD_NETWORK_INTERFACE,
-						"Connected");
-		}
+		device_reset_connection_state(device);
 
 		l_hashmap_foreach_remove(device->networks,
 						device_remove_network, device);
