@@ -619,6 +619,9 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 	case NETDEV_EVENT_DISCONNECT_BY_SME:
 		device_disassociated(device);
 		break;
+	case NETDEV_EVENT_RSSI_THRESHOLD_LOW:
+	case NETDEV_EVENT_RSSI_THRESHOLD_HIGH:
+		break;
 	};
 }
 

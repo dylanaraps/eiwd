@@ -410,6 +410,26 @@ static void netdev_lost_beacon(struct netdev *netdev)
 	netdev_connect_free(netdev);
 }
 
+static void netdev_rssi_threshold(struct netdev *netdev, uint32_t rssi_event)
+{
+	if (!netdev->connected)
+		return;
+
+	if (rssi_event != NL80211_CQM_RSSI_THRESHOLD_EVENT_LOW &&
+			rssi_event != NL80211_CQM_RSSI_THRESHOLD_EVENT_HIGH)
+		return;
+
+	if (netdev->event_filter) {
+		int event;
+
+		event = (rssi_event == NL80211_CQM_RSSI_THRESHOLD_EVENT_LOW) ?
+			NETDEV_EVENT_RSSI_THRESHOLD_LOW :
+			NETDEV_EVENT_RSSI_THRESHOLD_HIGH;
+
+		netdev->event_filter(netdev, event, netdev->user_data);
+	}
+}
+
 static void netdev_cqm_event(struct l_genl_msg *msg, struct netdev *netdev)
 {
 	struct l_genl_attr attr;
@@ -430,6 +450,14 @@ static void netdev_cqm_event(struct l_genl_msg *msg, struct netdev *netdev)
 				switch (type) {
 				case NL80211_ATTR_CQM_BEACON_LOSS_EVENT:
 					netdev_lost_beacon(netdev);
+					break;
+
+				case NL80211_ATTR_CQM_RSSI_THRESHOLD_EVENT:
+					if (len != 4)
+						continue;
+
+					netdev_rssi_threshold(netdev,
+							*(uint32_t *) data);
 					break;
 				}
 			}
@@ -1979,6 +2007,29 @@ static void netdev_register_frame(struct netdev *netdev, uint16_t frame_type,
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 }
 
+static struct l_genl_msg *netdev_build_cmd_set_cqm_rssi(struct netdev *netdev)
+{
+	struct l_genl_msg *msg;
+	/* -70 dBm is a popular choice for low signal threshold */
+	int32_t thold = -70;
+	uint32_t hyst = 5;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_SET_CQM, 128);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_enter_nested(msg, NL80211_ATTR_CQM);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_CQM_RSSI_THOLD, 4, &thold);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_CQM_RSSI_HYST, 4, &hyst);
+	l_genl_msg_leave_nested(msg);
+
+	return msg;
+}
+
+static void netdev_cmd_set_cqm_cb(struct l_genl_msg *msg, void *user_data)
+{
+	if (l_genl_msg_get_error(msg) < 0)
+		l_error("CMD_SET_CQM failed");
+}
+
 static void netdev_create_from_genl(struct l_genl_msg *msg)
 {
 	struct l_genl_attr attr;
@@ -1993,6 +2044,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	struct ifinfomsg *rtmmsg;
 	size_t bufsize;
 	const uint8_t action_neighbor_report_prefix[2] = { 0x05, 0x05 };
+	struct l_genl_msg *set_cqm_msg;
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -2108,6 +2160,16 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	/* Subscribe to Management -> Action -> RM -> Neighbor Report frames */
 	netdev_register_frame(netdev, 0x00d0, action_neighbor_report_prefix,
 				sizeof(action_neighbor_report_prefix));
+
+	/* Set RSSI threshold for CQM notifications */
+	set_cqm_msg = netdev_build_cmd_set_cqm_rssi(netdev);
+
+	if (!l_genl_family_send(nl80211, set_cqm_msg, netdev_cmd_set_cqm_cb,
+				NULL, NULL)) {
+		l_error("CMD_SET_CQM failed");
+
+		l_genl_msg_unref(set_cqm_msg);
+	}
 }
 
 static void netdev_get_interface_callback(struct l_genl_msg *msg,
