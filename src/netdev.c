@@ -1584,6 +1584,42 @@ int netdev_neighbor_report_req(struct netdev *netdev,
 	return 0;
 }
 
+static void netdev_radio_measurement_frame_event(struct netdev *netdev,
+						const uint8_t *data, size_t len)
+{
+	uint8_t action;
+
+	if (len < 2) {
+		l_debug("Radio Measurement frame too short");
+		return;
+	}
+
+	action = data[0];
+
+	switch (action) {
+	case 5: /* Neighbor Report Response */
+		if (!netdev->neighbor_report_cb)
+			break;
+
+		/*
+		 * Don't use the dialog token, return the first Neighbor
+		 * Report Response received.
+		 */
+
+		netdev->neighbor_report_cb(netdev, data + 2, len - 2,
+						netdev->user_data);
+		netdev->neighbor_report_cb = NULL;
+
+		l_timeout_remove(netdev->neighbor_report_timeout);
+
+		break;
+
+	default:
+		l_debug("Unknown radio measurement action %u received", action);
+		break;
+	}
+}
+
 static void netdev_action_frame_event(struct netdev *netdev,
 					const uint8_t *data, size_t len)
 {
@@ -1597,6 +1633,10 @@ static void netdev_action_frame_event(struct netdev *netdev,
 	category = data[0];
 
 	switch (category) {
+	case 5: /* Radio Measurement */
+		netdev_radio_measurement_frame_event(netdev, data + 1, len - 1);
+		break;
+
 	default:
 		l_debug("Unknown action frame category %u received", category);
 		break;
@@ -1923,6 +1963,22 @@ check_blacklist:
 	return true;
 }
 
+static void netdev_register_frame(struct netdev *netdev, uint16_t frame_type,
+					const uint8_t *prefix,
+					size_t prefix_len)
+{
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_REGISTER_FRAME, 128);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_FRAME_TYPE, 2, &frame_type);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_FRAME_MATCH,
+				prefix_len, prefix);
+
+	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
+}
+
 static void netdev_create_from_genl(struct l_genl_msg *msg)
 {
 	struct l_genl_attr attr;
@@ -1936,6 +1992,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	struct wiphy *wiphy = NULL;
 	struct ifinfomsg *rtmmsg;
 	size_t bufsize;
+	const uint8_t action_neighbor_report_prefix[2] = { 0x05, 0x05 };
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -2047,6 +2104,10 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 					netdev_getlink_cb, netdev, NULL);
 
 	l_free(rtmmsg);
+
+	/* Subscribe to Management -> Action -> RM -> Neighbor Report frames */
+	netdev_register_frame(netdev, 0x00d0, action_neighbor_report_prefix,
+				sizeof(action_neighbor_report_prefix));
 }
 
 static void netdev_get_interface_callback(struct l_genl_msg *msg,
