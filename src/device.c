@@ -692,10 +692,12 @@ void device_connect_network(struct device *device, struct network *network,
 	hs = handshake_state_new(netdev_get_ifindex(device->netdev));
 
 	if (security == SECURITY_PSK || security == SECURITY_8021X) {
+		const struct l_settings *settings = iwd_get_config();
 		struct ie_rsn_info bss_info;
 		uint8_t rsne_buf[256];
 		struct ie_rsn_info info;
 		const char *ssid;
+		uint32_t mfp_setting;
 
 		memset(&info, 0, sizeof(info));
 
@@ -705,28 +707,54 @@ void device_connect_network(struct device *device, struct network *network,
 		info.akm_suites = device_select_akm_suite(network, bss,
 								&bss_info);
 
-		if (!info.akm_suites) {
-			l_dbus_send(dbus, dbus_error_not_supported(message));
-			return;
-		}
+		if (!info.akm_suites)
+			goto not_supported;
 
 		info.pairwise_ciphers = wiphy_select_cipher(wiphy,
 						bss_info.pairwise_ciphers);
 		info.group_cipher = wiphy_select_cipher(wiphy,
 						bss_info.group_cipher);
-		info.group_management_cipher = wiphy_select_cipher(wiphy,
-				bss_info.group_management_cipher);
 
-		if (!info.pairwise_ciphers || !info.group_cipher) {
-			l_dbus_send(dbus, dbus_error_not_supported(message));
-			return;
+		if (!info.pairwise_ciphers || !info.group_cipher)
+			goto not_supported;
+
+		if (!l_settings_get_uint(settings, "General",
+				"ManagementFrameProtection", &mfp_setting))
+			mfp_setting = 1;
+
+		if (mfp_setting > 2) {
+			l_error("Invalid MFP value, using default of 1");
+			mfp_setting = 1;
 		}
 
-		if (info.group_management_cipher == 0 && bss_info.mfpr) {
-			l_dbus_send(dbus, dbus_error_not_supported(message));
-			return;
-		} else if (info.group_management_cipher != 0)
+		switch (mfp_setting) {
+		case 0:
+			break;
+		case 1:
+			info.group_management_cipher =
+				wiphy_select_cipher(wiphy,
+					bss_info.group_management_cipher);
+			info.mfpc = info.group_management_cipher != 0;
+			break;
+		case 2:
+			info.group_management_cipher =
+				wiphy_select_cipher(wiphy,
+					bss_info.group_management_cipher);
+
+			/*
+			 * MFP required on our side, but AP doesn't support MFP
+			 * or cipher mismatch
+			 */
+			if (info.group_management_cipher == 0)
+				goto not_supported;
+
 			info.mfpc = true;
+			info.mfpr = true;
+			break;
+		}
+
+		if (bss_info.mfpr && !info.mfpc)
+			goto not_supported;
 
 		ssid = network_get_ssid(network);
 		handshake_state_set_ssid(hs, (void *) ssid, strlen(ssid));
@@ -792,6 +820,10 @@ void device_connect_network(struct device *device, struct network *network,
 				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
 	l_dbus_property_changed(dbus, network_get_path(network),
 				IWD_NETWORK_INTERFACE, "Connected");
+	return;
+
+not_supported:
+	l_dbus_send(dbus, dbus_error_not_supported(message));
 }
 
 static void device_scan_triggered(int err, void *user_data)
