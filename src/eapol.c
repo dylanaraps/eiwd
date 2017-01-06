@@ -1419,6 +1419,8 @@ static void eapol_eap_results_cb(const uint8_t *msk_data, size_t msk_len,
 				void *user_data)
 {
 	struct eapol_sm *sm = user_data;
+	ssize_t pmk_len;
+	const uint8_t *pmk_data;
 
 	l_debug("EAP key material received");
 
@@ -1443,10 +1445,26 @@ static void eapol_eap_results_cb(const uint8_t *msk_data, size_t msk_len,
 	 *    802.1X authentication), i.e., XXKey = L(MSK, 256, 256)."
 	 */
 
-	if (sm->handshake->akm_suite == IE_RSN_AKM_SUITE_FT_OVER_8021X)
-		handshake_state_set_pmk(sm->handshake, msk_data + 32);
-	else
-		handshake_state_set_pmk(sm->handshake, msk_data);
+	if (sm->handshake->akm_suite == IE_RSN_AKM_SUITE_FT_OVER_8021X) {
+		pmk_len = (ssize_t) msk_len - 32;
+		pmk_data = msk_data + 32;
+	} else {
+		pmk_len = msk_len;
+		pmk_data = msk_data;
+	}
+
+	if (pmk_len < 32)
+		goto msk_short;
+
+	handshake_state_set_pmk(sm->handshake, pmk_data);
+
+	return;
+
+msk_short:
+	l_error("EAP method's MSK too short for AKM suite %u",
+			sm->handshake->akm_suite);
+
+	handshake_failed(sm, MPDU_REASON_CODE_IEEE8021X_FAILED);
 }
 
 static void eapol_eap_event_cb(unsigned int event,
