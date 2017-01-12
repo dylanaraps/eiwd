@@ -49,6 +49,7 @@
 #include "src/scan.h"
 #include "src/netdev.h"
 #include "src/wscutil.h"
+#include "src/ftutil.h"
 
 struct netdev {
 	uint32_t index;
@@ -1243,16 +1244,435 @@ error:
 	netdev_connect_failed(NULL, netdev);
 }
 
+/*
+ * Build an FT Reassociation Request frame according to 12.5.2 / 12.5.4:
+ * RSN or non-RSN Over-the-air FT Protocol, and with the IE contents
+ * according to 12.8.4: FT authentication sequence: contents of third message.
+ */
+static struct l_genl_msg *netdev_build_cmd_ft_reassociate(struct netdev *netdev,
+						uint32_t frequency,
+						const uint8_t *prev_bssid)
+{
+	struct l_genl_msg *msg;
+	struct iovec iov[3];
+	int iov_elems = 0;
+	struct handshake_state *hs = netdev_get_handshake(netdev);
+	bool is_rsn = hs->own_ie != NULL;
+	uint8_t *rsne = NULL;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_ASSOCIATE, 600);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &frequency);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, hs->aa);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_PREV_BSSID, ETH_ALEN,
+				prev_bssid);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, hs->ssid_len, hs->ssid);
+
+	if (is_rsn) {
+		uint32_t nl_cipher;
+		uint32_t nl_akm;
+		uint32_t wpa_version;
+		struct ie_rsn_info rsn_info;
+
+		if (hs->pairwise_cipher == IE_RSN_CIPHER_SUITE_CCMP)
+			nl_cipher = CRYPTO_CIPHER_CCMP;
+		else
+			nl_cipher = CRYPTO_CIPHER_TKIP;
+
+		l_genl_msg_append_attr(msg, NL80211_ATTR_CIPHER_SUITES_PAIRWISE,
+					4, &nl_cipher);
+
+		if (hs->group_cipher == IE_RSN_CIPHER_SUITE_CCMP)
+			nl_cipher = CRYPTO_CIPHER_CCMP;
+		else
+			nl_cipher = CRYPTO_CIPHER_TKIP;
+
+		l_genl_msg_append_attr(msg, NL80211_ATTR_CIPHER_SUITE_GROUP,
+					4, &nl_cipher);
+
+		if (hs->mfp) {
+			uint32_t use_mfp = NL80211_MFP_REQUIRED;
+			l_genl_msg_append_attr(msg, NL80211_ATTR_USE_MFP,
+								4, &use_mfp);
+		}
+
+		if (hs->akm_suite == IE_RSN_AKM_SUITE_FT_OVER_8021X)
+			nl_akm = CRYPTO_AKM_FT_OVER_8021X;
+		else
+			nl_akm = CRYPTO_AKM_FT_USING_PSK;
+
+		l_genl_msg_append_attr(msg, NL80211_ATTR_AKM_SUITES,
+							4, &nl_akm);
+
+		wpa_version = NL80211_WPA_VERSION_2;
+		l_genl_msg_append_attr(msg, NL80211_ATTR_WPA_VERSIONS,
+						4, &wpa_version);
+
+		l_genl_msg_append_attr(msg, NL80211_ATTR_CONTROL_PORT, 0, NULL);
+
+		/*
+		 * Rebuild the RSNE to include the PMKR1Name and append
+		 * MDE + FTE.
+		 *
+		 * 12.8.4: "If present, the RSNE shall be set as follows:
+		 * — Version field shall be set to 1.
+		 * — PMKID Count field shall be set to 1.
+		 * — PMKID field shall contain the PMKR1Name.
+		 * — All other fields shall be as specified in 8.4.2.27
+		 *   and 11.5.3."
+		 */
+		if (ie_parse_rsne_from_data(hs->own_ie, hs->own_ie[1] + 2,
+						&rsn_info) < 0)
+			goto error;
+
+		rsn_info.num_pmkids = 1;
+		rsn_info.pmkids = hs->pmk_r1_name;
+
+		rsne = alloca(256);
+		ie_build_rsne(&rsn_info, rsne);
+
+		iov[iov_elems].iov_base = rsne;
+		iov[iov_elems].iov_len = rsne[1] + 2;
+		iov_elems += 1;
+	}
+
+	/* The MDE advertised by the BSS must be passed verbatim */
+	iov[iov_elems].iov_base = (void *) hs->mde;
+	iov[iov_elems].iov_len = hs->mde[1] + 2;
+	iov_elems += 1;
+
+	if (is_rsn) {
+		struct ie_ft_info ft_info;
+		uint8_t *fte;
+
+		/*
+		 * 12.8.4: "If present, the FTE shall be set as follows:
+		 * — ANonce, SNonce, R0KH-ID, and R1KH-ID shall be set to
+		 *   the values contained in the second message of this
+		 *   sequence.
+		 * — The Element Count field of the MIC Control field shall
+		 *   be set to the number of elements protected in this
+		 *   frame (variable).
+		 * [...]
+		 * — All other fields shall be set to 0."
+		 */
+
+		memset(&ft_info, 0, sizeof(ft_info));
+
+		ft_info.mic_element_count = 3;
+		memcpy(ft_info.r0khid, hs->r0khid, hs->r0khid_len);
+		ft_info.r0khid_len = hs->r0khid_len;
+		memcpy(ft_info.r1khid, hs->r1khid, 6);
+		ft_info.r1khid_present = true;
+		memcpy(ft_info.anonce, hs->anonce, 32);
+		memcpy(ft_info.snonce, hs->snonce, 32);
+
+		fte = alloca(256);
+		ie_build_fast_bss_transition(&ft_info, fte);
+
+		if (!ft_calculate_fte_mic(hs, 5, rsne, fte, NULL, ft_info.mic))
+			goto error;
+
+		/* Rebuild the FT IE now with the MIC included */
+		ie_build_fast_bss_transition(&ft_info, fte);
+
+		iov[iov_elems].iov_base = fte;
+		iov[iov_elems].iov_len = fte[1] + 2;
+		iov_elems += 1;
+	}
+
+	l_genl_msg_append_attrv(msg, NL80211_ATTR_IE, iov, iov_elems);
+
+	return msg;
+
+error:
+	l_genl_msg_unref(msg);
+
+	return NULL;
+}
+
+static void netdev_cmd_ft_reassociate_cb(struct l_genl_msg *msg,
+						void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	netdev->connect_cmd_id = 0;
+
+	if (l_genl_msg_get_error(msg) < 0) {
+		struct l_genl_msg *cmd_deauth;
+
+		netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
+		cmd_deauth = netdev_build_cmd_deauthenticate(netdev,
+						MPDU_REASON_CODE_UNSPECIFIED);
+		netdev->disconnect_cmd_id = l_genl_family_send(nl80211,
+							cmd_deauth,
+							netdev_connect_failed,
+							netdev, NULL);
+	}
+}
+
 static void netdev_authenticate_event(struct l_genl_msg *msg,
 							struct netdev *netdev)
 {
+	struct l_genl_msg *cmd_associate, *cmd_deauth;
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	uint16_t status_code;
+	const uint8_t *ies = NULL;
+	size_t ies_len;
+	const uint8_t *frame = NULL;
+	size_t frame_len = 0;
+	struct ie_tlv_iter iter;
+	const uint8_t *rsne = NULL;
+	const uint8_t *mde = NULL;
+	const uint8_t *fte = NULL;
+	struct handshake_state *hs = netdev->handshake;
+	bool is_rsn = hs->own_ie != NULL;
+
 	l_debug("");
+
+	/*
+	 * During Fast Transition we use the authenticate event to start the
+	 * reassociation step because the FTE necessary before we can build
+	 * the FT Associate command is included in the attached frame and is
+	 * not available in the Authenticate command callback.
+	 */
+	if (!netdev->in_ft)
+		return;
+
+	if (!l_genl_attr_init(&attr, msg)) {
+		l_debug("attr init failed");
+
+		goto auth_error;
+	}
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_TIMED_OUT:
+			l_warn("authentication timed out");
+
+			goto auth_error;
+
+		case NL80211_ATTR_FRAME:
+			if (frame)
+				goto auth_error;
+
+			frame = data;
+			frame_len = len;
+			break;
+		}
+	}
+
+	if (!frame)
+		goto auth_error;
+
+	/*
+	 * Parse the Authentication Response and validate the contents
+	 * according to 12.5.2 / 12.5.4: RSN or non-RSN Over-the-air
+	 * FT Protocol.
+	 */
+	if (!ft_parse_authentication_resp_frame(frame, frame_len,
+					netdev->addr, hs->aa, hs->aa, 2,
+					&status_code, &ies, &ies_len))
+		goto auth_error;
+
+	/* AP Rejected the authenticate / associate */
+	if (status_code != 0)
+		goto auth_error;
+
+	/* Check 802.11r IEs */
+	if (!ies)
+		goto ft_error;
+
+	ie_tlv_iter_init(&iter, ies, ies_len);
+
+	while (ie_tlv_iter_next(&iter)) {
+		switch (ie_tlv_iter_get_tag(&iter)) {
+		case IE_TYPE_RSN:
+			if (rsne)
+				goto ft_error;
+
+			rsne = ie_tlv_iter_get_data(&iter) - 2;
+			break;
+
+		case IE_TYPE_MOBILITY_DOMAIN:
+			if (mde)
+				goto ft_error;
+
+			mde = ie_tlv_iter_get_data(&iter) - 2;
+			break;
+
+		case IE_TYPE_FAST_BSS_TRANSITION:
+			if (fte)
+				goto ft_error;
+
+			fte = ie_tlv_iter_get_data(&iter) - 2;
+			break;
+		}
+	}
+
+	/*
+	 * In an RSN, check for an RSNE containing the PMK-R0-Name and
+	 * the remaining fields same as in the advertised RSNE.
+	 *
+	 * 12.8.3: "The RSNE shall be present only if dot11RSNAActivated
+	 * is true. If present, the RSNE shall be set as follows:
+	 * — Version field shall be set to 1.
+	 * — PMKID Count field shall be set to 1.
+	 * — PMKID List field shall be set to the value contained in the
+	 *   first message of this sequence.
+	 * — All other fields shall be identical to the contents of the
+	 *   RSNE advertised by the AP in Beacon and Probe Response frames."
+	 */
+	if (is_rsn) {
+		struct ie_rsn_info msg2_rsne;
+
+		if (!rsne)
+			goto ft_error;
+
+		if (ie_parse_rsne_from_data(rsne, rsne[1] + 2,
+						&msg2_rsne) < 0)
+			goto ft_error;
+
+		if (msg2_rsne.num_pmkids != 1 ||
+				memcmp(msg2_rsne.pmkids, hs->pmk_r0_name, 16))
+			goto ft_error;
+
+		if (!handshake_util_ap_ie_matches(rsne, hs->ap_ie, false))
+			goto ft_error;
+	} else if (rsne)
+		goto ft_error;
+
+	/*
+	 * Check for an MD IE identical to the one we sent in message 1
+	 *
+	 * 12.8.3: "The MDE shall contain the MDID and FT Capability and
+	 * Policy fields. This element shall be the same as the MDE
+	 * advertised by the target AP in Beacon and Probe Response frames."
+	 */
+	if (!mde || memcmp(hs->mde, mde, hs->mde[1] + 2))
+		goto ft_error;
+
+	/*
+	 * In an RSN, check for an FT IE with the same R0KH-ID and the same
+	 * SNonce that we sent, and check that the R1KH-ID and the ANonce
+	 * are present.  Use them to generate new PMK-R1, PMK-R1-Name and PTK
+	 * in handshake.c.
+	 *
+	 * 12.8.3: "The FTE shall be present only if dot11RSNAActivated is
+	 * true. If present, the FTE shall be set as follows:
+	 * — R0KH-ID shall be identical to the R0KH-ID provided by the FTO
+	 *   in the first message.
+	 * — R1KH-ID shall be set to the R1KH-ID of the target AP, from
+	 *   dot11FTR1KeyHolderID.
+	 * — ANonce shall be set to a value chosen randomly by the target AP,
+	 *   following the recommendations of 11.6.5.
+	 * — SNonce shall be set to the value contained in the first message
+	 *   of this sequence.
+	 * — All other fields shall be set to 0."
+	 */
+	if (is_rsn) {
+		struct ie_ft_info ft_info;
+		uint8_t zeros[16] = {};
+
+		if (!fte)
+			goto ft_error;
+
+		if (ie_parse_fast_bss_transition_from_data(fte, fte[1] + 2,
+								&ft_info) < 0)
+			goto ft_error;
+
+		if (ft_info.mic_element_count != 0 ||
+				memcmp(ft_info.mic, zeros, 16))
+			goto ft_error;
+
+		if (hs->r0khid_len != ft_info.r0khid_len ||
+				memcmp(hs->r0khid, ft_info.r0khid,
+					hs->r0khid_len) ||
+				!ft_info.r1khid_present)
+			goto ft_error;
+
+		if (memcmp(ft_info.snonce, hs->snonce, 32))
+			goto ft_error;
+
+		handshake_state_set_fte(hs, fte);
+
+		handshake_state_set_anonce(hs, ft_info.anonce);
+
+		handshake_state_set_kh_ids(hs, ft_info.r0khid,
+						ft_info.r0khid_len,
+						ft_info.r1khid);
+
+		handshake_state_derive_ptk(hs);
+	} else if (fte)
+		goto ft_error;
+
+	cmd_associate = netdev_build_cmd_ft_reassociate(netdev,
+							netdev->frequency,
+							netdev->prev_bssid);
+	if (!cmd_associate)
+		goto ft_error;
+
+	netdev->connect_cmd_id = l_genl_family_send(nl80211,
+						cmd_associate,
+						netdev_cmd_ft_reassociate_cb,
+						netdev, NULL);
+	if (!netdev->connect_cmd_id) {
+		l_genl_msg_unref(cmd_associate);
+
+		goto ft_error;
+	}
+
+	if (netdev->sm)
+		eapol_register(netdev->sm); /* See netdev_cmd_connect_cb */
+
+	return;
+
+auth_error:
+	netdev->result = NETDEV_RESULT_AUTHENTICATION_FAILED;
+	netdev_connect_failed(NULL, netdev);
+	return;
+
+ft_error:
+	netdev->result = NETDEV_RESULT_AUTHENTICATION_FAILED;
+	cmd_deauth = netdev_build_cmd_deauthenticate(netdev,
+						MPDU_REASON_CODE_UNSPECIFIED);
+	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, cmd_deauth,
+							netdev_connect_failed,
+							netdev, NULL);
 }
 
 static void netdev_associate_event(struct l_genl_msg *msg,
 							struct netdev *netdev)
 {
 	l_debug("");
+}
+
+static unsigned int ie_rsn_akm_suite_to_nl80211(enum ie_rsn_akm_suite akm)
+{
+	switch (akm) {
+	case IE_RSN_AKM_SUITE_8021X:
+		return CRYPTO_AKM_8021X;
+	case IE_RSN_AKM_SUITE_PSK:
+		return CRYPTO_AKM_PSK;
+	case IE_RSN_AKM_SUITE_FT_OVER_8021X:
+		return CRYPTO_AKM_FT_OVER_8021X;
+	case IE_RSN_AKM_SUITE_FT_USING_PSK:
+		return CRYPTO_AKM_FT_USING_PSK;
+	case IE_RSN_AKM_SUITE_8021X_SHA256:
+		return CRYPTO_AKM_8021X_SHA256;
+	case IE_RSN_AKM_SUITE_PSK_SHA256:
+		return CRYPTO_AKM_PSK_SHA256;
+	case IE_RSN_AKM_SUITE_TDLS:
+		return CRYPTO_AKM_TDLS;
+	case IE_RSN_AKM_SUITE_SAE_SHA256:
+		return CRYPTO_AKM_SAE_SHA256;
+	case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
+		return CRYPTO_AKM_FT_OVER_SAE_SHA256;
+	}
+
+	return 0;
 }
 
 static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
@@ -1283,32 +1703,6 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 
 	netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
 	netdev_connect_failed(NULL, netdev);
-}
-
-static unsigned int ie_rsn_akm_suite_to_nl80211(enum ie_rsn_akm_suite akm)
-{
-	switch (akm) {
-	case IE_RSN_AKM_SUITE_8021X:
-		return CRYPTO_AKM_8021X;
-	case IE_RSN_AKM_SUITE_PSK:
-		return CRYPTO_AKM_PSK;
-	case IE_RSN_AKM_SUITE_FT_OVER_8021X:
-		return CRYPTO_AKM_FT_OVER_8021X;
-	case IE_RSN_AKM_SUITE_FT_USING_PSK:
-		return CRYPTO_AKM_FT_USING_PSK;
-	case IE_RSN_AKM_SUITE_8021X_SHA256:
-		return CRYPTO_AKM_8021X_SHA256;
-	case IE_RSN_AKM_SUITE_PSK_SHA256:
-		return CRYPTO_AKM_PSK_SHA256;
-	case IE_RSN_AKM_SUITE_TDLS:
-		return CRYPTO_AKM_TDLS;
-	case IE_RSN_AKM_SUITE_SAE_SHA256:
-		return CRYPTO_AKM_SAE_SHA256;
-	case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
-		return CRYPTO_AKM_FT_OVER_SAE_SHA256;
-	}
-
-	return 0;
 }
 
 static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
