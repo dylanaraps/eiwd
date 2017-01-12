@@ -75,6 +75,7 @@ struct netdev {
 	uint32_t disconnect_cmd_id;
 	enum netdev_result result;
 	struct l_timeout *neighbor_report_timeout;
+	uint8_t prev_bssid[ETH_ALEN];
 
 	struct l_queue *watches;
 	uint32_t next_watch_id;
@@ -82,6 +83,7 @@ struct netdev {
 	bool connected : 1;
 	bool operational : 1;
 	bool rekey_offload_support : 1;
+	bool in_ft : 1;
 };
 
 struct netdev_watch {
@@ -297,6 +299,7 @@ static void netdev_connect_free(struct netdev *netdev)
 	netdev->neighbor_report_cb = NULL;
 	netdev->user_data = NULL;
 	netdev->result = NETDEV_RESULT_OK;
+	netdev->in_ft = false;
 
 	if (netdev->pairwise_new_key_cmd_id) {
 		l_genl_family_cancel(nl80211, netdev->pairwise_new_key_cmd_id);
@@ -523,7 +526,8 @@ static void netdev_disconnect_event(struct l_genl_msg *msg,
 
 	l_debug("");
 
-	if (!netdev->connected || netdev->disconnect_cmd_id > 0)
+	if (!netdev->connected || netdev->disconnect_cmd_id > 0 ||
+			netdev->in_ft)
 		return;
 
 	if (!l_genl_attr_init(&attr, msg)) {
@@ -1527,6 +1531,207 @@ int netdev_disconnect(struct netdev *netdev,
 	netdev->user_data = user_data;
 
 	return 0;
+}
+
+/*
+ * Build an FT Authentication Request frame according to 12.5.2 / 12.5.4:
+ * RSN or non-RSN Over-the-air FT Protocol, with the IE contents
+ * according to 12.8.2: FT authentication sequence: contents of first message.
+ */
+static struct l_genl_msg *netdev_build_cmd_ft_authenticate(
+					struct netdev *netdev,
+					const struct scan_bss *bss,
+					const struct handshake_state *hs)
+{
+	uint32_t auth_type = NL80211_AUTHTYPE_FT;
+	struct l_genl_msg *msg;
+	struct iovec iov[3];
+	int iov_elems = 0;
+	bool is_rsn = hs->own_ie != NULL;
+	uint8_t mde[5];
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ,
+						4, &bss->frequency);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID,
+						bss->ssid_len, bss->ssid);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
+
+	if (is_rsn) {
+		struct ie_rsn_info rsn_info;
+		uint8_t *rsne;
+
+		/*
+		 * Rebuild the RSNE to include the PMKR0Name and append
+		 * MDE + FTE.
+		 *
+		 * 12.8.2: "If present, the RSNE shall be set as follows:
+		 * — Version field shall be set to 1.
+		 * — PMKID Count field shall be set to 1.
+		 * — PMKID List field shall contain the PMKR0Name.
+		 * — All other fields shall be as specified in 8.4.2.27
+		 *   and 11.5.3."
+		 */
+		if (ie_parse_rsne_from_data(hs->own_ie, hs->own_ie[1] + 2,
+						&rsn_info) < 0)
+			goto error;
+
+		rsn_info.num_pmkids = 1;
+		rsn_info.pmkids = hs->pmk_r0_name;
+
+		rsne = alloca(256);
+		ie_build_rsne(&rsn_info, rsne);
+
+		iov[iov_elems].iov_base = rsne;
+		iov[iov_elems].iov_len = rsne[1] + 2;
+		iov_elems += 1;
+	}
+
+	/* The MDE advertised by the BSS must be passed verbatim */
+	mde[0] = IE_TYPE_MOBILITY_DOMAIN;
+	mde[1] = 3;
+	memcpy(mde + 2, bss->mde, 3);
+
+	iov[iov_elems].iov_base = mde;
+	iov[iov_elems].iov_len = 5;
+	iov_elems += 1;
+
+	if (is_rsn) {
+		struct ie_ft_info ft_info;
+		uint8_t *fte;
+
+		/*
+		 * 12.8.2: "If present, the FTE shall be set as follows:
+		 * — R0KH-ID shall be the value of R0KH-ID obtained by the
+		 *   FTO during its FT initial mobility domain association
+		 *   exchange.
+		 * — SNonce shall be set to a value chosen randomly by the
+		 *   FTO, following the recommendations of 11.6.5.
+		 * — All other fields shall be set to 0."
+		 */
+
+		memset(&ft_info, 0, sizeof(ft_info));
+
+		memcpy(ft_info.r0khid, hs->r0khid, hs->r0khid_len);
+		ft_info.r0khid_len = hs->r0khid_len;
+
+		memcpy(ft_info.snonce, hs->snonce, 32);
+
+		fte = alloca(256);
+		ie_build_fast_bss_transition(&ft_info, fte);
+
+		iov[iov_elems].iov_base = fte;
+		iov[iov_elems].iov_len = fte[1] + 2;
+		iov_elems += 1;
+	}
+
+	l_genl_msg_append_attrv(msg, NL80211_ATTR_IE, iov, iov_elems);
+
+	return msg;
+
+error:
+	l_genl_msg_unref(msg);
+
+	return NULL;
+}
+
+static void netdev_cmd_authenticate_ft_cb(struct l_genl_msg *msg,
+						void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	netdev->connect_cmd_id = 0;
+
+	if (l_genl_msg_get_error(msg) < 0) {
+		netdev->result = NETDEV_RESULT_AUTHENTICATION_FAILED;
+		netdev_connect_failed(NULL, netdev);
+	}
+}
+
+int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
+				netdev_connect_cb_t cb)
+{
+	struct l_genl_msg *cmd_authenticate;
+	uint8_t orig_snonce[32];
+	int err;
+
+	if (!netdev->operational)
+		return -ENOTCONN;
+
+	if (!netdev->handshake->mde || !target_bss->mde_present ||
+			l_get_le16(netdev->handshake->mde + 2) !=
+			l_get_le16(target_bss->mde))
+		return -EINVAL;
+
+	/*
+	 * We reuse the handshake_state object and reset what's needed.
+	 * Could also create a new object and copy most of the state but
+	 * we would end up doing more work.
+	 */
+
+	memcpy(orig_snonce, netdev->handshake->snonce, 32);
+	handshake_state_new_snonce(netdev->handshake);
+
+	cmd_authenticate = netdev_build_cmd_ft_authenticate(netdev, target_bss,
+							netdev->handshake);
+	if (!cmd_authenticate) {
+		err = -EINVAL;
+		goto restore_snonce;
+	}
+
+	netdev->connect_cmd_id = l_genl_family_send(nl80211,
+						cmd_authenticate,
+						netdev_cmd_authenticate_ft_cb,
+						netdev, NULL);
+	if (!netdev->connect_cmd_id) {
+		l_genl_msg_unref(cmd_authenticate);
+		err = -EIO;
+		goto restore_snonce;
+	}
+
+	memcpy(netdev->prev_bssid, netdev->handshake->aa, ETH_ALEN);
+	handshake_state_set_authenticator_address(netdev->handshake,
+							target_bss->addr);
+	handshake_state_set_ap_rsn(netdev->handshake, target_bss->rsne);
+	memcpy(netdev->handshake->mde + 2, target_bss->mde, 3);
+
+	if (netdev->sm) {
+		eapol_sm_free(netdev->sm);
+
+		netdev->sm = eapol_sm_new(netdev->handshake);
+		eapol_sm_set_use_eapol_start(netdev->sm, false);
+	}
+
+	netdev->operational = false;
+	netdev->in_ft = true;
+
+	netdev->connect_cb = cb;
+	netdev->frequency = target_bss->frequency;
+
+	/*
+	 * Cancel commands that could be running because of EAPoL activity
+	 * like re-keying, this way the callbacks for those commands don't
+	 * have to check if failures resulted from the transition.
+	 */
+	if (netdev->group_new_key_cmd_id) {
+		l_genl_family_cancel(nl80211, netdev->group_new_key_cmd_id);
+		netdev->group_new_key_cmd_id = 0;
+	}
+
+	if (netdev->group_management_new_key_cmd_id) {
+		l_genl_family_cancel(nl80211,
+			netdev->group_management_new_key_cmd_id);
+		netdev->group_management_new_key_cmd_id = 0;
+	}
+
+	return 0;
+
+restore_snonce:
+	memcpy(netdev->handshake->snonce, orig_snonce, 32);
+
+	return err;
 }
 
 static uint32_t netdev_send_action_frame(struct netdev *netdev,
