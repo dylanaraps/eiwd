@@ -1102,6 +1102,130 @@ static void netdev_set_rekey_offload(uint32_t ifindex,
 
 }
 
+/*
+ * Handle the Association Response IE contents either as part of an
+ * FT initial Mobility Domain association (12.4) or a Fast Transition
+ * (12.8.5).
+ */
+static bool netdev_handle_associate_resp_ies(struct handshake_state *hs,
+					const uint8_t *rsne, const uint8_t *mde,
+					const uint8_t *fte, bool transition)
+{
+	const uint8_t *sent_mde = hs->mde;
+	bool is_rsn = hs->own_ie != NULL;
+
+	/*
+	 * During a transition in an RSN, check for an RSNE containing the
+	 * PMK-R1-Name and the remaining fields same as in the advertised
+	 * RSNE.
+	 *
+	 * 12.8.5: "The RSNE shall be present only if dot11RSNAActivated is
+	 * true. If present, the RSNE shall be set as follows:
+	 * — Version field shall be set to 1.
+	 * — PMKID Count field shall be set to 1.
+	 * — PMKID field shall contain the PMKR1Name
+	 * — All other fields shall be identical to the contents of the RSNE
+	 *   advertised by the target AP in Beacon and Probe Response frames."
+	 */
+	if (transition && is_rsn) {
+		struct ie_rsn_info msg4_rsne;
+
+		if (!rsne)
+			return false;
+
+		if (ie_parse_rsne_from_data(rsne, rsne[1] + 2,
+						&msg4_rsne) < 0)
+			return false;
+
+		if (msg4_rsne.num_pmkids != 1 ||
+				memcmp(msg4_rsne.pmkids, hs->pmk_r1_name, 16))
+			return false;
+
+		if (!handshake_util_ap_ie_matches(rsne, hs->ap_ie, false))
+			return false;
+	} else {
+		if (rsne)
+			return false;
+	}
+
+	/* An MD IE identical to the one we sent must be present */
+	if (sent_mde && (!mde || memcmp(sent_mde, mde, sent_mde[1] + 2)))
+		return false;
+
+	/*
+	 * An FT IE is required in an initial mobility domain
+	 * association and re-associations in an RSN but not present
+	 * in a non-RSN (12.4.2 vs. 12.4.3).
+	 */
+	if (sent_mde && is_rsn && !fte)
+		return false;
+	if (!(sent_mde && is_rsn) && fte)
+		return false;
+
+	if (fte) {
+		struct ie_ft_info ft_info;
+
+		if (ie_parse_fast_bss_transition_from_data(fte, fte[1] + 2,
+								&ft_info) < 0)
+			return false;
+
+		/* Validate the FTE contents */
+		if (transition) {
+			/*
+			 * In an RSN, check for an FT IE with the same
+			 * R0KH-ID, R1KH-ID, ANonce and SNonce that we
+			 * received in message 2, MIC Element Count
+			 * of 6 and the correct MIC.
+			 * TODO: parse and use the GTK and IGTK subelements.
+			 */
+			uint8_t mic[16];
+
+			if (!ft_calculate_fte_mic(hs, 6, rsne, fte, NULL, mic))
+				return false;
+
+			if (ft_info.mic_element_count != 3 ||
+					memcmp(ft_info.mic, mic, 16))
+				return false;
+
+			if (hs->r0khid_len != ft_info.r0khid_len ||
+					memcmp(hs->r0khid, ft_info.r0khid,
+						hs->r0khid_len) ||
+					!ft_info.r1khid_present ||
+					memcmp(hs->r1khid, ft_info.r1khid, 6))
+				return false;
+
+			if (memcmp(ft_info.anonce, hs->anonce, 32))
+				return false;
+
+			if (memcmp(ft_info.snonce, hs->snonce, 32))
+				return false;
+		} else {
+			/* Initial MD association */
+
+			uint8_t zeros[32] = {};
+
+			handshake_state_set_fte(hs, fte);
+
+			/*
+			 * 12.4.2: "The FTE shall have a MIC information
+			 * element count of zero (i.e., no MIC present)
+			 * and have ANonce, SNonce, and MIC fields set to 0."
+			 */
+			if (ft_info.mic_element_count != 0 ||
+					memcmp(ft_info.mic, zeros, 16) ||
+					memcmp(ft_info.anonce, zeros, 32) ||
+					memcmp(ft_info.snonce, zeros, 32))
+				return false;
+
+			handshake_state_set_kh_ids(hs, ft_info.r0khid,
+							ft_info.r0khid_len,
+							ft_info.r1khid);
+		}
+	}
+
+	return true;
+}
+
 static void netdev_connect_event(struct l_genl_msg *msg,
 							struct netdev *netdev)
 {
@@ -1111,6 +1235,9 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 	const uint16_t *status_code = NULL;
 	const uint8_t *ies = NULL;
 	size_t ies_len;
+	const uint8_t *rsne = NULL;
+	const uint8_t *mde = NULL;
+	const uint8_t *fte = NULL;
 	bool is_rsn = netdev->handshake->own_ie != NULL;
 
 	l_debug("");
@@ -1145,19 +1272,20 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 		goto error;
 
 	/* Check 802.11r IEs */
-	if (netdev->handshake->mde && !ies)
-		goto error;
-
 	if (ies) {
 		struct ie_tlv_iter iter;
-		const uint8_t *mde = NULL;
-		const uint8_t *fte = NULL;
-		const uint8_t *sent_mde = netdev->handshake->mde;
 
 		ie_tlv_iter_init(&iter, ies, ies_len);
 
 		while (ie_tlv_iter_next(&iter)) {
 			switch (ie_tlv_iter_get_tag(&iter)) {
+			case IE_TYPE_RSN:
+				if (rsne)
+					goto error;
+
+				rsne = ie_tlv_iter_get_data(&iter) - 2;
+				break;
+
 			case IE_TYPE_MOBILITY_DOMAIN:
 				if (mde)
 					goto error;
@@ -1173,54 +1301,11 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 				break;
 			}
 		}
-
-		/* An MD IE identical to the one we sent must be present */
-		if (sent_mde && (!mde || memcmp(sent_mde, mde,
-						sent_mde[1] + 2)))
-			goto error;
-
-		/*
-		 * An FT IE is required in an initial mobility domain
-		 * association and re-associations in an RSN but not present
-		 * in a non-RSN (12.4.2 vs. 12.4.3).
-		 */
-
-		if (sent_mde && !is_rsn && fte)
-			goto error;
-
-		if (sent_mde && is_rsn) {
-			struct ie_ft_info ft_info;
-			uint8_t zeros[32];
-
-			if (!fte)
-				goto error;
-
-			handshake_state_set_fte(netdev->handshake, fte);
-
-			if (ie_parse_fast_bss_transition_from_data(fte,
-								fte[1] + 2,
-								&ft_info) < 0)
-				goto error;
-
-			/*
-			 * 12.4.2: "The FTE shall have a MIC information
-			 * element count of zero (i.e., no MIC present)
-			 * and have ANonce, SNonce, and MIC fields set to 0."
-			 */
-			memset(zeros, 0, 32);
-
-			if (ft_info.mic_element_count != 0 ||
-					memcmp(ft_info.mic, zeros, 16) ||
-					memcmp(ft_info.anonce, zeros, 32) ||
-					memcmp(ft_info.snonce, zeros, 32))
-				goto error;
-
-			handshake_state_set_kh_ids(netdev->handshake,
-							ft_info.r0khid,
-							ft_info.r0khid_len,
-							ft_info.r1khid);
-		}
 	}
+
+	if (!netdev_handle_associate_resp_ies(netdev->handshake, rsne, mde, fte,
+						netdev->in_ft))
+		goto error;
 
 	if (netdev->sm) {
 		/*
@@ -1228,7 +1313,21 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 		 * has all the input data even in FT mode.
 		 */
 		eapol_start(netdev->sm);
+	}
 
+	if (netdev->in_ft) {
+		netdev->in_ft = false;
+		netdev->operational = true;
+
+		if (is_rsn)
+			handshake_state_install_ptk(netdev->handshake);
+
+		if (netdev->connect_cb) {
+			netdev->connect_cb(netdev, NETDEV_RESULT_OK,
+						netdev->user_data);
+			netdev->connect_cb = NULL;
+		}
+	} else if (is_rsn) {
 		if (netdev->event_filter)
 			netdev->event_filter(netdev,
 					NETDEV_EVENT_4WAY_HANDSHAKE,
