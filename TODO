@@ -332,6 +332,17 @@ Wireless daemon
   Priority: Medium
   Complexity: C2
 
+- Implement Enrollee Session Overlap Detection after WSC Protocol Run
+
+  WSC Best Practices v2.0.1, Section 3.15 describes an enhacement to detect
+  PBC session overlaps.  The Enrollee is asked to perform an extra scan without
+  the PBC request in the ProbeRequest frames after EAP-WSC completes
+  successfully.  If another AP in PBC mode is found, then a SessionOverlap
+  error should be reported to the user.
+
+  Priority: Low
+  Complexity: C2
+
 
 Client
 ======
