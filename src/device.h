@@ -40,6 +40,7 @@ enum device_state {
 	DEVICE_STATE_CONNECTING,	/* Connecting */
 	DEVICE_STATE_CONNECTED,
 	DEVICE_STATE_DISCONNECTING,
+	DEVICE_STATE_ROAMING,
 };
 
 typedef void (*device_watch_func_t)(struct device *device,

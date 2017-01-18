@@ -477,6 +477,7 @@ static void wsc_check_can_connect(struct wsc *wsc, struct scan_bss *target)
 		return;
 	case DEVICE_STATE_AUTOCONNECT:
 	case DEVICE_STATE_OFF:
+	case DEVICE_STATE_ROAMING:
 		l_warn("wsc_check_can_connect: invalid device state");
 		break;
 	}
