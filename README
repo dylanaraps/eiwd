@@ -111,7 +111,7 @@ two new Wireless radios by default.
 With the provided hwsim utility it is now possible to add and remove
 virtual radio devices.
 
-	hwsim --create
+	hwsim --create --keep
 	hwsim --destroy=<radio-id>
 
 The radio id assigned to each virtual device is its internal id used
