@@ -120,6 +120,30 @@ uint32_t wiphy_get_supported_bands(struct wiphy *wiphy)
 	return scan_freq_set_get_bands(wiphy->supported_freqs);
 }
 
+bool wiphy_can_connect(struct wiphy *wiphy, struct scan_bss *bss)
+{
+	struct ie_rsn_info rsn_info;
+	int r;
+
+	memset(&rsn_info, 0, sizeof(rsn_info));
+	r = scan_bss_get_rsn_info(bss, &rsn_info);
+
+	if (r == 0) {
+		if (!wiphy_select_cipher(wiphy, rsn_info.pairwise_ciphers))
+			return false;
+
+		if (!wiphy_select_cipher(wiphy, rsn_info.group_cipher))
+			return false;
+
+		if (rsn_info.mfpr && !wiphy_select_cipher(wiphy,
+					rsn_info.group_management_cipher))
+			return false;
+	} else if (r != -ENOENT)
+		return false;
+
+	return true;
+}
+
 static void wiphy_print_basic_info(struct wiphy *wiphy)
 {
 	uint32_t bands;

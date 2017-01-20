@@ -483,22 +483,15 @@ struct scan_bss *network_bss_select(struct network *network)
 
 	case SECURITY_PSK:
 	case SECURITY_8021X:
-		/* Pick the first bss that advertises any cipher we support. */
+		/*
+		 * Pick the first bss that advertises ciphers compatible with
+		 * the wiphy.
+		 */
 		for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
 				bss_entry = bss_entry->next) {
 			struct scan_bss *bss = bss_entry->data;
-			struct ie_rsn_info rsn;
 
-			memset(&rsn, 0, sizeof(rsn));
-			scan_bss_get_rsn_info(bss, &rsn);
-
-			if (rsn.mfpr && !wiphy_select_cipher(wiphy,
-					rsn.group_management_cipher))
-				continue;
-
-			if (wiphy_select_cipher(wiphy, rsn.pairwise_ciphers) &&
-					wiphy_select_cipher(wiphy,
-							rsn.group_cipher))
+			if (wiphy_can_connect(wiphy, bss))
 				return bss;
 		}
 
