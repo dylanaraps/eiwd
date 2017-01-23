@@ -580,8 +580,61 @@ static void device_roam_failed(struct device *device)
 		device_disassociated(device);
 }
 
+static void device_fast_transition_cb(struct netdev *netdev,
+					enum netdev_result result,
+					void *user_data)
+{
+	struct device *device = user_data;
+
+	l_debug("%d, result: %d", device->index, result);
+
+	if (device->state != DEVICE_STATE_ROAMING)
+		return;
+
+	if (result == NETDEV_RESULT_OK)
+		device_enter_state(device, DEVICE_STATE_CONNECTED);
+	else
+		device_roam_failed(device);
+}
+
 static void device_transition_start(struct device *device, struct scan_bss *bss)
 {
+	struct handshake_state *hs = netdev_get_handshake(device->netdev);
+	uint16_t mdid;
+
+	l_debug("%d, target %s", device->index,
+			util_address_to_string(bss->addr));
+
+	if (hs->mde)
+		ie_parse_mobility_domain_from_data(hs->mde, hs->mde[1] + 2,
+							&mdid, NULL, NULL);
+
+	/* Can we use Fast Transition? */
+	if (hs->mde && bss->mde_present && l_get_le16(bss->mde) == mdid) {
+		/*
+		 * There's no need to regenerate the RSNE because neither
+		 * the AKM nor cipher suite can change:
+		 *
+		 * 12.5.2: "If the FTO selects a pairwise cipher suite in
+		 * the RSNE that is different from the ones used in the
+		 * Initial mobility domain association, then the AP shall
+		 * reject the Authentication Request with status code 19
+		 * (i.e., Invalid Pairwise Cipher)."
+		 */
+		if (netdev_fast_transition(device->netdev, bss,
+					device_fast_transition_cb) < 0) {
+			device_roam_failed(device);
+			return;
+		}
+
+		device->connected_bss = bss;
+		device->preparing_roam = false;
+		device_enter_state(device, DEVICE_STATE_ROAMING);
+
+		return;
+	}
+
+	/* Non-FT transition not supported yet */
 	device_roam_failed(device);
 }
 
