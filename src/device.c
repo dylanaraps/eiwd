@@ -74,6 +74,7 @@ struct device {
 	uint32_t netdev_watch_id;
 	struct watchlist state_watches;
 	struct l_timeout *roam_trigger_timeout;
+	uint32_t roam_scan_id;
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
@@ -503,12 +504,16 @@ static void device_reset_connection_state(struct device *device)
 	if (!network)
 		return;
 
-	if (device->state == DEVICE_STATE_CONNECTED)
+	if (device->state == DEVICE_STATE_CONNECTED ||
+			device->state == DEVICE_STATE_ROAMING)
 		network_disconnected(network);
 
 	l_timeout_remove(device->roam_trigger_timeout);
 	device->roam_trigger_timeout = NULL;
 	device->preparing_roam = false;
+
+	if (device->roam_scan_id)
+		scan_cancel(device->index, device->roam_scan_id);
 
 	device->connected_bss = NULL;
 	device->connected_network = NULL;
@@ -558,9 +563,182 @@ static void device_disconnect_by_ap(struct device *device)
 	device_disassociated(device);
 }
 
+static void device_roam_failed(struct device *device)
+{
+	/*
+	 * If we're still connected to the old BSS, only clear preparing_roam,
+	 * otherwise (we'd already started negotiating with the transition
+	 * target, preparing_roam is false, state is roaming) we are now
+	 * disconnected.
+	 */
+
+	l_debug("%d", device->index);
+
+	device->preparing_roam = false;
+
+	if (device->state == DEVICE_STATE_ROAMING)
+		device_disassociated(device);
+}
+
+static void device_transition_start(struct device *device, struct scan_bss *bss)
+{
+	device_roam_failed(device);
+}
+
+static void device_roam_scan_triggered(int err, void *user_data)
+{
+	struct device *device = user_data;
+
+	if (err) {
+		device_roam_failed(device);
+		return;
+	}
+
+	/*
+	 * Do not update the Scanning property as we won't be updating the
+	 * list of networks.
+	 */
+}
+
+static bool device_roam_scan_notify(uint32_t wiphy_id, uint32_t ifindex,
+					struct l_queue *bss_list,
+					void *userdata)
+{
+	struct device *device = userdata;
+	struct network *network = device->connected_network;
+	struct handshake_state *hs = netdev_get_handshake(device->netdev);
+	struct scan_bss *bss;
+	struct scan_bss *best_bss = NULL;
+	double best_bss_rank = 0.0;
+	static const double RANK_FT_FACTOR = 1.3;
+	uint16_t mdid;
+	enum security orig_security, security;
+	struct timespec now;
+	bool seen = false;
+
+	/*
+	 * Do not call device_set_scan_results because this may have been
+	 * a partial scan.  We could at most update the current networks' BSS
+	 * list in its device->networks entry.
+	 */
+
+	network = device->connected_network;
+
+	orig_security = network_get_security(network);
+
+	if (hs->mde)
+		ie_parse_mobility_domain_from_data(hs->mde, hs->mde[1] + 2,
+							&mdid, NULL, NULL);
+
+	/*
+	 * BSSes in the bss_list come already ranked with their initial
+	 * association preference rank value.  We only need to add preference
+	 * for BSSes that are within the FT Mobility Domain so as to favor
+	 * Fast Roaming, if it is supported.
+	 */
+
+	while ((bss = l_queue_pop_head(bss_list))) {
+		double rank;
+		struct ie_rsn_info info;
+		int r;
+
+		/* Skip result if it is not part of the ESS */
+
+		if (bss->ssid_len != hs->ssid_len ||
+				memcmp(bss->ssid, hs->ssid, hs->ssid_len))
+			goto next;
+
+		memset(&info, 0, sizeof(info));
+		r = scan_bss_get_rsn_info(bss, &info);
+		if (r < 0) {
+			if (r != -ENOENT)
+				goto next;
+
+			security = scan_get_security(bss->capability, NULL);
+		} else
+			security = scan_get_security(bss->capability, &info);
+
+		if (security != orig_security)
+			goto next;
+
+		seen = true;
+
+		if (!wiphy_can_connect(device->wiphy, bss))
+			goto next;
+
+		rank = bss->rank;
+
+		if (hs->mde && bss->mde_present && l_get_le16(bss->mde) == mdid)
+			rank *= RANK_FT_FACTOR;
+
+		if (rank > best_bss_rank) {
+			if (best_bss)
+				scan_bss_free(best_bss);
+
+			best_bss = bss;
+			best_bss_rank = rank;
+
+			continue;
+		}
+
+next:
+		scan_bss_free(bss);
+	}
+
+	l_queue_destroy(bss_list, NULL);
+
+	if (!seen)
+		goto fail_free_bss;
+
+	clock_gettime(CLOCK_REALTIME, &now);
+
+	network_seen(network, &now);
+
+	/* See if we have anywhere to roam to */
+	if (!best_bss || bss_match(best_bss, device->connected_bss))
+		goto fail_free_bss;
+
+	bss = network_bss_find_by_addr(network, best_bss->addr);
+	if (bss) {
+		scan_bss_free(best_bss);
+		best_bss = bss;
+	} else {
+		network_bss_add(network, best_bss);
+		l_queue_push_tail(device->bss_list, best_bss);
+	}
+
+	device_transition_start(device, best_bss);
+
+	return true;
+
+fail_free_bss:
+	if (best_bss)
+		scan_bss_free(best_bss);
+
+	device_roam_failed(device);
+
+	return true;
+}
+
+static void device_roam_scan_destroy(void *userdata)
+{
+	struct device *device = userdata;
+
+	device->roam_scan_id = 0;
+}
+
 static void device_roam_scan(struct device *device,
 				struct scan_freq_set *freq_set)
 {
+	struct scan_parameters params = { .freqs = freq_set };
+
+	/* Use an active scan to save time */
+	device->roam_scan_id = scan_active_full(device->index, &params,
+						device_roam_scan_triggered,
+						device_roam_scan_notify, device,
+						device_roam_scan_destroy);
+	if (!device->roam_scan_id)
+		device_roam_failed(device);
 }
 
 static void device_neighbor_report_cb(struct netdev *netdev,
