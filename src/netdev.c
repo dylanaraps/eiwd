@@ -293,11 +293,17 @@ static void netdev_connect_free(struct netdev *netdev)
 		netdev->handshake = NULL;
 	}
 
+	if (netdev->neighbor_report_cb) {
+		netdev->neighbor_report_cb(netdev, -ENOTCONN, NULL, 0,
+						netdev->user_data);
+		netdev->neighbor_report_cb = NULL;
+		l_timeout_remove(netdev->neighbor_report_timeout);
+	}
+
 	netdev->operational = false;
 	netdev->connected = false;
 	netdev->connect_cb = NULL;
 	netdev->event_filter = NULL;
-	netdev->neighbor_report_cb = NULL;
 	netdev->user_data = NULL;
 	netdev->result = NETDEV_RESULT_OK;
 	netdev->in_ft = false;
@@ -358,6 +364,13 @@ static void netdev_free(void *data)
 
 	l_debug("Freeing netdev %s[%d]", netdev->name, netdev->index);
 
+	if (netdev->neighbor_report_cb) {
+		netdev->neighbor_report_cb(netdev, -ENODEV, NULL, 0,
+						netdev->user_data);
+		netdev->neighbor_report_cb = NULL;
+		l_timeout_remove(netdev->neighbor_report_timeout);
+	}
+
 	if (netdev->connected) {
 		netdev->result = NETDEV_RESULT_ABORTED;
 		netdev_connect_failed(NULL, netdev);
@@ -371,9 +384,6 @@ static void netdev_free(void *data)
 		netdev->disconnect_cb = NULL;
 		netdev->user_data = NULL;
 	}
-
-	if (netdev->neighbor_report_cb)
-		l_timeout_remove(netdev->neighbor_report_timeout);
 
 	device_remove(netdev->device);
 
@@ -2270,7 +2280,8 @@ static void netdev_neighbor_report_req_cb(struct l_genl_msg *msg,
 		return;
 
 	if (l_genl_msg_get_error(msg) < 0) {
-		netdev->neighbor_report_cb(netdev, NULL, 0, netdev->user_data);
+		netdev->neighbor_report_cb(netdev, l_genl_msg_get_error(msg),
+						NULL, 0, netdev->user_data);
 
 		netdev->neighbor_report_cb = NULL;
 
@@ -2283,9 +2294,12 @@ static void netdev_neighbor_report_timeout(struct l_timeout *timeout,
 {
 	struct netdev *netdev = user_data;
 
-	netdev->neighbor_report_cb(netdev, NULL, 0, netdev->user_data);
+	netdev->neighbor_report_cb(netdev, -ETIMEDOUT, NULL, 0,
+					netdev->user_data);
 
 	netdev->neighbor_report_cb = NULL;
+
+	l_timeout_remove(netdev->neighbor_report_timeout);
 }
 
 int netdev_neighbor_report_req(struct netdev *netdev,
@@ -2337,7 +2351,7 @@ static void netdev_radio_measurement_frame_event(struct netdev *netdev,
 		 * Report Response received.
 		 */
 
-		netdev->neighbor_report_cb(netdev, data + 2, len - 2,
+		netdev->neighbor_report_cb(netdev, 0, data + 2, len - 2,
 						netdev->user_data);
 		netdev->neighbor_report_cb = NULL;
 

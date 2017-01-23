@@ -794,7 +794,7 @@ static void device_roam_scan(struct device *device,
 		device_roam_failed(device);
 }
 
-static void device_neighbor_report_cb(struct netdev *netdev,
+static void device_neighbor_report_cb(struct netdev *netdev, int err,
 					const uint8_t *reports,
 					size_t reports_len, void *user_data)
 {
@@ -809,10 +809,10 @@ static void device_neighbor_report_cb(struct netdev *netdev,
 	 * Check if we're still attempting to roam -- if dbus Disconnect
 	 * had been called in the meantime we just abort the attempt.
 	 */
-	if (!device->preparing_roam)
+	if (!device->preparing_roam || err == -ENODEV)
 		return;
 
-	if (!reports) {
+	if (!reports || err) {
 		/* Have to do a full scan */
 		device_roam_scan(device, NULL);
 

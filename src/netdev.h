@@ -72,7 +72,7 @@ typedef void (*netdev_destroy_func_t)(void *user_data);
 typedef void (*netdev_eapol_event_func_t)(unsigned int event,
 					const void *event_data,
 					void *user_data);
-typedef void (*netdev_neighbor_report_cb_t)(struct netdev *netdev,
+typedef void (*netdev_neighbor_report_cb_t)(struct netdev *netdev, int err,
 					const uint8_t *reports,
 					size_t reports_len, void *user_data);
 
