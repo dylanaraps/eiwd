@@ -1162,7 +1162,7 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 
 	if (igtk)
 		handshake_state_install_igtk(sm->handshake, igtk_key_index,
-						igtk, igtk_len);
+						igtk + 6, igtk_len - 6, igtk);
 
 	if (rekey_offload)
 		rekey_offload(sm->handshake->ifindex, ptk->kek, ptk->kck,
@@ -1255,7 +1255,7 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 
 	if (igtk) {
 		handshake_state_install_igtk(sm->handshake, igtk_key_index,
-						igtk, igtk_len);
+						igtk + 6, igtk_len - 6, igtk);
 	}
 
 done:

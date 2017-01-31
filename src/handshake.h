@@ -124,7 +124,8 @@ void handshake_state_install_gtk(struct handshake_state *s,
 
 void handshake_state_install_igtk(struct handshake_state *s,
 					uint8_t igtk_key_index,
-					const uint8_t *igtk, size_t igtk_len);
+					const uint8_t *igtk, size_t igtk_len,
+					const uint8_t *ipn);
 
 void handshake_state_override_pairwise_cipher(struct handshake_state *s,
 					enum ie_rsn_cipher_suite pairwise);
