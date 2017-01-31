@@ -500,7 +500,19 @@ const uint8_t *handshake_util_find_igtk_kde(const uint8_t *data,
 	return find_kde(data, data_len, out_igtk_len, igtk_oui);
 }
 
-/* Unwrap a GTK / IGTK included in an FTE following 12.8.5 text */
+/*
+ * Unwrap a GTK / IGTK included in an FTE following 802.11-2012, Section 12.8.5:
+ *
+ * "If a GTK or an IGTK are included, the Key field of the subelement shall be
+ * encrypted using KEK and the NIST AES key wrap algorithm. The Key field shall
+ * be padded before encrypting if the key length is less than 16 octets or if
+ * it is not a multiple of 8. The padding consists of appending a single octet
+ * 0xdd followed by zero or more 0x00 octets. When processing a received
+ * message, the receiver shall ignore this trailing padding. Addition of
+ * padding does not change the value of the Key Length field. Note that the
+ * length of the encrypted Key field can be determined from the length of the
+ * GTK or IGTK subelement.
+ */
 bool handshake_decode_fte_key(struct handshake_state *s, const uint8_t *wrapped,
 				size_t key_len, uint8_t *key_out)
 {
