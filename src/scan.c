@@ -285,13 +285,14 @@ static struct l_genl_msg *scan_build_cmd(uint32_t ifindex, bool passive,
 {
 	struct l_genl_msg *msg;
 	int n_channels = 0;
+	uint32_t flags = 0;
 
 	if (params->freqs)
 		scan_freq_set_foreach(params->freqs, scan_freq_count,
 					&n_channels);
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN,
-						32 + params->extra_ie_size +
+						64 + params->extra_ie_size +
 						4 * n_channels);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
 
@@ -308,6 +309,12 @@ static struct l_genl_msg *scan_build_cmd(uint32_t ifindex, bool passive,
 
 	if (params->freqs)
 		scan_build_attr_scan_frequencies(msg, params->freqs);
+
+	if (params->flush)
+		flags |= NL80211_SCAN_FLAG_FLUSH;
+
+	if (flags)
+		l_genl_msg_append_attr(msg, NL80211_ATTR_SCAN_FLAGS, 4, &flags);
 
 	return msg;
 }

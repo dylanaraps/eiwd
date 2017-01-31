@@ -783,7 +783,7 @@ static void device_roam_scan_destroy(void *userdata)
 static void device_roam_scan(struct device *device,
 				struct scan_freq_set *freq_set)
 {
-	struct scan_parameters params = { .freqs = freq_set };
+	struct scan_parameters params = { .freqs = freq_set, .flush = true };
 
 	/* Use an active scan to save time */
 	device->roam_scan_id = scan_active_full(device->index, &params,
