@@ -499,3 +499,23 @@ const uint8_t *handshake_util_find_igtk_kde(const uint8_t *data,
 
 	return find_kde(data, data_len, out_igtk_len, igtk_oui);
 }
+
+/* Unwrap a GTK / IGTK included in an FTE following 12.8.5 text */
+bool handshake_decode_fte_key(struct handshake_state *s, const uint8_t *wrapped,
+				size_t key_len, uint8_t *key_out)
+{
+	const struct crypto_ptk *ptk = handshake_state_get_ptk(s);
+	size_t padded_len = key_len < 16 ? 16 : ((key_len + 7) & ~7);
+
+	if (!aes_unwrap(ptk->kek, wrapped, padded_len + 8, key_out))
+		return false;
+
+	if (key_len < padded_len && key_out[key_len++] != 0xdd)
+		return false;
+
+	while (key_len < padded_len)
+		if (key_out[key_len++] != 0x00)
+			return false;
+
+	return true;
+}

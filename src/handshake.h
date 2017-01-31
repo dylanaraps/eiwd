@@ -130,6 +130,9 @@ void handshake_state_install_igtk(struct handshake_state *s,
 void handshake_state_override_pairwise_cipher(struct handshake_state *s,
 					enum ie_rsn_cipher_suite pairwise);
 
+bool handshake_decode_fte_key(struct handshake_state *s, const uint8_t *wrapped,
+				size_t key_len, uint8_t *key_out);
+
 bool handshake_util_ap_ie_matches(const uint8_t *msg_ie,
 					const uint8_t *scan_ie, bool is_wpa);
 
