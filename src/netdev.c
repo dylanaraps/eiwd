@@ -795,6 +795,13 @@ static void netdev_set_gtk(uint32_t ifindex, uint8_t key_index,
 
 	l_debug("%d", netdev->index);
 
+	if (crypto_cipher_key_len(cipher) != gtk_len) {
+		l_error("Unexpected key length: %d", gtk_len);
+		netdev_setting_keys_failed(netdev,
+					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
+		return;
+	}
+
 	switch (cipher) {
 	case CRYPTO_CIPHER_CCMP:
 		memcpy(gtk_buf, gtk, 16);
@@ -819,13 +826,6 @@ static void netdev_set_gtk(uint32_t ifindex, uint8_t key_index,
 		break;
 	default:
 		l_error("Unexpected cipher: %x", cipher);
-		netdev_setting_keys_failed(netdev,
-					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
-		return;
-	}
-
-	if (crypto_cipher_key_len(cipher) != gtk_len) {
-		l_error("Unexpected key length: %d", gtk_len);
 		netdev_setting_keys_failed(netdev,
 					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
 		return;
@@ -858,19 +858,19 @@ static void netdev_set_igtk(uint32_t ifindex, uint8_t key_index,
 
 	l_debug("%d", netdev->index);
 
+	if (crypto_cipher_key_len(cipher) != igtk_len) {
+		l_error("Unexpected key length: %d", igtk_len);
+		netdev_setting_keys_failed(netdev,
+					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
+		return;
+	}
+
 	switch (cipher) {
 	case CRYPTO_CIPHER_BIP:
 		memcpy(igtk_buf, igtk, 16);
 		break;
 	default:
 		l_error("Unexpected cipher: %x", cipher);
-		netdev_setting_keys_failed(netdev,
-					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
-		return;
-	}
-
-	if (crypto_cipher_key_len(cipher) != igtk_len) {
-		l_error("Unexpected key length: %d", igtk_len);
 		netdev_setting_keys_failed(netdev,
 					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
 		return;
