@@ -26,6 +26,8 @@
 #include <stdint.h>
 #include <unistd.h>
 
+#define align_len(len, boundary) (((len)+(boundary)-1) & ~((boundary)-1))
+
 const char *util_ssid_to_utf8(size_t len, const uint8_t *ssid);
 bool util_ssid_is_utf8(size_t len, const uint8_t *ssid);
 const char *util_address_to_string(const uint8_t *addr);
