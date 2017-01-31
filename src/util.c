@@ -131,16 +131,3 @@ bool util_string_to_address(const char *str, uint8_t *addr)
 
 	return true;
 }
-
-bool _msg_append_attr(struct l_genl_msg *msg,
-			uint16_t type, const char *type_str,
-			uint16_t len, const void *value)
-{
-	bool ret;
-
-	ret = l_genl_msg_append_attr(msg, type, len, value);
-	if (!ret)
-		l_warn("Cannot append attr %s", type_str);
-
-	return ret;
-}

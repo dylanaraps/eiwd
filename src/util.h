@@ -43,10 +43,4 @@ static inline bool util_is_bit_set(const uint8_t oct, int bit)
 	return oct & mask ? true : false;
 }
 
-bool _msg_append_attr(struct l_genl_msg *msg,
-			uint16_t type, const char *type_str,
-			uint16_t len, const void *value);
-
-#define msg_append_attr(msg, type, len, value) \
-	_msg_append_attr(msg, type, #type, len, value)
 #endif /* __UTIL_H */
