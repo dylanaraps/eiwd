@@ -517,7 +517,7 @@ bool handshake_decode_fte_key(struct handshake_state *s, const uint8_t *wrapped,
 				size_t key_len, uint8_t *key_out)
 {
 	const struct crypto_ptk *ptk = handshake_state_get_ptk(s);
-	size_t padded_len = key_len < 16 ? 16 : ((key_len + 7) & ~7);
+	size_t padded_len = key_len < 16 ? 16 : align_len(key_len, 8);
 
 	if (!aes_unwrap(ptk->kek, wrapped, padded_len + 8, key_out))
 		return false;
