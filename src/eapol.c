@@ -1631,8 +1631,8 @@ void eapol_register(struct eapol_sm *sm)
 
 void eapol_start(struct eapol_sm *sm)
 {
-
-	sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);
+	if (!sm->handshake->ptk_complete && !sm->handshake->have_snonce)
+		sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);
 
 	sm->started = true;
 
