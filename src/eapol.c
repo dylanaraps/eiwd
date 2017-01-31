@@ -800,7 +800,9 @@ static void eapol_timeout(struct l_timeout *timeout, void *user_data)
 {
 	struct eapol_sm *sm = user_data;
 
+	l_timeout_remove(sm->timeout);
 	sm->timeout = NULL;
+
 	handshake_failed(sm, MPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT);
 }
 
