@@ -1460,8 +1460,18 @@ int ie_parse_fast_bss_transition(struct ie_tlv_iter *iter,
 			if (subelem_len < 35 || subelem_len > 51)
 				return -EINVAL;
 
-			memcpy(info->gtk, data, subelem_len);
-			info->gtk_len = subelem_len;
+			info->gtk_key_id = util_bit_field(data[0], 0, 2);
+			info->gtk_len = data[2];
+
+			/*
+			 * Check Wrapped Key field length is Key Length plus
+			 * padding (0 - 7 bytes) plus 8 bytes for AES key wrap.
+			 */
+			if (align_len(info->gtk_len, 8) + 8 != subelem_len - 11)
+				return -EINVAL;
+
+			memcpy(info->gtk_rsc, data + 3, 8);
+			memcpy(info->gtk, data + 11, subelem_len - 11);
 
 			break;
 		case 3:
@@ -1475,11 +1485,17 @@ int ie_parse_fast_bss_transition(struct ie_tlv_iter *iter,
 			break;
 
 		case 4:
-			if (subelem_len < 1)
+			if (subelem_len != 33)
 				return -EINVAL;
 
-			memcpy(info->igtk, data, subelem_len);
-			info->igtk_len = subelem_len;
+			info->igtk_key_id = l_get_le16(data);
+			memcpy(info->igtk_ipn, data + 2, 6);
+			info->igtk_len = data[8];
+
+			if (info->igtk_len > 16)
+				return -EINVAL;
+
+			memcpy(info->igtk, data + 9, subelem_len - 9);
 
 			break;
 		}
@@ -1538,13 +1554,7 @@ bool ie_build_fast_bss_transition(const struct ie_ft_info *info, uint8_t *to)
 		*len += 8;
 	}
 
-	if (info->gtk_len) {
-		to[0] = 2;
-		to[1] = info->gtk_len;
-		memcpy(to + 2, info->gtk, info->gtk_len);
-		to += 2 + info->gtk_len;
-		*len += 2 + info->gtk_len;
-	}
+	L_WARN_ON(info->gtk_len); /* Not implemented */
 
 	if (info->r0khid_len) {
 		to[0] = 3;
@@ -1554,13 +1564,7 @@ bool ie_build_fast_bss_transition(const struct ie_ft_info *info, uint8_t *to)
 		*len += 2 + info->r0khid_len;
 	}
 
-	if (info->igtk_len) {
-		to[0] = 4;
-		to[1] = info->igtk_len;
-		memcpy(to + 2, info->igtk, info->igtk_len);
-		to += 2 + info->igtk_len;
-		*len += 2 + info->igtk_len;
-	}
+	L_WARN_ON(info->igtk_len); /* Not implemented */
 
 	return true;
 }

@@ -238,10 +238,14 @@ struct ie_ft_info {
 	size_t r0khid_len;
 	uint8_t r1khid[6];
 	bool r1khid_present:1;
-	uint8_t gtk[51];
+	uint8_t gtk_key_id;
 	uint8_t gtk_len;
-	uint8_t igtk[255];
+	uint8_t gtk_rsc[8];
+	uint8_t gtk[40];
+	uint16_t igtk_key_id;
+	uint8_t igtk_ipn[6];
 	uint8_t igtk_len;
+	uint8_t igtk[24];
 };
 
 /* See chapter 8.4.2.47 for radio measurement capability details */
