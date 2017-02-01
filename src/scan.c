@@ -74,6 +74,7 @@ struct scan_context {
 	enum scan_state state;
 	struct scan_periodic sp;
 	struct l_queue *requests;
+	unsigned int start_cmd_id;
 };
 
 struct scan_results {
@@ -160,25 +161,27 @@ bool scan_ifindex_remove(uint32_t ifindex)
 	if (!sc)
 		return false;
 
+	if (sc->start_cmd_id)
+		l_genl_family_cancel(nl80211, sc->start_cmd_id);
+
 	l_info("Removing scan context for ifindex: %u", ifindex);
 	scan_context_free(sc);
 
 	return true;
 }
 
-static bool scan_send_start(struct l_genl_msg **msg,
+static unsigned int scan_send_start(struct l_genl_msg **msg,
 			scan_func_t callback, void *user_data)
 {
-	if (!l_genl_family_send(nl80211, *msg, callback,
-				user_data, NULL)) {
+	unsigned int id = l_genl_family_send(nl80211, *msg, callback,
+						user_data, NULL);
+
+	if (id)
+		*msg = NULL;
+	else
 		l_error("Sending NL80211_CMD_TRIGGER_SCAN failed");
 
-		return false;
-	}
-
-	*msg = NULL;
-
-	return true;
+	return id;
 }
 
 static void start_next_scan_request(void *userdata)
@@ -195,7 +198,9 @@ static void start_next_scan_request(void *userdata)
 
 	sr = l_queue_peek_head(sc->requests);
 
-	if (!scan_send_start(&sr->start_cmd, scan_done, sc)) {
+	sc->start_cmd_id = scan_send_start(&sr->start_cmd, scan_done, sc);
+
+	if (!sc->start_cmd_id) {
 		if (sr->destroy)
 			sr->destroy(sr->userdata);
 
@@ -215,6 +220,8 @@ static void scan_done(struct l_genl_msg *msg, void *userdata)
 	int err;
 
 	l_debug("");
+
+	sc->start_cmd_id = 0;
 
 	err = l_genl_msg_get_error(msg);
 	if (err < 0) {
@@ -352,7 +359,8 @@ static uint32_t scan_common(uint32_t ifindex, bool passive,
 	if (sc->state != SCAN_STATE_NOT_RUNNING)
 		goto done;
 
-	if (scan_send_start(&sr->start_cmd, scan_done, sc))
+	sc->start_cmd_id = scan_send_start(&sr->start_cmd, scan_done, sc);
+	if (!sc->start_cmd_id)
 		goto done;
 
 error:
@@ -457,6 +465,8 @@ static void scan_periodic_done(struct l_genl_msg *msg, void *user_data)
 	l_debug("");
 	sc->sp.rearm = true;
 
+	sc->start_cmd_id = 0;
+
 	err = l_genl_msg_get_error(msg);
 	if (err < 0) {
 		/* Scan already in progress */
@@ -485,7 +495,8 @@ static bool scan_periodic_send_start(struct scan_context *sc)
 	if (!msg)
 		return false;
 
-	if (!scan_send_start(&msg, scan_periodic_done, sc)) {
+	sc->start_cmd_id = scan_send_start(&msg, scan_periodic_done, sc);
+	if (!sc->start_cmd_id) {
 		l_genl_msg_unref(msg);
 		return false;
 	}
