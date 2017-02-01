@@ -1186,7 +1186,6 @@ static bool netdev_handle_associate_resp_ies(struct handshake_state *hs,
 			 * R0KH-ID, R1KH-ID, ANonce and SNonce that we
 			 * received in message 2, MIC Element Count
 			 * of 6 and the correct MIC.
-			 * TODO: parse and use the GTK and IGTK subelements.
 			 */
 			uint8_t mic[16];
 
@@ -1209,6 +1208,37 @@ static bool netdev_handle_associate_resp_ies(struct handshake_state *hs,
 
 			if (memcmp(ft_info.snonce, hs->snonce, 32))
 				return false;
+
+			if (ft_info.gtk_len) {
+				uint8_t gtk[32];
+
+				if (!handshake_decode_fte_key(hs, ft_info.gtk,
+								ft_info.gtk_len,
+								gtk))
+					return false;
+
+				if (ft_info.gtk_rsc[6] != 0x00 ||
+						ft_info.gtk_rsc[7] != 0x00)
+					return false;
+
+				handshake_state_install_gtk(hs,
+							ft_info.gtk_key_id,
+							gtk, ft_info.gtk_len,
+							ft_info.gtk_rsc, 6);
+			}
+
+			if (ft_info.igtk_len) {
+				uint8_t igtk[16];
+
+				if (!handshake_decode_fte_key(hs, ft_info.igtk,
+							ft_info.igtk_len, igtk))
+					return false;
+
+				handshake_state_install_igtk(hs,
+							ft_info.igtk_key_id,
+							igtk, ft_info.igtk_len,
+							ft_info.igtk_ipn);
+			}
 		} else {
 			/* Initial MD association */
 
