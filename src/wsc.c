@@ -678,6 +678,13 @@ static bool wsc_start_pushbutton(struct wsc *wsc)
 	wsc->scan_id = scan_active(device_get_ifindex(wsc->device),
 					wsc->wsc_ies, wsc->wsc_ies_size,
 					NULL, scan_results, wsc, NULL);
+	if (!wsc->scan_id) {
+		l_free(wsc->wsc_ies);
+		wsc->wsc_ies = NULL;
+
+		return false;
+	}
+
 	wsc->walk_timer = l_timeout_create(WALK_TIME, walk_timeout, wsc, NULL);
 
 	return true;
