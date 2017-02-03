@@ -201,6 +201,9 @@ static void start_next_scan_request(void *userdata)
 	sc->start_cmd_id = scan_send_start(&sr->start_cmd, scan_done, sc);
 
 	if (!sc->start_cmd_id) {
+		if (sr->trigger)
+			sr->trigger(-EIO, sr->userdata);
+
 		if (sr->destroy)
 			sr->destroy(sr->userdata);
 
