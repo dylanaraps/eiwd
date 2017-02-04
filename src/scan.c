@@ -360,7 +360,7 @@ static uint32_t scan_common(uint32_t ifindex, bool passive,
 		goto done;
 
 	sc->start_cmd_id = scan_send_start(&sr->start_cmd, scan_done, sc);
-	if (!sc->start_cmd_id)
+	if (sc->start_cmd_id > 0)
 		goto done;
 
 error:
