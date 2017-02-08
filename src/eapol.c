@@ -557,8 +557,13 @@ bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa)
 	if (!ek->encrypted_key_data && !is_wpa)
 		return false;
 
+	/*
+	 * Key Length should be 16 for WPA (P802.11i/D3.0) but since
+	 * 802.11i-2004 there's inconsistency in the field's value and
+	 * both 16 and 0 are in use.
+	 */
 	key_len = L_BE16_TO_CPU(ek->key_length);
-	if (key_len == 0)
+	if (is_wpa && key_len != 16)
 		return false;
 
 	VERIFY_IS_ZERO(ek->reserved);
