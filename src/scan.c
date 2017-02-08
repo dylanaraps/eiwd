@@ -84,7 +84,7 @@ struct scan_results {
 	struct scan_freq_set *freqs;
 };
 
-static void scan_done(struct l_genl_msg *msg, void *userdata);
+static void start_next_scan_request(struct scan_context *sc);
 
 static bool scan_context_match(const void *a, const void *b)
 {
@@ -184,38 +184,6 @@ static unsigned int scan_send_start(struct l_genl_msg **msg,
 	return id;
 }
 
-static void start_next_scan_request(void *userdata)
-{
-	uint32_t ifindex = L_PTR_TO_UINT(userdata);
-	struct scan_context *sc;
-	struct scan_request *sr;
-
-	sc = l_queue_find(scan_contexts, scan_context_match,
-				L_UINT_TO_PTR(ifindex));
-
-	if (!sc)
-		return;
-
-	sr = l_queue_peek_head(sc->requests);
-
-	sc->start_cmd_id = scan_send_start(&sr->start_cmd, scan_done, sc);
-
-	if (!sc->start_cmd_id) {
-		if (sr->trigger)
-			sr->trigger(-EIO, sr->userdata);
-
-		if (sr->destroy)
-			sr->destroy(sr->userdata);
-
-		sr = l_queue_pop_head(sc->requests);
-		scan_request_free(sr);
-
-		if (!l_queue_isempty(sc->requests))
-			l_idle_oneshot(start_next_scan_request,
-					L_UINT_TO_PTR(sc->ifindex), NULL);
-	}
-}
-
 static void scan_done(struct l_genl_msg *msg, void *userdata)
 {
 	struct scan_context *sc = userdata;
@@ -241,11 +209,10 @@ static void scan_done(struct l_genl_msg *msg, void *userdata)
 		l_queue_pop_head(sc->requests);
 		scan_request_free(sr);
 
-		l_error("Received an error during CMD_TRIGGER_SCAN");
+		l_error("Received error during CMD_TRIGGER_SCAN: %s (%d)",
+			strerror(-err), -err);
 
-		if (!l_queue_isempty(sc->requests))
-			l_idle_oneshot(start_next_scan_request,
-					L_UINT_TO_PTR(sc->ifindex), NULL);
+		start_next_scan_request(sc);
 
 		return;
 	}
@@ -479,6 +446,8 @@ static void scan_periodic_done(struct l_genl_msg *msg, void *user_data)
 
 		sc->sp.retry = true;
 
+		start_next_scan_request(sc);
+
 		return;
 	}
 
@@ -529,10 +498,10 @@ void scan_periodic_start(uint32_t ifindex, scan_trigger_func_t trigger,
 	sc->sp.trigger = trigger;
 	sc->sp.callback = func;
 	sc->sp.userdata = userdata;
-	sc->sp.retry = false;
+	sc->sp.retry = true;
 	sc->sp.rearm = false;
 
-	scan_periodic_send_start(sc);
+	start_next_scan_request(sc);
 }
 
 bool scan_periodic_stop(uint32_t ifindex)
@@ -573,7 +542,8 @@ static void scan_periodic_timeout(struct l_timeout *timeout, void *user_data)
 
 	sc->sp.interval *= 2;
 
-	scan_periodic_send_start(sc);
+	sc->sp.retry = true;
+	start_next_scan_request(sc);
 }
 
 static void scan_periodic_rearm(struct scan_context *sc)
@@ -587,6 +557,37 @@ static void scan_periodic_rearm(struct scan_context *sc)
 					scan_periodic_timeout, sc, NULL);
 
 	sc->sp.rearm = false;
+}
+
+static void start_next_scan_request(struct scan_context *sc)
+{
+	struct scan_request *sr;
+
+	if (sc->state != SCAN_STATE_NOT_RUNNING || sc->start_cmd_id)
+		return;
+
+	while (!l_queue_isempty(sc->requests)) {
+		sr = l_queue_peek_head(sc->requests);
+
+		sc->start_cmd_id = scan_send_start(&sr->start_cmd,
+							scan_done, sc);
+
+		if (sc->start_cmd_id)
+			return;
+
+		if (sr->trigger)
+			sr->trigger(-EIO, sr->userdata);
+
+		if (sr->destroy)
+			sr->destroy(sr->userdata);
+
+		sr = l_queue_pop_head(sc->requests);
+		scan_request_free(sr);
+	}
+
+	if (sc->sp.retry)
+		if (scan_periodic_send_start(sc))
+			sc->sp.retry = false;
 }
 
 enum security scan_get_security(enum ie_bss_capability bss_capability,
@@ -993,15 +994,10 @@ static void get_scan_done(void *user)
 
 	sc->state = SCAN_STATE_NOT_RUNNING;
 
-	if (!l_queue_isempty(sc->requests)) {
-		l_idle_oneshot(start_next_scan_request,
-					L_UINT_TO_PTR(sc->ifindex), NULL);
-	} else if (sc->sp.retry) {
-		if (scan_periodic_send_start(sc))
-			sc->sp.retry = false;
-	} else if (sc->sp.rearm) {
+	start_next_scan_request(sc);
+
+	if (sc->sp.rearm)
 		scan_periodic_rearm(sc);
-	}
 
 done:
 	if (!new_owner)
