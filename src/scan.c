@@ -388,9 +388,23 @@ bool scan_cancel(uint32_t ifindex, uint32_t id)
 		return false;
 
 	sr = l_queue_peek_head(sc->requests);
+	if (!sr)
+		return false;
 
-	/* If the scan has already been triggered, just zero out the callback */
-	if (sr->id == id && sr->triggered) {
+	/* If we already sent the trigger command, cancel the scan */
+	if (sr->id == id && !sr->start_cmd) {
+		if (!sr->triggered && sc->start_cmd_id) {
+			l_genl_family_cancel(nl80211, sc->start_cmd_id);
+			sc->start_cmd_id = 0;
+
+			l_queue_pop_head(sc->requests);
+
+			start_next_scan_request(sc);
+
+			goto free;
+		}
+
+		/* If already triggered, just zero out the callback */
 		sr->callback = NULL;
 
 		if (sr->destroy) {
@@ -405,6 +419,12 @@ bool scan_cancel(uint32_t ifindex, uint32_t id)
 							L_UINT_TO_PTR(id));
 	if (!sr)
 		return false;
+
+free:
+	if (sr->destroy)
+		sr->destroy(sr->userdata);
+
+	scan_request_free(sr);
 
 	return true;
 }
