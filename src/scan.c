@@ -84,7 +84,7 @@ struct scan_results {
 	struct scan_freq_set *freqs;
 };
 
-static void start_next_scan_request(struct scan_context *sc);
+static bool start_next_scan_request(struct scan_context *sc);
 
 static bool scan_context_match(const void *a, const void *b)
 {
@@ -579,12 +579,12 @@ static void scan_periodic_rearm(struct scan_context *sc)
 	sc->sp.rearm = false;
 }
 
-static void start_next_scan_request(struct scan_context *sc)
+static bool start_next_scan_request(struct scan_context *sc)
 {
 	struct scan_request *sr;
 
 	if (sc->state != SCAN_STATE_NOT_RUNNING || sc->start_cmd_id)
-		return;
+		return true;
 
 	while (!l_queue_isempty(sc->requests)) {
 		sr = l_queue_peek_head(sc->requests);
@@ -593,7 +593,7 @@ static void start_next_scan_request(struct scan_context *sc)
 							scan_done, sc);
 
 		if (sc->start_cmd_id)
-			return;
+			return true;
 
 		if (sr->trigger)
 			sr->trigger(-EIO, sr->userdata);
@@ -605,9 +605,14 @@ static void start_next_scan_request(struct scan_context *sc)
 		scan_request_free(sr);
 	}
 
-	if (sc->sp.retry)
-		if (scan_periodic_send_start(sc))
+	if (sc->sp.retry) {
+		if (scan_periodic_send_start(sc)) {
 			sc->sp.retry = false;
+			return true;
+		}
+	}
+
+	return false;
 }
 
 enum security scan_get_security(enum ie_bss_capability bss_capability,
@@ -1014,9 +1019,7 @@ static void get_scan_done(void *user)
 
 	sc->state = SCAN_STATE_NOT_RUNNING;
 
-	start_next_scan_request(sc);
-
-	if (sc->sp.rearm)
+	if (!start_next_scan_request(sc) && sc->sp.rearm)
 		scan_periodic_rearm(sc);
 
 done:
