@@ -1105,7 +1105,6 @@ void device_connect_network(struct device *device, struct network *network,
 	struct l_dbus *dbus = dbus_get_bus();
 	struct handshake_state *hs;
 	bool add_mde = false;
-	uint8_t *mde;
 
 	hs = handshake_state_new(netdev_get_ifindex(device->netdev));
 
@@ -1205,7 +1204,7 @@ void device_connect_network(struct device *device, struct network *network,
 		add_mde = bss->mde_present;
 
 	if (add_mde) {
-		mde = l_malloc(5);
+		uint8_t mde[5];
 
 		/* The MDE advertised by the BSS must be passed verbatim */
 		mde[0] = IE_TYPE_MOBILITY_DOMAIN;
@@ -1213,16 +1212,13 @@ void device_connect_network(struct device *device, struct network *network,
 		memcpy(mde + 2, bss->mde, 3);
 
 		handshake_state_set_mde(hs, mde);
-	} else
-		mde = NULL;
+	}
 
 	device->connect_pending = l_dbus_message_ref(message);
 
 	if (netdev_connect(device->netdev, bss, hs, device_netdev_event,
 					device_connect_cb, device) < 0) {
 		handshake_state_free(hs);
-
-		l_free(mde);
 
 		dbus_pending_reply(&device->connect_pending,
 				dbus_error_failed(device->connect_pending));
