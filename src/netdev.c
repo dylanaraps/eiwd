@@ -371,10 +371,9 @@ static void netdev_free(void *data)
 		l_timeout_remove(netdev->neighbor_report_timeout);
 	}
 
-	if (netdev->connected) {
-		netdev->result = NETDEV_RESULT_ABORTED;
-		netdev_connect_failed(NULL, netdev);
-	} else if (netdev->disconnect_cmd_id) {
+	if (netdev->connected)
+		netdev_connect_free(netdev);
+	else if (netdev->disconnect_cmd_id) {
 		l_genl_family_cancel(nl80211, netdev->disconnect_cmd_id);
 		netdev->disconnect_cmd_id = 0;
 
