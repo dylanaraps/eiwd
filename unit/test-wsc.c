@@ -2166,6 +2166,7 @@ static void wsc_test_retransmission_no_fragmentation(const void *data)
 
 	handshake_state_free(hs);
 	eapol_exit();
+	eap_exit();
 }
 
 static void wsc_test_pin_valid(const void *data)
