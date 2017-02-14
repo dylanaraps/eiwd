@@ -2168,6 +2168,15 @@ static void wsc_test_retransmission_no_fragmentation(const void *data)
 	eapol_exit();
 }
 
+static void wsc_test_pin_valid(const void *data)
+{
+	assert(wsc_pin_is_valid("1234"));
+	assert(wsc_pin_is_valid("12345678"));
+	assert(!wsc_pin_is_valid(""));
+	assert(!wsc_pin_is_valid("123456789"));
+	assert(!wsc_pin_is_valid("abcdefgh"));
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -2253,6 +2262,8 @@ int main(int argc, char *argv[])
 
 	l_test_add("/wsc/retransmission/no fragmentation",
 				wsc_test_retransmission_no_fragmentation, NULL);
+
+	l_test_add("/wsc/pin/valid pin", wsc_test_pin_valid, NULL);
 
 	return l_test_run();
 }
