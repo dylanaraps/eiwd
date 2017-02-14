@@ -2531,3 +2531,31 @@ bool wsc_pin_is_valid(const char *pin)
 
 	return true;
 }
+
+/* Takes the first 7 characters of a PIN as input and computes a check digit */
+static char compute_check_digit(const char *pin)
+{
+	unsigned int accum = 0;
+	unsigned int digit;
+
+	accum += 3 * ((pin[0] - '0') % 10);
+	accum += 1 * ((pin[1] - '0') % 10);
+	accum += 3 * ((pin[2] - '0') % 10);
+	accum += 1 * ((pin[3] - '0') % 10);
+	accum += 3 * ((pin[4] - '0') % 10);
+	accum += 1 * ((pin[5] - '0') % 10);
+	accum += 3 * ((pin[6] - '0') % 10);
+
+	digit = (10 - (accum % 10)) % 10;
+	return '0' + digit;
+}
+
+/*
+ * Validates the checksum digit and returns true if valid.  Assumes that the
+ * input is an 8-byte PIN already validated by wsc_pin_is_valid()
+ */
+bool wsc_pin_is_checksum_valid(const char *pin)
+{
+	char digit = compute_check_digit(pin);
+	return pin[7] == digit;
+}

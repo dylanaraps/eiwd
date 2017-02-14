@@ -639,3 +639,4 @@ struct wsc_session_key {
 bool wsc_kdf(const void *kdk, void *output, size_t size);
 
 bool wsc_pin_is_valid(const char *pin);
+bool wsc_pin_is_checksum_valid(const char *pin);
