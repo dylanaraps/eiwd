@@ -2515,3 +2515,19 @@ bool wsc_kdf(const void *key, void *output, size_t size)
 
 	return true;
 }
+
+bool wsc_pin_is_valid(const char *pin)
+{
+	unsigned int i;
+
+	for (i = 0; pin[i] >= '0' && pin[i] <= '9'; i++)
+		;
+
+	if (pin[i])
+		return false;
+
+	if (i != 8 && i != 4)
+		return false;
+
+	return true;
+}
