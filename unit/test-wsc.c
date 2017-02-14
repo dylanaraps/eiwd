@@ -2178,6 +2178,13 @@ static void wsc_test_pin_valid(const void *data)
 	assert(!wsc_pin_is_valid("abcdefgh"));
 }
 
+static void wsc_test_pin_checksum(const void *data)
+{
+	assert(!wsc_pin_is_checksum_valid("12345671"));
+	assert(wsc_pin_is_checksum_valid("12345670"));
+	assert(wsc_pin_is_checksum_valid("24681353"));
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -2265,6 +2272,7 @@ int main(int argc, char *argv[])
 				wsc_test_retransmission_no_fragmentation, NULL);
 
 	l_test_add("/wsc/pin/valid pin", wsc_test_pin_valid, NULL);
+	l_test_add("/wsc/pin/valid checksum", wsc_test_pin_checksum, NULL);
 
 	return l_test_run();
 }
