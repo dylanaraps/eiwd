@@ -1384,7 +1384,7 @@ static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
 				entry = entry->next) {
 		const struct network *network = entry->data;
 		enum security security = network_get_security(network);
-		int32_t signal_strength = network_get_signal_strength(network);
+		int16_t signal_strength = network_get_signal_strength(network);
 
 		l_dbus_message_builder_enter_struct(builder, "osns");
 		l_dbus_message_builder_append_basic(builder, 'o',
