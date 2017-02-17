@@ -29,6 +29,11 @@ Methods		void PushButton()
 			net.connman.iwd.Failed
 			net.connman.iwd.Busy
 
+		string GeneratePin()
+
+			Generates a random 8 digit PIN with an included check
+			digit suitable for use by most user interfaces.
+
 		void Cancel()
 
 			Aborts any ongoing WSC operations.  If no WSC
