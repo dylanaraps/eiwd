@@ -2185,6 +2185,18 @@ static void wsc_test_pin_checksum(const void *data)
 	assert(wsc_pin_is_checksum_valid("24681353"));
 }
 
+static void wsc_test_pin_generate(const void *data)
+{
+	int i;
+	char pin[9];
+
+	for (i = 0; i < 1000; i++) {
+		assert(wsc_pin_generate(pin));
+		assert(wsc_pin_is_valid(pin));
+		assert(wsc_pin_is_checksum_valid(pin));
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -2273,6 +2285,7 @@ int main(int argc, char *argv[])
 
 	l_test_add("/wsc/pin/valid pin", wsc_test_pin_valid, NULL);
 	l_test_add("/wsc/pin/valid checksum", wsc_test_pin_checksum, NULL);
+	l_test_add("/wsc/pin/generate", wsc_test_pin_generate, NULL);
 
 	return l_test_run();
 }
