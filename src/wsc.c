@@ -708,6 +708,28 @@ static struct l_dbus_message *wsc_push_button(struct l_dbus *dbus,
 	return NULL;
 }
 
+static struct l_dbus_message *wsc_generate_pin(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct wsc *wsc = user_data;
+	struct l_dbus_message *reply;
+	char pin[9];
+
+	l_debug("");
+
+	if (wsc->pending)
+		return dbus_error_busy(message);
+
+	if (!wsc_pin_generate(pin))
+		return dbus_error_failed(message);
+
+	reply = l_dbus_message_new_method_return(message);
+	l_dbus_message_set_arguments(reply, "s", pin);
+
+	return reply;
+}
+
 static struct l_dbus_message *wsc_cancel(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -754,6 +776,8 @@ static void setup_wsc_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "PushButton", 0,
 				wsc_push_button, "", "");
+	l_dbus_interface_method(interface, "GeneratePin", 0,
+				wsc_generate_pin, "s", "", "pin");
 	l_dbus_interface_method(interface, "Cancel", 0,
 				wsc_cancel, "", "");
 }
