@@ -27,6 +27,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <stdio.h>
 
 #include <ell/ell.h>
 
@@ -2558,4 +2559,24 @@ bool wsc_pin_is_checksum_valid(const char *pin)
 {
 	char digit = compute_check_digit(pin);
 	return pin[7] == digit;
+}
+
+/*
+ * Generate an 8 character PIN string into buffer given by @pin.  @pin must be
+ * at least 9 bytes long to account for the nul character.
+ */
+bool wsc_pin_generate(char *pin)
+{
+	uint32_t random;
+	bool ok;
+
+	ok = l_getrandom(&random, sizeof(random));
+	if (!ok)
+		return ok;
+
+	snprintf(pin, 8, "%07u", random);
+	pin[7] = compute_check_digit(pin);
+	pin[8] = '\0';
+
+	return true;
 }
