@@ -73,6 +73,7 @@ struct device {
 	struct l_dbus_message *disconnect_pending;
 	uint32_t netdev_watch_id;
 	struct watchlist state_watches;
+	struct timespec roam_min_time;
 	struct l_timeout *roam_trigger_timeout;
 	uint32_t roam_scan_id;
 
@@ -82,10 +83,13 @@ struct device {
 	bool scanning : 1;
 	bool autoconnect : 1;
 	bool preparing_roam : 1;
+	bool signal_low : 1;
 };
 
 static struct watchlist device_watches;
 static struct l_queue *device_list;
+
+static void device_roam_timeout_rearm(struct device *device, int seconds);
 
 uint32_t device_watch_add(device_watch_func_t func,
 				void *userdata, device_destroy_func_t destroy)
@@ -511,6 +515,8 @@ static void device_reset_connection_state(struct device *device)
 	l_timeout_remove(device->roam_trigger_timeout);
 	device->roam_trigger_timeout = NULL;
 	device->preparing_roam = false;
+	device->signal_low = false;
+	device->roam_min_time.tv_sec = 0;
 
 	if (device->roam_scan_id)
 		scan_cancel(device->index, device->roam_scan_id);
@@ -566,10 +572,11 @@ static void device_disconnect_by_ap(struct device *device)
 static void device_roam_failed(struct device *device)
 {
 	/*
-	 * If we're still connected to the old BSS, only clear preparing_roam,
-	 * otherwise (we'd already started negotiating with the transition
-	 * target, preparing_roam is false, state is roaming) we are now
-	 * disconnected.
+	 * If we're still connected to the old BSS, only clear preparing_roam
+	 * and reattempt in 60 seconds if signal level is still low at that
+	 * time.  Otherwise (we'd already started negotiating with the
+	 * transition target, preparing_roam is false, state is roaming) we
+	 * are now disconnected.
 	 */
 
 	l_debug("%d", device->index);
@@ -578,6 +585,8 @@ static void device_roam_failed(struct device *device)
 
 	if (device->state == DEVICE_STATE_ROAMING)
 		device_disassociated(device);
+	else if (device->signal_low)
+		device_roam_timeout_rearm(device, 60);
 }
 
 static void device_fast_transition_cb(struct netdev *netdev,
@@ -591,9 +600,16 @@ static void device_fast_transition_cb(struct netdev *netdev,
 	if (device->state != DEVICE_STATE_ROAMING)
 		return;
 
-	if (result == NETDEV_RESULT_OK)
+	if (result == NETDEV_RESULT_OK) {
+		/*
+		 * New signal high/low notification should occur on the next
+		 * beacon from new AP.
+		 */
+		device->signal_low = false;
+		device->roam_min_time.tv_sec = 0;
+
 		device_enter_state(device, DEVICE_STATE_CONNECTED);
-	else
+	} else
 		device_roam_failed(device);
 }
 
@@ -952,6 +968,27 @@ static void device_roam_trigger_cb(struct l_timeout *timeout, void *user_data)
 	device_roam_scan(device, NULL);
 }
 
+static void device_roam_timeout_rearm(struct device *device, int seconds)
+{
+	struct timespec now, min_timeout;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+
+	min_timeout = now;
+	min_timeout.tv_sec += seconds;
+
+	if (device->roam_min_time.tv_sec < min_timeout.tv_sec ||
+			(device->roam_min_time.tv_sec == min_timeout.tv_sec &&
+			 device->roam_min_time.tv_nsec < min_timeout.tv_nsec))
+		device->roam_min_time = min_timeout;
+
+	seconds = device->roam_min_time.tv_sec - now.tv_sec +
+		(device->roam_min_time.tv_nsec > now.tv_nsec ? 1 : 0);
+
+	device->roam_trigger_timeout =
+		l_timeout_create(seconds, device_roam_trigger_cb, device, NULL);
+}
+
 static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 					void *user_data)
 {
@@ -1026,20 +1063,25 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 		device_disassociated(device);
 		break;
 	case NETDEV_EVENT_RSSI_THRESHOLD_LOW:
-		if (device->roam_trigger_timeout ||
-				device->preparing_roam ||
+		if (device->signal_low)
+			break;
+
+		device->signal_low = true;
+
+		if (device->preparing_roam ||
 				device->state == DEVICE_STATE_ROAMING)
 			break;
 
-		/* Set a 5-second timeout */
-		device->roam_trigger_timeout =
-			l_timeout_create(5, device_roam_trigger_cb,
-						device, NULL);
+		/* Set a 5-second initial timeout */
+		device_roam_timeout_rearm(device, 5);
 
 		break;
 	case NETDEV_EVENT_RSSI_THRESHOLD_HIGH:
 		l_timeout_remove(device->roam_trigger_timeout);
 		device->roam_trigger_timeout = NULL;
+
+		device->signal_low = false;
+
 		break;
 	};
 }
