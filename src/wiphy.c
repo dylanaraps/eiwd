@@ -108,7 +108,7 @@ const char *wiphy_get_path(struct wiphy *wiphy)
 {
 	static char path[15];
 
-	snprintf(path, sizeof(path), "/phy%u", wiphy->id);
+	snprintf(path, sizeof(path), "/%s", wiphy->name);
 	return path;
 }
 
