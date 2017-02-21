@@ -513,7 +513,7 @@ static void walk_timeout(struct l_timeout *timeout, void *user_data)
 				wsc_error_walk_time_expired(wsc->pending));
 }
 
-static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
+static bool push_button_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 				struct l_queue *bss_list, void *userdata)
 {
 	struct wsc *wsc = userdata;
@@ -605,7 +605,8 @@ static bool scan_results(uint32_t wiphy_id, uint32_t ifindex,
 		l_debug("No PBC APs found, running the scan again");
 		wsc->scan_id = scan_active(device_get_ifindex(wsc->device),
 						wsc->wsc_ies, wsc->wsc_ies_size,
-						NULL, scan_results, wsc, NULL);
+						NULL, push_button_scan_results,
+						wsc, NULL);
 		return false;
 	}
 
@@ -626,7 +627,9 @@ session_overlap:
 	return false;
 }
 
-static bool wsc_start_pushbutton(struct wsc *wsc)
+static bool wsc_initiate_scan(struct wsc *wsc,
+					enum wsc_device_password_id dpid,
+					scan_notify_func_t callback)
 {
 	static const uint8_t wfa_oui[] = { 0x00, 0x50, 0xF2 };
 	struct wsc_probe_request req;
@@ -659,10 +662,10 @@ static bool wsc_start_pushbutton(struct wsc *wsc)
 	if (bands & SCAN_BAND_5_GHZ)
 		req.rf_bands |= WSC_RF_BAND_5_0_GHZ;
 
-	req.association_state = WSC_ASSOCIATION_STATE_NOT_ASSOCIATED,
-	req.configuration_error = WSC_CONFIGURATION_ERROR_NO_ERROR,
-	req.device_password_id = WSC_DEVICE_PASSWORD_ID_PUSH_BUTTON,
-	req.request_to_enroll = true,
+	req.association_state = WSC_ASSOCIATION_STATE_NOT_ASSOCIATED;
+	req.configuration_error = WSC_CONFIGURATION_ERROR_NO_ERROR;
+	req.device_password_id = dpid;
+	req.request_to_enroll = true;
 
 	wsc_data = wsc_build_probe_request(&req, &wsc_data_size);
 	if (!wsc_data)
@@ -677,15 +680,13 @@ static bool wsc_start_pushbutton(struct wsc *wsc)
 
 	wsc->scan_id = scan_active(device_get_ifindex(wsc->device),
 					wsc->wsc_ies, wsc->wsc_ies_size,
-					NULL, scan_results, wsc, NULL);
+					NULL, callback, wsc, NULL);
 	if (!wsc->scan_id) {
 		l_free(wsc->wsc_ies);
 		wsc->wsc_ies = NULL;
 
 		return false;
 	}
-
-	wsc->walk_timer = l_timeout_create(WALK_TIME, walk_timeout, wsc, NULL);
 
 	return true;
 }
@@ -701,10 +702,13 @@ static struct l_dbus_message *wsc_push_button(struct l_dbus *dbus,
 	if (wsc->pending)
 		return dbus_error_busy(message);
 
-	if (!wsc_start_pushbutton(wsc))
+	if (!wsc_initiate_scan(wsc, WSC_DEVICE_PASSWORD_ID_PUSH_BUTTON,
+				push_button_scan_results))
 		return dbus_error_failed(message);
 
+	wsc->walk_timer = l_timeout_create(WALK_TIME, walk_timeout, wsc, NULL);
 	wsc->pending = l_dbus_message_ref(message);
+
 	return NULL;
 }
 
