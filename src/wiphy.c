@@ -703,6 +703,21 @@ static bool wiphy_property_get_vendor(struct l_dbus *dbus,
 	return true;
 }
 
+static bool wiphy_property_get_name(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct wiphy *wiphy = user_data;
+
+	if (!wiphy->name)
+		return false;
+
+	l_dbus_message_builder_append_basic(builder, 's', wiphy->name);
+
+	return true;
+}
+
 static void setup_wiphy_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_property(interface, "Powered", 0, "b",
@@ -712,6 +727,8 @@ static void setup_wiphy_interface(struct l_dbus_interface *interface)
 					wiphy_property_get_model, NULL);
 	l_dbus_interface_property(interface, "Vendor", 0, "s",
 					wiphy_property_get_vendor, NULL);
+	l_dbus_interface_property(interface, "Name", 0, "s",
+					wiphy_property_get_name, NULL);
 }
 
 bool wiphy_init(struct l_genl_family *in)
