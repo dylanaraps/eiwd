@@ -10,6 +10,10 @@ Properties	boolean Powered [readwrite]
 			True if the adapter is powered.  If false, the
 			all of adapter's devices are powered down.
 
+		string Name [readonly]
+
+			Contains the name of the adapter.
+
 		string Model [readonly, optional]
 
 			Contains the model name of the adapter, if available.
