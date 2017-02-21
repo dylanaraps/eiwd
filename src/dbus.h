@@ -57,6 +57,7 @@ struct l_dbus_message *dbus_error_failed(struct l_dbus_message *msg);
 struct l_dbus_message *dbus_error_aborted(struct l_dbus_message *msg);
 struct l_dbus_message *dbus_error_not_available(struct l_dbus_message *msg);
 struct l_dbus_message *dbus_error_invalid_args(struct l_dbus_message *msg);
+struct l_dbus_message *dbus_error_invalid_format(struct l_dbus_message *msg);
 struct l_dbus_message *dbus_error_already_exists(struct l_dbus_message *msg);
 struct l_dbus_message *dbus_error_not_found(struct l_dbus_message *msg);
 struct l_dbus_message *dbus_error_not_supported(struct l_dbus_message *msg);

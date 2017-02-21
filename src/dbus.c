@@ -123,6 +123,12 @@ struct l_dbus_message *dbus_error_invalid_args(struct l_dbus_message *msg)
 					"Argument type is wrong");
 }
 
+struct l_dbus_message *dbus_error_invalid_format(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".InvalidFormat",
+					"Argument format is invalid");
+}
+
 struct l_dbus_message *dbus_error_already_exists(struct l_dbus_message *msg)
 {
 	return l_dbus_message_new_error(msg, IWD_SERVICE ".AlreadyExists",
