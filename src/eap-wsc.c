@@ -1265,7 +1265,6 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 	}
 
 	wsc->m1->association_state = WSC_ASSOCIATION_STATE_NOT_ASSOCIATED;
-	wsc->m1->device_password_id = WSC_DEVICE_PASSWORD_ID_PUSH_BUTTON;
 	wsc->m1->configuration_error = WSC_CONFIGURATION_ERROR_NO_ERROR;
 
 	if (!l_settings_get_uint(settings, "WSC",
@@ -1273,6 +1272,11 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 		u32 = 0;
 
 	wsc->m1->os_version = u32 & 0x7fffffff;
+
+	if (!l_settings_get_uint(settings, "WSC", "DevicePasswordId", &u32))
+		u32 = WSC_DEVICE_PASSWORD_ID_PUSH_BUTTON;
+
+	wsc->m1->device_password_id = u32;
 
 	device_password = l_settings_get_string(settings, "WSC",
 							"DevicePassword");
