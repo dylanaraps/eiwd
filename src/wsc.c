@@ -25,6 +25,7 @@
 #endif
 
 #include <errno.h>
+#include <stdio.h>
 #include <ell/ell.h>
 
 #include "src/dbus.h"
@@ -103,6 +104,13 @@ static struct l_dbus_message *wsc_error_walk_time_expired(
 					"the alloted time");
 }
 
+static struct l_dbus_message *wsc_error_time_expired(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg,
+					IWD_WSC_INTERFACE ".TimeExpired",
+					"No APs in PIN mode found in "
+					"the alloted time");
+}
 static void wsc_try_credentials(struct wsc *wsc)
 {
 	unsigned int i;
@@ -420,6 +428,24 @@ static void wsc_connect(struct wsc *wsc)
 	l_settings_set_string(settings, "WSC", "EnrolleeMAC",
 		util_address_to_string(device_get_address(wsc->device)));
 
+	if (!strcmp(l_dbus_message_get_member(wsc->pending), "StartPin")) {
+		const char *pin;
+
+		if (l_dbus_message_get_arguments(wsc->pending, "s", &pin)) {
+			enum wsc_device_password_id dpid;
+
+			if (wsc_pin_is_checksum_valid(pin))
+				dpid = WSC_DEVICE_PASSWORD_ID_DEFAULT;
+			else
+				dpid = WSC_DEVICE_PASSWORD_ID_USER_SPECIFIED;
+
+			l_settings_set_uint(settings, "WSC",
+						"DevicePasswordId", dpid);
+			l_settings_set_string(settings, "WSC",
+						"DevicePassword", pin);
+		}
+	}
+
 	handshake_state_set_8021x_config(hs, settings);
 	wsc->eap_settings = settings;
 
@@ -511,6 +537,17 @@ static void walk_timeout(struct l_timeout *timeout, void *user_data)
 	if (wsc->pending)
 		dbus_pending_reply(&wsc->pending,
 				wsc_error_walk_time_expired(wsc->pending));
+}
+
+static void pin_timeout(struct l_timeout *timeout, void *user_data)
+{
+	struct wsc *wsc = user_data;
+
+	wsc_cancel_scan(wsc);
+
+	if (wsc->pending)
+		dbus_pending_reply(&wsc->pending,
+					wsc_error_time_expired(wsc->pending));
 }
 
 static bool push_button_scan_results(uint32_t wiphy_id, uint32_t ifindex,
@@ -627,6 +664,138 @@ session_overlap:
 	return false;
 }
 
+static const char *authorized_macs_to_string(const uint8_t *authorized_macs)
+{
+	unsigned int i;
+	unsigned int offset = 0;
+	/* Max of 5 addresses in AuthorizedMacs, 17 bytes / address */
+	static char buf[128];
+
+	for (i = 0; i < 5; i++) {
+		const uint8_t *addr = authorized_macs + i * 6;
+
+		if (util_mem_is_zero(addr, 6))
+			continue;
+
+		offset += sprintf(buf + offset, "%s",
+						util_address_to_string(addr));
+	}
+
+	return buf;
+}
+
+static bool authorized_macs_contains(const uint8_t *authorized_macs,
+							const uint8_t *target)
+{
+	unsigned int i;
+
+	for (i = 0; i < 5; i++) {
+		const uint8_t *addr = authorized_macs + i * 6;
+
+		if (!memcmp(addr, target, 6))
+			return true;
+	}
+
+	return false;
+}
+
+static bool pin_scan_results(uint32_t wiphy_id, uint32_t ifindex,
+				struct l_queue *bss_list, void *userdata)
+{
+	static const uint8_t wildcard_address[] =
+					{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+	struct wsc *wsc = userdata;
+	struct scan_bss *target = NULL;
+	const struct l_queue_entry *bss_entry;
+	struct wsc_probe_response probe_response;
+
+	wsc->scan_id = 0;
+
+	for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
+				bss_entry = bss_entry->next) {
+		struct scan_bss *bss = bss_entry->data;
+		const uint8_t *amacs;
+		int err;
+
+		l_debug("bss '%s' with SSID: %s, freq: %u",
+			util_address_to_string(bss->addr),
+			util_ssid_to_utf8(bss->ssid_len, bss->ssid),
+			bss->frequency);
+
+		l_debug("bss->wsc: %p, %zu", bss->wsc, bss->wsc_size);
+
+		if (!bss->wsc)
+			continue;
+
+		err = wsc_parse_probe_response(bss->wsc, bss->wsc_size,
+						&probe_response);
+		if (err < 0) {
+			l_debug("ProbeResponse parse failed: %s",
+							strerror(-err));
+			continue;
+		}
+
+		if (probe_response.device_password_id !=
+					WSC_DEVICE_PASSWORD_ID_DEFAULT &&
+				probe_response.device_password_id !=
+					WSC_DEVICE_PASSWORD_ID_USER_SPECIFIED)
+			continue;
+
+		l_debug("SelectedRegistar: %s",
+			probe_response.selected_registrar ? "true" : "false");
+
+		/*
+		 * WSC Best Practices v2.0.1, Section 3.4:
+		 * In a mixed environment with both WSC 1.0 and WSC 2.0 APs, an
+		 * Enrollee should be prepared to run both the WSC 1.0 and
+		 * WSC 2.0 forms of discovery. An Enrollee may scan available
+		 * channels and then order PIN attempts with prospective APs
+		 * as follows:
+		 * 1. WSC 2.0 AP with the Selected Registrar attribute TRUE
+		 * and the Enrollee’s MAC address in the AuthorizedMACs
+		 * sub-element in Beacons and Probe Responses.
+		 * 2. WSC 2.0 APs with the Selected Registrar attribute TRUE
+		 * and the wildcard MAC address in the AuthorizedMACs
+		 * sub-element in Beacons and Probe Responses, ordered by
+		 * decreasing RSSI.
+		 * 3. WSC 1.0 APs, ordered by decreasing RSSI.
+		 * If option 1 is available, options 2 and 3 should be
+		 * unnecessary.
+		 */
+		if (!probe_response.selected_registrar)
+			continue;
+
+		amacs = probe_response.authorized_macs;
+		l_debug("AuthorizedMacs: %s", authorized_macs_to_string(amacs));
+
+		if (authorized_macs_contains(amacs,
+					device_get_address(wsc->device))) {
+			target = bss;
+			break;
+		} else if (!target && authorized_macs_contains(amacs,
+							wildcard_address))
+			target = bss;
+	}
+
+	if (!target) {
+		l_debug("No PIN APs found, running the scan again");
+		wsc->scan_id = scan_active(device_get_ifindex(wsc->device),
+						wsc->wsc_ies, wsc->wsc_ies_size,
+						NULL, pin_scan_results,
+						wsc, NULL);
+		return false;
+	}
+
+	wsc_cancel_scan(wsc);
+	device_set_scan_results(wsc->device, bss_list);
+
+	l_debug("Found AP to connect to: %s",
+			util_address_to_string(target->addr));
+	wsc_check_can_connect(wsc, target);
+
+	return true;
+}
+
 static bool wsc_initiate_scan(struct wsc *wsc,
 					enum wsc_device_password_id dpid,
 					scan_notify_func_t callback)
@@ -734,6 +903,39 @@ static struct l_dbus_message *wsc_generate_pin(struct l_dbus *dbus,
 	return reply;
 }
 
+static struct l_dbus_message *wsc_start_pin(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct wsc *wsc = user_data;
+	const char *pin;
+	enum wsc_device_password_id dpid;
+
+	l_debug("");
+
+	if (wsc->pending)
+		return dbus_error_busy(message);
+
+	if (!l_dbus_message_get_arguments(message, "s", &pin))
+		return dbus_error_invalid_args(message);
+
+	if (!wsc_pin_is_valid(pin))
+		return dbus_error_invalid_format(message);
+
+	if (wsc_pin_is_checksum_valid(pin))
+		dpid = WSC_DEVICE_PASSWORD_ID_DEFAULT;
+	else
+		dpid = WSC_DEVICE_PASSWORD_ID_USER_SPECIFIED;
+
+	if (!wsc_initiate_scan(wsc, dpid, pin_scan_results))
+		return dbus_error_failed(message);
+
+	wsc->walk_timer = l_timeout_create(60, pin_timeout, wsc, NULL);
+	wsc->pending = l_dbus_message_ref(message);
+
+	return NULL;
+}
+
 static struct l_dbus_message *wsc_cancel(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -782,6 +984,8 @@ static void setup_wsc_interface(struct l_dbus_interface *interface)
 				wsc_push_button, "", "");
 	l_dbus_interface_method(interface, "GeneratePin", 0,
 				wsc_generate_pin, "s", "", "pin");
+	l_dbus_interface_method(interface, "StartPin", 0,
+				wsc_start_pin, "", "s", "pin");
 	l_dbus_interface_method(interface, "Cancel", 0,
 				wsc_cancel, "", "");
 }
