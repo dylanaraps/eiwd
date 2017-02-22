@@ -34,6 +34,32 @@ Methods		void PushButton()
 			Generates a random 8 digit PIN with an included check
 			digit suitable for use by most user interfaces.
 
+		void StartPin(string pin)
+			Start WSC in PIN mode.  If iwd's WSC configuration
+			indicates that the device does not support a display,
+			a static PIN from the iwd.conf configuration file is
+			used.  Contents of pin are ignored in this case.
+
+			Otherwise, the pin provided will be utilized.  This
+			can be an automatically generated PIN that contains a
+			check digit, or a user-specified PIN.  The
+			GeneratePin() method can be used a generate a random
+			8 digit PIN with an included check digit.
+
+			This method returns once the configuration has been
+			completed and the network has been successfully
+			connected.
+
+			Possible errors:
+			net.connman.iwd.WiFiSimpleConfiguration.NoCredentials
+			net.connman.iwd.WiFiSimpleConfiguration.NotReachable
+			net.connman.iwd.WiFiSimpleConfiguration.WalkTimerExpired
+			net.connman.iwd.Aborted
+			net.connman.iwd.Failed
+			net.connman.iwd.Busy
+			net.connman.iwd.InvalidArgs
+			net.connman.iwd.InvalidFormat
+
 		void Cancel()
 
 			Aborts any ongoing WSC operations.  If no WSC
