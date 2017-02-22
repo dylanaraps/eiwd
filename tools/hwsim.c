@@ -257,7 +257,7 @@ static void hwsim_ready(void *user_data)
 
 	ret = l_genl_family_register(hwsim, "config", hwsim_config,
 					NULL, NULL);
-	if (ret < 0) {
+	if (!ret) {
 		fprintf(stderr, "Failed to create hwsim config listener\n");
 		exit_status = EXIT_FAILURE;
 		l_main_quit();
