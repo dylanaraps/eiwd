@@ -16,3 +16,5 @@ if (len(sys.argv) == 3):
 else:
     pin = wsc.GeneratePin()
     print("Please use '%s' as the PIN" % (pin))
+
+wsc.StartPin(pin, timeout=125)
