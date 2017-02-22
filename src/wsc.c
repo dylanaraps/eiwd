@@ -380,8 +380,11 @@ static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
 		wsc_connect_cb(device_get_netdev(wsc->device),
 				NETDEV_RESULT_HANDSHAKE_FAILED, wsc);
 		break;
+	case NETDEV_EVENT_RSSI_THRESHOLD_LOW:
+	case NETDEV_EVENT_RSSI_THRESHOLD_HIGH:
+		break;
 	default:
-		l_debug("Unexpected event");
+		l_debug("Unexpected event: %d", event);
 		break;
 	};
 }
