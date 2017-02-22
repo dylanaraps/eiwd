@@ -109,6 +109,7 @@ monitor_iwmon_LDADD = ell/libell-internal.la
 noinst_PROGRAMS = tools/hwsim
 noinst_PROGRAMS += tools/test-runner
 
+tools_hwsim_SOURCES = tools/hwsim.c src/util.h src/util.c src/mpdu.h
 tools_hwsim_LDADD = ell/libell-internal.la
 tools_test_runner_LDADD = ell/libell-internal.la
 
