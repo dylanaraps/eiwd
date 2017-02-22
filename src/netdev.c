@@ -1366,7 +1366,7 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 						netdev->user_data);
 			netdev->connect_cb = NULL;
 		}
-	} else if (is_rsn) {
+	} else if (netdev->sm) {
 		if (netdev->event_filter)
 			netdev->event_filter(netdev,
 					NETDEV_EVENT_4WAY_HANDSHAKE,
