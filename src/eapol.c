@@ -754,7 +754,9 @@ struct eapol_sm *eapol_sm_new(struct handshake_state *hs)
 	sm = l_new(struct eapol_sm, 1);
 
 	sm->handshake = hs;
-	sm->use_eapol_start = true;
+
+	if (hs->settings_8021x)
+		sm->use_eapol_start = true;
 
 	return sm;
 }
