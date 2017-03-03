@@ -28,12 +28,14 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <linux/if_ether.h>
+#include <ctype.h>
 
 #include <ell/ell.h>
 
 #include "linux/nl80211.h"
 
 #include "src/util.h"
+#include "src/storage.h"
 
 enum {
 	HWSIM_CMD_UNSPEC,
@@ -241,37 +243,46 @@ static void list_callback(struct l_genl_msg *msg, void *user_data)
 
 struct radio_info_rec {
 	uint32_t id;
+	uint32_t wiphy_id;
 	char alpha2[2];
 	bool p2p;
 	uint32_t regdom;
 	int channels;
-	bool ready;	/* Whether we have radio, wiphy and interface data */
-	char wiphy_name[0];
-};
-
-struct wiphy_info_rec {
-	uint32_t id;
-	char name[0];
+	uint8_t addrs[ETH_ALEN * 2];
+	char *name;
 };
 
 struct interface_info_rec {
 	uint32_t id;
-	uint32_t wiphy_id;
+	struct radio_info_rec *radio_rec;
 	uint8_t addr[ETH_ALEN];
-	char name[0];
+	char *name;
 };
 
 static struct l_queue *radio_info;
-static struct l_queue *wiphy_info;
 static struct l_queue *interface_info;
+
+static void radio_free(void *user_data)
+{
+	struct radio_info_rec *rec = user_data;
+
+	l_free(rec->name);
+	l_free(rec);
+}
+
+static void interface_free(void *user_data)
+{
+	struct interface_info_rec *rec = user_data;
+
+	l_free(rec->name);
+	l_free(rec);
+}
 
 static void hwsim_radio_cache_cleanup(void)
 {
-	l_queue_destroy(radio_info, l_free);
-	l_queue_destroy(wiphy_info, l_free);
-	l_queue_destroy(interface_info, l_free);
+	l_queue_destroy(radio_info, radio_free);
+	l_queue_destroy(interface_info, interface_free);
 	radio_info = NULL;
-	wiphy_info = NULL;
 	interface_info = NULL;
 }
 
@@ -283,26 +294,12 @@ static bool radio_info_match_id(const void *a, const void *b)
 	return rec->id == id;
 }
 
-static bool radio_info_match_name(const void *a, const void *b)
+static bool radio_info_match_wiphy_id(const void *a, const void *b)
 {
 	const struct radio_info_rec *rec = a;
-
-	return !strcmp(rec->wiphy_name, b);
-}
-
-static bool wiphy_info_match_id(const void *a, const void *b)
-{
-	const struct wiphy_info_rec *rec = a;
 	uint32_t id = L_PTR_TO_UINT(b);
 
-	return rec->id == id;
-}
-
-static bool wiphy_info_match_name(const void *a, const void *b)
-{
-	const struct wiphy_info_rec *rec = a;
-
-	return !strcmp(rec->name, b);
+	return rec->wiphy_id == id;
 }
 
 static bool interface_info_match_id(const void *a, const void *b)
@@ -313,58 +310,51 @@ static bool interface_info_match_id(const void *a, const void *b)
 	return rec->id == id;
 }
 
-static bool interface_info_match_wiphy_id(const void *a, const void *b)
+static bool parse_addresses(const uint8_t *buf, size_t len,
+				struct radio_info_rec *rec)
 {
-	const struct interface_info_rec *rec = a;
-	uint32_t id = L_PTR_TO_UINT(b);
+	unsigned int pos = 0, addr_idx = 0;
 
-	return rec->wiphy_id == id;
-}
+	while (pos < len) {
+		int start_pos = pos;
+		char addr[20];
 
-/*
- * See if we have any radios that should become "ready", i.e. where matching
- * wiphy or interface record was missing and is now available.
- */
-static void process_new_radios(void)
-{
-	const struct l_queue_entry *radio_entry;
+		while (pos < len && !isspace(buf[pos]))
+			pos++;
 
-	for (radio_entry = l_queue_get_entries(radio_info); radio_entry;
-			radio_entry = radio_entry->next) {
-		struct radio_info_rec *radio = radio_entry->data;
-		const struct wiphy_info_rec *wiphy;
-		const struct interface_info_rec *interface;
+		if (pos - start_pos > sizeof(addr) - 1) {
+			l_error("Can't parse a %s address from sysfs",
+				rec->name);
+			return false;
+		}
 
-		if (radio->ready)
-			continue;
+		memcpy(addr, buf + start_pos, pos - start_pos);
+		addr[pos - start_pos] = '\0';
 
-		wiphy = l_queue_find(wiphy_info, wiphy_info_match_name,
-					radio->wiphy_name);
-		if (!wiphy)
-			continue;
+		if (addr_idx >= 2) {
+			l_error("Hwsim wiphy %s has too many addresses listed "
+				" in sysfs - only 2 supported", rec->name);
+			return false;
+		}
 
-		interface = l_queue_find(interface_info,
-						interface_info_match_wiphy_id,
-						L_UINT_TO_PTR(wiphy->id));
-		if (!interface)
-			continue;
+		if (!util_string_to_address(addr, rec->addrs +
+						(addr_idx++ * ETH_ALEN))) {
+			l_error("Can't parse hwsim wiphy %s address from sysfs",
+				rec->name);
+			return false;
+		}
 
-		radio->ready = true;
-
-		/* TODO: Create DBus object */
-		/* TODO: insert into address cache */
+		while (pos < len && isspace(buf[pos]))
+			pos++;
 	}
-}
 
-static void process_del_radio(struct radio_info_rec *radio)
-{
-	if (!radio->ready)
-		return;
+	if (addr_idx < 2) {
+		l_error("Hwsim wiphy %s has too few addresses listed "
+			" in sysfs - only 2 supported", rec->name);
+		return false;
+	}
 
-	radio->ready = false;
-
-	/* TODO: unregister DBus object */
-	/* TODO: remove from address cache */
+	return true;
 }
 
 static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
@@ -376,6 +366,10 @@ static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
 	const uint32_t *id = NULL;
 	size_t name_len = 0;
 	struct radio_info_rec *rec;
+	uint8_t file_buffer[128];
+	int bytes, consumed;
+	unsigned int uintval;
+	bool old;
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -399,14 +393,20 @@ static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
 	if (!id || !name)
 		return;
 
-	l_free(l_queue_remove_if(radio_info, radio_info_match_id,
-					L_UINT_TO_PTR(*id)));
+	rec = l_queue_find(radio_info, radio_info_match_id, L_UINT_TO_PTR(*id));
+	if (rec) {
+		old = true;
 
-	rec = l_malloc(sizeof(struct radio_info_rec) + name_len + 1);
-	memset(rec, 0, sizeof(struct radio_info_rec) + name_len + 1);
+		l_free(rec->name);
+	} else {
+		old = false;
 
-	rec->id = *id;
-	memcpy(rec->wiphy_name, name, name_len);
+		rec = l_new(struct radio_info_rec, 1);
+
+		rec->id = *id;
+	}
+
+	rec->name = l_strndup(name, name_len);
 
 	l_genl_attr_init(&attr, msg);
 
@@ -440,12 +440,54 @@ static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
 		}
 	}
 
+	/*
+	 * Assuming that the radio name is the wiphy name read the wiphy index
+	 * associated with the radio and the wiphy's hardware addresses from
+	 * sysfs.  The index could be obtained through NL80211_CMD_GET_WIPHY
+	 * but that is costly and reading the index synchronously simplifies
+	 * the job a lot.  We have to resort to sysfs anyway to obtain the
+	 * radio addresses.
+	 */
+
+	bytes = read_file((char *) file_buffer, sizeof(file_buffer) - 1,
+				"/sys/class/ieee80211/%s/index", rec->name);
+	if (bytes < 0) {
+		l_error("Error reading index for %s from sysfs", rec->name);
+		goto free_radio;
+	}
+
+	file_buffer[bytes] = '\0';
+	if (sscanf((char *) file_buffer, "%u %n", &uintval, &consumed) != 1 ||
+			consumed != bytes) {
+		l_error("Error parsing index for %s from sysfs", rec->name);
+		goto free_radio;
+	}
+
+	rec->wiphy_id = uintval;
+
+	bytes = read_file(file_buffer, sizeof(file_buffer),
+				"/sys/class/ieee80211/%s/addresses", rec->name);
+	if (bytes < 0) {
+		l_error("Error reading addresses for %s from sysfs", rec->name);
+		goto free_radio;
+	}
+
+	if (!parse_addresses(file_buffer, bytes, rec))
+		goto free_radio;
+
 	if (!radio_info)
 		radio_info = l_queue_new();
 
-	l_queue_push_tail(radio_info, rec);
+	if (!old)
+		l_queue_push_tail(radio_info, rec);
 
-	process_new_radios();
+	/* TODO: Create DBus object */
+
+	return;
+
+free_radio:
+	if (!old)
+		radio_free(rec);
 }
 
 static void get_wiphy_callback(struct l_genl_msg *msg, void *user_data)
@@ -456,7 +498,7 @@ static void get_wiphy_callback(struct l_genl_msg *msg, void *user_data)
 	const char *name = NULL;
 	uint16_t name_len = 0;
 	const uint32_t *id = NULL;
-	struct wiphy_info_rec *rec;
+	struct radio_info_rec *rec;
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -476,21 +518,17 @@ static void get_wiphy_callback(struct l_genl_msg *msg, void *user_data)
 	if (!name || !id)
 		return;
 
-	l_free(l_queue_remove_if(wiphy_info, wiphy_info_match_id,
-					L_UINT_TO_PTR(*id)));
+	rec = l_queue_find(radio_info, radio_info_match_wiphy_id,
+				L_UINT_TO_PTR(*id));
+	if (!rec)
+		return;
 
-	rec = l_malloc(sizeof(struct wiphy_info_rec) + name_len + 1);
-	memset(rec, 0, sizeof(struct wiphy_info_rec) + name_len + 1);
+	if (strlen(rec->name) == name_len && !memcmp(rec->name, name, name_len))
+		return;
 
-	memcpy(rec->name, name, name_len);
-	rec->id = *id;
+	l_free(rec->name);
 
-	if (!wiphy_info)
-		wiphy_info = l_queue_new();
-
-	l_queue_push_tail(wiphy_info, rec);
-
-	process_new_radios();
+	rec->name = l_strndup(name, name_len);
 }
 
 static void get_interface_callback(struct l_genl_msg *msg, void *user_data)
@@ -504,6 +542,8 @@ static void get_interface_callback(struct l_genl_msg *msg, void *user_data)
 	const char *ifname = NULL;
 	size_t ifname_len = 0;
 	struct interface_info_rec *rec;
+	struct radio_info_rec *radio_rec;
+	bool old;
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -541,24 +581,52 @@ static void get_interface_callback(struct l_genl_msg *msg, void *user_data)
 	if (!addr || !wiphy_id || !ifindex || !ifname)
 		return;
 
-	l_free(l_queue_remove_if(interface_info, interface_info_match_id,
-					L_UINT_TO_PTR(*ifindex)));
+	radio_rec = l_queue_find(radio_info, radio_info_match_wiphy_id,
+				L_UINT_TO_PTR(*wiphy_id));
+	if (!radio_rec)
+		/* This is not a hwsim interface, don't track it */
+		return;
 
-	rec = l_malloc(sizeof(struct interface_info_rec) + ifname_len + 1);
-	memset(rec, 0, sizeof(struct interface_info_rec) + ifname_len + 1);
+	rec = l_queue_find(interface_info, interface_info_match_id,
+				L_UINT_TO_PTR(*ifindex));
+	if (rec) {
+		old = true;
 
-	rec->id = *ifindex;
-	rec->wiphy_id = *wiphy_id;
+		l_free(rec->name);
+	} else {
+		old = false;
+
+		rec = l_new(struct interface_info_rec, 1);
+
+		rec->id = *ifindex;
+		rec->radio_rec = radio_rec;
+	}
+
 	memcpy(rec->addr, addr, ETH_ALEN);
-	memcpy(rec->name, ifname, ifname_len);
-	rec->name[ifname_len] = '\0';
+	rec->name = l_strndup(ifname, ifname_len);
 
 	if (!interface_info)
 		interface_info = l_queue_new();
 
-	l_queue_push_tail(interface_info, rec);
+	if (!old)
+		l_queue_push_tail(interface_info, rec);
 
-	process_new_radios();
+	/* TODO: Create DBus object */
+}
+
+static bool interface_info_destroy_by_radio(void *data, void *user_data)
+{
+	struct interface_info_rec *rec = data;
+	struct radio_info_rec *radio_rec = user_data;
+
+	if (rec->radio_rec != radio_rec)
+		return false;
+
+	/* TODO: Drop DBus object */
+
+	interface_free(rec);
+
+	return true;
 }
 
 static void del_radio_event(struct l_genl_msg *msg)
@@ -592,51 +660,18 @@ static void del_radio_event(struct l_genl_msg *msg)
 	if (!radio)
 		return;
 
-	process_del_radio(radio);
+	l_queue_foreach_remove(interface_info, interface_info_destroy_by_radio,
+				radio);
 
-	l_free(radio);
+	/* TODO: Drop DBus object */
+
+	radio_free(radio);
 	l_queue_remove(radio_info, radio);
-}
-
-static void del_wiphy_event(struct l_genl_msg *msg)
-{
-	struct wiphy_info_rec *wiphy;
-	struct radio_info_rec *radio;
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-	uint32_t id;
-
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	if (!l_genl_attr_next(&attr, &type, &len, &data))
-		return;
-
-	if (type != NL80211_ATTR_WIPHY || len != 4)
-		return;
-
-	id = *((uint32_t *) data);
-
-	wiphy = l_queue_find(wiphy_info, wiphy_info_match_id,
-				L_UINT_TO_PTR(id));
-	if (!wiphy)
-		return;
-
-	radio = l_queue_find(radio_info, radio_info_match_name, wiphy->name);
-
-	if (radio)
-		process_del_radio(radio);
-
-	l_free(wiphy);
-	l_queue_remove(wiphy_info, wiphy);
 }
 
 static void del_interface_event(struct l_genl_msg *msg)
 {
 	struct interface_info_rec *interface;
-	struct wiphy_info_rec *wiphy;
-	struct radio_info_rec *radio;
 	struct l_genl_attr attr;
 	uint16_t type, len;
 	const void *data;
@@ -664,18 +699,9 @@ static void del_interface_event(struct l_genl_msg *msg)
 	if (!interface)
 		return;
 
-	wiphy = l_queue_find(wiphy_info, wiphy_info_match_id,
-				L_UINT_TO_PTR(interface->wiphy_id));
-	if (wiphy)
-		radio = l_queue_find(radio_info, radio_info_match_name,
-					wiphy->name);
-	else
-		radio = NULL;
+	/* TODO: Drop DBus object */
 
-	if (radio)
-		process_del_radio(radio);
-
-	l_free(interface);
+	interface_free(interface);
 	l_queue_remove(interface_info, interface);
 }
 
@@ -718,9 +744,6 @@ static void nl80211_config_notify(struct l_genl_msg *msg, void *user_data)
 	case NL80211_CMD_NEW_WIPHY:
 		get_wiphy_callback(msg, NULL);
 		break;
-	case NL80211_CMD_DEL_WIPHY:
-		del_wiphy_event(msg);
-		break;
 	case NL80211_CMD_NEW_INTERFACE:
 		get_interface_callback(msg, NULL);
 		break;
@@ -730,17 +753,15 @@ static void nl80211_config_notify(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
-static void nl80211_ready(void *user_data)
+static void get_radio_done_initial(void *user_data)
 {
 	struct l_genl_msg *msg;
 
-	msg = l_genl_msg_new(NL80211_CMD_GET_WIPHY);
-	if (!l_genl_family_dump(nl80211, msg, get_wiphy_callback,
-				NULL, NULL)) {
-		l_error("Getting nl80211 wiphy information failed");
-		goto error;
-	}
-
+	/*
+	 * Query interfaces now that we know we have all the radio data
+	 * for radio lookups inside get_interface_callback, and we know
+	 * nl80211_ready has already been called.
+	 */
 	msg = l_genl_msg_new(NL80211_CMD_GET_INTERFACE);
 	if (!l_genl_family_dump(nl80211, msg, get_interface_callback,
 				NULL, NULL)) {
@@ -752,6 +773,24 @@ static void nl80211_ready(void *user_data)
 					NULL, NULL)) {
 		l_error("Registering for nl80211 config notification "
 			"failed");
+		goto error;
+	}
+
+	return;
+
+error:
+	exit_status = EXIT_FAILURE;
+	l_main_quit();
+}
+
+static void nl80211_ready(void *user_data)
+{
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new(HWSIM_CMD_GET_RADIO);
+	if (!l_genl_family_dump(hwsim, msg, get_radio_callback,
+				NULL, get_radio_done_initial)) {
+		l_error("Getting hwsim radio information failed");
 		goto error;
 	}
 
@@ -846,13 +885,6 @@ static void hwsim_ready(void *user_data)
 		break;
 
 	case ACTION_NONE:
-		msg = l_genl_msg_new(HWSIM_CMD_GET_RADIO);
-		if (!l_genl_family_dump(hwsim, msg, get_radio_callback,
-					NULL, NULL)) {
-			l_error("Getting hwsim radio information failed");
-			goto error;
-		}
-
 		l_genl_family_set_watches(nl80211, nl80211_ready, NULL,
 						NULL, NULL);
 
@@ -860,10 +892,6 @@ static void hwsim_ready(void *user_data)
 	}
 
 	return;
-
-error:
-	exit_status = EXIT_FAILURE;
-	l_main_quit();
 }
 
 static void hwsim_disappeared(void *user_data)
