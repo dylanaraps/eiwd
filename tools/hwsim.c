@@ -821,7 +821,7 @@ static void hwsim_ready(void *user_data)
 
 		if (radio_name_attr)
 			l_genl_msg_append_attr(msg, HWSIM_ATTR_RADIO_NAME,
-						strlen(radio_name_attr),
+						strlen(radio_name_attr) + 1,
 							radio_name_attr);
 
 		if (no_vif_attr)
