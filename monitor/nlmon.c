@@ -3804,7 +3804,7 @@ static void print_eapol_key(const void *data, uint32_t size)
 	print_attr(1, "Install: %s", ek->install ? "true" : "false");
 	print_attr(1, "Key ACK: %s", ek->key_ack ? "true" : "false");
 	print_attr(1, "Key Length: %d", L_BE16_TO_CPU(ek->key_length));
-	print_attr(1, "Key Replay Counter: %ld",
+	print_attr(1, "Key Replay Counter: %" PRIu64,
 					L_BE64_TO_CPU(ek->key_replay_counter));
 	print_attr(1, "Key NONCE");
 	print_hexdump(2, ek->key_nonce, 32);
