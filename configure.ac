@@ -73,6 +73,7 @@ AC_DEFINE_UNQUOTED(CONFIGDIR, "/etc/iwd", [Configuration directory])
 AC_CHECK_HEADERS(linux/types.h linux/if_alg.h)
 
 AC_PATH_PROG(A2X, [a2x], [], $PATH:/sbin:/usr/sbin)
+AM_CONDITIONAL(BUILD_DOCS, test "$A2X" != "")
 
 AC_CONFIG_FILES(Makefile)
 

@@ -215,7 +215,9 @@ TESTS = $(unit_tests)
 
 manual_pages = doc/iwmon.1
 
+if BUILD_DOCS
 dist_man_MANS = $(manual_pages)
+endif
 
 EXTRA_DIST = $(manual_pages:.1=.txt)
 
