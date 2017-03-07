@@ -298,13 +298,6 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 
 	while (l_genl_attr_next(attr, &type, &len, &data)) {
 		switch (type) {
-		case NL80211_ATTR_WIPHY_NAME:
-			if (len > sizeof(wiphy->name))
-				l_warn("Invalid wiphy name attribute");
-			else
-				memcpy(wiphy->name, data, len);
-
-			break;
 		case NL80211_ATTR_FEATURE_FLAGS:
 			if (len != sizeof(uint32_t))
 				l_warn("Invalid feature flags attribute");
@@ -469,15 +462,36 @@ static void wiphy_new_wiphy_event(struct l_genl_msg *msg)
 
 	id = *((uint32_t *) data);
 
+	if (!l_genl_attr_next(&attr, &type, &len, &data))
+		return;
+
+	if (type != NL80211_ATTR_WIPHY_NAME)
+		return;
+
+	if (len > sizeof(wiphy->name))
+		return;
+
 	wiphy = l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(id));
 	if (wiphy) {
-		l_info("Wiphy %s[%d] already being tracked",
-				wiphy->name, wiphy->id);
+		/*
+		 * WIPHY_NAME is a NLA_NUL_STRING, so the kernel
+		 * enforces the data to be null terminated
+		 */
+		if (strcmp(wiphy->name, data)) {
+			struct l_dbus *dbus = dbus_get_bus();
+
+			memcpy(wiphy->name, data, len);
+			l_dbus_property_changed(dbus, wiphy_get_path(wiphy),
+						IWD_WIPHY_INTERFACE, "Name");
+		} else
+			l_info("Wiphy %s[%d] already being tracked",
+						wiphy->name, wiphy->id);
 		return;
 	}
 
 	wiphy = l_new(struct wiphy, 1);
 	wiphy->id = id;
+	memcpy(wiphy->name, data, len);
 	wiphy->supported_freqs = scan_freq_set_new();
 	l_queue_push_head(wiphy_list, wiphy);
 
