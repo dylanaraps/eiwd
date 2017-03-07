@@ -215,7 +215,7 @@ bool pcap_read(struct pcap *pcap, struct timeval *tv,
 		return false;
 	}
 
-	if (bytes_read < pkt.incl_len) {
+	if ((uint32_t) bytes_read < pkt.incl_len) {
 		if (lseek(pcap->fd, pkt.incl_len - bytes_read, SEEK_CUR) < 0) {
 			pcap->closed = true;
 			return false;
