@@ -721,9 +721,6 @@ static bool wiphy_property_get_name(struct l_dbus *dbus,
 {
 	struct wiphy *wiphy = user_data;
 
-	if (!wiphy->name)
-		return false;
-
 	l_dbus_message_builder_append_basic(builder, 's', wiphy->name);
 
 	return true;
