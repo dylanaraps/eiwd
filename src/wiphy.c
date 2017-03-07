@@ -298,9 +298,6 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 
 	while (l_genl_attr_next(attr, &type, &len, &data)) {
 		switch (type) {
-		case NL80211_ATTR_WIPHY:
-			l_warn("Duplicate wiphy attribute");
-			break;
 		case NL80211_ATTR_WIPHY_NAME:
 			if (len > sizeof(wiphy->name))
 				l_warn("Invalid wiphy name attribute");
