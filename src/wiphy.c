@@ -720,8 +720,21 @@ static bool wiphy_property_get_name(struct l_dbus *dbus,
 					void *user_data)
 {
 	struct wiphy *wiphy = user_data;
+	char buf[20];
 
-	l_dbus_message_builder_append_basic(builder, 's', wiphy->name);
+	if (l_utf8_validate(wiphy->name, strlen(wiphy->name), NULL)) {
+		l_dbus_message_builder_append_basic(builder, 's', wiphy->name);
+		return true;
+	}
+
+	/*
+	 * In the highly unlikely scenario that the wiphy name is not utf8,
+	 * we simply use the canonical name phy<index>.  The kernel guarantees
+	 * that this name cannot be taken by any other wiphy, so this should
+	 * be safe enough.
+	 */
+	sprintf(buf, "phy%d", wiphy->id);
+	l_dbus_message_builder_append_basic(builder, 's', buf);
 
 	return true;
 }
