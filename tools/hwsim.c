@@ -35,6 +35,11 @@
 
 #include "src/util.h"
 #include "src/storage.h"
+#include "src/dbus.h"
+
+#define HWSIM_RADIO_MANAGER_INTERFACE "net.connman.iwd.hwsim.RadioManager"
+#define HWSIM_RADIO_INTERFACE "net.connman.iwd.hwsim.Radio"
+#define HWSIM_INTERFACE_INTERFACE "net.connman.iwd.hwsim.Interface"
 
 enum {
 	HWSIM_CMD_UNSPEC,
@@ -91,6 +96,7 @@ static bool keep_radios_attr;
 static bool no_vif_attr;
 static bool p2p_attr;
 static const char *radio_name_attr;
+static struct l_dbus *dbus;
 
 static void do_debug(const char *str, void *user_data)
 {
@@ -245,7 +251,8 @@ struct radio_info_rec {
 	uint32_t wiphy_id;
 	char alpha2[2];
 	bool p2p;
-	uint32_t regdom;
+	bool custom_regdom;
+	uint32_t regdom_idx;
 	int channels;
 	uint8_t addrs[ETH_ALEN * 2];
 	char *name;
@@ -307,6 +314,23 @@ static bool interface_info_match_id(const void *a, const void *b)
 	uint32_t id = L_PTR_TO_UINT(b);
 
 	return rec->id == id;
+}
+
+static const char *radio_get_path(const struct radio_info_rec *rec)
+{
+	static char path[15];
+
+	snprintf(path, sizeof(path), "/radio%u", rec->id);
+	return path;
+}
+
+static const char *interface_get_path(const struct interface_info_rec *rec)
+{
+	static char path[25];
+
+	snprintf(path, sizeof(path), "%s/%u",
+			radio_get_path(rec->radio_rec), rec->id);
+	return path;
 }
 
 static bool parse_addresses(const uint8_t *buf, size_t len,
@@ -373,6 +397,9 @@ static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
 	int bytes, consumed;
 	unsigned int uintval;
 	bool old;
+	struct radio_info_rec prev_rec;
+	bool name_change = false;
+	const char *path;
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -399,6 +426,12 @@ static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
 	rec = l_queue_find(radio_info, radio_info_match_id, L_UINT_TO_PTR(*id));
 	if (rec) {
 		old = true;
+
+		memcpy(&prev_rec, rec, sizeof(prev_rec));
+
+		if (strlen(rec->name) != name_len ||
+				memcmp(rec->name, name, name_len))
+			name_change = true;
 
 		l_free(rec->name);
 	} else {
@@ -438,7 +471,8 @@ static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
 			if (len != 4)
 				break;
 
-			rec->regdom = *(uint32_t *) data;
+			rec->custom_regdom = true;
+			rec->regdom_idx = *(uint32_t *) data;
 			break;
 		}
 	}
@@ -456,14 +490,14 @@ static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
 				"/sys/class/ieee80211/%s/index", rec->name);
 	if (bytes < 0) {
 		l_error("Error reading index for %s from sysfs", rec->name);
-		goto free_radio;
+		goto err_free_radio;
 	}
 
 	file_buffer[bytes] = '\0';
 	if (sscanf((char *) file_buffer, "%u %n", &uintval, &consumed) != 1 ||
 			consumed != bytes) {
 		l_error("Error parsing index for %s from sysfs", rec->name);
-		goto free_radio;
+		goto err_free_radio;
 	}
 
 	rec->wiphy_id = uintval;
@@ -472,11 +506,11 @@ static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
 				"/sys/class/ieee80211/%s/addresses", rec->name);
 	if (bytes < 0) {
 		l_error("Error reading addresses for %s from sysfs", rec->name);
-		goto free_radio;
+		goto err_free_radio;
 	}
 
 	if (!parse_addresses(file_buffer, bytes, rec))
-		goto free_radio;
+		goto err_free_radio;
 
 	if (!radio_info)
 		radio_info = l_queue_new();
@@ -484,11 +518,37 @@ static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
 	if (!old)
 		l_queue_push_tail(radio_info, rec);
 
-	/* TODO: Create DBus object */
+	path = radio_get_path(rec);
+
+	if (!old) {
+		/* Create Dbus object */
+
+		if (!l_dbus_object_add_interface(dbus, path,
+						HWSIM_RADIO_INTERFACE, rec))
+			l_info("Unable to add the %s interface to %s",
+					HWSIM_RADIO_INTERFACE, path);
+
+		if (!l_dbus_object_add_interface(dbus, path,
+						L_DBUS_INTERFACE_PROPERTIES,
+						NULL))
+			l_info("Unable to add the %s interface to %s",
+					L_DBUS_INTERFACE_PROPERTIES, path);
+	} else {
+		/* Emit property change events */
+
+		if (memcmp(prev_rec.addrs, rec->addrs, sizeof(rec->addrs)))
+			l_dbus_property_changed(dbus, path,
+						HWSIM_RADIO_INTERFACE,
+						"Addresses");
+
+		if (name_change)
+			l_dbus_property_changed(dbus, path,
+						HWSIM_RADIO_INTERFACE, "Name");
+	}
 
 	return;
 
-free_radio:
+err_free_radio:
 	if (!old)
 		radio_free(rec);
 }
@@ -532,6 +592,9 @@ static void get_wiphy_callback(struct l_genl_msg *msg, void *user_data)
 	l_free(rec->name);
 
 	rec->name = l_strndup(name, name_len);
+
+	l_dbus_property_changed(dbus, radio_get_path(rec),
+				HWSIM_RADIO_INTERFACE, "Name");
 }
 
 static void get_interface_callback(struct l_genl_msg *msg, void *user_data)
@@ -547,6 +610,9 @@ static void get_interface_callback(struct l_genl_msg *msg, void *user_data)
 	struct interface_info_rec *rec;
 	struct radio_info_rec *radio_rec;
 	bool old;
+	const char *path;
+	struct interface_info_rec prev_rec;
+	bool name_change = false;
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -595,6 +661,12 @@ static void get_interface_callback(struct l_genl_msg *msg, void *user_data)
 	if (rec) {
 		old = true;
 
+		memcpy(&prev_rec, rec, sizeof(prev_rec));
+
+		if (strlen(rec->name) != ifname_len ||
+				memcmp(rec->name, ifname, ifname_len))
+			name_change = true;
+
 		l_free(rec->name);
 	} else {
 		old = false;
@@ -614,7 +686,34 @@ static void get_interface_callback(struct l_genl_msg *msg, void *user_data)
 	if (!old)
 		l_queue_push_tail(interface_info, rec);
 
-	/* TODO: Create DBus object */
+	path = interface_get_path(rec);
+
+	if (!old) {
+		/* Create Dbus object */
+
+		if (!l_dbus_object_add_interface(dbus, path,
+						HWSIM_INTERFACE_INTERFACE, rec))
+			l_info("Unable to add the %s interface to %s",
+					HWSIM_INTERFACE_INTERFACE, path);
+
+		if (!l_dbus_object_add_interface(dbus, path,
+						L_DBUS_INTERFACE_PROPERTIES,
+						NULL))
+			l_info("Unable to add the %s interface to %s",
+					L_DBUS_INTERFACE_PROPERTIES, path);
+	} else {
+		/* Emit property change events */
+
+		if (memcmp(prev_rec.addr, rec->addr, ETH_ALEN))
+			l_dbus_property_changed(dbus, path,
+						HWSIM_INTERFACE_INTERFACE,
+						"Addresses");
+
+		if (name_change)
+			l_dbus_property_changed(dbus, path,
+						HWSIM_INTERFACE_INTERFACE,
+						"Name");
+	}
 }
 
 static bool interface_info_destroy_by_radio(void *data, void *user_data)
@@ -625,7 +724,7 @@ static bool interface_info_destroy_by_radio(void *data, void *user_data)
 	if (rec->radio_rec != radio_rec)
 		return false;
 
-	/* TODO: Drop DBus object */
+	l_dbus_unregister_object(dbus, interface_get_path(rec));
 
 	interface_free(rec);
 
@@ -666,7 +765,7 @@ static void del_radio_event(struct l_genl_msg *msg)
 	l_queue_foreach_remove(interface_info, interface_info_destroy_by_radio,
 				radio);
 
-	/* TODO: Drop DBus object */
+	l_dbus_unregister_object(dbus, radio_get_path(radio));
 
 	radio_free(radio);
 	l_queue_remove(radio_info, radio);
@@ -702,7 +801,7 @@ static void del_interface_event(struct l_genl_msg *msg)
 	if (!interface)
 		return;
 
-	/* TODO: Drop DBus object */
+	l_dbus_unregister_object(dbus, interface_get_path(interface));
 
 	interface_free(interface);
 	l_queue_remove(interface_info, interface);
@@ -754,6 +853,218 @@ static void nl80211_config_notify(struct l_genl_msg *msg, void *user_data)
 		del_interface_event(msg);
 		break;
 	}
+}
+
+static void setup_radio_manager_interface(struct l_dbus_interface *interface)
+{
+}
+
+static bool radio_property_get_name(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	const struct radio_info_rec *rec = user_data;
+
+	l_dbus_message_builder_append_basic(builder, 's', rec->name);
+
+	return true;
+}
+
+static bool radio_property_get_addresses(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	const struct radio_info_rec *rec = user_data;
+	unsigned int i;
+
+	l_dbus_message_builder_enter_array(builder, "s");
+
+	for (i = 0; i < sizeof(rec->addrs); i += ETH_ALEN) {
+		const char *str = util_address_to_string(rec->addrs + i);
+
+		l_dbus_message_builder_append_basic(builder, 's', str);
+	}
+
+	l_dbus_message_builder_leave_array(builder);
+
+	return true;
+}
+
+static bool radio_property_get_channels(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	const struct radio_info_rec *rec = user_data;
+	uint16_t val = rec->channels;
+
+	l_dbus_message_builder_append_basic(builder, 'q', &val);
+
+	return true;
+}
+
+static bool radio_property_get_alpha2(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	const struct radio_info_rec *rec = user_data;
+
+	if (rec->alpha2[0] == 0 || rec->alpha2[1] == 0)
+		return false;
+
+	l_dbus_message_builder_enter_struct(builder, "yy");
+	l_dbus_message_builder_append_basic(builder, 'y', &rec->alpha2[0]);
+	l_dbus_message_builder_append_basic(builder, 'y', &rec->alpha2[1]);
+	l_dbus_message_builder_leave_struct(builder);
+
+	return true;
+}
+
+static bool radio_property_get_p2p(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	const struct radio_info_rec *rec = user_data;
+	bool val = rec->p2p;
+
+	l_dbus_message_builder_append_basic(builder, 'b', &val);
+
+	return true;
+}
+
+static bool radio_property_get_regdom(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	const struct radio_info_rec *rec = user_data;
+
+	if (!rec->custom_regdom)
+		return false;
+
+	l_dbus_message_builder_append_basic(builder, 'u', &rec->regdom_idx);
+
+	return true;
+}
+
+static void setup_radio_interface(struct l_dbus_interface *interface)
+{
+	l_dbus_interface_property(interface, "Name", 0, "s",
+					radio_property_get_name, NULL);
+	l_dbus_interface_property(interface, "Addresses", 0, "s",
+					radio_property_get_addresses, NULL);
+	l_dbus_interface_property(interface, "Channels", 0, "q",
+					radio_property_get_channels, NULL);
+	l_dbus_interface_property(interface, "Alpha2", 0, "(yy)",
+					radio_property_get_alpha2, NULL);
+	l_dbus_interface_property(interface, "P2PDevice", 0, "b",
+					radio_property_get_p2p, NULL);
+	l_dbus_interface_property(interface, "RegulatoryDomainIndex", 0, "u",
+					radio_property_get_regdom, NULL);
+}
+
+static bool interface_property_get_name(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	const struct interface_info_rec *rec = user_data;
+
+	l_dbus_message_builder_append_basic(builder, 's', rec->name);
+
+	return true;
+}
+
+static bool interface_property_get_address(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	const struct interface_info_rec *rec = user_data;
+	const char *str = util_address_to_string(rec->addr);
+
+	l_dbus_message_builder_append_basic(builder, 's', str);
+
+	return true;
+}
+
+static void setup_interface_interface(struct l_dbus_interface *interface)
+{
+	l_dbus_interface_property(interface, "Name", 0, "s",
+					interface_property_get_name, NULL);
+	l_dbus_interface_property(interface, "Address", 0, "s",
+					interface_property_get_address, NULL);
+}
+
+static void request_name_callback(struct l_dbus *dbus, bool success,
+					bool queued, void *user_data)
+{
+	if (!success)
+		l_error("Name request failed");
+}
+
+static void ready_callback(void *user_data)
+{
+	l_dbus_name_acquire(dbus, "net.connman.iwd.hwsim", false, false, true,
+				request_name_callback, NULL);
+
+	if (!l_dbus_object_manager_enable(dbus))
+		l_info("Unable to register the ObjectManager");
+}
+
+static void disconnect_callback(void *user_data)
+{
+	l_info("D-Bus disconnected, quitting...");
+	l_main_quit();
+}
+
+static bool setup_dbus_hwsim(void)
+{
+	dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
+	if (!dbus) {
+		l_error("Unable to connect to Dbus");
+		return false;
+	}
+
+	if (!l_dbus_register_interface(dbus, HWSIM_RADIO_MANAGER_INTERFACE,
+					setup_radio_manager_interface,
+					NULL, false)) {
+		l_error("Unable to register the %s interface",
+			HWSIM_RADIO_MANAGER_INTERFACE);
+		return false;
+	}
+
+	if (!l_dbus_register_interface(dbus, HWSIM_RADIO_INTERFACE,
+					setup_radio_interface, NULL, false)) {
+		l_error("Unable to register the %s interface",
+			HWSIM_RADIO_INTERFACE);
+		return false;
+	}
+
+	if (!l_dbus_register_interface(dbus, HWSIM_INTERFACE_INTERFACE,
+					setup_interface_interface,
+					NULL, false)) {
+		l_error("Unable to register the %s interface",
+			HWSIM_INTERFACE_INTERFACE);
+		return false;
+	}
+
+	if (!l_dbus_object_add_interface(dbus, "/",
+						HWSIM_RADIO_MANAGER_INTERFACE,
+						NULL)) {
+		l_info("Unable to add the %s interface to /",
+			HWSIM_RADIO_MANAGER_INTERFACE);
+		return false;
+	}
+
+	l_dbus_set_ready_handler(dbus, ready_callback, dbus, NULL);
+	l_dbus_set_disconnect_handler(dbus, disconnect_callback, NULL, NULL);
+
+	return true;
 }
 
 static void get_radio_done_initial(void *user_data)
@@ -888,6 +1199,9 @@ static void hwsim_ready(void *user_data)
 		break;
 
 	case ACTION_NONE:
+		if (!setup_dbus_hwsim())
+			goto error;
+
 		l_genl_family_set_watches(nl80211, nl80211_ready, NULL,
 						NULL, NULL);
 
@@ -895,6 +1209,10 @@ static void hwsim_ready(void *user_data)
 	}
 
 	return;
+
+error:
+	exit_status = EXIT_FAILURE;
+	l_main_quit();
 }
 
 static void hwsim_disappeared(void *user_data)
@@ -1067,6 +1385,8 @@ int main(int argc, char *argv[])
 	l_genl_family_unref(hwsim);
 	l_genl_family_unref(nl80211);
 	l_genl_unref(genl);
+
+	l_dbus_destroy(dbus);
 
 	hwsim_radio_cache_cleanup();
 
