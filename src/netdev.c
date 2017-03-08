@@ -2585,6 +2585,7 @@ static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 	struct netdev *netdev;
 	bool old_up, new_up;
 	char old_name[IFNAMSIZ];
+	uint8_t old_addr[ETH_ALEN];
 	struct rtattr *attr;
 	struct netdev_watch_event_data event;
 
@@ -2594,17 +2595,23 @@ static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 
 	old_up = netdev_get_is_up(netdev);
 	strcpy(old_name, netdev->name);
+	memcpy(old_addr, netdev->addr, ETH_ALEN);
 
 	netdev->ifi_flags = ifi->ifi_flags;
 
 	for (attr = IFLA_RTA(ifi); RTA_OK(attr, bytes);
 			attr = RTA_NEXT(attr, bytes)) {
-		if (attr->rta_type != IFLA_IFNAME)
-			continue;
+		switch (attr->rta_type) {
+		case IFLA_IFNAME:
+			strcpy(netdev->name, RTA_DATA(attr));
+			break;
+		case IFLA_ADDRESS:
+			if (RTA_PAYLOAD(attr) < ETH_ALEN)
+				break;
 
-		strcpy(netdev->name, RTA_DATA(attr));
-
-		break;
+			memcpy(netdev->addr, RTA_DATA(attr), ETH_ALEN);
+			break;
+		}
 	}
 
 	new_up = netdev_get_is_up(netdev);
@@ -2620,6 +2627,13 @@ static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 	if (strcmp(old_name, netdev->name)) {
 		event.netdev = netdev;
 		event.type = NETDEV_WATCH_EVENT_NAME_CHANGE;
+
+		l_queue_foreach(netdev->watches, netdev_watch_notify, &event);
+	}
+
+	if (memcmp(old_addr, netdev->addr, ETH_ALEN)) {
+		event.netdev = netdev;
+		event.type = NETDEV_WATCH_EVENT_ADDRESS_CHANGE;
 
 		l_queue_foreach(netdev->watches, netdev_watch_notify, &event);
 	}

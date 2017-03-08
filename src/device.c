@@ -1699,6 +1699,10 @@ static void device_netdev_notify(struct netdev *netdev,
 		l_dbus_property_changed(dbus, device_get_path(device),
 					IWD_DEVICE_INTERFACE, "Name");
 		break;
+	case NETDEV_WATCH_EVENT_ADDRESS_CHANGE:
+		l_dbus_property_changed(dbus, device_get_path(device),
+					IWD_DEVICE_INTERFACE, "Address");
+		break;
 	}
 }
 
