@@ -1,0 +1,67 @@
+RuleManager hierarchy
+=====================
+
+Service		net.connman.iwd.hwsim
+Interface	net.connman.iwd.hwsim.Manager [Experimental]
+Object path	/
+
+Methods		object AddRule()
+			Create a new blank rule entry. This rule will
+			match all frames but apply no changes to the frames
+			until the properties are written some non-default
+			values.  Rules may affect frames being sent over
+			the wireless medium.  Some properties of a rule
+			determine what frames match it, other properties
+			determine the effect on matching frames.  When
+			a frame goes through the simulated medium all
+			matching rules are applied according to their
+			priority property.  See below for specifics on
+			those properties.
+
+Service		net.connman.iwd.hwsim
+Interface	net.connman.iwd.hwsim.Rule [Experimental]
+Object path	/{rule0,rule1,...}
+
+Methods		void Remove()
+			Remove this rule.
+
+Properties	string Source
+			Source device's hardware address in the
+			XX:XX:XX:XX:XX:XX format or "any".  The Source
+			and Destination addresses refer to the hardware
+			addresses of the source and the destination
+			radios as given by the
+			net.connman.iwd.hwsim.Radio.Addresses property
+			on the radio object (see hwsim-radio-api.txt).
+			While those addresses initially match the network
+			interface mac addresses, and that present in the
+			ethernet headers of each frame, they are
+			independent.
+
+		string Destination
+			Destination device's hardware address in the
+			XX:XX:XX:XX:XX:XX format, or one of: "any",
+			"multicast".
+
+		boolean Bidirectional
+			If false, rule matches frames from Source to
+			Destination.  If true, also matches frames from
+			Destination to Source.
+
+		uint32 Frequency
+			If non-zero, rule matches specified center
+			frequency only.
+
+		int16 Priority
+			Rule priority / preference / metric.  The rule
+			will be processed after any rule with a lower
+			Priority value and may override properties
+			already modified.
+
+		int16 SignalStrength
+			Signal strength (RSSI) value to set on matching
+			frames to be seen by the receiver, or zero.  If
+			zero, no change is applied.  Signal strength is
+			expressed in 100 * dBm.  The value is in the range
+			of -1 (strongest signal) to -10000 (weakest
+			signal).
