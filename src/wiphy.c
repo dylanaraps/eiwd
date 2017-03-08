@@ -323,13 +323,78 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 
 }
 
+static bool wiphy_parse_id_and_name(struct l_genl_attr *attr, uint32_t *out_id,
+					const char **out_name,
+					uint32_t *out_name_len)
+{
+	uint16_t type, len;
+	const void *data;
+	uint32_t id;
+	const char *name;
+	uint32_t name_len;
+
+	/*
+	 * The wiphy attribute, name and generation are always the first
+	 * three attributes (in that order) in every NEW_WIPHY & DEL_WIPHY
+	 * message.  If not, then error out with a warning and ignore the
+	 * whole message.
+	 */
+	if (!l_genl_attr_next(attr, &type, &len, &data))
+		return false;
+
+	if (type != NL80211_ATTR_WIPHY)
+		return false;
+
+	if (len != sizeof(uint32_t))
+		return false;
+
+	id = *((uint32_t *) data);
+
+	if (!l_genl_attr_next(attr, &type, &len, &data))
+		return false;
+
+	if (type != NL80211_ATTR_WIPHY_NAME)
+		return false;
+
+	if (len > sizeof(((struct wiphy *) 0)->name))
+		return false;
+
+	name = data;
+	name_len = len;
+
+	if (!l_genl_attr_next(attr, &type, &len, &data))
+		return false;
+
+	if (type != NL80211_ATTR_GENERATION)
+		return false;
+
+	if (len != sizeof(uint32_t))
+		return false;
+
+	/*
+	 * TODO: Handle GENERATION.  In theory if we detect a changed generation
+	 * number during a dump, it means that our dump needs to be re-started
+	 */
+
+	if (out_id)
+		*out_id = id;
+
+	if (out_name)
+		*out_name = name;
+
+	if (out_name_len)
+		*out_name_len = name_len;
+
+	return true;
+}
+
 static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy;
 	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
 	uint32_t id;
+	const char *name;
+	uint32_t name_len;
 
 	l_debug("");
 
@@ -337,27 +402,12 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 		return;
 
 	/*
-	 * The wiphy attribute is always the first attribute in the
-	 * list. If not then error out with a warning and ignore the
-	 * whole message.
-	 *
-	 * In most cases multiple of these message will be send
+	 * In most cases multiple of these message will be sent
 	 * since the information included can not fit into a single
 	 * message.
 	 */
-	if (!l_genl_attr_next(&attr, &type, &len, &data))
+	if (!wiphy_parse_id_and_name(&attr, &id, &name, &name_len))
 		return;
-
-	if (type != NL80211_ATTR_WIPHY)
-		return;
-
-
-	if (len != sizeof(uint32_t)) {
-		l_warn("Invalid wiphy attribute");
-		return;
-	}
-
-	id = *((uint32_t *) data);
 
 	wiphy = l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(id));
 	if (!wiphy) {
@@ -367,6 +417,7 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 		l_queue_push_head(wiphy_list, wiphy);
 	}
 
+	memcpy(wiphy->name, name, name_len);
 	wiphy_parse_attributes(wiphy, &attr);
 }
 
@@ -440,35 +491,16 @@ static void wiphy_new_wiphy_event(struct l_genl_msg *msg)
 {
 	struct wiphy *wiphy;
 	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
 	uint32_t id;
+	const char *name;
+	uint32_t name_len;
 
 	l_debug("");
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
 
-	if (!l_genl_attr_next(&attr, &type, &len, &data))
-		return;
-
-	if (type != NL80211_ATTR_WIPHY)
-		return;
-
-	if (len != sizeof(uint32_t)) {
-		l_warn("Invalid wiphy attribute");
-		return;
-	}
-
-	id = *((uint32_t *) data);
-
-	if (!l_genl_attr_next(&attr, &type, &len, &data))
-		return;
-
-	if (type != NL80211_ATTR_WIPHY_NAME)
-		return;
-
-	if (len > sizeof(wiphy->name))
+	if (!wiphy_parse_id_and_name(&attr, &id, &name, &name_len))
 		return;
 
 	wiphy = l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(id));
@@ -477,21 +509,20 @@ static void wiphy_new_wiphy_event(struct l_genl_msg *msg)
 		 * WIPHY_NAME is a NLA_NUL_STRING, so the kernel
 		 * enforces the data to be null terminated
 		 */
-		if (strcmp(wiphy->name, data)) {
+		if (strcmp(wiphy->name, name)) {
 			struct l_dbus *dbus = dbus_get_bus();
 
-			memcpy(wiphy->name, data, len);
+			memcpy(wiphy->name, name, name_len);
 			l_dbus_property_changed(dbus, wiphy_get_path(wiphy),
 						IWD_WIPHY_INTERFACE, "Name");
-		} else
-			l_info("Wiphy %s[%d] already being tracked",
-						wiphy->name, wiphy->id);
+		}
+
 		return;
 	}
 
 	wiphy = l_new(struct wiphy, 1);
 	wiphy->id = id;
-	memcpy(wiphy->name, data, len);
+	memcpy(wiphy->name, name, name_len);
 	wiphy->supported_freqs = scan_freq_set_new();
 	l_queue_push_head(wiphy_list, wiphy);
 
@@ -505,25 +536,15 @@ static void wiphy_del_wiphy_event(struct l_genl_msg *msg)
 {
 	struct wiphy *wiphy;
 	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
 	uint32_t id;
+
+	l_debug("");
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
 
-	if (!l_genl_attr_next(&attr, &type, &len, &data))
+	if (!wiphy_parse_id_and_name(&attr, &id, NULL, NULL))
 		return;
-
-	if (type != NL80211_ATTR_WIPHY)
-		return;
-
-	if (len != sizeof(uint32_t)) {
-		l_warn("Invalid wiphy attribute");
-		return;
-	}
-
-	id = *((uint32_t *) data);
 
 	wiphy = l_queue_remove_if(wiphy_list, wiphy_match, L_UINT_TO_PTR(id));
 	if (!wiphy)
