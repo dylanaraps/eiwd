@@ -28,7 +28,6 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <linux/if_ether.h>
-#include <ctype.h>
 
 #include <ell/ell.h>
 
@@ -319,7 +318,8 @@ static bool parse_addresses(const uint8_t *buf, size_t len,
 		int start_pos = pos;
 		char addr[20];
 
-		while (pos < len && !isspace(buf[pos]))
+		/* Find first word start and end */
+		while (pos < len && !l_ascii_isspace(buf[pos]))
 			pos++;
 
 		if (pos - start_pos > sizeof(addr) - 1) {
@@ -338,13 +338,16 @@ static bool parse_addresses(const uint8_t *buf, size_t len,
 		}
 
 		if (!util_string_to_address(addr, rec->addrs +
-						(addr_idx++ * ETH_ALEN))) {
+						(addr_idx * ETH_ALEN))) {
 			l_error("Can't parse hwsim wiphy %s address from sysfs",
 				rec->name);
 			return false;
 		}
 
-		while (pos < len && isspace(buf[pos]))
+		addr_idx++;
+
+		/* Skip until the start of the next word */
+		while (pos < len && l_ascii_isspace(buf[pos]))
 			pos++;
 	}
 
