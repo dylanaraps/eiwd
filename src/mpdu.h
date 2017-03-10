@@ -25,6 +25,9 @@
 #include <asm/byteorder.h>
 #include <linux/types.h>
 
+/* Std 802.11, Section 8.2.3 */
+#define IEEE80211_MAX_DATA_LEN		2304
+
 /* 802.11, Table 8-1 "Valid type and subtype combinations" */
 enum mpdu_type {
 	MPDU_TYPE_MANAGEMENT = 0,

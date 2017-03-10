@@ -95,7 +95,7 @@ static bool pae_read(struct l_io *io, void *user_data)
 	struct sockaddr_ll sll;
 	socklen_t sll_len;
 	ssize_t bytes;
-	uint8_t frame[2304]; /* IEEE Std 802.11 ch. 8.2.3 */
+	uint8_t frame[IEEE80211_MAX_DATA_LEN];
 
 	memset(&sll, 0, sizeof(sll));
 	sll_len = sizeof(sll);
