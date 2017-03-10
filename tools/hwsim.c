@@ -88,6 +88,18 @@ enum hwsim_tx_control_flags {
 
 #define IEEE80211_TX_RATE_TABLE_SIZE	4
 
+struct hwsim_rule {
+	unsigned int id;
+	uint8_t source[ETH_ALEN];
+	uint8_t destination[ETH_ALEN];
+	bool source_any : 1;
+	bool destination_any : 1;
+	bool bidirectional : 1;
+	uint32_t frequency;
+	int priority;
+	int signal;
+};
+
 static struct l_genl *genl;
 static struct l_genl_family *hwsim;
 static struct l_genl_family *nl80211;
@@ -107,6 +119,7 @@ static bool no_vif_attr;
 static bool p2p_attr;
 static const char *radio_name_attr;
 static struct l_dbus *dbus;
+static struct l_queue *rules;
 
 static void do_debug(const char *str, void *user_data)
 {
@@ -945,6 +958,62 @@ struct hwsim_frame {
 	int pending_callback_count;
 };
 
+static bool radio_match_addr(const struct radio_info_rec *radio,
+				const uint8_t *addr)
+{
+	if (!radio || is_multicast_addr(addr))
+		return !radio && is_multicast_addr(addr);
+
+	return !memcmp(addr, radio->addrs[0], ETH_ALEN) ||
+		!memcmp(addr, radio->addrs[1], ETH_ALEN);
+}
+
+static void process_rules(const struct radio_info_rec *src_radio,
+				const struct radio_info_rec *dst_radio,
+				struct hwsim_frame *frame)
+{
+	const struct l_queue_entry *rule_entry;
+
+	for (rule_entry = l_queue_get_entries(rules); rule_entry;
+			rule_entry = rule_entry->next) {
+		struct hwsim_rule *rule = rule_entry->data;
+
+		if (!rule->source_any &&
+				!radio_match_addr(src_radio, rule->source) &&
+				(!rule->bidirectional ||
+				 !radio_match_addr(dst_radio, rule->source)))
+			continue;
+
+		if (!rule->destination_any &&
+				!radio_match_addr(dst_radio,
+							rule->destination) &&
+				(!rule->bidirectional ||
+				 !radio_match_addr(src_radio,
+							rule->destination)))
+			continue;
+
+		/*
+		 * If source matches only because rule->bidirectional was
+		 * true, make sure destination is "any" or matches source
+		 * radio's address.
+		 */
+		if (!rule->source_any && rule->bidirectional &&
+				radio_match_addr(dst_radio, rule->source))
+			if (!rule->destination_any &&
+					!radio_match_addr(dst_radio,
+							rule->destination))
+				continue;
+
+		if (rule->frequency && rule->frequency != frame->frequency)
+			continue;
+
+		/* Rule deemed to match frame, apply any changes */
+
+		if (rule->signal)
+			frame->signal = rule->signal / 100;
+	}
+}
+
 struct send_frame_info {
 	struct hwsim_frame *frame;
 	struct radio_info_rec *radio;
@@ -1020,8 +1089,12 @@ static void hwsim_frame_unref(struct hwsim_frame *frame)
 		 * the returning of an ACK frame in the opposite direction.
 		 */
 
-		if (!(frame->flags & HWSIM_TX_CTL_NO_ACK) && frame->acked)
+		if (!(frame->flags & HWSIM_TX_CTL_NO_ACK) && frame->acked) {
 			frame->flags |= HWSIM_TX_STAT_ACK;
+
+			process_rules(frame->ack_radio, frame->src_radio,
+					frame);
+		}
 
 		send_frame_tx_info(frame);
 	}
@@ -1077,6 +1150,9 @@ static void process_frame(struct hwsim_frame *frame)
 {
 	const struct l_queue_entry *entry;
 
+	if (is_multicast_addr(frame->dst_ether_addr))
+		process_rules(frame->src_radio, NULL, frame);
+
 	for (entry = l_queue_get_entries(radio_info); entry;
 			entry = entry->next) {
 		struct radio_info_rec *radio = entry->data;
@@ -1112,6 +1188,8 @@ static void process_frame(struct hwsim_frame *frame)
 			if (!interface)
 				continue;
 		}
+
+		process_rules(frame->src_radio, radio, frame);
 
 		send_info = l_new(struct send_frame_info, 1);
 		send_info->radio = radio;
@@ -1934,6 +2012,8 @@ int main(int argc, char *argv[])
 	l_dbus_destroy(dbus);
 
 	hwsim_radio_cache_cleanup();
+
+	l_queue_destroy(rules, l_free);
 
 done:
 	l_signal_remove(signal);
