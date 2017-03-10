@@ -752,7 +752,7 @@ static void get_interface_callback(struct l_genl_msg *msg, void *user_data)
 		if (memcmp(prev_rec.addr, rec->addr, ETH_ALEN))
 			l_dbus_property_changed(dbus, path,
 						HWSIM_INTERFACE_INTERFACE,
-						"Addresses");
+						"Address");
 
 		if (name_change)
 			l_dbus_property_changed(dbus, path,
