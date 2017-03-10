@@ -35,6 +35,7 @@
 
 #include "src/util.h"
 #include "src/storage.h"
+#include "src/mpdu.h"
 
 #define HWSIM_SERVICE "net.connman.iwd.hwsim"
 
@@ -78,6 +79,14 @@ enum {
 	__HWSIM_ATTR_MAX,
 };
 #define HWSIM_ATTR_MAX (__HWSIM_ATTR_MAX - 1)
+
+enum hwsim_tx_control_flags {
+	HWSIM_TX_CTL_REQ_TX_STATUS		= 1 << 0,
+	HWSIM_TX_CTL_NO_ACK			= 1 << 1,
+	HWSIM_TX_STAT_ACK			= 1 << 2,
+};
+
+#define IEEE80211_TX_RATE_TABLE_SIZE	4
 
 static struct l_genl *genl;
 static struct l_genl_family *hwsim;
@@ -310,6 +319,14 @@ static bool radio_info_match_wiphy_id(const void *a, const void *b)
 	uint32_t id = L_PTR_TO_UINT(b);
 
 	return rec->wiphy_id == id;
+}
+
+static bool radio_info_match_addr1(const void *a, const void *b)
+{
+	const struct radio_info_rec *rec = a;
+	const uint8_t *addr1 = b;
+
+	return !memcmp(rec->addrs[1], addr1, ETH_ALEN);
 }
 
 static bool interface_info_match_id(const void *a, const void *b)
@@ -899,6 +916,327 @@ static void nl80211_config_notify(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
+static bool is_multicast_addr(const uint8_t *addr)
+{
+	return util_is_bit_set(addr[0], 7);
+}
+
+struct hwsim_tx_info {
+	int8_t idx;
+	uint8_t count;
+};
+
+struct hwsim_frame {
+	int refcount;
+	uint8_t src_ether_addr[ETH_ALEN];
+	uint8_t dst_ether_addr[ETH_ALEN];
+	struct radio_info_rec *src_radio;
+	struct radio_info_rec *ack_radio;
+	uint32_t flags;
+	const uint64_t *cookie;
+	int32_t signal;
+	uint32_t frequency;
+	uint16_t tx_info_len;
+	const struct hwsim_tx_info *tx_info;
+	uint16_t payload_len;
+	const uint8_t *payload;
+	bool acked;
+	struct l_genl_msg *msg;
+	int pending_callback_count;
+};
+
+struct send_frame_info {
+	struct hwsim_frame *frame;
+	struct radio_info_rec *radio;
+};
+
+static bool send_frame_tx_info(struct hwsim_frame *frame)
+{
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(HWSIM_CMD_TX_INFO_FRAME,
+					128 + frame->tx_info_len);
+	l_genl_msg_append_attr(msg, HWSIM_ATTR_ADDR_TRANSMITTER, ETH_ALEN,
+				frame->src_radio->addrs[1]);
+	l_genl_msg_append_attr(msg, HWSIM_ATTR_FLAGS, 4, &frame->flags);
+	l_genl_msg_append_attr(msg, HWSIM_ATTR_SIGNAL, 4, &frame->signal);
+	l_genl_msg_append_attr(msg, HWSIM_ATTR_COOKIE, 8, frame->cookie);
+	l_genl_msg_append_attr(msg, HWSIM_ATTR_TX_INFO, frame->tx_info_len,
+				frame->tx_info);
+
+	if (!l_genl_family_send(hwsim, msg, NULL, NULL, NULL)) {
+		l_error("Sending HWSIM_CMD_TX_INFO_FRAME failed");
+		return false;
+	}
+
+	return true;
+}
+
+static bool send_frame(struct send_frame_info *info,
+			l_genl_msg_func_t callback,
+			l_genl_destroy_func_t destroy)
+{
+	struct l_genl_msg *msg;
+	uint32_t rx_rate = 2;
+	unsigned int id;
+
+	msg = l_genl_msg_new_sized(HWSIM_CMD_FRAME,
+					128 + info->frame->payload_len);
+	l_genl_msg_append_attr(msg, HWSIM_ATTR_ADDR_RECEIVER, ETH_ALEN,
+				info->radio->addrs[1]);
+	l_genl_msg_append_attr(msg, HWSIM_ATTR_FRAME, info->frame->payload_len,
+				info->frame->payload);
+	l_genl_msg_append_attr(msg, HWSIM_ATTR_RX_RATE, 4,
+				&rx_rate);
+	l_genl_msg_append_attr(msg, HWSIM_ATTR_SIGNAL, 4,
+				&info->frame->signal);
+	l_genl_msg_append_attr(msg, HWSIM_ATTR_FREQ, 4,
+				&info->frame->frequency);
+
+	id = l_genl_family_send(hwsim, msg, callback, info, destroy);
+	if (!id) {
+		l_error("Sending HWSIM_CMD_FRAME failed");
+		return false;
+	}
+
+	return true;
+}
+
+static struct hwsim_frame *hwsim_frame_ref(struct hwsim_frame *frame)
+{
+	__sync_fetch_and_add(&frame->refcount, 1);
+
+	return frame;
+}
+
+static void hwsim_frame_unref(struct hwsim_frame *frame)
+{
+	if (__sync_sub_and_fetch(&frame->refcount, 1))
+		return;
+
+	if (!frame->pending_callback_count) {
+		/*
+		 * Apparently done with this frame, send tx info and signal
+		 * the returning of an ACK frame in the opposite direction.
+		 */
+
+		if (!(frame->flags & HWSIM_TX_CTL_NO_ACK) && frame->acked)
+			frame->flags |= HWSIM_TX_STAT_ACK;
+
+		send_frame_tx_info(frame);
+	}
+
+	l_genl_msg_unref(frame->msg);
+	l_free(frame);
+}
+
+static void send_frame_callback(struct l_genl_msg *msg, void *user_data)
+{
+	struct send_frame_info *info = user_data;
+
+	if (l_genl_msg_get_error(msg) < 0)
+		/* Radio address or frequency didn't match */
+		l_debug("HWSIM_CMD_FRAME failed for destination %s",
+			util_address_to_string(info->radio->addrs[0]));
+	else {
+		info->frame->acked = true;
+		info->frame->ack_radio = info->radio;
+	}
+
+	info->frame->pending_callback_count--;
+}
+
+static void send_frame_destroy(void *user_data)
+{
+	struct send_frame_info *info = user_data;
+
+	hwsim_frame_unref(info->frame);
+	l_free(info);
+}
+
+struct interface_match_data {
+	struct radio_info_rec *radio;
+	const uint8_t *addr;
+};
+
+static bool interface_info_match_dst(const void *a, const void *b)
+{
+	const struct interface_info_rec *rec = a;
+	const struct interface_match_data *dst = b;
+
+	return rec->radio_rec == dst->radio &&
+		!memcmp(rec->addr, dst->addr, ETH_ALEN);
+}
+
+/*
+ * Process frames in a similar way to how the kernel built-in hwsim medium
+ * does this, with an additional optimization for unicast frames and
+ * additonal modifications to frames decided by user-configurable rules.
+ */
+static void process_frame(struct hwsim_frame *frame)
+{
+	const struct l_queue_entry *entry;
+
+	for (entry = l_queue_get_entries(radio_info); entry;
+			entry = entry->next) {
+		struct radio_info_rec *radio = entry->data;
+		struct send_frame_info *send_info;
+
+		if (radio == frame->src_radio)
+			continue;
+
+		/*
+		 * The kernel hwsim medium passes multicast frames to all
+		 * radios that are on the same frequency as this frame but
+		 * the netlink medium API only lets userspace pass frames to
+		 * radios by known hardware address.  It does check that the
+		 * receiving radio is on the same frequency though so we can
+		 * send to all known addresses.
+		 *
+		 * If the frame's Receiver Address (RA) is a multicast
+		 * address, then send the frame to every radio that is
+		 * registered.  If it's a unicast address then optimize
+		 * by only forwarding the frame to the radios that have
+		 * at least one interface with this specific address.
+		 */
+		if (!is_multicast_addr(frame->dst_ether_addr)) {
+			struct interface_match_data match_data = {
+				radio,
+				frame->dst_ether_addr,
+			};
+			struct interface_info_rec *interface =
+				l_queue_find(interface_info,
+						interface_info_match_dst,
+						&match_data);
+
+			if (!interface)
+				continue;
+		}
+
+		send_info = l_new(struct send_frame_info, 1);
+		send_info->radio = radio;
+		send_info->frame = hwsim_frame_ref(frame);
+
+		if (send_frame(send_info, send_frame_callback,
+					send_frame_destroy))
+			frame->pending_callback_count++;
+		else
+			send_frame_destroy(send_info);
+	}
+
+	hwsim_frame_unref(frame);
+}
+
+static void unicast_handler(struct l_genl_msg *msg, void *user_data)
+{
+	struct hwsim_frame *frame;
+	const struct mpdu *mpdu;
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	const uint8_t *transmitter = NULL, *freq = NULL, *flags = NULL;
+
+	if (l_genl_msg_get_command(msg) != HWSIM_CMD_FRAME)
+		return;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	frame = l_new(struct hwsim_frame, 1);
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case HWSIM_ATTR_ADDR_TRANSMITTER:
+			if (len != ETH_ALEN)
+				break;
+
+			transmitter = data;
+			break;
+
+		case HWSIM_ATTR_FREQ:
+			if (len != 4)
+				break;
+
+			freq = data;
+			break;
+
+		case HWSIM_ATTR_FLAGS:
+			if (len != 4)
+				break;
+
+			flags = data;
+			break;
+
+		case HWSIM_ATTR_COOKIE:
+			if (len != 8)
+				break;
+
+			frame->cookie = (const uint64_t *) data;
+			break;
+
+		case HWSIM_ATTR_FRAME:
+			if (len > IEEE80211_MAX_DATA_LEN)
+				break;
+
+			if (len < sizeof(struct mpdu_fc) +
+					sizeof(struct mpdu_mgmt_header)) {
+				l_error("Frame payload too short for header");
+				break;
+			}
+
+			frame->payload_len = len;
+			frame->payload = data;
+
+			break;
+
+		case HWSIM_ATTR_TX_INFO:
+			if (len > sizeof(struct hwsim_tx_info) *
+					IEEE80211_TX_RATE_TABLE_SIZE)
+				break;
+
+			frame->tx_info_len = len;
+			frame->tx_info = data;
+
+			break;
+
+		default:
+			l_warn("Unhandled attribute type: %u", type);
+			break;
+		}
+	}
+
+	if (!frame->payload || !frame->tx_info || !frame->cookie ||
+			!flags || !freq || !transmitter) {
+		l_error("Incomplete HWSIM_CMD_FRAME");
+		l_free(frame);
+		return;
+	}
+
+	frame->signal = -30;
+	frame->msg = l_genl_msg_ref(msg);
+	frame->refcount = 1;
+
+	frame->src_radio = l_queue_find(radio_info, radio_info_match_addr1,
+					transmitter);
+	if (!frame->src_radio) {
+		l_error("Unknown transmitter address %s, probably need to "
+			"update radio dump code for this kernel",
+			util_address_to_string(transmitter));
+		hwsim_frame_unref(frame);
+		return;
+	}
+
+	frame->frequency = *(uint32_t *) freq;
+	frame->flags = *(uint32_t *) flags;
+
+	mpdu = (struct mpdu *) frame->payload;
+
+	memcpy(frame->src_ether_addr, mpdu->mgmt_hdr.address_2, ETH_ALEN);
+	memcpy(frame->dst_ether_addr, mpdu->mgmt_hdr.address_1, ETH_ALEN);
+
+	process_frame(frame);
+}
+
 static void radio_manager_create_callback(struct l_genl_msg *msg,
 						void *user_data)
 {
@@ -1242,6 +1580,30 @@ static bool setup_dbus_hwsim(void)
 	return true;
 }
 
+static void register_callback(struct l_genl_msg *msg, void *user_data)
+{
+	int err = l_genl_msg_get_error(msg);
+
+	if (err < 0) {
+		l_error("HWSIM_CMD_REGISTER failed: %s (%d)",
+			strerror(-err), -err);
+
+		exit_status = EXIT_FAILURE;
+		l_main_quit();
+		return;
+	}
+
+	l_info("Registered as a transmission medium");
+}
+
+static void get_interface_done_initial(void *user_data)
+{
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(HWSIM_CMD_REGISTER, 4);
+	l_genl_family_send(hwsim, msg, register_callback, NULL, NULL);
+}
+
 static void get_radio_done_initial(void *user_data)
 {
 	struct l_genl_msg *msg;
@@ -1253,7 +1615,7 @@ static void get_radio_done_initial(void *user_data)
 	 */
 	msg = l_genl_msg_new(NL80211_CMD_GET_INTERFACE);
 	if (!l_genl_family_dump(nl80211, msg, get_interface_callback,
-				NULL, NULL)) {
+				NULL, get_interface_done_initial)) {
 		l_error("Getting nl80211 interface information failed");
 		goto error;
 	}
@@ -1379,6 +1741,12 @@ static void hwsim_ready(void *user_data)
 
 		l_genl_family_set_watches(nl80211, nl80211_ready, NULL,
 						NULL, NULL);
+
+		if (!l_genl_set_unicast_handler(genl, unicast_handler,
+						NULL, NULL)) {
+			l_error("Failed to set unicast handler");
+			goto error;
+		}
 
 		break;
 	}
