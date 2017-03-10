@@ -255,7 +255,7 @@ struct radio_info_rec {
 	bool custom_regdom;
 	uint32_t regdom_idx;
 	int channels;
-	uint8_t addrs[ETH_ALEN * 2];
+	uint8_t addrs[2][ETH_ALEN];
 	char *name;
 };
 
@@ -392,8 +392,7 @@ static bool parse_addresses(const uint8_t *buf, size_t len,
 			return false;
 		}
 
-		if (!util_string_to_address(addr, rec->addrs +
-						(addr_idx * ETH_ALEN))) {
+		if (!util_string_to_address(addr, rec->addrs[addr_idx])) {
 			l_error("Can't parse hwsim wiphy %s address from sysfs",
 				rec->name);
 			return false;
@@ -567,7 +566,7 @@ static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
 	} else {
 		/* Emit property change events */
 
-		if (memcmp(prev_rec.addrs, rec->addrs, sizeof(rec->addrs)))
+		if (memcmp(&prev_rec.addrs, &rec->addrs, sizeof(rec->addrs)))
 			l_dbus_property_changed(dbus, path,
 						HWSIM_RADIO_INTERFACE,
 						"Addresses");
@@ -1055,8 +1054,8 @@ static bool radio_property_get_addresses(struct l_dbus *dbus,
 
 	l_dbus_message_builder_enter_array(builder, "s");
 
-	for (i = 0; i < sizeof(rec->addrs); i += ETH_ALEN) {
-		const char *str = util_address_to_string(rec->addrs + i);
+	for (i = 0; i < sizeof(rec->addrs) / ETH_ALEN; i++) {
+		const char *str = util_address_to_string(rec->addrs[i]);
 
 		l_dbus_message_builder_append_basic(builder, 's', str);
 	}
