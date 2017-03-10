@@ -498,7 +498,6 @@ static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
 	rec = l_queue_find(radio_info, radio_info_match_id, L_UINT_TO_PTR(*id));
 	if (rec) {
 		old = true;
-
 		memcpy(&prev_rec, rec, sizeof(prev_rec));
 
 		if (strlen(rec->name) != name_len ||
@@ -508,9 +507,7 @@ static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
 		l_free(rec->name);
 	} else {
 		old = false;
-
 		rec = l_new(struct radio_info_rec, 1);
-
 		rec->id = *id;
 	}
 
@@ -624,7 +621,6 @@ static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
 			l_dbus_message_new_method_return(pending_create_msg);
 
 		l_dbus_message_set_arguments(reply, "o", path);
-
 		dbus_pending_reply(&pending_create_msg, reply);
 	}
 
@@ -676,7 +672,6 @@ static void get_wiphy_callback(struct l_genl_msg *msg, void *user_data)
 		return;
 
 	l_free(rec->name);
-
 	rec->name = l_strndup(name, name_len);
 
 	l_dbus_property_changed(dbus, radio_get_path(rec),
@@ -811,7 +806,6 @@ static bool interface_info_destroy_by_radio(void *data, void *user_data)
 		return false;
 
 	l_dbus_unregister_object(dbus, interface_get_path(rec));
-
 	interface_free(rec);
 
 	return true;
@@ -850,9 +844,7 @@ static void del_radio_event(struct l_genl_msg *msg)
 
 	l_queue_foreach_remove(interface_info, interface_info_destroy_by_radio,
 				radio);
-
 	l_dbus_unregister_object(dbus, radio_get_path(radio));
-
 	radio_free(radio);
 	l_queue_remove(radio_info, radio);
 }
@@ -888,7 +880,6 @@ static void del_interface_event(struct l_genl_msg *msg)
 		return;
 
 	l_dbus_unregister_object(dbus, interface_get_path(interface));
-
 	interface_free(interface);
 	l_queue_remove(interface_info, interface);
 }
@@ -1359,9 +1350,7 @@ static void radio_manager_create_callback(struct l_genl_msg *msg,
 		const char *path = radio_get_path(radio);
 
 		reply = l_dbus_message_new_method_return(pending_create_msg);
-
 		l_dbus_message_set_arguments(reply, "o", path);
-
 		dbus_pending_reply(&pending_create_msg, reply);
 	}
 
@@ -1369,7 +1358,6 @@ static void radio_manager_create_callback(struct l_genl_msg *msg,
 
 error:
 	reply = dbus_error_failed(pending_create_msg);
-
 	dbus_pending_reply(&pending_create_msg, reply);
 }
 
@@ -1388,7 +1376,6 @@ static struct l_dbus_message *radio_manager_create(struct l_dbus *dbus,
 		return dbus_error_invalid_args(message);
 
 	new_msg = l_genl_msg_new_sized(HWSIM_CMD_NEW_RADIO, 16 + strlen(name));
-
 	l_genl_msg_append_attr(new_msg, HWSIM_ATTR_DESTROY_RADIO_ON_CLOSE,
 				0, NULL);
 
@@ -1432,14 +1419,12 @@ static void radio_destroy_callback(struct l_genl_msg *msg, void *user_data)
 
 	reply = l_dbus_message_new_method_return(message);
 	l_dbus_message_set_arguments(reply, "");
-
 	dbus_pending_reply(&message, reply);
 
 	return;
 
 error:
 	reply = dbus_error_failed(message);
-
 	dbus_pending_reply(&message, reply);
 }
 
@@ -1628,7 +1613,6 @@ static struct l_dbus_message *rule_add(struct l_dbus *dbus,
 		rules = l_queue_new();
 
 	l_queue_insert(rules, rule, rule_compare_priority, NULL);
-
 	path = rule_get_path(rule);
 
 	if (!l_dbus_object_add_interface(dbus, path,
@@ -1661,11 +1645,8 @@ static struct l_dbus_message *rule_remove(struct l_dbus *dbus,
 	const char *path;
 
 	path = rule_get_path(rule);
-
 	l_queue_remove(rules, rule);
-
 	l_free(rule);
-
 	l_dbus_unregister_object(dbus, path);
 
 	return l_dbus_message_new_method_return(message);
@@ -2346,15 +2327,13 @@ int main(int argc, char *argv[])
 
 	if (pending_create_msg)
 		l_dbus_message_unref(pending_create_msg);
+
 	l_dbus_destroy(dbus);
-
 	hwsim_radio_cache_cleanup();
-
 	l_queue_destroy(rules, l_free);
 
 done:
 	l_signal_remove(signal);
-
 	l_main_exit();
 
 	return exit_status;
