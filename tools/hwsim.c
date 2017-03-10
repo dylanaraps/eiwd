@@ -35,11 +35,12 @@
 
 #include "src/util.h"
 #include "src/storage.h"
-#include "src/dbus.h"
 
-#define HWSIM_RADIO_MANAGER_INTERFACE "net.connman.iwd.hwsim.RadioManager"
-#define HWSIM_RADIO_INTERFACE "net.connman.iwd.hwsim.Radio"
-#define HWSIM_INTERFACE_INTERFACE "net.connman.iwd.hwsim.Interface"
+#define HWSIM_SERVICE "net.connman.iwd.hwsim"
+
+#define HWSIM_RADIO_MANAGER_INTERFACE HWSIM_SERVICE ".RadioManager"
+#define HWSIM_RADIO_INTERFACE HWSIM_SERVICE ".Radio"
+#define HWSIM_INTERFACE_INTERFACE HWSIM_SERVICE ".Interface"
 
 enum {
 	HWSIM_CMD_UNSPEC,
@@ -268,6 +269,9 @@ struct interface_info_rec {
 static struct l_queue *radio_info;
 static struct l_queue *interface_info;
 
+static struct l_dbus_message *pending_create_msg;
+static uint32_t pending_create_radio_id;
+
 static void radio_free(void *user_data)
 {
 	struct radio_info_rec *rec = user_data;
@@ -331,6 +335,33 @@ static const char *interface_get_path(const struct interface_info_rec *rec)
 	snprintf(path, sizeof(path), "%s/%u",
 			radio_get_path(rec->radio_rec), rec->id);
 	return path;
+}
+
+static struct l_dbus_message *dbus_error_busy(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, HWSIM_SERVICE ".InProgress",
+					"Operation already in progress");
+}
+
+static struct l_dbus_message *dbus_error_failed(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, HWSIM_SERVICE ".Failed",
+					"Operation failed");
+}
+
+static struct l_dbus_message *dbus_error_invalid_args(
+						struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, HWSIM_SERVICE ".InvalidArgs",
+					"Argument type is wrong");
+}
+
+static void dbus_pending_reply(struct l_dbus_message **msg,
+				struct l_dbus_message *reply)
+{
+	l_dbus_send(dbus, reply);
+	l_dbus_message_unref(*msg);
+	*msg = NULL;
 }
 
 static bool parse_addresses(const uint8_t *buf, size_t len,
@@ -546,11 +577,25 @@ static void get_radio_callback(struct l_genl_msg *msg, void *user_data)
 						HWSIM_RADIO_INTERFACE, "Name");
 	}
 
+	/* Send pending CreateRadio reply */
+	if (pending_create_msg && pending_create_radio_id == rec->id) {
+		struct l_dbus_message *reply =
+			l_dbus_message_new_method_return(pending_create_msg);
+
+		l_dbus_message_set_arguments(reply, "o", path);
+
+		dbus_pending_reply(&pending_create_msg, reply);
+	}
+
 	return;
 
 err_free_radio:
 	if (!old)
 		radio_free(rec);
+
+	if (pending_create_msg && pending_create_radio_id == *id)
+		dbus_pending_reply(&pending_create_msg,
+					dbus_error_failed(pending_create_msg));
 }
 
 static void get_wiphy_callback(struct l_genl_msg *msg, void *user_data)
@@ -855,8 +900,137 @@ static void nl80211_config_notify(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
+static void radio_manager_create_callback(struct l_genl_msg *msg,
+						void *user_data)
+{
+	struct l_dbus_message *reply;
+	struct l_genl_attr attr;
+	struct radio_info_rec *radio;
+	int err;
+
+	/*
+	 * Note that the radio id is returned in the error field of
+	 * the returned message.
+	 */
+	if (l_genl_attr_init(&attr, msg))
+		goto error;
+
+	err = l_genl_msg_get_error(msg);
+	if (err < 0)
+		goto error;
+
+	pending_create_radio_id = err;
+
+	/*
+	 * If the NEW_RADIO event has been received we'll have added the
+	 * radio to radio_info already but we can send the method return
+	 * only now that we know the ID returned by our command.
+	 */
+	radio = l_queue_find(radio_info, radio_info_match_id,
+				L_UINT_TO_PTR(pending_create_radio_id));
+	if (radio) {
+		const char *path = radio_get_path(radio);
+
+		reply = l_dbus_message_new_method_return(pending_create_msg);
+
+		l_dbus_message_set_arguments(reply, "o", path);
+
+		dbus_pending_reply(&pending_create_msg, reply);
+	}
+
+	return;
+
+error:
+	reply = dbus_error_failed(pending_create_msg);
+
+	dbus_pending_reply(&pending_create_msg, reply);
+}
+
+static struct l_dbus_message *radio_manager_create(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					void *user_data)
+{
+	struct l_genl_msg *new_msg;
+	const char *name;
+	bool p2p;
+
+	if (pending_create_msg)
+		return dbus_error_busy(message);
+
+	if (!l_dbus_message_get_arguments(message, "sb", &name, &p2p))
+		return dbus_error_invalid_args(message);
+
+	new_msg = l_genl_msg_new_sized(HWSIM_CMD_NEW_RADIO, 16 + strlen(name));
+
+	l_genl_msg_append_attr(new_msg, HWSIM_ATTR_DESTROY_RADIO_ON_CLOSE,
+				0, NULL);
+
+	if (name[0])
+		l_genl_msg_append_attr(new_msg, HWSIM_ATTR_RADIO_NAME,
+					strlen(name), name);
+
+	if (p2p)
+		l_genl_msg_append_attr(new_msg, HWSIM_ATTR_SUPPORT_P2P_DEVICE,
+					0, NULL);
+
+	l_genl_family_send(hwsim, new_msg, radio_manager_create_callback,
+				pending_create_msg, NULL);
+
+	pending_create_msg = l_dbus_message_ref(message);
+	pending_create_radio_id = 0;
+
+	return NULL;
+}
+
 static void setup_radio_manager_interface(struct l_dbus_interface *interface)
 {
+	l_dbus_interface_method(interface, "CreateRadio", 0,
+				radio_manager_create, "o", "sb",
+				"path", "name", "p2p_device");
+}
+
+static void radio_destroy_callback(struct l_genl_msg *msg, void *user_data)
+{
+	struct l_dbus_message *message = user_data;
+	struct l_dbus_message *reply;
+	struct l_genl_attr attr;
+	int err;
+
+	if (l_genl_attr_init(&attr, msg))
+		goto error;
+
+	err = l_genl_msg_get_error(msg);
+	if (err < 0)
+		goto error;
+
+	reply = l_dbus_message_new_method_return(message);
+	l_dbus_message_set_arguments(reply, "");
+
+	dbus_pending_reply(&message, reply);
+
+	return;
+
+error:
+	reply = dbus_error_failed(message);
+
+	dbus_pending_reply(&message, reply);
+}
+
+static struct l_dbus_message *radio_destroy(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					void *user_data)
+{
+	struct l_genl_msg *del_msg;
+	struct radio_info_rec *radio = user_data;
+
+	del_msg = l_genl_msg_new_sized(HWSIM_CMD_DEL_RADIO, 8);
+
+	l_genl_msg_append_attr(del_msg, HWSIM_ATTR_RADIO_ID, 4, &radio->id);
+
+	l_genl_family_send(hwsim, del_msg, radio_destroy_callback,
+				l_dbus_message_ref(message), NULL);
+
+	return NULL;
 }
 
 static bool radio_property_get_name(struct l_dbus *dbus,
@@ -953,6 +1127,8 @@ static bool radio_property_get_regdom(struct l_dbus *dbus,
 
 static void setup_radio_interface(struct l_dbus_interface *interface)
 {
+	l_dbus_interface_method(interface, "Destroy", 0, radio_destroy, "", "");
+
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					radio_property_get_name, NULL);
 	l_dbus_interface_property(interface, "Addresses", 0, "s",
@@ -1386,6 +1562,8 @@ int main(int argc, char *argv[])
 	l_genl_family_unref(nl80211);
 	l_genl_unref(genl);
 
+	if (pending_create_msg)
+		l_dbus_message_unref(pending_create_msg);
 	l_dbus_destroy(dbus);
 
 	hwsim_radio_cache_cleanup();
