@@ -42,6 +42,8 @@
 #define HWSIM_RADIO_MANAGER_INTERFACE HWSIM_SERVICE ".RadioManager"
 #define HWSIM_RADIO_INTERFACE HWSIM_SERVICE ".Radio"
 #define HWSIM_INTERFACE_INTERFACE HWSIM_SERVICE ".Interface"
+#define HWSIM_RULE_MANAGER_INTERFACE HWSIM_SERVICE ".RuleManager"
+#define HWSIM_RULE_INTERFACE HWSIM_SERVICE ".Rule"
 
 enum {
 	HWSIM_CMD_UNSPEC,
@@ -120,6 +122,7 @@ static bool p2p_attr;
 static const char *radio_name_attr;
 static struct l_dbus *dbus;
 static struct l_queue *rules;
+static unsigned int next_rule_id;
 
 static void do_debug(const char *str, void *user_data)
 {
@@ -392,6 +395,15 @@ static void dbus_pending_reply(struct l_dbus_message **msg,
 	l_dbus_send(dbus, reply);
 	l_dbus_message_unref(*msg);
 	*msg = NULL;
+}
+
+static const char *rule_get_path(struct hwsim_rule *rule)
+{
+	static char path[16];
+
+	snprintf(path, sizeof(path), "/rule%u", rule->id);
+
+	return path;
 }
 
 static bool parse_addresses(const uint8_t *buf, size_t len,
@@ -1591,6 +1603,308 @@ static void setup_interface_interface(struct l_dbus_interface *interface)
 					interface_property_get_address, NULL);
 }
 
+static int rule_compare_priority(const void *a, const void *b, void *user)
+{
+	const struct hwsim_rule *rule_a = a;
+	const struct hwsim_rule *rule_b = b;
+
+	return rule_a->priority - rule_b->priority;
+}
+
+static struct l_dbus_message *rule_add(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					void *user_data)
+{
+	struct hwsim_rule *rule;
+	const char *path;
+	struct l_dbus_message *reply;
+
+	rule = l_new(struct hwsim_rule, 1);
+	rule->id = next_rule_id++;
+	rule->source_any = true;
+	rule->destination_any = true;
+
+	if (!rules)
+		rules = l_queue_new();
+
+	l_queue_insert(rules, rule, rule_compare_priority, NULL);
+
+	path = rule_get_path(rule);
+
+	if (!l_dbus_object_add_interface(dbus, path,
+					HWSIM_RULE_INTERFACE, rule))
+		l_info("Unable to add the %s interface to %s",
+				HWSIM_RULE_INTERFACE, path);
+
+	if (!l_dbus_object_add_interface(dbus, path,
+					L_DBUS_INTERFACE_PROPERTIES, NULL))
+		l_info("Unable to add the %s interface to %s",
+				L_DBUS_INTERFACE_PROPERTIES, path);
+
+	reply = l_dbus_message_new_method_return(message);
+	l_dbus_message_set_arguments(reply, "o", path);
+
+	return reply;
+}
+
+static void setup_rule_manager_interface(struct l_dbus_interface *interface)
+{
+	l_dbus_interface_method(interface, "AddRule", 0,
+				rule_add, "o", "", "path");
+}
+
+static struct l_dbus_message *rule_remove(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+	const char *path;
+
+	path = rule_get_path(rule);
+
+	l_queue_remove(rules, rule);
+
+	l_free(rule);
+
+	l_dbus_unregister_object(dbus, path);
+
+	return l_dbus_message_new_method_return(message);
+}
+
+static bool rule_property_get_source(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+	const char *str;
+
+	if (rule->source_any)
+		str = "any";
+	else
+		str = util_address_to_string(rule->source);
+
+	l_dbus_message_builder_append_basic(builder, 's', str);
+
+	return true;
+}
+
+static struct l_dbus_message *rule_property_set_source(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_iter *new_value,
+					l_dbus_property_complete_cb_t complete,
+					void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+	const char *str;
+
+	if (!l_dbus_message_iter_get_variant(new_value, "s", &str))
+		return dbus_error_invalid_args(message);
+
+	if (!strcmp(str, "any"))
+		rule->source_any = true;
+	else {
+		if (!util_string_to_address(str, rule->source))
+			return dbus_error_invalid_args(message);
+
+		rule->source_any = false;
+	}
+
+	return l_dbus_message_new_method_return(message);
+}
+
+static bool rule_property_get_destination(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+	const char *str;
+
+	if (rule->destination_any)
+		str = "any";
+	else if (is_multicast_addr(rule->destination))
+		str = "multicast";
+	else
+		str = util_address_to_string(rule->destination);
+
+	l_dbus_message_builder_append_basic(builder, 's', str);
+
+	return true;
+}
+
+static struct l_dbus_message *rule_property_set_destination(
+					struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_iter *new_value,
+					l_dbus_property_complete_cb_t complete,
+					void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+	const char *str;
+
+	if (!l_dbus_message_iter_get_variant(new_value, "s", &str))
+		return dbus_error_invalid_args(message);
+
+	if (!strcmp(str, "any"))
+		rule->destination_any = true;
+	else if (!strcmp(str, "multicast")) {
+		rule->destination[0] = 0x80;
+		rule->destination_any = false;
+	} else {
+		if (!util_string_to_address(str, rule->destination))
+			return dbus_error_invalid_args(message);
+
+		rule->destination_any = false;
+	}
+
+	return l_dbus_message_new_method_return(message);
+}
+
+static bool rule_property_get_bidirectional(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+	bool bval = rule->bidirectional;
+
+	l_dbus_message_builder_append_basic(builder, 'b', &bval);
+
+	return true;
+}
+
+static struct l_dbus_message *rule_property_set_bidirectional(
+					struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_iter *new_value,
+					l_dbus_property_complete_cb_t complete,
+					void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+	bool bval;
+
+	if (!l_dbus_message_iter_get_variant(new_value, "b", &bval))
+		return dbus_error_invalid_args(message);
+
+	rule->bidirectional = bval;
+
+	return l_dbus_message_new_method_return(message);
+}
+
+static bool rule_property_get_frequency(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+
+	l_dbus_message_builder_append_basic(builder, 'u', &rule->frequency);
+
+	return true;
+}
+
+static struct l_dbus_message *rule_property_set_frequency(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_iter *new_value,
+					l_dbus_property_complete_cb_t complete,
+					void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+
+	if (!l_dbus_message_iter_get_variant(new_value, "u", &rule->frequency))
+		return dbus_error_invalid_args(message);
+
+	return l_dbus_message_new_method_return(message);
+}
+
+static bool rule_property_get_priority(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+	int16_t intval = rule->priority;
+
+	l_dbus_message_builder_append_basic(builder, 'n', &intval);
+
+	return true;
+}
+
+static struct l_dbus_message *rule_property_set_priority(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_iter *new_value,
+					l_dbus_property_complete_cb_t complete,
+					void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+	int16_t intval;
+
+	if (!l_dbus_message_iter_get_variant(new_value, "n", &intval))
+		return dbus_error_invalid_args(message);
+
+	rule->priority = intval;
+	l_queue_remove(rules, rule);
+	l_queue_insert(rules, rule, rule_compare_priority, NULL);
+
+	return l_dbus_message_new_method_return(message);
+}
+
+static bool rule_property_get_signal(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+	int16_t intval = rule->signal;
+
+	l_dbus_message_builder_append_basic(builder, 'n', &intval);
+
+	return true;
+}
+
+static struct l_dbus_message *rule_property_set_signal(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_iter *new_value,
+					l_dbus_property_complete_cb_t complete,
+					void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+	int16_t intval;
+
+	if (!l_dbus_message_iter_get_variant(new_value, "n", &intval) ||
+			intval > 0 || intval < -10000)
+		return dbus_error_invalid_args(message);
+
+	rule->signal = intval;
+
+	return l_dbus_message_new_method_return(message);
+}
+
+static void setup_rule_interface(struct l_dbus_interface *interface)
+{
+	l_dbus_interface_method(interface, "Remove", 0, rule_remove, "", "");
+
+	l_dbus_interface_property(interface, "Source", 0, "s",
+					rule_property_get_source,
+					rule_property_set_source);
+	l_dbus_interface_property(interface, "Destination", 0, "s",
+					rule_property_get_destination,
+					rule_property_set_destination);
+	l_dbus_interface_property(interface, "Bidirectional", 0, "b",
+					rule_property_get_bidirectional,
+					rule_property_set_bidirectional);
+	l_dbus_interface_property(interface, "Frequency", 0, "u",
+					rule_property_get_frequency,
+					rule_property_set_frequency);
+	l_dbus_interface_property(interface, "Priority", 0, "n",
+					rule_property_get_priority,
+					rule_property_set_priority);
+	l_dbus_interface_property(interface, "SignalStrength", 0, "n",
+					rule_property_get_signal,
+					rule_property_set_signal);
+}
+
 static void request_name_callback(struct l_dbus *dbus, bool success,
 					bool queued, void *user_data)
 {
@@ -1644,11 +1958,34 @@ static bool setup_dbus_hwsim(void)
 		return false;
 	}
 
+	if (!l_dbus_register_interface(dbus, HWSIM_RULE_MANAGER_INTERFACE,
+					setup_rule_manager_interface,
+					NULL, false)) {
+		l_error("Unable to register the %s interface",
+			HWSIM_RULE_MANAGER_INTERFACE);
+		return false;
+	}
+
+	if (!l_dbus_register_interface(dbus, HWSIM_RULE_INTERFACE,
+					setup_rule_interface, NULL, false)) {
+		l_error("Unable to register the %s interface",
+			HWSIM_RULE_INTERFACE);
+		return false;
+	}
+
 	if (!l_dbus_object_add_interface(dbus, "/",
 						HWSIM_RADIO_MANAGER_INTERFACE,
 						NULL)) {
 		l_info("Unable to add the %s interface to /",
 			HWSIM_RADIO_MANAGER_INTERFACE);
+		return false;
+	}
+
+	if (!l_dbus_object_add_interface(dbus, "/",
+						HWSIM_RULE_MANAGER_INTERFACE,
+						NULL)) {
+		l_info("Unable to add the %s interface to /",
+			HWSIM_RULE_MANAGER_INTERFACE);
 		return false;
 	}
 
