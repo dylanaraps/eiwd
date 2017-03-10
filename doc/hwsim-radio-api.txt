@@ -1,0 +1,67 @@
+RadioManager hierarchy
+======================
+
+Service		net.connman.iwd.hwsim
+Interface	net.connman.iwd.hwsim.RadioManager [Experimental]
+Object path	/
+
+Methods		object CreateRadio(string name, boolean p2p_device)
+			Add one virtual radio device to the simulator, a
+			path to a new object with the
+			net.connman.iwd.hwsim.Radio interface is returned.
+			The radio is created with one network interface of
+			the type "managed" (Station) and optionally one
+			P2P Device interface.  The name parameter may be
+			an empty string or a requested name for the radio
+			and its wiphy.  If empty, the kernel will use a
+			default name.  If non-empty, the kernel may still
+			use the default name if the requested name can not
+			be used.
+
+Service		net.connman.iwd.hwsim
+Interface	net.connman.iwd.hwsim.Radio [Experimental]
+Object path	/{radio0,radio1,...}
+
+Methods		void Remove()
+			Remove this radio from the simulator.  Associated
+			interfaces will disappear from the system too, as
+			if the device was unplugged.
+
+Properties	string Name [readonly]
+			The radio's and the associated wiphy's name.
+
+		array(string) Addresses [readonly]
+			The two hardware addresses assigned to the simulated
+			wiphy by the kernel in the XX:XX:XX:XX:XX:XX format.
+			Actual network interfaces under the wiphy may use
+			different addresses and those addresses will be seen
+			in all 802.11 and ethernet traffic.
+
+		uint32 Channels [readonly]
+			The number of channels supported by this radio.
+
+		struct(byte, byte) Alpha2 [readonly, optional]
+			The Alpha2 country code used as the regulatory
+			hint during radio creation.  May differ from the
+			actual reulatory domain used.
+
+		boolean P2PDevice [readonly]
+			Whether a P2P Device interface creation was requested
+			during radio creation command.  Independent of the
+			current number and types of interfaces.
+
+		uint32 RegulatoryDomainIndex [readonly, optional]
+			Index into the custom regulatory domains table
+			kept by the simulator.  Only present if one of
+			these custom domains is in use.
+
+Service		net.connman.iwd.hwsim
+Interface	net.connman.iwd.hwsim.Interface [Experimental]
+Object path	/{radio0,radio1,...}/{1,2,...}
+
+Properties	string Name [readonly]
+			The interface name.
+
+		string Address [readonly]
+			The ethernet address of the interface in the
+			XX:XX:XX:XX:XX:XX format.
