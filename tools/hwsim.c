@@ -2051,18 +2051,8 @@ error:
 static void hwsim_ready(void *user_data)
 {
 	struct l_genl_msg *msg;
-	int ret;
 	size_t msg_size;
 	uint32_t radio_id;
-
-	ret = l_genl_family_register(hwsim, "config", hwsim_config,
-					NULL, NULL);
-	if (!ret) {
-		fprintf(stderr, "Failed to create hwsim config listener\n");
-		exit_status = EXIT_FAILURE;
-		l_main_quit();
-		return;
-	}
 
 	switch (action) {
 	case ACTION_LIST:
@@ -2134,6 +2124,12 @@ static void hwsim_ready(void *user_data)
 	case ACTION_NONE:
 		if (!setup_dbus_hwsim())
 			goto error;
+
+		if (!l_genl_family_register(hwsim, "config", hwsim_config,
+						NULL, NULL)) {
+			l_error("Failed to create hwsim config listener\n");
+			goto error;
+		}
 
 		l_genl_family_set_watches(nl80211, nl80211_ready, NULL,
 						NULL, NULL);
