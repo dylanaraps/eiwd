@@ -1381,7 +1381,7 @@ static struct l_dbus_message *radio_manager_create(struct l_dbus *dbus,
 
 	if (name[0])
 		l_genl_msg_append_attr(new_msg, HWSIM_ATTR_RADIO_NAME,
-					strlen(name), name);
+					strlen(name) + 1, name);
 
 	if (p2p)
 		l_genl_msg_append_attr(new_msg, HWSIM_ATTR_SUPPORT_P2P_DEVICE,
