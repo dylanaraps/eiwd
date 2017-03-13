@@ -1150,8 +1150,37 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 
 	case NL80211_CMD_SCAN_ABORTED:
+	{
+		struct scan_request *sr = l_queue_peek_head(sc->requests);
+
+		if (!sr || !sr->triggered) {
+			sc->state = SCAN_STATE_NOT_RUNNING;
+			break;
+		}
+
+		if (sr->callback) {
+			bool new_owner;
+			struct l_queue *bss_list = l_queue_new();
+
+			new_owner = sr->callback(attr_wiphy, attr_ifindex,
+						bss_list, sr->userdata);
+			if (!new_owner)
+				l_queue_destroy(bss_list, NULL);
+		}
+
+		if (sr->destroy)
+			sr->destroy(sr->userdata);
+
+		scan_request_free(sr);
+		l_queue_pop_head(sc->requests);
+
 		sc->state = SCAN_STATE_NOT_RUNNING;
+
+		if (!start_next_scan_request(sc) && sc->sp.rearm)
+			scan_periodic_rearm(sc);
+
 		break;
+	}
 	}
 }
 
