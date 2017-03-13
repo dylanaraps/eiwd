@@ -622,11 +622,10 @@ static bool destroy_hwsim_radio(int radio_id)
 
 static pid_t register_hwsim_as_trans_medium(void)
 {
-	char *argv[3];
+	char *argv[2];
 
 	argv[0] = BIN_HWSIM;
-	argv[1] = "--register";
-	argv[2] = NULL;
+	argv[1] = NULL;
 
 	return execute_program(argv, false);
 }
