@@ -589,11 +589,10 @@ static int create_hwsim_radio(const char *radio_name,
 	/*TODO add the rest of params*/
 	argv[0] = BIN_HWSIM;
 	argv[1] = "--create";
-	argv[2] = "--keep";
-	argv[3] = "--name";
-	argv[4] = (char *) radio_name;
-	argv[5] = "--nointerface";
-	argv[6] = NULL;
+	argv[2] = "--name";
+	argv[3] = (char *) radio_name;
+	argv[4] = "--nointerface";
+	argv[5] = NULL;
 
 	pid = execute_program(argv, true);
 	if (pid < 0)

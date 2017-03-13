@@ -116,7 +116,6 @@ static enum action {
 	ACTION_LIST,
 } action;
 
-static bool keep_radios_attr;
 static bool no_vif_attr;
 static bool p2p_attr;
 static const char *radio_name_attr;
@@ -2076,9 +2075,6 @@ static void hwsim_ready(void *user_data)
 	case ACTION_CREATE:
 		msg_size = 0;
 
-		if (!keep_radios_attr)
-			msg_size += 4;
-
 		if (radio_name_attr)
 			msg_size += strlen(radio_name_attr) + 8;
 
@@ -2089,11 +2085,6 @@ static void hwsim_ready(void *user_data)
 			msg_size += 4;
 
 		msg = l_genl_msg_new_sized(HWSIM_CMD_NEW_RADIO, msg_size);
-
-		if (!keep_radios_attr)
-			l_genl_msg_append_attr(msg,
-					HWSIM_ATTR_DESTROY_RADIO_ON_CLOSE,
-					0, NULL);
 
 		if (radio_name_attr)
 			l_genl_msg_append_attr(msg, HWSIM_ATTR_RADIO_NAME,
@@ -2175,8 +2166,6 @@ static void usage(void)
 		"\t-L, --list [id]        List simulated radios\n"
 		"\t-C, --create           Create new simulated radio\n"
 		"\t-D, --destroy <id>     Destroy existing radio\n"
-		"\t-k, --keep             Do not destroy radios when "
-						"program exits\n"
 		"\t-n, --name <name>      Name of a radio to be created\n"
 		"\t-i, --nointerface      Do not create VIF\n"
 		"\t-p, --p2p              Support P2P\n"
@@ -2187,7 +2176,6 @@ static const struct option main_options[] = {
 	{ "list",	 optional_argument,	NULL, 'L' },
 	{ "create",	 no_argument,		NULL, 'C' },
 	{ "destroy",	 required_argument,	NULL, 'D' },
-	{ "keep",	 no_argument,		NULL, 'k' },
 	{ "name",	 required_argument,	NULL, 'n' },
 	{ "nointerface", no_argument,		NULL, 'i' },
 	{ "p2p",	 no_argument,		NULL, 'p' },
@@ -2234,9 +2222,6 @@ int main(int argc, char *argv[])
 			action = ACTION_DESTROY;
 			options = optarg;
 			actions++;
-			break;
-		case 'k':
-			keep_radios_attr = true;
 			break;
 		case 'n':
 			radio_name_attr = optarg;
