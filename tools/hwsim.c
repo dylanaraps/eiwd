@@ -1258,8 +1258,8 @@ static void unicast_handler(struct l_genl_msg *msg, void *user_data)
 			if (len > IEEE80211_MAX_DATA_LEN)
 				break;
 
-			if (len < sizeof(struct mpdu_fc) +
-					sizeof(struct mpdu_mgmt_header)) {
+			/* Duration + Address1 + Address2 + Address3 + SeqCtl */
+			if (len < sizeof(struct mpdu_fc) + 22) {
 				l_error("Frame payload too short for header");
 				break;
 			}
