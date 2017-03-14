@@ -56,6 +56,7 @@ struct scan_periodic {
 	void *userdata;
 	bool rearm:1;
 	bool retry:1;
+	bool triggered:1;
 };
 
 struct scan_request {
@@ -473,6 +474,8 @@ static void scan_periodic_done(struct l_genl_msg *msg, void *user_data)
 
 	sc->state = SCAN_STATE_PASSIVE;
 	l_debug("Periodic scan triggered for ifindex: %u", sc->ifindex);
+
+	sc->sp.triggered = true;
 
 	if (sc->sp.trigger)
 		sc->sp.trigger(0, sc->sp.userdata);
@@ -978,22 +981,14 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 	l_queue_insert(results->bss_list, bss, scan_bss_rank_compare, NULL);
 }
 
-static void get_scan_done(void *user)
+static void scan_finished(struct scan_context *sc, uint32_t wiphy,
+				struct l_queue *bss_list)
 {
-	struct scan_results *results = user;
-	struct scan_context *sc;
 	struct scan_request *sr;
-	scan_notify_func_t callback;
+	scan_notify_func_t callback = NULL;
 	void *userdata;
-	scan_destroy_func_t destroy;
+	scan_destroy_func_t destroy = NULL;
 	bool new_owner = false;
-
-	l_debug("get_scan_done");
-
-	sc = l_queue_find(scan_contexts, scan_context_match,
-					L_UINT_TO_PTR(results->ifindex));
-	if (!sc)
-		goto done;
 
 	sr = l_queue_peek_head(sc->requests);
 	if (sr && sr->triggered) {
@@ -1004,15 +999,28 @@ static void get_scan_done(void *user)
 		scan_request_free(sr);
 		l_queue_pop_head(sc->requests);
 	} else if (sc->state == SCAN_STATE_PASSIVE && sc->sp.interval != 0) {
-		callback = sc->sp.callback;
-		userdata = sc->sp.userdata;
-		destroy = NULL;
-	} else
-		goto done;
+		/*
+		 * If we'd called sc.sp->trigger, we must call back now
+		 * independent of whether the scan was succesful or was
+		 * aborted.  If the scan was successful though we call back
+		 * with the scan results even if didn't triggered this scan.
+		 */
+		if (sc->sp.triggered || bss_list) {
+			callback = sc->sp.callback;
+			userdata = sc->sp.userdata;
+			destroy = NULL;
+		}
 
-	if (callback)
-		new_owner = callback(results->wiphy, results->ifindex,
-					results->bss_list, userdata);
+		sc->sp.triggered = false;
+	}
+
+	if (callback) {
+		if (!bss_list)
+			bss_list = l_queue_new();
+
+		new_owner = callback(wiphy, sc->ifindex,
+					bss_list, userdata);
+	}
 
 	if (destroy)
 		destroy(userdata);
@@ -1022,8 +1030,23 @@ static void get_scan_done(void *user)
 	if (!start_next_scan_request(sc) && sc->sp.rearm)
 		scan_periodic_rearm(sc);
 
-done:
-	if (!new_owner)
+	if (bss_list && !new_owner)
+		l_queue_destroy(bss_list,
+				(l_queue_destroy_func_t) scan_bss_free);
+}
+
+static void get_scan_done(void *user)
+{
+	struct scan_results *results = user;
+	struct scan_context *sc;
+
+	l_debug("get_scan_done");
+
+	sc = l_queue_find(scan_contexts, scan_context_match,
+					L_UINT_TO_PTR(results->ifindex));
+	if (sc)
+		scan_finished(sc, results->wiphy, results->bss_list);
+	else
 		l_queue_destroy(results->bss_list,
 				(l_queue_destroy_func_t) scan_bss_free);
 
@@ -1150,37 +1173,9 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 
 	case NL80211_CMD_SCAN_ABORTED:
-	{
-		struct scan_request *sr = l_queue_peek_head(sc->requests);
-
-		if (!sr || !sr->triggered) {
-			sc->state = SCAN_STATE_NOT_RUNNING;
-			break;
-		}
-
-		if (sr->callback) {
-			bool new_owner;
-			struct l_queue *bss_list = l_queue_new();
-
-			new_owner = sr->callback(attr_wiphy, attr_ifindex,
-						bss_list, sr->userdata);
-			if (!new_owner)
-				l_queue_destroy(bss_list, NULL);
-		}
-
-		if (sr->destroy)
-			sr->destroy(sr->userdata);
-
-		scan_request_free(sr);
-		l_queue_pop_head(sc->requests);
-
-		sc->state = SCAN_STATE_NOT_RUNNING;
-
-		if (!start_next_scan_request(sc) && sc->sp.rearm)
-			scan_periodic_rearm(sc);
+		scan_finished(sc, attr_wiphy, NULL);
 
 		break;
-	}
 	}
 }
 
