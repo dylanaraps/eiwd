@@ -547,12 +547,14 @@ bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa)
 		return false;
 
 	/*
-	 * Key Length should be 16 for WPA (P802.11i/D3.0) but since
-	 * 802.11i-2004 there's inconsistency in the field's value and
-	 * both 16 and 0 are in use.
+	 * In P802.11i/D3.0 the Key Length should be 16 for WPA but hostapd
+	 * uses 16 for CCMP and 32 for TKIP.  Since 802.11i-2004 there's
+	 * inconsistency in the required value, for example 0 is clearly
+	 * specified in 802.11-2012 11.6.7.2 but 11.6.2 doesn't list 0 and
+	 * makes the value depend on the pairwise key type.
 	 */
 	key_len = L_BE16_TO_CPU(ek->key_length);
-	if (is_wpa && key_len != 16)
+	if (key_len != 0 && key_len != 16 && key_len != 32)
 		return false;
 
 	VERIFY_IS_ZERO(ek->reserved);
