@@ -85,6 +85,7 @@ struct scan_results {
 };
 
 static bool start_next_scan_request(struct scan_context *sc);
+static void scan_periodic_rearm(struct scan_context *sc);
 
 static bool scan_context_match(const void *a, const void *b)
 {
@@ -464,9 +465,8 @@ static void scan_periodic_done(struct l_genl_msg *msg, void *user_data)
 			l_warn("Periodic scan could not be triggered: %s (%d)",
 				strerror(-err), -err);
 
-		sc->sp.retry = true;
-
-		start_next_scan_request(sc);
+		if (!start_next_scan_request(sc))
+			scan_periodic_rearm(sc);
 
 		return;
 	}
