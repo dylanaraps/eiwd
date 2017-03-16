@@ -1256,16 +1256,17 @@ void device_connect_network(struct device *device, struct network *network,
 		handshake_state_set_mde(hs, mde);
 	}
 
-	device->connect_pending = l_dbus_message_ref(message);
-
 	if (netdev_connect(device->netdev, bss, hs, device_netdev_event,
 					device_connect_cb, device) < 0) {
 		handshake_state_free(hs);
 
-		dbus_pending_reply(&device->connect_pending,
-				dbus_error_failed(device->connect_pending));
+		if (message)
+			l_dbus_send(dbus, dbus_error_failed(message));
+
 		return;
 	}
+
+	device->connect_pending = l_dbus_message_ref(message);
 
 	device->connected_bss = bss;
 	device->connected_network = network;
@@ -1279,7 +1280,8 @@ void device_connect_network(struct device *device, struct network *network,
 	return;
 
 not_supported:
-	l_dbus_send(dbus, dbus_error_not_supported(message));
+	if (message)
+		l_dbus_send(dbus, dbus_error_not_supported(message));
 }
 
 static void device_scan_triggered(int err, void *user_data)
