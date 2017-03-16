@@ -2859,10 +2859,8 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 		}
 	}
 
-	if (!wiphy) {
-		l_warn("Missing wiphy attribute or wiphy not found");
+	if (!wiphy)
 		return;
-	}
 
 	if (!iftype) {
 		l_warn("Missing iftype attribute");
