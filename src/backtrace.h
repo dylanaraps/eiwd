@@ -20,6 +20,6 @@
  *
  */
 #ifdef __GLIBC__
-void __iwd_backtrace_init(const char *program);
+void __iwd_backtrace_init();
 void __iwd_backtrace_print(unsigned int offset);
 #endif

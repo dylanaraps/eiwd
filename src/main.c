@@ -197,7 +197,7 @@ int main(int argc, char *argv[])
 	l_debug_enable("*");
 
 #ifdef __GLIBC__
-	__iwd_backtrace_init(argv[0]);
+	__iwd_backtrace_init();
 #endif
 
 	l_info("Wireless daemon version %s", VERSION);

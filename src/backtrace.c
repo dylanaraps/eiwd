@@ -156,14 +156,33 @@ static void signal_handler(int signo)
 	exit(EXIT_FAILURE);
 }
 
-void __iwd_backtrace_init(const char *program)
+void __iwd_backtrace_init()
 {
 	static char path[PATH_MAX];
+	static char cwd[PATH_MAX];
 	struct sigaction sa;
 	sigset_t mask;
+	ssize_t len;
 
-	program_exec = program;
-	program_path = getcwd(path, sizeof(path));
+	/* Attempt to get the full path to our executable */
+	len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+	if (len > 0) {
+		int i;
+		path[len] = '\0';
+
+		for (i = len - 1; i >= 0; i--) {
+			if (path[i] != '/')
+				continue;
+
+			program_exec = path;
+			break;
+		}
+	}
+
+	if (program_exec == NULL)
+		return;
+
+	program_path = getcwd(cwd, sizeof(cwd));
 
 	sigemptyset(&mask);
 	sa.sa_handler = signal_handler;
