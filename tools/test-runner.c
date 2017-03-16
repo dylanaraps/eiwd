@@ -84,6 +84,13 @@ static const char * const qemu_table[] = {
 	NULL
 };
 
+struct wiphy {
+	char name[20];
+	int id;
+	unsigned int interface_index;
+	bool interface_created : 1;
+};
+
 static bool path_exist(const char *path_name)
 {
 	struct stat st;
@@ -401,11 +408,6 @@ static bool wait_for_socket(const char *socket, useconds_t wait_time)
 
 	l_error("Error: cannot find socket: %s", socket);
 	return false;
-}
-
-static void hashmap_string_destroy(void *value)
-{
-	l_free(value);
 }
 
 static void create_dbus_system_conf(void)
@@ -802,8 +804,6 @@ error_exit:
 #define HW_CONFIG_PHY_CHANCTX	"use_chanctx"
 #define HW_CONFIG_PHY_P2P	"p2p_device"
 
-#define HW_PHY_NAME_PREFIX	"PHY"
-
 #define HW_MIN_NUM_RADIOS	1
 
 #define HW_INTERFACE_PREFIX	"wln"
@@ -811,14 +811,12 @@ error_exit:
 #define HW_INTERFACE_STATE_DOWN false
 
 static bool configure_hw_radios(struct l_settings *hw_settings,
-						int hwsim_radio_ids[],
-						struct l_hashmap *if_name_map)
+						struct l_queue *wiphy_list)
 {
 	char interface_name[7];
-	char phy_name[7];
 	char **radio_conf_list;
 	int i, num_radios_requested, num_radios_created;
-	bool status = true;
+	bool status = false;
 	bool has_hw_conf;
 
 	l_settings_get_int(hw_settings, HW_CONFIG_GROUP_SETUP,
@@ -839,103 +837,118 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 						HW_CONFIG_SETUP_RADIO_CONFS,
 									':');
 
+	if (has_hw_conf) {
+		for (i = 0; radio_conf_list[i]; i++) {
+			size_t len = strlen(radio_conf_list[i]);
+
+			if (len >= sizeof(((struct wiphy *) 0)->name)) {
+				l_error("Radio name: '%s' is too big",
+						radio_conf_list[i]);
+				goto exit;
+			}
+
+			if (len == 0) {
+				l_error("Radio name cannot be empty");
+				goto exit;
+			}
+
+			if (!l_settings_has_group(hw_settings,
+							radio_conf_list[i])) {
+				l_error("No radio configuration group [%s]"
+						" found in config file.",
+						radio_conf_list[i]);
+				goto exit;
+			}
+		}
+
+		if (i != num_radios_requested) {
+			l_error(HW_CONFIG_SETUP_RADIO_CONFS "should contain"
+					" %d radios", num_radios_requested);
+			goto exit;
+		}
+	}
+
 	num_radios_created = 0;
 	i = 0;
 
 	while (num_radios_requested > num_radios_created) {
-		char *radio_config_group;
+		struct wiphy *wiphy;
 
 		unsigned int channels;
 		bool p2p_device;
 		bool use_chanctx;
 
-		if (!has_hw_conf || !radio_conf_list[i]) {
+		wiphy = l_new(struct wiphy, 1);
+
+		if (!has_hw_conf) {
 			channels = 1;
 			p2p_device = true;
 			use_chanctx = true;
 
 			has_hw_conf = false;
+
+			sprintf(wiphy->name, "rad%d", num_radios_created);
 			goto configure;
 		}
 
-		radio_config_group = radio_conf_list[i];
+		strcpy(wiphy->name, radio_conf_list[i]);
 
-		if (!l_settings_has_group(hw_settings, radio_config_group)) {
-			l_error("No radio configuration group [%s] found in "
-					"config. file.", radio_config_group);
-
-			status = false;
-			goto exit;
-		}
-
-		if (!l_settings_get_uint(hw_settings, radio_config_group,
-							HW_CONFIG_PHY_CHANNELS,
-								&channels))
+		if (!l_settings_get_uint(hw_settings, wiphy->name,
+					HW_CONFIG_PHY_CHANNELS, &channels))
 			channels = 1;
 
-		if (!l_settings_get_bool(hw_settings, radio_config_group,
-							HW_CONFIG_PHY_P2P,
-								&p2p_device))
+		if (!l_settings_get_bool(hw_settings, wiphy->name,
+					HW_CONFIG_PHY_P2P, &p2p_device))
 			p2p_device = true;
 
-		if (!l_settings_get_bool(hw_settings, radio_config_group,
-							HW_CONFIG_PHY_CHANCTX,
-								&use_chanctx))
+		if (!l_settings_get_bool(hw_settings, wiphy->name,
+					HW_CONFIG_PHY_CHANCTX, &use_chanctx))
 			use_chanctx = true;
 
 configure:
-		sprintf(phy_name, "%s%d", HW_PHY_NAME_PREFIX,
-							num_radios_created);
+		wiphy->id = create_hwsim_radio(wiphy->name, channels,
+						p2p_device, use_chanctx);
 
-		hwsim_radio_ids[num_radios_created] =
-			create_hwsim_radio(phy_name, channels, p2p_device,
-							use_chanctx);
-
-		if (hwsim_radio_ids[num_radios_created] < 0) {
-			status = false;
+		if (wiphy->id < 0) {
+			l_free(wiphy);
 			goto exit;
 		}
+
+		l_queue_push_head(wiphy_list, wiphy);
 
 		sprintf(interface_name, "%s%d", HW_INTERFACE_PREFIX,
 							num_radios_created);
-
-		if (!create_interface(interface_name, phy_name)) {
-			status = false;
+		if (!create_interface(interface_name, wiphy->name))
 			goto exit;
-		}
 
+		wiphy->interface_created = true;
+		wiphy->interface_index = num_radios_created;
 		l_info("Created interface %s on %s radio", interface_name,
-								phy_name);
+								wiphy->name);
 
 		if (!set_interface_state(interface_name,
-						HW_INTERFACE_STATE_UP)) {
-			status = false;
+						HW_INTERFACE_STATE_UP))
 			goto exit;
-		}
-
-		l_hashmap_insert(if_name_map,
-					has_hw_conf ?
-						l_strdup(radio_conf_list[i++]) :
-						l_strdup(interface_name),
-					l_strdup(interface_name));
 
 		num_radios_created++;
 	}
+
+	status = true;
 
 exit:
 	l_strfreev(radio_conf_list);
 	return status;
 }
 
-static void destroy_hw_radios(int hwsim_radio_ids[])
+static void wiphy_free(void *data)
 {
-	int i = 0;
+	struct wiphy *wiphy = data;
 
-	while (hwsim_radio_ids[i] != -1) {
+	if (wiphy->interface_created) {
 		char *if_name;
 
-		if_name = l_strdup_printf("%s%d", HW_INTERFACE_PREFIX, i);
-
+		if_name = l_strdup_printf("%s%d", HW_INTERFACE_PREFIX,
+							wiphy->interface_index);
 		set_interface_state(if_name, HW_INTERFACE_STATE_DOWN);
 
 		if (delete_interface(if_name))
@@ -944,35 +957,17 @@ static void destroy_hw_radios(int hwsim_radio_ids[])
 			l_error("Failed to remove interface %s", if_name);
 
 		l_free(if_name);
-		i++;
 	}
 
-	i = 0;
+	destroy_hwsim_radio(wiphy->id);
+	l_debug("Removed radio id %d", wiphy->id);
 
-	while (hwsim_radio_ids[i] != -1) {
-		destroy_hwsim_radio(hwsim_radio_ids[i]);
-		l_debug("Removed radio id %d", hwsim_radio_ids[i]);
-
-		hwsim_radio_ids[i] = -1;
-
-		i++;
-	}
-}
-
-static void get_next_avail_if(const void *key, void *value, void *data)
-{
-	char **if_name = (char **) data;
-
-	if (!*if_name && !strcmp(key, value)) {
-		*if_name = l_strdup(value);
-
-		l_debug("Found available interface %s", (char *) *if_name);
-	}
+	l_free(wiphy);
 }
 
 static bool configure_hostapd_instances(struct l_settings *hw_settings,
 						char *config_dir_path,
-						struct l_hashmap *if_name_map,
+						struct l_queue *wiphy_list,
 						pid_t hostapd_pids_out[])
 {
 	char **hostap_keys;
@@ -989,7 +984,8 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 	while (hostap_keys[i]) {
 		char hostapd_config_file_path[PATH_MAX];
 		const char *hostapd_config_file;
-		char *if_name;
+		char *if_name = NULL;
+		const struct l_queue_entry *wiphy_entry;
 
 		hostapd_config_file =
 			l_settings_get_value(hw_settings,
@@ -1009,14 +1005,19 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 			return false;
 		}
 
-		if_name = l_hashmap_remove(if_name_map, hostap_keys[i]);
+		for (wiphy_entry = l_queue_get_entries(wiphy_list);
+					wiphy_entry;
+					wiphy_entry = wiphy_entry->next) {
+			struct wiphy *wiphy = wiphy_entry->data;
 
-		if (!if_name)
-			l_hashmap_foreach(if_name_map, get_next_avail_if,
-								&if_name);
-		if (if_name) {
-			l_hashmap_remove(if_name_map, if_name);
-		} else {
+			if (strcmp(wiphy->name, hostap_keys[i]))
+				continue;
+
+			if_name = l_strdup_printf("%s%d", HW_INTERFACE_PREFIX,
+							wiphy->interface_index);
+		}
+
+		if (!if_name) {
 			l_error("Failed to find available interface.");
 			return false;
 		}
@@ -1392,7 +1393,6 @@ static void set_config_cycle_info(const char *config_dir_path,
 static void create_network_and_run_tests(const void *key, void *value,
 								void *data)
 {
-	int hwsim_radio_ids[HWSIM_RADIOS_MAX];
 	pid_t hostapd_pids[HWSIM_RADIOS_MAX];
 	pid_t iwd_pid = -1;
 	pid_t medium_pid = -1;
@@ -1400,15 +1400,11 @@ static void create_network_and_run_tests(const void *key, void *value,
 	char *iwd_config_dir;
 	char **tmpfs_extra_stuff = NULL;
 	struct l_settings *hw_settings;
-	struct l_hashmap *if_name_map;
+	struct l_queue *wiphy_list;
 	struct l_queue *test_queue;
 	struct l_queue *test_stats_queue;
 	bool start_iwd_daemon = true;
 
-	if (!key || !value)
-		return;
-
-	memset(hwsim_radio_ids, -1, sizeof(hwsim_radio_ids));
 	memset(hostapd_pids, -1, sizeof(hostapd_pids));
 
 	config_dir_path = (char *) key;
@@ -1427,10 +1423,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 	if (!hw_settings)
 		return;
 
-	if_name_map = l_hashmap_string_new();
-	if (!if_name_map)
-		return;
-
+	wiphy_list = l_queue_new();
 	l_info("Configuring network...");
 
 	if (chdir(config_dir_path) < 0) {
@@ -1447,7 +1440,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 	if (!create_tmpfs_extra_stuff(tmpfs_extra_stuff))
 		goto exit_hwsim;
 
-	if (!configure_hw_radios(hw_settings, hwsim_radio_ids, if_name_map))
+	if (!configure_hw_radios(hw_settings, wiphy_list))
 		goto exit_hwsim;
 
 	medium_pid = register_hwsim_as_trans_medium();
@@ -1460,7 +1453,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 	}
 
 	if (!configure_hostapd_instances(hw_settings, config_dir_path,
-						if_name_map, hostapd_pids))
+						wiphy_list, hostapd_pids))
 		goto exit_hostapd;
 
 	l_settings_get_bool(hw_settings, HW_CONFIG_GROUP_SETUP,
@@ -1496,9 +1489,8 @@ exit_hostapd:
 	destroy_hostapd_instances(hostapd_pids);
 
 exit_hwsim:
-	destroy_hw_radios(hwsim_radio_ids);
+	l_queue_destroy(wiphy_list, wiphy_free);
 
-	l_hashmap_destroy(if_name_map, hashmap_string_destroy);
 	l_settings_free(hw_settings);
 	l_strfreev(tmpfs_extra_stuff);
 }
