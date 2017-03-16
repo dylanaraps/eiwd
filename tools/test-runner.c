@@ -89,6 +89,7 @@ struct wiphy {
 	int id;
 	unsigned int interface_index;
 	bool interface_created : 1;
+	bool used_by_hostapd : 1;
 };
 
 static bool path_exist(const char *path_name)
@@ -1013,6 +1014,7 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 			if (strcmp(wiphy->name, hostap_keys[i]))
 				continue;
 
+			wiphy->used_by_hostapd = true;
 			if_name = l_strdup_printf("%s%d", HW_INTERFACE_PREFIX,
 							wiphy->interface_index);
 		}
@@ -1035,16 +1037,50 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 	return true;
 }
 
-static pid_t start_iwd(const char *config_dir)
+static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list)
 {
-	char *argv[4];
+	char *argv[6];
+	char *iwd_phys = NULL;
+	pid_t ret;
 
 	argv[0] = "iwd";
 	argv[1] = "-c";
 	argv[2] = (char *) config_dir;
 	argv[3] = NULL;
 
-	return execute_program(argv, false);
+	if (wiphy_list) {
+		const struct l_queue_entry *wiphy_entry;
+		struct l_string *list = l_string_new(64);
+
+		for (wiphy_entry = l_queue_get_entries(wiphy_list);
+					wiphy_entry;
+					wiphy_entry = wiphy_entry->next) {
+			struct wiphy *wiphy = wiphy_entry->data;
+
+			if (!wiphy->interface_created)
+				continue;
+
+			if (wiphy->used_by_hostapd)
+				continue;
+
+			l_string_append_printf(list, "%s,", wiphy->name);
+		}
+
+		iwd_phys = l_string_unwrap(list);
+		/* Take care of last comma */
+		iwd_phys[strlen(iwd_phys) - 1] = '\0';
+
+		argv[3] = "-p";
+		argv[4] = iwd_phys;
+		argv[5] = NULL;
+	}
+
+	ret = execute_program(argv, false);
+
+	if (iwd_phys)
+		l_free(iwd_phys);
+
+	return ret;
 }
 
 static void terminate_iwd(pid_t iwd_pid)
@@ -1467,7 +1503,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 		if (!iwd_config_dir)
 			iwd_config_dir = CONFIGDIR;
 
-		iwd_pid = start_iwd(iwd_config_dir);
+		iwd_pid = start_iwd(iwd_config_dir, wiphy_list);
 
 		if (iwd_pid == -1)
 			goto exit_hostapd;
