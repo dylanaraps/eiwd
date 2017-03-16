@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <linux/if_ether.h>
+#include <fnmatch.h>
 
 #include <ell/ell.h>
 
@@ -45,6 +46,8 @@
 
 static struct l_genl_family *nl80211 = NULL;
 static struct l_hwdb *hwdb;
+static char **whitelist_filter;
+static char **blacklist_filter;
 
 struct wiphy {
 	uint32_t id;
@@ -102,6 +105,38 @@ static bool wiphy_match(const void *a, const void *b)
 struct wiphy *wiphy_find(int wiphy_id)
 {
 	return l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(wiphy_id));
+}
+
+static bool wiphy_is_managed(const char *phy)
+{
+	char *pattern;
+	unsigned int i;
+
+	if (!whitelist_filter)
+		goto check_blacklist;
+
+	for (i = 0; (pattern = whitelist_filter[i]); i++) {
+		if (fnmatch(pattern, phy, 0) != 0)
+			continue;
+
+		goto check_blacklist;
+	}
+
+	l_debug("whitelist filtered phy: %s", phy);
+	return false;
+
+check_blacklist:
+	if (!blacklist_filter)
+		return true;
+
+	for (i = 0; (pattern = blacklist_filter[i]); i++) {
+		if (fnmatch(pattern, phy, 0) == 0) {
+			l_debug("blacklist filtered ifname: %s", phy);
+			return false;
+		}
+	}
+
+	return true;
 }
 
 const char *wiphy_get_path(struct wiphy *wiphy)
@@ -411,6 +446,9 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 
 	wiphy = l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(id));
 	if (!wiphy) {
+		if (!wiphy_is_managed(name))
+			return;
+
 		wiphy = l_new(struct wiphy, 1);
 		wiphy->id = id;
 		wiphy->supported_freqs = scan_freq_set_new();
@@ -519,6 +557,9 @@ static void wiphy_new_wiphy_event(struct l_genl_msg *msg)
 
 		return;
 	}
+
+	if (!wiphy_is_managed(name))
+		return;
 
 	wiphy = l_new(struct wiphy, 1);
 	wiphy->id = id;
@@ -773,7 +814,8 @@ static void setup_wiphy_interface(struct l_dbus_interface *interface)
 					wiphy_property_get_name, NULL);
 }
 
-bool wiphy_init(struct l_genl_family *in)
+bool wiphy_init(struct l_genl_family *in, const char *whitelist,
+							const char *blacklist)
 {
 	struct l_genl_msg *msg;
 
@@ -824,11 +866,20 @@ bool wiphy_init(struct l_genl_family *in)
 
 	hwdb = l_hwdb_new_default();
 
+	if (whitelist)
+		whitelist_filter = l_strsplit(whitelist, ',');
+
+	if (blacklist)
+		blacklist_filter = l_strsplit(blacklist, ',');
+
 	return true;
 }
 
 bool wiphy_exit(void)
 {
+	l_strfreev(whitelist_filter);
+	l_strfreev(blacklist_filter);
+
 	l_queue_destroy(wiphy_list, wiphy_free);
 	wiphy_list = NULL;
 

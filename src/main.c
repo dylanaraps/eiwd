@@ -50,6 +50,8 @@ static struct l_settings *iwd_config;
 static struct l_timeout *timeout;
 static const char *interfaces;
 static const char *nointerfaces;
+static const char *phys;
+static const char *nophys;
 static const char *config_dir;
 
 static void main_loop_quit(struct l_timeout *timeout, void *user_data)
@@ -87,6 +89,8 @@ static void usage(void)
 		"\t-B, --dbus-debug       Enable D-Bus debugging\n"
 		"\t-i, --interfaces       Interfaces to manage\n"
 		"\t-I, --nointerfaces     Interfaces to ignore\n"
+		"\t-p, --phys             Phys to manage\n"
+		"\t-P, --nophys           Phys to ignore\n"
 		"\t-c, --config           Configuration directory to use\n"
 		"\t-h, --help             Show help options\n");
 }
@@ -96,6 +100,8 @@ static const struct option main_options[] = {
 	{ "version",      no_argument,       NULL, 'v' },
 	{ "interfaces",   required_argument, NULL, 'i' },
 	{ "nointerfaces", required_argument, NULL, 'I' },
+	{ "phys",         required_argument, NULL, 'p' },
+	{ "nophys",       required_argument, NULL, 'P' },
 	{ "config",       required_argument, NULL, 'c' },
 	{ "help",         no_argument,       NULL, 'h' },
 	{ }
@@ -114,7 +120,7 @@ static void nl80211_appeared(void *user_data)
 
 	l_debug("Found nl80211 interface");
 
-	if (!wiphy_init(nl80211))
+	if (!wiphy_init(nl80211, phys, nophys))
 		l_error("Unable to init wiphy functionality");
 
 	if (!netdev_init(nl80211, interfaces, nointerfaces))
@@ -151,7 +157,8 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "Bi:I:c:vh", main_options, NULL);
+		opt = getopt_long(argc, argv, "Bi:I:p:P:c:vh",
+							main_options, NULL);
 		if (opt < 0)
 			break;
 
@@ -164,6 +171,12 @@ int main(int argc, char *argv[])
 			break;
 		case 'I':
 			nointerfaces = optarg;
+			break;
+		case 'p':
+			phys = optarg;
+			break;
+		case 'P':
+			nophys = optarg;
 			break;
 		case 'v':
 			printf("%s\n", VERSION);
