@@ -27,7 +27,6 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/genl.h ell/genl.c \
 			ell/dbus-private.h \
 			ell/dbus.h ell/dbus.c \
-			ell/dbus-kernel.c \
 			ell/dbus-util.c \
 			ell/dbus-message.c \
 			ell/dbus-service.h ell/dbus-service.c \
@@ -49,9 +48,7 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/uuid.h ell/uuid.c \
 			ell/key.h ell/key.c
 
-ell_linux_headers = linux/kdbus.h
-
-ell_libell_internal_la_SOURCES = $(ell_sources) $(ell_linux_headers)
+ell_libell_internal_la_SOURCES = $(ell_sources)
 
 bin_PROGRAMS = src/iwd client/iwctl monitor/iwmon
 
