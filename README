@@ -105,7 +105,7 @@ Wireless devices using fake virtual air. Just load the module.
 
 	modprobe mac80211_hwsim radios=0
 
-Provding the radios=0 is important since otherwise it starts out with
+Providing the radios=0 is important since otherwise it starts out with
 two new Wireless radios by default.
 
 With the provided hwsim utility it is now possible to add and remove
