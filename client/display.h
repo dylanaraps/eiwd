@@ -29,6 +29,11 @@
 #define CLEAR_SCREEN	"\033[2J"
 #define MARGIN		"  "
 
+void display(const char *format, ...);
+void display_table_header(const char *caption, const char *fmt, ...);
+void display_table_footer(void);
+void display_error(const char *error);
+
 void display_enable_cmd_prompt(void);
 void display_disable_cmd_prompt(void);
 

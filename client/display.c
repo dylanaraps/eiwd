@@ -39,6 +39,110 @@ static struct l_io *io;
 static char dashed_line[LINE_LEN];
 static char empty_line[LINE_LEN];
 
+struct saved_input {
+	char *line;
+	int point;
+};
+
+static struct saved_input *save_input(void)
+{
+	struct saved_input *input;
+
+	if (RL_ISSTATE(RL_STATE_DONE))
+		return NULL;
+
+	input = l_new(struct saved_input, 1);
+
+	input->point = rl_point;
+	input->line = rl_copy_text(0, rl_end);
+	rl_save_prompt();
+	rl_replace_line("", 0);
+	rl_redisplay();
+
+	return input;
+}
+
+static void restore_input(struct saved_input *input)
+{
+	if (!input)
+		return;
+
+	rl_restore_prompt();
+	rl_replace_line(input->line, 0);
+	rl_point = input->point;
+	rl_forced_update_display();
+
+	l_free(input->line);
+	l_free(input);
+}
+
+static void display_text(const char *text)
+{
+	struct saved_input *input = save_input();
+
+	printf("%s", text);
+
+	restore_input(input);
+}
+
+void display(const char *fmt, ...)
+{
+	va_list args;
+	char *text;
+
+	va_start(args, fmt);
+	text = l_strdup_vprintf(fmt, args);
+	va_end(args);
+
+	display_text(text);
+
+	l_free(text);
+}
+
+void display_error(const char *error)
+{
+	char *text = l_strdup_printf(COLOR_RED "%s\n" COLOR_OFF, error);
+
+	display_text(text);
+
+	l_free(text);
+}
+
+void display_table_header(const char *caption, const char *fmt, ...)
+{
+	va_list args;
+	char *text;
+	char *body;
+	int caption_pos =
+		(int) ((sizeof(dashed_line) - 1) / 2 + strlen(caption) / 2);
+
+	text = l_strdup_printf("%*s\n", caption_pos, caption);
+	display_text(text);
+	l_free(text);
+
+	text = l_strdup_printf("%s%s%s\n", COLOR_GRAY, dashed_line, COLOR_OFF);
+	display_text(text);
+	l_free(text);
+
+	va_start(args, fmt);
+	text = l_strdup_vprintf(fmt, args);
+	va_end(args);
+
+	body = l_strdup_printf("%s%s%s\n", COLOR_BOLDGRAY, text, COLOR_OFF);
+	display_text(body);
+	l_free(body);
+	l_free(text);
+
+	text = l_strdup_printf("%s%s%s\n", COLOR_GRAY, dashed_line, COLOR_OFF);
+	display_text(text);
+	l_free(text);
+}
+
+void display_table_footer(void)
+{
+	display_text("\n");
+}
+
 static void readline_callback(char *prompt)
 {
 	l_free(prompt);
