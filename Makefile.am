@@ -85,7 +85,8 @@ src_iwd_LDADD = ell/libell-internal.la -ldl
 
 dist_sysconf_DATA = src/iwd.conf
 
-client_iwctl_SOURCES = client/main.c
+client_iwctl_SOURCES = client/main.c \
+			client/dbus-proxy.h client/dbus-proxy.c
 client_iwctl_LDADD = ell/libell-internal.la
 
 monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
