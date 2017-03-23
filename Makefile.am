@@ -87,6 +87,7 @@ dist_sysconf_DATA = src/iwd.conf
 
 client_iwctl_SOURCES = client/main.c \
 			readline/readline.h readline/history.h \
+			client/display.h client/display.c \
 			client/dbus-proxy.h client/dbus-proxy.c
 client_iwctl_LDADD = ell/libell-internal.la -lreadline
 
