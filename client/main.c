@@ -26,6 +26,7 @@
 
 #include <ell/ell.h>
 
+#include "display.h"
 #include "dbus-proxy.h"
 
 static void signal_handler(struct l_signal *signal, uint32_t signo,
@@ -57,6 +58,7 @@ int main(int argc, char *argv[])
 
 	l_log_set_stderr();
 
+	display_init();
 	dbus_proxy_init();
 
 	l_main_run();
@@ -64,6 +66,7 @@ int main(int argc, char *argv[])
 	exit_status = EXIT_SUCCESS;
 
 	dbus_proxy_exit();
+	display_exit();
 
 	l_signal_remove(signal);
 
