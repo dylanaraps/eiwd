@@ -673,6 +673,7 @@ static void usage(void)
 		"\t-w, --write <file>     Write netlink PCAP trace file\n"
 		"\t-a, --analyze <file>   Analyze netlink PCAP trace file\n"
 		"\t-i, --interface <dev>  Use specified netlink monitor\n"
+		"\t-n, --nortnl           Don't show RTNL output\n"
 		"\t-h, --help             Show help options\n");
 }
 
