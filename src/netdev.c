@@ -1277,12 +1277,14 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 	const uint8_t *rsne = NULL;
 	const uint8_t *mde = NULL;
 	const uint8_t *fte = NULL;
-	bool is_rsn = netdev->handshake->own_ie != NULL;
 
 	l_debug("");
 
-	if (!netdev->connected)
+	if (!netdev->connected) {
+		l_warn("Unexpected connection related event -- "
+				"is another supplicant running?");
 		return;
+	}
 
 	if (!l_genl_attr_init(&attr, msg)) {
 		l_debug("attr init failed");
@@ -1355,6 +1357,8 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 	}
 
 	if (netdev->in_ft) {
+		bool is_rsn = netdev->handshake->own_ie != NULL;
+
 		netdev->in_ft = false;
 		netdev->operational = true;
 
@@ -1566,9 +1570,15 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 	const uint8_t *mde = NULL;
 	const uint8_t *fte = NULL;
 	struct handshake_state *hs = netdev->handshake;
-	bool is_rsn = hs->own_ie != NULL;
+	bool is_rsn;
 
 	l_debug("");
+
+	if (!netdev->connected) {
+		l_warn("Unexpected connection related event -- "
+				"is another supplicant running?");
+		return;
+	}
 
 	/*
 	 * During Fast Transition we use the authenticate event to start the
@@ -1649,6 +1659,8 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 			break;
 		}
 	}
+
+	is_rsn = hs->own_ie != NULL;
 
 	/*
 	 * In an RSN, check for an RSNE containing the PMK-R0-Name and
