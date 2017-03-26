@@ -12,6 +12,8 @@ import time
 from abc import ABCMeta, abstractmethod
 from enum import Enum
 
+import wiphy
+
 IWD_STORAGE_DIR =               '/var/lib/iwd'
 IWD_CONFIG_DIR =                '/etc/iwd'
 
@@ -521,8 +523,14 @@ class IWD(AsyncOpAbstract):
         if not start_iwd_daemon:
             return
 
+        iwd_wiphys = [wname for wname, wiphy in wiphy.wiphy_map.items()
+                      if any(intf for intf in wiphy.values()
+                             if intf.use == 'iwd')]
+        whitelist = ','.join(iwd_wiphys)
+
         import subprocess
-        iwd_proc = subprocess.Popen(['iwd', '-c', iwd_config_dir])
+        iwd_proc = subprocess.Popen(['iwd', '-c', iwd_config_dir, '-p',
+                                     whitelist])
 
         tries = 0
         while not self._bus.name_has_owner(IWD_SERVICE):
