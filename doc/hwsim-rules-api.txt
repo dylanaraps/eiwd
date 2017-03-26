@@ -2,7 +2,7 @@ RuleManager hierarchy
 =====================
 
 Service		net.connman.iwd.hwsim
-Interface	net.connman.iwd.hwsim.Manager [Experimental]
+Interface	net.connman.iwd.hwsim.RuleManager [Experimental]
 Object path	/
 
 Methods		object AddRule()
