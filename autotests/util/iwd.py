@@ -141,6 +141,7 @@ class DeviceState(Enum):
     disconnected =  'disconnected'
     connecting =    'connecting'
     disconnecting = 'disconnecting'
+    roaming =       'roaming'
 
     def __str__(self):
         return self.value
