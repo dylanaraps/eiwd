@@ -1,15 +1,25 @@
 #!/usr/bin/python3
-import os
+import os, os.path
+import wiphy
+
+hostapd_map = {ifname: intf for wname, wiphy in wiphy.wiphy_map.items()
+        for ifname, intf in wiphy.items() if intf.use == 'hostapd'}
 
 class HostapdCLI:
+    def __init__(self, interface):
+        self.ifname = interface.name
+        self.ctrl_interface = interface.ctrl_interface
 
-    @staticmethod
-    def wps_push_button():
-        os.system('hostapd_cli wps_pbc')
+        socket_path = os.path.dirname(self.ctrl_interface)
 
-    @staticmethod
-    def deauthenticate(client_address):
-        os.system('hostapd_cli deauthenticate ' + client_address)
+        self.cmdline = 'hostapd_cli -p"' + socket_path + '" -i"' + \
+                self.ifname + '"'
+
+    def wps_push_button(self):
+        os.system(self.cmdline + ' wps_pbc')
+
+    def deauthenticate(self, client_address):
+        os.system(self.cmdline + ' deauthenticate ' + client_address)
 
     @staticmethod
     def kill_all():

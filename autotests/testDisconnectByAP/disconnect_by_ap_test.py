@@ -10,6 +10,7 @@ from iwd import DeviceState
 from iwd import NetworkType
 
 from hostapd import HostapdCLI
+from hostapd import hostapd_map
 
 class Test(unittest.TestCase):
 
@@ -19,6 +20,9 @@ class Test(unittest.TestCase):
         devices = wd.list_devices();
         self.assertIsNotNone(devices)
         device = devices[0]
+
+        hostapd_if = list(hostapd_map.values())[0]
+        hostapd = HostapdCLI(hostapd_if)
 
         device.scan()
 
@@ -33,7 +37,7 @@ class Test(unittest.TestCase):
         condition = 'obj.state == DeviceState.connected'
         wd.wait_for_object_condition(device, condition)
 
-        HostapdCLI.deauthenticate(device.address)
+        hostapd.deauthenticate(device.address)
 
         condition = 'obj.state == DeviceState.connecting'
         wd.wait_for_object_condition(device, condition)

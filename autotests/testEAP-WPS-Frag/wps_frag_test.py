@@ -9,6 +9,7 @@ from iwd import IWD
 from iwd import DeviceState
 
 from hostapd import HostapdCLI
+from hostapd import hostapd_map
 
 class Test(unittest.TestCase):
 
@@ -32,7 +33,10 @@ class Test(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        HostapdCLI.wps_push_button()
+        cls.hostapd_if = list(hostapd_map.values())[0]
+        cls.hostapd = HostapdCLI(cls.hostapd_if)
+
+        cls.hostapd.wps_push_button()
 
     @classmethod
     def tearDownClass(cls):
