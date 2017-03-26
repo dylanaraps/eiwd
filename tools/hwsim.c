@@ -28,6 +28,8 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <linux/if_ether.h>
+#include <linux/rtnetlink.h>
+#include <net/if_arp.h>
 
 #include <ell/ell.h>
 
@@ -105,6 +107,7 @@ struct hwsim_rule {
 static struct l_genl *genl;
 static struct l_genl_family *hwsim;
 static struct l_genl_family *nl80211;
+static struct l_netlink *rtnl;
 
 static const char *options;
 static int exit_status;
@@ -927,6 +930,74 @@ static void nl80211_config_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 	case NL80211_CMD_DEL_INTERFACE:
 		del_interface_event(msg);
+		break;
+	}
+}
+
+static void rtnl_newlink_notify(const struct ifinfomsg *ifi, int bytes)
+{
+	struct rtattr *attr;
+	struct interface_info_rec *rec;
+	bool addr_change = false, name_change = false;
+	const char *path;
+
+	rec = l_queue_find(interface_info, interface_info_match_id,
+				L_UINT_TO_PTR(ifi->ifi_index));
+	if (!rec)
+		return;
+
+	for (attr = IFLA_RTA(ifi); RTA_OK(attr, bytes);
+			attr = RTA_NEXT(attr, bytes)) {
+		switch (attr->rta_type) {
+		case IFLA_IFNAME:
+			if (!strcmp(rec->name, RTA_DATA(attr)))
+				continue;
+
+			name_change = true;
+			l_free(rec->name);
+			rec->name = l_strdup(RTA_DATA(attr));
+			break;
+		case IFLA_ADDRESS:
+			if (RTA_PAYLOAD(attr) < ETH_ALEN)
+				break;
+
+			if (!memcmp(rec->addr, RTA_DATA(attr), ETH_ALEN))
+				continue;
+
+			addr_change = true;
+			memcpy(rec->addr, RTA_DATA(attr), ETH_ALEN);
+			break;
+		}
+	}
+
+	if (!addr_change && !name_change)
+		return;
+
+	path = interface_get_path(rec);
+
+	if (addr_change)
+		l_dbus_property_changed(dbus, path, HWSIM_INTERFACE_INTERFACE,
+					"Address");
+
+	if (name_change)
+		l_dbus_property_changed(dbus, path, HWSIM_INTERFACE_INTERFACE,
+					"Name");
+}
+
+static void rtnl_link_notify(uint16_t type, const void *data, uint32_t len,
+				void *user_data)
+{
+	const struct ifinfomsg *ifi = data;
+	unsigned int bytes;
+
+	if (ifi->ifi_type != ARPHRD_ETHER)
+		return;
+
+	bytes = len - NLMSG_ALIGN(sizeof(struct ifinfomsg));
+
+	switch (type) {
+	case RTM_NEWLINK:
+		rtnl_newlink_notify(ifi, bytes);
 		break;
 	}
 }
@@ -2022,6 +2093,18 @@ static void get_radio_done_initial(void *user_data)
 		goto error;
 	}
 
+	rtnl = l_netlink_new(NETLINK_ROUTE);
+	if (!rtnl) {
+		l_error("Failed to open route netlink socket");
+		goto error;
+	}
+
+	if (!l_netlink_register(rtnl, RTNLGRP_LINK,
+				rtnl_link_notify, NULL, NULL)) {
+		l_error("Failed to register for RTNL link notifications");
+		goto error;
+	}
+
 	return;
 
 error:
@@ -2312,6 +2395,8 @@ int main(int argc, char *argv[])
 	l_dbus_destroy(dbus);
 	hwsim_radio_cache_cleanup();
 	l_queue_destroy(rules, l_free);
+
+	l_netlink_destroy(rtnl);
 
 done:
 	l_signal_remove(signal);
