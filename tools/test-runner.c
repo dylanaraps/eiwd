@@ -90,6 +90,9 @@ struct wiphy {
 	unsigned int interface_index;
 	bool interface_created : 1;
 	bool used_by_hostapd : 1;
+	char *interface_name;
+	char *hostapd_ctrl_interface;
+	char *hostapd_config;
 };
 
 static bool path_exist(const char *path_name)
@@ -640,18 +643,15 @@ static void terminate_medium(pid_t medium_pid)
 
 #define HOSTAPD_CTRL_INTERFACE_PREFIX "/var/run/hostapd"
 
-static pid_t start_hostapd(const char *config_file, const char *interface_name)
+static pid_t start_hostapd(const char *config_file, const char *interface_name,
+				const char *ctrl_interface)
 {
 	char *argv[7];
-	char *ctrl_interface;
 	pid_t pid;
-
-	ctrl_interface = l_strdup_printf("%s/%s", HOSTAPD_CTRL_INTERFACE_PREFIX,
-								interface_name);
 
 	argv[0] = "hostapd";
 	argv[1] = "-g";
-	argv[2] = ctrl_interface;
+	argv[2] = (char *) ctrl_interface;
 	argv[3] = "-i";
 	argv[4] = (char *) interface_name;
 	argv[5] = (char *) config_file;
@@ -666,8 +666,6 @@ static pid_t start_hostapd(const char *config_file, const char *interface_name)
 		pid = -1;
 
 exit:
-	l_free(ctrl_interface);
-
 	return pid;
 }
 
@@ -814,7 +812,6 @@ error_exit:
 static bool configure_hw_radios(struct l_settings *hw_settings,
 						struct l_queue *wiphy_list)
 {
-	char interface_name[7];
 	char **radio_conf_list;
 	int i, num_radios_requested, num_radios_created;
 	bool status = false;
@@ -917,17 +914,18 @@ configure:
 
 		l_queue_push_head(wiphy_list, wiphy);
 
-		sprintf(interface_name, "%s%d", HW_INTERFACE_PREFIX,
+		wiphy->interface_name = l_strdup_printf("%s%d",
+							HW_INTERFACE_PREFIX,
 							num_radios_created);
-		if (!create_interface(interface_name, wiphy->name))
+		if (!create_interface(wiphy->interface_name, wiphy->name))
 			goto exit;
 
 		wiphy->interface_created = true;
 		wiphy->interface_index = num_radios_created;
-		l_info("Created interface %s on %s radio", interface_name,
-								wiphy->name);
+		l_info("Created interface %s on %s radio",
+			wiphy->interface_name, wiphy->name);
 
-		if (!set_interface_state(interface_name,
+		if (!set_interface_state(wiphy->interface_name,
 						HW_INTERFACE_STATE_UP))
 			goto exit;
 
@@ -946,22 +944,23 @@ static void wiphy_free(void *data)
 	struct wiphy *wiphy = data;
 
 	if (wiphy->interface_created) {
-		char *if_name;
+		set_interface_state(wiphy->interface_name,
+					HW_INTERFACE_STATE_DOWN);
 
-		if_name = l_strdup_printf("%s%d", HW_INTERFACE_PREFIX,
-							wiphy->interface_index);
-		set_interface_state(if_name, HW_INTERFACE_STATE_DOWN);
-
-		if (delete_interface(if_name))
-			l_debug("Removed interface %s", if_name);
+		if (delete_interface(wiphy->interface_name))
+			l_debug("Removed interface %s", wiphy->interface_name);
 		else
-			l_error("Failed to remove interface %s", if_name);
+			l_error("Failed to remove interface %s",
+				wiphy->interface_name);
 
-		l_free(if_name);
+		l_free(wiphy->interface_name);
 	}
 
 	destroy_hwsim_radio(wiphy->id);
 	l_debug("Removed radio id %d", wiphy->id);
+
+	l_free(wiphy->hostapd_config);
+	l_free(wiphy->hostapd_ctrl_interface);
 
 	l_free(wiphy);
 }
@@ -985,8 +984,8 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 	while (hostap_keys[i]) {
 		char hostapd_config_file_path[PATH_MAX];
 		const char *hostapd_config_file;
-		char *if_name = NULL;
 		const struct l_queue_entry *wiphy_entry;
+		struct wiphy *wiphy;
 
 		hostapd_config_file =
 			l_settings_get_value(hw_settings,
@@ -1009,24 +1008,34 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 		for (wiphy_entry = l_queue_get_entries(wiphy_list);
 					wiphy_entry;
 					wiphy_entry = wiphy_entry->next) {
-			struct wiphy *wiphy = wiphy_entry->data;
+			wiphy = wiphy_entry->data;
 
 			if (strcmp(wiphy->name, hostap_keys[i]))
 				continue;
 
+			if (wiphy->used_by_hostapd) {
+				l_error("Wiphy %s already used by hostapd",
+					wiphy->name);
+				return false;
+			}
+
 			wiphy->used_by_hostapd = true;
-			if_name = l_strdup_printf("%s%d", HW_INTERFACE_PREFIX,
-							wiphy->interface_index);
+			break;
 		}
 
-		if (!if_name) {
+		if (!wiphy_entry) {
 			l_error("Failed to find available interface.");
 			return false;
 		}
 
+		wiphy->hostapd_ctrl_interface =
+			l_strdup_printf("%s/%s", HOSTAPD_CTRL_INTERFACE_PREFIX,
+					wiphy->interface_name);
+		wiphy->hostapd_config = l_strdup(hostapd_config_file);
+
 		hostapd_pids_out[i] = start_hostapd(hostapd_config_file_path,
-								if_name);
-		l_free(if_name);
+						wiphy->interface_name,
+						wiphy->hostapd_ctrl_interface);
 
 		if (hostapd_pids_out[i] < 1)
 			return false;
@@ -1426,6 +1435,52 @@ static void set_config_cycle_info(const char *config_dir_path,
 	l_queue_push_tail(test_stats_queue, test_stats);
 }
 
+static void set_wiphy_list(struct l_queue *wiphy_list)
+{
+	const struct l_queue_entry *wiphy_entry;
+	int size = 32;
+	char *var;
+
+	for (wiphy_entry = l_queue_get_entries(wiphy_list);
+				wiphy_entry; wiphy_entry = wiphy_entry->next) {
+		struct wiphy *wiphy = wiphy_entry->data;
+
+		size += 32 + strlen(wiphy->name);
+		if (wiphy->interface_created)
+			size += 32 + strlen(wiphy->interface_name);
+		if (wiphy->used_by_hostapd) {
+			size += 32 + strlen(wiphy->hostapd_ctrl_interface) +
+				strlen(wiphy->hostapd_config);
+		}
+	}
+
+	var = alloca(size);
+	size = 0;
+
+	for (wiphy_entry = l_queue_get_entries(wiphy_list);
+				wiphy_entry; wiphy_entry = wiphy_entry->next) {
+		struct wiphy *wiphy = wiphy_entry->data;
+
+		if (size)
+			var[size++] = '\n';
+
+		size += sprintf(var + size, "%s=%s=", wiphy->name,
+				wiphy->interface_name);
+
+		if (wiphy->used_by_hostapd)
+			size += sprintf(var + size,
+					"hostapd,ctrl_interface=%s,config=%s",
+					wiphy->hostapd_ctrl_interface,
+					wiphy->hostapd_config);
+		else
+			size += sprintf(var + size, "iwd");
+	}
+
+	var[size++] = '\0';
+
+	setenv("TEST_WIPHY_LIST", var, true);
+}
+
 static void create_network_and_run_tests(const void *key, void *value,
 								void *data)
 {
@@ -1508,6 +1563,8 @@ static void create_network_and_run_tests(const void *key, void *value,
 		if (iwd_pid == -1)
 			goto exit_hostapd;
 	}
+
+	set_wiphy_list(wiphy_list);
 
 	run_py_tests(hw_settings, test_queue, test_stats_queue);
 
