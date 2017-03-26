@@ -1542,7 +1542,7 @@ static void setup_radio_interface(struct l_dbus_interface *interface)
 
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					radio_property_get_name, NULL);
-	l_dbus_interface_property(interface, "Addresses", 0, "s",
+	l_dbus_interface_property(interface, "Addresses", 0, "as",
 					radio_property_get_addresses, NULL);
 	l_dbus_interface_property(interface, "Channels", 0, "q",
 					radio_property_get_channels, NULL);
