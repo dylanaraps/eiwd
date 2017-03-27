@@ -982,7 +982,7 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 }
 
 static void scan_finished(struct scan_context *sc, uint32_t wiphy,
-				struct l_queue *bss_list)
+				int err, struct l_queue *bss_list)
 {
 	struct scan_request *sr;
 	scan_notify_func_t callback = NULL;
@@ -1014,13 +1014,9 @@ static void scan_finished(struct scan_context *sc, uint32_t wiphy,
 		sc->sp.triggered = false;
 	}
 
-	if (callback) {
-		if (!bss_list)
-			bss_list = l_queue_new();
-
-		new_owner = callback(wiphy, sc->ifindex,
+	if (callback)
+		new_owner = callback(wiphy, sc->ifindex, err,
 					bss_list, userdata);
-	}
 
 	if (destroy)
 		destroy(userdata);
@@ -1045,7 +1041,7 @@ static void get_scan_done(void *user)
 	sc = l_queue_find(scan_contexts, scan_context_match,
 					L_UINT_TO_PTR(results->ifindex));
 	if (sc)
-		scan_finished(sc, results->wiphy, results->bss_list);
+		scan_finished(sc, results->wiphy, 0, results->bss_list);
 	else
 		l_queue_destroy(results->bss_list,
 				(l_queue_destroy_func_t) scan_bss_free);
@@ -1173,7 +1169,7 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 
 	case NL80211_CMD_SCAN_ABORTED:
-		scan_finished(sc, attr_wiphy, NULL);
+		scan_finished(sc, attr_wiphy, -ECANCELED, NULL);
 
 		break;
 	}

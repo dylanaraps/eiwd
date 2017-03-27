@@ -316,13 +316,8 @@ void device_set_scan_results(struct device *device, struct l_queue *bss_list)
 	struct network *network;
 	const struct l_queue_entry *bss_entry;
 	struct timespec now;
-	struct l_dbus *dbus = dbus_get_bus();
 
 	clock_gettime(CLOCK_REALTIME, &now);
-
-	device->scanning = false;
-	l_dbus_property_changed(dbus, device_get_path(device),
-				IWD_DEVICE_INTERFACE, "Scanning");
 
 	device->old_bss_list = device->bss_list;
 	device->bss_list = bss_list;
@@ -367,12 +362,21 @@ void device_set_scan_results(struct device *device, struct l_queue *bss_list)
 		device_autoconnect_next(device);
 }
 
-static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex,
+static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 				struct l_queue *bss_list, void *userdata)
 {
 	struct device *device = userdata;
+	struct l_dbus *dbus = dbus_get_bus();
+
+	device->scanning = false;
+	l_dbus_property_changed(dbus, device_get_path(device),
+				IWD_DEVICE_INTERFACE, "Scanning");
+
+	if (err)
+		return false;
 
 	device_set_scan_results(device, bss_list);
+
 	return true;
 }
 
@@ -670,7 +674,7 @@ static void device_roam_scan_triggered(int err, void *user_data)
 }
 
 static bool device_roam_scan_notify(uint32_t wiphy_id, uint32_t ifindex,
-					struct l_queue *bss_list,
+					int err, struct l_queue *bss_list,
 					void *userdata)
 {
 	struct device *device = userdata;
@@ -684,6 +688,12 @@ static bool device_roam_scan_notify(uint32_t wiphy_id, uint32_t ifindex,
 	enum security orig_security, security;
 	struct timespec now;
 	bool seen = false;
+
+	if (err) {
+		device_roam_failed(device);
+
+		return false;
+	}
 
 	/*
 	 * Do not call device_set_scan_results because this may have been
