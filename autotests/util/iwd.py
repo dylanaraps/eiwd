@@ -94,10 +94,7 @@ class AsyncOpAbstract(object):
     def _wait_for_async_op(self):
         context = mainloop.get_context()
         while not self._is_completed:
-            if context.pending():
-                context.iteration()
-            else:
-                time.sleep(0.01)
+            context.iteration(may_block=True)
 
         self._is_completed = False
         if self._exception is not None:
@@ -578,18 +575,20 @@ class IWD(AsyncOpAbstract):
         return _known_network_manager_if
 
     def wait_for_object_condition(self, obj, condition_str, max_wait = 15):
-        start = time.time()
+        self._wait_timed_out = False
+        def wait_timeout_cb():
+            self._wait_timed_out = True
+            return False
+
+        timeout = GLib.timeout_add_seconds(max_wait, wait_timeout_cb)
         context = mainloop.get_context()
         while not eval(condition_str):
-            if context.pending():
-                context.iteration()
-            else:
-                now = time.time()
-                if (now - start) > max_wait:
-                    raise TimeoutError('[' + condition_str + ']'\
-                                       ' condition was not met in '\
-                                       + str(max_wait) + ' sec')
-                time.sleep(0.01)
+            context.iteration(may_block=True)
+            if self._wait_timed_out:
+                raise TimeoutError('[' + condition_str + ']'\
+                                   ' condition was not met in '\
+                                   + str(max_wait) + ' sec')
+        GLib.source_remove(timeout)
 
     @staticmethod
     def clear_storage():
