@@ -96,6 +96,9 @@ int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
 				void *user_data);
 int netdev_disconnect(struct netdev *netdev,
 				netdev_disconnect_cb_t cb, void *user_data);
+int netdev_reassociate(struct netdev *netdev, struct scan_bss *target_bss,
+				struct handshake_state *hs,
+				netdev_connect_cb_t cb);
 int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 				netdev_connect_cb_t cb);
 

@@ -1857,7 +1857,8 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 
 static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 						struct scan_bss *bss,
-						struct handshake_state *hs)
+						struct handshake_state *hs,
+						const uint8_t *prev_bssid)
 {
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
@@ -1873,6 +1874,10 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID,
 						bss->ssid_len, bss->ssid);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
+
+	if (prev_bssid)
+		l_genl_msg_append_attr(msg, NL80211_ATTR_PREV_BSSID, ETH_ALEN,
+						prev_bssid);
 
 	if (bss->capability & IE_BSS_CAP_PRIVACY)
 		l_genl_msg_append_attr(msg, NL80211_ATTR_PRIVACY, 0, NULL);
@@ -1979,7 +1984,7 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	if (netdev->connected)
 		return -EISCONN;
 
-	cmd_connect = netdev_build_cmd_connect(netdev, bss, hs);
+	cmd_connect = netdev_build_cmd_connect(netdev, bss, hs, NULL);
 	if (!cmd_connect)
 		return -EINVAL;
 
@@ -2008,7 +2013,7 @@ int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
 	if (netdev->connected)
 		return -EISCONN;
 
-	cmd_connect = netdev_build_cmd_connect(netdev, bss, hs);
+	cmd_connect = netdev_build_cmd_connect(netdev, bss, hs, NULL);
 	if (!cmd_connect)
 		return -EINVAL;
 
@@ -2075,6 +2080,63 @@ int netdev_disconnect(struct netdev *netdev,
 	netdev->user_data = user_data;
 
 	return 0;
+}
+
+int netdev_reassociate(struct netdev *netdev, struct scan_bss *target_bss,
+			struct handshake_state *hs, netdev_connect_cb_t cb)
+{
+	struct l_genl_msg *cmd_connect;
+	struct handshake_state *old_hs;
+	struct eapol_sm *sm = NULL, *old_sm;
+	bool is_rsn = hs->own_ie != NULL;
+	int err;
+
+	if (!netdev->operational)
+		return -ENOTCONN;
+
+	cmd_connect = netdev_build_cmd_connect(netdev, target_bss, hs,
+						netdev->handshake->aa);
+	if (!cmd_connect)
+		return -EINVAL;
+
+	if (is_rsn)
+		sm = eapol_sm_new(hs);
+
+	old_sm = netdev->sm;
+	old_hs = netdev->handshake;
+
+	err = netdev_connect_common(netdev, cmd_connect, target_bss, hs, sm,
+					netdev->event_filter, cb,
+					netdev->user_data);
+	if (err < 0)
+		return err;
+
+	memcpy(netdev->prev_bssid, old_hs->aa, ETH_ALEN);
+
+	netdev->operational = false;
+
+	/*
+	 * Cancel commands that could be running because of EAPoL activity
+	 * like re-keying, this way the callbacks for those commands don't
+	 * have to check if failures resulted from the transition.
+	 */
+	if (netdev->group_new_key_cmd_id) {
+		l_genl_family_cancel(nl80211, netdev->group_new_key_cmd_id);
+		netdev->group_new_key_cmd_id = 0;
+	}
+
+	if (netdev->group_management_new_key_cmd_id) {
+		l_genl_family_cancel(nl80211,
+			netdev->group_management_new_key_cmd_id);
+		netdev->group_management_new_key_cmd_id = 0;
+	}
+
+	if (old_sm)
+		eapol_sm_free(old_sm);
+
+	handshake_state_free(old_hs);
+
+	return err;
 }
 
 /*
