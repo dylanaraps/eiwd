@@ -27,6 +27,7 @@
 #include <ell/ell.h>
 
 #include "dbus-proxy.h"
+#include "display.h"
 
 #define IWD_SERVICE		"net.connman.iwd"
 #define IWD_ROOT_PATH		"/"
@@ -35,6 +36,24 @@ static struct l_dbus *dbus;
 
 static struct l_queue *proxy_interfaces;
 static struct l_queue *proxy_interface_types;
+
+static bool dbus_message_has_error(struct l_dbus_message *message)
+{
+	const char *name;
+	const char *text;
+
+	if (l_dbus_message_get_error(message, &name, &text)) {
+		display_error(text);
+		return true;
+	}
+
+	return false;
+}
+
+static void proxy_interface_create(const char *path,
+					struct l_dbus_message_iter *interfaces)
+{
+}
 
 static void interfaces_added_callback(struct l_dbus_message *message,
 								void *user_data)
@@ -49,6 +68,21 @@ static void interfaces_removed_callback(struct l_dbus_message *message,
 static void get_managed_objects_callback(struct l_dbus_message *message,
 								void *user_data)
 {
+	struct l_dbus_message_iter objects;
+	struct l_dbus_message_iter object;
+	const char *path;
+
+	if (dbus_message_has_error(message)) {
+		l_error("Failed to retrieve IWD dbus objects");
+
+		return;
+	}
+
+	l_dbus_message_get_arguments(message, "a{oa{sa{sv}}}", &objects);
+
+	while (l_dbus_message_iter_next_entry(&objects, &path, &object))
+		proxy_interface_create(path, &object);
+
 }
 
 static void service_appeared_callback(struct l_dbus *dbus, void *user_data)
