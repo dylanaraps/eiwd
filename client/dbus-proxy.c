@@ -43,10 +43,53 @@ static struct l_dbus *dbus;
 static struct l_queue *proxy_interfaces;
 static struct l_queue *proxy_interface_types;
 
+static void proxy_interface_property_set(struct proxy_interface *proxy,
+					const char *name,
+					struct l_dbus_message_iter *variant)
+{
+	size_t i;
+	const void *value;
+	const struct proxy_interface_property *property_table =
+							proxy->type->properties;
+
+	for (i = 0; property_table[i].name; i++) {
+		if (strcmp(property_table[i].name, name))
+			continue;
+
+		if (!property_table[i].set)
+			return;
+
+		if (variant)
+			l_dbus_message_iter_get_variant(variant,
+						property_table[i].type,
+						&value);
+		else
+			value = NULL;
+
+		property_table[i].set(proxy->data, value);
+
+		return;
+	}
+
+	l_debug("Unknown property name: %s for interface %s", name,
+							proxy->type->interface);
+}
+
 static void interface_update_properties(struct proxy_interface *proxy,
 					struct l_dbus_message_iter *changed,
 					struct l_dbus_message_iter *invalidated)
 {
+	const char *name;
+	struct l_dbus_message_iter variant;
+
+	while (l_dbus_message_iter_next_entry(changed, &name, &variant))
+		proxy_interface_property_set(proxy, name, &variant);
+
+	if (!invalidated)
+		return;
+
+	while (l_dbus_message_iter_next_entry(invalidated, &name))
+		proxy_interface_property_set(proxy, name, NULL);
 }
 
 static bool dbus_message_has_error(struct l_dbus_message *message)

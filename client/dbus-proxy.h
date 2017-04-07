@@ -22,6 +22,12 @@
 
 struct proxy_interface;
 
+struct proxy_interface_property {
+	const char *name;
+	const char *type;
+	void (*set)(void *data, const void *value);
+};
+
 struct proxy_interface_type_ops {
 	void *(*create)(void);
 	void (*destroy)(void *data);
@@ -29,6 +35,7 @@ struct proxy_interface_type_ops {
 
 struct proxy_interface_type {
 	const char *interface;
+	const struct proxy_interface_property *properties;
 	const struct proxy_interface_type_ops *ops;
 };
 
