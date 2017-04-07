@@ -43,6 +43,12 @@ static struct l_dbus *dbus;
 static struct l_queue *proxy_interfaces;
 static struct l_queue *proxy_interface_types;
 
+static void interface_update_properties(struct proxy_interface *proxy,
+					struct l_dbus_message_iter *changed,
+					struct l_dbus_message_iter *invalidated)
+{
+}
+
 static bool dbus_message_has_error(struct l_dbus_message *message)
 {
 	const char *name;
@@ -54,6 +60,14 @@ static bool dbus_message_has_error(struct l_dbus_message *message)
 	}
 
 	return false;
+}
+
+static bool interface_match_by_type_name(const void *a, const void *b)
+{
+	const struct proxy_interface_type *type = a;
+	const char *interface = b;
+
+	return !strcmp(type->interface, interface);
 }
 
 struct proxy_interface *proxy_interface_find(const char *interface,
@@ -80,14 +94,81 @@ struct proxy_interface *proxy_interface_find(const char *interface,
 	return NULL;
 }
 
+static void proxy_interface_bind_dependencies(const char *path)
+{
+}
+
 static void proxy_interface_unbind_dependencies(
 					const struct proxy_interface *proxy)
 {
 }
 
+static bool is_ignorable(const char *interface)
+{
+	size_t i;
+
+	static const struct {
+		const char *interface;
+	} interfaces_to_ignore[] = {
+		{ L_DBUS_INTERFACE_OBJECT_MANAGER },
+		{ L_DBUS_INTERFACE_INTROSPECTABLE },
+		{ }
+	};
+
+	for (i = 0; interfaces_to_ignore[i].interface; i++)
+		if (!strcmp(interfaces_to_ignore[i].interface, interface))
+			return true;
+
+	return false;
+}
+
 static void proxy_interface_create(const char *path,
 					struct l_dbus_message_iter *interfaces)
 {
+	const char *interface;
+	struct l_dbus_message_iter properties;
+	struct proxy_interface *proxy;
+	struct proxy_interface_type *interface_type;
+
+	if (!path)
+		return;
+
+	while (l_dbus_message_iter_next_entry(interfaces, &interface,
+								&properties)) {
+		interface_type = l_queue_find(proxy_interface_types,
+						interface_match_by_type_name,
+						interface);
+
+		if (!interface_type) {
+			if (!is_ignorable(interface))
+				l_debug("Unknown DBus interface type %s",
+								interface);
+
+			continue;
+		}
+
+		proxy = proxy_interface_find(interface_type->interface, path);
+
+		if (proxy) {
+			interface_update_properties(proxy, &properties, NULL);
+
+			continue;
+		}
+
+		proxy = l_new(struct proxy_interface, 1);
+		proxy->path = l_strdup(path);
+		proxy->type = interface_type;
+
+		if (interface_type->ops->create) {
+			proxy->data = interface_type->ops->create();
+
+			interface_update_properties(proxy, &properties, NULL);
+		}
+
+		l_queue_push_tail(proxy_interfaces, proxy);
+	}
+
+	proxy_interface_bind_dependencies(path);
 }
 
 static void interfaces_added_callback(struct l_dbus_message *message,

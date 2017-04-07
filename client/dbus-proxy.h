@@ -22,8 +22,13 @@
 
 struct proxy_interface;
 
+struct proxy_interface_type_ops {
+	void *(*create)(void);
+};
+
 struct proxy_interface_type {
 	const char *interface;
+	const struct proxy_interface_type_ops *ops;
 };
 
 struct proxy_interface *proxy_interface_find(const char *interface,
