@@ -32,6 +32,12 @@
 #define IWD_SERVICE		"net.connman.iwd"
 #define IWD_ROOT_PATH		"/"
 
+struct proxy_interface {
+	void *data;
+	char *path;
+	const struct proxy_interface_type *type;
+};
+
 static struct l_dbus *dbus;
 
 static struct l_queue *proxy_interfaces;
@@ -50,6 +56,35 @@ static bool dbus_message_has_error(struct l_dbus_message *message)
 	return false;
 }
 
+struct proxy_interface *proxy_interface_find(const char *interface,
+							const char *path)
+{
+	const struct l_queue_entry *entry;
+
+	if (!interface || !path)
+		return NULL;
+
+	for (entry = l_queue_get_entries(proxy_interfaces); entry;
+							entry = entry->next) {
+		struct proxy_interface *proxy = entry->data;
+
+		if (strcmp(proxy->path, path))
+			continue;
+
+		if (strcmp(proxy->type->interface, interface))
+			continue;
+
+		return proxy;
+	}
+
+	return NULL;
+}
+
+static void proxy_interface_unbind_dependencies(
+					const struct proxy_interface *proxy)
+{
+}
+
 static void proxy_interface_create(const char *path,
 					struct l_dbus_message_iter *interfaces)
 {
@@ -58,11 +93,40 @@ static void proxy_interface_create(const char *path,
 static void interfaces_added_callback(struct l_dbus_message *message,
 								void *user_data)
 {
+	const char *path;
+	struct l_dbus_message_iter object;
+
+	if (dbus_message_has_error(message))
+		return;
+
+	l_dbus_message_get_arguments(message, "oa{sa{sv}}", &path, &object);
+
+	proxy_interface_create(path, &object);
 }
 
 static void interfaces_removed_callback(struct l_dbus_message *message,
 								void *user_data)
 {
+	const char *interface;
+	const char *path;
+	struct l_dbus_message_iter interfaces;
+	struct proxy_interface *proxy;
+
+	if (dbus_message_has_error(message))
+		return;
+
+	l_dbus_message_get_arguments(message, "oas", &path, &interfaces);
+
+	while (l_dbus_message_iter_next_entry(&interfaces, &interface)) {
+		proxy = proxy_interface_find(interface, path);
+
+		if (!proxy)
+			continue;
+
+		proxy_interface_unbind_dependencies(proxy);
+
+		l_queue_remove(proxy_interfaces, proxy);
+	}
 }
 
 static void get_managed_objects_callback(struct l_dbus_message *message,

@@ -20,5 +20,14 @@
  *
  */
 
+struct proxy_interface;
+
+struct proxy_interface_type {
+	const char *interface;
+};
+
+struct proxy_interface *proxy_interface_find(const char *interface,
+							const char *path);
+
 bool dbus_proxy_init(void);
 bool dbus_proxy_exit(void);
