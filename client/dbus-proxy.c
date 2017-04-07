@@ -273,6 +273,8 @@ static void service_disappeared_callback(struct l_dbus *dbus,
 
 static void dbus_disconnect_callback(void *user_data)
 {
+	display("D-Bus disconnected, quitting...\n");
+
 	l_main_quit();
 }
 
