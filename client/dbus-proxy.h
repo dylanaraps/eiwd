@@ -24,6 +24,7 @@ struct proxy_interface;
 
 struct proxy_interface_type_ops {
 	void *(*create)(void);
+	void (*destroy)(void *data);
 };
 
 struct proxy_interface_type {

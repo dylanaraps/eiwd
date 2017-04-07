@@ -171,6 +171,20 @@ static void proxy_interface_create(const char *path,
 	proxy_interface_bind_dependencies(path);
 }
 
+static void proxy_interface_destroy(void *data)
+{
+	struct proxy_interface *proxy = data;
+
+	l_free(proxy->path);
+
+	if (proxy->type->ops->destroy)
+		proxy->type->ops->destroy(proxy->data);
+
+	proxy->type = NULL;
+
+	l_free(proxy);
+}
+
 static void interfaces_added_callback(struct l_dbus_message *message,
 								void *user_data)
 {
@@ -252,15 +266,14 @@ static void service_appeared_callback(struct l_dbus *dbus, void *user_data)
 static void service_disappeared_callback(struct l_dbus *dbus,
 							void *user_data)
 {
+	l_queue_clear(proxy_interfaces, proxy_interface_destroy);
+
+	display_disable_cmd_prompt();
 }
 
 static void dbus_disconnect_callback(void *user_data)
 {
 	l_main_quit();
-}
-
-static void proxy_interface_destroy(void *data)
-{
 }
 
 bool dbus_proxy_init(void)
