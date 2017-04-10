@@ -321,6 +321,18 @@ static void dbus_disconnect_callback(void *user_data)
 	l_main_quit();
 }
 
+void proxy_interface_type_register(
+			const struct proxy_interface_type *interface_type)
+{
+	l_queue_push_tail(proxy_interface_types, (void *) interface_type);
+}
+
+void proxy_interface_type_unregister(
+			const struct proxy_interface_type *interface_type)
+{
+	l_queue_remove(proxy_interface_types, (void *) interface_type);
+}
+
 bool dbus_proxy_init(void)
 {
 	if (dbus)

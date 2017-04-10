@@ -42,5 +42,10 @@ struct proxy_interface_type {
 struct proxy_interface *proxy_interface_find(const char *interface,
 							const char *path);
 
+void proxy_interface_type_register(
+			const struct proxy_interface_type *interface_type);
+void proxy_interface_type_unregister(
+			const struct proxy_interface_type *interface_type);
+
 bool dbus_proxy_init(void);
 bool dbus_proxy_exit(void);
