@@ -31,6 +31,10 @@ struct proxy_interface_property {
 struct proxy_interface_type_ops {
 	void *(*create)(void);
 	void (*destroy)(void *data);
+	bool (*bind_interface)(const struct proxy_interface *proxy,
+				const struct proxy_interface *dependency);
+	bool (*unbind_interface)(const struct proxy_interface *proxy,
+				const struct proxy_interface *dependency);
 };
 
 struct proxy_interface_type {

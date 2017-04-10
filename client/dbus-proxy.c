@@ -137,13 +137,101 @@ struct proxy_interface *proxy_interface_find(const char *interface,
 	return NULL;
 }
 
+static struct l_queue *proxy_interface_find_by_path(const char *path)
+{
+	const struct l_queue_entry *entry;
+	struct l_queue *match = NULL;
+
+	for (entry = l_queue_get_entries(proxy_interfaces); entry;
+							entry = entry->next) {
+		struct proxy_interface *proxy = entry->data;
+
+		if (!strcmp(proxy->path, path)) {
+			if (!match)
+				match = l_queue_new();
+
+			l_queue_push_tail(match, proxy);
+		}
+	}
+
+	return match;
+}
+
 static void proxy_interface_bind_dependencies(const char *path)
 {
+	const struct l_queue_entry *entry;
+	const struct l_queue_entry *inner_entry;
+	struct l_queue *match = proxy_interface_find_by_path(path);
+
+	if (l_queue_length(match) < 2)
+		goto done;
+
+	for (entry = l_queue_get_entries(match); entry; entry = entry->next) {
+		struct proxy_interface *proxy = entry->data;
+
+		if (!proxy->type->ops || !proxy->type->ops->bind_interface)
+			continue;
+
+		for (inner_entry = l_queue_get_entries(match); inner_entry;
+					inner_entry = inner_entry->next) {
+			char *error;
+			struct proxy_interface *dependency = inner_entry->data;
+
+			if (!strcmp(proxy->type->interface,
+						dependency->type->interface))
+				continue;
+
+			if (proxy->type->ops->bind_interface(proxy,
+								dependency))
+				continue;
+
+			error = l_strdup_printf("Interface %s does not support "
+						"dependency %s\n",
+						proxy->type->interface,
+						dependency->type->interface);
+			display_error(error);
+			l_free(error);
+		}
+	}
+
+done:
+	l_queue_destroy(match, NULL);
 }
 
 static void proxy_interface_unbind_dependencies(
 					const struct proxy_interface *proxy)
 {
+	const struct l_queue_entry *entry;
+	struct l_queue *match = proxy_interface_find_by_path(proxy->path);
+
+	if (l_queue_length(match) < 2)
+		goto done;
+
+	for (entry = l_queue_get_entries(match); entry; entry = entry->next) {
+		struct proxy_interface *dependency = entry->data;
+		char *error;
+
+		if (!strcmp(proxy->type->interface,
+						dependency->type->interface))
+			continue;
+
+		if (!dependency->type->ops ||
+				!dependency->type->ops->unbind_interface)
+			continue;
+
+		if (dependency->type->ops->unbind_interface(proxy, dependency))
+			continue;
+
+		error = l_strdup_printf("Interface %s does not support "
+					"dependency %s\n",
+					proxy->type->interface,
+					dependency->type->interface);
+		display_error(error);
+		l_free(error);
+	}
+
+done:
+	l_queue_destroy(match, NULL);
 }
 
 static bool is_ignorable(const char *interface)
