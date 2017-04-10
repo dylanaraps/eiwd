@@ -224,7 +224,7 @@ static void ie_test_writer(const void *data)
 	ie_tlv_builder_finalize(&builder, &builder_len);
 
 	assert(final_len == builder_len);
-	assert(expected_len = final_len);
+	assert(expected_len == final_len);
 	assert(ie_count == test->num_ie);
 
 	str = l_util_hexstring(test->buf, final_len);
