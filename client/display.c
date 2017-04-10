@@ -176,6 +176,13 @@ void display_disable_cmd_prompt(void)
 	rl_crlf();
 }
 
+void display_quit(void)
+{
+	rl_insert_text("quit");
+	rl_redisplay();
+	rl_crlf();
+}
+
 void display_init(void)
 {
 	memset(&dashed_line, '-', sizeof(dashed_line) - 1);

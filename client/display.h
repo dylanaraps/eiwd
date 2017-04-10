@@ -37,5 +37,7 @@ void display_error(const char *error);
 void display_enable_cmd_prompt(void);
 void display_disable_cmd_prompt(void);
 
+void display_quit(void);
+
 void display_init(void);
 void display_exit(void);
