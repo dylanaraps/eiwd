@@ -20,5 +20,12 @@
  *
  */
 
+struct command_family {
+	const char *name;
+};
+
+void command_family_register(const struct command_family *family);
+void command_family_unregister(const struct command_family *family);
+
 void command_init(void);
 void command_exit(void);

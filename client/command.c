@@ -30,6 +30,16 @@
 
 static struct l_queue *command_families;
 
+void command_family_register(const struct command_family *family)
+{
+	l_queue_push_tail(command_families, (void *) family);
+}
+
+void command_family_unregister(const struct command_family *family)
+{
+	l_queue_remove(command_families, (void *) family);
+}
+
 void command_init(void)
 {
 	command_families = l_queue_new();
