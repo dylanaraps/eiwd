@@ -77,6 +77,22 @@ static void restore_input(struct saved_input *input)
 	l_free(input);
 }
 
+void display_refresh_timeout_set(void)
+{
+
+}
+
+void display_refresh_reset(void)
+{
+
+}
+
+void display_refresh_set_cmd(const char *family, const char *entity,
+					const struct command *cmd, char *args)
+{
+
+}
+
 static void display_text(const char *text)
 {
 	struct saved_input *input = save_input();

@@ -40,6 +40,11 @@ void display_command(const struct command_family *family, const char *cmd_name);
 void display_command_line(const char *command_family,
 						const struct command *cmd);
 
+void display_refresh_timeout_set(void);
+void display_refresh_reset(void);
+void display_refresh_set_cmd(const char *family, const char *entity,
+					const struct command *cmd, char *args);
+
 void display_enable_cmd_prompt(void);
 void display_disable_cmd_prompt(void);
 
