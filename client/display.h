@@ -20,6 +20,9 @@
  *
  */
 
+struct command;
+struct command_family;
+
 #define COLOR_BOLDGRAY	"\x1B[1;30m"
 #define COLOR_GRAY	"\x1b[37m"
 #define COLOR_GREEN	"\x1b[32m"
@@ -33,6 +36,9 @@ void display(const char *format, ...);
 void display_table_header(const char *caption, const char *fmt, ...);
 void display_table_footer(void);
 void display_error(const char *error);
+void display_command(const struct command_family *family, const char *cmd_name);
+void display_command_line(const char *command_family,
+						const struct command *cmd);
 
 void display_enable_cmd_prompt(void);
 void display_disable_cmd_prompt(void);

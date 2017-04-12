@@ -29,6 +29,7 @@
 #include <readline/readline.h>
 #include <stdio.h>
 
+#include "command.h"
 #include "display.h"
 
 #define IWD_PROMPT COLOR_GREEN "[iwd]" COLOR_OFF "# "
@@ -141,6 +142,37 @@ void display_table_header(const char *caption, const char *fmt, ...)
 void display_table_footer(void)
 {
 	display_text("\n");
+}
+
+void display_command_line(const char *command_family,
+						const struct command *cmd)
+{
+	char *cmd_line = l_strdup_printf("%s%s%s%s%s %s",
+				command_family ? : "",
+				command_family ? " " : "",
+				cmd->entity ? : "",
+				cmd->entity  ? " " : "",
+				cmd->cmd,
+				cmd->arg ? : "",
+				cmd->arg ? " " : "");
+
+	display(MARGIN "%-*s%s\n", 50, cmd_line, cmd->desc ? : "");
+
+	l_free(cmd_line);
+}
+
+void display_command(const struct command_family *family, const char *cmd_name)
+{
+	size_t i;
+
+	for (i = 0; family->command_list[i].cmd; i++) {
+		if (!strcmp(family->command_list[i].cmd, cmd_name)) {
+			display_command_line(family->name,
+						&family->command_list[i]);
+
+			return;
+		}
+	}
 }
 
 static void readline_callback(char *prompt)
