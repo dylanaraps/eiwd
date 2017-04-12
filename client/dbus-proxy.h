@@ -22,6 +22,12 @@
 
 struct proxy_interface;
 
+#define IWD_ADAPTER_INTERFACE	     "net.connman.iwd.Adapter"
+#define IWD_DEVICE_INTERFACE	     "net.connman.iwd.Device"
+#define IWD_KNOWN_NETWORKS_INTREFACE "net.connman.iwd.KnownNetworks"
+#define IWD_NETWORK_INTERFACE	     "net.connman.iwd.Network"
+#define IWD_WSC_INTERFACE	     "net.connman.iwd.WiFiSimpleConfiguration"
+
 struct proxy_interface_property {
 	const char *name;
 	const char *type;
