@@ -20,9 +20,22 @@
  *
  */
 
+typedef char *(*command_completion_func_t) (const char *text, int state);
+
+struct command {
+	const char *entity;
+	const char *cmd;
+	const char *arg;
+	void (*function)(const char *entity, char *arg);
+	const char *desc;
+};
+
 struct command_family {
 	const char *name;
+	const struct command *command_list;
 };
+
+void command_process_prompt(char *prompt);
 
 void command_family_register(const struct command_family *family);
 void command_family_unregister(const struct command_family *family);

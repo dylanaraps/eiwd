@@ -27,8 +27,79 @@
 #include <ell/ell.h>
 
 #include "command.h"
+#include "display.h"
 
 static struct l_queue *command_families;
+
+static void cmd_version(const char *entity, char *arg)
+{
+	display("IWD version %s\n", VERSION);
+}
+
+static void cmd_quit(const char *entity, char *arg)
+{
+	display_quit();
+
+	l_main_quit();
+}
+
+static const struct command command_list[] = {
+	{ NULL, "version", NULL, cmd_version, "Display version" },
+	{ NULL, "quit",    NULL, cmd_quit,    "Quit program" },
+	{ NULL, "exit",    NULL, cmd_quit },
+	{ NULL, "help" },
+	{ }
+};
+
+static bool match_cmd(const char *family, const char *entity, const char *cmd,
+				char *args, const struct command *command_list)
+{
+	return false;
+}
+
+static bool match_cmd_family(const char *cmd_family, char *arg)
+{
+	return false;
+}
+
+static void list_commands(const char *command_family,
+						const struct command *cmd_list)
+{
+}
+
+static void list_cmd_families(void)
+{
+}
+
+void command_process_prompt(char *prompt)
+{
+	const char *cmd;
+	char *arg = NULL;
+
+	cmd = strtok_r(prompt, " ", &arg);
+	if (!cmd)
+		return;
+
+	if (match_cmd_family(cmd, arg))
+		return;
+
+	if (match_cmd(NULL, NULL, cmd, arg, command_list))
+		return;
+
+	if (strcmp(cmd, "help")) {
+		display("Invalid command\n");
+		return;
+	}
+
+	display_table_header("Available commands", MARGIN "%-*s%-*s",
+					50, "Commands", 28, "Description");
+
+	list_cmd_families();
+
+	display("\n");
+
+	list_commands(NULL, command_list);
+}
 
 void command_family_register(const struct command_family *family)
 {
