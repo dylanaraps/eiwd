@@ -26,6 +26,7 @@
 
 #include <ell/ell.h>
 
+#include "command.h"
 #include "display.h"
 #include "dbus-proxy.h"
 
@@ -58,6 +59,7 @@ int main(int argc, char *argv[])
 
 	l_log_set_stderr();
 
+	command_init();
 	display_init();
 	dbus_proxy_init();
 
@@ -67,6 +69,7 @@ int main(int argc, char *argv[])
 
 	dbus_proxy_exit();
 	display_exit();
+	command_exit();
 
 	l_signal_remove(signal);
 
