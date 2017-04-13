@@ -28,9 +28,11 @@ struct command {
 	const char *arg;
 	void (*function)(const char *entity, char *arg);
 	const char *desc;
+	const bool refreshable;
 };
 
 struct command_family {
+	const char *caption;
 	const char *name;
 	const struct command *command_list;
 };

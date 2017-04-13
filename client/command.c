@@ -51,24 +51,98 @@ static const struct command command_list[] = {
 	{ }
 };
 
+static void execute_cmd(const char *family, const char *entity,
+					const struct command *cmd, char *args)
+{
+	display_refresh_set_cmd(family, entity, cmd, args);
+
+	cmd->function(entity, args);
+
+	if (cmd->refreshable)
+		display_refresh_timeout_set();
+}
+
 static bool match_cmd(const char *family, const char *entity, const char *cmd,
 				char *args, const struct command *command_list)
 {
+	size_t i;
+
+	for (i = 0; command_list[i].cmd; i++) {
+		if (strcmp(command_list[i].cmd, cmd))
+			continue;
+
+		if (!command_list[i].function)
+			goto nomatch;
+
+		execute_cmd(family, entity, &command_list[i], args);
+
+		return true;
+	}
+
+nomatch:
 	return false;
 }
 
 static bool match_cmd_family(const char *cmd_family, char *arg)
 {
+	const struct l_queue_entry *entry;
+	const char *arg1;
+	const char *arg2;
+
+	for (entry = l_queue_get_entries(command_families); entry;
+							entry = entry->next) {
+		const struct command_family *family = entry->data;
+
+		if (strcmp(family->name, cmd_family))
+			continue;
+
+		arg1 = strtok_r(NULL, " ", &arg);
+		if (!arg1)
+			goto nomatch;
+
+		if (match_cmd(family->name, NULL, arg1, arg,
+							family->command_list))
+			return true;
+
+		arg2 = strtok_r(NULL, " ", &arg);
+		if (!arg2)
+			goto nomatch;
+
+		if (!match_cmd(family->name, arg1, arg2, arg,
+							family->command_list))
+			goto nomatch;
+
+		return true;
+	}
+
+nomatch:
 	return false;
 }
 
 static void list_commands(const char *command_family,
 						const struct command *cmd_list)
 {
+	size_t i;
+
+	for (i = 0; cmd_list[i].cmd; i++) {
+		if (!cmd_list[i].desc)
+			continue;
+
+		display_command_line(command_family, &cmd_list[i]);
+	}
 }
 
 static void list_cmd_families(void)
 {
+	const struct l_queue_entry *entry;
+
+	for (entry = l_queue_get_entries(command_families); entry;
+							entry = entry->next) {
+		const struct command_family *family = entry->data;
+
+		display("\n%s:\n", family->caption);
+		list_commands(family->name, family->command_list);
+	}
 }
 
 void command_process_prompt(char *prompt)
@@ -82,6 +156,8 @@ void command_process_prompt(char *prompt)
 
 	if (match_cmd_family(cmd, arg))
 		return;
+
+	display_refresh_reset();
 
 	if (match_cmd(NULL, NULL, cmd, arg, command_list))
 		return;
