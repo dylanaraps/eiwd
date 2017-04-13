@@ -89,6 +89,7 @@ client_iwctl_SOURCES = client/main.c \
 			readline/readline.h readline/history.h \
 			client/command.h client/command.c \
 			client/dbus-proxy.h client/dbus-proxy.c \
+			client/device.h client/device.c \
 			client/display.h client/display.c
 client_iwctl_LDADD = ell/libell-internal.la -lreadline
 
