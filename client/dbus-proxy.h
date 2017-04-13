@@ -20,6 +20,8 @@
  *
  */
 
+#include <stdio.h>
+
 struct proxy_interface;
 
 #define IWD_ADAPTER_INTERFACE          "net.connman.iwd.Adapter"
@@ -56,6 +58,18 @@ void proxy_interface_type_register(
 			const struct proxy_interface_type *interface_type);
 void proxy_interface_type_unregister(
 			const struct proxy_interface_type *interface_type);
+
+struct interface_type_desc {
+	const char *interface;
+	int (*init)(void);
+	void (*exit)(void);
+} __attribute__((aligned(8)));
+
+#define INTERFACE_TYPE(interface, init, exit)				\
+	static struct interface_type_desc __interface_type_ ## interface\
+		__attribute__((used, section("__interface"), aligned(8))) = {\
+			#interface, init, exit				\
+		};							\
 
 bool dbus_proxy_init(void);
 bool dbus_proxy_exit(void);

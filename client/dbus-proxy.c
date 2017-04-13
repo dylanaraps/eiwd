@@ -24,6 +24,7 @@
 #include <config.h>
 #endif
 
+#include <stdio.h>
 #include <ell/ell.h>
 
 #include "dbus-proxy.h"
@@ -421,8 +422,13 @@ void proxy_interface_type_unregister(
 	l_queue_remove(proxy_interface_types, (void *) interface_type);
 }
 
+extern struct interface_type_desc __start___interface[];
+extern struct interface_type_desc __stop___interface[];
+
 bool dbus_proxy_init(void)
 {
+	struct interface_type_desc *desc;
+
 	if (dbus)
 		return true;
 
@@ -432,6 +438,16 @@ bool dbus_proxy_init(void)
 
 	proxy_interface_types = l_queue_new();
 	proxy_interfaces = l_queue_new();
+
+	if (__start___interface == NULL || __stop___interface == NULL)
+		return false;
+
+	for (desc = __start___interface; desc < __stop___interface; desc++) {
+		if (!desc->init)
+			continue;
+
+		desc->init();
+	}
 
 	l_dbus_set_disconnect_handler(dbus, dbus_disconnect_callback, NULL,
 									NULL);
@@ -445,6 +461,18 @@ bool dbus_proxy_init(void)
 
 bool dbus_proxy_exit(void)
 {
+	struct interface_type_desc *desc;
+
+	if (__start___interface == NULL || __stop___interface == NULL)
+		return false;
+
+	for (desc = __start___interface; desc < __stop___interface; desc++) {
+		if (!desc->exit)
+			continue;
+
+		desc->exit();
+	}
+
 	l_queue_destroy(proxy_interface_types, NULL);
 	proxy_interface_types = NULL;
 
