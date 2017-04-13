@@ -24,6 +24,7 @@
 #include <config.h>
 #endif
 
+#include <stdio.h>
 #include <ell/ell.h>
 
 #include "command.h"
@@ -187,13 +188,40 @@ void command_family_unregister(const struct command_family *family)
 	l_queue_remove(command_families, (void *) family);
 }
 
+extern struct command_family_desc __start___command[];
+extern struct command_family_desc __stop___command[];
+
 void command_init(void)
 {
+	struct command_family_desc *desc;
+
 	command_families = l_queue_new();
+
+	if (__start___command == NULL || __stop___command == NULL)
+		return;
+
+	for (desc = __start___command; desc < __stop___command; desc++) {
+		if (!desc->init)
+			continue;
+
+		desc->init();
+	}
 }
 
 void command_exit(void)
 {
+	struct command_family_desc *desc;
+
+	if (__start___command == NULL || __stop___command == NULL)
+		return;
+
+	for (desc = __start___command; desc < __stop___command; desc++) {
+		if (!desc->exit)
+			continue;
+
+		desc->exit();
+	}
+
 	l_queue_destroy(command_families, NULL);
 	command_families = NULL;
 }

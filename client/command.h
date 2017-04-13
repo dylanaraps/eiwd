@@ -42,5 +42,17 @@ void command_process_prompt(char *prompt);
 void command_family_register(const struct command_family *family);
 void command_family_unregister(const struct command_family *family);
 
+struct command_family_desc {
+	const char *name;
+	int (*init)(void);
+	void (*exit)(void);
+} __attribute__((aligned(8)));
+
+#define COMMAND_FAMILY(name, init, exit)				\
+	static struct command_family_desc __command_family_ ## name	\
+		__attribute__((used, section("__command"), aligned(8))) = {\
+			#name, init, exit				\
+		};							\
+
 void command_init(void);
 void command_exit(void);
