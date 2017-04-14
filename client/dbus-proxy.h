@@ -34,6 +34,8 @@ struct proxy_interface_property {
 	const char *name;
 	const char *type;
 	void (*set)(void *data, const void *value);
+	const void *(*get)(const void *data);
+	const bool is_read_write;
 };
 
 struct proxy_interface_type_ops {
