@@ -317,6 +317,25 @@ static void proxy_interface_destroy(void *data)
 	l_free(proxy);
 }
 
+void *proxy_interface_get_data(const struct proxy_interface *proxy)
+{
+	return proxy->data;
+}
+
+const char *proxy_interface_get_interface(const struct proxy_interface *proxy)
+{
+	return proxy->type->interface;
+}
+
+const char *proxy_interface_get_identity_str(
+					const struct proxy_interface *proxy)
+{
+	if (proxy->type->ops && proxy->type->ops->identity)
+		return proxy->type->ops->identity(proxy->data);
+
+	return NULL;
+}
+
 static void interfaces_added_callback(struct l_dbus_message *message,
 								void *user_data)
 {

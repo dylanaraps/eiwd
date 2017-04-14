@@ -45,6 +45,8 @@ struct proxy_interface_type_ops {
 				const struct proxy_interface *dependency);
 	bool (*unbind_interface)(const struct proxy_interface *proxy,
 				const struct proxy_interface *dependency);
+	const char *(*identity)(void *data);
+	void (*display)(const char *margin, const void *data);
 };
 
 struct proxy_interface_type {
@@ -55,6 +57,11 @@ struct proxy_interface_type {
 
 struct proxy_interface *proxy_interface_find(const char *interface,
 							const char *path);
+
+void *proxy_interface_get_data(const struct proxy_interface *proxy);
+const char *proxy_interface_get_interface(const struct proxy_interface *proxy);
+const char *proxy_interface_get_identity_str(
+					const struct proxy_interface *proxy);
 
 void proxy_interface_type_register(
 			const struct proxy_interface_type *interface_type);
