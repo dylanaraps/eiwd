@@ -4160,7 +4160,7 @@ static void genl_ctrl(struct nlmon *nlmon, const void *data, uint32_t len)
 	const struct genlmsghdr *genlmsg = data;
 	const struct nlattr *nla;
 	char name[GENL_NAMSIZ];
-	uint16_t id = GENL_ID_GENERATE;
+	uint16_t id = 0;
 
 	if (genlmsg->cmd != CTRL_CMD_NEWFAMILY)
 		return;
@@ -4177,7 +4177,7 @@ static void genl_ctrl(struct nlmon *nlmon, const void *data, uint32_t len)
 		}
 	}
 
-	if (id == GENL_ID_GENERATE)
+	if (id == 0)
 		return;
 
 	if (!strcmp(name, NL80211_GENL_NAME))

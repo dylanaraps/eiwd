@@ -78,7 +78,7 @@ static void genl_parse(uint16_t type, const void *data, uint32_t len,
 	const struct genlmsghdr *genlmsg = data;
 	const struct nlattr *nla;
 	char name[GENL_NAMSIZ];
-	uint16_t id = GENL_ID_GENERATE;
+	uint16_t id = 0;
 
 	if (nlmon)
 		return;
@@ -101,7 +101,7 @@ static void genl_parse(uint16_t type, const void *data, uint32_t len,
 		}
 	}
 
-	if (id == GENL_ID_GENERATE)
+	if (id == 0)
 		return;
 
 	if (!strcmp(name, NL80211_GENL_NAME)) {
@@ -695,7 +695,7 @@ int main(int argc, char *argv[])
 	const char *analyze_path = NULL;
 	const char *ifname = NULL;
 	struct iwmon_interface monitor_interface = { };
-	uint16_t nl80211_family = GENL_ID_GENERATE;
+	uint16_t nl80211_family = 0;
 	struct l_signal *signal;
 	sigset_t mask;
 	int exit_status;
@@ -733,7 +733,7 @@ int main(int argc, char *argv[])
 				}
 				nl80211_family = strtoul(optarg, NULL, 10);
 			}
-			if (nl80211_family == GENL_ID_GENERATE) {
+			if (nl80211_family == 0) {
 				usage();
 				return EXIT_FAILURE;
 			}
