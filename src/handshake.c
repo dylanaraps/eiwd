@@ -525,6 +525,21 @@ const uint8_t *handshake_util_find_igtk_kde(const uint8_t *data,
 	return find_kde(data, data_len, out_igtk_len, igtk_oui);
 }
 
+const uint8_t *handshake_util_find_pmkid_kde(const uint8_t *data,
+						size_t data_len)
+{
+	static const unsigned char pmkid_oui[] = { 0x00, 0x0f, 0xac, 0x04 };
+	const uint8_t *pmkid;
+	size_t pmkid_len;
+
+	pmkid = find_kde(data, data_len, &pmkid_len, pmkid_oui);
+
+	if (pmkid_len != 16)
+		return NULL;
+
+	return pmkid;
+}
+
 /*
  * Unwrap a GTK / IGTK included in an FTE following 802.11-2012, Section 12.8.5:
  *

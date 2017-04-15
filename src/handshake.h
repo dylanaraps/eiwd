@@ -142,3 +142,5 @@ const uint8_t *handshake_util_find_gtk_kde(const uint8_t *data, size_t data_len,
 					size_t *out_gtk_len);
 const uint8_t *handshake_util_find_igtk_kde(const uint8_t *data,
 					size_t data_len, size_t *out_igtk_len);
+const uint8_t *handshake_util_find_pmkid_kde(const uint8_t *data,
+					size_t data_len);
