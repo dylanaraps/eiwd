@@ -360,6 +360,31 @@ void handshake_state_override_pairwise_cipher(struct handshake_state *s,
 	s->pairwise_cipher = pairwise;
 }
 
+bool handshake_state_get_pmkid(struct handshake_state *s, uint8_t *out_pmkid)
+{
+	bool use_sha256;
+
+	if (!s->have_pmk)
+		return false;
+
+	/*
+	 * Note 802.11 section 11.6.1.3:
+	 * "When the PMKID is calculated for the PMKSA as part of RSN
+	 * preauthentication, the AKM has not yet been negotiated. In this
+	 * case, the HMAC-SHA1-128 based derivation is used for the PMKID
+	 * calculation."
+	 */
+
+	if (s->akm_suite & (IE_RSN_AKM_SUITE_8021X_SHA256 |
+			IE_RSN_AKM_SUITE_PSK_SHA256))
+		use_sha256 = true;
+	else
+		use_sha256 = false;
+
+	return crypto_derive_pmkid(s->pmk, s->spa, s->aa, out_pmkid,
+					use_sha256);
+}
+
 /*
  * This function performs a match of the RSN/WPA IE obtained from the scan
  * results vs the RSN/WPA IE obtained as part of the 4-way handshake.  If they
