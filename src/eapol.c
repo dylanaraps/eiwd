@@ -54,18 +54,19 @@ void *tx_user_data;
 
 /*
  * BPF filter to match skb->dev->type == 1 (ARPHRD_ETHER) and
- * match skb->protocol == 0x888e (PAE).
+ * match skb->protocol == 0x888e (PAE) or 0x88c7 (preauthentication).
  */
 static struct sock_filter pae_filter[] = {
 	{ 0x28,  0,  0, 0xfffff01c },	/* ldh #hatype		*/
-	{ 0x15,  0,  3, 0x00000001 },	/* jne #1, drop		*/
+	{ 0x15,  0,  4, 0x00000001 },	/* jne #1, drop		*/
 	{ 0x28,  0,  0, 0xfffff000 },	/* ldh #proto		*/
-	{ 0x15,  0,  1, 0x0000888e },	/* jne #0x888e, drop	*/
-	{ 0x06,  0,  0, 0xffffffff },	/* ret #-1		*/
+	{ 0x15,  1,  0, 0x0000888e },	/* je  #0x888e, keep	*/
+	{ 0x15,  0,  1, 0x000088c7 },	/* jne #0x88c7, drop	*/
+	{ 0x06,  0,  0, 0xffffffff },	/* keep: ret #-1	*/
 	{ 0x06,  0,  0, 0000000000 },	/* drop: ret #0		*/
 };
 
-static const struct sock_fprog pae_fprog = { .len = 6, .filter = pae_filter };
+static const struct sock_fprog pae_fprog = { .len = 7, .filter = pae_filter };
 
 static struct l_io *pae_open(void)
 {
@@ -110,7 +111,8 @@ static bool pae_read(struct l_io *io, void *user_data)
 	if (sll.sll_halen != ETH_ALEN)
 		return true;
 
-	__eapol_rx_packet(sll.sll_ifindex, sll.sll_addr, frame, bytes);
+	__eapol_rx_packet(sll.sll_ifindex, sll.sll_addr,
+				ntohs(sll.sll_protocol), frame, bytes);
 
 	return true;
 }
@@ -1578,12 +1580,16 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 	}
 }
 
-void __eapol_rx_packet(uint32_t ifindex, const uint8_t *aa,
+void __eapol_rx_packet(uint32_t ifindex, const uint8_t *aa, uint16_t proto,
 					const uint8_t *frame, size_t len)
 {
 	struct eapol_sm *sm = eapol_find_sm(ifindex, aa);
 
 	if (!sm)
+		return;
+
+	if ((proto != ETH_P_PAE && !sm->preauth) ||
+			(proto != 0x88c7 && sm->preauth))
 		return;
 
 	eapol_rx_packet(sm, frame, len);
