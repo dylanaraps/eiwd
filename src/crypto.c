@@ -625,3 +625,20 @@ exit:
 
 	return r;
 }
+
+/* Defined in 802.11-2012, Section 11.6.1.3 Pairwise Key Hierarchy */
+bool crypto_derive_pmkid(const uint8_t *pmk,
+				const uint8_t *addr1, const uint8_t *addr2,
+				uint8_t *out_pmkid, bool use_sha256)
+{
+	uint8_t data[20];
+
+	memcpy(data + 0, "PMK Name", 8);
+	memcpy(data + 8, addr2, 6);
+	memcpy(data + 14, addr1, 6);
+
+	if (use_sha256)
+		return hmac_sha256(pmk, 32, data, 20, out_pmkid, 16);
+	else
+		return hmac_sha1(pmk, 32, data, 20, out_pmkid, 16);
+}
