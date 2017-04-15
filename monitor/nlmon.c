@@ -5192,9 +5192,6 @@ static bool pae_receive(struct l_io *io, void *user_data)
 		return true;
 	}
 
-	if (sll.sll_protocol != htons(ETH_P_PAE))
-		return true;
-
 	if (sll.sll_hatype != ARPHRD_ETHER)
 		return true;
 
@@ -5207,8 +5204,8 @@ static bool pae_receive(struct l_io *io, void *user_data)
 		}
 	}
 
-	store_packet(nlmon, tv, sll.sll_pkttype, ARPHRD_ETHER, ETH_P_PAE,
-							buf, bytes_read);
+	store_packet(nlmon, tv, sll.sll_pkttype, ARPHRD_ETHER,
+				ntohs(sll.sll_protocol), buf, bytes_read);
 
 	nlmon_print_pae(nlmon, tv, sll.sll_pkttype, sll.sll_ifindex,
 							buf, bytes_read);
@@ -5218,18 +5215,19 @@ static bool pae_receive(struct l_io *io, void *user_data)
 
 /*
  * BPF filter to match skb->dev->type == 1 (ARPHRD_ETHER) and
- * match skb->protocol == 0x888e (PAE).
+ * match skb->protocol == 0x888e (PAE) or 0x88c7 (preauthentication).
  */
 static struct sock_filter pae_filter[] = {
 	{ 0x28,  0,  0, 0xfffff01c },	/* ldh #hatype		*/
-	{ 0x15,  0,  3, 0x00000001 },	/* jne #1, drop		*/
+	{ 0x15,  0,  4, 0x00000001 },	/* jne #1, drop		*/
 	{ 0x28,  0,  0, 0xfffff000 },	/* ldh #proto		*/
-	{ 0x15,  0,  1, 0x0000888e },	/* jne #0x888e, drop	*/
-	{ 0x06,  0,  0, 0xffffffff },	/* ret #-1		*/
+	{ 0x15,  1,  0, 0x0000888e },	/* je  #0x888e, keep	*/
+	{ 0x15,  0,  1, 0x000088c7 },	/* jne #0x88c7, drop	*/
+	{ 0x06,  0,  0, 0xffffffff },	/* keep: ret #-1	*/
 	{ 0x06,  0,  0, 0000000000 },	/* drop: ret #0		*/
 };
 
-static const struct sock_fprog pae_fprog = { .len = 6, .filter = pae_filter };
+static const struct sock_fprog pae_fprog = { .len = 7, .filter = pae_filter };
 
 static struct l_io *open_pae(void)
 {
