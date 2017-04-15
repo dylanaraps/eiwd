@@ -728,6 +728,7 @@ struct eapol_sm {
 	bool have_replay:1;
 	bool started:1;
 	bool use_eapol_start:1;
+	bool preauth:1;
 	struct eap_state *eap;
 	struct eapol_buffer *early_frame;
 };
@@ -1675,6 +1676,21 @@ void eapol_start(struct eapol_sm *sm)
 eap_error:
 	l_error("Error initializing EAP for ifindex %i",
 			(int) sm->handshake->ifindex);
+}
+
+void eapol_start_preauthentication(struct eapol_sm *sm)
+{
+	/*
+	 * The only difference here is that we send the EAPOL-Start immeditely
+	 * instead of in a timeout, and we set sm->preauth so that pae_write
+	 * uses the preauthentication protocol id.
+	 */
+
+	sm->use_eapol_start = false;
+	sm->preauth = true;
+
+	eapol_start(sm);
+	send_eapol_start(NULL, sm);
 }
 
 bool eapol_init()

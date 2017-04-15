@@ -182,6 +182,7 @@ void eapol_sm_set_event_func(struct eapol_sm *sm, eapol_sm_event_func_t func);
 
 void eapol_register(struct eapol_sm *sm);
 void eapol_start(struct eapol_sm *sm);
+void eapol_start_preauthentication(struct eapol_sm *sm);
 
 void eapol_pae_open();
 void eapol_pae_close();
