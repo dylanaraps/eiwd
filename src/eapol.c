@@ -121,7 +121,7 @@ static void pae_destroy()
 }
 
 static void pae_write(uint32_t ifindex, const uint8_t *aa, const uint8_t *spa,
-			const struct eapol_frame *ef)
+			uint16_t proto, const struct eapol_frame *ef)
 {
 	size_t frame_size;
 	struct sockaddr_ll sll;
@@ -140,7 +140,7 @@ static void pae_write(uint32_t ifindex, const uint8_t *aa, const uint8_t *spa,
 	memset(&sll, 0, sizeof(sll));
 	sll.sll_family = AF_PACKET;
 	sll.sll_ifindex = ifindex;
-	sll.sll_protocol = htons(ETH_P_PAE);
+	sll.sll_protocol = htons(proto);
 	sll.sll_halen = ETH_ALEN;
 	memcpy(sll.sll_addr, aa, ETH_ALEN);
 
@@ -807,8 +807,10 @@ static void eapol_timeout(struct l_timeout *timeout, void *user_data)
 
 static void eapol_write(struct eapol_sm *sm, const struct eapol_frame *ef)
 {
+	uint16_t proto = sm->preauth ? 0x88c7 : ETH_P_PAE;
+
 	pae_write(sm->handshake->ifindex,
-			sm->handshake->aa, sm->handshake->spa, ef);
+			sm->handshake->aa, sm->handshake->spa, proto, ef);
 }
 
 static void send_eapol_start(struct l_timeout *timeout, void *user_data)
