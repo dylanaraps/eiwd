@@ -43,6 +43,10 @@ struct device {
 	const struct proxy_interface *wsc;
 };
 
+static void display_device(const struct device *device)
+{
+}
+
 static const void *get_name(const void *data)
 {
 	const struct device *device = data;
@@ -236,8 +240,48 @@ static struct proxy_interface_type device_interface_type = {
 	.ops = &device_ops,
 };
 
+static bool match_by_name(const void *a, const void *b)
+{
+	const struct device *device = a;
+	const char *name = b;
+
+	return !strcmp(device->name, name);
+}
+
+static const struct proxy_interface *get_device_proxy_by_name(
+							const char *device_name)
+{
+	struct l_queue *match;
+	struct proxy_interface *proxy = NULL;
+
+	if (!device_name)
+		return NULL;
+
+	match = proxy_interface_find_all(device_interface_type.interface,
+						match_by_name, device_name);
+
+	if (l_queue_length(match))
+		proxy = l_queue_pop_head(match);
+	else
+		display("Device %s not found", device_name);
+
+	l_queue_destroy(match, NULL);
+
+	return proxy;
+}
+
 static void cmd_show(const char *device_name, char *args)
 {
+	struct device *device;
+	const struct proxy_interface *proxy =
+					get_device_proxy_by_name(device_name);
+
+	if (!proxy)
+		return;
+
+	device = proxy_interface_get_data(proxy);
+
+	display_device(device);
 }
 
 static void cmd_scan(const char *device_name, char *args)

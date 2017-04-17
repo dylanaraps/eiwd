@@ -138,6 +138,35 @@ struct proxy_interface *proxy_interface_find(const char *interface,
 	return NULL;
 }
 
+struct l_queue *proxy_interface_find_all(const char *interface,
+					proxy_property_match_func_t function,
+					const void *value)
+{
+	const struct l_queue_entry *entry;
+	struct l_queue *match = NULL;
+
+	if (!interface || !function || !value)
+		return NULL;
+
+	for (entry = l_queue_get_entries(proxy_interfaces); entry;
+							entry = entry->next) {
+		struct proxy_interface *proxy = entry->data;
+
+		if (!interface_match_by_type_name(proxy->type, interface))
+			continue;
+
+		if (!function(proxy->data, value))
+			continue;
+
+		if (!match)
+			match = l_queue_new();
+
+		l_queue_push_tail(match, proxy);
+	}
+
+	return match;
+}
+
 static struct l_queue *proxy_interface_find_by_path(const char *path)
 {
 	const struct l_queue_entry *entry;
