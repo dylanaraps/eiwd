@@ -236,9 +236,58 @@ static struct proxy_interface_type device_interface_type = {
 	.ops = &device_ops,
 };
 
+static void cmd_show(const char *device_name, char *args)
+{
+}
+
+static void cmd_scan(const char *device_name, char *args)
+{
+}
+
+static void cmd_disconnect(const char *device_name, char *args)
+{
+}
+
+static void cmd_get_networks(const char *device_name, char *args)
+{
+}
+
+static void cmd_list(const char *device_name, char *args)
+{
+}
+
+static void cmd_set_property(const char *device_name, char *args)
+{
+}
+
+static void cmd_connect(const char *device_name, char *args)
+{
+}
+
+static const struct command device_commands[] = {
+	{ NULL,     "list",     NULL,   cmd_list, "List devices",     true },
+	{ "<wlan>", "show",     NULL,   cmd_show, "Show device info", true },
+	{ "<wlan>", "scan",     NULL,   cmd_scan, "Scan for networks" },
+	{ "<wlan>", "get-networks",
+				NULL,   cmd_get_networks,
+						"Get networks",       true },
+	{ "<wlan>", "set-property",
+				"<name> <value>",
+					cmd_set_property,
+						"Set property",       false },
+	{ "<wlan>", "connect",
+				"<network name> [security]",
+					cmd_connect,
+						"Connect to network", false },
+	{ "<wlan>", "disconnect",
+				NULL,   cmd_disconnect, "Disconnect" },
+	{ }
+};
+
 static struct command_family device_command_family = {
 	.caption = "Devices",
 	.name = "device",
+	.command_list = device_commands,
 };
 
 static int device_command_family_init(void)
