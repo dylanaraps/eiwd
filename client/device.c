@@ -167,8 +167,68 @@ static const struct proxy_interface_property device_properties[] = {
 	{ }
 };
 
+struct ordered_network {
+	char *network_path;
+	char *name;
+	int16_t signal_strength;
+	char *type;
+};
+
 static void ordered_networks_destroy(void *data)
 {
+	struct ordered_network *network = data;
+
+	l_free(network->name);
+	l_free(network->network_path);
+	l_free(network->type);
+
+	l_free(network);
+}
+
+static void ordered_networks_display(struct l_queue *ordered_networks)
+{
+}
+
+static void ordered_networks_callback(struct l_dbus_message *message,
+								void *proxy)
+{
+	struct device *device = proxy_interface_get_data(proxy);
+	struct l_queue *networks = NULL;
+	struct ordered_network network;
+	struct l_dbus_message_iter iter;
+
+	if (dbus_message_has_error(message))
+		return;
+
+	if (!l_dbus_message_get_arguments(message, "a(osns)", &iter)) {
+		l_error("Failed to parse ordered networks callback message");
+
+		return;
+	}
+
+	l_queue_destroy(device->ordered_networks, ordered_networks_destroy);
+
+	while (l_dbus_message_iter_next_entry(&iter,
+						&network.network_path,
+						&network.name,
+						&network.signal_strength,
+						&network.type)) {
+		struct ordered_network *net = l_new(struct ordered_network, 1);
+
+		if (!networks)
+			networks = l_queue_new();
+
+		net->name = l_strdup(network.name);
+		net->network_path = l_strdup(network.network_path);
+		net->signal_strength = network.signal_strength;
+		net->type = l_strdup(network.type);
+
+		l_queue_push_tail(networks, net);
+	}
+
+	device->ordered_networks = networks;
+
+	ordered_networks_display(networks);
 }
 
 static void *device_create(void)
@@ -284,20 +344,56 @@ static void cmd_show(const char *device_name, char *args)
 	display_device(device);
 }
 
+static void check_errors_method_callback(struct l_dbus_message *message,
+								void *user_data)
+{
+	dbus_message_has_error(message);
+}
+
 static void cmd_scan(const char *device_name, char *args)
 {
+	const struct proxy_interface *proxy =
+					get_device_proxy_by_name(device_name);
+
+	if (!proxy)
+		return;
+
+	proxy_interface_method_call(proxy, "Scan", "",
+						check_errors_method_callback);
 }
 
 static void cmd_disconnect(const char *device_name, char *args)
 {
+	const struct proxy_interface *proxy =
+					get_device_proxy_by_name(device_name);
+
+	if (!proxy)
+		return;
+
+	proxy_interface_method_call(proxy, "Disconnect", "",
+						check_errors_method_callback);
 }
 
 static void cmd_get_networks(const char *device_name, char *args)
 {
+	const struct proxy_interface *proxy =
+					get_device_proxy_by_name(device_name);
+
+	if (!proxy)
+		return;
+
+	proxy_interface_method_call(proxy, "GetOrderedNetworks", "",
+					ordered_networks_callback);
 }
 
 static void cmd_list(const char *device_name, char *args)
 {
+	display_table_header("Devices", MARGIN "%-*s%-*s%-*s%-*s", 20, "Name",
+				20, "Address", 15, "State", 10, "Adapter");
+
+	proxy_interface_display_list(device_interface_type.interface);
+
+	display_table_footer();
 }
 
 static void cmd_set_property(const char *device_name, char *args)

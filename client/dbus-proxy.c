@@ -93,7 +93,7 @@ static void interface_update_properties(struct proxy_interface *proxy,
 		proxy_interface_property_set(proxy, name, NULL);
 }
 
-static bool dbus_message_has_error(struct l_dbus_message *message)
+bool dbus_message_has_error(struct l_dbus_message *message)
 {
 	const char *name;
 	const char *text;
@@ -385,6 +385,24 @@ const char *proxy_interface_get_identity_str(
 		return proxy->type->ops->identity(proxy->data);
 
 	return NULL;
+}
+
+void proxy_interface_display_list(const char *interface)
+{
+	const struct l_queue_entry *entry;
+
+	for (entry = l_queue_get_entries(proxy_interfaces); entry;
+							entry = entry->next) {
+		const struct proxy_interface *proxy = entry->data;
+
+		if (!interface_match_by_type_name(proxy->type, interface))
+			continue;
+
+		if (!proxy->type->ops || !proxy->type->ops->display)
+			break;
+
+		proxy->type->ops->display(MARGIN, proxy->data);
+	}
 }
 
 static void interfaces_added_callback(struct l_dbus_message *message,
