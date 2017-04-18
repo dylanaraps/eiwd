@@ -90,7 +90,8 @@ client_iwctl_SOURCES = client/main.c \
 			client/command.h client/command.c \
 			client/dbus-proxy.h client/dbus-proxy.c \
 			client/device.h client/device.c \
-			client/display.h client/display.c
+			client/display.h client/display.c \
+			client/network.h client/network.c
 client_iwctl_LDADD = ell/libell-internal.la -lreadline
 
 monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
