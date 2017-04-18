@@ -346,6 +346,28 @@ static void proxy_interface_destroy(void *data)
 	l_free(proxy);
 }
 
+bool proxy_interface_method_call(const struct proxy_interface *proxy,
+					const char *name, const char *signature,
+					l_dbus_message_func_t callback, ...)
+{
+	struct l_dbus_message *call;
+	va_list args;
+
+	if (!proxy || !name)
+		return false;
+
+	call = l_dbus_message_new_method_call(dbus, IWD_SERVICE, proxy->path,
+						 proxy->type->interface, name);
+
+	va_start(args, callback);
+	l_dbus_message_set_arguments_valist(call, signature, args);
+	va_end(args);
+
+	l_dbus_send_with_reply(dbus, call, callback, (void *) proxy, NULL);
+
+	return true;
+}
+
 void *proxy_interface_get_data(const struct proxy_interface *proxy)
 {
 	return proxy->data;

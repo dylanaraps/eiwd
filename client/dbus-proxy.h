@@ -64,6 +64,10 @@ struct l_queue *proxy_interface_find_all(const char *interface,
 					proxy_property_match_func_t function,
 					const void *value);
 
+bool proxy_interface_method_call(const struct proxy_interface *proxy,
+					const char *name, const char *signature,
+					l_dbus_message_func_t callback, ...);
+
 void *proxy_interface_get_data(const struct proxy_interface *proxy);
 const char *proxy_interface_get_interface(const struct proxy_interface *proxy);
 const char *proxy_interface_get_identity_str(
