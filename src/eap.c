@@ -462,7 +462,7 @@ int eap_unregister_method(struct eap_method *method)
 static void __eap_method_enable(struct eap_method_desc *start,
 					struct eap_method_desc *stop)
 {
-        struct eap_method_desc *desc;
+	struct eap_method_desc *desc;
 
 	l_debug("");
 
@@ -480,7 +480,7 @@ static void __eap_method_enable(struct eap_method_desc *start,
 static void __eap_method_disable(struct eap_method_desc *start,
 					struct eap_method_desc *stop)
 {
-        struct eap_method_desc *desc;
+	struct eap_method_desc *desc;
 
 	l_debug("");
 
