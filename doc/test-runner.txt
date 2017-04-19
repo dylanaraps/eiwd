@@ -264,9 +264,10 @@ follows:
 
 	$ vi .config
 
-	Find the following line:
+	Find the following lines:
 
 		#CONFIG_DRIVER_NL80211=y
+		#CONFIG_LIBNL32=y
 
 	and uncomment it by removing the '#' sign.
 
