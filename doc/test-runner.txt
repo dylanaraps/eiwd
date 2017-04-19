@@ -272,6 +272,10 @@ follows:
 
 		#CONFIG_WPS=y
 
+	For 802.11r (fast roaming) tests uncomment the following:
+
+		#CONFIG_IEEE80211R=y
+
 	Note: You may need to pre-install: 'gnutls-devel' and 'libgcrypt-devel'
 	libraries.
 
