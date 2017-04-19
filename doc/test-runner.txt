@@ -60,6 +60,8 @@ as follows:
 
 	$ sh <iwd>/tools/test_runner_kernel_config
 
+	$ make olddefconfig
+
 After that a default kernel with the required options can be built:
 
 	$ make -j$(nproc)
