@@ -242,8 +242,10 @@ void display_enable_cmd_prompt(void)
 
 void display_disable_cmd_prompt(void)
 {
-	rl_set_prompt("");
-	rl_crlf();
+	rl_set_prompt("Waiting to connect to IWD");
+	printf("\r");
+	rl_on_new_line();
+	rl_redisplay();
 }
 
 void display_quit(void)
