@@ -192,6 +192,29 @@ void display_command(const struct command_family *family, const char *cmd_name)
 
 static void readline_callback(char *prompt)
 {
+	HIST_ENTRY *previous_prompt;
+
+	if (!prompt) {
+		display_quit();
+
+		l_main_quit();
+
+		return;
+	}
+
+	if (!strlen(prompt))
+		goto done;
+
+	previous_prompt = current_history();
+	if (!previous_prompt ||
+			(previous_prompt &&
+				strcmp(previous_prompt->line, prompt))) {
+		add_history(prompt);
+	}
+
+	command_process_prompt(prompt);
+
+done:
 	l_free(prompt);
 }
 
