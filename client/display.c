@@ -204,7 +204,7 @@ static bool read_handler(struct l_io *io, void *user_data)
 
 static void disconnect_callback(struct l_io *io, void *user_data)
 {
-	l_main_exit();
+	l_main_quit();
 }
 
 void display_enable_cmd_prompt(void)
