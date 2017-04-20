@@ -253,6 +253,31 @@ done:
 	return matches;
 }
 
+char *command_entity_arg_completion(const char *text, int state,
+					const struct command *command_list)
+{
+	static size_t index;
+	static size_t len;
+	const char *cmd;
+
+	if (!state) {
+		index = 0;
+		len = strlen(text);
+	}
+
+	while ((cmd = command_list[index].cmd)) {
+		if (!command_list[index++].entity)
+			continue;
+
+		if (strncmp(cmd, text, len))
+			continue;
+
+		return l_strdup(cmd);
+	}
+
+	return NULL;
+}
+
 static void execute_cmd(const char *family, const char *entity,
 					const struct command *cmd, char *args)
 {

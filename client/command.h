@@ -41,6 +41,8 @@ struct command_family {
 };
 
 char **command_completion(const char *text, int start, int end);
+char *command_entity_arg_completion(const char *text, int state,
+					const struct command *command_list);
 
 void command_process_prompt(char *prompt);
 
