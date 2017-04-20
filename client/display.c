@@ -35,7 +35,6 @@
 #define IWD_PROMPT COLOR_GREEN "[iwd]" COLOR_OFF "# "
 #define LINE_LEN   81
 
-static struct l_queue *display_types;
 static struct l_io *io;
 static char dashed_line[LINE_LEN];
 static char empty_line[LINE_LEN];
@@ -236,8 +235,6 @@ void display_init(void)
 	memset(&dashed_line, '-', sizeof(dashed_line) - 1);
 	memset(&empty_line, ' ', sizeof(empty_line) - 1);
 
-	display_types = l_queue_new();
-
 	setlinebuf(stdout);
 
 	rl_erase_empty_line = 1;
@@ -251,7 +248,4 @@ void display_exit(void)
 	rl_callback_handler_remove();
 
 	l_io_destroy(io);
-
-	l_queue_destroy(display_types, NULL);
-	display_types = NULL;
 }
