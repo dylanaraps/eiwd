@@ -462,6 +462,7 @@ static void get_managed_objects_callback(struct l_dbus_message *message,
 	while (l_dbus_message_iter_next_entry(&objects, &path, &object))
 		proxy_interface_create(path, &object);
 
+	display_enable_cmd_prompt();
 }
 
 static void service_appeared_callback(struct l_dbus *dbus, void *user_data)

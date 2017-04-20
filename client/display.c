@@ -238,6 +238,8 @@ void display_enable_cmd_prompt(void)
 	l_io_set_disconnect_handler(io, disconnect_callback, NULL, NULL);
 
 	rl_set_prompt(IWD_PROMPT);
+
+	display("");
 }
 
 void display_disable_cmd_prompt(void)
