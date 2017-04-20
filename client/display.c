@@ -264,6 +264,8 @@ void display_init(void)
 
 	setlinebuf(stdout);
 
+	rl_attempted_completion_function = command_completion;
+
 	rl_erase_empty_line = 1;
 	rl_callback_handler_install("Waiting for IWD to appear...",
 							readline_callback);

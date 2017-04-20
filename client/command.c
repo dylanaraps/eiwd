@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include <ell/ell.h>
+#include <readline/readline.h>
 
 #include "command.h"
 #include "display.h"
@@ -51,6 +52,88 @@ static const struct command command_list[] = {
 	{ NULL, "help" },
 	{ }
 };
+
+static char *cmd_generator(const char *text, int state)
+{
+	static const struct l_queue_entry *entry;
+	static size_t index;
+	static size_t len;
+	const char *cmd;
+
+	if (!state) {
+		len = strlen(text);
+		index = 0;
+		entry = l_queue_get_entries(command_families);
+	}
+
+	while (entry) {
+		const struct command_family *family = entry->data;
+
+		entry = entry->next;
+
+		if (strncmp(family->name, text, len))
+			continue;
+
+		return l_strdup(family->name);
+	}
+
+	while ((cmd = command_list[index].cmd)) {
+		index++;
+
+		if (strncmp(cmd, text, len))
+			continue;
+
+		return l_strdup(cmd);
+	}
+
+	return NULL;
+}
+
+static char **cmd_completion_match_family_cmd(const char *family,
+						char *args, const char *text,
+						bool ends_with_space)
+{
+	return NULL;
+}
+
+char **command_completion(const char *text, int start, int end)
+{
+	char **matches = NULL;
+	const char *family;
+	char *args;
+	char *prompt = NULL;
+	bool ends_with_space = false;
+
+	if (!start) {
+		matches = rl_completion_matches(text, cmd_generator);
+
+		goto done;
+	}
+
+	prompt = rl_copy_text(0, rl_end);
+
+	family = strtok_r(prompt, " ", &args);
+	if (!family)
+		goto done;
+
+	if (args) {
+		int len = strlen(args);
+
+		if (len > 0 && args[len - 1] == ' ')
+			ends_with_space = true;
+	}
+
+	matches = cmd_completion_match_family_cmd(family, args, text,
+							ends_with_space);
+
+done:
+	l_free(prompt);
+
+	if (!matches)
+		rl_attempted_completion_over = 1;
+
+	return matches;
+}
 
 static void execute_cmd(const char *family, const char *entity,
 					const struct command *cmd, char *args)

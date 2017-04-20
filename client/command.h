@@ -37,6 +37,8 @@ struct command_family {
 	const struct command *command_list;
 };
 
+char **command_completion(const char *text, int start, int end);
+
 void command_process_prompt(char *prompt);
 
 void command_family_register(const struct command_family *family);
