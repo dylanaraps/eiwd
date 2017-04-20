@@ -424,10 +424,22 @@ static const struct command device_commands[] = {
 	{ }
 };
 
+static char *family_arg_completion(const char *text, int state)
+{
+	return NULL;
+}
+
+static char *entity_arg_completion(const char *text, int state)
+{
+	return command_entity_arg_completion(text, state, device_commands);
+}
+
 static struct command_family device_command_family = {
 	.caption = "Devices",
 	.name = "device",
 	.command_list = device_commands,
+	.family_arg_completion = family_arg_completion,
+	.entity_arg_completion = entity_arg_completion,
 };
 
 static int device_command_family_init(void)
