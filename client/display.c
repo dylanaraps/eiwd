@@ -38,6 +38,17 @@
 static struct l_io *io;
 static char dashed_line[LINE_LEN];
 static char empty_line[LINE_LEN];
+static struct l_timeout *refresh_timeout;
+
+static struct display_refresh {
+	char *family;
+	char *entity;
+	const struct command *cmd;
+	char *args;
+	size_t undo_lines;
+	struct l_queue *redo_entries;
+	bool recording;
+} display_refresh;
 
 struct saved_input {
 	char *line;
@@ -76,20 +87,121 @@ static void restore_input(struct saved_input *input)
 	l_free(input);
 }
 
-void display_refresh_timeout_set(void)
+static void display_refresh_undo_lines(void)
 {
+	size_t num_lines = display_refresh.undo_lines;
 
+	printf("\033[%dA", (int) num_lines);
+
+	do {
+		printf("%s\n", empty_line);
+	} while (--display_refresh.undo_lines);
+
+	printf("\033[%dA", (int) num_lines);
+}
+
+static void display_refresh_redo_lines(void)
+{
+	const struct l_queue_entry *entry;
+	struct saved_input *input;
+
+	input = save_input();
+
+	for (entry = l_queue_get_entries(display_refresh.redo_entries); entry;
+							entry = entry->next) {
+		char *line = entry->data;
+
+		printf("%s", line);
+
+		display_refresh.undo_lines++;
+	}
+
+	restore_input(input);
+	display_refresh.recording = true;
+
+	l_timeout_modify(refresh_timeout, 1);
 }
 
 void display_refresh_reset(void)
 {
+	l_free(display_refresh.family);
+	display_refresh.family = NULL;
 
+	l_free(display_refresh.entity);
+	display_refresh.entity = NULL;
+
+	display_refresh.cmd = NULL;
+
+	l_free(display_refresh.args);
+	display_refresh.args = NULL;
+
+	display_refresh.undo_lines = 0;
+	display_refresh.recording = false;
+
+	l_queue_clear(display_refresh.redo_entries, l_free);
 }
 
 void display_refresh_set_cmd(const char *family, const char *entity,
-					const struct command *cmd, char *args)
+				const struct command *cmd, char *args)
 {
+	if (cmd->refreshable) {
+		l_free(display_refresh.family);
+		display_refresh.family = l_strdup(family);
 
+		l_free(display_refresh.entity);
+		display_refresh.entity = l_strdup(entity);
+
+		display_refresh.cmd = cmd;
+
+		l_free(display_refresh.args);
+		display_refresh.args = l_strdup(args);
+
+		l_queue_clear(display_refresh.redo_entries, l_free);
+
+		display_refresh.recording = false;
+		display_refresh.undo_lines = 0;
+
+		return;
+	}
+
+	if (display_refresh.family && !strcmp(display_refresh.family, family)) {
+		char *prompt =
+			l_strdup_printf(IWD_PROMPT"%s %s %s %s\n",
+					family ? : "", entity ? : "",
+					cmd->cmd ? : "", args ? : "");
+
+		l_queue_push_tail(display_refresh.redo_entries, prompt);
+		display_refresh.undo_lines++;
+
+		display_refresh.recording = true;
+	} else {
+		display_refresh_reset();
+	}
+}
+
+static void timeout_callback(struct l_timeout *timeout, void *user_data)
+{
+	struct saved_input *input;
+
+	if (!display_refresh.cmd)
+		return;
+
+	input = save_input();
+	display_refresh_undo_lines();
+	restore_input(input);
+
+	display_refresh.recording = false;
+	display_refresh.cmd->function(display_refresh.entity,
+							display_refresh.args);
+}
+
+void display_refresh_timeout_set(void)
+{
+	if (refresh_timeout)
+		l_timeout_modify(refresh_timeout, 1);
+	else
+		refresh_timeout = l_timeout_create(1, timeout_callback,
+							NULL, NULL);
 }
 
 static void display_text(const char *text)
@@ -99,6 +211,14 @@ static void display_text(const char *text)
 	printf("%s", text);
 
 	restore_input(input);
+
+	if (!display_refresh.cmd)
+		return;
+
+	display_refresh.undo_lines++;
+
+	if (display_refresh.recording)
+		l_queue_push_tail(display_refresh.redo_entries, l_strdup(text));
 }
 
 void display(const char *fmt, ...)
@@ -157,6 +277,9 @@ void display_table_header(const char *caption, const char *fmt, ...)
 void display_table_footer(void)
 {
 	display_text("\n");
+
+	if (display_refresh.cmd)
+		display_refresh_redo_lines();
 }
 
 void display_command_line(const char *command_family,
@@ -244,6 +367,8 @@ void display_enable_cmd_prompt(void)
 
 void display_disable_cmd_prompt(void)
 {
+	display_refresh_reset();
+
 	rl_set_prompt("Waiting to connect to IWD");
 	printf("\r");
 	rl_on_new_line();
@@ -262,6 +387,8 @@ void display_init(void)
 	memset(&dashed_line, '-', sizeof(dashed_line) - 1);
 	memset(&empty_line, ' ', sizeof(empty_line) - 1);
 
+	display_refresh.redo_entries = l_queue_new();
+
 	setlinebuf(stdout);
 
 	rl_attempted_completion_function = command_completion;
@@ -274,6 +401,11 @@ void display_init(void)
 
 void display_exit(void)
 {
+	l_timeout_remove(refresh_timeout);
+	refresh_timeout = NULL;
+
+	l_queue_destroy(display_refresh.redo_entries, l_free);
+
 	rl_callback_handler_remove();
 
 	l_io_destroy(io);
