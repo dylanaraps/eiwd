@@ -89,11 +89,129 @@ static char *cmd_generator(const char *text, int state)
 	return NULL;
 }
 
-static char **cmd_completion_match_family_cmd(const char *family,
+static bool cmd_completion_cmd_has_arg(const char *cmd,
+					const struct command_family *family)
+{
+	size_t i;
+	char **matches = NULL;
+	bool status;
+
+	for (i = 0; family->command_list[i].cmd; i++) {
+		if (strcmp(family->command_list[i].cmd, cmd))
+			continue;
+
+		return family->command_list[i].arg ? true : false;
+	}
+
+	if (!family->family_arg_completion)
+		return false;
+
+	matches = rl_completion_matches(cmd, family->family_arg_completion);
+	if (!matches)
+		return false;
+
+	status = false;
+
+	for (i = 0; matches[i]; i++) {
+		if (strcmp(matches[i], cmd))
+			continue;
+
+		status = true;
+
+		break;
+	}
+
+	l_strfreev(matches);
+
+	return status;
+}
+
+static char **cmd_completion_match_entity_cmd(const char *cmd, const char *text,
+						const struct command *cmd_list)
+{
+	char **matches = NULL;
+	size_t i;
+
+	for (i = 0; cmd_list[i].cmd; i++) {
+		if (strcmp(cmd_list[i].cmd, cmd))
+			continue;
+
+		if (!cmd_list[i].completion)
+			break;
+
+		matches = rl_completion_matches(text, cmd_list[i].completion);
+
+		break;
+	}
+
+	return matches;
+}
+
+static char **cmd_completion_match_family_cmd(const char *cmd_family,
 						char *args, const char *text,
 						bool ends_with_space)
 {
-	return NULL;
+	const struct l_queue_entry *entry;
+	const char *arg1;
+	const char *arg2;
+	const char *arg3;
+	char **matches = NULL;
+
+	for (entry = l_queue_get_entries(command_families); entry;
+							entry = entry->next) {
+		const struct command_family *family = entry->data;
+
+		if (strcmp(family->name, cmd_family))
+			continue;
+
+		arg1 = strtok_r(NULL, " ", &args);
+		if (!arg1) {
+			if (!family->family_arg_completion)
+				break;
+
+			matches = rl_completion_matches(text,
+						family->family_arg_completion);
+
+			break;
+		}
+
+		arg2 = strtok_r(NULL, " ", &args);
+		if (!arg2 && !ends_with_space) {
+			if (!family->family_arg_completion)
+				break;
+
+			matches = rl_completion_matches(text,
+						family->family_arg_completion);
+			break;
+		} else if (!arg2 && ends_with_space) {
+			if (!cmd_completion_cmd_has_arg(arg1, family))
+				break;
+
+			if (!family->entity_arg_completion)
+				break;
+
+			matches = rl_completion_matches(text,
+						family->entity_arg_completion);
+			break;
+		}
+
+		arg3 = strtok_r(NULL, " ", &args);
+		if (!arg3 && !ends_with_space) {
+			if (!family->entity_arg_completion)
+				break;
+
+			matches = rl_completion_matches(text,
+						family->entity_arg_completion);
+			break;
+		}
+
+		matches = cmd_completion_match_entity_cmd(arg2, text,
+							family->command_list);
+
+		break;
+	}
+
+	return matches;
 }
 
 char **command_completion(const char *text, int start, int end)

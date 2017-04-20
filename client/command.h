@@ -29,12 +29,15 @@ struct command {
 	void (*function)(const char *entity, char *arg);
 	const char *desc;
 	const bool refreshable;
+	command_completion_func_t completion;
 };
 
 struct command_family {
 	const char *caption;
 	const char *name;
 	const struct command *command_list;
+	command_completion_func_t family_arg_completion;
+	command_completion_func_t entity_arg_completion;
 };
 
 char **command_completion(const char *text, int start, int end);
