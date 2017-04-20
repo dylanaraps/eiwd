@@ -55,5 +55,5 @@ static void network_interface_exit(void)
 	proxy_interface_type_register(&network_interface_type);
 }
 
-INTERFACE_TYPE(device_interface_type, network_interface_init,
+INTERFACE_TYPE(network_interface_type, network_interface_init,
 						network_interface_exit)
