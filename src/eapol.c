@@ -843,9 +843,56 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 	uint8_t *ies;
 	size_t ies_len;
 	const uint8_t *own_ie = sm->handshake->own_ie;
+	const uint8_t *pmkid;
+	struct ie_rsn_info rsn_info;
 
 	if (!eapol_verify_ptk_1_of_4(ek))
 		goto error_unspecified;
+
+	pmkid = handshake_util_find_pmkid_kde(ek->key_data,
+					L_BE16_TO_CPU(ek->key_data_len));
+
+	/*
+	 * Require the PMKID KDE whenever we've sent a list of PMKIDs in
+	 * our RSNE, otherwise treat it as optional and only validate it
+	 * against our PMK.  Some 802.11-2012 sections show message 1/4
+	 * without a PMKID KDE and there are APs that send no PMKID KDE.
+	 */
+	if (!sm->handshake->wpa_ie &&
+			ie_parse_rsne_from_data(own_ie, own_ie[1] + 2,
+						&rsn_info) >= 0 &&
+			rsn_info.num_pmkids) {
+		bool found = false;
+		int i;
+
+		if (!pmkid)
+			goto error_unspecified;
+
+		for (i = 0; i < rsn_info.num_pmkids; i++)
+			if (!memcmp(rsn_info.pmkids + i * 16, pmkid, 16)) {
+				found = true;
+				break;
+			}
+
+		if (!found)
+			goto error_unspecified;
+	} else if (pmkid) {
+		uint8_t own_pmkid[16];
+
+		if (handshake_state_get_pmkid(sm->handshake, own_pmkid) &&
+				memcmp(pmkid, own_pmkid, 16)) {
+			/*
+			 * If the AP has a different PMKSA from ours and we
+			 * have means to create a new PMKSA through EAP then
+			 * try that, otherwise give up.
+			 */
+			if (sm->eap) {
+				send_eapol_start(NULL, sm);
+				return;
+			} else
+				goto error_unspecified;
+		}
+	}
 
 	handshake_state_new_snonce(sm->handshake);
 
@@ -858,7 +905,6 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 			(IE_RSN_AKM_SUITE_FT_OVER_8021X |
 			 IE_RSN_AKM_SUITE_FT_USING_PSK |
 			 IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256)) {
-		struct ie_rsn_info rsn_info;
 		const uint8_t *mde = sm->handshake->mde;
 		const uint8_t *fte = sm->handshake->fte;
 
@@ -867,10 +913,6 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 		 * MDE + FTE.
 		 */
 		ies = alloca(512);
-
-		if (ie_parse_rsne_from_data(own_ie, own_ie[1] + 2,
-						&rsn_info) < 0)
-			goto error_unspecified;
 
 		rsn_info.num_pmkids = 1;
 		rsn_info.pmkids = sm->handshake->pmk_r1_name;
@@ -1533,6 +1575,12 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 	if (!sm->protocol_version)
 		sm->protocol_version = eh->protocol_version;
 
+	/* Only EAPOL-EAP packets allowed in preauthentication */
+	if (sm->preauth && eh->packet_type != 0) {
+		handshake_failed(sm, MPDU_REASON_CODE_UNSPECIFIED);
+		return;
+	}
+
 	switch (eh->packet_type) {
 	case 0: /* EAPOL-EAP */
 		l_timeout_remove(sm->eapol_start_timeout);
@@ -1556,7 +1604,10 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 		break;
 
 	case 3: /* EAPOL-Key */
-		if (sm->eap) {
+		if (!sm->handshake->have_pmk) {
+			if (!sm->eap)
+				return;
+
 			/*
 			 * Either this is an error (EAP negotiation in
 			 * progress) or the server is giving us a chance to
@@ -1568,9 +1619,6 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 
 			return;
 		}
-
-		if (!sm->handshake->have_pmk)
-			return;
 
 		eapol_key_handle(sm, frame, len);
 		break;
