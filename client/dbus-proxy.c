@@ -452,7 +452,9 @@ static void get_managed_objects_callback(struct l_dbus_message *message,
 	const char *path;
 
 	if (dbus_message_has_error(message)) {
-		l_error("Failed to retrieve IWD dbus objects");
+		l_error("Failed to retrieve IWD dbus objects, quitting...\n");
+
+		l_main_quit();
 
 		return;
 	}
