@@ -91,6 +91,7 @@ client_iwctl_SOURCES = client/main.c \
 			client/dbus-proxy.h client/dbus-proxy.c \
 			client/device.h client/device.c \
 			client/display.h client/display.c \
+			client/known-networks.c \
 			client/network.h client/network.c
 client_iwctl_LDADD = ell/libell-internal.la -lreadline
 
