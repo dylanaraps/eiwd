@@ -89,7 +89,7 @@ client_iwctl_SOURCES = client/main.c \
 			readline/readline.h readline/history.h \
 			client/command.h client/command.c \
 			client/dbus-proxy.h client/dbus-proxy.c \
-			client/device.h client/device.c \
+			client/device.c \
 			client/display.h client/display.c \
 			client/known-networks.c \
 			client/network.h client/network.c
