@@ -29,8 +29,45 @@
 #include "command.h"
 #include "dbus-proxy.h"
 
+struct known_network {
+	char *name;
+	char *type;
+	char *last_seen;
+	char *last_connected;
+};
+
+static void known_network_destroy(void *data)
+{
+	struct known_network *network = data;
+
+	l_free(network->last_connected);
+	l_free(network->last_seen);
+	l_free(network->name);
+	l_free(network->type);
+
+	l_free(network);
+}
+
+static void *known_networks_create(void)
+{
+	return l_queue_new();
+}
+
+static void known_networks_destroy(void *data)
+{
+	struct l_queue *networks = data;
+
+	l_queue_destroy(networks, known_network_destroy);
+}
+
+static const struct proxy_interface_type_ops known_networks_ops = {
+	.create = known_networks_create,
+	.destroy = known_networks_destroy,
+};
+
 static struct proxy_interface_type known_networks_interface_type = {
 	.interface = IWD_KNOWN_NETWORKS_INTREFACE,
+	.ops = &known_networks_ops,
 };
 
 static void cmd_list(const char *entity, char *args)
