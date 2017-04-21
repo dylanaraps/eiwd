@@ -33,9 +33,25 @@ static struct proxy_interface_type known_networks_interface_type = {
 	.interface = IWD_KNOWN_NETWORKS_INTREFACE,
 };
 
+static void cmd_list(const char *entity, char *args)
+{
+}
+
+static void cmd_forget(const char *entity, char *args)
+{
+}
+
+static const struct command known_networks_commands[] = {
+	{ NULL, "list",   NULL, cmd_list,   "List known networks", true },
+	{ NULL, "forget", "<network name> [security]",
+				cmd_forget, "Forget known network"},
+	{ }
+};
+
 static struct command_family known_networks_command_family = {
 	.caption = "Known Networks",
 	.name = "known-networks",
+	.command_list = known_networks_commands,
 };
 
 static int known_networks_command_family_init(void)
