@@ -48,10 +48,35 @@ static const struct command known_networks_commands[] = {
 	{ }
 };
 
+static char *family_arg_completion(const char *text, int state)
+{
+	static size_t index;
+	static size_t len;
+	const char *cmd;
+
+	if (!state) {
+		index = 0;
+		len = strlen(text);
+	}
+
+	while ((cmd = known_networks_commands[index].cmd)) {
+		if (known_networks_commands[index++].entity)
+			continue;
+
+		if (strncmp(cmd, text, len))
+			continue;
+
+		return l_strdup(cmd);
+	}
+
+	return NULL;
+}
+
 static struct command_family known_networks_command_family = {
 	.caption = "Known Networks",
 	.name = "known-networks",
 	.command_list = known_networks_commands,
+	.family_arg_completion = family_arg_completion,
 };
 
 static int known_networks_command_family_init(void)
