@@ -49,7 +49,6 @@ static void proxy_interface_property_set(struct proxy_interface *proxy,
 					struct l_dbus_message_iter *variant)
 {
 	size_t i;
-	const void *value;
 	const struct proxy_interface_property *property_table =
 							proxy->type->properties;
 
@@ -60,14 +59,7 @@ static void proxy_interface_property_set(struct proxy_interface *proxy,
 		if (!property_table[i].set)
 			return;
 
-		if (variant)
-			l_dbus_message_iter_get_variant(variant,
-						property_table[i].type,
-						&value);
-		else
-			value = NULL;
-
-		property_table[i].set(proxy->data, value);
+		property_table[i].set(proxy->data, variant);
 
 		return;
 	}

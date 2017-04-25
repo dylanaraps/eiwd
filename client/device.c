@@ -54,14 +54,20 @@ static const void *get_name(const void *data)
 	return device->name;
 }
 
-static void set_name(void *data, const void *value)
+static void set_name(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
+	const char *value;
 
 	l_free(device->name);
 
-	if (value)
-		device->name = l_strdup(value);
+	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
+		device->name = NULL;
+
+		return;
+	}
+
+	device->name = l_strdup(value);
 }
 
 static const void *get_address(const void *data)
@@ -71,14 +77,20 @@ static const void *get_address(const void *data)
 	return device->address;
 }
 
-static void set_address(void *data, const void *value)
+static void set_address(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
+	const char *value;
 
 	l_free(device->address);
 
-	if (value)
-		device->address = l_strdup(value);
+	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
+		device->address = NULL;
+
+		return;
+	}
+
+	device->address = l_strdup(value);
 }
 
 static const void *get_state(const void *data)
@@ -88,20 +100,33 @@ static const void *get_state(const void *data)
 	return device->state;
 }
 
-static void set_state(void *data, const void *value)
+static void set_state(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
+	const char *value;
 
 	l_free(device->state);
 
-	if (value)
-		device->state = l_strdup(value);
+	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
+		device->state = NULL;
+
+		return;
+	}
+
+	device->state = l_strdup(value);
 }
 
-static void set_connected_network(void *data, const void *value)
+static void set_connected_network(void *data,
+					struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
-	const char *path = value;
+	const char *path;
+
+	if (!l_dbus_message_iter_get_variant(variant, "o", &path)) {
+		device->connected_network = NULL;
+
+		return;
+	}
 
 	device->connected_network = proxy_interface_find(IWD_NETWORK_INTERFACE,
 									path);
@@ -117,14 +142,18 @@ static const void *get_powered(const void *data)
 	return ptr;
 }
 
-static void set_powered(void *data, const void *value)
+static void set_powered(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
+	bool value;
 
-	if (value)
-		device->powered = l_get_u8(&value);
-	else
+	if (!l_dbus_message_iter_get_variant(variant, "b", &value)) {
 		device->powered = false;
+
+		return;
+	}
+
+	device->powered = value;
 }
 
 static const void *get_scanning(const void *data)
@@ -137,20 +166,30 @@ static const void *get_scanning(const void *data)
 	return ptr;
 }
 
-static void set_scanning(void *data, const void *value)
+static void set_scanning(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
+	bool value;
 
-	if (value)
-		device->scanning = l_get_u8(&value);
-	else
+	if (!l_dbus_message_iter_get_variant(variant, "b", &value)) {
 		device->scanning = false;
+
+		return;
+	}
+
+	device->scanning = value;
 }
 
-static void set_adapter(void *data, const void *value)
+static void set_adapter(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
-	const char *path = value;
+	const char *path;
+
+	if (!l_dbus_message_iter_get_variant(variant, "o", &path)) {
+		device->adapter = NULL;
+
+		return;
+	}
 
 	device->adapter = proxy_interface_find(IWD_ADAPTER_INTERFACE, path);
 }
