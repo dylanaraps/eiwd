@@ -320,7 +320,7 @@ static void proxy_interface_create(const char *path,
 		proxy->path = l_strdup(path);
 		proxy->type = interface_type;
 
-		if (interface_type->ops->create) {
+		if (interface_type->ops && interface_type->ops->create) {
 			proxy->data = interface_type->ops->create();
 
 			interface_update_properties(proxy, &properties, NULL);
