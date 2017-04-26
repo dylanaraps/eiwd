@@ -518,27 +518,26 @@ class IWD(AsyncOpAbstract):
         global mainloop
         mainloop = GLib.MainLoop()
 
-        if not start_iwd_daemon:
-            return
+        if start_iwd_daemon:
+            iwd_wiphys = [wname for wname, wiphy in wiphy.wiphy_map.items()
+                          if any(intf for intf in wiphy.values()
+                                 if intf.use == 'iwd')]
+            whitelist = ','.join(iwd_wiphys)
 
-        iwd_wiphys = [wname for wname, wiphy in wiphy.wiphy_map.items()
-                      if any(intf for intf in wiphy.values()
-                             if intf.use == 'iwd')]
-        whitelist = ','.join(iwd_wiphys)
+            import subprocess
+            iwd_proc = subprocess.Popen(['iwd', '-c', iwd_config_dir, '-p',
+                                         whitelist])
 
-        import subprocess
-        iwd_proc = subprocess.Popen(['iwd', '-c', iwd_config_dir, '-p',
-                                     whitelist])
+            self._iwd_proc = iwd_proc
 
         tries = 0
         while not self._bus.name_has_owner(IWD_SERVICE):
-            if tries > 20:
-                iwd_proc.terminate()
+            if tries > 100:
+                if start_iwd_daemon:
+                    iwd_proc.terminate()
                 raise TimeoutError('IWD has failed to start')
             tries += 1
             time.sleep(0.05)
-
-        self._iwd_proc = iwd_proc
 
     def __del__(self):
         if self._iwd_proc is None:
