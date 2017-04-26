@@ -40,7 +40,6 @@ struct device {
 	struct l_queue *ordered_networks;
 	const struct proxy_interface *adapter;
 	const struct proxy_interface *connected_network;
-	const struct proxy_interface *properties;
 	const struct proxy_interface *wsc;
 };
 
@@ -336,7 +335,6 @@ static void device_destroy(void *data)
 
 	device->adapter = NULL;
 	device->connected_network = NULL;
-	device->properties = NULL;
 	device->wsc = NULL;
 
 	l_free(device);
