@@ -44,6 +44,36 @@ static struct l_dbus *dbus;
 static struct l_queue *proxy_interfaces;
 static struct l_queue *proxy_interface_types;
 
+void proxy_properties_display(const struct proxy_interface *proxy,
+				const char *caption, const char *margin,
+				int name_column_width, int value_column_width)
+{
+	const void *data;
+	const struct proxy_interface_property *properties;
+	size_t i;
+
+	if (!proxy->type->properties)
+		return;
+
+	display_table_header(caption, "%s%-*s  %-*s%-*s", margin,
+				8, "Settable",
+				name_column_width, "Property",
+				value_column_width, "Value");
+
+	data = proxy_interface_get_data(proxy);
+	properties = proxy->type->properties;
+
+	for (i = 0; properties[i].name; i++) {
+		if (!properties[i].tostr)
+			continue;
+
+		display("%s%*s  %-*s%-*s\n", margin,
+			8, properties[i].is_read_write ? "       " CHECK : "",
+			name_column_width, properties[i].name,
+			value_column_width, properties[i].tostr(data) ? : "");
+	}
+}
+
 static const void *proxy_interface_property_tostr(
 					const struct proxy_interface *proxy,
 					const char *name)

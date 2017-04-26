@@ -70,6 +70,10 @@ bool proxy_interface_method_call(const struct proxy_interface *proxy,
 					const char *name, const char *signature,
 					l_dbus_message_func_t callback, ...);
 
+void proxy_properties_display(const struct proxy_interface *proxy,
+				const char *caption, const char *margin,
+				int name_column_width, int value_column_width);
+
 char *proxy_property_str_completion(const struct proxy_interface_type *type,
 					proxy_property_match_func_t function,
 					const char *property_name,

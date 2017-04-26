@@ -44,8 +44,29 @@ struct device {
 	const struct proxy_interface *wsc;
 };
 
-static void display_device(const struct device *device)
+static void display_device(const struct proxy_interface *proxy)
 {
+	const struct device *device = proxy_interface_get_data(proxy);
+	char *caption = l_strdup_printf("%s: %s", "Device", device->name);
+
+	proxy_properties_display(proxy, caption, MARGIN, 20, 47);
+
+	l_free(caption);
+
+	if (device->connected_network) {
+		display("%s%*s  %-*s%-*s\n", MARGIN, 8, "",
+			20, "Connected network",
+			47, proxy_interface_get_identity_str(
+					device->connected_network) ? : "");
+	}
+
+	if (device->adapter) {
+		display("%s%*s  %-*s%-*s\n", MARGIN, 8, "", 20, "Adapter", 47,
+			proxy_interface_get_identity_str(
+						device->adapter) ? : "");
+	}
+
+	display_table_footer();
 }
 
 static const char *get_name(const void *data)
@@ -407,16 +428,13 @@ static const struct proxy_interface *get_device_proxy_by_name(
 
 static enum cmd_status cmd_show(const char *device_name, char *args)
 {
-	struct device *device;
 	const struct proxy_interface *proxy =
 					get_device_proxy_by_name(device_name);
 
 	if (!proxy)
 		return CMD_STATUS_INVALID_ARGS;
 
-	device = proxy_interface_get_data(proxy);
-
-	display_device(device);
+	display_device(proxy);
 
 	return CMD_STATUS_OK;
 }
