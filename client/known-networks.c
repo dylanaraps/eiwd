@@ -261,7 +261,91 @@ static enum cmd_status cmd_list(const char *entity, char *args)
 
 static enum cmd_status cmd_forget(const char *entity, char *args)
 {
-	return CMD_STATUS_UNSUPPORTED;
+	char **arg_arr;
+	const char *network_name;
+	const char *network_type;
+	const struct l_queue_entry *entry;
+	struct known_network *network = NULL;
+	struct known_network *net;
+	struct l_queue *known_networks;
+	struct l_queue *match;
+	struct proxy_interface *proxy =
+		proxy_interface_find(IWD_KNOWN_NETWORKS_INTREFACE,
+						IWD_KNOWN_NETWORKS_PATH);
+
+	if (!proxy)
+		return CMD_STATUS_FAILED;
+
+	arg_arr = l_strsplit(args, ' ');
+	if (!arg_arr || !arg_arr[0]) {
+		l_strfreev(arg_arr);
+
+		return CMD_STATUS_INVALID_ARGS;
+	}
+
+	network_name = arg_arr[0];
+	known_networks = proxy_interface_get_data(proxy);
+	match = NULL;
+
+	for (entry = l_queue_get_entries(known_networks); entry;
+							entry = entry->next) {
+		net = entry->data;
+
+		if (strcmp(net->name, network_name))
+			continue;
+
+		if (!match)
+			match = l_queue_new();
+
+		l_queue_push_tail(match, net);
+	}
+
+	if (!match) {
+		display("Invalid network name '%s'\n", network_name);
+		l_strfreev(arg_arr);
+
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	if (l_queue_length(match) > 1) {
+		if (!arg_arr[1]) {
+			display("Provided network name is ambiguous. "
+				"Please specify security type.\n");
+
+			l_queue_destroy(match, NULL);
+			l_strfreev(arg_arr);
+
+			return CMD_STATUS_INVALID_VALUE;
+		}
+
+		network_type = arg_arr[1];
+
+		for (entry = l_queue_get_entries(match); entry;
+							entry = entry->next) {
+			net = entry->data;
+
+			if (!strcmp(net->type, network_type)) {
+				network = net;
+				break;
+			}
+		}
+	} else {
+		network = l_queue_pop_head(match);
+	}
+
+	l_queue_destroy(match, NULL);
+	l_strfreev(arg_arr);
+
+	if (!network) {
+		display("No network with specified parameters was found\n");
+
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	proxy_interface_method_call(proxy, "ForgetNetwork", "ss", NULL,
+						network->name, network->type);
+
+	return CMD_STATUS_OK;
 }
 
 static const struct command known_networks_commands[] = {

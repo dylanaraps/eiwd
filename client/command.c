@@ -306,6 +306,9 @@ error:
 		display_command_line(family, cmd);
 		break;
 
+	case CMD_STATUS_INVALID_VALUE:
+		break;
+
 	case CMD_STATUS_UNSUPPORTED:
 		display_refresh_reset();
 

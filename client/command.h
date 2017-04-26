@@ -25,6 +25,7 @@ typedef char *(*command_completion_func_t) (const char *text, int state);
 enum cmd_status {
 	CMD_STATUS_OK,
 	CMD_STATUS_INVALID_ARGS,
+	CMD_STATUS_INVALID_VALUE,
 	CMD_STATUS_UNSUPPORTED,
 	CMD_STATUS_FAILED,
 };
