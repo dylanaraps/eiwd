@@ -24,10 +24,16 @@
 #include <config.h>
 #endif
 
+#define _XOPEN_SOURCE 700
+
+#include <time.h>
 #include <ell/ell.h>
 
 #include "command.h"
 #include "dbus-proxy.h"
+#include "display.h"
+
+#define IWD_KNOWN_NETWORKS_PATH	"/"
 
 struct known_network {
 	char *name;
@@ -46,6 +52,174 @@ static void known_network_destroy(void *data)
 	l_free(network->type);
 
 	l_free(network);
+}
+
+static const char *format_iso8601(const char *time_str, const char *format)
+{
+	struct tm tm;
+	time_t time;
+	static char buf[255];
+
+	if (!time_str)
+		return NULL;
+
+	memset(&tm, 0, sizeof(struct tm));
+
+	strptime(time_str, "%FT%TZ", &tm);
+
+	time = mktime(&tm);
+
+	strftime(buf, sizeof(buf), format, localtime(&time));
+
+	return buf;
+}
+
+static void known_networks_display(struct l_queue *known_networks)
+{
+	const struct l_queue_entry *entry;
+
+	if (l_queue_length(known_networks))
+		display_table_header("Known Networks",
+					" %-*s%-*s%-*s%-*s",
+					32, "Name", 11, "Security",
+					19, "Last connected", 17, "Last seen");
+	else
+		display(MARGIN "No known networks\n");
+
+	for (entry = l_queue_get_entries(known_networks); entry;
+							entry = entry->next) {
+		struct known_network *network = entry->data;
+		char *last_connected =
+			l_strdup(format_iso8601(network->last_connected,
+							"%b %e, %l:%M %p"));
+		char *last_seen =
+			l_strdup(format_iso8601(network->last_seen,
+							"%b %e, %l:%M %p"));
+
+		display(" %-*s%-*s%-*s%-*s"
+			"\n", 32, network->name, 11, network->type,
+			19, last_connected ? : "-", 17, last_seen ? : "-");
+
+		l_free(last_connected);
+		l_free(last_seen);
+	}
+
+	display_table_footer();
+}
+
+static void set_name(void *data, struct l_dbus_message_iter *variant)
+{
+	struct known_network *network = data;
+	const char *value;
+
+	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
+		network->name = NULL;
+
+		return;
+	}
+
+	network->name = l_strdup(value);
+}
+
+static void set_type(void *data, struct l_dbus_message_iter *variant)
+{
+	struct known_network *network = data;
+	const char *value;
+
+	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
+		network->type = NULL;
+
+		return;
+	}
+
+	network->type = l_strdup(value);
+}
+
+static void set_last_connected(void *data, struct l_dbus_message_iter *variant)
+{
+	struct known_network *network = data;
+	const char *value;
+
+	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
+		network->last_connected = NULL;
+
+		return;
+	}
+
+	network->last_connected = l_strdup(value);
+}
+
+static void set_last_seen(void *data, struct l_dbus_message_iter *variant)
+{
+	struct known_network *network = data;
+	const char *value;
+
+	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
+		network->last_seen = NULL;
+
+		return;
+	}
+
+	network->last_seen = l_strdup(value);
+}
+
+static const struct proxy_interface_property known_network_properties[] = {
+	{ "Name",              "s", set_name           },
+	{ "Type",              "s", set_type           },
+	{ "LastConnectedTime", "s", set_last_connected },
+	{ "LastSeenTime",      "s", set_last_seen      },
+	{ },
+};
+
+static void populate_known_network(struct known_network *network,
+				struct l_dbus_message_iter *network_iter)
+{
+	const char *name;
+	size_t i;
+	struct l_dbus_message_iter variant;
+
+	while (l_dbus_message_iter_next_entry(network_iter, &name, &variant)) {
+		for (i = 0; known_network_properties[i].name; i++) {
+			if (strcmp(known_network_properties[i].name, name))
+				continue;
+
+			if (!known_network_properties[i].set)
+				break;
+
+			known_network_properties[i].set(network, &variant);
+
+			break;
+		}
+	}
+}
+
+static void list_networks_callback(struct l_dbus_message *message, void *proxy)
+{
+	struct l_queue *known_networks = proxy_interface_get_data(proxy);
+	struct l_dbus_message_iter network_iter;
+	struct l_dbus_message_iter iter;
+
+	if (dbus_message_has_error(message))
+		return;
+
+	if (!l_dbus_message_get_arguments(message, "aa{sv}", &iter)) {
+		l_error("Failed to parse 'list known networks' callback "
+								"message");
+
+		return;
+	}
+
+	l_queue_clear(known_networks, known_network_destroy);
+
+	while (l_dbus_message_iter_next_entry(&iter, &network_iter)) {
+		struct known_network *network = l_new(struct known_network, 1);
+
+		populate_known_network(network, &network_iter);
+
+		l_queue_push_tail(known_networks, network);
+	}
+
+	known_networks_display(known_networks);
 }
 
 static void *known_networks_create(void)
@@ -72,6 +246,15 @@ static struct proxy_interface_type known_networks_interface_type = {
 
 static void cmd_list(const char *entity, char *args)
 {
+	struct proxy_interface *proxy =
+		proxy_interface_find(IWD_KNOWN_NETWORKS_INTREFACE,
+						IWD_KNOWN_NETWORKS_PATH);
+
+	if (!proxy)
+		return;
+
+	proxy_interface_method_call(proxy, "ListKnownNetworks", "",
+						list_networks_callback);
 }
 
 static void cmd_forget(const char *entity, char *args)
@@ -81,7 +264,7 @@ static void cmd_forget(const char *entity, char *args)
 static const struct command known_networks_commands[] = {
 	{ NULL, "list",   NULL, cmd_list,   "List known networks", true },
 	{ NULL, "forget", "<network name> [security]",
-				cmd_forget, "Forget known network"},
+				cmd_forget, "Forget known network" },
 	{ }
 };
 
