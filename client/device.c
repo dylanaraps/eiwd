@@ -341,6 +341,14 @@ static bool match_by_name(const void *a, const void *b)
 	return !strcmp(device->name, name);
 }
 
+static bool match_by_partial_name(const void *a, const void *b)
+{
+	const struct device *device = a;
+	const char *text = b;
+
+	return !strncmp(device->name, text, strlen(text));
+}
+
 static const struct proxy_interface *get_device_proxy_by_name(
 							const char *device_name)
 {
@@ -471,7 +479,33 @@ static const struct command device_commands[] = {
 
 static char *family_arg_completion(const char *text, int state)
 {
-	return NULL;
+	static bool first_pass;
+	static size_t index;
+	static size_t len;
+	const char *cmd;
+
+	if (!state) {
+		index = 0;
+		len = strlen(text);
+		first_pass = true;
+	}
+
+	while ((cmd = device_commands[index].cmd)) {
+		if (device_commands[index++].entity)
+			continue;
+
+		if (!strncmp(cmd, text, len))
+			return l_strdup(cmd);
+	}
+
+	if (first_pass) {
+		state = 0;
+		first_pass = false;
+	}
+
+	return proxy_property_str_completion(&device_interface_type,
+						match_by_partial_name, "Name",
+						text, state);
 }
 
 static char *entity_arg_completion(const char *text, int state)

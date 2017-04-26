@@ -44,6 +44,27 @@ static struct l_dbus *dbus;
 static struct l_queue *proxy_interfaces;
 static struct l_queue *proxy_interface_types;
 
+static const void *proxy_interface_property_tostr(
+					const struct proxy_interface *proxy,
+					const char *name)
+{
+	size_t i;
+	const struct proxy_interface_property *property_table =
+							proxy->type->properties;
+
+	for (i = 0; property_table[i].name; i++) {
+		if (strcmp(property_table[i].name, name))
+			continue;
+
+		if (!property_table[i].tostr)
+			break;
+
+		return property_table[i].tostr(proxy->data);
+	}
+
+	return NULL;
+}
+
 static void proxy_interface_property_set(struct proxy_interface *proxy,
 					const char *name,
 					struct l_dbus_message_iter *variant)
@@ -83,6 +104,43 @@ static void interface_update_properties(struct proxy_interface *proxy,
 
 	while (l_dbus_message_iter_next_entry(invalidated, &name))
 		proxy_interface_property_set(proxy, name, NULL);
+}
+
+char *proxy_property_str_completion(const struct proxy_interface_type *type,
+					proxy_property_match_func_t function,
+					const char *property_name,
+					const char *value, int state)
+{
+	static struct l_queue *match;
+	static const struct l_queue_entry *entry;
+
+	if (!state) {
+		match = proxy_interface_find_all(type->interface, function,
+									value);
+		if (!match)
+			return NULL;
+
+		entry = l_queue_get_entries(match);
+	}
+
+	while (entry) {
+		const struct proxy_interface *proxy = entry->data;
+		const char *str;
+
+		entry = entry->next;
+
+		str = proxy_interface_property_tostr(proxy, property_name);
+		if (!str)
+			return NULL;
+
+		return l_strdup(str);
+	}
+
+	l_queue_destroy(match, NULL);
+	match = NULL;
+	entry = NULL;
+
+	return NULL;
 }
 
 bool dbus_message_has_error(struct l_dbus_message *message)
