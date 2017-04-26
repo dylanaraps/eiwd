@@ -166,8 +166,9 @@ void display_refresh_set_cmd(const char *family, const char *entity,
 
 	if (display_refresh.family && !strcmp(display_refresh.family, family)) {
 		char *prompt =
-			l_strdup_printf(IWD_PROMPT"%s %s %s %s\n",
-					family ? : "", entity ? : "",
+			l_strdup_printf(IWD_PROMPT"%s%s%s %s %s\n",
+					family ? : "",
+					entity ? " " : "", entity ? : "",
 					cmd->cmd ? : "", args ? : "");
 
 		l_queue_push_tail(display_refresh.redo_entries, prompt);
