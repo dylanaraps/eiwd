@@ -314,6 +314,40 @@ void display_command(const struct command_family *family, const char *cmd_name)
 	}
 }
 
+static void display_completion_matches(char **matches, int num_matches,
+								int max_length)
+{
+	char *prompt;
+	char *entry;
+	char line[LINE_LEN];
+	size_t index;
+	size_t line_used;
+
+	prompt = l_strdup_printf("%s%s\n", IWD_PROMPT, rl_copy_text(0, rl_end));
+	display_text(prompt);
+	l_free(prompt);
+
+	for (index = 1, line_used = 0; matches[index]; index++) {
+		if ((line_used + max_length) > LINE_LEN) {
+			strcpy(&line[line_used], "\n");
+
+			display_text(line);
+
+			line_used = 0;
+		}
+
+		entry = l_strdup_printf("%-*s ", max_length, matches[index]);
+		strcpy(&line[line_used], entry);
+		l_free(entry);
+
+		line_used += max_length + 1;
+	}
+
+	strcpy(&line[line_used], "\n");
+
+	display_text(line);
+}
+
 static void readline_callback(char *prompt)
 {
 	HIST_ENTRY *previous_prompt;
@@ -393,6 +427,7 @@ void display_init(void)
 	setlinebuf(stdout);
 
 	rl_attempted_completion_function = command_completion;
+	rl_completion_display_matches_hook = display_completion_matches;
 
 	rl_erase_empty_line = 1;
 	rl_callback_handler_install("Waiting for IWD to appear...",
