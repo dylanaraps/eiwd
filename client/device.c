@@ -29,6 +29,7 @@
 #include "command.h"
 #include "dbus-proxy.h"
 #include "display.h"
+#include "network.h"
 
 struct device {
 	bool powered;
@@ -454,7 +455,96 @@ static enum cmd_status cmd_set_property(const char *device_name, char *args)
 
 static enum cmd_status cmd_connect(const char *device_name, char *args)
 {
-	return CMD_STATUS_UNSUPPORTED;
+	char **arg_arr;
+	const char *network_name;
+	const char *network_type;
+	struct l_queue *match;
+	const struct device *device;
+	const struct l_queue_entry *entry;
+	struct ordered_network *ordered_network;
+	const struct proxy_interface *proxy =
+					get_device_proxy_by_name(device_name);
+
+	if (!proxy)
+		return CMD_STATUS_INVALID_VALUE;
+
+	arg_arr = l_strsplit(args, ' ');
+	if (!arg_arr || !arg_arr[0]) {
+		l_strfreev(arg_arr);
+
+		return CMD_STATUS_INVALID_ARGS;
+	}
+
+	device = proxy_interface_get_data(proxy);
+
+	if (!device->ordered_networks) {
+		display("Use 'get-networks' command to obtain a list of "
+						"available networks first\n");
+		l_strfreev(arg_arr);
+
+		return CMD_STATUS_OK;
+	}
+
+	network_name = arg_arr[0];
+	match = NULL;
+
+	for (entry = l_queue_get_entries(device->ordered_networks); entry;
+							entry = entry->next) {
+		ordered_network = entry->data;
+
+		if (strcmp(ordered_network->name, network_name))
+			continue;
+
+		if (!match)
+			match = l_queue_new();
+
+		l_queue_push_tail(match, ordered_network);
+	}
+
+	if (!match) {
+		display("Invalid network name '%s'\n", network_name);
+		l_strfreev(arg_arr);
+
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	if (l_queue_length(match) > 1) {
+		if (!arg_arr[1]) {
+			display("Provided network name is ambiguous. "
+				"Please specify security type.\n");
+
+			l_queue_destroy(match, NULL);
+			l_strfreev(arg_arr);
+
+			return CMD_STATUS_INVALID_VALUE;
+		}
+
+		network_type = arg_arr[1];
+		ordered_network = NULL;
+
+		for (entry = l_queue_get_entries(match); entry;
+							entry = entry->next) {
+			ordered_network = entry->data;
+
+			if (!strcmp(ordered_network->type, network_type))
+				break;
+		}
+	} else {
+		ordered_network = l_queue_pop_head(match);
+	}
+
+	l_queue_destroy(match, NULL);
+	l_strfreev(arg_arr);
+
+	if (!ordered_network) {
+		display("No network with specified parameters was found\n");
+
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	network_connect(ordered_network->network_path);
+
+	return CMD_STATUS_OK;
 }
 
 static const struct command device_commands[] = {

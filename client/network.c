@@ -30,6 +30,12 @@
 #include "display.h"
 #include "network.h"
 
+static void check_errors_method_callback(struct l_dbus_message *message,
+								void *user_data)
+{
+	dbus_message_has_error(message);
+}
+
 bool network_is_connected(const char *path)
 {
 	return false;
@@ -37,6 +43,14 @@ bool network_is_connected(const char *path)
 
 void network_connect(const char *path)
 {
+	const struct proxy_interface *proxy =
+			proxy_interface_find(IWD_NETWORK_INTERFACE, path);
+
+	if (!proxy)
+		return;
+
+	proxy_interface_method_call(proxy, "Connect", "",
+						check_errors_method_callback);
 }
 
 static struct proxy_interface_type network_interface_type = {
