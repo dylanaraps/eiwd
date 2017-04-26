@@ -369,18 +369,20 @@ static const struct proxy_interface *get_device_proxy_by_name(
 	return proxy;
 }
 
-static void cmd_show(const char *device_name, char *args)
+static enum cmd_status cmd_show(const char *device_name, char *args)
 {
 	struct device *device;
 	const struct proxy_interface *proxy =
 					get_device_proxy_by_name(device_name);
 
 	if (!proxy)
-		return;
+		return CMD_STATUS_INVALID_ARGS;
 
 	device = proxy_interface_get_data(proxy);
 
 	display_device(device);
+
+	return CMD_STATUS_OK;
 }
 
 static void check_errors_method_callback(struct l_dbus_message *message,
@@ -389,43 +391,49 @@ static void check_errors_method_callback(struct l_dbus_message *message,
 	dbus_message_has_error(message);
 }
 
-static void cmd_scan(const char *device_name, char *args)
+static enum cmd_status cmd_scan(const char *device_name, char *args)
 {
 	const struct proxy_interface *proxy =
 					get_device_proxy_by_name(device_name);
 
 	if (!proxy)
-		return;
+		return CMD_STATUS_INVALID_ARGS;
 
 	proxy_interface_method_call(proxy, "Scan", "",
 						check_errors_method_callback);
+
+	return CMD_STATUS_OK;
 }
 
-static void cmd_disconnect(const char *device_name, char *args)
+static enum cmd_status cmd_disconnect(const char *device_name, char *args)
 {
 	const struct proxy_interface *proxy =
 					get_device_proxy_by_name(device_name);
 
 	if (!proxy)
-		return;
+		return CMD_STATUS_INVALID_ARGS;
 
 	proxy_interface_method_call(proxy, "Disconnect", "",
 						check_errors_method_callback);
+
+	return CMD_STATUS_OK;
 }
 
-static void cmd_get_networks(const char *device_name, char *args)
+static enum cmd_status cmd_get_networks(const char *device_name, char *args)
 {
 	const struct proxy_interface *proxy =
 					get_device_proxy_by_name(device_name);
 
 	if (!proxy)
-		return;
+		return CMD_STATUS_INVALID_ARGS;
 
 	proxy_interface_method_call(proxy, "GetOrderedNetworks", "",
 					ordered_networks_callback);
+
+	return CMD_STATUS_OK;
 }
 
-static void cmd_list(const char *device_name, char *args)
+static enum cmd_status cmd_list(const char *device_name, char *args)
 {
 	display_table_header("Devices", MARGIN "%-*s%-*s%-*s%-*s", 20, "Name",
 				20, "Address", 15, "State", 10, "Adapter");
@@ -433,14 +441,18 @@ static void cmd_list(const char *device_name, char *args)
 	proxy_interface_display_list(device_interface_type.interface);
 
 	display_table_footer();
+
+	return CMD_STATUS_OK;
 }
 
-static void cmd_set_property(const char *device_name, char *args)
+static enum cmd_status cmd_set_property(const char *device_name, char *args)
 {
+	return CMD_STATUS_UNSUPPORTED;
 }
 
-static void cmd_connect(const char *device_name, char *args)
+static enum cmd_status cmd_connect(const char *device_name, char *args)
 {
+	return CMD_STATUS_UNSUPPORTED;
 }
 
 static const struct command device_commands[] = {

@@ -244,21 +244,24 @@ static struct proxy_interface_type known_networks_interface_type = {
 	.ops = &known_networks_ops,
 };
 
-static void cmd_list(const char *entity, char *args)
+static enum cmd_status cmd_list(const char *entity, char *args)
 {
 	struct proxy_interface *proxy =
 		proxy_interface_find(IWD_KNOWN_NETWORKS_INTREFACE,
 						IWD_KNOWN_NETWORKS_PATH);
 
 	if (!proxy)
-		return;
+		return CMD_STATUS_FAILED;
 
 	proxy_interface_method_call(proxy, "ListKnownNetworks", "",
 						list_networks_callback);
+
+	return CMD_STATUS_OK;
 }
 
-static void cmd_forget(const char *entity, char *args)
+static enum cmd_status cmd_forget(const char *entity, char *args)
 {
+	return CMD_STATUS_UNSUPPORTED;
 }
 
 static const struct command known_networks_commands[] = {

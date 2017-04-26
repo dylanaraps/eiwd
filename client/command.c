@@ -33,16 +33,20 @@
 
 static struct l_queue *command_families;
 
-static void cmd_version(const char *entity, char *arg)
+static enum cmd_status cmd_version(const char *entity, char *arg)
 {
 	display("IWD version %s\n", VERSION);
+
+	return CMD_STATUS_OK;
 }
 
-static void cmd_quit(const char *entity, char *arg)
+static enum cmd_status cmd_quit(const char *entity, char *arg)
 {
 	display_quit();
 
 	l_main_quit();
+
+	return CMD_STATUS_OK;
 }
 
 static const struct command command_list[] = {
@@ -281,12 +285,40 @@ char *command_entity_arg_completion(const char *text, int state,
 static void execute_cmd(const char *family, const char *entity,
 					const struct command *cmd, char *args)
 {
+	enum cmd_status status;
+
 	display_refresh_set_cmd(family, entity, cmd, args);
 
-	cmd->function(entity, args);
+	status = cmd->function(entity, args);
+
+	if (status != CMD_STATUS_OK)
+		goto error;
 
 	if (cmd->refreshable)
 		display_refresh_timeout_set();
+
+	return;
+
+error:
+	switch (status) {
+	case CMD_STATUS_INVALID_ARGS:
+		display("Invalid command. Use the following pattern:\n");
+		display_command_line(family, cmd);
+		break;
+
+	case CMD_STATUS_UNSUPPORTED:
+		display_refresh_reset();
+
+		display("Unsupported command\n");
+		break;
+
+	case CMD_STATUS_FAILED:
+		l_main_quit();
+		break;
+
+	default:
+		l_error("Unknown command status.");
+	}
 }
 
 static bool match_cmd(const char *family, const char *entity, const char *cmd,

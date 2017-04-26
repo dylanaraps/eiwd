@@ -22,11 +22,18 @@
 
 typedef char *(*command_completion_func_t) (const char *text, int state);
 
+enum cmd_status {
+	CMD_STATUS_OK,
+	CMD_STATUS_INVALID_ARGS,
+	CMD_STATUS_UNSUPPORTED,
+	CMD_STATUS_FAILED,
+};
+
 struct command {
 	const char *entity;
 	const char *cmd;
 	const char *arg;
-	void (*function)(const char *entity, char *arg);
+	enum cmd_status (*function)(const char *entity, char *arg);
 	const char *desc;
 	const bool refreshable;
 	command_completion_func_t completion;
