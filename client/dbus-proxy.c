@@ -418,7 +418,7 @@ static void proxy_interface_destroy(void *data)
 
 	l_free(proxy->path);
 
-	if (proxy->type->ops->destroy)
+	if (proxy->type->ops && proxy->type->ops->destroy)
 		proxy->type->ops->destroy(proxy->data);
 
 	proxy->type = NULL;
