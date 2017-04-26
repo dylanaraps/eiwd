@@ -47,7 +47,7 @@ static void display_device(const struct device *device)
 {
 }
 
-static const void *get_name(const void *data)
+static const char *get_name(const void *data)
 {
 	const struct device *device = data;
 
@@ -70,7 +70,7 @@ static void set_name(void *data, struct l_dbus_message_iter *variant)
 	device->name = l_strdup(value);
 }
 
-static const void *get_address(const void *data)
+static const char *get_address(const void *data)
 {
 	const struct device *device = data;
 
@@ -93,7 +93,7 @@ static void set_address(void *data, struct l_dbus_message_iter *variant)
 	device->address = l_strdup(value);
 }
 
-static const void *get_state(const void *data)
+static const char *get_state(const void *data)
 {
 	const struct device *device = data;
 
@@ -132,14 +132,11 @@ static void set_connected_network(void *data,
 									path);
 }
 
-static const void *get_powered(const void *data)
+static const char *get_powered_tostr(const void *data)
 {
 	const struct device *device = data;
-	void *ptr;
 
-	l_put_u8(device->powered, &ptr);
-
-	return ptr;
+	return device->powered ? "yes" : "no";
 }
 
 static void set_powered(void *data, struct l_dbus_message_iter *variant)
@@ -156,14 +153,11 @@ static void set_powered(void *data, struct l_dbus_message_iter *variant)
 	device->powered = value;
 }
 
-static const void *get_scanning(const void *data)
+static const char *get_scanning_tostr(const void *data)
 {
 	const struct device *device = data;
-	void *ptr;
 
-	l_put_u8(device->scanning, &ptr);
-
-	return ptr;
+	return device->scanning ? "scanning" : "";
 }
 
 static void set_scanning(void *data, struct l_dbus_message_iter *variant)
@@ -196,10 +190,10 @@ static void set_adapter(void *data, struct l_dbus_message_iter *variant)
 
 static const struct proxy_interface_property device_properties[] = {
 	{ "Name",     "s", set_name,     get_name },
-	{ "Powered",  "b", set_powered,  get_powered, true },
+	{ "Powered",  "b", set_powered,  get_powered_tostr, true },
 	{ "Adapter",  "o", set_adapter },
 	{ "Address",  "s", set_address,  get_address },
-	{ "Scanning", "b", set_scanning, get_scanning },
+	{ "Scanning", "b", set_scanning, get_scanning_tostr },
 	{ "State",    "s", set_state,    get_state },
 	{ "ConnectedNetwork",
 			"o", set_connected_network },

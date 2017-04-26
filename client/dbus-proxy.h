@@ -36,7 +36,7 @@ struct proxy_interface_property {
 	const char *name;
 	const char *type;
 	void (*set)(void *data, struct l_dbus_message_iter *variant);
-	const void *(*get)(const void *data);
+	const char *(*tostr)(const void *data);
 	const bool is_read_write;
 };
 
