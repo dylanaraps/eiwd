@@ -221,6 +221,39 @@ static void ordered_networks_destroy(void *data)
 
 static void ordered_networks_display(struct l_queue *ordered_networks)
 {
+	const struct l_queue_entry *entry;
+	bool is_first;
+
+	if (l_queue_length(ordered_networks)) {
+		display_table_header("Available networks",
+					"%s%-*s%-*s%-*s%*s", MARGIN, 2, "",
+					32, "Network name", 10, "Security",
+					4, "dbms");
+	} else {
+		display("No networks available\n");
+
+		return;
+	}
+
+	for (is_first = true, entry = l_queue_get_entries(ordered_networks);
+						entry; entry = entry->next) {
+		struct ordered_network *network = entry->data;
+
+		if (is_first && network_is_connected(network->network_path)) {
+			display("%s%-*s%-*s%-*s%*d\n", MARGIN, 2, "\u25CB ",
+					32, network->name, 10, network->type,
+					4, network->signal_strength);
+
+			is_first = false;
+			continue;
+		}
+
+		display("%s%-*s%-*s%-*s%*d\n", MARGIN, 2, "",
+					32, network->name, 10, network->type,
+					4, network->signal_strength);
+	}
+
+	display_table_footer();
 }
 
 static void ordered_networks_callback(struct l_dbus_message *message,
