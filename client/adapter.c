@@ -28,6 +28,7 @@
 
 #include "command.h"
 #include "dbus-proxy.h"
+#include "display.h"
 
 struct adapter {
 	bool powered;
@@ -120,9 +121,49 @@ static const struct proxy_interface_property adapter_properties[] = {
 	{ }
 };
 
+static void display_adapter_inline(const char *margin, const void *data)
+{
+	const struct adapter *adapter = data;
+
+	display("%s%-*s%-*s%-*s%-*s\n", margin,
+		19, adapter->name ? : "-", 10, get_powered_tostr(adapter),
+		20, adapter->vendor ? : "-", 20, adapter->model ? : "-");
+}
+
+static void *adapter_create(void)
+{
+	return  l_new(struct adapter, 1);
+}
+
+static void adapter_destroy(void *data)
+{
+	struct adapter *adapter = data;
+
+	l_free(adapter->model);
+	l_free(adapter->vendor);
+	l_free(adapter->name);
+
+	l_free(adapter);
+}
+
+static const char *adapter_identity(void *data)
+{
+	const struct adapter *adapter = data;
+
+	return adapter->name;
+}
+
+static const struct proxy_interface_type_ops adapter_ops = {
+	.create = adapter_create,
+	.destroy = adapter_destroy,
+	.display = display_adapter_inline,
+	.identity = adapter_identity,
+};
+
 static struct proxy_interface_type adapter_interface_type = {
 	.interface = IWD_ADAPTER_INTERFACE,
 	.properties = adapter_properties,
+	.ops = &adapter_ops,
 };
 
 static bool match_by_partial_name(const void *a, const void *b)
