@@ -87,6 +87,7 @@ dist_sysconf_DATA = src/iwd.conf
 
 client_iwctl_SOURCES = client/main.c \
 			readline/readline.h readline/history.h \
+			client/adapter.c \
 			client/command.h client/command.c \
 			client/dbus-proxy.h client/dbus-proxy.c \
 			client/device.c \
