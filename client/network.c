@@ -30,6 +30,14 @@
 #include "display.h"
 #include "network.h"
 
+struct network {
+	bool connected;
+	char *identity;
+	char *name;
+	char *type;
+	const struct proxy_interface *device;
+};
+
 static void check_errors_method_callback(struct l_dbus_message *message,
 								void *user_data)
 {
@@ -53,8 +61,77 @@ void network_connect(const char *path)
 						check_errors_method_callback);
 }
 
+static void set_name(void *data, struct l_dbus_message_iter *variant)
+{
+	struct network *network = data;
+	const char *value;
+
+	l_free(network->name);
+
+	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
+		network->name = NULL;
+
+		return;
+	}
+
+	network->name = l_strdup(value);
+}
+
+static void set_connected(void *data, struct l_dbus_message_iter *variant)
+{
+	struct network *network = data;
+	bool value;
+
+	if (!l_dbus_message_iter_get_variant(variant, "b", &value)) {
+		network->connected = false;
+
+		return;
+	}
+
+	network->connected = value;
+}
+
+static void set_device(void *data, struct l_dbus_message_iter *variant)
+{
+	struct network *network = data;
+	const char *path;
+
+	if (!l_dbus_message_iter_get_variant(variant, "o", &path)) {
+		network->device = NULL;
+
+		return;
+	}
+
+	network->device = proxy_interface_find(IWD_DEVICE_INTERFACE, path);
+}
+
+static void set_type(void *data, struct l_dbus_message_iter *variant)
+{
+	struct network *network = data;
+	const char *value;
+
+	l_free(network->type);
+
+	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
+		network->type = NULL;
+
+		return;
+	}
+
+	network->type = l_strdup(value);
+}
+
+static const struct proxy_interface_property network_properties[] = {
+	{ "Name",       "s", set_name},
+	{ "Connected",  "b", set_connected},
+	{ "Device",     "o", set_device},
+	{ "Type",       "s", set_type},
+	{ }
+};
+
 static struct proxy_interface_type network_interface_type = {
 	.interface = IWD_NETWORK_INTERFACE,
+	.properties = network_properties,
 };
 
 static int network_interface_init(void)
