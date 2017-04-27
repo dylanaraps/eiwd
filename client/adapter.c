@@ -121,6 +121,18 @@ static const struct proxy_interface_property adapter_properties[] = {
 	{ }
 };
 
+static void display_adapter(const struct proxy_interface *proxy)
+{
+	const struct adapter *adapter = proxy_interface_get_data(proxy);
+	char *caption = l_strdup_printf("%s: %s", "Adapter", adapter->name);
+
+	proxy_properties_display(proxy, caption, MARGIN, 17, 47);
+
+	l_free(caption);
+
+	display_table_footer();
+}
+
 static void display_adapter_inline(const char *margin, const void *data)
 {
 	const struct adapter *adapter = data;
@@ -166,6 +178,14 @@ static struct proxy_interface_type adapter_interface_type = {
 	.ops = &adapter_ops,
 };
 
+static bool match_by_name(const void *a, const void *b)
+{
+	const struct adapter *adapter = a;
+	const char *name = b;
+
+	return !strcmp(adapter->name, name);
+}
+
 static bool match_by_partial_name(const void *a, const void *b)
 {
 	const struct adapter *adapter = a;
@@ -174,14 +194,51 @@ static bool match_by_partial_name(const void *a, const void *b)
 	return !strncmp(adapter->name, text, strlen(text));
 }
 
+static const struct proxy_interface *get_adapter_proxy_by_name(
+						const char *adapter_name)
+{
+	struct l_queue *match;
+	struct proxy_interface *proxy = NULL;
+
+	if (!adapter_name)
+		return NULL;
+
+	match = proxy_interface_find_all(adapter_interface_type.interface,
+						match_by_name, adapter_name);
+
+	if (l_queue_length(match))
+		proxy = l_queue_pop_head(match);
+	else
+		display("Adapter '%s' not found\n", adapter_name);
+
+	l_queue_destroy(match, NULL);
+
+	return proxy;
+}
+
 static enum cmd_status cmd_list(const char *adapter_name, char *args)
 {
-	return CMD_STATUS_UNSUPPORTED;
+	display_table_header("Adapters", MARGIN "%-*s%-*s%-*s%-*s", 19, "Name",
+				10, "Powered", 20, "Vendor", 20, "Model");
+
+	proxy_interface_display_list(adapter_interface_type.interface);
+
+	display_table_footer();
+
+	return CMD_STATUS_OK;
 }
 
 static enum cmd_status cmd_show(const char *adapter_name, char *args)
 {
-	return CMD_STATUS_UNSUPPORTED;
+	const struct proxy_interface *proxy =
+					get_adapter_proxy_by_name(adapter_name);
+
+	if (!proxy)
+		return CMD_STATUS_INVALID_ARGS;
+
+	display_adapter(proxy);
+
+	return CMD_STATUS_OK;
 }
 
 static enum cmd_status cmd_set_property(const char *adapter_name, char *args)
@@ -191,6 +248,25 @@ static enum cmd_status cmd_set_property(const char *adapter_name, char *args)
 
 static char *cmd_set_property_completion(const char *text, int state)
 {
+	static size_t index;
+	static size_t len;
+	const char *prop;
+
+	if (!state) {
+		index = 0;
+		len = strlen(text);
+	}
+
+	while ((prop = adapter_properties[index].name)) {
+		if (!adapter_properties[index++].is_read_write)
+			continue;
+
+		if (strncmp(prop, text, len))
+			continue;
+
+		return l_strdup(prop);
+	}
+
 	return NULL;
 }
 
