@@ -174,7 +174,35 @@ static bool match_by_partial_name(const void *a, const void *b)
 	return !strncmp(adapter->name, text, strlen(text));
 }
 
+static enum cmd_status cmd_list(const char *adapter_name, char *args)
+{
+	return CMD_STATUS_UNSUPPORTED;
+}
+
+static enum cmd_status cmd_show(const char *adapter_name, char *args)
+{
+	return CMD_STATUS_UNSUPPORTED;
+}
+
+static enum cmd_status cmd_set_property(const char *adapter_name, char *args)
+{
+	return CMD_STATUS_UNSUPPORTED;
+}
+
+static char *cmd_set_property_completion(const char *text, int state)
+{
+	return NULL;
+}
+
 static const struct command adapter_commands[] = {
+	{ NULL,    "list",         NULL, cmd_list,       "List adapters",
+									true },
+	{ "<phy>", "show",         NULL, cmd_show,       "Show adapter info",
+									true },
+	{ "<phy>", "set-property", "<name> <value>",
+					cmd_set_property, "Set property",
+									false,
+						cmd_set_property_completion },
 	{ }
 };
 
