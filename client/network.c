@@ -129,9 +129,55 @@ static const struct proxy_interface_property network_properties[] = {
 	{ }
 };
 
+static const char *network_identity(void *data)
+{
+	struct network *network = data;
+
+	if (!network->identity)
+		network->identity =
+			l_strdup_printf("%s %s", network->name, network->type);
+
+	return network->identity;
+}
+
+static void network_display_inline(const char *margin, const void *data)
+{
+	const struct network *network = data;
+
+	display("%s%s %s %s\n", margin, network->name ? network->name : "",
+			network->type ? network->type : "",
+			network->connected ? "connected" : "diconnected");
+}
+
+static void *network_create(void)
+{
+	return l_new(struct network, 1);
+}
+
+static void network_destroy(void *data)
+{
+	struct network *network = data;
+
+	l_free(network->name);
+	l_free(network->type);
+	l_free(network->identity);
+
+	network->device = NULL;
+
+	l_free(network);
+}
+
+static const struct proxy_interface_type_ops ops = {
+	.create = network_create,
+	.destroy = network_destroy,
+	.display = network_display_inline,
+	.identity = network_identity,
+};
+
 static struct proxy_interface_type network_interface_type = {
 	.interface = IWD_NETWORK_INTERFACE,
 	.properties = network_properties,
+	.ops = &ops,
 };
 
 static int network_interface_init(void)
