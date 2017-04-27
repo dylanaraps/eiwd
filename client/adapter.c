@@ -125,13 +125,61 @@ static struct proxy_interface_type adapter_interface_type = {
 	.properties = adapter_properties,
 };
 
+static bool match_by_partial_name(const void *a, const void *b)
+{
+	const struct adapter *adapter = a;
+	const char *text = b;
+
+	return !strncmp(adapter->name, text, strlen(text));
+}
+
 static const struct command adapter_commands[] = {
 	{ }
 };
 
+static char *family_arg_completion(const char *text, int state)
+{
+	static bool first_pass;
+	static size_t index;
+	static size_t len;
+	const char *cmd;
+
+	if (!state) {
+		index = 0;
+		len = strlen(text);
+		first_pass = true;
+	}
+
+	while ((cmd = adapter_commands[index].cmd)) {
+		if (adapter_commands[index++].entity)
+			continue;
+
+		if (strncmp(cmd, text, len))
+			continue;
+
+		return l_strdup(cmd);
+	}
+
+	if (first_pass) {
+		state = 0;
+		first_pass = false;
+	}
+
+	return proxy_property_str_completion(&adapter_interface_type,
+						match_by_partial_name, "Name",
+						text, state);
+}
+
+static char *entity_arg_completion(const char *text, int state)
+{
+	return command_entity_arg_completion(text, state, adapter_commands);
+}
+
 static struct command_family adapter_command_family = {
 	.caption = "Adapters",
 	.name = "adapter",
+	.family_arg_completion = family_arg_completion,
+	.entity_arg_completion = entity_arg_completion,
 	.command_list = adapter_commands,
 };
 
