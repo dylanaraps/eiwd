@@ -46,7 +46,13 @@ static void check_errors_method_callback(struct l_dbus_message *message,
 
 bool network_is_connected(const char *path)
 {
-	return false;
+	const struct network *network;
+	const struct proxy_interface *proxy =
+			proxy_interface_find(IWD_NETWORK_INTERFACE, path);
+
+	network = proxy_interface_get_data(proxy);
+
+	return network->connected;
 }
 
 void network_connect(const char *path)
