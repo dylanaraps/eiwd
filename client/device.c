@@ -355,12 +355,19 @@ static bool device_unbind_interface(const struct proxy_interface *proxy,
 static void display_device_inline(const char *margin, const void *data)
 {
 	const struct device *device = data;
+	const char *adapter_str;
+
+	if (device->adapter &&
+			proxy_interface_get_identity_str(device->adapter))
+		adapter_str = proxy_interface_get_identity_str(device->adapter);
+	else
+		adapter_str = "-";
 
 	display("%s%-*s%-*s%-*s%-*s%-*s\n", margin,
 		20, device->name ? : "",
 		20, device->address ? : "",
 		15, device->state ? : "",
-		10, proxy_interface_get_identity_str(device->adapter) ? : "-",
+		10, adapter_str,
 		8, device->scanning ? "scanning" : "");
 }
 
