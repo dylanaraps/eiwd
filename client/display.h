@@ -28,7 +28,6 @@ struct command_family;
 #define COLOR_GREEN	"\x1b[32m"
 #define COLOR_RED	"\x1B[0;91m"
 #define COLOR_OFF	"\x1B[0m"
-#define CHECK		"\u2714"
 #define CLEAR_SCREEN	"\033[2J"
 #define MARGIN		"  "
 

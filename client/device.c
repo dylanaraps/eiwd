@@ -260,7 +260,8 @@ static void ordered_networks_display(struct l_queue *ordered_networks)
 		struct ordered_network *network = entry->data;
 
 		if (is_first && network_is_connected(network->network_path)) {
-			display("%s%-*s%-*s%-*s%*d\n", MARGIN, 2, "\u25CB ",
+			display("%s%-*s%-*s%-*s%*d\n", MARGIN,
+					2, COLOR_BOLDGRAY "> " COLOR_OFF,
 					32, network->name, 10, network->type,
 					4, network->signal_strength);
 
