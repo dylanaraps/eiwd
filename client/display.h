@@ -35,7 +35,6 @@ void display(const char *format, ...);
 void display_table_header(const char *caption, const char *fmt, ...);
 void display_table_footer(void);
 void display_error(const char *error);
-void display_command(const struct command_family *family, const char *cmd_name);
 void display_command_line(const char *command_family,
 						const struct command *cmd);
 

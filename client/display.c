@@ -300,20 +300,6 @@ void display_command_line(const char *command_family,
 	l_free(cmd_line);
 }
 
-void display_command(const struct command_family *family, const char *cmd_name)
-{
-	size_t i;
-
-	for (i = 0; family->command_list[i].cmd; i++) {
-		if (!strcmp(family->command_list[i].cmd, cmd_name)) {
-			display_command_line(family->name,
-						&family->command_list[i]);
-
-			return;
-		}
-	}
-}
-
 static void display_completion_matches(char **matches, int num_matches,
 								int max_length)
 {
