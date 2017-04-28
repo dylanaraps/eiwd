@@ -157,7 +157,7 @@ static const char *get_powered_tostr(const void *data)
 {
 	const struct device *device = data;
 
-	return device->powered ? "yes" : "no";
+	return device->powered ? "on" : "off";
 }
 
 static void set_powered(void *data, struct l_dbus_message_iter *variant)
@@ -178,7 +178,7 @@ static const char *get_scanning_tostr(const void *data)
 {
 	const struct device *device = data;
 
-	return device->scanning ? "scanning" : "";
+	return device->scanning ? "yes" : "no";
 }
 
 static void set_scanning(void *data, struct l_dbus_message_iter *variant)
