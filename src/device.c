@@ -76,6 +76,7 @@ struct device {
 	struct timespec roam_min_time;
 	struct l_timeout *roam_trigger_timeout;
 	uint32_t roam_scan_id;
+	uint8_t preauth_bssid[ETH_ALEN];
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
@@ -802,11 +803,102 @@ static void device_fast_transition_cb(struct netdev *netdev,
 		device_roam_failed(device);
 }
 
+static void device_transition_reassociate(struct device *device,
+						struct scan_bss *bss,
+						struct handshake_state *new_hs)
+{
+	if (netdev_reassociate(device->netdev, bss, new_hs,
+				device_reassociate_cb) < 0) {
+		handshake_state_free(new_hs);
+
+		device_roam_failed(device);
+		return;
+	}
+
+	device->connected_bss = bss;
+	device->preparing_roam = false;
+	device_enter_state(device, DEVICE_STATE_ROAMING);
+}
+
+static bool bss_match_bssid(const void *a, const void *b)
+{
+	const struct scan_bss *bss = a;
+	const uint8_t *bssid = b;
+
+	return !memcmp(bss->addr, bssid, sizeof(bss->addr));
+}
+
+static void device_preauthenticate_cb(struct netdev *netdev,
+					enum netdev_result result,
+					const uint8_t *pmk, void *user_data)
+{
+	struct device *device = user_data;
+	struct scan_bss *bss;
+	struct handshake_state *new_hs;
+
+	l_debug("%d, result: %d", device->index, result);
+
+	if (!device->preparing_roam || result == NETDEV_RESULT_ABORTED)
+		return;
+
+	bss = l_queue_find(device->bss_list, bss_match_bssid,
+				device->preauth_bssid);
+	if (!bss) {
+		l_error("Roam target BSS not found");
+
+		device_roam_failed(device);
+		return;
+	}
+
+	new_hs = device_handshake_setup(device, device->connected_network, bss);
+	if (!new_hs) {
+		l_error("device_handshake_setup failed");
+
+		device_roam_failed(device);
+		return;
+	}
+
+	if (result == NETDEV_RESULT_OK) {
+		uint8_t pmkid[16];
+		uint8_t rsne_buf[300];
+		struct ie_rsn_info rsn_info;
+
+		handshake_state_set_pmk(new_hs, pmk);
+		handshake_state_set_authenticator_address(new_hs,
+					device->preauth_bssid);
+		handshake_state_set_supplicant_address(new_hs,
+					netdev_get_address(device->netdev));
+
+		/*
+		 * Rebuild the RSNE to include the negotiated PMKID.  Note
+		 * own_ie can't be a WPA IE here, including because the
+		 * WPA IE doesn't have a capabilities field and
+		 * target_rsne->preauthentication would have been false in
+		 * device_transition_start.
+		 */
+		ie_parse_rsne_from_data(new_hs->own_ie, new_hs->own_ie[1] + 2,
+					&rsn_info);
+
+		handshake_state_get_pmkid(new_hs, pmkid);
+
+		rsn_info.num_pmkids = 1;
+		rsn_info.pmkids = pmkid;
+
+		ie_build_rsne(&rsn_info, rsne_buf);
+		handshake_state_set_own_rsn(new_hs, rsne_buf);
+	}
+
+	device_transition_reassociate(device, bss, new_hs);
+}
+
 static void device_transition_start(struct device *device, struct scan_bss *bss)
 {
 	struct handshake_state *hs = netdev_get_handshake(device->netdev);
 	uint16_t mdid;
 	struct handshake_state *new_hs;
+	struct ie_rsn_info cur_rsne, target_rsne;
+	enum security security =
+		network_get_security(device->connected_network);
 
 	l_debug("%d, target %s", device->index,
 			util_address_to_string(bss->addr));
@@ -842,6 +934,35 @@ static void device_transition_start(struct device *device, struct scan_bss *bss)
 
 	/* Non-FT transition */
 
+	/*
+	 * FT not available, we can try preauthentication if available.
+	 * 802.11-2012 section 11.5.9.2:
+	 * "A STA shall not use preauthentication within the same mobility
+	 * domain if AKM suite type 00-0F-AC:3 or 00-0F-AC:4 is used in
+	 * the current association."
+	 */
+	if (security == SECURITY_8021X &&
+			scan_bss_get_rsn_info(device->connected_bss,
+						&cur_rsne) >= 0 &&
+			scan_bss_get_rsn_info(bss, &target_rsne) >= 0 &&
+			cur_rsne.preauthentication &&
+			target_rsne.preauthentication) {
+		/*
+		 * Both the current and the target AP support
+		 * pre-authentication and we're using 8021x authentication so
+		 * attempt to pre-authenticate and reassociate afterwards.
+		 * If the pre-authentication fails or times out we simply
+		 * won't supply any PMKID when reassociating.
+		 * Remain in the preparing_roam state.
+		 */
+		memcpy(device->preauth_bssid, bss->addr, ETH_ALEN);
+
+		if (netdev_preauthenticate(device->netdev, bss,
+						device_preauthenticate_cb,
+						device) >= 0)
+			return;
+	}
+
 	new_hs = device_handshake_setup(device, device->connected_network, bss);
 	if (!new_hs) {
 		l_error("device_handshake_setup failed in reassociation");
@@ -850,17 +971,7 @@ static void device_transition_start(struct device *device, struct scan_bss *bss)
 		return;
 	}
 
-	if (netdev_reassociate(device->netdev, bss, new_hs,
-				device_reassociate_cb) < 0) {
-		handshake_state_free(new_hs);
-
-		device_roam_failed(device);
-		return;
-	}
-
-	device->connected_bss = bss;
-	device->preparing_roam = false;
-	device_enter_state(device, DEVICE_STATE_ROAMING);
+	device_transition_reassociate(device, bss, new_hs);
 }
 
 static void device_roam_scan_triggered(int err, void *user_data)
