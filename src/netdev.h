@@ -76,6 +76,9 @@ typedef void (*netdev_eapol_event_func_t)(unsigned int event,
 typedef void (*netdev_neighbor_report_cb_t)(struct netdev *netdev, int err,
 					const uint8_t *reports,
 					size_t reports_len, void *user_data);
+typedef void (*netdev_preauthenticate_cb_t)(struct netdev *netdev,
+					enum netdev_result result,
+					const uint8_t *pmk, void *user_data);
 
 const uint8_t *netdev_get_address(struct netdev *netdev);
 uint32_t netdev_get_ifindex(struct netdev *netdev);
@@ -101,6 +104,9 @@ int netdev_reassociate(struct netdev *netdev, struct scan_bss *target_bss,
 				netdev_connect_cb_t cb);
 int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 				netdev_connect_cb_t cb);
+int netdev_preauthenticate(struct netdev *netdev, struct scan_bss *target_bss,
+				netdev_preauthenticate_cb_t cb,
+				void *user_data);
 
 int netdev_set_powered(struct netdev *netdev, bool powered,
 				netdev_set_powered_cb_t cb, void *user_data,

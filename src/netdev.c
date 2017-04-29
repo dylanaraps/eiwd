@@ -50,6 +50,7 @@
 #include "src/netdev.h"
 #include "src/wscutil.h"
 #include "src/ftutil.h"
+#include "src/util.h"
 
 struct netdev {
 	uint32_t index;
@@ -85,6 +86,12 @@ struct netdev {
 	bool operational : 1;
 	bool rekey_offload_support : 1;
 	bool in_ft : 1;
+};
+
+struct netdev_preauth_state {
+	netdev_preauthenticate_cb_t cb;
+	void *user_data;
+	struct netdev *netdev;
 };
 
 struct netdev_watch {
@@ -281,12 +288,25 @@ static void netdev_operstate_down_cb(bool success, void *user_data)
 	l_debug("netdev: %d, success: %d", index, success);
 }
 
+static void netdev_preauth_destroy(void *data)
+{
+	struct netdev_preauth_state *state = data;
+
+	if (state->cb)
+		state->cb(state->netdev, NETDEV_RESULT_ABORTED, NULL,
+				state->user_data);
+
+	l_free(state);
+}
+
 static void netdev_connect_free(struct netdev *netdev)
 {
 	if (netdev->sm) {
 		eapol_sm_free(netdev->sm);
 		netdev->sm = NULL;
 	}
+
+	eapol_preauth_cancel(netdev->index);
 
 	if (netdev->handshake) {
 		handshake_state_free(netdev->handshake);
@@ -1039,7 +1059,7 @@ static void netdev_handshake_failed(uint32_t ifindex,
 	if (!netdev)
 		return;
 
-	l_error("4-Way Handshake failed for ifindex: %d", ifindex);
+	l_error("4-Way handshake failed for ifindex: %d", ifindex);
 
 	netdev->sm = NULL;
 
@@ -2338,6 +2358,43 @@ restore_snonce:
 	memcpy(netdev->handshake->snonce, orig_snonce, 32);
 
 	return err;
+}
+
+static void netdev_preauth_cb(const uint8_t *pmk, void *user_data)
+{
+	struct netdev_preauth_state *preauth = user_data;
+	netdev_preauthenticate_cb_t cb = preauth->cb;
+
+	preauth->cb = NULL;
+
+	cb(preauth->netdev,
+		pmk ? NETDEV_RESULT_OK : NETDEV_RESULT_HANDSHAKE_FAILED,
+		pmk, preauth->user_data);
+}
+
+int netdev_preauthenticate(struct netdev *netdev, struct scan_bss *target_bss,
+				netdev_preauthenticate_cb_t cb, void *user_data)
+{
+	struct netdev_preauth_state *preauth;
+
+	if (!netdev->operational)
+		return -ENOTCONN;
+
+	preauth = l_new(struct netdev_preauth_state, 1);
+
+	if (!eapol_preauth_start(target_bss->addr, netdev->handshake,
+					netdev_preauth_cb, preauth,
+					netdev_preauth_destroy)) {
+		l_free(preauth);
+
+		return -EIO;
+	}
+
+	preauth->cb = cb;
+	preauth->user_data = user_data;
+	preauth->netdev = netdev;
+
+	return 0;
 }
 
 static uint32_t netdev_send_action_frame(struct netdev *netdev,
