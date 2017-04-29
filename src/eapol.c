@@ -44,6 +44,7 @@
 #include "handshake.h"
 
 struct l_queue *state_machines;
+struct l_queue *preauths;
 
 eapol_deauthenticate_func_t deauthenticate = NULL;
 eapol_rekey_offload_func_t rekey_offload = NULL;
@@ -730,7 +731,6 @@ struct eapol_sm {
 	bool have_replay:1;
 	bool started:1;
 	bool use_eapol_start:1;
-	bool preauth:1;
 	struct eap_state *eap;
 	struct eapol_buffer *early_frame;
 };
@@ -809,10 +809,8 @@ static void eapol_timeout(struct l_timeout *timeout, void *user_data)
 
 static void eapol_write(struct eapol_sm *sm, const struct eapol_frame *ef)
 {
-	uint16_t proto = sm->preauth ? 0x88c7 : ETH_P_PAE;
-
 	pae_write(sm->handshake->ifindex,
-			sm->handshake->aa, sm->handshake->spa, proto, ef);
+			sm->handshake->aa, sm->handshake->spa, ETH_P_PAE, ef);
 }
 
 static void send_eapol_start(struct l_timeout *timeout, void *user_data)
@@ -1533,7 +1531,7 @@ void eapol_sm_set_use_eapol_start(struct eapol_sm *sm, bool enabled)
 static void eapol_rx_packet(struct eapol_sm *sm,
 					const uint8_t *frame, size_t len)
 {
-	const struct eapol_header *eh;
+	const struct eapol_header *eh = (const struct eapol_header *) frame;
 
 	if (!sm->started) {
 		struct eapol_buffer *buf;
@@ -1555,31 +1553,8 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 		return;
 	}
 
-	/* Validate Header */
-	if (len < sizeof(struct eapol_header))
-		return;
-
-	eh = (const struct eapol_header *) frame;
-
-	switch (eh->protocol_version) {
-	case EAPOL_PROTOCOL_VERSION_2001:
-	case EAPOL_PROTOCOL_VERSION_2004:
-		break;
-	default:
-		return;
-	}
-
-	if (len < (size_t) 4 + L_BE16_TO_CPU(eh->packet_len))
-		return;
-
 	if (!sm->protocol_version)
 		sm->protocol_version = eh->protocol_version;
-
-	/* Only EAPOL-EAP packets allowed in preauthentication */
-	if (sm->preauth && eh->packet_type != 0) {
-		handshake_failed(sm, MPDU_REASON_CODE_UNSPECIFIED);
-		return;
-	}
 
 	switch (eh->packet_type) {
 	case 0: /* EAPOL-EAP */
@@ -1626,21 +1601,6 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 	default:
 		return;
 	}
-}
-
-void __eapol_rx_packet(uint32_t ifindex, const uint8_t *aa, uint16_t proto,
-					const uint8_t *frame, size_t len)
-{
-	struct eapol_sm *sm = eapol_find_sm(ifindex, aa);
-
-	if (!sm)
-		return;
-
-	if ((proto != ETH_P_PAE && !sm->preauth) ||
-			(proto != 0x88c7 && sm->preauth))
-		return;
-
-	eapol_rx_packet(sm, frame, len);
 }
 
 void __eapol_update_replay_counter(uint32_t ifindex, const uint8_t *spa,
@@ -1734,24 +1694,230 @@ eap_error:
 			(int) sm->handshake->ifindex);
 }
 
-void eapol_start_preauthentication(struct eapol_sm *sm)
+struct preauth_sm {
+	uint32_t ifindex;
+	uint8_t aa[6];
+	uint8_t spa[6];
+	struct eap_state *eap;
+	uint8_t pmk[32];
+	eapol_preauth_cb_t cb;
+	eapol_preauth_destroy_func_t destroy;
+	void *user_data;
+};
+
+static void preauth_sm_destroy(void *value)
 {
-	/*
-	 * The only difference here is that we send the EAPOL-Start immeditely
-	 * instead of in a timeout, and we set sm->preauth so that pae_write
-	 * uses the preauthentication protocol id.
-	 */
+	struct preauth_sm *sm = value;
 
-	sm->use_eapol_start = false;
-	sm->preauth = true;
+	if (sm->destroy)
+		sm->destroy(sm->user_data);
 
-	eapol_start(sm);
-	send_eapol_start(NULL, sm);
+	eap_free(sm->eap);
+	l_free(sm);
+}
+
+static struct preauth_sm *preauth_find_sm(uint32_t ifindex, const uint8_t *aa)
+{
+	const struct l_queue_entry *entry;
+	struct preauth_sm *sm;
+
+	for (entry = l_queue_get_entries(preauths); entry;
+			entry = entry->next) {
+		sm = entry->data;
+
+		if (sm->ifindex != ifindex)
+			continue;
+
+		if (memcmp(sm->aa, aa, 6))
+			continue;
+
+		return sm;
+	}
+
+	return NULL;
+}
+
+static void preauth_frame(struct preauth_sm *sm, uint8_t packet_type,
+				const uint8_t *data, size_t data_len)
+{
+	uint8_t buf[sizeof(struct eapol_frame) + data_len];
+	struct eapol_frame *frame = (struct eapol_frame *) buf;
+
+	frame->header.protocol_version = EAPOL_PROTOCOL_VERSION_2001;
+	frame->header.packet_type = packet_type;
+	l_put_be16(data_len, &frame->header.packet_len);
+
+	if (data_len)
+		memcpy(frame->data, data, data_len);
+
+	pae_write(sm->ifindex, sm->aa, sm->spa, 0x88c7, frame);
+}
+
+static void preauth_rx_packet(struct preauth_sm *sm,
+				const uint8_t *frame, size_t len)
+{
+	const struct eapol_header *eh = (const struct eapol_header *) frame;
+
+	if (eh->packet_type != 0) /* EAPOL-EAP */
+		return;
+
+	eap_rx_packet(sm->eap, frame + 4, L_BE16_TO_CPU(eh->packet_len));
+}
+
+static void preauth_eap_msg_cb(const uint8_t *eap_data, size_t len,
+				void *user_data)
+{
+	struct preauth_sm *sm = user_data;
+
+	preauth_frame(sm, 0, eap_data, len);
+}
+
+static void preauth_eap_complete_cb(enum eap_result result, void *user_data)
+{
+	struct preauth_sm *sm = user_data;
+
+	l_info("Preauthentication completed with %s",
+		result == EAP_RESULT_SUCCESS ? "eapSuccess" :
+		(result == EAP_RESULT_FAIL ? "eapFail" : "eapTimeout"));
+
+	l_queue_remove(preauths, sm);
+
+	if (result == EAP_RESULT_SUCCESS)
+		sm->cb(sm->pmk, sm->user_data);
+	else
+		sm->cb(NULL, sm->user_data);
+
+	preauth_sm_destroy(sm);
+}
+
+/* See eapol_eap_results_cb for documentation */
+static void preauth_eap_results_cb(const uint8_t *msk_data, size_t msk_len,
+				const uint8_t *emsk_data, size_t emsk_len,
+				const uint8_t *iv, size_t iv_len,
+				void *user_data)
+{
+	struct preauth_sm *sm = user_data;
+
+	l_debug("Preauthentication EAP key material received");
+
+	if (msk_len < 32)
+		goto msk_short;
+
+	memcpy(sm->pmk, msk_data, 32);
+
+	return;
+
+msk_short:
+	l_error("Preauthentication MSK too short");
+
+	l_queue_remove(preauths, sm);
+
+	sm->cb(NULL, sm->user_data);
+
+	preauth_sm_destroy(sm);
+}
+
+struct preauth_sm *eapol_preauth_start(const uint8_t *aa,
+					const struct handshake_state *hs,
+					eapol_preauth_cb_t cb, void *user_data,
+					eapol_preauth_destroy_func_t destroy)
+{
+	struct preauth_sm *sm;
+
+	sm = l_new(struct preauth_sm, 1);
+
+	sm->ifindex = hs->ifindex;
+	memcpy(sm->aa, aa, 6);
+	memcpy(sm->spa, hs->spa, 6);
+	sm->cb = cb;
+	sm->destroy = destroy;
+	sm->user_data = user_data;
+
+	sm->eap = eap_new(preauth_eap_msg_cb, preauth_eap_complete_cb, sm);
+	if (!sm->eap)
+		goto err_free_sm;
+
+	if (!eap_load_settings(sm->eap, hs->settings_8021x, "EAP-"))
+		goto err_free_eap;
+
+	eap_set_key_material_func(sm->eap, preauth_eap_results_cb);
+
+	l_queue_push_head(preauths, sm);
+
+	/* Send EAPOL-Start */
+	preauth_frame(sm, 1, NULL, 0);
+
+	return sm;
+
+err_free_eap:
+	eap_free(sm->eap);
+err_free_sm:
+	l_free(sm);
+
+	return NULL;
+}
+
+static bool preauth_remove_by_ifindex(void *data, void *user_data)
+{
+	struct preauth_sm *sm = data;
+
+	if (sm->ifindex != L_PTR_TO_UINT(user_data))
+		return false;
+
+	preauth_sm_destroy(sm);
+
+	return true;
+}
+
+void eapol_preauth_cancel(uint32_t ifindex)
+{
+	l_queue_foreach_remove(preauths, preauth_remove_by_ifindex,
+				L_UINT_TO_PTR(ifindex));
+}
+
+void __eapol_rx_packet(uint32_t ifindex, const uint8_t *aa, uint16_t proto,
+					const uint8_t *frame, size_t len)
+{
+	const struct eapol_header *eh;
+
+	/* Validate Header */
+	if (len < sizeof(struct eapol_header))
+		return;
+
+	eh = (const struct eapol_header *) frame;
+
+	switch (eh->protocol_version) {
+	case EAPOL_PROTOCOL_VERSION_2001:
+	case EAPOL_PROTOCOL_VERSION_2004:
+		break;
+	default:
+		return;
+	}
+
+	if (len < (size_t) 4 + L_BE16_TO_CPU(eh->packet_len))
+		return;
+
+	if (proto == ETH_P_PAE) {
+		struct eapol_sm *sm = eapol_find_sm(ifindex, aa);
+
+		if (!sm)
+			return;
+
+		eapol_rx_packet(sm, frame, len);
+	} else if (proto == 0x88c7) {
+		struct preauth_sm *sm = preauth_find_sm(ifindex, aa);
+
+		if (!sm)
+			return;
+
+		preauth_rx_packet(sm, frame, len);
+	}
 }
 
 bool eapol_init()
 {
 	state_machines = l_queue_new();
+	preauths = l_queue_new();
 
 	return true;
 }
@@ -1762,6 +1928,11 @@ bool eapol_exit()
 		l_warn("stale eapol state machines found");
 
 	l_queue_destroy(state_machines, eapol_sm_destroy);
+
+	if (!l_queue_isempty(preauths))
+		l_warn("stale preauth state machines found");
+
+	l_queue_destroy(preauths, preauth_sm_destroy);
 
 	return true;
 }

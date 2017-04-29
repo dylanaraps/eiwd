@@ -49,6 +49,7 @@ enum eapol_key_descriptor_version {
 
 struct eapol_sm;
 struct handshake_state;
+struct preauth_sm;
 
 struct eapol_header {
 	uint8_t protocol_version;
@@ -121,6 +122,8 @@ typedef void (*eapol_deauthenticate_func_t)(uint32_t ifindex, const uint8_t *aa,
 						const uint8_t *spa,
 						uint16_t reason_code,
 						void *user_data);
+typedef void (*eapol_preauth_cb_t)(const uint8_t *pmk, void *user_data);
+typedef void (*eapol_preauth_destroy_func_t)(void *user_data);
 
 bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 				uint8_t *mic);
@@ -182,7 +185,12 @@ void eapol_sm_set_event_func(struct eapol_sm *sm, eapol_sm_event_func_t func);
 
 void eapol_register(struct eapol_sm *sm);
 void eapol_start(struct eapol_sm *sm);
-void eapol_start_preauthentication(struct eapol_sm *sm);
+
+struct preauth_sm *eapol_preauth_start(const uint8_t *aa,
+					const struct handshake_state *hs,
+					eapol_preauth_cb_t cb, void *user_data,
+					eapol_preauth_destroy_func_t destroy);
+void eapol_preauth_cancel(uint32_t ifindex);
 
 void eapol_pae_open();
 void eapol_pae_close();
