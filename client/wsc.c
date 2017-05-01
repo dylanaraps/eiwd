@@ -43,7 +43,18 @@ static void check_errors_method_callback(struct l_dbus_message *message,
 
 static enum cmd_status cmd_push_button(const char *device_name, char *args)
 {
-	return CMD_STATUS_UNSUPPORTED;
+	const struct proxy_interface *proxy = device_wsc_get(device_name);
+
+	if (!proxy) {
+		display("Invalid device name '%s'\n", device_name);
+
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	proxy_interface_method_call(proxy, "PushButton", "",
+						check_errors_method_callback);
+
+	return CMD_STATUS_OK;
 }
 
 static enum cmd_status cmd_start_user_pin(const char *device_name, char *args)
