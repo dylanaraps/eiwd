@@ -345,13 +345,33 @@ static void device_destroy(void *data)
 static bool device_bind_interface(const struct proxy_interface *proxy,
 				const struct proxy_interface *dependency)
 {
-	return true;
+	const char *interface = proxy_interface_get_interface(dependency);
+
+	if (!strcmp(interface, IWD_WSC_INTERFACE)) {
+		struct device *device = proxy_interface_get_data(proxy);
+
+		device->wsc = dependency;
+
+		return true;
+	}
+
+	return false;
 }
 
 static bool device_unbind_interface(const struct proxy_interface *proxy,
 				const struct proxy_interface *dependency)
 {
-	return true;
+	const char *interface = proxy_interface_get_interface(dependency);
+
+	if (!strcmp(interface, IWD_WSC_INTERFACE)) {
+		struct device *device = proxy_interface_get_data(proxy);
+
+		device->wsc = NULL;
+
+		return true;
+	}
+
+	return false;
 }
 
 static void display_device_inline(const char *margin, const void *data)
