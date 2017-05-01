@@ -66,6 +66,9 @@ static void display_device(const struct proxy_interface *proxy)
 						device->adapter) ? : "");
 	}
 
+	display("%s%*s  %-*s%-*s\n", MARGIN, 8, "", 20, "WSC-capable",
+						47, device->wsc ? "yes" : "no");
+
 	display_table_footer();
 }
 
