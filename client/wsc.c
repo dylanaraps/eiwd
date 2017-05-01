@@ -41,6 +41,28 @@ static void check_errors_method_callback(struct l_dbus_message *message,
 	dbus_message_has_error(message);
 }
 
+static void generate_pin_callback(struct l_dbus_message *message,
+								void *user_data)
+{
+	const struct proxy_interface *proxy = user_data;
+	const char *pin;
+
+	if (dbus_message_has_error(message))
+		return;
+
+	if (!l_dbus_message_get_arguments(message, "s", &pin)) {
+		l_error("Failed to parse 'generate pin' callback message");
+
+		return;
+	}
+
+	if (!pin)
+		return;
+
+	proxy_interface_method_call(proxy, "StartPin", "s",
+					check_errors_method_callback, pin);
+}
+
 static enum cmd_status cmd_push_button(const char *device_name, char *args)
 {
 	const struct proxy_interface *proxy = device_wsc_get(device_name);
@@ -75,7 +97,18 @@ static enum cmd_status cmd_start_user_pin(const char *device_name, char *args)
 
 static enum cmd_status cmd_start_pin(const char *device_name, char *args)
 {
-	return CMD_STATUS_UNSUPPORTED;
+	const struct proxy_interface *proxy = device_wsc_get(device_name);
+
+	if (!proxy) {
+		display("Invalid device name '%s'\n", device_name);
+
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	proxy_interface_method_call(proxy, "GeneratePin", "",
+							generate_pin_callback);
+
+	return CMD_STATUS_OK;
 }
 
 static enum cmd_status cmd_cancel(const char *device_name, char *args)
