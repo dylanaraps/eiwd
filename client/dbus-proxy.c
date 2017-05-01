@@ -268,6 +268,36 @@ static struct l_queue *proxy_interface_find_by_path(const char *path)
 	return match;
 }
 
+static void properties_changed_callback(struct l_dbus_message *message,
+								void *data)
+{
+	struct proxy_interface *proxy;
+	const char *path;
+	const char *interface;
+	struct l_dbus_message_iter changed;
+	struct l_dbus_message_iter invalidated;
+
+	if (dbus_message_has_error(message))
+		return;
+
+	if (!l_dbus_message_get_arguments(message, "sa{sv}as", &interface,
+						&changed, &invalidated)) {
+		l_debug("Failed to parse properties changed callback message");
+
+		return;
+	}
+
+	path = l_dbus_message_get_path(message);
+	if (!path)
+		return;
+
+	proxy = proxy_interface_find(interface, path);
+	if (!proxy)
+		return;
+
+	interface_update_properties(proxy, &changed, &invalidated);
+}
+
 static void proxy_interface_bind_dependencies(const char *path)
 {
 	const struct l_queue_entry *entry;
@@ -559,6 +589,11 @@ static void service_appeared_callback(struct l_dbus *dbus, void *user_data)
 					L_DBUS_INTERFACE_OBJECT_MANAGER,
 					"InterfacesRemoved", L_DBUS_MATCH_NONE,
 					interfaces_removed_callback, NULL);
+
+	l_dbus_add_signal_watch(dbus, IWD_SERVICE, NULL,
+					L_DBUS_INTERFACE_PROPERTIES,
+					"PropertiesChanged", L_DBUS_MATCH_NONE,
+					properties_changed_callback, NULL);
 
 	l_dbus_method_call(dbus, IWD_SERVICE, IWD_ROOT_PATH,
 					L_DBUS_INTERFACE_OBJECT_MANAGER,
