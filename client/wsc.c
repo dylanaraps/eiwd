@@ -33,7 +33,33 @@ static struct proxy_interface_type wsc_interface_type = {
 	.interface = IWD_WSC_INTERFACE,
 };
 
+static enum cmd_status cmd_push_button(const char *device_name, char *args)
+{
+	return CMD_STATUS_UNSUPPORTED;
+}
+
+static enum cmd_status cmd_start_user_pin(const char *device_name, char *args)
+{
+	return CMD_STATUS_UNSUPPORTED;
+}
+
+static enum cmd_status cmd_start_pin(const char *device_name, char *args)
+{
+	return CMD_STATUS_UNSUPPORTED;
+}
+
+static enum cmd_status cmd_cancel(const char *device_name, char *args)
+{
+	return CMD_STATUS_UNSUPPORTED;
+}
+
 static const struct command wsc_commands[] = {
+	{ "<wlan>", "push-button", NULL, cmd_push_button, "PushButton mode" },
+	{ "<wlan>", "start-user-pin", "<8 digit PIN>", cmd_start_user_pin,
+							"PIN mode" },
+	{ "<wlan>", "start-pin", NULL, cmd_start_pin,
+		"PIN mode with generated\n\t\t\t\t\t\t    8 digit PIN" },
+	{ "<wlan>", "cancel", NULL,   cmd_cancel, "Aborts WSC operations" },
 	{ }
 };
 
