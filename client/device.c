@@ -28,6 +28,7 @@
 
 #include "command.h"
 #include "dbus-proxy.h"
+#include "device.h"
 #include "display.h"
 #include "network.h"
 
@@ -623,6 +624,13 @@ static const struct command device_commands[] = {
 				NULL,   cmd_disconnect, "Disconnect" },
 	{ }
 };
+
+char *device_wsc_family_arg_completion(const char *text, int state)
+{
+	return proxy_property_str_completion(&device_interface_type,
+						match_by_partial_name, "Name",
+						text, state);
+}
 
 static char *family_arg_completion(const char *text, int state)
 {

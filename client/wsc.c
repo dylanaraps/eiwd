@@ -28,6 +28,7 @@
 
 #include "command.h"
 #include "dbus-proxy.h"
+#include "device.h"
 
 static struct proxy_interface_type wsc_interface_type = {
 	.interface = IWD_WSC_INTERFACE,
@@ -63,10 +64,22 @@ static const struct command wsc_commands[] = {
 	{ }
 };
 
+static char *family_arg_completion(const char *text, int state)
+{
+	return device_wsc_family_arg_completion(text, state);
+}
+
+static char *entity_arg_completion(const char *text, int state)
+{
+	return command_entity_arg_completion(text, state, wsc_commands);
+}
+
 static struct command_family wsc_command_family = {
 	.caption = "WiFi Simple Configuration",
 	.name = "wsc",
 	.command_list = wsc_commands,
+	.family_arg_completion = family_arg_completion,
+	.entity_arg_completion = entity_arg_completion,
 };
 
 static int wsc_command_family_init(void)
