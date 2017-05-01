@@ -384,6 +384,7 @@ static bool is_ignorable(const char *interface)
 	} interfaces_to_ignore[] = {
 		{ L_DBUS_INTERFACE_OBJECT_MANAGER },
 		{ L_DBUS_INTERFACE_INTROSPECTABLE },
+		{ L_DBUS_INTERFACE_PROPERTIES },
 		{ }
 	};
 
