@@ -195,7 +195,7 @@ static int network_interface_init(void)
 
 static void network_interface_exit(void)
 {
-	proxy_interface_type_register(&network_interface_type);
+	proxy_interface_type_unregister(&network_interface_type);
 }
 
 INTERFACE_TYPE(network_interface_type, network_interface_init,

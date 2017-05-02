@@ -737,7 +737,7 @@ static int device_interface_init(void)
 
 static void device_interface_exit(void)
 {
-	proxy_interface_type_register(&device_interface_type);
+	proxy_interface_type_unregister(&device_interface_type);
 }
 
 INTERFACE_TYPE(device_interface_type, device_interface_init,

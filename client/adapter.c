@@ -352,7 +352,7 @@ static int adapter_interface_init(void)
 
 static void adapter_interface_exit(void)
 {
-	proxy_interface_type_register(&adapter_interface_type);
+	proxy_interface_type_unregister(&adapter_interface_type);
 }
 
 INTERFACE_TYPE(adapter_interface_type, adapter_interface_init,

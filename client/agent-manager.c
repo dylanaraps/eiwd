@@ -42,7 +42,7 @@ static int agent_manager_interface_init(void)
 
 static void agent_manager_interface_exit(void)
 {
-	proxy_interface_type_register(&agent_manager_interface_type);
+	proxy_interface_type_unregister(&agent_manager_interface_type);
 }
 
 INTERFACE_TYPE(agent_manager_interface_type, agent_manager_interface_init,

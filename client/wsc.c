@@ -179,7 +179,7 @@ static int wsc_interface_init(void)
 
 static void wsc_interface_exit(void)
 {
-	proxy_interface_type_register(&wsc_interface_type);
+	proxy_interface_type_unregister(&wsc_interface_type);
 }
 
 INTERFACE_TYPE(wsc_interface_type, wsc_interface_init, wsc_interface_exit)

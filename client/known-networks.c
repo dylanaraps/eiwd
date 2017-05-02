@@ -411,7 +411,7 @@ static int known_networks_interface_init(void)
 
 static void known_networks_interface_exit(void)
 {
-	proxy_interface_type_register(&known_networks_interface_type);
+	proxy_interface_type_unregister(&known_networks_interface_type);
 }
 
 INTERFACE_TYPE(known_networks_interface_type, known_networks_interface_init,
