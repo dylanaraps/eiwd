@@ -53,6 +53,7 @@ static const char *nointerfaces;
 static const char *phys;
 static const char *nophys;
 static const char *config_dir;
+static bool terminating;
 
 static void main_loop_quit(struct l_timeout *timeout, void *user_data)
 {
@@ -61,6 +62,11 @@ static void main_loop_quit(struct l_timeout *timeout, void *user_data)
 
 void iwd_shutdown(void)
 {
+	if (terminating)
+		return;
+
+	terminating = true;
+
 	dbus_shutdown();
 	netdev_shutdown();
 
@@ -121,6 +127,9 @@ static void do_debug(const char *str, void *user_data)
 static void nl80211_appeared(void *user_data)
 {
 	struct l_genl_family *nl80211 = user_data;
+
+	if (terminating)
+		return;
 
 	l_debug("Found nl80211 interface");
 
