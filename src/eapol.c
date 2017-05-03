@@ -731,6 +731,7 @@ struct eapol_sm {
 	bool have_replay:1;
 	bool started:1;
 	bool use_eapol_start:1;
+	bool eap_exchanged:1;
 	struct eap_state *eap;
 	struct eapol_buffer *early_frame;
 };
@@ -852,11 +853,13 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 
 	/*
 	 * Require the PMKID KDE whenever we've sent a list of PMKIDs in
-	 * our RSNE, otherwise treat it as optional and only validate it
-	 * against our PMK.  Some 802.11-2012 sections show message 1/4
-	 * without a PMKID KDE and there are APs that send no PMKID KDE.
+	 * our RSNE and we've haven't seen any EAPOL-EAP frame since
+	 * (sm->eap_exchanged is false), otherwise treat it as optional and
+	 * only validate it against our PMK.  Some 802.11-2012 sections
+	 * show message 1/4 without a PMKID KDE and there are APs that
+	 * send no PMKID KDE.
 	 */
-	if (!sm->handshake->wpa_ie &&
+	if (!sm->eap_exchanged && !sm->handshake->wpa_ie &&
 			ie_parse_rsne_from_data(own_ie, own_ie[1] + 2,
 						&rsn_info) >= 0 &&
 			rsn_info.num_pmkids) {
@@ -1572,6 +1575,8 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 			eap_set_key_material_func(sm->eap,
 							eapol_eap_results_cb);
 		}
+
+		sm->eap_exchanged = true;
 
 		eap_rx_packet(sm->eap, frame + 4,
 				L_BE16_TO_CPU(eh->packet_len));
