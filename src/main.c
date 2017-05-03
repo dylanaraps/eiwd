@@ -59,6 +59,14 @@ static void main_loop_quit(struct l_timeout *timeout, void *user_data)
 	l_main_quit();
 }
 
+void iwd_shutdown(void)
+{
+	dbus_shutdown();
+	netdev_shutdown();
+
+	timeout = l_timeout_create(1, main_loop_quit, NULL, NULL);
+}
+
 static void signal_handler(struct l_signal *signal, uint32_t signo,
 							void *user_data)
 {
@@ -66,11 +74,7 @@ static void signal_handler(struct l_signal *signal, uint32_t signo,
 	case SIGINT:
 	case SIGTERM:
 		l_info("Terminate");
-
-		dbus_shutdown();
-		netdev_shutdown();
-
-		timeout = l_timeout_create(1, main_loop_quit, NULL, NULL);
+		iwd_shutdown();
 		break;
 	}
 }

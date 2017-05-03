@@ -31,6 +31,7 @@
 #include <ell/dbus-private.h>
 #include "src/dbus.h"
 #include "src/agent.h"
+#include "src/iwd.h"
 
 struct l_dbus *g_dbus = 0;
 
@@ -196,7 +197,7 @@ static void ready_callback(void *user_data)
 static void disconnect_callback(void *user_data)
 {
 	l_info("D-Bus disconnected, quitting...");
-	l_main_quit();
+	iwd_shutdown();
 }
 
 struct l_dbus *dbus_get_bus(void)
