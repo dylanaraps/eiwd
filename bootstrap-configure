@@ -9,4 +9,5 @@ fi
 		--enable-debug \
 		--localstatedir=/var \
 		--prefix=/usr $* \
-		--sysconfdir=/etc/iwd
+		--sysconfdir=/etc/iwd \
+		--with-dbusconfdir=/etc

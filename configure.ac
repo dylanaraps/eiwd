@@ -75,6 +75,19 @@ AC_CHECK_HEADERS(linux/types.h linux/if_alg.h)
 AC_CHECK_HEADERS(readline/readline.h, enable_readline=yes,
 			AC_MSG_ERROR(readline header files are required))
 
+AC_ARG_WITH([dbusconfdir], AC_HELP_STRING([--with-dbusconfdir=DIR],
+				[path to D-Bus configuration directory]),
+					[path_dbusconfdir=${withval}])
+if (test -z "${path_dbusconfdir}"); then
+	AC_MSG_CHECKING([D-Bus configuration directory])
+	path_dbusconfdir="`$PKG_CONFIG --variable=sysconfdir dbus-1`"
+	if (test -z "${path_dbusconfdir}"); then
+		AC_MSG_ERROR([D-Bus configuration directory is required])
+	fi
+	AC_MSG_RESULT([${path_dbusconfdir}])
+fi
+AC_SUBST(DBUS_CONFDIR, [${path_dbusconfdir}])
+
 AC_PATH_PROG(A2X, [a2x], [], $PATH:/sbin:/usr/sbin)
 AM_CONDITIONAL(BUILD_DOCS, test "$A2X" != "")
 
