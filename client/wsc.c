@@ -199,6 +199,30 @@ static const struct command wsc_commands[] = {
 
 static char *family_arg_completion(const char *text, int state)
 {
+	static bool first_pass;
+	static size_t index;
+	static size_t len;
+	const char *cmd;
+
+	if (!state) {
+		index = 0;
+		len = strlen(text);
+		first_pass = true;
+	}
+
+	while ((cmd = wsc_commands[index].cmd)) {
+		if (wsc_commands[index++].entity)
+			continue;
+
+		if (!strncmp(cmd, text, len))
+			return l_strdup(cmd);
+	}
+
+	if (first_pass) {
+		state = 0;
+		first_pass = false;
+	}
+
 	return device_wsc_family_arg_completion(text, state);
 }
 
