@@ -123,6 +123,51 @@ static void generate_pin_callback(struct l_dbus_message *message,
 					check_errors_method_callback, pin);
 }
 
+static bool match_by_device(const void *a, const void *b)
+{
+	const struct wsc *wsc = a;
+
+	return wsc->device ? true : false;
+}
+
+static void display_wsc_inline(const char *margin, const void *data)
+{
+	const struct wsc *wsc = data;
+
+	if (wsc->device && proxy_interface_get_identity_str(wsc->device))
+		display("%s%-*s\n", margin,
+			20, proxy_interface_get_identity_str(wsc->device));
+}
+
+static enum cmd_status cmd_list(const char *device_name, char *args)
+{
+	const struct l_queue_entry *entry;
+	struct l_queue *match =
+		proxy_interface_find_all(IWD_WSC_INTERFACE,
+						match_by_device, NULL);
+
+	if (match) {
+		display_table_header("WSC-capable Devices",
+					MARGIN "%-*s", 20, "Name");
+	} else {
+		display("No WSC-capable devices available\n");
+
+		return CMD_STATUS_OK;
+	}
+
+	for (entry = l_queue_get_entries(match); entry; entry = entry->next) {
+		const struct wsc *wsc = proxy_interface_get_data(entry->data);
+
+		display_wsc_inline(MARGIN, wsc);
+	}
+
+	display_table_footer();
+
+	l_queue_destroy(match, NULL);
+
+	return CMD_STATUS_OK;
+}
+
 static enum cmd_status cmd_push_button(const char *device_name, char *args)
 {
 	const struct proxy_interface *proxy = device_wsc_get(device_name);
@@ -188,6 +233,7 @@ static enum cmd_status cmd_cancel(const char *device_name, char *args)
 }
 
 static const struct command wsc_commands[] = {
+	{ NULL, "list", NULL, cmd_list, "List WSC-capable devices", true },
 	{ "<wlan>", "push-button", NULL, cmd_push_button, "PushButton mode" },
 	{ "<wlan>", "start-user-pin", "<8 digit PIN>", cmd_start_user_pin,
 							"PIN mode" },
