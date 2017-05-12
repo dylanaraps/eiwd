@@ -31,8 +31,68 @@
 #include "device.h"
 #include "display.h"
 
+struct wsc {
+	const struct proxy_interface *device;
+
+	/* TODO: Add status */
+};
+
+static void *wsc_create(void)
+{
+	return l_new(struct wsc, 1);
+}
+
+static void wsc_destroy(void *data)
+{
+	struct wsc *wsc = data;
+
+	wsc->device = NULL;
+
+	l_free(wsc);
+}
+
+static bool wsc_bind_interface(const struct proxy_interface *proxy,
+				const struct proxy_interface *dependency)
+{
+	const char *interface = proxy_interface_get_interface(dependency);
+
+	if (!strcmp(interface, IWD_DEVICE_INTERFACE)) {
+		struct wsc *wsc = proxy_interface_get_data(proxy);
+
+		wsc->device = dependency;
+
+		return true;
+	}
+
+	return false;
+}
+
+static bool wsc_unbind_interface(const struct proxy_interface *proxy,
+				const struct proxy_interface *dependency)
+{
+	const char *interface = proxy_interface_get_interface(dependency);
+
+	if (!strcmp(interface, IWD_DEVICE_INTERFACE)) {
+		struct wsc *wsc = proxy_interface_get_data(proxy);
+
+		wsc->device = NULL;
+
+		return true;
+	}
+
+	return false;
+}
+
+static const struct proxy_interface_type_ops wsc_ops = {
+	.create = wsc_create,
+	.destroy = wsc_destroy,
+	.bind_interface = wsc_bind_interface,
+	.unbind_interface = wsc_unbind_interface,
+};
+
 static struct proxy_interface_type wsc_interface_type = {
 	.interface = IWD_WSC_INTERFACE,
+	.ops = &wsc_ops,
 };
 
 static void check_errors_method_callback(struct l_dbus_message *message,
