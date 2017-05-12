@@ -553,6 +553,8 @@ static void interfaces_removed_callback(struct l_dbus_message *message,
 		proxy_interface_unbind_dependencies(proxy);
 
 		l_queue_remove(proxy_interfaces, proxy);
+
+		proxy_interface_destroy(proxy);
 	}
 }
 

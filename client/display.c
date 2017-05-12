@@ -376,7 +376,8 @@ static void disconnect_callback(struct l_io *io, void *user_data)
 
 void display_enable_cmd_prompt(void)
 {
-	io = l_io_new(fileno(stdin));
+	if (!io)
+		io = l_io_new(fileno(stdin));
 
 	l_io_set_read_handler(io, read_handler, NULL, NULL);
 	l_io_set_disconnect_handler(io, disconnect_callback, NULL, NULL);
