@@ -308,8 +308,11 @@ static void display_completion_matches(char **matches, int num_matches,
 	char line[LINE_LEN];
 	size_t index;
 	size_t line_used;
+	char *input = rl_copy_text(0, rl_end);
 
-	prompt = l_strdup_printf("%s%s\n", IWD_PROMPT, rl_copy_text(0, rl_end));
+	prompt = l_strdup_printf("%s%s\n", IWD_PROMPT, input);
+	l_free(input);
+
 	display_text(prompt);
 	l_free(prompt);
 
