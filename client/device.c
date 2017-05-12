@@ -434,6 +434,13 @@ static bool match_by_partial_name(const void *a, const void *b)
 	return !strncmp(device->name, text, strlen(text));
 }
 
+static bool match_by_partial_name_and_wsc(const void *a, const void *b)
+{
+	const struct device *device = a;
+
+	return match_by_partial_name(a, b) && device->wsc ? true : false;
+}
+
 static const struct proxy_interface *get_device_proxy_by_name(
 							const char *device_name)
 {
@@ -665,8 +672,8 @@ const struct proxy_interface *device_wsc_get(const char *device_name)
 char *device_wsc_family_arg_completion(const char *text, int state)
 {
 	return proxy_property_str_completion(&device_interface_type,
-						match_by_partial_name, "Name",
-						text, state);
+						match_by_partial_name_and_wsc,
+						"Name", text, state);
 }
 
 static char *family_arg_completion(const char *text, int state)
