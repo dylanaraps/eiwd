@@ -514,6 +514,13 @@ static void passphrase_callback(enum agent_result result,
 
 	network->agent_request = 0;
 
+	/*
+	 * agent will release its reference to message after invoking this
+	 * callback.  So if we want this message, we need to take a reference
+	 * to it
+	 */
+	l_dbus_message_ref(message);
+
 	if (result != AGENT_RESULT_OK) {
 		dbus_pending_reply(&message, dbus_error_aborted(message));
 		goto err;
@@ -549,6 +556,7 @@ static void passphrase_callback(enum agent_result result,
 	network->update_psk = true;
 
 	device_connect_network(network->device, network, bss, message);
+	l_dbus_message_unref(message);
 	return;
 
 err:
