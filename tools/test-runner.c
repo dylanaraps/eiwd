@@ -213,7 +213,7 @@ static void prepare_sandbox(void)
 
 static char *const qemu_argv[] = {
 	"",
-	"-machine", "",
+	"-machine", "type=q35,accel=kvm:tcg",
 	"-nodefaults",
 	"-nodefconfig",
 	"-no-user-config",
@@ -315,21 +315,12 @@ static void start_qemu(void)
 
 	argv[0] = (char *) qemu_binary;
 
-	if (has_virt)
-		argv[2] = "type=q35,accel=kvm:tcg";
-	else
-		argv[2] = "type=q35";
-
 	argv[pos++] = "-kernel";
 	argv[pos++] = (char *) kernel_image;
 	argv[pos++] = "-append";
 	argv[pos++] = (char *) cmdline;
-
-	if (has_virt) {
-		argv[pos++] = "-cpu";
-		argv[pos++] = "host,level=9";
-		argv[pos++] = "-enable-kvm";
-	}
+	argv[pos++] = "-cpu";
+	argv[pos++] = has_virt ? "host" : "max";
 
 	argv[pos] = NULL;
 
