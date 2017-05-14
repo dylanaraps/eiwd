@@ -76,13 +76,31 @@ static const char *exec_home;
 static const char *test_action_params;
 static char top_level_path[PATH_MAX];
 
+#ifdef __i386__
+/*
+ * If iwd is being compiled for i386, prefer the i386 qemu but try the
+ * X86-64 version as a fallback.
+ */
 static const char * const qemu_table[] = {
-	"qemu-system-x86_64",
 	"qemu-system-i386",
-	"/usr/bin/qemu-system-x86_64",
 	"/usr/bin/qemu-system-i386",
+	"qemu-system-x86_64",
+	"/usr/bin/qemu-system-x86_64",
 	NULL
 };
+#elif defined(__x86_64__)
+/*
+ * If iwd is being built for 64 bits there's no point booting a 32-bit only
+ * system.
+ */
+static const char * const qemu_table[] = {
+	"qemu-system-x86_64",
+	"/usr/bin/qemu-system-x86_64",
+	NULL
+};
+#else
+#warning Qemu binary name not defined for this architecture yet
+#endif
 
 struct wiphy {
 	char name[20];
