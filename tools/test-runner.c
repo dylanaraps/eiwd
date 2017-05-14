@@ -245,10 +245,19 @@ static bool check_virtualization(void)
 #if defined(__GNUC__) && (defined(__i386__) || defined(__amd64__))
 	uint32_t ecx;
 
-	__asm__ __volatile__("cpuid" : "=c" (ecx) : "a" (1) : "memory");
+	__asm__ __volatile__("cpuid" : "=c" (ecx) :
+				"a" (1) : "%ebx", "%edx");
 
 	if (!!(ecx & (1 << 5))) {
 		l_info("Found support for Virtual Machine eXtensions");
+		return true;
+	}
+
+	__asm__ __volatile__("cpuid" : "=c" (ecx) :
+				"a" (0x80000001) : "%ebx", "%edx");
+
+	if (ecx & (1 << 2)) {
+		l_info("Found support for Secure Virtual Machine extension");
 		return true;
 	}
 #endif
