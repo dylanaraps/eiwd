@@ -589,6 +589,17 @@ class IWD(AsyncOpAbstract):
                                    + str(max_wait) + ' sec')
         GLib.source_remove(timeout)
 
+    def wait(self, time):
+        self._wait_timed_out = False
+        def wait_timeout_cb():
+            self._wait_timed_out = True
+            return False
+
+        GLib.timeout_add(int(time * 1000), wait_timeout_cb)
+        context = mainloop.get_context()
+        while not self._wait_timed_out:
+            context.iteration(may_block=True)
+
     @staticmethod
     def clear_storage():
         os.system('rm -rf ' + IWD_STORAGE_DIR + '/*')
