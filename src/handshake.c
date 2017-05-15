@@ -534,7 +534,7 @@ const uint8_t *handshake_util_find_pmkid_kde(const uint8_t *data,
 
 	pmkid = find_kde(data, data_len, &pmkid_len, pmkid_oui);
 
-	if (pmkid_len != 16)
+	if (pmkid && pmkid_len != 16)
 		return NULL;
 
 	return pmkid;
