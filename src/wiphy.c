@@ -43,6 +43,7 @@
 #include "src/rfkill.h"
 #include "src/wiphy.h"
 #include "src/storage.h"
+#include "src/util.h"
 
 static struct l_genl_family *nl80211 = NULL;
 static struct l_hwdb *hwdb;
@@ -53,6 +54,7 @@ struct wiphy {
 	uint32_t id;
 	char name[20];
 	uint32_t feature_flags;
+	uint8_t ext_features[2];
 	bool support_scheduled_scan:1;
 	bool support_rekey_offload:1;
 	uint16_t supported_ciphers;
@@ -177,6 +179,12 @@ bool wiphy_can_connect(struct wiphy *wiphy, struct scan_bss *bss)
 		return false;
 
 	return true;
+}
+
+bool wiphy_get_ext_feature(struct wiphy *wiphy, unsigned int idx)
+{
+	return idx < sizeof(wiphy->ext_features) * 8 &&
+		util_is_bit_set(wiphy->ext_features[idx >> 3], idx & 7);
 }
 
 static void wiphy_print_basic_info(struct wiphy *wiphy)
@@ -339,6 +347,12 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 			else
 				wiphy->feature_flags = *((uint32_t *) data);
 
+			break;
+		case NL80211_ATTR_EXT_FEATURES:
+			if (len > sizeof(wiphy->ext_features))
+				len = sizeof(wiphy->ext_features);
+
+			memcpy(wiphy->ext_features, data, len);
 			break;
 		case NL80211_ATTR_SUPPORTED_COMMANDS:
 			if (l_genl_attr_recurse(attr, &nested))
