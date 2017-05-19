@@ -56,6 +56,36 @@ Methods		void Scan()
 				Contains the type of the network.  Possible
 				types are "open", "psk", "8021x" (EAP)
 
+		void RegisterSignalLevelAgent(object path,
+						 array(int16) levels)
+
+			Register the agent object to receive signal strength
+			level change notifications on the
+			net.connman.iwd.SignalLevelAgent interface, see
+			signal-level-agent-api.txt.  The "levels"
+			parameters decides the thresholds in dBm that will
+			generate a call to the agent's SignalLevelChanged
+			method whenever current RSSI crosses any of the
+			values.  The values must be passed in descending
+			order.  The number and distance between requested
+			threshold values is a compromise between resolution
+			and the frequency of system wakeups and
+			context-switches that are going to be occuring to
+			update the client's signal meter.  Only one agent
+			can be registered at any time.
+
+			Possible Errors: [service].Error.InvalidArguments
+					 [service].Error.Failed
+					 [service].Error.AlreadyExists
+					 [service].Error.NotSupported
+
+		void UnregisterSignalLevelAgent(object path)
+
+			Unregister an existing agent.
+
+			Possible Errors: [service].Error.InvalidArguments
+					 [service].Error.NotFound
+
 Properties	string Name [readonly]
 
 			Device's interface name
