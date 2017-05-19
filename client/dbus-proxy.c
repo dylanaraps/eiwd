@@ -360,13 +360,13 @@ static void proxy_interface_unbind_dependencies(
 				!dependency->type->ops->unbind_interface)
 			continue;
 
-		if (dependency->type->ops->unbind_interface(proxy, dependency))
+		if (dependency->type->ops->unbind_interface(dependency, proxy))
 			continue;
 
 		error = l_strdup_printf("Interface %s does not support "
 					"dependency %s\n",
-					proxy->type->interface,
-					dependency->type->interface);
+					dependency->type->interface,
+					proxy->type->interface);
 		display_error(error);
 		l_free(error);
 	}
