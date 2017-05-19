@@ -28,6 +28,7 @@ IWD_DEVICE_INTERFACE =          'net.connman.iwd.Device'
 IWD_KNOWN_NETWORKS_INTERFACE =  'net.connman.iwd.KnownNetworks'
 IWD_NETWORK_INTERFACE =         'net.connman.iwd.Network'
 IWD_WSC_INTERFACE =             'net.connman.iwd.WiFiSimpleConfiguration'
+IWD_SIGNAL_AGENT_INTERFACE =    'net.connman.iwd.SignalLevelAgent'
 
 IWD_AGENT_MANAGER_PATH =        '/'
 IWD_KNOWN_NETWORKS_PATH =       '/'
@@ -165,6 +166,31 @@ class NetworkType(Enum):
                 type = getattr(cls, attr)
                 break
         return type
+
+
+class SignalAgent(dbus.service.Object):
+    def __init__(self, passphrase = None):
+        self._path = '/test/agent/' + str(int(round(time.time() * 1000)))
+
+        dbus.service.Object.__init__(self, dbus.SystemBus(), self._path)
+
+    @property
+    def path(self):
+        return self._path
+
+    @dbus.service.method(IWD_SIGNAL_AGENT_INTERFACE,
+                         in_signature='', out_signature='')
+    def Release(self):
+        print("SignalAgent released")
+
+    @dbus.service.method(IWD_SIGNAL_AGENT_INTERFACE,
+                         in_signature='oy', out_signature='')
+    def SignalLevelChanged(self, path, level):
+        self.handle_new_level(str(path), int(level))
+
+    @abstractmethod
+    def handle_new_level(self, path, level):
+        pass
 
 
 class Device(IWDDBusAbstract):
@@ -305,6 +331,21 @@ class Device(IWDDBusAbstract):
         self._wps_manager.Cancel(dbus_interface=IWD_WSC_INTERFACE,
                                  reply_handler=self._success,
                                  error_handler=self._failure)
+        self._wait_for_async_op()
+
+    def register_signal_agent(self, signal_agent, levels):
+        self._iface.RegisterSignalLevelAgent(signal_agent.path,
+                                             dbus.Array(levels, 'n'),
+                                             dbus_interface=self._iface_name,
+                                             reply_handler=self._success,
+                                             error_handler=self._failure)
+        self._wait_for_async_op()
+
+    def unregister_signal_agent(self, signal_agent):
+        self._iface.UnregisterSignalLevelAgent(signal_agent.path,
+                                               dbus_interface=self._iface_name,
+                                               reply_handler=self._success,
+                                               error_handler=self._failure)
         self._wait_for_async_op()
 
     def __str__(self, prefix = ''):
