@@ -77,6 +77,7 @@ struct device {
 	struct l_timeout *roam_trigger_timeout;
 	uint32_t roam_scan_id;
 	uint8_t preauth_bssid[ETH_ALEN];
+	struct signal_agent *signal_agent;
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
@@ -85,6 +86,12 @@ struct device {
 	bool autoconnect : 1;
 	bool preparing_roam : 1;
 	bool signal_low : 1;
+};
+
+struct signal_agent {
+	char *owner;
+	char *path;
+	unsigned int disconnect_watch;
 };
 
 static struct watchlist device_watches;
@@ -1356,6 +1363,38 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 	device->autoconnect = true;
 }
 
+static void device_signal_agent_notify(struct signal_agent *agent,
+					const char *device_path, int level)
+{
+	struct l_dbus_message *msg;
+	uint8_t value = level;
+
+	msg = l_dbus_message_new_method_call(dbus_get_bus(),
+						agent->owner, agent->path,
+						IWD_SIGNAL_AGENT_INTERFACE,
+						"SignalLevelChanged");
+	l_dbus_message_set_arguments(msg, "oy", device_path, value);
+	l_dbus_message_set_no_reply(msg, true);
+
+	l_dbus_send(dbus_get_bus(), msg);
+}
+
+static void device_signal_agent_release(struct signal_agent *agent,
+					const char *device_path)
+{
+	struct l_dbus_message *msg;
+
+	msg = l_dbus_message_new_method_call(dbus_get_bus(),
+						agent->owner, agent->path,
+						IWD_SIGNAL_AGENT_INTERFACE,
+						"Release");
+	l_dbus_message_set_arguments(msg, "o", device_path);
+	l_dbus_message_set_no_reply(msg, true);
+
+	l_dbus_send(dbus_get_bus(), msg);
+}
+
+
 static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 					void *user_data)
 {
@@ -1410,6 +1449,11 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 
 		break;
 	case NETDEV_EVENT_RSSI_LEVEL_NOTIFY:
+		if (device->signal_agent)
+			device_signal_agent_notify(device->signal_agent,
+					device_get_path(device),
+					netdev_get_rssi_level(device->netdev));
+
 		break;
 	};
 }
@@ -1635,6 +1679,113 @@ static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
 	return reply;
 }
 
+static void signal_agent_free(void *data)
+{
+	struct signal_agent *agent = data;
+
+	l_free(agent->owner);
+	l_free(agent->path);
+	l_dbus_remove_watch(dbus_get_bus(), agent->disconnect_watch);
+	l_free(agent);
+}
+
+static void signal_agent_disconnect(struct l_dbus *dbus, void *user_data)
+{
+	struct device *device = user_data;
+
+	l_debug("signal_agent %s disconnected", device->signal_agent->owner);
+
+	l_idle_oneshot(signal_agent_free, device->signal_agent, NULL);
+	device->signal_agent = NULL;
+
+	netdev_set_rssi_report_levels(device->netdev, NULL, 0);
+}
+
+static struct l_dbus_message *device_signal_agent_register(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct device *device = user_data;
+	const char *path, *sender;
+	struct l_dbus_message_iter level_iter;
+	int8_t levels[16];
+	int err;
+	int16_t val;
+	size_t count = 0;
+
+	if (device->signal_agent)
+		return dbus_error_already_exists(message);
+
+	l_debug("signal agent register called");
+
+	if (!l_dbus_message_get_arguments(message, "oan", &path, &level_iter))
+		return dbus_error_invalid_args(message);
+
+	while (l_dbus_message_iter_next_entry(&level_iter, &val)) {
+		if (count >= L_ARRAY_SIZE(levels) || val > 127 || val < -127)
+			return dbus_error_invalid_args(message);
+
+		levels[count++] = val;
+	}
+
+	if (count < 1 || count > 16)
+		return dbus_error_invalid_args(message);
+
+	err = netdev_set_rssi_report_levels(device->netdev, levels, count);
+	if (err == -ENOTSUP)
+		return dbus_error_not_supported(message);
+	else if (err < 0)
+		return dbus_error_failed(message);
+
+	sender = l_dbus_message_get_sender(message);
+
+	device->signal_agent = l_new(struct signal_agent, 1);
+	device->signal_agent->owner = l_strdup(sender);
+	device->signal_agent->path = l_strdup(path);
+	device->signal_agent->disconnect_watch =
+		l_dbus_add_disconnect_watch(dbus, sender,
+						signal_agent_disconnect,
+						device, NULL);
+
+	l_debug("agent %s path %s", sender, path);
+
+	/*
+	 * TODO: send an initial notification in a oneshot idle callback,
+	 * if state is connected.
+	 */
+
+	return l_dbus_message_new_method_return(message);
+}
+
+static struct l_dbus_message *device_signal_agent_unregister(
+						struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct device *device = user_data;
+	const char *path, *sender;
+
+	if (!device->signal_agent)
+		return dbus_error_failed(message);
+
+	l_debug("signal agent unregister");
+
+	if (!l_dbus_message_get_arguments(message, "o", &path))
+		return dbus_error_invalid_args(message);
+
+	sender = l_dbus_message_get_sender(message);
+
+	if (strcmp(device->signal_agent->owner, sender))
+		return dbus_error_not_found(message);
+
+	signal_agent_free(device->signal_agent);
+	device->signal_agent = NULL;
+
+	netdev_set_rssi_report_levels(device->netdev, NULL, 0);
+
+	return l_dbus_message_new_method_return(message);
+}
+
 static bool device_property_get_name(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -1806,6 +1957,12 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "GetOrderedNetworks", 0,
 				device_get_networks, "a(osns)", "",
 				"networks");
+	l_dbus_interface_method(interface, "RegisterSignalLevelAgent", 0,
+				device_signal_agent_register,
+				"", "oan", "path", "levels");
+	l_dbus_interface_method(interface, "UnregisterSignalLevelAgent", 0,
+				device_signal_agent_unregister,
+				"", "o", "path");
 
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					device_property_get_name, NULL);
@@ -1949,6 +2106,12 @@ static void device_free(void *user)
 	if (device->connect_pending)
 		dbus_pending_reply(&device->connect_pending,
 				dbus_error_aborted(device->connect_pending));
+
+	if (device->signal_agent) {
+		device_signal_agent_release(device->signal_agent,
+						device_get_path(device));
+		signal_agent_free(device->signal_agent);
+	}
 
 	if (device->state != DEVICE_STATE_OFF)
 		WATCHLIST_NOTIFY(&device_watches, device_watch_func_t,

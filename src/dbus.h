@@ -31,6 +31,7 @@
 #define IWD_AGENT_INTERFACE "net.connman.iwd.Agent"
 #define IWD_WSC_INTERFACE "net.connman.iwd.WiFiSimpleConfiguration"
 #define IWD_KNOWN_NETWORKS_INTERFACE "net.connman.iwd.KnownNetworks"
+#define IWD_SIGNAL_AGENT_INTERFACE "net.connman.iwd.SignalLevelAgent"
 
 #define IWD_AGENT_MANAGER_PATH "/"
 #define IWD_KNOWN_NETWORKS_PATH "/"
