@@ -243,6 +243,22 @@ static void ordered_networks_destroy(void *data)
 	l_free(network);
 }
 
+static const char *dbms_tostars(int16_t dbms)
+{
+	switch (dbms) {
+	case -6000 ... 0:
+		return "****";
+	case -6700 ... -6100:
+		return "***" COLOR_BOLDGRAY "*" COLOR_OFF;
+	case -7500 ... -6800:
+		return "**" COLOR_BOLDGRAY "**" COLOR_OFF;
+	case -10000 ... -7600:
+		return "*" COLOR_BOLDGRAY "***" COLOR_OFF;
+	default:
+		return "-";
+	}
+}
+
 static void ordered_networks_display(struct l_queue *ordered_networks)
 {
 	const struct l_queue_entry *entry;
@@ -250,7 +266,7 @@ static void ordered_networks_display(struct l_queue *ordered_networks)
 
 	display_table_header("Available networks", "%s%-*s%-*s%-*s%*s",
 					MARGIN, 2, "", 32, "Network name",
-					10, "Security", 4, "dbms");
+					10, "Security", 6, "Signal");
 
 	if (!l_queue_length(ordered_networks)) {
 		display("No networks available\n");
@@ -264,18 +280,18 @@ static void ordered_networks_display(struct l_queue *ordered_networks)
 		struct ordered_network *network = entry->data;
 
 		if (is_first && network_is_connected(network->network_path)) {
-			display("%s%-*s%-*s%-*s%*d\n", MARGIN,
-					2, COLOR_BOLDGRAY "> " COLOR_OFF,
-					32, network->name, 10, network->type,
-					4, network->signal_strength);
+			display("%s%-*s%-*s%-*s%-*s\n", MARGIN,
+				2, COLOR_BOLDGRAY "> " COLOR_OFF,
+				32, network->name, 10, network->type,
+				6, dbms_tostars(network->signal_strength));
 
 			is_first = false;
 			continue;
 		}
 
-		display("%s%-*s%-*s%-*s%*d\n", MARGIN, 2, "",
-					32, network->name, 10, network->type,
-					4, network->signal_strength);
+		display("%s%-*s%-*s%-*s%-*s\n", MARGIN, 2, "",
+				32, network->name, 10, network->type,
+				6, dbms_tostars(network->signal_strength));
 	}
 
 	display_table_footer();
