@@ -146,11 +146,11 @@ static enum cmd_status cmd_list(const char *device_name, char *args)
 		proxy_interface_find_all(IWD_WSC_INTERFACE,
 						match_by_device, NULL);
 
-	if (match) {
-		display_table_header("WSC-capable Devices",
-					MARGIN "%-*s", 20, "Name");
-	} else {
+	display_table_header("WSC-capable Devices", MARGIN "%-*s", 20, "Name");
+
+	if (!match) {
 		display("No WSC-capable devices available\n");
+		display_table_footer();
 
 		return CMD_STATUS_OK;
 	}

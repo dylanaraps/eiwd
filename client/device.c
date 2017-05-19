@@ -248,13 +248,13 @@ static void ordered_networks_display(struct l_queue *ordered_networks)
 	const struct l_queue_entry *entry;
 	bool is_first;
 
-	if (l_queue_length(ordered_networks)) {
-		display_table_header("Available networks",
-					"%s%-*s%-*s%-*s%*s", MARGIN, 2, "",
-					32, "Network name", 10, "Security",
-					4, "dbms");
-	} else {
+	display_table_header("Available networks", "%s%-*s%-*s%-*s%*s",
+					MARGIN, 2, "", 32, "Network name",
+					10, "Security", 4, "dbms");
+
+	if (!l_queue_length(ordered_networks)) {
 		display("No networks available\n");
+		display_table_footer();
 
 		return;
 	}

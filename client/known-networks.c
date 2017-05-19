@@ -78,12 +78,11 @@ static void known_networks_display(struct l_queue *known_networks)
 {
 	const struct l_queue_entry *entry;
 
-	if (l_queue_length(known_networks))
-		display_table_header("Known Networks",
-					" %-*s%-*s%-*s%-*s",
+	display_table_header("Known Networks", " %-*s%-*s%-*s%-*s",
 					32, "Name", 11, "Security",
 					19, "Last connected", 17, "Last seen");
-	else
+
+	if (!l_queue_length(known_networks))
 		display(MARGIN "No known networks\n");
 
 	for (entry = l_queue_get_entries(known_networks); entry;
