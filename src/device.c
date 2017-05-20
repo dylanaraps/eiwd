@@ -1409,6 +1409,8 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 		device->signal_low = false;
 
 		break;
+	case NETDEV_EVENT_RSSI_LEVEL_NOTIFY:
+		break;
 	};
 }
 

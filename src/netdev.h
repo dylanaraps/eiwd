@@ -46,6 +46,7 @@ enum netdev_event {
 	NETDEV_EVENT_DISCONNECT_BY_SME,
 	NETDEV_EVENT_RSSI_THRESHOLD_LOW,
 	NETDEV_EVENT_RSSI_THRESHOLD_HIGH,
+	NETDEV_EVENT_RSSI_LEVEL_NOTIFY,
 };
 
 enum netdev_watch_event {
@@ -114,6 +115,10 @@ int netdev_set_powered(struct netdev *netdev, bool powered,
 
 int netdev_neighbor_report_req(struct netdev *netdev,
 				netdev_neighbor_report_cb_t cb);
+
+int netdev_set_rssi_report_levels(struct netdev *netdev, const int8_t *levels,
+					size_t levels_num);
+int netdev_get_rssi_level(struct netdev *netdev);
 
 struct netdev *netdev_find(int ifindex);
 
