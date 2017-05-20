@@ -245,18 +245,16 @@ static void ordered_networks_destroy(void *data)
 
 static const char *dbms_tostars(int16_t dbms)
 {
-	switch (dbms) {
-	case -6000 ... 0:
+	if (dbms >= -6000)
 		return "****";
-	case -6700 ... -6100:
+
+	if (dbms >= -6700)
 		return "***" COLOR_BOLDGRAY "*" COLOR_OFF;
-	case -7500 ... -6800:
+
+	if (dbms >= -7500)
 		return "**" COLOR_BOLDGRAY "**" COLOR_OFF;
-	case -10000 ... -7600:
-		return "*" COLOR_BOLDGRAY "***" COLOR_OFF;
-	default:
-		return "-";
-	}
+
+	return "*" COLOR_BOLDGRAY "***" COLOR_OFF;
 }
 
 static void ordered_networks_display(struct l_queue *ordered_networks)
