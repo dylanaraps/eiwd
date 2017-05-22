@@ -1495,6 +1495,7 @@ static struct l_genl_msg *netdev_build_cmd_ft_reassociate(struct netdev *netdev,
 	l_genl_msg_append_attr(msg, NL80211_ATTR_PREV_BSSID, ETH_ALEN,
 				prev_bssid);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, hs->ssid_len, hs->ssid);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SOCKET_OWNER, 0, NULL);
 
 	if (is_rsn) {
 		uint32_t nl_cipher;
@@ -1967,6 +1968,8 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 
 	if (bss->capability & IE_BSS_CAP_PRIVACY)
 		l_genl_msg_append_attr(msg, NL80211_ATTR_PRIVACY, 0, NULL);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SOCKET_OWNER, 0, NULL);
 
 	if (is_rsn) {
 		uint32_t nl_cipher;
