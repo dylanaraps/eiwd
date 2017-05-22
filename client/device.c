@@ -257,8 +257,22 @@ static const char *dbms_tostars(int16_t dbms)
 	return "*" COLOR_BOLDGRAY "***" COLOR_OFF;
 }
 
+#define RSSI_DBMS "rssi-dbms"
+#define RSSI_BARS "rssi-bars"
+
+static const struct {
+	const char *option;
+} ordered_networks_arg_options[] = {
+	{ RSSI_DBMS },
+	{ RSSI_BARS },
+	{ }
+};
+
+static bool display_signal_as_dbms;
+
 static void ordered_networks_display(struct l_queue *ordered_networks)
 {
+	char *dbms = NULL;
 	const struct l_queue_entry *entry;
 	bool is_first;
 
@@ -277,19 +291,27 @@ static void ordered_networks_display(struct l_queue *ordered_networks)
 						entry; entry = entry->next) {
 		struct ordered_network *network = entry->data;
 
+		if (display_signal_as_dbms)
+			dbms = l_strdup_printf("%d", network->signal_strength);
+
 		if (is_first && network_is_connected(network->network_path)) {
 			display("%s%-*s%-*s%-*s%-*s\n", MARGIN,
 				2, COLOR_BOLDGRAY "> " COLOR_OFF,
 				32, network->name, 10, network->type,
-				6, dbms_tostars(network->signal_strength));
+				6, display_signal_as_dbms ? dbms :
+					dbms_tostars(network->signal_strength));
 
+			l_free(dbms);
 			is_first = false;
 			continue;
 		}
 
 		display("%s%-*s%-*s%-*s%-*s\n", MARGIN, 2, "",
 				32, network->name, 10, network->type,
-				6, dbms_tostars(network->signal_strength));
+				6, display_signal_as_dbms ? dbms :
+					dbms_tostars(network->signal_strength));
+
+		l_free(dbms);
 	}
 
 	display_table_footer();
@@ -532,6 +554,15 @@ static enum cmd_status cmd_get_networks(const char *device_name, char *args)
 	if (!proxy)
 		return CMD_STATUS_INVALID_ARGS;
 
+	if (!args)
+		goto proceed;
+
+	if (!strcmp(args, RSSI_DBMS))
+		display_signal_as_dbms = true;
+	else
+		display_signal_as_dbms = false;
+
+proceed:
 	proxy_interface_method_call(proxy, "GetOrderedNetworks", "",
 					ordered_networks_callback);
 
@@ -649,13 +680,34 @@ static enum cmd_status cmd_connect(const char *device_name, char *args)
 	return CMD_STATUS_OK;
 }
 
+static char *get_networks_cmd_arg_completion(const char *text, int state)
+{
+	static int index;
+	static int len;
+	const char *arg;
+
+	if (!state) {
+		index = 0;
+		len = strlen(text);
+	}
+
+	while ((arg = ordered_networks_arg_options[index++].option)) {
+		if (!strncmp(arg, text, len))
+			return l_strdup(arg);
+	}
+
+	return NULL;
+}
+
 static const struct command device_commands[] = {
 	{ NULL,     "list",     NULL,   cmd_list, "List devices",     true },
 	{ "<wlan>", "show",     NULL,   cmd_show, "Show device info", true },
 	{ "<wlan>", "scan",     NULL,   cmd_scan, "Scan for networks" },
 	{ "<wlan>", "get-networks",
-				NULL,   cmd_get_networks,
-						"Get networks",       true },
+				"[rssi-dbms/rssi-bars]",
+					cmd_get_networks,
+						"Get networks",       true,
+			get_networks_cmd_arg_completion },
 	{ "<wlan>", "set-property",
 				"<name> <value>",
 					cmd_set_property,
