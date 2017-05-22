@@ -434,7 +434,7 @@ void command_process_prompt(char *prompt)
 
 	list_cmd_families();
 
-	display("\n");
+	display("\nMiscellaneous:\n");
 
 	list_commands(NULL, command_list);
 }
