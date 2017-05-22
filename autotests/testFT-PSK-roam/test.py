@@ -11,6 +11,7 @@ from iwd import NetworkType
 from hwsim import Hwsim
 from hostapd import HostapdCLI
 from wiphy import wiphy_map
+import testutil
 
 class Test(unittest.TestCase):
     def test_roam_success(self):
@@ -109,6 +110,10 @@ class Test(unittest.TestCase):
 
         wd.unregister_psk_agent(psk_agent)
 
+        testutil.test_ifaces_connected(bss_hostapd[0].ifname, device.name)
+        self.assertRaises(Exception, testutil.test_ifaces_connected,
+                          (bss_hostapd[1].ifname, device.name))
+
         # Check that iwd starts transition to BSS 1 in less than 10 seconds
         rule0.signal = -8000
 
@@ -122,6 +127,10 @@ class Test(unittest.TestCase):
 
         self.assertEqual(device.state, iwd.DeviceState.connected)
         self.assertTrue(bss_hostapd[1].list_sta())
+
+        testutil.test_ifaces_connected(bss_hostapd[1].ifname, device.name)
+        self.assertRaises(Exception, testutil.test_ifaces_connected,
+                          (bss_hostapd[0].ifname, device.name))
 
         device.disconnect()
 

@@ -8,6 +8,7 @@ import iwd
 from iwd import IWD
 from iwd import PSKAgent
 from iwd import NetworkType
+import testutil
 
 class Test(unittest.TestCase):
 
@@ -42,6 +43,8 @@ class Test(unittest.TestCase):
 
         condition = 'obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
+
+        testutil.test_ifaces_connected()
 
         device.disconnect()
 
