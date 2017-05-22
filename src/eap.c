@@ -186,16 +186,23 @@ static void eap_handle_request(struct eap_state *eap, uint16_t id,
 		/* Invalid packets to be ignored */
 		return;
 
+	type = pkt[0];
+	if (type >= __EAP_TYPE_MIN_METHOD && !eap->method) {
+		l_warn("EAP server tried method %i while client had no method "
+			"configured", type);
+
+		goto unsupported_method;
+	}
+
 	if (id == eap->last_id)
 		op = eap->method->handle_retransmit;
 	else
 		op = eap->method->handle_request;
 
 	eap->last_id = id;
-	type = pkt[0];
 
 	if (type >= __EAP_TYPE_MIN_METHOD) {
-		if (!eap->method || type != eap->method->request_type) {
+		if (type != eap->method->request_type) {
 			l_warn("EAP server tried method %i while client was "
 					"configured for method %i",
 					type, eap->method->request_type);
