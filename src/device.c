@@ -1773,6 +1773,9 @@ static struct l_dbus_message *device_signal_agent_unregister(
 	if (!l_dbus_message_get_arguments(message, "o", &path))
 		return dbus_error_invalid_args(message);
 
+	if (strcmp(device->signal_agent->path, path))
+		return dbus_error_not_found(message);
+
 	sender = l_dbus_message_get_sender(message);
 
 	if (strcmp(device->signal_agent->owner, sender))
