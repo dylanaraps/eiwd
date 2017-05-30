@@ -1728,7 +1728,7 @@ static struct l_dbus_message *device_signal_agent_register(struct l_dbus *dbus,
 		levels[count++] = val;
 	}
 
-	if (count < 1 || count > 16)
+	if (count < 1)
 		return dbus_error_invalid_args(message);
 
 	err = netdev_set_rssi_report_levels(device->netdev, levels, count);
