@@ -714,23 +714,14 @@ static void netdev_operstate_cb(bool success, void *user_data)
 {
 	struct netdev *netdev = user_data;
 
-	if (!netdev->connected)
-		return;
+	l_debug("netdev: %d, success: %d", netdev->index, success);
+}
 
-	if (!success) {
-		struct l_genl_msg *msg;
-
-		l_error("Setting LinkMode and OperState failed for ifindex: %d",
-				netdev->index);
-
-		netdev->result = NETDEV_RESULT_KEY_SETTING_FAILED;
-		msg = netdev_build_cmd_deauthenticate(netdev,
-						MPDU_REASON_CODE_UNSPECIFIED);
-		netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
-							netdev_connect_failed,
-							netdev, NULL);
-		return;
-	}
+static void netdev_connect_ok(struct netdev *netdev)
+{
+	netdev_set_linkmode_and_operstate(netdev->index, IF_LINK_MODE_DORMANT,
+						IF_OPER_UP, netdev_operstate_cb,
+						netdev);
 
 	netdev->operational = true;
 
@@ -786,9 +777,7 @@ static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	netdev_set_linkmode_and_operstate(netdev->index, IF_LINK_MODE_DORMANT,
-						IF_OPER_UP, netdev_operstate_cb,
-						netdev);
+	netdev_connect_ok(netdev);
 }
 
 static struct l_genl_msg *netdev_build_cmd_set_station(struct netdev *netdev)
@@ -1464,9 +1453,7 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 			handshake_state_install_ptk(netdev->handshake);
 	}
 
-	netdev_set_linkmode_and_operstate(netdev->index, IF_LINK_MODE_DORMANT,
-						IF_OPER_UP, netdev_operstate_cb,
-						netdev);
+	netdev_connect_ok(netdev);
 
 	return;
 
