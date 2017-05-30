@@ -100,3 +100,26 @@ def test_ifaces_connected(if0=None, if1=None):
     finally:
         sock0.close()
         sock1.close()
+
+SIOCGIFFLAGS = 0x8913
+IFF_UP = 1 << 0
+IFF_RUNNING = 1 << 6
+
+def test_iface_operstate(intf=None):
+    for wname in wiphy.wiphy_map:
+        w = wiphy.wiphy_map[wname]
+        for ifname in w:
+            if intf is None and w[ifname].use == 'iwd':
+                intf = ifname
+
+    sock = socket.socket(socket.PF_PACKET, socket.SOCK_RAW)
+
+    try:
+        ifreq = struct.pack('16sh', intf.encode('utf8'), 0)
+        flags = struct.unpack('16sh', fcntl.ioctl(sock, SIOCGIFFLAGS, ifreq))[1]
+
+        # IFF_LOWER_UP and IFF_DORMANT not returned by SIOCGIFFLAGS
+        if flags & (IFF_UP | IFF_RUNNING) != IFF_UP | IFF_RUNNING:
+            raise Exception(intf + ' operstate wrong')
+    finally:
+        sock.close()

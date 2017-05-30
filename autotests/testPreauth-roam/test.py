@@ -101,6 +101,7 @@ class Test(unittest.TestCase):
         self.assertTrue(bss_hostapd[0].list_sta())
         self.assertFalse(bss_hostapd[1].list_sta())
 
+        testutil.test_iface_operstate(device.name)
         testutil.test_ifaces_connected(bss_hostapd[0].ifname, device.name)
         self.assertRaises(Exception, testutil.test_ifaces_connected,
                           (bss_hostapd[1].ifname, device.name))
@@ -121,6 +122,7 @@ class Test(unittest.TestCase):
         self.assertEqual(device.state, iwd.DeviceState.connected)
         self.assertTrue(bss_hostapd[1].list_sta())
 
+        testutil.test_iface_operstate(device.name)
         testutil.test_ifaces_connected(bss_hostapd[1].ifname, device.name)
         self.assertRaises(Exception, testutil.test_ifaces_connected,
                           (bss_hostapd[0].ifname, device.name))
