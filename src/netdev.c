@@ -279,18 +279,11 @@ int netdev_set_powered(struct netdev *netdev, bool powered,
 	return 0;
 }
 
-static void netdev_operstate_dormant_cb(bool success, void *user_data)
+static void netdev_linkmode_dormant_cb(bool success, void *user_data)
 {
 	struct netdev *netdev = user_data;
 
 	l_debug("netdev: %d, success: %d", netdev->index, success);
-}
-
-static void netdev_operstate_down_cb(bool success, void *user_data)
-{
-	uint32_t index = L_PTR_TO_UINT(user_data);
-
-	l_debug("netdev: %d, success: %d", index, success);
 }
 
 static void netdev_preauth_destroy(void *data)
@@ -419,10 +412,6 @@ static void netdev_free(void *data)
 static void netdev_shutdown_one(void *data, void *user_data)
 {
 	struct netdev *netdev = data;
-
-	netdev_set_linkmode_and_operstate(netdev->index, 0, IF_OPER_DOWN,
-						netdev_operstate_down_cb,
-						L_UINT_TO_PTR(netdev->index));
 
 	if (netdev_get_is_up(netdev))
 		netdev_set_powered(netdev, false, NULL, NULL, NULL);
@@ -797,8 +786,9 @@ static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	netdev_set_linkmode_and_operstate(netdev->index, 1, IF_OPER_UP,
-						netdev_operstate_cb, netdev);
+	netdev_set_linkmode_and_operstate(netdev->index, IF_LINK_MODE_DORMANT,
+						IF_OPER_UP, netdev_operstate_cb,
+						netdev);
 }
 
 static struct l_genl_msg *netdev_build_cmd_set_station(struct netdev *netdev)
@@ -1454,30 +1444,29 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 		 * has all the input data even in FT mode.
 		 */
 		eapol_start(netdev->sm);
+
+		if (!netdev->in_ft) {
+			if (netdev->event_filter)
+				netdev->event_filter(netdev,
+						NETDEV_EVENT_4WAY_HANDSHAKE,
+						netdev->user_data);
+
+			return;
+		}
 	}
 
 	if (netdev->in_ft) {
 		bool is_rsn = netdev->handshake->own_ie != NULL;
 
 		netdev->in_ft = false;
-		netdev->operational = true;
 
 		if (is_rsn)
 			handshake_state_install_ptk(netdev->handshake);
+	}
 
-		if (netdev->connect_cb) {
-			netdev->connect_cb(netdev, NETDEV_RESULT_OK,
-						netdev->user_data);
-			netdev->connect_cb = NULL;
-		}
-	} else if (netdev->sm) {
-		if (netdev->event_filter)
-			netdev->event_filter(netdev,
-					NETDEV_EVENT_4WAY_HANDSHAKE,
-					netdev->user_data);
-	} else
-		netdev_set_linkmode_and_operstate(netdev->index, 1, IF_OPER_UP,
-						netdev_operstate_cb, netdev);
+	netdev_set_linkmode_and_operstate(netdev->index, IF_LINK_MODE_DORMANT,
+						IF_OPER_UP, netdev_operstate_cb,
+						netdev);
 
 	return;
 
@@ -2997,9 +2986,9 @@ static void netdev_initial_up_cb(struct netdev *netdev, int result,
 			return;
 	}
 
-	netdev_set_linkmode_and_operstate(netdev->index, 1,
-						IF_OPER_DORMANT,
-						netdev_operstate_dormant_cb,
+	netdev_set_linkmode_and_operstate(netdev->index, IF_LINK_MODE_DORMANT,
+						IF_OPER_DOWN,
+						netdev_linkmode_dormant_cb,
 						netdev);
 
 	l_debug("Interface %i initialized", netdev->index);
