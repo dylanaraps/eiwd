@@ -79,7 +79,7 @@ struct netdev {
 	struct l_timeout *neighbor_report_timeout;
 	uint8_t prev_bssid[ETH_ALEN];
 	int8_t rssi_levels[16];
-	uint8_t rssi_levels_num : 4;
+	uint8_t rssi_levels_num;
 	uint8_t cur_rssi_level_idx;
 	int8_t cur_rssi;
 
