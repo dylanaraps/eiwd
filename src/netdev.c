@@ -52,6 +52,10 @@
 #include "src/ftutil.h"
 #include "src/util.h"
 
+#ifndef ENOTSUPP
+#define ENOTSUPP 524
+#endif
+
 struct netdev {
 	uint32_t index;
 	char name[IFNAMSIZ];
@@ -766,17 +770,23 @@ static void netdev_setting_keys_failed(struct netdev *netdev,
 static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
+	int err;
 
 	if (!netdev->connected)
 		return;
 
-	if (l_genl_msg_get_error(msg) < 0) {
+	err = l_genl_msg_get_error(msg);
+	if (err == -ENOTSUPP)
+		goto done;
+
+	if (err < 0) {
 		l_error("Set Station failed for ifindex %d", netdev->index);
 		netdev_setting_keys_failed(netdev,
 						MPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
 
+done:
 	netdev_connect_ok(netdev);
 }
 
