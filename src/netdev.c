@@ -666,14 +666,7 @@ static void netdev_disconnect_event(struct l_genl_msg *msg,
 							event_data);
 }
 
-static void netdev_deauthenticate_event(struct l_genl_msg *msg,
-							struct netdev *netdev)
-{
-	l_debug("");
-}
-
-static void netdev_cmd_deauthenticate_cb(struct l_genl_msg *msg,
-								void *user_data)
+static void netdev_cmd_disconnect_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
 	void *disconnect_data;
@@ -698,6 +691,24 @@ static void netdev_cmd_deauthenticate_cb(struct l_genl_msg *msg,
 		r = true;
 
 	disconnect_cb(netdev, r, disconnect_data);
+}
+
+static struct l_genl_msg *netdev_build_cmd_disconnect(struct netdev *netdev,
+							uint16_t reason_code)
+{
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_DISCONNECT, 64);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
+
+	return msg;
+}
+
+static void netdev_deauthenticate_event(struct l_genl_msg *msg,
+							struct netdev *netdev)
+{
+	l_debug("");
 }
 
 static struct l_genl_msg *netdev_build_cmd_deauthenticate(struct netdev *netdev,
@@ -760,8 +771,7 @@ static void netdev_setting_keys_failed(struct netdev *netdev,
 	netdev->group_management_new_key_cmd_id = 0;
 
 	netdev->result = NETDEV_RESULT_KEY_SETTING_FAILED;
-	msg = netdev_build_cmd_deauthenticate(netdev,
-						MPDU_REASON_CODE_UNSPECIFIED);
+	msg = netdev_build_cmd_disconnect(netdev, MPDU_REASON_CODE_UNSPECIFIED);
 	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
 							netdev_connect_failed,
 							netdev, NULL);
@@ -1133,7 +1143,7 @@ static void netdev_handshake_failed(uint32_t ifindex,
 	netdev->sm = NULL;
 
 	netdev->result = NETDEV_RESULT_HANDSHAKE_FAILED;
-	msg = netdev_build_cmd_deauthenticate(netdev, reason_code);
+	msg = netdev_build_cmd_disconnect(netdev, reason_code);
 	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
 						netdev_connect_failed,
 						netdev, NULL);
@@ -2140,17 +2150,13 @@ error:
 int netdev_disconnect(struct netdev *netdev,
 				netdev_disconnect_cb_t cb, void *user_data)
 {
-	struct l_genl_msg *deauthenticate;
+	struct l_genl_msg *disconnect;
 
 	if (!netdev->connected)
 		return -ENOTCONN;
 
 	if (netdev->disconnect_cmd_id)
 		return -EINPROGRESS;
-
-	/* Build deauthenticate prior to handshake_state being cleared */
-	deauthenticate = netdev_build_cmd_deauthenticate(netdev,
-					MPDU_REASON_CODE_DEAUTH_LEAVING);
 
 	/* Only perform this if we haven't successfully fully associated yet */
 	if (!netdev->operational) {
@@ -2160,11 +2166,13 @@ int netdev_disconnect(struct netdev *netdev,
 		netdev_connect_free(netdev);
 	}
 
-	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, deauthenticate,
-				netdev_cmd_deauthenticate_cb, netdev, NULL);
+	disconnect = netdev_build_cmd_disconnect(netdev,
+					MPDU_REASON_CODE_DEAUTH_LEAVING);
+	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, disconnect,
+				netdev_cmd_disconnect_cb, netdev, NULL);
 
 	if (!netdev->disconnect_cmd_id) {
-		l_genl_msg_unref(deauthenticate);
+		l_genl_msg_unref(disconnect);
 		return -EIO;
 	}
 
