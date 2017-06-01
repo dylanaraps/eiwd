@@ -85,8 +85,14 @@ int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
 
+	if (!l_checksum_is_supported(L_CHECKSUM_MD5, true)) {
+		printf("MD5 support missing, skipping...\n");
+		goto done;
+	}
+
 	l_test_add("/hmac-md5/Test case 1", hmac_test, &test_case_1);
 	l_test_add("/hmac-md5/Test case 2", hmac_test, &test_case_2);
 
+done:
 	return l_test_run();
 }

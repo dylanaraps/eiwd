@@ -3177,6 +3177,10 @@ int main(int argc, char *argv[])
 	l_test_add("/EAPoL Key/Key Frame 32",
 			eapol_key_test, &eapol_key_test_32);
 
+	if (!l_checksum_is_supported(L_CHECKSUM_MD5, true) ||
+			!l_checksum_is_supported(L_CHECKSUM_SHA1, true))
+		goto done;
+
 	l_test_add("/EAPoL Key/MIC Test 1",
 			eapol_key_mic_test, &eapol_key_mic_test_1);
 	l_test_add("/EAPoL Key/MIC Test 2",
@@ -3220,5 +3224,6 @@ int main(int argc, char *argv[])
 	l_test_add("EAPoL/FT-Using-PSK 4-Way Handshake",
 			&eapol_ft_handshake_test, NULL);
 
+done:
 	return l_test_run();
 }

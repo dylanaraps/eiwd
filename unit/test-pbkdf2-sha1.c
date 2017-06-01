@@ -183,6 +183,11 @@ int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
 
+	if (!l_checksum_is_supported(L_CHECKSUM_SHA1, true)) {
+		printf("SHA1 support missing, skipping...\n");
+		goto done;
+	}
+
 	l_test_add("/pbkdf2-sha1/PBKDF2 Test vector 1",
 					pbkdf2_test, &pbkdf2_test_vector_1);
 	l_test_add("/pbkdf2-sha1/PBKDF2 Test vector 2",
@@ -211,5 +216,6 @@ int main(int argc, char *argv[])
 	l_test_add("/pbkdf2-sha1/ATHENA Test vector 7",
 					pbkdf2_test, &athena_test_vector_7);
 
+done:
 	return l_test_run();
 }

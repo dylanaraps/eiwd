@@ -339,6 +339,11 @@ int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
 
+	if (!l_checksum_is_supported(L_CHECKSUM_SHA1, true)) {
+		printf("SHA1 support missing, skipping...\n");
+		goto done;
+	}
+
 	l_test_add("/Passphrase Generator/PSK Test Case 1",
 			psk_test, &psk_test_case_1);
 	l_test_add("/Passphrase Generator/PSK Test Case 2",
@@ -355,5 +360,6 @@ int main(int argc, char *argv[])
 	l_test_add("/PTK Derivation/PTK Test Case 4",
 			ptk_test, &ptk_test_4);
 
+done:
 	return l_test_run();
 }

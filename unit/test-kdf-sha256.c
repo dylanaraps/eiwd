@@ -85,7 +85,13 @@ int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
 
+	if (!l_checksum_is_supported(L_CHECKSUM_SHA256, true)) {
+		printf("SHA256 support missing, skipping...\n");
+		goto done;
+	}
+
 	l_test_add("/kdf-sha256/Test case 1", kdf_test, &test_case_1);
 
+done:
 	return l_test_run();
 }

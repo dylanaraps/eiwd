@@ -142,10 +142,16 @@ int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
 
+	if (!l_checksum_cmac_aes_supported()) {
+		printf("AES-CMAC support missing, skipping...\n");
+		goto done;
+	}
+
 	l_test_add("/cmac-aes/Example 1", cmac_test, &example_1);
 	l_test_add("/cmac-aes/Example 2", cmac_test, &example_2);
 	l_test_add("/cmac-aes/Exmaple 3", cmac_test, &example_3);
 	l_test_add("/cmac-aes/Exmaple 4", cmac_test, &example_4);
 
+done:
 	return l_test_run();
 }

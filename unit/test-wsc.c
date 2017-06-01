@@ -2233,21 +2233,23 @@ int main(int argc, char *argv[])
 	l_test_add("/wsc/build/probe request 1", wsc_test_build_probe_request,
 					&probe_request_data_1);
 
+	l_test_add("/wsc/pin/valid pin", wsc_test_pin_valid, NULL);
+	l_test_add("/wsc/pin/valid checksum", wsc_test_pin_checksum, NULL);
+	l_test_add("/wsc/pin/generate", wsc_test_pin_generate, NULL);
+
 	l_test_add("/wsc/gen_uuid/1", wsc_test_uuid_from_addr,
 					&uuid_from_addr_data_1);
-
-	l_test_add("/wsc/diffie-hellman/generate pubkey 1",
-					wsc_test_dh_generate_pubkey,
-					&dh_generate_pubkey_test_data_1);
-	l_test_add("/wsc/diffie-hellman/generate pubkey 2",
-					wsc_test_dh_generate_pubkey,
-					&dh_generate_pubkey_test_data_2);
 
 	l_test_add("/wsc/parse/m1 1", wsc_test_parse_m1, &m1_data_1);
 	l_test_add("/wsc/parse/m1 2", wsc_test_parse_m1, &m1_data_2);
 
 	l_test_add("/wsc/build/m1 1", wsc_test_build_m1, &m1_data_1);
 	l_test_add("/wsc/build/m1 2", wsc_test_build_m1, &m1_data_2);
+
+	if (!l_checksum_is_supported(L_CHECKSUM_SHA256, true)) {
+		printf("SHA256 support missing, skipping other tests...\n");
+		goto done;
+	}
 
 	l_test_add("/wsc/parse/m2 1", wsc_test_parse_m2, &m2_data_1);
 	l_test_add("/wsc/parse/m2 2", wsc_test_parse_m2, &m2_data_2);
@@ -2295,15 +2297,19 @@ int main(int argc, char *argv[])
 	l_test_add("/wsc/build/wsc_done 1", wsc_test_build_wsc_done,
 							&wsc_done_data_1);
 
+	l_test_add("/wsc/diffie-hellman/generate pubkey 1",
+					wsc_test_dh_generate_pubkey,
+					&dh_generate_pubkey_test_data_1);
+	l_test_add("/wsc/diffie-hellman/generate pubkey 2",
+					wsc_test_dh_generate_pubkey,
+					&dh_generate_pubkey_test_data_2);
+
 	l_test_add("/wsc/handshake/PBC Handshake Test",
 						wsc_test_pbc_handshake, NULL);
 
 	l_test_add("/wsc/retransmission/no fragmentation",
 				wsc_test_retransmission_no_fragmentation, NULL);
 
-	l_test_add("/wsc/pin/valid pin", wsc_test_pin_valid, NULL);
-	l_test_add("/wsc/pin/valid checksum", wsc_test_pin_checksum, NULL);
-	l_test_add("/wsc/pin/generate", wsc_test_pin_generate, NULL);
-
+done:
 	return l_test_run();
 }

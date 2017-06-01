@@ -135,6 +135,11 @@ int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
 
+	if (!l_checksum_is_supported(L_CHECKSUM_MD4, false)) {
+		printf("MD4 support missing, skipping...\n");
+		goto done;
+	}
+
 	l_test_add("MSHAPv2 nt_password-hash",
 			test_nt_password_hash, NULL);
 	l_test_add("MSHAPv2 generate_nt_response",
@@ -146,5 +151,6 @@ int main(int argc, char *argv[])
 	l_test_add("MSHAPv2 authenticator_response",
 			test_authenticator_response, NULL);
 
+done:
 	return l_test_run();
 }
