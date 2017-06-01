@@ -100,6 +100,7 @@ static const char * const qemu_table[] = {
 };
 #else
 #warning Qemu binary name not defined for this architecture yet
+static const char * const qemu_table[] = { NULL };
 #endif
 
 struct wiphy {
