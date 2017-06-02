@@ -1589,8 +1589,6 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 	l_info("Destructing network...");
 
-	remove_absolute_path_dirs(tmpfs_extra_stuff);
-
 	/* Script has responsibility to cleanup any iwd instances it started */
 	if (iwd_pid > 0)
 		terminate_iwd(iwd_pid);
@@ -1604,6 +1602,7 @@ exit_hwsim:
 	l_queue_destroy(wiphy_list, wiphy_free);
 
 	l_settings_free(hw_settings);
+	remove_absolute_path_dirs(tmpfs_extra_stuff);
 	l_strfreev(tmpfs_extra_stuff);
 }
 
