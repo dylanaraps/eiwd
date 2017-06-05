@@ -471,4 +471,6 @@ void display_exit(void)
 	l_io_destroy(io);
 
 	l_signal_remove(resize_signal);
+
+	display_quit();
 }
