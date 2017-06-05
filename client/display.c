@@ -245,6 +245,18 @@ void display_error(const char *error)
 	l_free(text);
 }
 
+static char get_flasher(void)
+{
+	static char c;
+
+	if (c == ' ')
+		c = '*';
+	else
+		c = ' ';
+
+	return c;
+}
+
 void display_table_header(const char *caption, const char *fmt, ...)
 {
 	va_list args;
@@ -253,7 +265,10 @@ void display_table_header(const char *caption, const char *fmt, ...)
 	int caption_pos =
 		(int) ((sizeof(dashed_line) - 1) / 2 + strlen(caption) / 2);
 
-	text = l_strdup_printf("%*s\n", caption_pos, caption);
+	text = l_strdup_printf("%*s" COLOR_BOLDGRAY "%*c" COLOR_OFF "\n",
+				caption_pos, caption,
+				LINE_LEN - 2 - caption_pos,
+				display_refresh.cmd ? get_flasher() : ' ');
 	display_text(text);
 	l_free(text);
 
