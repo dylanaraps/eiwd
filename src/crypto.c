@@ -177,6 +177,9 @@ bool arc4_skip(const uint8_t *key, size_t key_len, size_t skip,
 	if (!cipher)
 		return false;
 
+	/* This is not strictly necessary, but keeps valgrind happy */
+	memset(skip_buf, 0, sizeof(skip_buf));
+
 	while (skip > sizeof(skip_buf)) {
 		size_t to_skip =
 			skip > sizeof(skip_buf) ? sizeof(skip_buf) : skip;
