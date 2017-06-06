@@ -169,12 +169,15 @@ bool arc4_skip(const uint8_t *key, size_t key_len, size_t skip,
 {
 	char skip_buf[1024];
 	struct l_cipher *cipher;
+	struct iovec in_vec[2];
+	struct iovec out_vec[2];
+	bool r;
 
 	cipher = l_cipher_new(L_CIPHER_ARC4, key, key_len);
 	if (!cipher)
 		return false;
 
-	while (skip > 0) {
+	while (skip > sizeof(skip_buf)) {
 		size_t to_skip =
 			skip > sizeof(skip_buf) ? sizeof(skip_buf) : skip;
 
@@ -182,10 +185,20 @@ bool arc4_skip(const uint8_t *key, size_t key_len, size_t skip,
 		skip -= to_skip;
 	}
 
-	l_cipher_decrypt(cipher, in, out, len);
+	in_vec[0].iov_base = skip_buf;
+	in_vec[0].iov_len = skip;
+	in_vec[1].iov_base = (void *) in;
+	in_vec[1].iov_len = len;
+
+	out_vec[0].iov_base = skip_buf;
+	out_vec[0].iov_len = skip;
+	out_vec[1].iov_base = out;
+	out_vec[1].iov_len = len;
+
+	r = l_cipher_decryptv(cipher, in_vec, 2, out_vec, 2);
 	l_cipher_free(cipher);
 
-	return true;
+	return r;
 }
 
 /* 802.11, Section 11.6.2, Table 11-4 */
