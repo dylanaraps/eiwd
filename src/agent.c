@@ -73,10 +73,10 @@ static void send_request(struct agent *agent, const char *request)
 							agent->path);
 
 	message = l_dbus_message_new_method_call(dbus_get_bus(),
-						agent->owner,
-						agent->path,
-						IWD_AGENT_INTERFACE,
-						request);
+							agent->owner,
+							agent->path,
+							IWD_AGENT_INTERFACE,
+							request);
 
 	l_dbus_message_set_arguments(message, "");
 
@@ -110,10 +110,10 @@ static void send_cancel_request(void *user_data, int reason)
 			agent->owner, agent->path);
 
 	message = l_dbus_message_new_method_call(dbus_get_bus(),
-						agent->owner,
-						agent->path,
-						IWD_AGENT_INTERFACE,
-						"Cancel");
+							agent->owner,
+							agent->path,
+							IWD_AGENT_INTERFACE,
+							"Cancel");
 
 	l_dbus_message_set_arguments(message, "s", reasonstr);
 
@@ -128,7 +128,7 @@ static void agent_request_free(void *user_data)
 
 	if (request->trigger)
 		dbus_pending_reply(&request->trigger,
-				dbus_error_aborted(request->trigger));
+					dbus_error_aborted(request->trigger));
 
 	l_free(request);
 }
@@ -241,9 +241,9 @@ static void agent_send_next_request(struct agent *agent)
 	l_debug("send request to %s %s", agent->owner, agent->path);
 
 	agent->pending_id = l_dbus_send_with_reply(dbus_get_bus(),
-						pending->message,
-						agent_receive_reply,
-						agent, NULL);
+							pending->message,
+							agent_receive_reply,
+							agent, NULL);
 
 	pending->message = NULL;
 
@@ -251,9 +251,10 @@ static void agent_send_next_request(struct agent *agent)
 }
 
 static unsigned int agent_queue_request(struct agent *agent,
-				struct l_dbus_message *message, int timeout,
-				void *callback, struct l_dbus_message *trigger,
-				void *user_data)
+					struct l_dbus_message *message,
+					int timeout, void *callback,
+					struct l_dbus_message *trigger,
+					void *user_data)
 {
 	struct agent_request *request;
 
@@ -334,18 +335,16 @@ unsigned int agent_request_passphrase(const char *path,
 	l_debug("agent %p owner %s path %s", agent, agent->owner, agent->path);
 
 	message = l_dbus_message_new_method_call(dbus_get_bus(),
-						agent->owner,
-						agent->path,
-						IWD_AGENT_INTERFACE,
-						"RequestPassphrase");
+							agent->owner,
+							agent->path,
+							IWD_AGENT_INTERFACE,
+							"RequestPassphrase");
 
 	l_dbus_message_set_arguments(message, "o", path);
 
 	return agent_queue_request(agent, message,
-				agent_timeout_input_request(),
-				callback,
-				trigger,
-				user_data);
+					agent_timeout_input_request(),
+					callback, trigger, user_data);
 }
 
 static bool find_request(const void *a, const void *b)
@@ -396,7 +395,7 @@ static void agent_disconnect(struct l_dbus *dbus, void *user_data)
 }
 
 static struct agent *agent_create(struct l_dbus *dbus, const char *name,
-				const char *path)
+							const char *path)
 {
 	struct agent *agent;
 
@@ -406,8 +405,8 @@ static struct agent *agent_create(struct l_dbus *dbus, const char *name,
 	agent->path = l_strdup(path);
 	agent->requests = l_queue_new();
 	agent->disconnect_watch = l_dbus_add_disconnect_watch(dbus, name,
-						agent_disconnect,
-						agent, NULL);
+							agent_disconnect,
+							agent, NULL);
 	return agent;
 }
 
