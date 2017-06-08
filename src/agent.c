@@ -51,7 +51,7 @@ struct agent {
 	struct l_queue *requests;
 };
 
-static struct agent *default_agent = NULL;
+static struct l_queue *agents;
 
 /*
  * How long we wait for user to input things.
@@ -195,8 +195,6 @@ static void agent_free(void *data)
 	l_free(agent->owner);
 	l_free(agent->path);
 	l_free(agent);
-
-	default_agent = NULL;
 }
 
 static void agent_send_next_request(struct agent *agent);
@@ -277,6 +275,35 @@ static unsigned int agent_queue_request(struct agent *agent,
 	return request->id;
 }
 
+static struct agent *agent_lookup(const char *owner)
+{
+	const struct l_queue_entry *entry;
+
+	if (!owner)
+		return NULL;
+
+	for (entry = l_queue_get_entries(agents); entry; entry = entry->next) {
+		struct agent *agent = entry->data;
+
+		if (strcmp(agent->owner, owner))
+			continue;
+
+		return agent;
+	}
+
+	return NULL;
+}
+
+static struct agent *get_agent(const char *owner)
+{
+	struct agent *agent = agent_lookup(owner);
+
+	if (agent)
+		return agent;
+
+	return l_queue_peek_head(agents);
+}
+
 /**
  * agent_request_passphrase:
  * @path: object path related to this request (like network object path)
@@ -298,10 +325,8 @@ unsigned int agent_request_passphrase(const char *path,
 				struct l_dbus_message *trigger,
 				void *user_data)
 {
+	struct agent *agent = get_agent(l_dbus_message_get_sender(trigger));
 	struct l_dbus_message *message;
-	struct agent *agent;
-
-	agent = default_agent;
 
 	if (!agent || !callback)
 		return 0;
@@ -334,17 +359,25 @@ static bool find_request(const void *a, const void *b)
 bool agent_request_cancel(unsigned int req_id, int reason)
 {
 	struct agent_request *request;
+	struct agent *agent;
+	const struct l_queue_entry *entry;
 
-	if (!default_agent)
-		return false;
+	for (entry = l_queue_get_entries(agents); entry; entry = entry->next) {
+		agent = entry->data;
 
-	request = l_queue_remove_if(default_agent->requests, find_request,
+		request = l_queue_remove_if(agent->requests, find_request,
 							L_UINT_TO_PTR(req_id));
+		if (!request)
+			continue;
+
+		break;
+	}
+
 	if (!request)
 		return false;
 
 	if (!request->message)
-		send_cancel_request(default_agent, reason);
+		send_cancel_request(agent, reason);
 
 	agent_request_free(request);
 
@@ -356,6 +389,8 @@ static void agent_disconnect(struct l_dbus *dbus, void *user_data)
 	struct agent *agent = user_data;
 
 	l_debug("agent %s disconnected", agent->owner);
+
+	l_queue_remove(agents, agent);
 
 	l_idle_oneshot(agent_free, agent, NULL);
 }
@@ -380,11 +415,11 @@ static struct l_dbus_message *agent_register(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
 {
+	struct agent *agent = agent_lookup(l_dbus_message_get_sender(message));
 	struct l_dbus_message *reply;
-	struct agent *agent;
 	const char *path;
 
-	if (default_agent)
+	if (agent)
 		return dbus_error_already_exists(message);
 
 	l_debug("agent register called");
@@ -396,7 +431,7 @@ static struct l_dbus_message *agent_register(struct l_dbus *dbus,
 	if (!agent)
 		return dbus_error_failed(message);
 
-	default_agent = agent;
+	l_queue_push_tail(agents, agent);
 
 	l_debug("agent %s path %s", agent->owner, agent->path);
 
@@ -411,23 +446,17 @@ static struct l_dbus_message *agent_unregister(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
 {
+	struct agent *agent = agent_lookup(l_dbus_message_get_sender(message));
 	struct l_dbus_message *reply;
-	const char *path, *sender;
-
-	if (!default_agent)
-		return dbus_error_failed(message);
 
 	l_debug("agent unregister");
 
-	if (!l_dbus_message_get_arguments(message, "o", &path))
-		return dbus_error_invalid_args(message);
-
-	sender = l_dbus_message_get_sender(message);
-
-	if (strcmp(default_agent->owner, sender))
+	if (!agent)
 		return dbus_error_not_found(message);
 
-	agent_free(default_agent);
+	l_queue_remove(agents, agent);
+
+	agent_free(agent);
 
 	reply = l_dbus_message_new_method_return(message);
 
@@ -446,15 +475,21 @@ static void setup_agent_interface(struct l_dbus_interface *interface)
 				"", "o", "path");
 }
 
-static void release_agent(struct agent *agent)
+static bool release_agent(void *data, void *user_data)
 {
+	struct agent *agent = data;
+
 	send_request(agent, "Release");
 
 	agent_free(agent);
+
+	return true;
 }
 
 bool agent_init(struct l_dbus *dbus)
 {
+	agents = l_queue_new();
+
 	if (!l_dbus_register_interface(dbus, IWD_AGENT_MANAGER_INTERFACE,
 						setup_agent_interface,
 						NULL, false)) {
@@ -480,11 +515,13 @@ bool agent_exit(struct l_dbus *dbus)
 	l_dbus_unregister_object(dbus, IWD_AGENT_MANAGER_PATH);
 	l_dbus_unregister_interface(dbus, IWD_AGENT_MANAGER_INTERFACE);
 
+	l_queue_destroy(agents, agent_free);
+	agents = NULL;
+
 	return true;
 }
 
 void agent_shutdown(void)
 {
-	if (default_agent)
-		release_agent(default_agent);
+	l_queue_foreach_remove(agents, release_agent, NULL);
 }
