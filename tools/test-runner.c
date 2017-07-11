@@ -1380,8 +1380,6 @@ start_next_test:
 		pid_t corpse;
 		int status;
 		double interval;
-		const int BUF_LEN = 11;
-		char interval_buf[BUF_LEN];
 
 		corpse = waitpid(WAIT_ANY, &status, 0);
 
@@ -1394,11 +1392,8 @@ start_next_test:
 			kill_process(test_timer_pid);
 
 			timersub(&time_after, &time_before, &time_elapsed);
-			sprintf(interval_buf, "%ld.%0ld",
-					(long int) time_elapsed.tv_sec,
-					(long int) time_elapsed.tv_usec);
-			interval_buf[BUF_LEN - 1] = '\0';
-			interval = atof(interval_buf);
+			interval = time_elapsed.tv_sec +
+					1e-6 * time_elapsed.tv_usec;
 
 			if (WIFEXITED(status) &&
 					WEXITSTATUS(status) == EXIT_SUCCESS) {
