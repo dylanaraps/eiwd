@@ -357,7 +357,7 @@ static bool find_request(const void *a, const void *b)
 
 bool agent_request_cancel(unsigned int req_id, int reason)
 {
-	struct agent_request *request;
+	struct agent_request *request = NULL;
 	struct agent *agent;
 	const struct l_queue_entry *entry;
 
