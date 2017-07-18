@@ -366,10 +366,8 @@ bool agent_request_cancel(unsigned int req_id, int reason)
 
 		request = l_queue_remove_if(agent->requests, find_request,
 							L_UINT_TO_PTR(req_id));
-		if (!request)
-			continue;
-
-		break;
+		if (request)
+			break;
 	}
 
 	if (!request)
