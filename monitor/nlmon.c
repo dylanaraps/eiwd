@@ -4321,8 +4321,6 @@ static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 						struct rtattr *rt_attr, int len)
 {
 	struct rtattr *attr;
-	const char *str;
-	int i;
 
 	if (!table || !rt_attr)
 		return;
@@ -4338,6 +4336,8 @@ static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 		int8_t val_s8;
 		int32_t val_s32;
 		int64_t val_s64;
+		const char *str;
+		int i, payload;
 
 		str = "Reserved";
 
@@ -4350,11 +4350,12 @@ static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 			}
 		}
 
+		payload = RTA_PAYLOAD(attr);
+
 		switch (type) {
 		case ATTR_CUSTOM:
 			if (function)
-				function(indent, str, RTA_DATA(attr),
-							RTA_PAYLOAD(attr));
+				function(indent, str, RTA_DATA(attr), payload);
 			else
 				printf("missing function\n");
 			break;
@@ -4366,57 +4367,57 @@ static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 			val8 = *((uint8_t *) RTA_DATA(attr));
 			print_attr(indent, "%s: %"PRIu8" (0x%02"PRIx8")", str,
 								val8, val8);
-			if (RTA_PAYLOAD(attr) != 1)
+			if (payload != 1)
 				printf("malformed packet\n");
 			break;
 		case ATTR_U16:
 			val16 = *((uint16_t *) RTA_DATA(attr));
 			print_attr(indent, "%s: %"PRIu16" (0x%04"PRIx16")", str,
 								val16, val16);
-			if (RTA_PAYLOAD(attr) != 2)
+			if (payload != 2)
 				printf("malformed packet\n");
 			break;
 		case ATTR_U32:
 			val32 = *((uint32_t *) RTA_DATA(attr));
 			print_attr(indent, "%s: %"PRIu32" (0x%08"PRIx32")", str,
 								val32, val32);
-			if (RTA_PAYLOAD(attr) != 4)
+			if (payload != 4)
 				printf("malformed packet\n");
 			break;
 		case ATTR_U64:
 			val64 = *((uint64_t *) RTA_DATA(attr));
 			print_attr(indent, "%s: %"PRIu64" (0x%016"PRIx64")",
 							str, val64, val64);
-			if (RTA_PAYLOAD(attr) != 8)
+			if (payload != 8)
 				printf("malformed packet\n");
 			break;
 		case ATTR_S8:
 			val_s8 = *((int8_t *) RTA_DATA(attr));
 			print_attr(indent, "%s: %"PRId8, str, val_s8);
-			if (RTA_PAYLOAD(attr) != 1)
+			if (payload != 1)
 				printf("malformed packet\n");
 			break;
 		case ATTR_S32:
 			val_s32 = *((int32_t *) RTA_DATA(attr));
 			print_attr(indent, "%s: %"PRId32, str, val_s32);
-			if (RTA_PAYLOAD(attr) != 4)
+			if (payload != 4)
 				printf("malformed packet\n");
 			break;
 		case ATTR_S64:
 			val_s64 = *((int64_t *) RTA_DATA(attr));
 			print_attr(indent, "%s: %"PRId64, str, val_s64);
-			if (RTA_PAYLOAD(attr) != 8)
+			if (payload != 8)
 				printf("malformed packet\n");
 			break;
 		case ATTR_FLAG:
 			print_attr(indent, "%s: true", str);
-			if (RTA_PAYLOAD(attr) != 0)
+			if (payload != 0)
 				printf("malformed packet\n");
 			break;
 		case ATTR_FLAG_OR_U16:
-			if (RTA_PAYLOAD(attr) == 0)
+			if (payload == 0)
 				print_attr(indent, "%s: true", str);
-			else if (RTA_PAYLOAD(attr) == 2) {
+			else if (payload == 2) {
 				val16 = *((uint16_t *) RTA_DATA(attr));
 				print_attr(indent,
 						"%s: %"PRIu16" (0x%04"PRIx16")",
@@ -4425,17 +4426,14 @@ static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 				printf("malformed packet\n");
 			break;
 		case ATTR_BINARY:
-			print_attr(indent, "%s: len %lu", str,
-							RTA_PAYLOAD(attr));
-			print_hexdump(indent + 1,
-					RTA_DATA(attr), RTA_PAYLOAD(attr));
+			print_attr(indent, "%s: len %d", str, payload);
+			print_hexdump(indent + 1, RTA_DATA(attr), payload);
 			break;
 		case ATTR_ADDRESS:
 		case ATTR_NESTED:
 		case ATTR_ARRAY:
 		case ATTR_UNSPEC:
-			print_attr(indent, "%s: len %lu", str,
-							RTA_PAYLOAD(attr));
+			print_attr(indent, "%s: len %d", str, payload);
 			break;
 		}
 	}
