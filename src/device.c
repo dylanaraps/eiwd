@@ -355,6 +355,7 @@ void device_set_scan_results(struct device *device, struct l_queue *bss_list)
 
 		if (!bss) {
 			l_warn("Connected BSS not in scan results!");
+			device->connected_bss->rank = 0;
 			l_queue_push_tail(device->bss_list,
 						device->connected_bss);
 			network_bss_add(device->connected_network,
