@@ -2104,6 +2104,8 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 
 	scan_ifindex_add(device->index);
 
+	netdev_set_iftype(device->netdev, NETDEV_IFTYPE_STATION);
+
 	device_netdev_notify(netdev, netdev_get_is_up(netdev) ?
 						NETDEV_WATCH_EVENT_UP :
 						NETDEV_WATCH_EVENT_DOWN,

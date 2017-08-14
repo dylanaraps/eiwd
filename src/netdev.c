@@ -195,9 +195,10 @@ uint32_t netdev_get_ifindex(struct netdev *netdev)
 	return netdev->index;
 }
 
-uint32_t netdev_get_iftype(struct netdev *netdev)
+enum netdev_iftype netdev_get_iftype(struct netdev *netdev)
 {
-	return netdev->type;
+	return netdev->type == NL80211_IFTYPE_AP ?
+		NETDEV_IFTYPE_AP : NETDEV_IFTYPE_STATION;
 }
 
 const char *netdev_get_name(struct netdev *netdev)
@@ -416,6 +417,9 @@ static void netdev_free(void *data)
 static void netdev_shutdown_one(void *data, void *user_data)
 {
 	struct netdev *netdev = data;
+
+	if (netdev_get_iftype(netdev) == NETDEV_IFTYPE_AP)
+		netdev_set_iftype(netdev, NETDEV_IFTYPE_STATION);
 
 	if (netdev_get_is_up(netdev))
 		netdev_set_powered(netdev, false, NULL, NULL, NULL);
@@ -2902,6 +2906,27 @@ static int netdev_cqm_rssi_update(struct netdev *netdev)
 	return 0;
 }
 
+int netdev_set_iftype(struct netdev *netdev, enum netdev_iftype type)
+{
+	struct l_genl_msg *msg;
+	uint32_t iftype = (type == NETDEV_IFTYPE_AP) ?
+		NL80211_IFTYPE_AP : NL80211_IFTYPE_STATION;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_SET_INTERFACE, 32);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFTYPE, 4, &iftype);
+
+	if (!l_genl_family_send(nl80211, msg, NULL, NULL, NULL)) {
+		l_error("CMD_SET_INTERFACE failed");
+
+		l_genl_msg_unref(msg);
+
+		return -EIO;
+	}
+
+	return 0;
+}
+
 struct netdev_watch_event_data {
 	struct netdev *netdev;
 	enum netdev_watch_event type;
@@ -3175,11 +3200,6 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 
 	if (!iftype) {
 		l_warn("Missing iftype attribute");
-		return;
-	}
-
-	if (*iftype != NL80211_IFTYPE_STATION) {
-		l_warn("Skipping non-STA interfaces");
 		return;
 	}
 

@@ -56,6 +56,11 @@ enum netdev_watch_event {
 	NETDEV_WATCH_EVENT_ADDRESS_CHANGE,
 };
 
+enum netdev_iftype {
+	NETDEV_IFTYPE_STATION,
+	NETDEV_IFTYPE_AP,
+};
+
 typedef void (*netdev_command_func_t) (bool result, void *user_data);
 typedef void (*netdev_connect_cb_t)(struct netdev *netdev,
 					enum netdev_result result,
@@ -83,7 +88,8 @@ typedef void (*netdev_preauthenticate_cb_t)(struct netdev *netdev,
 
 const uint8_t *netdev_get_address(struct netdev *netdev);
 uint32_t netdev_get_ifindex(struct netdev *netdev);
-uint32_t netdev_get_iftype(struct netdev *netdev);
+enum netdev_iftype netdev_get_iftype(struct netdev *netdev);
+int netdev_set_iftype(struct netdev *netdev, enum netdev_iftype type);
 const char *netdev_get_name(struct netdev *netdev);
 bool netdev_get_is_up(struct netdev *netdev);
 struct handshake_state *netdev_get_handshake(struct netdev *netdev);
