@@ -86,6 +86,7 @@ struct device {
 	bool autoconnect : 1;
 	bool preparing_roam : 1;
 	bool signal_low : 1;
+	bool roam_no_orig_ap : 1;
 };
 
 struct signal_agent {
@@ -554,11 +555,6 @@ static void device_disassociated(struct device *device)
 		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 }
 
-static void device_lost_beacon(struct device *device)
-{
-	l_debug("%d", device->index);
-}
-
 static void device_disconnect_by_ap(struct device *device)
 {
 	l_debug("%d", device->index);
@@ -749,6 +745,7 @@ static void device_roam_failed(struct device *device)
 	l_debug("%d", device->index);
 
 	device->preparing_roam = false;
+	device->roam_no_orig_ap = false;
 
 	if (device->state == DEVICE_STATE_ROAMING)
 		device_disassociated(device);
@@ -774,6 +771,7 @@ static void device_reassociate_cb(struct netdev *netdev,
 		 */
 		device->signal_low = false;
 		device->roam_min_time.tv_sec = 0;
+		device->roam_no_orig_ap = false;
 
 		device_enter_state(device, DEVICE_STATE_CONNECTED);
 	} else
@@ -798,6 +796,7 @@ static void device_fast_transition_cb(struct netdev *netdev,
 		 */
 		device->signal_low = false;
 		device->roam_min_time.tv_sec = 0;
+		device->roam_no_orig_ap = false;
 
 		device_enter_state(device, DEVICE_STATE_CONNECTED);
 	} else
@@ -943,6 +942,7 @@ static void device_transition_start(struct device *device, struct scan_bss *bss)
 	 * the current association."
 	 */
 	if (security == SECURITY_8021X &&
+			!device->roam_no_orig_ap &&
 			scan_bss_get_rsn_info(device->connected_bss,
 						&cur_rsne) >= 0 &&
 			scan_bss_get_rsn_info(bss, &target_rsne) >= 0 &&
@@ -1286,7 +1286,8 @@ static void device_roam_trigger_cb(struct l_timeout *timeout, void *user_data)
 	 * either by choice, or due to the fact that there may be neighbor
 	 * APs not known to the AP."
 	 */
-	if (device->connected_bss->cap_rm_neighbor_report)
+	if (device->connected_bss->cap_rm_neighbor_report &&
+			!device->roam_no_orig_ap)
 		if (netdev_neighbor_report_req(device->netdev,
 						device_neighbor_report_cb) == 0)
 			return;
@@ -1314,6 +1315,25 @@ static void device_roam_timeout_rearm(struct device *device, int seconds)
 
 	device->roam_trigger_timeout =
 		l_timeout_create(seconds, device_roam_trigger_cb, device, NULL);
+}
+
+static void device_lost_beacon(struct device *device)
+{
+	l_debug("%d", device->index);
+
+	if (device->preparing_roam || device->state == DEVICE_STATE_ROAMING)
+		return;
+
+	/*
+	 * Tell the roam mechanism to not bother requesting Neighbor Reports,
+	 * preauthenticating or performing other over-the-DS type of
+	 * authentication to target AP, even while device->connected_bss is
+	 * still non-NULL.  The current connection is in a serious condition
+	 * and we might wasting our time with those mechanisms.
+	 */
+	device->roam_no_orig_ap = true;
+
+	device_roam_trigger_cb(NULL, device);
 }
 
 static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
