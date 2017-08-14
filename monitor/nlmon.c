@@ -2567,6 +2567,8 @@ static void print_frame_type(unsigned int level, const char *label,
 
 	print_attr(level + 1, "Type: %s (%u)", str, type);
 
+	str = NULL;
+
 	switch (subtype) {
 	case 0x00:
 		str = "Association request";
@@ -2599,12 +2601,16 @@ static void print_frame_type(unsigned int level, const char *label,
 		str = "Disassociation";
 		break;
 	case 0x0b:
-		str = "Authentication";
-		print_authentication_mgmt_frame(level + 1, mpdu);
+		if (mpdu)
+			print_authentication_mgmt_frame(level + 1, mpdu);
+		else
+			str = "Authentication";
 		break;
 	case 0x0c:
-		str = "Deauthentication";
-		print_deauthentication_mgmt_frame(level + 1, mpdu);
+		if (mpdu)
+			print_deauthentication_mgmt_frame(level + 1, mpdu);
+		else
+			str = "Deauthentication";
 		break;
 	case 0x0d:
 		str = "Action";
@@ -2617,7 +2623,7 @@ static void print_frame_type(unsigned int level, const char *label,
 		break;
 	}
 
-	if (!mpdu)
+	if (str)
 		print_attr(level + 1, "Subtype: %s (%u)", str, subtype);
 }
 
