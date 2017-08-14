@@ -659,8 +659,14 @@ static void netdev_disconnect_event(struct l_genl_msg *msg,
 	event_data = netdev->user_data;
 	netdev_connect_free(netdev);
 
-	if (disconnect_by_ap && event_filter)
+	if (!event_filter)
+		return;
+
+	if (disconnect_by_ap)
 		event_filter(netdev, NETDEV_EVENT_DISCONNECT_BY_AP,
+							event_data);
+	else
+		event_filter(netdev, NETDEV_EVENT_DISCONNECT_BY_SME,
 							event_data);
 }
 
