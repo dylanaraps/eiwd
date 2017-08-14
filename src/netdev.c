@@ -2187,7 +2187,9 @@ int netdev_disconnect(struct netdev *netdev,
 }
 
 int netdev_reassociate(struct netdev *netdev, struct scan_bss *target_bss,
-			struct handshake_state *hs, netdev_connect_cb_t cb)
+			struct scan_bss *orig_bss, struct handshake_state *hs,
+			netdev_event_func_t event_filter,
+			netdev_connect_cb_t cb, void *user_data)
 {
 	struct l_genl_msg *cmd_connect;
 	struct handshake_state *old_hs;
@@ -2195,11 +2197,8 @@ int netdev_reassociate(struct netdev *netdev, struct scan_bss *target_bss,
 	bool is_rsn = hs->own_ie != NULL;
 	int err;
 
-	if (!netdev->operational)
-		return -ENOTCONN;
-
 	cmd_connect = netdev_build_cmd_connect(netdev, target_bss, hs,
-						netdev->handshake->aa);
+						orig_bss->addr);
 	if (!cmd_connect)
 		return -EINVAL;
 
@@ -2210,12 +2209,11 @@ int netdev_reassociate(struct netdev *netdev, struct scan_bss *target_bss,
 	old_hs = netdev->handshake;
 
 	err = netdev_connect_common(netdev, cmd_connect, target_bss, hs, sm,
-					netdev->event_filter, cb,
-					netdev->user_data);
+					event_filter, cb, user_data);
 	if (err < 0)
 		return err;
 
-	memcpy(netdev->prev_bssid, old_hs->aa, ETH_ALEN);
+	memcpy(netdev->prev_bssid, orig_bss->addr, ETH_ALEN);
 
 	netdev->operational = false;
 
@@ -2238,7 +2236,8 @@ int netdev_reassociate(struct netdev *netdev, struct scan_bss *target_bss,
 	if (old_sm)
 		eapol_sm_free(old_sm);
 
-	handshake_state_free(old_hs);
+	if (old_hs)
+		handshake_state_free(old_hs);
 
 	return err;
 }

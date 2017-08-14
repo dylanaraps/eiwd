@@ -100,6 +100,9 @@ static struct l_queue *device_list;
 
 static void device_roam_timeout_rearm(struct device *device, int seconds);
 
+static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
+					void *user_data);
+
 uint32_t device_watch_add(device_watch_func_t func,
 				void *userdata, device_destroy_func_t destroy)
 {
@@ -807,8 +810,9 @@ static void device_transition_reassociate(struct device *device,
 						struct scan_bss *bss,
 						struct handshake_state *new_hs)
 {
-	if (netdev_reassociate(device->netdev, bss, new_hs,
-				device_reassociate_cb) < 0) {
+	if (netdev_reassociate(device->netdev, bss, device->connected_bss,
+				new_hs, device_netdev_event,
+				device_reassociate_cb, device) < 0) {
 		handshake_state_free(new_hs);
 
 		device_roam_failed(device);
