@@ -557,12 +557,6 @@ static void device_disassociated(struct device *device)
 static void device_lost_beacon(struct device *device)
 {
 	l_debug("%d", device->index);
-
-	if (device->connect_pending)
-		dbus_pending_reply(&device->connect_pending,
-				dbus_error_failed(device->connect_pending));
-
-	device_disassociated(device);
 }
 
 static void device_disconnect_by_ap(struct device *device)

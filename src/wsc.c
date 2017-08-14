@@ -372,8 +372,6 @@ static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
 		break;
 	case NETDEV_EVENT_LOST_BEACON:
 		l_debug("Lost beacon");
-		wsc_connect_cb(device_get_netdev(wsc->device),
-				NETDEV_RESULT_HANDSHAKE_FAILED, wsc);
 		break;
 	case NETDEV_EVENT_DISCONNECT_BY_AP:
 		l_debug("Disconnect by AP");

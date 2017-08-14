@@ -442,8 +442,6 @@ static void netdev_lost_beacon(struct netdev *netdev)
 	if (netdev->event_filter)
 		netdev->event_filter(netdev, NETDEV_EVENT_LOST_BEACON,
 							netdev->user_data);
-
-	netdev_connect_free(netdev);
 }
 
 /* -70 dBm is a popular choice for low signal threshold for roaming */
