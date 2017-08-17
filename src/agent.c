@@ -39,6 +39,7 @@ struct agent_request {
 	void *user_data;
 	void *user_callback;
 	struct l_dbus_message *trigger;
+	agent_request_destroy_func_t destroy;
 };
 
 struct agent {
@@ -129,6 +130,9 @@ static void agent_request_free(void *user_data)
 	if (request->trigger)
 		dbus_pending_reply(&request->trigger,
 					dbus_error_aborted(request->trigger));
+
+	if (request->destroy)
+		request->destroy(request->user_data);
 
 	l_free(request);
 }
@@ -254,7 +258,8 @@ static unsigned int agent_queue_request(struct agent *agent,
 					struct l_dbus_message *message,
 					int timeout, void *callback,
 					struct l_dbus_message *trigger,
-					void *user_data)
+					void *user_data,
+					agent_request_destroy_func_t destroy)
 {
 	struct agent_request *request;
 
@@ -265,6 +270,7 @@ static unsigned int agent_queue_request(struct agent *agent,
 	request->user_data = user_data;
 	request->user_callback = callback;
 	request->trigger = l_dbus_message_ref(trigger);
+	request->destroy = destroy;
 
 	agent->timeout_secs = timeout;
 
@@ -311,6 +317,7 @@ static struct agent *get_agent(const char *owner)
  * @callback: user callback called when the request is ready
  * @trigger: Message associated with (e.g. that triggered) this request
  * @user_data: user defined data
+ * @destroy: callback to release @user_data when this request finishes
  *
  * Called when a passphrase information is needed from the user. Returns an
  * id that can be used to cancel the request.
@@ -324,7 +331,8 @@ static struct agent *get_agent(const char *owner)
 unsigned int agent_request_passphrase(const char *path,
 				agent_request_passphrase_func_t callback,
 				struct l_dbus_message *trigger,
-				void *user_data)
+				void *user_data,
+				agent_request_destroy_func_t destroy)
 {
 	struct agent *agent = get_agent(l_dbus_message_get_sender(trigger));
 	struct l_dbus_message *message;
@@ -344,7 +352,7 @@ unsigned int agent_request_passphrase(const char *path,
 
 	return agent_queue_request(agent, message,
 					agent_timeout_input_request(),
-					callback, trigger, user_data);
+					callback, trigger, user_data, destroy);
 }
 
 static bool find_request(const void *a, const void *b)

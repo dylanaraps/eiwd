@@ -602,8 +602,7 @@ static struct l_dbus_message *network_connect_psk(struct network *network,
 		network->agent_request =
 			agent_request_passphrase(network->object_path,
 						passphrase_callback,
-						message,
-						network);
+						message, network, NULL);
 
 		if (!network->agent_request)
 			return dbus_error_no_agent(message);
