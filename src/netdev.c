@@ -86,6 +86,8 @@ struct netdev {
 	uint8_t rssi_levels_num;
 	uint8_t cur_rssi_level_idx;
 	int8_t cur_rssi;
+	struct l_timeout *rssi_poll_timeout;
+	uint32_t rssi_poll_cmd_id;
 
 	struct l_queue *watches;
 	uint32_t next_watch_id;
@@ -284,6 +286,117 @@ int netdev_set_powered(struct netdev *netdev, bool powered,
 	return 0;
 }
 
+static void netdev_set_rssi_level_idx(struct netdev *netdev)
+{
+	uint8_t new_level;
+
+	for (new_level = 0; new_level < netdev->rssi_levels_num; new_level++)
+		if (netdev->cur_rssi >= netdev->rssi_levels[new_level])
+			break;
+
+	netdev->cur_rssi_level_idx = new_level;
+}
+
+static void netdev_rssi_poll_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct l_genl_attr attr, nested;
+	uint16_t type, len;
+	const void *data;
+	bool found;
+	uint8_t prev_rssi_level_idx = netdev->cur_rssi_level_idx;
+
+	netdev->rssi_poll_cmd_id = 0;
+
+	if (!l_genl_attr_init(&attr, msg))
+		goto done;
+
+	found = false;
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		if (type != NL80211_ATTR_STA_INFO)
+			continue;
+
+		found = true;
+		break;
+	}
+
+	if (!found || !l_genl_attr_recurse(&attr, &nested))
+		goto done;
+
+	found = false;
+	while (l_genl_attr_next(&nested, &type, &len, &data)) {
+		if (type != NL80211_STA_INFO_SIGNAL_AVG)
+			continue;
+
+		if (len != 1)
+			continue;
+
+		found = true;
+		netdev->cur_rssi = *(const int8_t *) data;
+		break;
+	}
+
+	if (!found)
+		goto done;
+
+	/*
+	 * Note we don't have to handle LOW_SIGNAL_THRESHOLD here.  The
+	 * CQM single threshold RSSI monitoring should work even if the
+	 * kernel driver doesn't support multiple thresholds.  So the
+	 * polling only handles the client-supplied threshold list.
+	 */
+	netdev_set_rssi_level_idx(netdev);
+	if (netdev->cur_rssi_level_idx != prev_rssi_level_idx)
+		netdev->event_filter(netdev, NETDEV_EVENT_RSSI_LEVEL_NOTIFY,
+					netdev->user_data);
+
+done:
+	/* Rearm timer */
+	l_timeout_modify(netdev->rssi_poll_timeout, 6);
+}
+
+static void netdev_rssi_poll(struct l_timeout *timeout, void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_GET_STATION, 64);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
+							netdev->handshake->aa);
+
+	netdev->rssi_poll_cmd_id = l_genl_family_send(nl80211, msg,
+							netdev_rssi_poll_cb,
+							netdev, NULL);
+}
+
+/* To be called whenever operational or rssi_levels_num are updated */
+static void netdev_rssi_polling_update(struct netdev *netdev)
+{
+	if (wiphy_get_ext_feature(netdev->wiphy,
+					NL80211_EXT_FEATURE_CQM_RSSI_LIST))
+		return;
+
+	if (netdev->operational && netdev->rssi_levels_num > 0) {
+		if (netdev->rssi_poll_timeout)
+			return;
+
+		netdev->rssi_poll_timeout =
+			l_timeout_create(1, netdev_rssi_poll, netdev, NULL);
+	} else {
+		if (!netdev->rssi_poll_timeout)
+			return;
+
+		l_timeout_remove(netdev->rssi_poll_timeout);
+		netdev->rssi_poll_timeout = NULL;
+
+		if (netdev->rssi_poll_cmd_id) {
+			l_genl_family_cancel(nl80211, netdev->rssi_poll_cmd_id);
+			netdev->rssi_poll_cmd_id = 0;
+		}
+	}
+}
+
 static void netdev_linkmode_dormant_cb(bool success, void *user_data)
 {
 	struct netdev *netdev = user_data;
@@ -330,6 +443,8 @@ static void netdev_connect_free(struct netdev *netdev)
 	netdev->user_data = NULL;
 	netdev->result = NETDEV_RESULT_OK;
 	netdev->in_ft = false;
+
+	netdev_rssi_polling_update(netdev);
 
 	if (netdev->pairwise_new_key_cmd_id) {
 		l_genl_family_cancel(nl80211, netdev->pairwise_new_key_cmd_id);
@@ -468,21 +583,10 @@ static void netdev_cqm_event_rssi_threshold(struct netdev *netdev,
 
 	netdev->cur_rssi_low =
 		(rssi_event == NL80211_CQM_RSSI_THRESHOLD_EVENT_LOW);
-	event = netdev->cur_rssi_low ?  NETDEV_EVENT_RSSI_THRESHOLD_LOW :
+	event = netdev->cur_rssi_low ? NETDEV_EVENT_RSSI_THRESHOLD_LOW :
 		NETDEV_EVENT_RSSI_THRESHOLD_HIGH;
 
 	netdev->event_filter(netdev, event, netdev->user_data);
-}
-
-static void netdev_set_rssi_level_idx(struct netdev *netdev)
-{
-	uint8_t new_level;
-
-	for (new_level = 0; new_level < netdev->rssi_levels_num; new_level++)
-		if (netdev->cur_rssi >= netdev->rssi_levels[new_level])
-			break;
-
-	netdev->cur_rssi_level_idx = new_level;
 }
 
 static void netdev_rssi_level_init(struct netdev *netdev)
@@ -752,6 +856,8 @@ static void netdev_connect_ok(struct netdev *netdev)
 		netdev->connect_cb(netdev, NETDEV_RESULT_OK, netdev->user_data);
 		netdev->connect_cb = NULL;
 	}
+
+	netdev_rssi_polling_update(netdev);
 }
 
 static void netdev_setting_keys_failed(struct netdev *netdev,
@@ -2221,6 +2327,8 @@ int netdev_reassociate(struct netdev *netdev, struct scan_bss *target_bss,
 
 	netdev->operational = false;
 
+	netdev_rssi_polling_update(netdev);
+
 	/*
 	 * Cancel commands that could be running because of EAPoL activity
 	 * like re-keying, this way the callbacks for those commands don't
@@ -2438,6 +2546,8 @@ int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 			netdev->group_management_new_key_cmd_id);
 		netdev->group_management_new_key_cmd_id = 0;
 	}
+
+	netdev_rssi_polling_update(netdev);
 
 	return 0;
 
@@ -2851,12 +2961,12 @@ int netdev_set_rssi_report_levels(struct netdev *netdev, const int8_t *levels,
 {
 	struct l_genl_msg *cmd_set_cqm;
 
-	if (!wiphy_get_ext_feature(netdev->wiphy,
-					NL80211_EXT_FEATURE_CQM_RSSI_LIST))
-		return levels_num ? -ENOTSUP : 0;
-
 	if (levels_num > L_ARRAY_SIZE(netdev->rssi_levels))
 		return -ENOSPC;
+
+	if (!wiphy_get_ext_feature(netdev->wiphy,
+					NL80211_EXT_FEATURE_CQM_RSSI_LIST))
+		goto done;
 
 	cmd_set_cqm = netdev_build_cmd_cqm_rssi_update(netdev, levels,
 							levels_num);
@@ -2872,9 +2982,12 @@ int netdev_set_rssi_report_levels(struct netdev *netdev, const int8_t *levels,
 		return -EIO;
 	}
 
+done:
 	memcpy(netdev->rssi_levels, levels, levels_num);
 	netdev->rssi_levels_num = levels_num;
 	netdev_rssi_level_init(netdev);
+
+	netdev_rssi_polling_update(netdev);
 
 	return 0;
 }
