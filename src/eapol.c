@@ -731,6 +731,7 @@ struct eapol_sm {
 	bool have_replay:1;
 	bool started:1;
 	bool use_eapol_start:1;
+	bool require_handshake:1;
 	bool eap_exchanged:1;
 	struct eap_state *eap;
 	struct eapol_buffer *early_frame;
@@ -763,6 +764,8 @@ struct eapol_sm *eapol_sm_new(struct handshake_state *hs)
 
 	if (hs->settings_8021x)
 		sm->use_eapol_start = true;
+
+	sm->require_handshake = true;
 
 	return sm;
 }
@@ -1531,6 +1534,14 @@ void eapol_sm_set_use_eapol_start(struct eapol_sm *sm, bool enabled)
 	sm->use_eapol_start = enabled;
 }
 
+void eapol_sm_set_require_handshake(struct eapol_sm *sm, bool enabled)
+{
+	sm->require_handshake = enabled;
+
+	if (!sm->require_handshake)
+		sm->use_eapol_start = false;
+}
+
 static void eapol_rx_packet(struct eapol_sm *sm,
 					const uint8_t *frame, size_t len)
 {
@@ -1651,7 +1662,7 @@ void eapol_register(struct eapol_sm *sm)
 
 void eapol_start(struct eapol_sm *sm)
 {
-	if (!sm->handshake->ptk_complete && !sm->handshake->have_snonce)
+	if (sm->require_handshake)
 		sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);
 
 	sm->started = true;

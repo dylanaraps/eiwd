@@ -2414,7 +2414,7 @@ int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 		eapol_sm_free(netdev->sm);
 
 		netdev->sm = eapol_sm_new(netdev->handshake);
-		eapol_sm_set_use_eapol_start(netdev->sm, false);
+		eapol_sm_set_require_handshake(netdev->sm, false);
 	}
 
 	netdev->operational = false;
