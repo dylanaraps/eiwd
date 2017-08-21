@@ -136,7 +136,8 @@ unit_tests = unit/test-cmac-aes \
 		unit/test-kdf-sha256 \
 		unit/test-crypto unit/test-eapol unit/test-mpdu \
 		unit/test-ie unit/test-ssid-to-utf8 unit/test-ssid-security \
-		unit/test-arc4 unit/test-wsc unit/test-eap-mschapv2
+		unit/test-arc4 unit/test-wsc unit/test-eap-mschapv2 \
+		unit/test-eap-sim
 
 ell_pem_files = cert-ca-key.pem cert-client-key.pem cert-client-key-pkcs8.pem \
 		cert-server-key.pem cert-server-key-pkcs8.pem \
@@ -146,6 +147,17 @@ if MAINTAINER_MODE
 noinst_PROGRAMS += $(unit_tests)
 noinst_DATA = ell/unit/test_data
 endif
+
+unit_test_eap_sim_SOURCES = unit/test-eap-sim.c \
+		src/crypto.h src/crypto.c src/simutil.h src/simutil.c \
+		src/ie.h src/ie.c \
+		src/eapol.h src/eapol.c \
+		src/handshake.h src/handshake.c \
+		src/eap.h src/eap.c \
+		src/util.h src/util.c \
+		src/eap-sim.c
+
+unit_test_eap_sim_LDADD = ell/libell-internal.la
 
 unit_test_cmac_aes_SOURCES = unit/test-cmac-aes.c \
 					src/crypto.h src/crypto.c
