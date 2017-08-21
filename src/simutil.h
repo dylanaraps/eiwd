@@ -123,6 +123,35 @@ enum eap_sim_fail {
 void eap_sim_fips_prf(const void *seed, size_t slen, uint8_t *out, size_t olen);
 
 /*
+ * 3GPP TS 35.206
+ *
+ * Algorithm for generating milenage parameters.
+ *
+ * opc - Input: OPc value
+ * k - Input: K key value
+ * rand - Input: Rand from server
+ * sqn - Input: Sequence number
+ * amf - Input: AMF value
+ *
+ * autn - Output: AUTN computed
+ * ck - Output: CK computed
+ * ik - Output: IK computed
+ * res - Output: RES computed
+ *
+ * Internal Functions used:
+ * f1 and f1* output MAC-A and MAC-S. MAC-A along with SQN/AK/AMF make AUTN
+ * f2 outputs RES where RES == OUT2[8-16]
+ * f3 outputs CK where CK == OUT3[0-16]
+ * f4 outputs IK where IK == OUT4[0-16]
+ * f5 outputs AK where AK == OUT2[0-6]
+ *
+ * f5* outputs AK', not used with EAP-AKA
+ */
+bool eap_aka_get_milenage(const uint8_t *opc, const uint8_t *k,
+		const uint8_t *rand, const uint8_t *sqn, const uint8_t *amf,
+		uint8_t *autn, uint8_t *ck, uint8_t *ik, uint8_t *res);
+
+/*
  * Separate PRNG data into encryption keys. k_encr and k_aut may be NULL in the
  * case of fast re-authentication.
  *
