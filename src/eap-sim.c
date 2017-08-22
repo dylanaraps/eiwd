@@ -31,6 +31,7 @@
 
 #include "crypto.h"
 #include "simutil.h"
+#include "util.h"
 #include "src/dbus.h"
 
 /*
@@ -223,24 +224,20 @@ static void handle_start(struct eap_state *eap, const uint8_t *pkt,
 
 		switch (eap_sim_tlv_iter_get_type(&iter)) {
 		case EAP_SIM_AT_VERSION_LIST:
-			if (length < 2) {
+			/* Actual len (2) + version 1 (2) + padding (2) */
+			if (length < 6) {
 				l_error("AT_VERSION_LIST was malformed");
 				goto start_error;
 			}
 
 			sim->vlist_len = l_get_be16(contents);
 
-			if (length < 2 + sim->vlist_len) {
+			/* check that attribute was properly padded */
+			if (length < 2 + align_len(sim->vlist_len, 4)) {
 				l_error("AT_VERSION_LIST was malformed");
 				goto start_error;
 			}
 
-			/*
-			 * The version list is stored as-is (including
-			 * padding). This does mean that there is potential
-			 * for padding bytes at the end, but this is expected
-			 * when generating the Master Key.
-			 */
 			sim->vlist = l_memdup(contents + 2, sim->vlist_len);
 
 			sim->selected_version = sim->vlist[0];
