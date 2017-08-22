@@ -649,9 +649,6 @@ bool dbus_proxy_init(void)
 	proxy_interface_types = l_queue_new();
 	proxy_interfaces = l_queue_new();
 
-	if (__start___interface == NULL || __stop___interface == NULL)
-		return false;
-
 	for (desc = __start___interface; desc < __stop___interface; desc++) {
 		if (!desc->init)
 			continue;
@@ -672,9 +669,6 @@ bool dbus_proxy_init(void)
 bool dbus_proxy_exit(void)
 {
 	struct interface_type_desc *desc;
-
-	if (__start___interface == NULL || __stop___interface == NULL)
-		return false;
 
 	for (desc = __start___interface; desc < __stop___interface; desc++) {
 		if (!desc->exit)
