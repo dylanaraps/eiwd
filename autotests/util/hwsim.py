@@ -103,6 +103,14 @@ class Rule(HwsimDBusAbstract):
         self._prop_proxy.Set(self._iface_name, 'SignalStrength',
                 dbus.Int16(value))
 
+    @property
+    def drop(self):
+        return bool(self._properties['Drop'])
+
+    @drop.setter
+    def drop(self, value):
+        self._prop_proxy.Set(self._iface_name, 'Drop', dbus.Boolean(value))
+
     def remove(self):
         self._iface.Remove(reply_handler=self._success,
                 error_handler=self._failure)
@@ -117,7 +125,8 @@ class Rule(HwsimDBusAbstract):
                str(self.bidirectional) + '\n' + \
                prefix + '\tPriority:\t' + str(self.priority) + '\n' +\
                prefix + '\tFrequency:\t' + str(self.frequency) + '\n' + \
-               prefix + '\tApply rssi:\t' + str(self.signal) + '\n'
+               prefix + '\tApply rssi:\t' + str(self.signal) + '\n' + \
+               prefix + '\tApply drop:\t' + str(self.drop) + '\n'
 
 class RuleSet(collections.Mapping):
     def __init__(self, hwsim, objects):

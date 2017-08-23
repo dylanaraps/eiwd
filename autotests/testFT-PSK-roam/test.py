@@ -76,7 +76,12 @@ class Test(unittest.TestCase):
         self.assertRaises(Exception, testutil.test_ifaces_connected,
                           (self.bss_hostapd[1].ifname, device.name))
 
-        # Check that iwd starts transition to BSS 1 in less than 10 seconds
+        # Check that iwd starts transition to BSS 1 in less than 10 seconds.
+        # The 10 seconds is longer than needed to scan on just two channels
+        # but short enough that a full scan on the 2.4 + 5.8 bands supported
+        # by mac80211_hwsim will not finish.  If this times out then, but
+        # device_roam_trigger_cb has happened, it probably means that
+        # Neighbor Reports are broken.
         rule0.signal = -8000
 
         condition = 'obj.state == DeviceState.roaming'
@@ -157,11 +162,15 @@ class Test(unittest.TestCase):
         self.assertRaises(Exception, testutil.test_ifaces_connected,
                           (self.bss_hostapd[1].ifname, device.name))
 
-        # Check that iwd starts transition to BSS 1 in less than 10 seconds
-        os.system('ifconfig "' + self.bss_hostapd[0].ifname + '" down')
+        # Check that iwd starts transition to BSS 1 in less than 20 seconds
+        # from a beacon loss event
+        rule0.drop = True
+        rule0.signal = -3000
+        wd.wait(2)
+        rule0.drop = False
 
         condition = 'obj.state == DeviceState.roaming'
-        wd.wait_for_object_condition(device, condition, 10)
+        wd.wait_for_object_condition(device, condition, 20)
 
         # Check that iwd is on BSS 1 once out of roaming state and doesn't
         # go through 'disconnected', 'autoconnect', 'connecting' in between
@@ -177,6 +186,8 @@ class Test(unittest.TestCase):
                           (self.bss_hostapd[0].ifname, device.name))
 
     def tearDown(self):
+        os.system('ifconfig "' + self.bss_hostapd[0].ifname + '" down')
+        os.system('ifconfig "' + self.bss_hostapd[1].ifname + '" down')
         os.system('ifconfig "' + self.bss_hostapd[0].ifname + '" up')
         os.system('ifconfig "' + self.bss_hostapd[1].ifname + '" up')
 
