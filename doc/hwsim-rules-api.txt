@@ -65,3 +65,6 @@ Properties	string Source
 			expressed in 100 * dBm.  The value is in the range
 			of -1 (strongest signal) to -10000 (weakest
 			signal).
+
+		bool Drop
+			If true, nothing is passed to the receiver.
