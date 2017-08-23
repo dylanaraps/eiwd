@@ -99,6 +99,7 @@ struct hwsim_rule {
 	bool source_any : 1;
 	bool destination_any : 1;
 	bool bidirectional : 1;
+	bool drop : 1;
 	uint32_t frequency;
 	int priority;
 	int signal;
@@ -1043,7 +1044,7 @@ static bool radio_match_addr(const struct radio_info_rec *radio,
 
 static void process_rules(const struct radio_info_rec *src_radio,
 				const struct radio_info_rec *dst_radio,
-				struct hwsim_frame *frame)
+				struct hwsim_frame *frame, bool *drop)
 {
 	const struct l_queue_entry *rule_entry;
 
@@ -1084,6 +1085,8 @@ static void process_rules(const struct radio_info_rec *src_radio,
 
 		if (rule->signal)
 			frame->signal = rule->signal / 100;
+
+		*drop = rule->drop;
 	}
 }
 
@@ -1163,10 +1166,13 @@ static void hwsim_frame_unref(struct hwsim_frame *frame)
 		 */
 
 		if (!(frame->flags & HWSIM_TX_CTL_NO_ACK) && frame->acked) {
-			frame->flags |= HWSIM_TX_STAT_ACK;
+			bool drop = false;
 
 			process_rules(frame->ack_radio, frame->src_radio,
-					frame);
+					frame, &drop);
+
+			if (!drop)
+				frame->flags |= HWSIM_TX_STAT_ACK;
 		}
 
 		send_frame_tx_info(frame);
@@ -1222,14 +1228,16 @@ static bool interface_info_match_dst(const void *a, const void *b)
 static void process_frame(struct hwsim_frame *frame)
 {
 	const struct l_queue_entry *entry;
+	bool drop_mcast = false;
 
 	if (is_multicast_addr(frame->dst_ether_addr))
-		process_rules(frame->src_radio, NULL, frame);
+		process_rules(frame->src_radio, NULL, frame, &drop_mcast);
 
 	for (entry = l_queue_get_entries(radio_info); entry;
 			entry = entry->next) {
 		struct radio_info_rec *radio = entry->data;
 		struct send_frame_info *send_info;
+		bool drop = drop_mcast;
 
 		if (radio == frame->src_radio)
 			continue;
@@ -1262,7 +1270,10 @@ static void process_frame(struct hwsim_frame *frame)
 				continue;
 		}
 
-		process_rules(frame->src_radio, radio, frame);
+		process_rules(frame->src_radio, radio, frame, &drop);
+
+		if (drop)
+			continue;
 
 		send_info = l_new(struct send_frame_info, 1);
 		send_info->radio = radio;
@@ -1932,6 +1943,37 @@ static struct l_dbus_message *rule_property_set_signal(struct l_dbus *dbus,
 	return l_dbus_message_new_method_return(message);
 }
 
+static bool rule_property_get_drop(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+	bool bval = rule->drop;
+
+	l_dbus_message_builder_append_basic(builder, 'b', &bval);
+
+	return true;
+}
+
+static struct l_dbus_message *rule_property_set_drop(
+					struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_iter *new_value,
+					l_dbus_property_complete_cb_t complete,
+					void *user_data)
+{
+	struct hwsim_rule *rule = user_data;
+	bool bval;
+
+	if (!l_dbus_message_iter_get_variant(new_value, "b", &bval))
+		return dbus_error_invalid_args(message);
+
+	rule->drop = bval;
+
+	return l_dbus_message_new_method_return(message);
+}
+
 static void setup_rule_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Remove", 0, rule_remove, "", "");
@@ -1954,6 +1996,9 @@ static void setup_rule_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_property(interface, "SignalStrength", 0, "n",
 					rule_property_get_signal,
 					rule_property_set_signal);
+	l_dbus_interface_property(interface, "Drop", 0, "b",
+					rule_property_get_drop,
+					rule_property_set_drop);
 }
 
 static void request_name_callback(struct l_dbus *dbus, bool success,
