@@ -1719,7 +1719,11 @@ struct preauth_sm {
 	eapol_preauth_cb_t cb;
 	eapol_preauth_destroy_func_t destroy;
 	void *user_data;
+	struct l_timeout *timeout;
+	bool initial_rx:1;
 };
+
+#define EAPOL_TIMEOUT_SEC 1
 
 static void preauth_sm_destroy(void *value)
 {
@@ -1729,6 +1733,7 @@ static void preauth_sm_destroy(void *value)
 		sm->destroy(sm->user_data);
 
 	eap_free(sm->eap);
+	l_timeout_remove(sm->timeout);
 	l_free(sm);
 }
 
@@ -1776,6 +1781,19 @@ static void preauth_rx_packet(struct preauth_sm *sm,
 
 	if (eh->packet_type != 0) /* EAPOL-EAP */
 		return;
+
+	if (!sm->initial_rx) {
+		sm->initial_rx = true;
+
+		/*
+		 * Initial frame from authenticator received, it's alive
+		 * so set a longer timeout.  The timeout is for the whole
+		 * EAP exchange as we have no way to monitor the
+		 * negotiation progress and keep rearming the timer each
+		 * time progress is made.
+		 */
+		l_timeout_modify(sm->timeout, EAPOL_TIMEOUT_SEC * 3);
+	}
 
 	eap_rx_packet(sm->eap, frame + 4, L_BE16_TO_CPU(eh->packet_len));
 }
@@ -1833,6 +1851,19 @@ msk_short:
 	preauth_sm_destroy(sm);
 }
 
+static void preauth_timeout(struct l_timeout *timeout, void *user_data)
+{
+	struct preauth_sm *sm = user_data;
+
+	l_error("Preauthentication timeout");
+
+	l_queue_remove(preauths, sm);
+
+	sm->cb(NULL, sm->user_data);
+
+	preauth_sm_destroy(sm);
+}
+
 struct preauth_sm *eapol_preauth_start(const uint8_t *aa,
 					const struct handshake_state *hs,
 					eapol_preauth_cb_t cb, void *user_data,
@@ -1857,6 +1888,9 @@ struct preauth_sm *eapol_preauth_start(const uint8_t *aa,
 		goto err_free_eap;
 
 	eap_set_key_material_func(sm->eap, preauth_eap_results_cb);
+
+	sm->timeout = l_timeout_create(EAPOL_TIMEOUT_SEC, preauth_timeout,
+					sm, NULL);
 
 	l_queue_push_head(preauths, sm);
 
