@@ -39,11 +39,11 @@
 #define EAP_AKA_OPC_LEN		16
 #define EAP_AKA_AMF_LEN		2
 #define EAP_AKA_SQN_LEN		6
-#define EAP_AKA_IK_LEN		16
-#define EAP_AKA_CK_LEN		16
 #define EAP_AKA_AUTN_LEN	16
 #define EAP_AKA_RES_LEN		8
 #define EAP_AKA_K_RE_LEN	32
+
+#define EAP_AKA_KDF_DEFAULT	0x0001
 
 #define EAP_AKA_ST_CHALLENGE	0x01
 #define EAP_AKA_ST_AUTH_REJECT	0x02
@@ -66,6 +66,7 @@ enum eap_aka_state {
 
 struct eap_aka_handle {
 	enum eap_aka_state state;
+	enum eap_type type;
 	/* Identity from SIM */
 	char *identity;
 
@@ -75,8 +76,8 @@ struct eap_aka_handle {
 	/* Derived K_encr key from PRNG */
 	uint8_t k_encr[EAP_SIM_K_ENCR_LEN];
 
-	/* Derived K_aut key from PRNG */
-	uint8_t k_aut[EAP_SIM_K_AUT_LEN];
+	/* Derived K_aut key from PRNG, extended for AKA' */
+	uint8_t k_aut[EAP_AKA_PRIME_K_AUT_LEN];
 
 	/* Derived MSK from PRNG */
 	uint8_t msk[EAP_SIM_MSK_LEN];
@@ -113,6 +114,9 @@ struct eap_aka_handle {
 
 	/* Authentication value from AuC */
 	uint8_t autn[EAP_AKA_AUTN_LEN];
+
+	/* re-auth key */
+	uint8_t k_re[EAP_AKA_K_RE_LEN];
 };
 
 static int eap_aka_probe(struct eap_state *eap, const char *name)
@@ -123,6 +127,22 @@ static int eap_aka_probe(struct eap_state *eap, const char *name)
 		return -ENOTSUP;
 
 	aka = l_new(struct eap_aka_handle, 1);
+	aka->type = EAP_TYPE_AKA;
+
+	eap_set_data(eap, aka);
+
+	return 0;
+}
+
+static int eap_aka_prime_probe(struct eap_state *eap, const char *name)
+{
+	struct eap_aka_handle *aka;
+
+	if (strcasecmp(name, "AKA'"))
+		return -ENOTSUP;
+
+	aka = l_new(struct eap_aka_handle, 1);
+	aka->type = EAP_TYPE_AKA_PRIME;
 
 	eap_set_data(eap, aka);
 
@@ -186,6 +206,11 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 	uint8_t *pos = response;
 	const uint8_t *rand = NULL;
 	const uint8_t *autn = NULL;
+	bool kdf_func = false;
+	const uint8_t *kdf_in = NULL;
+	uint16_t kdf_in_len = 0;
+	uint8_t ik_p[EAP_AKA_IK_LEN];
+	uint8_t ck_p[EAP_AKA_CK_LEN];
 
 	if (len < 3) {
 		l_error("packet is too small");
@@ -235,6 +260,48 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 
 			break;
 
+		case EAP_SIM_AT_KDF:
+			if (aka->type != EAP_TYPE_AKA_PRIME) {
+				l_error("invalid attribute found for EAP-AKA");
+				goto chal_error;
+			}
+
+			if (length < 2) {
+				l_error("malformed AT_KDF");
+				goto chal_error;
+			}
+
+			if (l_get_be16(contents) != EAP_AKA_KDF_DEFAULT) {
+				l_error("KDF requested is not supported");
+				goto chal_error;
+			}
+
+			kdf_func = true;
+
+			break;
+
+		case EAP_SIM_AT_KDF_INPUT:
+			if (aka->type != EAP_TYPE_AKA_PRIME) {
+				l_error("invalid attribute found for EAP-AKA");
+				goto chal_error;
+			}
+
+			if (length < 3) {
+				l_error("malformed AT_KDF_INPUT");
+				goto chal_error;
+			}
+
+			kdf_in_len = l_get_be16(contents);
+
+			if (length < kdf_in_len + 2) {
+				l_error("malformed AT_KDF_INPUT");
+				goto chal_error;
+			}
+
+			kdf_in = contents + 2;
+
+			break;
+
 		case EAP_SIM_AT_NEXT_PSEUDONYM:
 		case EAP_SIM_AT_NEXT_REAUTH_ID:
 		case EAP_SIM_AT_IV:
@@ -257,6 +324,11 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 		}
 	}
 
+	if (aka->type == EAP_TYPE_AKA_PRIME && (!kdf_in || !kdf_func)) {
+		l_error("AT_KDF or AT_KDF_INPUT were not found");
+		goto chal_error;
+	}
+
 	eap_aka_get_milenage(aka->opc, aka->ki, rand, aka->sqn, aka->amf,
 			aka->autn, aka->ck, aka->ik, aka->res);
 
@@ -265,20 +337,34 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 		goto chal_error;
 	}
 
-	if (!derive_aka_mk(aka->identity, aka->ik, aka->ck, aka->mk)) {
-		l_error("error deriving MK");
-		goto chal_fatal;
+	if (aka->type == EAP_TYPE_AKA_PRIME) {
+		if (!eap_aka_derive_primes(aka->ck, aka->ik, aka->autn, kdf_in,
+				kdf_in_len, ck_p, ik_p)) {
+			l_error("could not derive primes");
+			goto chal_fatal;
+		}
+
+		if (!eap_aka_prf_prime(ik_p, ck_p, aka->identity, aka->k_encr,
+				aka->k_aut, aka->k_re, aka->msk, aka->emsk)) {
+			l_error("could not derive encryption keys");
+			goto chal_fatal;
+		}
+	} else {
+		if (!derive_aka_mk(aka->identity, aka->ik, aka->ck, aka->mk)) {
+			l_error("error deriving MK");
+			goto chal_fatal;
+		}
+
+		eap_sim_fips_prf(aka->mk, 20, prng_buf, 160);
+
+		if (!eap_sim_get_encryption_keys(prng_buf, aka->k_encr,
+				aka->k_aut, aka->msk, aka->emsk)) {
+			l_error("could not derive encryption keys");
+			goto chal_fatal;
+		}
 	}
 
-	eap_sim_fips_prf(aka->mk, 20, prng_buf, 160);
-
-	if (!eap_sim_get_encryption_keys(prng_buf, aka->k_encr, aka->k_aut,
-			aka->msk, aka->emsk)) {
-		l_error("could not derive encryption keys");
-		goto chal_fatal;
-	}
-
-	if (!eap_sim_verify_mac(eap, EAP_TYPE_AKA, pkt, len, aka->k_aut, NULL,
+	if (!eap_sim_verify_mac(eap, aka->type, pkt, len, aka->k_aut, NULL,
 			0)) {
 		l_error("MAC was not valid");
 		goto chal_error;
@@ -286,7 +372,7 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 
 	aka->state = EAP_AKA_STATE_CHALLENGE;
 
-	pos += eap_sim_build_header(eap, EAP_TYPE_AKA, EAP_AKA_ST_CHALLENGE,
+	pos += eap_sim_build_header(eap, aka->type, EAP_AKA_ST_CHALLENGE,
 			pos, resp_len);
 	pos += eap_sim_add_attribute(pos, EAP_SIM_AT_RES,
 			EAP_SIM_PAD_LENGTH_BITS, aka->res, EAP_AKA_RES_LEN);
@@ -298,13 +384,13 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 	pos += eap_sim_add_attribute(pos, EAP_SIM_AT_MAC, EAP_SIM_PAD_NONE,
 			NULL, EAP_SIM_MAC_LEN);
 
-	if (!eap_sim_derive_mac(EAP_TYPE_AKA, response, resp_len, aka->k_aut,
+	if (!eap_sim_derive_mac(aka->type, response, resp_len, aka->k_aut,
 			pos - EAP_SIM_MAC_LEN)) {
 		l_error("error deriving MAC");
 		goto chal_fatal;
 	}
 
-	eap_send_response(eap, EAP_TYPE_AKA, response, resp_len);
+	eap_send_response(eap, aka->type, response, resp_len);
 
 	if (!aka->protected) {
 		eap_method_success(eap);
@@ -321,7 +407,7 @@ chal_fatal:
 	return;
 
 chal_error:
-	eap_sim_client_error(eap, EAP_TYPE_AKA, EAP_SIM_ERROR_PROCESS);
+	eap_sim_client_error(eap, aka->type, EAP_SIM_ERROR_PROCESS);
 }
 
 /*
@@ -384,12 +470,12 @@ static void handle_notification(struct eap_state *eap, const uint8_t *pkt,
 		/*
 		 * Build response packet
 		 */
-		pos += eap_sim_build_header(eap, EAP_TYPE_AKA,
+		pos += eap_sim_build_header(eap, aka->type,
 				EAP_AKA_ST_NOTIFICATION, pos, 20);
 		pos += eap_sim_add_attribute(pos, EAP_SIM_AT_MAC,
 				EAP_SIM_PAD_NONE, NULL, EAP_SIM_MAC_LEN);
 
-		if (!eap_sim_derive_mac(EAP_TYPE_AKA, response, pos - response,
+		if (!eap_sim_derive_mac(aka->type, response, pos - response,
 				aka->k_aut, response + 12)) {
 			l_error("could not derive MAC");
 			eap_method_error(eap);
@@ -397,7 +483,7 @@ static void handle_notification(struct eap_state *eap, const uint8_t *pkt,
 			return;
 		}
 
-		eap_send_response(eap, EAP_TYPE_AKA, response, pos - response);
+		eap_send_response(eap, aka->type, response, pos - response);
 
 		aka->state = EAP_AKA_STATE_SUCCESS;
 
@@ -418,7 +504,7 @@ static void handle_notification(struct eap_state *eap, const uint8_t *pkt,
 	}
 
 notif_error:
-	eap_sim_client_error(eap, EAP_TYPE_AKA, EAP_SIM_ERROR_PROCESS);
+	eap_sim_client_error(eap, aka->type, EAP_SIM_ERROR_PROCESS);
 }
 
 static void handle_identity(struct eap_state *eap, const uint8_t *pkt,
@@ -430,7 +516,7 @@ static void handle_identity(struct eap_state *eap, const uint8_t *pkt,
 
 	if (aka->state != EAP_AKA_STATE_UNCONNECTED) {
 		l_error("invalid packet for EAP-AKA state");
-		eap_sim_client_error(eap, EAP_TYPE_AKA, EAP_SIM_ERROR_PROCESS);
+		eap_sim_client_error(eap, aka->type, EAP_SIM_ERROR_PROCESS);
 		return;
 	}
 
@@ -438,18 +524,20 @@ static void handle_identity(struct eap_state *eap, const uint8_t *pkt,
 	/*
 	 * Build response packet
 	 */
-	pos += eap_sim_build_header(eap, EAP_TYPE_AKA, EAP_AKA_ST_IDENTITY, pos,
+	pos += eap_sim_build_header(eap, aka->type, EAP_AKA_ST_IDENTITY, pos,
 			20);
 	pos += eap_sim_add_attribute(pos, EAP_SIM_AT_IDENTITY,
 			EAP_SIM_PAD_LENGTH, (uint8_t *)aka->identity,
 			strlen(aka->identity));
 
-	eap_send_response(eap, EAP_TYPE_AKA, response, pos - response);
+	eap_send_response(eap, aka->type, response, pos - response);
 }
 
 static void eap_aka_handle_request(struct eap_state *eap,
 					const uint8_t *pkt, size_t len)
 {
+	struct eap_aka_handle *aka = eap_get_data(eap);
+
 	if (len < 1) {
 		l_error("packet is too small");
 		goto req_error;
@@ -476,7 +564,7 @@ static void eap_aka_handle_request(struct eap_state *eap,
 	return;
 
 req_error:
-	eap_sim_client_error(eap, EAP_TYPE_AKA, EAP_SIM_ERROR_PROCESS);
+	eap_sim_client_error(eap, aka->type, EAP_SIM_ERROR_PROCESS);
 }
 
 static bool eap_aka_load_settings(struct eap_state *eap,
@@ -546,6 +634,16 @@ static struct eap_method eap_aka = {
 	.load_settings = eap_aka_load_settings,
 };
 
+static struct eap_method eap_aka_prime = {
+	.request_type = EAP_TYPE_AKA_PRIME,
+	.exports_msk = true,
+	.name = "AKA'",
+	.probe = eap_aka_prime_probe,
+	.remove = eap_aka_remove,
+	.handle_request = eap_aka_handle_request,
+	.load_settings = eap_aka_load_settings,
+};
+
 static int eap_aka_init(void)
 {
 	l_debug("");
@@ -558,4 +656,17 @@ static void eap_aka_exit(void)
 	eap_unregister_method(&eap_aka);
 }
 
-EAP_METHOD_BUILTIN(eap_aka, eap_aka_init, eap_aka_exit)
+static int eap_aka_prime_init(void)
+{
+	l_debug("");
+	return eap_register_method(&eap_aka_prime);
+}
+
+static void eap_aka_prime_exit(void)
+{
+	l_debug("");
+	eap_unregister_method(&eap_aka_prime);
+}
+
+EAP_METHOD_BUILTIN(eap_aka, eap_aka_init, eap_aka_exit);
+EAP_METHOD_BUILTIN(eap_aka_prime, eap_aka_prime_init, eap_aka_prime_exit);
