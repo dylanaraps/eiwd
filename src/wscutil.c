@@ -518,7 +518,7 @@ static bool extract_version(struct wsc_attr_iter *iter, void *data)
 
 static bool extract_wsc_state(struct wsc_attr_iter *iter, void *data)
 {
-	uint8_t *out = data;
+	enum wsc_state *out = data;
 	uint8_t st;
 
 	if (!extract_uint8(iter, &st))
