@@ -218,8 +218,8 @@ bool eap_sim_get_encryption_keys(const uint8_t *buf, uint8_t *k_encr,
  * key - encryption key to use (e.g. K_encr)
  * mac - buffer for the 16 byte MAC
  */
-bool eap_sim_derive_mac(const uint8_t *buf, size_t len, const uint8_t *key,
-		uint8_t *mac);
+bool eap_sim_derive_mac(enum eap_type type, const uint8_t *buf, size_t len,
+		const uint8_t *key, uint8_t *mac);
 
 /*
  * Helper to build the EAP packet header

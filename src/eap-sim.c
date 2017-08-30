@@ -415,8 +415,8 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 	memcpy(pos, sim->sres, EAP_SIM_SRES_LEN * 3);
 	pos += EAP_SIM_SRES_LEN * 3;
 
-	if (!eap_sim_derive_mac(response, pos - response, sim->k_aut,
-			mac_pos + 4)) {
+	if (!eap_sim_derive_mac(EAP_TYPE_SIM, response, pos - response,
+			sim->k_aut, mac_pos + 4)) {
 		l_error("could not derive MAC");
 		goto chal_fatal;
 	}
@@ -513,8 +513,8 @@ static void handle_notification(struct eap_state *eap, const uint8_t *pkt,
 		pos += eap_sim_add_attribute(pos, EAP_SIM_AT_MAC,
 				EAP_SIM_PAD_NONE, NULL, EAP_SIM_MAC_LEN);
 
-		if (!eap_sim_derive_mac(response, pos - response, sim->k_aut,
-				response + 12)) {
+		if (!eap_sim_derive_mac(EAP_TYPE_SIM, response, pos - response,
+				sim->k_aut, response + 12)) {
 			l_error("could not derive MAC");
 			eap_method_error(eap);
 			sim->state = EAP_SIM_STATE_ERROR;

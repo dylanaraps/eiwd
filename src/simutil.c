@@ -431,10 +431,14 @@ bool eap_sim_get_encryption_keys(const uint8_t *buf, uint8_t *k_encr,
 	return true;
 }
 
-bool eap_sim_derive_mac(const uint8_t *buf, size_t len, const uint8_t *key,
-		uint8_t *mac)
+bool eap_sim_derive_mac(enum eap_type type, const uint8_t *buf, size_t len,
+		const uint8_t *key, uint8_t *mac)
 {
-	return hmac_sha1(key, EAP_SIM_K_AUT_LEN, buf, len, mac,
+	if (type == EAP_TYPE_AKA_PRIME)
+		return hmac_sha256(key, EAP_AKA_PRIME_K_AUT_LEN, buf, len,
+				mac, EAP_SIM_MAC_LEN);
+	else
+		return hmac_sha1(key, EAP_SIM_K_AUT_LEN, buf, len, mac,
 			EAP_SIM_MAC_LEN);
 }
 
@@ -547,7 +551,13 @@ bool eap_sim_verify_mac(struct eap_state *eap, enum eap_type type,
 	iov[3].iov_base = extra;
 	iov[3].iov_len = elen;
 
-	hmac = l_checksum_new_hmac(L_CHECKSUM_SHA1, k_aut, EAP_SIM_K_AUT_LEN);
+	if (type == EAP_TYPE_AKA_PRIME)
+		hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, k_aut,
+				EAP_AKA_PRIME_K_AUT_LEN);
+	else
+		hmac = l_checksum_new_hmac(L_CHECKSUM_SHA1, k_aut,
+				EAP_SIM_K_AUT_LEN);
+
 	l_checksum_updatev(hmac, iov, 4);
 	/* reuse zero mac array for new mac */
 	l_checksum_get_digest(hmac, zero_mac, EAP_SIM_MAC_LEN);
