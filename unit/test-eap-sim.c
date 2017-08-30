@@ -185,7 +185,7 @@ static void test_calc_mac(const void *data)
 
 	memcpy(pkt + pos, ex_sres, 12);
 
-	eap_sim_derive_mac(pkt, sizeof(ex_pkt) + 12, ex_k_aut,
+	eap_sim_derive_mac(EAP_TYPE_SIM, pkt, sizeof(ex_pkt) + 12, ex_k_aut,
 			pkt + pos - EAP_SIM_MAC_LEN);
 
 	assert(!memcmp(ex_mac, pkt + pos - EAP_SIM_MAC_LEN, EAP_SIM_MAC_LEN));
