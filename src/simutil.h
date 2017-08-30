@@ -28,11 +28,15 @@
 #define EAP_SIM_MK_LEN		20
 #define EAP_SIM_K_ENCR_LEN	16
 #define EAP_SIM_K_AUT_LEN	16
+#define EAP_AKA_PRIME_K_AUT_LEN	32
 #define EAP_SIM_MSK_LEN		64
 #define EAP_SIM_EMSK_LEN	64
 #define EAP_SIM_IV_LEN		16
 #define EAP_SIM_MAC_LEN		16
 #define EAP_SIM_RAND_LEN	16
+#define EAP_AKA_K_RE_LEN	32
+#define EAP_AKA_IK_LEN		16
+#define EAP_AKA_CK_LEN		16
 
 /*
  * Possible pad types for EAP-SIM/EAP-AKA attributes
@@ -150,6 +154,47 @@ void eap_sim_fips_prf(const void *seed, size_t slen, uint8_t *out, size_t olen);
 bool eap_aka_get_milenage(const uint8_t *opc, const uint8_t *k,
 		const uint8_t *rand, const uint8_t *sqn, const uint8_t *amf,
 		uint8_t *autn, uint8_t *ck, uint8_t *ik, uint8_t *res);
+
+/*
+ * 3GPP TS 33.402
+ * Derivation of CK' and IK' from CK and IK
+ *
+ * FC = 0x20
+ * P0 = access network identity ('network')
+ * L0 = length of P0
+ * P1 = SQN ^ AK = first 6 bytes of AUTN
+ * L1 = length of P1 = 0x0006
+ *
+ * (CK' | IK') = HMAC_SHA256(FC |P0 | L0 | P1 | L1)
+ */
+bool eap_aka_derive_primes(const uint8_t *ck, const uint8_t *ik,
+		const uint8_t *autn, const uint8_t *network, uint16_t net_len,
+		uint8_t *ck_p, uint8_t *ik_p);
+
+/*
+ * RFC 5448, Section 3.4.1
+ *
+ * PRF'(K,S) = T1 | T2 | T3 | T4 | ...
+ *
+ *     where:
+ *     T1 = HMAC-SHA-256 (K, S | 0x01)
+ *     T2 = HMAC-SHA-256 (K, T1 | S | 0x02)
+ *     T3 = HMAC-SHA-256 (K, T2 | S | 0x03)
+ *     T4 = HMAC-SHA-256 (K, T3 | S | 0x04)
+ *     ...
+ *
+ * RFC 5448, Section 3.3
+ *
+ * MK = PRF'(IK'|CK',"EAP-AKA'"|Identity)
+ *      K_encr = MK[0..127]
+ *      K_aut  = MK[128..383]
+ *      K_re   = MK[384..639]
+ *      MSK    = MK[640..1151]
+ *      EMSK   = MK[1152..1663]
+ */
+bool eap_aka_prf_prime(const uint8_t *ik_p, const uint8_t *ck_p,
+		const char *identity, uint8_t *k_encr, uint8_t *k_aut,
+		uint8_t *k_re, uint8_t *msk, uint8_t *emsk);
 
 /*
  * Separate PRNG data into encryption keys. k_encr and k_aut may be NULL in the

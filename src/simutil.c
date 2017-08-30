@@ -270,6 +270,104 @@ bool eap_aka_get_milenage(const uint8_t *opc, const uint8_t *k,
 	return true;
 }
 
+bool eap_aka_derive_primes(const uint8_t *ck, const uint8_t *ik,
+		const uint8_t *autn, const uint8_t *network, uint16_t net_len,
+		uint8_t *ck_p, uint8_t *ik_p)
+{
+	struct iovec iov[5];
+	struct l_checksum *hmac;
+	uint8_t key[32];
+	uint8_t fc = 0x20;
+	uint16_t l1 = L_CPU_TO_BE16(6);
+	uint16_t name_len = L_CPU_TO_BE16(net_len);
+	uint8_t digest[32];
+
+	memcpy(key, ck, EAP_AKA_CK_LEN);
+	memcpy(key + EAP_AKA_CK_LEN, ik, EAP_AKA_IK_LEN);
+
+	hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, key, 32);
+	if (!hmac)
+		return false;
+
+	iov[0].iov_base = &fc;
+	iov[0].iov_len = 1;
+	iov[1].iov_base = (void *)network;
+	iov[1].iov_len = net_len;
+	iov[2].iov_base = &name_len;
+	iov[2].iov_len = 2;
+	iov[3].iov_base = (void *)autn;
+	iov[3].iov_len = 6;
+	iov[4].iov_base = &l1;
+	iov[4].iov_len = 2;
+
+	l_checksum_updatev(hmac, iov, 5);
+	l_checksum_get_digest(hmac, digest, 32);
+	l_checksum_free(hmac);
+
+	memcpy(ck_p, digest, EAP_AKA_CK_LEN);
+	memcpy(ik_p, digest + EAP_AKA_CK_LEN, EAP_AKA_IK_LEN);
+
+	return true;
+}
+
+bool eap_aka_prf_prime(const uint8_t *ik_p, const uint8_t *ck_p,
+		const char *identity, uint8_t *k_encr, uint8_t *k_aut,
+		uint8_t *k_re, uint8_t *msk, uint8_t *emsk)
+{
+	struct l_checksum *hmac;
+	uint8_t key[32];
+	struct iovec iov[4];
+	/* digest continues to be reused each iteration */
+	uint8_t digest[32];
+	uint8_t i = 0x01;
+	/* 7 iterations will be 224 bytes, 208 of which will get used */
+	uint8_t out[224];
+	uint8_t *pos = out;
+
+	/* K = (IK'|CK') */
+	memcpy(key, ik_p, EAP_AKA_IK_LEN);
+	memcpy(key + EAP_AKA_IK_LEN, ck_p, EAP_AKA_CK_LEN);
+
+	iov[0].iov_base = digest;
+	/* initial iteration digest is not used */
+	iov[0].iov_len = 0;
+	iov[1].iov_base = (void *)"EAP-AKA'";
+	iov[1].iov_len = strlen("EAP-AKA'");
+	iov[2].iov_base = (void *)identity;
+	iov[2].iov_len = strlen(identity);
+	iov[3].iov_base = &i;
+	iov[3].iov_len = 1;
+
+	/* need 208 bytes for all keys */
+	while (pos < out + 224) {
+		hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, key, 32);
+		if (!hmac)
+			return false;
+
+		l_checksum_updatev(hmac, iov, 4);
+		l_checksum_get_digest(hmac, digest, 32);
+		l_checksum_free(hmac);
+		memcpy(pos, digest, 32);
+		pos += 32;
+		i++;
+		/* set the digest length so it can be prepended as Tn */
+		iov[0].iov_len = 32;
+	}
+
+	pos = out;
+	memcpy(k_encr, pos, EAP_SIM_K_ENCR_LEN);
+	pos += EAP_SIM_K_ENCR_LEN;
+	memcpy(k_aut, pos, EAP_AKA_PRIME_K_AUT_LEN);
+	pos += EAP_AKA_PRIME_K_AUT_LEN;
+	memcpy(k_re, pos, EAP_AKA_K_RE_LEN);
+	pos += EAP_AKA_K_RE_LEN;
+	memcpy(msk, pos, EAP_SIM_MSK_LEN);
+	pos += EAP_SIM_MSK_LEN;
+	memcpy(emsk, pos, EAP_SIM_EMSK_LEN);
+
+	return true;
+}
+
 void eap_sim_fips_prf(const void *seed, size_t slen, uint8_t *out, size_t olen)
 {
 	uint8_t xkey[64];
