@@ -42,4 +42,5 @@ unit/test-ssid-to-utf8
 unit/test-ssid-security
 unit/test-wsc
 unit/test-eap-mschapv2
+unit/test-eap-sim
 test-suite.log
