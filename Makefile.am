@@ -6,7 +6,7 @@ ACLOCAL_AMFLAGS = -I build-aux
 noinst_LTLIBRARIES = ell/libell-internal.la
 
 dbusdir = @DBUS_CONFDIR@/dbus-1/system.d
-dbus_DATA = src/iwd-dbus.conf
+dist_dbus_DATA = src/iwd-dbus.conf
 
 ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/util.h ell/util.c \
