@@ -4810,6 +4810,7 @@ static bool nlmon_receive(struct l_io *io, void *user_data)
 	unsigned char buf[8192];
 	unsigned char control[32];
 	ssize_t bytes_read;
+	size_t nlmsg_len;
 	int fd;
 
 	fd = l_io_get_fd(io);
@@ -4858,8 +4859,10 @@ static bool nlmon_receive(struct l_io *io, void *user_data)
 		}
 	}
 
-	for (nlmsg = iov.iov_base; NLMSG_OK(nlmsg, (uint32_t) bytes_read);
-				nlmsg = NLMSG_NEXT(nlmsg, bytes_read)) {
+	nlmsg_len = bytes_read;
+
+	for (nlmsg = iov.iov_base; NLMSG_OK(nlmsg, nlmsg_len);
+				nlmsg = NLMSG_NEXT(nlmsg, nlmsg_len)) {
 		switch (proto_type) {
 		case NETLINK_ROUTE:
 			store_netlink(nlmon, tv, proto_type, nlmsg);
