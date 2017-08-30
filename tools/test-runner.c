@@ -116,6 +116,24 @@ static const char * const qemu_table[] = {
 	"/usr/bin/qemu-system-aarch64",
 	NULL
 };
+#elif defined(__powerpc__)
+/*
+ * If iwd is being built for PowerPC look for 32-bit version.
+ */
+static const char * const qemu_table[] = {
+	"qemu-system-ppc",
+	"/usr/bin/qemu-system-ppc",
+	NULL
+};
+#elif defined(__powerpc64__)
+/*
+ * If iwd is being built for PowerPC-64 look for 64-bit version.
+ */
+static const char * const qemu_table[] = {
+	"qemu-system-ppc64",
+	"/usr/bin/qemu-system-ppc64",
+	NULL
+};
 #else
 #warning Qemu binary name not defined for this architecture yet
 static const char * const qemu_table[] = { NULL };
