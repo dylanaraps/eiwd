@@ -324,6 +324,12 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 		}
 	}
 
+	/* check that the right attributes were found */
+	if (!rand || !autn) {
+		l_error("AT_RAND or AT_AUTN were not found");
+		goto chal_error;
+	}
+
 	if (aka->type == EAP_TYPE_AKA_PRIME && (!kdf_in || !kdf_func)) {
 		l_error("AT_KDF or AT_KDF_INPUT were not found");
 		goto chal_error;
