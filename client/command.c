@@ -222,7 +222,7 @@ char **command_completion(const char *text, int start, int end)
 {
 	char **matches = NULL;
 	const char *family;
-	char *args;
+	char *args = NULL;
 	char *prompt = NULL;
 	bool ends_with_space = false;
 
