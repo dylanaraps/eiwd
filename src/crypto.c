@@ -125,11 +125,12 @@ bool cmac_aes(const void *key, size_t key_len,
 bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
 			uint8_t *out)
 {
-	uint8_t b[16];
-	uint8_t *r;
+	uint64_t b[2];
+	uint64_t *r;
 	size_t n = (len - 8) >> 3;
 	int i, j;
 	struct l_cipher *cipher;
+	uint64_t t = n * 6;
 
 	cipher = l_cipher_new(L_CIPHER_AES, kek, 16);
 	if (!cipher)
@@ -141,23 +142,22 @@ bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
 
 	/* Unwrap */
 	for (j = 5; j >= 0; j--) {
-		r = out + (n - 1) * 8;
+		r = (uint64_t *) out + n - 1;
 
-		for (i = n; i >= 1; i--) {
-			memcpy(b + 8, r, 8);
-			b[7] ^= n * j + i;
+		for (i = n; i >= 1; i--, t--) {
+			b[0] ^= L_CPU_TO_BE64(t);
+			b[1] = L_GET_UNALIGNED(r);
 			l_cipher_decrypt(cipher, b, b, 16);
-			memcpy(r, b + 8, 8);
-			r -= 8;
+			L_PUT_UNALIGNED(b[1], r);
+			r -= 1;
 		}
 	}
 
 	l_cipher_free(cipher);
 
 	/* Check IV */
-	for (i = 0; i < 8; i++)
-		if (b[i] != 0xA6)
-			return false;
+	if (b[0] != 0xa6a6a6a6a6a6a6a6)
+		return false;
 
 	return true;
 }
