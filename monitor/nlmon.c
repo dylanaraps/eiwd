@@ -2473,39 +2473,41 @@ static void print_mpdu_frame_control(unsigned int level,
 				fc->protected_frame, fc->order);
 }
 
-static void print_mpdu_mgmt_header(unsigned int level, const struct mpdu *mpdu)
+static void print_mmpdu_header(unsigned int level,
+					const struct mmpdu_header *mmpdu)
 {
-	print_attr(level, "Duration: %u",
-			L_LE16_TO_CPU(mpdu->mgmt_hdr.duration));
+	print_attr(level, "Duration: %u", L_LE16_TO_CPU(mmpdu->duration));
 
-	print_address(level, "Address 1 (RA):", mpdu->mgmt_hdr.address_1);
-	print_address(level, "Address 2 (TA):", mpdu->mgmt_hdr.address_2);
-	print_address(level, "Address 3:", mpdu->mgmt_hdr.address_3);
+	print_address(level, "Address 1 (RA):", mmpdu->address_1);
+	print_address(level, "Address 2 (TA):", mmpdu->address_2);
+	print_address(level, "Address 3:", mmpdu->address_3);
 
-	print_attr(level, "Fragment Number: %u",
-					mpdu->mgmt_hdr.fragment_number);
+	print_attr(level, "Fragment Number: %u", mmpdu->fragment_number);
 	print_attr(level, "Sequence Number: %u",
-				MPDU_MGMT_SEQUENCE_NUMBER(mpdu->mgmt_hdr));
+					MPDU_SEQUENCE_NUMBER(*mmpdu));
 }
 
 static void print_authentication_mgmt_frame(unsigned int level,
-						const struct mpdu *mpdu)
+					const struct mmpdu_header *mmpdu)
 {
 	const char *str;
+	const struct mmpdu_authentication *body;
 
-	if (!mpdu)
+	if (!mmpdu)
 		return;
+
+	body = mmpdu_body(mmpdu);
 
 	print_attr(level, "Authentication:");
 
-	print_mpdu_frame_control(level + 1, &mpdu->fc);
-	print_mpdu_mgmt_header(level + 1, mpdu);
+	print_mpdu_frame_control(level + 1, &mmpdu->fc);
+	print_mmpdu_header(level + 1, mmpdu);
 
-	switch (L_LE16_TO_CPU(mpdu->auth.algorithm)) {
-	case MPDU_AUTH_ALGO_OPEN_SYSTEM:
+	switch (L_LE16_TO_CPU(body->algorithm)) {
+	case MMPDU_AUTH_ALGO_OPEN_SYSTEM:
 		str = "Open";
 		break;
-	case MPDU_AUTH_ALGO_SHARED_KEY:
+	case MMPDU_AUTH_ALGO_SHARED_KEY:
 		str = "Shared key";
 		break;
 	default:
@@ -2514,34 +2516,38 @@ static void print_authentication_mgmt_frame(unsigned int level,
 	}
 
 	print_attr(level + 1, "Algorithm: %s (seq: %u, status: %u)", str,
-				L_LE16_TO_CPU(mpdu->auth.transaction_sequence),
-				L_LE16_TO_CPU(mpdu->auth.status));
+				L_LE16_TO_CPU(body->transaction_sequence),
+				L_LE16_TO_CPU(body->status));
 
-	if (L_LE16_TO_CPU(mpdu->auth.algorithm) != MPDU_AUTH_ALGO_SHARED_KEY)
+	if (L_LE16_TO_CPU(body->algorithm) != MMPDU_AUTH_ALGO_SHARED_KEY)
 		return;
 
-	if (L_LE16_TO_CPU(mpdu->auth.transaction_sequence) < 2 ||
-			L_LE16_TO_CPU(mpdu->auth.transaction_sequence) > 3)
+	if (L_LE16_TO_CPU(body->transaction_sequence) < 2 ||
+			L_LE16_TO_CPU(body->transaction_sequence) > 3)
 		return;
 
 	print_attr(level + 1, "Challenge text: \"%s\" (%u)",
-				mpdu->auth.shared_key_23.challenge_text,
-				mpdu->auth.shared_key_23.challenge_text_len);
+				body->shared_key_23.challenge_text,
+				body->shared_key_23.challenge_text_len);
 }
 
 static void print_deauthentication_mgmt_frame(unsigned int level,
-						const struct mpdu *mpdu)
+					const struct mmpdu_header *mmpdu)
 {
-	if (!mpdu)
+	const struct mmpdu_deauthentication *body;
+
+	if (!mmpdu)
 		return;
+
+	body = mmpdu_body(mmpdu);
 
 	print_attr(level, "Deauthentication:");
 
-	print_mpdu_frame_control(level + 1, &mpdu->fc);
-	print_mpdu_mgmt_header(level + 1, mpdu);
+	print_mpdu_frame_control(level + 1, &mmpdu->fc);
+	print_mmpdu_header(level + 1, mmpdu);
 
 	print_attr(level + 1, "Reason code: %u",
-				L_LE16_TO_CPU(mpdu->deauth.reason_code));
+				L_LE16_TO_CPU(body->reason_code));
 }
 
 static void print_frame_type(unsigned int level, const char *label,
@@ -2550,7 +2556,7 @@ static void print_frame_type(unsigned int level, const char *label,
 	uint16_t frame_type = *((uint16_t *) data);
 	uint8_t type = frame_type & 0x000c;
 	uint8_t subtype = (frame_type & 0x00f0) >> 4;
-	const struct mpdu *mpdu = NULL;
+	const struct mmpdu_header *mpdu = NULL;
 	const char *str;
 
 	print_attr(level, "%s: 0x%04x", label, frame_type);
