@@ -51,6 +51,7 @@
 #include "src/wscutil.h"
 #include "src/ftutil.h"
 #include "src/util.h"
+#include "src/watchlist.h"
 
 #ifndef ENOTSUPP
 #define ENOTSUPP 524
@@ -89,8 +90,7 @@ struct netdev {
 	struct l_timeout *rssi_poll_timeout;
 	uint32_t rssi_poll_cmd_id;
 
-	struct l_queue *watches;
-	uint32_t next_watch_id;
+	struct watchlist event_watches;
 
 	bool connected : 1;
 	bool operational : 1;
@@ -523,8 +523,7 @@ static void netdev_free(void *data)
 	}
 
 	device_remove(netdev->device);
-
-	l_queue_destroy(netdev->watches, l_free);
+	watchlist_destroy(&netdev->event_watches);
 
 	l_free(netdev);
 }
@@ -3056,19 +3055,6 @@ int netdev_set_iftype(struct netdev *netdev, enum netdev_iftype type)
 	return 0;
 }
 
-struct netdev_watch_event_data {
-	struct netdev *netdev;
-	enum netdev_watch_event type;
-};
-
-static void netdev_watch_notify(void *data, void *user_data)
-{
-	struct netdev_watch *watch = data;
-	struct netdev_watch_event_data *event = user_data;
-
-	watch->callback(event->netdev, event->type, watch->user_data);
-}
-
 static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 {
 	struct netdev *netdev;
@@ -3076,7 +3062,6 @@ static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 	char old_name[IFNAMSIZ];
 	uint8_t old_addr[ETH_ALEN];
 	struct rtattr *attr;
-	struct netdev_watch_event_data event;
 
 	netdev = netdev_find(ifi->ifi_index);
 	if (!netdev)
@@ -3105,27 +3090,18 @@ static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 
 	new_up = netdev_get_is_up(netdev);
 
-	if (old_up != new_up) {
-		event.netdev = netdev;
-		event.type = new_up ? NETDEV_WATCH_EVENT_UP :
-						NETDEV_WATCH_EVENT_DOWN;
+	if (old_up != new_up)
+		WATCHLIST_NOTIFY(&netdev->event_watches, netdev_watch_func_t,
+				netdev, new_up ? NETDEV_WATCH_EVENT_UP :
+						NETDEV_WATCH_EVENT_DOWN);
 
-		l_queue_foreach(netdev->watches, netdev_watch_notify, &event);
-	}
+	if (strcmp(old_name, netdev->name))
+		WATCHLIST_NOTIFY(&netdev->event_watches, netdev_watch_func_t,
+				netdev, NETDEV_WATCH_EVENT_NAME_CHANGE);
 
-	if (strcmp(old_name, netdev->name)) {
-		event.netdev = netdev;
-		event.type = NETDEV_WATCH_EVENT_NAME_CHANGE;
-
-		l_queue_foreach(netdev->watches, netdev_watch_notify, &event);
-	}
-
-	if (memcmp(old_addr, netdev->addr, ETH_ALEN)) {
-		event.netdev = netdev;
-		event.type = NETDEV_WATCH_EVENT_ADDRESS_CHANGE;
-
-		l_queue_foreach(netdev->watches, netdev_watch_notify, &event);
-	}
+	if (memcmp(old_addr, netdev->addr, ETH_ALEN))
+		WATCHLIST_NOTIFY(&netdev->event_watches, netdev_watch_func_t,
+				netdev, NETDEV_WATCH_EVENT_ADDRESS_CHANGE);
 }
 
 static void netdev_dellink_notify(const struct ifinfomsg *ifi, int bytes)
@@ -3354,6 +3330,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
 	memcpy(netdev->name, ifname, ifname_len);
 	netdev->wiphy = wiphy;
+	watchlist_init(&netdev->event_watches);
 
 	l_queue_push_tail(netdev_list, netdev);
 
@@ -3466,44 +3443,15 @@ static void netdev_link_notify(uint16_t type, const void *data, uint32_t len,
 	}
 }
 
-static bool netdev_watch_match(const void *a, const void *b)
-{
-	const struct netdev_watch *item = a;
-	uint32_t id = L_PTR_TO_UINT(b);
-
-	return item->id == id;
-}
-
 uint32_t netdev_watch_add(struct netdev *netdev, netdev_watch_func_t func,
 				void *user_data)
 {
-	struct netdev_watch *item;
-
-	item = l_new(struct netdev_watch, 1);
-	item->id = ++netdev->next_watch_id;
-	item->callback = func;
-	item->user_data = user_data;
-
-	if (!netdev->watches)
-		netdev->watches = l_queue_new();
-
-	l_queue_push_tail(netdev->watches, item);
-
-	return item->id;
+	return watchlist_add(&netdev->event_watches, func, user_data, NULL);
 }
 
 bool netdev_watch_remove(struct netdev *netdev, uint32_t id)
 {
-	struct netdev_watch *item;
-
-	item = l_queue_remove_if(netdev->watches, netdev_watch_match,
-					L_UINT_TO_PTR(id));
-	if (!item)
-		return false;
-
-	l_free(item);
-
-	return true;
+	return watchlist_remove(&netdev->event_watches, id);
 }
 
 bool netdev_init(struct l_genl_family *in,
