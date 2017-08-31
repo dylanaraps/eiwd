@@ -311,6 +311,43 @@ error:
 	return NULL;
 }
 
+/*
+ * Pad and encrypt the plaintext Key Data contents in @key_data using
+ * the encryption scheme required by @out_frame->key_descriptor_version,
+ * write results to @out_frame->key_data and @out_frame->key_data_len.
+ *
+ * Note that for efficiency @key_data is being modified, including in
+ * case of failure, so it must be sufficiently larger than @key_data_len.
+ */
+bool eapol_encrypt_key_data(const uint8_t *kek, uint8_t *key_data,
+				size_t key_data_len,
+				struct eapol_key *out_frame)
+{
+	switch (out_frame->key_descriptor_version) {
+	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4:
+		/* Not supported */
+		return false;
+
+	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
+	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
+		if (key_data_len < 16 || key_data_len % 8)
+			key_data[key_data_len++] = 0xdd;
+		while (key_data_len < 16 || key_data_len % 8)
+			key_data[key_data_len++] = 0x00;
+
+		if (!aes_wrap(kek, key_data, key_data_len, out_frame->key_data))
+			return false;
+
+		key_data_len += 8;
+
+		break;
+	}
+
+	out_frame->key_data_len = L_CPU_TO_BE16(key_data_len);
+
+	return true;
+}
+
 const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len)
 {
 	const struct eapol_key *ek;

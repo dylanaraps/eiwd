@@ -132,6 +132,9 @@ bool eapol_verify_mic(const uint8_t *kck, const struct eapol_key *frame);
 uint8_t *eapol_decrypt_key_data(const uint8_t *kek,
 				const struct eapol_key *frame,
 				size_t *decrypted_size);
+bool eapol_encrypt_key_data(const uint8_t *kek, uint8_t *key_data,
+				size_t key_data_len,
+				struct eapol_key *out_frame);
 
 const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len);
 
