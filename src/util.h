@@ -28,6 +28,10 @@
 
 #define align_len(len, boundary) (((len)+(boundary)-1) & ~((boundary)-1))
 
+#define container_of(ptr, type, member) ({			\
+	const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
+	(type *)( (char *)__mptr - offsetof(type,member) );})
+
 const char *util_ssid_to_utf8(size_t len, const uint8_t *ssid);
 bool util_ssid_is_utf8(size_t len, const uint8_t *ssid);
 const char *util_address_to_string(const uint8_t *addr);
