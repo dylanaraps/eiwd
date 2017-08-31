@@ -65,6 +65,7 @@ bool cmac_aes(const void *key, size_t key_len,
 
 bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
 			uint8_t *out);
+bool aes_wrap(const uint8_t *kek, const uint8_t *in, size_t len, uint8_t *out);
 bool arc4_skip(const uint8_t *key, size_t key_len, size_t skip,
 		const uint8_t *in, size_t len, uint8_t *out);
 

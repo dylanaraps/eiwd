@@ -162,6 +162,48 @@ bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
 	return true;
 }
 
+/*
+ * AES Key-wrap from RFC 3394 for 128-bit key
+ *
+ * The key is specified using @kek.  @in contains the plaintext data and @len
+ * contains its length.  @out will contain the encrypted data.  The result
+ * will be (len + 8) bytes.
+ *
+ * Returns: true on success, false if an IV mismatch has occurred.
+ *
+ * NOTE: Buffers @in and @out can overlap
+ */
+bool aes_wrap(const uint8_t *kek, const uint8_t *in, size_t len, uint8_t *out)
+{
+	uint64_t b[2] = { 0xa6a6a6a6a6a6a6a6, 0 };
+	uint64_t *r = (uint64_t *) out + 1;
+	size_t n = len >> 3;
+	unsigned int i, j;
+	uint32_t t = 1;
+	struct l_cipher *cipher;
+
+	cipher = l_cipher_new(L_CIPHER_AES, kek, 16);
+	if (!cipher)
+		return false;
+
+	memmove(r, in, len);
+
+	for (j = 0; j < 6; j++) {
+		for (i = 0; i < n; i++, t++) {
+			b[1] = L_GET_UNALIGNED(r + i);
+			l_cipher_encrypt(cipher, b, b, 16);
+			L_PUT_UNALIGNED(b[1], r + i);
+			b[0] ^= L_CPU_TO_BE64(t);
+		}
+	}
+
+	L_PUT_UNALIGNED(b[0], r - 1);
+
+	l_cipher_free(cipher);
+
+	return true;
+}
+
 bool arc4_skip(const uint8_t *key, size_t key_len, size_t skip,
 		const uint8_t *in, size_t len, uint8_t *out)
 {
