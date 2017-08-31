@@ -92,8 +92,7 @@ struct netdev {
 
 	struct watchlist event_watches;
 
-	struct l_queue *frame_watches;
-	uint32_t next_frame_watch_id;
+	struct watchlist frame_watches;
 
 	bool connected : 1;
 	bool operational : 1;
@@ -115,12 +114,10 @@ struct netdev_watch {
 };
 
 struct netdev_frame_watch {
-	uint32_t id;
 	uint16_t frame_type;
 	uint8_t *prefix;
 	size_t prefix_len;
-	netdev_frame_watch_func_t handler;
-	void *user_data;
+	struct watchlist_item super;
 };
 
 static struct l_netlink *rtnl = NULL;
@@ -508,14 +505,6 @@ static void netdev_connect_failed(struct l_genl_msg *msg, void *user_data)
 				connect_data);
 }
 
-static void netdev_frame_watch_free(void *data)
-{
-	struct netdev_frame_watch *fw = data;
-
-	l_free(fw->prefix);
-	l_free(fw);
-}
-
 static void netdev_free(void *data)
 {
 	struct netdev *netdev = data;
@@ -544,8 +533,7 @@ static void netdev_free(void *data)
 
 	device_remove(netdev->device);
 	watchlist_destroy(&netdev->event_watches);
-
-	l_queue_destroy(netdev->frame_watches, netdev_frame_watch_free);
+	watchlist_destroy(&netdev->frame_watches);
 
 	l_free(netdev);
 }
@@ -2817,7 +2805,9 @@ struct frame_prefix_info {
 
 static bool netdev_frame_watch_match_prefix(const void *a, const void *b)
 {
-	const struct netdev_frame_watch *fw = a;
+	const struct watchlist_item *item = a;
+	const struct netdev_frame_watch *fw =
+		container_of(item, struct netdev_frame_watch, super);
 	const struct frame_prefix_info *info = b;
 
 	return fw->frame_type == info->frame_type &&
@@ -2834,7 +2824,6 @@ static void netdev_mgmt_frame_event(struct l_genl_msg *msg,
 	const struct mmpdu_header *mpdu = NULL;
 	const uint8_t *body;
 	struct frame_prefix_info info;
-	const struct l_queue_entry *fw_entry;
 	static const uint8_t bcast_addr[6] = {
 		0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 	};
@@ -2872,15 +2861,10 @@ static void netdev_mgmt_frame_event(struct l_genl_msg *msg,
 	info.body = (const uint8_t *) body;
 	info.body_len = (const uint8_t *) mpdu + frame_len - body;
 
-	for (fw_entry = l_queue_get_entries(netdev->frame_watches); fw_entry;
-				fw_entry = fw_entry->next) {
-		const struct netdev_frame_watch *fw = fw_entry->data;
-
-		if (!netdev_frame_watch_match_prefix(fw, &info))
-			continue;
-
-		fw->handler(netdev, mpdu, body, info.body_len, fw->user_data);
-	}
+	WATCHLIST_NOTIFY_MATCHES(&netdev->frame_watches,
+					netdev_frame_watch_match_prefix, &info,
+					netdev_frame_watch_func_t,
+					netdev, mpdu, body, info.body_len);
 }
 
 static void netdev_unicast_notify(struct l_genl_msg *msg, void *user_data)
@@ -3231,13 +3215,18 @@ check_blacklist:
 	return true;
 }
 
-static bool netdev_frame_watch_match_id(const void *a, const void *b)
+static void netdev_frame_watch_free(struct watchlist_item *item)
 {
-	const struct netdev_frame_watch *fw = a;
-	uint32_t id = L_PTR_TO_UINT(b);
+	struct netdev_frame_watch *fw =
+		container_of(item, struct netdev_frame_watch, super);
 
-	return fw->id == id;
+	l_free(fw->prefix);
+	l_free(fw);
 }
+
+static const struct watchlist_ops netdev_frame_watch_ops = {
+	.item_free = netdev_frame_watch_free,
+};
 
 uint32_t netdev_frame_watch_add(struct netdev *netdev, uint16_t frame_type,
 				const uint8_t *prefix, size_t prefix_len,
@@ -3248,25 +3237,21 @@ uint32_t netdev_frame_watch_add(struct netdev *netdev, uint16_t frame_type,
 	struct l_genl_msg *msg;
 	struct frame_prefix_info info = { frame_type, prefix, prefix_len };
 	bool registered;
+	uint32_t id;
 
 	fw = l_new(struct netdev_frame_watch, 1);
-	fw->id = netdev->next_frame_watch_id++;
 	fw->frame_type = frame_type;
 	fw->prefix = l_memdup(prefix, prefix_len);
 	fw->prefix_len = prefix_len;
-	fw->handler = handler;
-	fw->user_data = user_data;
+	id = watchlist_link(&netdev->frame_watches, &fw->super,
+						handler, user_data, NULL);
 
-	registered = l_queue_find(netdev->frame_watches,
+	registered = l_queue_find(netdev->frame_watches.items,
 					netdev_frame_watch_match_prefix,
 					&info);
 
-	if (!netdev->frame_watches)
-		netdev->frame_watches = l_queue_new();
-	l_queue_push_tail(netdev->frame_watches, fw);
-
 	if (registered)
-		return fw->id;
+		return id;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_REGISTER_FRAME, 32 + prefix_len);
 
@@ -3277,27 +3262,17 @@ uint32_t netdev_frame_watch_add(struct netdev *netdev, uint16_t frame_type,
 
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
 
-	return fw->id;
+	return id;
 }
 
 bool netdev_frame_watch_remove(struct netdev *netdev, uint32_t id)
 {
-	struct netdev_frame_watch *fw;
-
 	/*
 	 * There's no way to unregister from notifications but that's not a
 	 * problem, we leave them active in the kernel but
 	 * netdev_mgmt_frame_event will ignore these events.
 	 */
-
-	fw = l_queue_remove_if(netdev->frame_watches,
-				netdev_frame_watch_match_id, L_UINT_TO_PTR(id));
-	if (!fw)
-		return false;
-
-	netdev_frame_watch_free(fw);
-
-	return true;
+	return watchlist_remove(&netdev->frame_watches, id);
 }
 
 static void netdev_create_from_genl(struct l_genl_msg *msg)
@@ -3399,6 +3374,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	memcpy(netdev->name, ifname, ifname_len);
 	netdev->wiphy = wiphy;
 	watchlist_init(&netdev->event_watches, NULL);
+	watchlist_init(&netdev->frame_watches, &netdev_frame_watch_ops);
 
 	l_queue_push_tail(netdev_list, netdev);
 
