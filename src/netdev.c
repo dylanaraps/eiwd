@@ -1016,25 +1016,31 @@ static void netdev_set_gtk(uint32_t ifindex, uint8_t key_index,
 
 	switch (cipher) {
 	case CRYPTO_CIPHER_CCMP:
+		/*
+		 * 802.11-2012 11.7.4 Mapping GTK to CCMP keys:
+		 * "A STA shall use the temporal key as the CCMP key."
+		 */
 		memcpy(gtk_buf, gtk, 16);
 		break;
 	case CRYPTO_CIPHER_TKIP:
 		/*
-		 * Swap the TX and RX MIC key portions for supplicant.
-		 * WPA_80211_v3_1_090922 doc's 3.3.4:
-		 *   The MIC key used on the Client for transmit (TX) is in
-		 *   bytes 24-31, and the MIC key used on the Client for
-		 *   receive (RX) is in bytes 16-23 of the PTK.  That is,
-		 *   assume that TX MIC and RX MIC referred to in Clause 8.7
-		 *   are referenced to the Authenticator. Similarly, on the AP,
-		 *   the MIC used for TX is in bytes 16-23, and the MIC key
-		 *   used for RX is in bytes 24-31 of the PTK.
+		 * 802.11-2012 11.7.2 Mapping GTK to TKIP keys:
+		 * "A STA shall use bits 0-127 of the temporal key as the
+		 * input to the TKIP Phase 1 and Phase 2 mixing functions.
 		 *
-		 * Here apply this to the GTK instead of the PTK.
+		 * A STA shall use bits 128-191 of the temporal key as
+		 * the Michael key for MSDUs from the Authenticator's STA
+		 * to the Supplicant's STA.
+		 *
+		 * A STA shall use bits 192-255 of the temporal key as
+		 * the Michael key for MSDUs from the Supplicant's STA
+		 * to the Authenticator's STA."
 		 */
-		memcpy(gtk_buf, gtk, 16);
-		memcpy(gtk_buf + 16, gtk + 24, 8);
-		memcpy(gtk_buf + 24, gtk + 16, 8);
+		memcpy(gtk_buf + NL80211_TKIP_DATA_OFFSET_ENCR_KEY, gtk, 16);
+		memcpy(gtk_buf + NL80211_TKIP_DATA_OFFSET_RX_MIC_KEY,
+			gtk + 16, 8);
+		memcpy(gtk_buf + NL80211_TKIP_DATA_OFFSET_TX_MIC_KEY,
+			gtk + 24, 8);
 		break;
 	default:
 		l_error("Unexpected cipher: %x", cipher);
@@ -1192,23 +1198,32 @@ static void netdev_set_tk(uint32_t ifindex, const uint8_t *aa,
 
 	switch (cipher) {
 	case CRYPTO_CIPHER_CCMP:
+		/*
+		 * 802.11-2012 11.7.3 Mapping PTK to CCMP keys:
+		 * "A STA shall use the temporal key as the CCMP key
+		 * for MPDUs between the two communicating STAs."
+		 */
 		memcpy(tk_buf, tk, 16);
 		break;
 	case CRYPTO_CIPHER_TKIP:
 		/*
-		 * Swap the TX and RX MIC key portions for supplicant.
-		 * WPA_80211_v3_1_090922 doc's 3.3.4:
-		 *   The MIC key used on the Client for transmit (TX) is in
-		 *   bytes 24-31, and the MIC key used on the Client for
-		 *   receive (RX) is in bytes 16-23 of the PTK.  That is,
-		 *   assume that TX MIC and RX MIC referred to in Clause 8.7
-		 *   are referenced to the Authenticator. Similarly, on the AP,
-		 *   the MIC used for TX is in bytes 16-23, and the MIC key
-		 *   used for RX is in bytes 24-31 of the PTK.
+		 * 802.11-2012 11.7.1 Mapping PTK to TKIP keys:
+		 * "A STA shall use bits 0-127 of the temporal key as its
+		 * input to the TKIP Phase 1 and Phase 2 mixing functions.
+		 *
+		 * A STA shall use bits 128-191 of the temporal key as
+		 * the Michael key for MSDUs from the Authenticator's STA
+		 * to the Supplicant's STA.
+		 *
+		 * A STA shall use bits 192-255 of the temporal key as
+		 * the Michael key for MSDUs from the Supplicant's STA
+		 * to the Authenticator's STA."
 		 */
-		memcpy(tk_buf, tk, 16);
-		memcpy(tk_buf + 16, tk + 24, 8);
-		memcpy(tk_buf + 24, tk + 16, 8);
+		memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_ENCR_KEY, tk, 16);
+		memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_RX_MIC_KEY,
+			tk + 16, 8);
+		memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_TX_MIC_KEY,
+			tk + 24, 8);
 		break;
 	default:
 		l_error("Unexpected cipher: %x", cipher);
