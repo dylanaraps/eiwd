@@ -2081,7 +2081,7 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	device = l_new(struct device, 1);
 	device->bss_list = l_queue_new();
 	device->networks = l_hashmap_new();
-	watchlist_init(&device->state_watches);
+	watchlist_init(&device->state_watches, NULL);
 	l_hashmap_set_hash_function(device->networks, l_str_hash);
 	l_hashmap_set_compare_function(device->networks,
 				(l_hashmap_compare_func_t) strcmp);
@@ -2177,7 +2177,7 @@ bool device_init(void)
 					NULL, false))
 		return false;
 
-	watchlist_init(&device_watches);
+	watchlist_init(&device_watches, NULL);
 	device_list = l_queue_new();
 
 	return true;
