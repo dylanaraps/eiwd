@@ -885,7 +885,8 @@ static void netdev_setting_keys_failed(struct netdev *netdev,
 	netdev->group_management_new_key_cmd_id = 0;
 
 	netdev->result = NETDEV_RESULT_KEY_SETTING_FAILED;
-	msg = netdev_build_cmd_disconnect(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+	msg = netdev_build_cmd_disconnect(netdev,
+						MMPDU_REASON_CODE_UNSPECIFIED);
 	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
 							netdev_connect_failed,
 							netdev, NULL);
@@ -906,7 +907,7 @@ static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
 	if (err < 0) {
 		l_error("Set Station failed for ifindex %d", netdev->index);
 		netdev_setting_keys_failed(netdev,
-						MPDU_REASON_CODE_UNSPECIFIED);
+						MMPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
 
@@ -952,7 +953,7 @@ static void netdev_new_group_key_cb(struct l_genl_msg *msg, void *data)
 		return;
 
 error:
-	netdev_setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+	netdev_setting_keys_failed(netdev, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
 static void netdev_new_group_management_key_cb(struct l_genl_msg *msg,
@@ -966,7 +967,7 @@ static void netdev_new_group_management_key_cb(struct l_genl_msg *msg,
 		l_error("New Key for Group Mgmt failed for ifindex: %d",
 				netdev->index);
 		netdev_setting_keys_failed(netdev,
-			MPDU_REASON_CODE_UNSPECIFIED);
+						MMPDU_REASON_CODE_UNSPECIFIED);
 	}
 }
 
@@ -1010,7 +1011,7 @@ static void netdev_set_gtk(uint32_t ifindex, uint8_t key_index,
 	if (crypto_cipher_key_len(cipher) != gtk_len) {
 		l_error("Unexpected key length: %d", gtk_len);
 		netdev_setting_keys_failed(netdev,
-					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
+					MMPDU_REASON_CODE_INVALID_GROUP_CIPHER);
 		return;
 	}
 
@@ -1045,7 +1046,7 @@ static void netdev_set_gtk(uint32_t ifindex, uint8_t key_index,
 	default:
 		l_error("Unexpected cipher: %x", cipher);
 		netdev_setting_keys_failed(netdev,
-					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
+					MMPDU_REASON_CODE_INVALID_GROUP_CIPHER);
 		return;
 	}
 
@@ -1060,7 +1061,7 @@ static void netdev_set_gtk(uint32_t ifindex, uint8_t key_index,
 		return;
 
 	l_genl_msg_unref(msg);
-	netdev_setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+	netdev_setting_keys_failed(netdev, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
 static void netdev_set_igtk(uint32_t ifindex, uint8_t key_index,
@@ -1079,7 +1080,7 @@ static void netdev_set_igtk(uint32_t ifindex, uint8_t key_index,
 	if (crypto_cipher_key_len(cipher) != igtk_len) {
 		l_error("Unexpected key length: %d", igtk_len);
 		netdev_setting_keys_failed(netdev,
-					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
+					MMPDU_REASON_CODE_INVALID_GROUP_CIPHER);
 		return;
 	}
 
@@ -1090,7 +1091,7 @@ static void netdev_set_igtk(uint32_t ifindex, uint8_t key_index,
 	default:
 		l_error("Unexpected cipher: %x", cipher);
 		netdev_setting_keys_failed(netdev,
-					MPDU_REASON_CODE_INVALID_GROUP_CIPHER);
+					MMPDU_REASON_CODE_INVALID_GROUP_CIPHER);
 		return;
 	}
 
@@ -1106,7 +1107,7 @@ static void netdev_set_igtk(uint32_t ifindex, uint8_t key_index,
 		return;
 
 	l_genl_msg_unref(msg);
-	netdev_setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+	netdev_setting_keys_failed(netdev, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
 static void netdev_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
@@ -1120,7 +1121,7 @@ static void netdev_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 
 	l_error("Set Key for Pairwise Key failed for ifindex: %d",
 								netdev->index);
-	netdev_setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+	netdev_setting_keys_failed(netdev, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
 static struct l_genl_msg *netdev_build_cmd_set_key_pairwise(
@@ -1154,7 +1155,7 @@ static void netdev_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 
 	l_error("New Key for Pairwise Key failed for ifindex: %d",
 								netdev->index);
-	netdev_setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+	netdev_setting_keys_failed(netdev, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
 static struct l_genl_msg *netdev_build_cmd_new_key_pairwise(
@@ -1228,7 +1229,7 @@ static void netdev_set_tk(uint32_t ifindex, const uint8_t *aa,
 	default:
 		l_error("Unexpected cipher: %x", cipher);
 		netdev_setting_keys_failed(netdev,
-				MPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER);
+				MMPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER);
 		return;
 	}
 
@@ -1253,7 +1254,7 @@ static void netdev_set_tk(uint32_t ifindex, const uint8_t *aa,
 
 	l_genl_msg_unref(msg);
 error:
-	netdev_setting_keys_failed(netdev, MPDU_REASON_CODE_UNSPECIFIED);
+	netdev_setting_keys_failed(netdev, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
 static void netdev_handshake_failed(uint32_t ifindex,
@@ -1771,7 +1772,7 @@ static void netdev_cmd_ft_reassociate_cb(struct l_genl_msg *msg,
 
 		netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
 		cmd_deauth = netdev_build_cmd_deauthenticate(netdev,
-						MPDU_REASON_CODE_UNSPECIFIED);
+						MMPDU_REASON_CODE_UNSPECIFIED);
 		netdev->disconnect_cmd_id = l_genl_family_send(nl80211,
 							cmd_deauth,
 							netdev_connect_failed,
@@ -2013,7 +2014,7 @@ auth_error:
 ft_error:
 	netdev->result = NETDEV_RESULT_AUTHENTICATION_FAILED;
 	cmd_deauth = netdev_build_cmd_deauthenticate(netdev,
-						MPDU_REASON_CODE_UNSPECIFIED);
+						MMPDU_REASON_CODE_UNSPECIFIED);
 	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, cmd_deauth,
 							netdev_connect_failed,
 							netdev, NULL);
@@ -2296,7 +2297,7 @@ int netdev_disconnect(struct netdev *netdev,
 	}
 
 	disconnect = netdev_build_cmd_disconnect(netdev,
-					MPDU_REASON_CODE_DEAUTH_LEAVING);
+					MMPDU_REASON_CODE_DEAUTH_LEAVING);
 	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, disconnect,
 				netdev_cmd_disconnect_cb, netdev, NULL);
 

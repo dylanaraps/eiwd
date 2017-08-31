@@ -50,69 +50,69 @@ enum mpdu_management_subtype {
 };
 
 /* 802.11, Section 8.4.1.1 Authentication Algorithm Number field */
-enum mpdu_authentication_algorithm_number {
-	MPDU_AUTH_ALGO_OPEN_SYSTEM = 0,
-	MPDU_AUTH_ALGO_SHARED_KEY,
+enum mmpdu_authentication_algorithm_number {
+	MMPDU_AUTH_ALGO_OPEN_SYSTEM = 0,
+	MMPDU_AUTH_ALGO_SHARED_KEY,
 };
 
 /*
  * 802.11-2012, Section 8.4.1.7:
 */
-enum mpdu_reason_code {
-	MPDU_REASON_CODE_UNSPECIFIED = 1,
-	MPDU_REASON_CODE_PREV_AUTH_NOT_VALID = 2,
-	MPDU_REASON_CODE_DEAUTH_LEAVING = 3,
-	MPDU_REASON_CODE_DISASSOC_DUE_TO_INACTIVITY = 4,
-	MPDU_REASON_CODE_DISASSOC_AP_BUSY = 5,
-	MPDU_REASON_CODE_CLASS2_FRAME_FROM_NONAUTH_STA = 6,
-	MPDU_REASON_CODE_CLASS3_FRAME_FROM_NONASSOC_STA = 7,
-	MPDU_REASON_CODE_DISASSOC_STA_HAS_LEFT = 8,
-	MPDU_REASON_CODE_STA_REQ_ASSOC_WITHOUT_AUTH = 9,
+enum mmpdu_reason_code {
+	MMPDU_REASON_CODE_UNSPECIFIED = 1,
+	MMPDU_REASON_CODE_PREV_AUTH_NOT_VALID = 2,
+	MMPDU_REASON_CODE_DEAUTH_LEAVING = 3,
+	MMPDU_REASON_CODE_DISASSOC_DUE_TO_INACTIVITY = 4,
+	MMPDU_REASON_CODE_DISASSOC_AP_BUSY = 5,
+	MMPDU_REASON_CODE_CLASS2_FRAME_FROM_NONAUTH_STA = 6,
+	MMPDU_REASON_CODE_CLASS3_FRAME_FROM_NONASSOC_STA = 7,
+	MMPDU_REASON_CODE_DISASSOC_STA_HAS_LEFT = 8,
+	MMPDU_REASON_CODE_STA_REQ_ASSOC_WITHOUT_AUTH = 9,
 	/* 802.11h */
-	MPDU_REASON_CODE_DISASSOC_BAD_POWER = 10,
-	MPDU_REASON_CODE_DISASSOC_BAD_SUPP_CHAN = 11,
+	MMPDU_REASON_CODE_DISASSOC_BAD_POWER = 10,
+	MMPDU_REASON_CODE_DISASSOC_BAD_SUPP_CHAN = 11,
 	/* 802.11i */
-	MPDU_REASON_CODE_INVALID_IE = 13,
-	MPDU_REASON_CODE_MIC_FAILURE = 14,
-	MPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT = 15,
-	MPDU_REASON_CODE_GROUP_KEY_HANDSHAKE_TIMEOUT = 16,
-	MPDU_REASON_CODE_IE_DIFFERENT = 17,
-	MPDU_REASON_CODE_INVALID_GROUP_CIPHER = 18,
-	MPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER = 19,
-	MPDU_REASON_CODE_INVALID_AKMP = 20,
-	MPDU_REASON_CODE_UNSUPP_RSN_VERSION = 21,
-	MPDU_REASON_CODE_INVALID_RSN_IE_CAP = 22,
-	MPDU_REASON_CODE_IEEE8021X_FAILED = 23,
-	MPDU_REASON_CODE_CIPHER_SUITE_REJECTED = 24,
+	MMPDU_REASON_CODE_INVALID_IE = 13,
+	MMPDU_REASON_CODE_MIC_FAILURE = 14,
+	MMPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT = 15,
+	MMPDU_REASON_CODE_GROUP_KEY_HANDSHAKE_TIMEOUT = 16,
+	MMPDU_REASON_CODE_IE_DIFFERENT = 17,
+	MMPDU_REASON_CODE_INVALID_GROUP_CIPHER = 18,
+	MMPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER = 19,
+	MMPDU_REASON_CODE_INVALID_AKMP = 20,
+	MMPDU_REASON_CODE_UNSUPP_RSN_VERSION = 21,
+	MMPDU_REASON_CODE_INVALID_RSN_IE_CAP = 22,
+	MMPDU_REASON_CODE_IEEE8021X_FAILED = 23,
+	MMPDU_REASON_CODE_CIPHER_SUITE_REJECTED = 24,
 	/* TDLS (802.11z) */
-	MPDU_REASON_CODE_TDLS_TEARDOWN_UNREACHABLE = 25,
-	MPDU_REASON_CODE_TDLS_TEARDOWN_UNSPECIFIED = 26,
+	MMPDU_REASON_CODE_TDLS_TEARDOWN_UNREACHABLE = 25,
+	MMPDU_REASON_CODE_TDLS_TEARDOWN_UNSPECIFIED = 26,
 	/* 802.11e */
-	MPDU_REASON_CODE_DISASSOC_UNSPECIFIED_QOS = 32,
-	MPDU_REASON_CODE_DISASSOC_QAP_NO_BANDWIDTH = 33,
-	MPDU_REASON_CODE_DISASSOC_LOW_ACK = 34,
-	MPDU_REASON_CODE_DISASSOC_QAP_EXCEED_TXOP = 35,
-	MPDU_REASON_CODE_QSTA_LEAVE_QBSS = 36,
-	MPDU_REASON_CODE_QSTA_NOT_USE = 37,
-	MPDU_REASON_CODE_QSTA_REQUIRE_SETUP = 38,
-	MPDU_REASON_CODE_QSTA_TIMEOUT = 39,
-	MPDU_REASON_CODE_QSTA_CIPHER_NOT_SUPP = 45,
+	MMPDU_REASON_CODE_DISASSOC_UNSPECIFIED_QOS = 32,
+	MMPDU_REASON_CODE_DISASSOC_QAP_NO_BANDWIDTH = 33,
+	MMPDU_REASON_CODE_DISASSOC_LOW_ACK = 34,
+	MMPDU_REASON_CODE_DISASSOC_QAP_EXCEED_TXOP = 35,
+	MMPDU_REASON_CODE_QSTA_LEAVE_QBSS = 36,
+	MMPDU_REASON_CODE_QSTA_NOT_USE = 37,
+	MMPDU_REASON_CODE_QSTA_REQUIRE_SETUP = 38,
+	MMPDU_REASON_CODE_QSTA_TIMEOUT = 39,
+	MMPDU_REASON_CODE_QSTA_CIPHER_NOT_SUPP = 45,
 	/* 802.11s */
-	MPDU_REASON_CODE_MESH_PEER_CANCELED = 52,
-	MPDU_REASON_CODE_MESH_MAX_PEERS = 53,
-	MPDU_REASON_CODE_MESH_CONFIG = 54,
-	MPDU_REASON_CODE_MESH_CLOSE = 55,
-	MPDU_REASON_CODE_MESH_MAX_RETRIES = 56,
-	MPDU_REASON_CODE_MESH_CONFIRM_TIMEOUT = 57,
-	MPDU_REASON_CODE_MESH_INVALID_GTK = 58,
-	MPDU_REASON_CODE_MESH_INCONSISTENT_PARAM = 59,
-	MPDU_REASON_CODE_MESH_INVALID_SECURITY = 60,
-	MPDU_REASON_CODE_MESH_PATH_ERROR = 61,
-	MPDU_REASON_CODE_MESH_PATH_NOFORWARD = 62,
-	MPDU_REASON_CODE_MESH_PATH_DEST_UNREACHABLE = 63,
-	MPDU_REASON_CODE_MAC_EXISTS_IN_MBSS = 64,
-	MPDU_REASON_CODE_MESH_CHAN_REGULATORY = 65,
-	MPDU_REASON_CODE_MESH_CHAN = 66,
+	MMPDU_REASON_CODE_MESH_PEER_CANCELED = 52,
+	MMPDU_REASON_CODE_MESH_MAX_PEERS = 53,
+	MMPDU_REASON_CODE_MESH_CONFIG = 54,
+	MMPDU_REASON_CODE_MESH_CLOSE = 55,
+	MMPDU_REASON_CODE_MESH_MAX_RETRIES = 56,
+	MMPDU_REASON_CODE_MESH_CONFIRM_TIMEOUT = 57,
+	MMPDU_REASON_CODE_MESH_INVALID_GTK = 58,
+	MMPDU_REASON_CODE_MESH_INCONSISTENT_PARAM = 59,
+	MMPDU_REASON_CODE_MESH_INVALID_SECURITY = 60,
+	MMPDU_REASON_CODE_MESH_PATH_ERROR = 61,
+	MMPDU_REASON_CODE_MESH_PATH_NOFORWARD = 62,
+	MMPDU_REASON_CODE_MESH_PATH_DEST_UNREACHABLE = 63,
+	MMPDU_REASON_CODE_MAC_EXISTS_IN_MBSS = 64,
+	MMPDU_REASON_CODE_MESH_CHAN_REGULATORY = 65,
+	MMPDU_REASON_CODE_MESH_CHAN = 66,
 };
 
 /* 802.11, Section 8.2.4.1.1, Figure 8-2 */
@@ -147,7 +147,8 @@ struct mpdu_fc {
 } __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.1 */
-struct mpdu_mgmt_header {
+struct mmpdu_header {
+	struct mpdu_fc fc;
 	__le16 duration;
 	unsigned char address_1[6];
 	unsigned char address_2[6];
@@ -165,11 +166,11 @@ struct mpdu_mgmt_header {
 	__le32 ht_control; /* ToDo? */
 } __attribute__ ((packed));
 
-#define MPDU_MGMT_SEQUENCE_NUMBER(v)		\
+#define MPDU_SEQUENCE_NUMBER(v)		\
 	(((v).sequence_number_high << 4) + ((v).sequence_number_low))
 
 /* 802.11, Section 8.4.1.4 */
-struct mpdu_field_capability {
+struct mmpdu_field_capability {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 	bool ess:1;
 	bool ibss:1;
@@ -210,72 +211,72 @@ struct mpdu_field_capability {
 } __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.5 */
-struct mpdu_association_request {
-	struct mpdu_field_capability capability;
+struct mmpdu_association_request {
+	struct mmpdu_field_capability capability;
 	__le16 listen_interval;
 	uint8_t ies[0];
 } __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.6 */
-struct mpdu_association_response {
-	struct mpdu_field_capability capability;
+struct mmpdu_association_response {
+	struct mmpdu_field_capability capability;
 	__le16 status_code;
 	__le16 aid;
 	uint8_t ies[0];
 } __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.7 */
-struct mpdu_reassociation_request {
-	struct mpdu_field_capability capability;
+struct mmpdu_reassociation_request {
+	struct mmpdu_field_capability capability;
 	__le16 listen_interval;
 	unsigned char current_ap_address[6];
 	uint8_t ies[0];
 } __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.8 */
-struct mpdu_reassociation_response {
-	struct mpdu_field_capability capability;
+struct mmpdu_reassociation_response {
+	struct mmpdu_field_capability capability;
 	__le16 status_code;
 	__le16 aid;
 	uint8_t ies[0];
 } __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.4 */
-struct mpdu_disassociation {
+struct mmpdu_disassociation {
 	__le16 reason_code;
 	uint8_t ies[0];
 } __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.9 */
-struct mpdu_probe_request {
+struct mmpdu_probe_request {
 	uint8_t ies[0];
 } __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.10 */
-struct mpdu_probe_response {
+struct mmpdu_probe_response {
 	uint8_t timestamp;
 	__le16 beacon_interval;
-	struct mpdu_field_capability capability;
+	struct mmpdu_field_capability capability;
 	uint8_t ies[0];
 } __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.15 */
-struct mpdu_timing_advertisement {
+struct mmpdu_timing_advertisement {
 	uint8_t timestamp;
-	struct mpdu_field_capability capability;
+	struct mmpdu_field_capability capability;
 	uint8_t ies[0];
 } __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.2 */
-struct mpdu_beacon {
+struct mmpdu_beacon {
 	uint8_t timestamp;
 	__le16 beacon_interval;
-	struct mpdu_field_capability capability;
+	struct mmpdu_field_capability capability;
 	uint8_t ies[0];
 } __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.11 */
-struct mpdu_authentication {
+struct mmpdu_authentication {
 	__le16 algorithm;
 	__le16 transaction_sequence;
 	__le16 status;
@@ -291,27 +292,10 @@ struct mpdu_authentication {
 } __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.12 */
-struct mpdu_deauthentication {
+struct mmpdu_deauthentication {
 	__le16 reason_code;
 	uint8_t ies[0];
 } __attribute__ ((packed));
 
-struct mpdu {
-	struct mpdu_fc fc;
-	struct mpdu_mgmt_header mgmt_hdr;
-	union {
-		struct mpdu_association_request assoc_req;
-		struct mpdu_association_response assoc_resp;
-		struct mpdu_reassociation_request reassoc_req;
-		struct mpdu_reassociation_response reassoc_resp;
-		struct mpdu_probe_request probe_req;
-		struct mpdu_probe_response probe_resp;
-		struct mpdu_timing_advertisement time_advert;
-		struct mpdu_beacon beacon;
-		struct mpdu_disassociation disassoc;
-		struct mpdu_authentication auth;
-		struct mpdu_deauthentication deauth;
-	};
-} __attribute__ ((packed));
-
-const struct mpdu *mpdu_validate(const uint8_t *frame, int len);
+const struct mmpdu_header *mpdu_validate(const uint8_t *frame, int len);
+const void *mmpdu_body(const struct mmpdu_header *mpdu);

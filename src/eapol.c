@@ -845,7 +845,7 @@ static void eapol_timeout(struct l_timeout *timeout, void *user_data)
 	l_timeout_remove(sm->timeout);
 	sm->timeout = NULL;
 
-	handshake_failed(sm, MPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT);
+	handshake_failed(sm, MMPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT);
 }
 
 static void eapol_write(struct eapol_sm *sm, const struct eapol_frame *ef)
@@ -983,7 +983,7 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 		l_info("MIC calculation failed. "
 			"Ensure Kernel Crypto is available.");
 		l_free(step2);
-		handshake_failed(sm, MPDU_REASON_CODE_UNSPECIFIED);
+		handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 
 		return;
 	}
@@ -998,7 +998,7 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 	return;
 
 error_unspecified:
-	handshake_failed(sm, MPDU_REASON_CODE_UNSPECIFIED);
+	handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
 static const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len,
@@ -1063,7 +1063,7 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 	uint8_t igtk_key_index;
 
 	if (!eapol_verify_ptk_3_of_4(ek, sm->handshake->wpa_ie)) {
-		handshake_failed(sm, MPDU_REASON_CODE_UNSPECIFIED);
+		handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
 
@@ -1178,7 +1178,7 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 				!(info1.pairwise_ciphers & override) ||
 				__builtin_popcount(override) != 1) {
 			handshake_failed(sm,
-				MPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER);
+				MMPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER);
 			return;
 		}
 
@@ -1194,7 +1194,7 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 							decrypted_key_data_size,
 							&gtk_len);
 		if (!gtk || gtk_len < 8) {
-			handshake_failed(sm, MPDU_REASON_CODE_UNSPECIFIED);
+			handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 			return;
 		}
 
@@ -1211,7 +1211,7 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 							decrypted_key_data_size,
 							&igtk_len);
 		if (!igtk || igtk_len < 8) {
-			handshake_failed(sm, MPDU_REASON_CODE_UNSPECIFIED);
+			handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 			return;
 		}
 
@@ -1260,7 +1260,7 @@ fail:
 	return;
 
 error_ie_different:
-	handshake_failed(sm, MPDU_REASON_CODE_IE_DIFFERENT);
+	handshake_failed(sm, MMPDU_REASON_CODE_IE_DIFFERENT);
 }
 
 static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
@@ -1279,7 +1279,7 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 	uint8_t igtk_key_index;
 
 	if (!eapol_verify_gtk_1_of_2(ek, sm->handshake->wpa_ie)) {
-		handshake_failed(sm, MPDU_REASON_CODE_UNSPECIFIED);
+		handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
 
@@ -1497,7 +1497,7 @@ static void eapol_eap_complete_cb(enum eap_result result, void *user_data)
 	sm->eap = NULL;
 
 	if (result != EAP_RESULT_SUCCESS)
-		handshake_failed(sm, MPDU_REASON_CODE_IEEE8021X_FAILED);
+		handshake_failed(sm, MMPDU_REASON_CODE_IEEE8021X_FAILED);
 }
 
 /* This respresentes the eapResults message */
@@ -1552,7 +1552,7 @@ msk_short:
 	l_error("EAP method's MSK too short for AKM suite %u",
 			sm->handshake->akm_suite);
 
-	handshake_failed(sm, MPDU_REASON_CODE_IEEE8021X_FAILED);
+	handshake_failed(sm, MMPDU_REASON_CODE_IEEE8021X_FAILED);
 }
 
 static void eapol_eap_event_cb(unsigned int event,
