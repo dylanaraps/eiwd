@@ -351,18 +351,18 @@ static void aes_wrap_test(const void *data)
 		0xae, 0xf3, 0x4b, 0xd8, 0xfb, 0x5a, 0x7b, 0x82,
 		0x9d, 0x3e, 0x86, 0x23, 0x71, 0xd2, 0xcf, 0xe5,
 	};
-	uint8_t out[24];
+	uint8_t buf[24];
 
-	memset(out, 0, 24);
+	memcpy(buf, key_data, sizeof(key_data));
+	assert(aes_wrap(kek, buf, sizeof(key_data), buf));
+	assert(!memcmp(buf, ciphertext, sizeof(ciphertext)));
 
-	assert(aes_wrap(kek, key_data, sizeof(key_data), out));
-	assert(!memcmp(out, ciphertext, sizeof(ciphertext)));
+	buf[10] = 10;
+	assert(!aes_unwrap(kek, buf, sizeof(ciphertext), buf));
 
-	out[10] = 10;
-	assert(!aes_unwrap(kek, out, sizeof(ciphertext), out));
-
-	assert(aes_unwrap(kek, ciphertext, sizeof(ciphertext), out));
-	assert(!memcmp(out, key_data, sizeof(key_data)));
+	memcpy(buf, ciphertext, sizeof(ciphertext));
+	assert(aes_unwrap(kek, buf, sizeof(ciphertext), buf));
+	assert(!memcmp(buf, key_data, sizeof(key_data)));
 }
 
 int main(int argc, char *argv[])
