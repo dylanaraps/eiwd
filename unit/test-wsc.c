@@ -1912,7 +1912,7 @@ static void verify_deauthenticate(uint32_t ifindex, const uint8_t *aa,
 {
 	struct verify_data *data = user_data;
 
-	assert(reason_code == MPDU_REASON_CODE_IEEE8021X_FAILED);
+	assert(reason_code == MMPDU_REASON_CODE_IEEE8021X_FAILED);
 	data->eapol_failed = true;
 }
 
