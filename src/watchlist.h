@@ -29,17 +29,27 @@ struct watchlist_item {
 	watchlist_item_destroy_func_t destroy;
 };
 
+struct watchlist_ops {
+	void (*item_free)(struct watchlist_item *item);
+};
+
 struct watchlist {
 	int next_id;
 	struct l_queue *items;
 	bool in_notify : 1;
 	bool stale_items : 1;
+	const struct watchlist_ops *ops;
 };
 
-struct watchlist *watchlist_new(void);
-void watchlist_init(struct watchlist *watchlist);
+struct watchlist *watchlist_new(const struct watchlist_ops *ops);
+void watchlist_init(struct watchlist *watchlist,
+					const struct watchlist_ops *ops);
 unsigned int watchlist_add(struct watchlist *watchlist, void *notify,
 					void *notify_data,
+					watchlist_item_destroy_func_t destroy);
+unsigned int watchlist_link(struct watchlist *watchlist,
+					struct watchlist_item *item,
+					void *notify, void *notify_data,
 					watchlist_item_destroy_func_t destroy);
 bool watchlist_remove(struct watchlist *watchlist, unsigned int id);
 void watchlist_destroy(struct watchlist *watchlist);

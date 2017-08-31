@@ -36,29 +36,49 @@ static bool watchlist_item_match(const void *a, const void *b)
 	return item->id == id;
 }
 
-static void watchlist_item_free(void *data)
+static void __watchlist_item_free(struct watchlist *watchlist,
+						struct watchlist_item *item)
 {
-	struct watchlist_item *item = data;
-
 	if (item->destroy)
 		item->destroy(item->notify_data);
 
-	l_free(item);
+	if (watchlist->ops && watchlist->ops->item_free)
+		watchlist->ops->item_free(item);
+	else
+		l_free(item);
 }
 
-struct watchlist *watchlist_new(void)
+struct watchlist *watchlist_new(const struct watchlist_ops *ops)
 {
 	struct watchlist *watchlist;
 
 	watchlist = l_new(struct watchlist, 1);
 	watchlist->items = l_queue_new();
+	watchlist->ops = ops;
 	return watchlist;
 }
 
-void watchlist_init(struct watchlist *watchlist)
+void watchlist_init(struct watchlist *watchlist,
+					const struct watchlist_ops *ops)
 {
 	watchlist->next_id = 0;
 	watchlist->items = l_queue_new();
+	watchlist->ops = ops;
+}
+
+unsigned int watchlist_link(struct watchlist *watchlist,
+					struct watchlist_item *item,
+					void *notify, void *notify_data,
+					watchlist_item_destroy_func_t destroy)
+{
+	item->id = ++watchlist->next_id;
+	item->notify = notify;
+	item->notify_data = notify_data;
+	item->destroy = destroy;
+
+	l_queue_push_tail(watchlist->items, item);
+
+	return item->id;
 }
 
 unsigned int watchlist_add(struct watchlist *watchlist, void *notify,
@@ -68,14 +88,7 @@ unsigned int watchlist_add(struct watchlist *watchlist, void *notify,
 	struct watchlist_item *item;
 
 	item = l_new(struct watchlist_item, 1);
-	item->id = ++watchlist->next_id;
-	item->notify = notify;
-	item->notify_data = notify_data;
-	item->destroy = destroy;
-
-	l_queue_push_tail(watchlist->items, item);
-
-	return item->id;
+	return watchlist_link(watchlist, item, notify, notify_data, destroy);
 }
 
 bool watchlist_remove(struct watchlist *watchlist, unsigned int id)
@@ -99,22 +112,28 @@ bool watchlist_remove(struct watchlist *watchlist, unsigned int id)
 	if (!item)
 		return false;
 
-	if (item->destroy)
-		item->destroy(item->notify_data);
+	__watchlist_item_free(watchlist, item);
 
-	l_free(item);
 	return true;
+}
+
+static void __watchlist_clear(struct watchlist *watchlist)
+{
+	struct watchlist_item *item;
+
+	while ((item = l_queue_pop_head(watchlist->items)))
+		__watchlist_item_free(watchlist, item);
 }
 
 void watchlist_destroy(struct watchlist *watchlist)
 {
-	l_queue_destroy(watchlist->items, watchlist_item_free);
+	__watchlist_clear(watchlist);
 	watchlist->items = NULL;
 }
 
 void watchlist_free(struct watchlist *watchlist)
 {
-	l_queue_destroy(watchlist->items, watchlist_item_free);
+	__watchlist_clear(watchlist);
 	l_free(watchlist);
 }
 
@@ -123,12 +142,8 @@ void __watchlist_prune_stale(struct watchlist *watchlist)
 	struct watchlist_item *item;
 
 	while ((item = l_queue_remove_if(watchlist->items, watchlist_item_match,
-							L_UINT_TO_PTR(0)))) {
-		if (item->destroy)
-			item->destroy(item->notify_data);
-
-		l_free(item);
-	}
+							L_UINT_TO_PTR(0))))
+		__watchlist_item_free(watchlist, item);
 
 	watchlist->stale_items = false;
 }
