@@ -177,7 +177,7 @@ const struct mmpdu_header *mpdu_validate(const uint8_t *frame, int len)
 
 	switch (fc->type) {
 	case MPDU_TYPE_MANAGEMENT:
-		mmpdu = (const struct mmpdu_header *) mmpdu;
+		mmpdu = (const struct mmpdu_header *) frame;
 
 		if (validate_mgmt_mpdu(mmpdu, len, &offset))
 			return mmpdu;
