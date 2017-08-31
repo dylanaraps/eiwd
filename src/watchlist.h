@@ -73,3 +73,22 @@ void __watchlist_prune_stale(struct watchlist *watchlist);
 			__watchlist_prune_stale(watchlist);		\
 	} while	(false)							\
 
+#define WATCHLIST_NOTIFY_MATCHES(watchlist, match, match_data, type, args...) \
+	do {								\
+		const struct l_queue_entry *entry =			\
+				l_queue_get_entries((watchlist)->items);\
+									\
+		(watchlist)->in_notify = true;				\
+		for (; entry; entry = entry->next) {			\
+			struct watchlist_item *item = entry->data;	\
+			type t = item->notify;				\
+									\
+			if (!match(item->notify_data, match_data))	\
+				continue;				\
+									\
+			t(args, item->notify_data);			\
+		}							\
+		(watchlist)->in_notify = false;				\
+		if ((watchlist)->stale_items)				\
+			__watchlist_prune_stale(watchlist);		\
+	} while	(false)
