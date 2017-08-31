@@ -1292,7 +1292,7 @@ static void process_frame(struct hwsim_frame *frame)
 static void unicast_handler(struct l_genl_msg *msg, void *user_data)
 {
 	struct hwsim_frame *frame;
-	const struct mpdu *mpdu;
+	const struct mmpdu_header *mpdu;
 	struct l_genl_attr attr;
 	uint16_t type, len;
 	const void *data;
@@ -1391,10 +1391,10 @@ static void unicast_handler(struct l_genl_msg *msg, void *user_data)
 	frame->frequency = *(uint32_t *) freq;
 	frame->flags = *(uint32_t *) flags;
 
-	mpdu = (struct mpdu *) frame->payload;
+	mpdu = (const struct mmpdu_header *) frame->payload;
 
-	memcpy(frame->src_ether_addr, mpdu->mgmt_hdr.address_2, ETH_ALEN);
-	memcpy(frame->dst_ether_addr, mpdu->mgmt_hdr.address_1, ETH_ALEN);
+	memcpy(frame->src_ether_addr, mpdu->address_2, ETH_ALEN);
+	memcpy(frame->dst_ether_addr, mpdu->address_1, ETH_ALEN);
 
 	process_frame(frame);
 }
