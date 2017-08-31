@@ -125,7 +125,7 @@ bool cmac_aes(const void *key, size_t key_len,
 bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
 			uint8_t *out)
 {
-	uint8_t a[8], b[16];
+	uint8_t b[16];
 	uint8_t *r;
 	size_t n = (len - 8) >> 3;
 	int i, j;
@@ -136,7 +136,7 @@ bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
 		return false;
 
 	/* Set up */
-	memcpy(a, in, 8);
+	memcpy(b, in, 8);
 	memmove(out, in + 8, n * 8);
 
 	/* Unwrap */
@@ -144,11 +144,9 @@ bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
 		r = out + (n - 1) * 8;
 
 		for (i = n; i >= 1; i--) {
-			memcpy(b, a, 8);
 			memcpy(b + 8, r, 8);
 			b[7] ^= n * j + i;
 			l_cipher_decrypt(cipher, b, b, 16);
-			memcpy(a, b, 8);
 			memcpy(r, b + 8, 8);
 			r -= 8;
 		}
@@ -158,7 +156,7 @@ bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
 
 	/* Check IV */
 	for (i = 0; i < 8; i++)
-		if (a[i] != 0xA6)
+		if (b[i] != 0xA6)
 			return false;
 
 	return true;
