@@ -92,6 +92,9 @@ struct netdev {
 
 	struct watchlist event_watches;
 
+	struct l_queue *frame_watches;
+	uint32_t next_frame_watch_id;
+
 	bool connected : 1;
 	bool operational : 1;
 	bool rekey_offload_support : 1;
@@ -108,6 +111,15 @@ struct netdev_preauth_state {
 struct netdev_watch {
 	uint32_t id;
 	netdev_watch_func_t callback;
+	void *user_data;
+};
+
+struct netdev_frame_watch {
+	uint32_t id;
+	uint16_t frame_type;
+	uint8_t *prefix;
+	size_t prefix_len;
+	netdev_frame_watch_func_t handler;
 	void *user_data;
 };
 
@@ -496,6 +508,14 @@ static void netdev_connect_failed(struct l_genl_msg *msg, void *user_data)
 				connect_data);
 }
 
+static void netdev_frame_watch_free(void *data)
+{
+	struct netdev_frame_watch *fw = data;
+
+	l_free(fw->prefix);
+	l_free(fw);
+}
+
 static void netdev_free(void *data)
 {
 	struct netdev *netdev = data;
@@ -524,6 +544,8 @@ static void netdev_free(void *data)
 
 	device_remove(netdev->device);
 	watchlist_destroy(&netdev->event_watches);
+
+	l_queue_destroy(netdev->frame_watches, netdev_frame_watch_free);
 
 	l_free(netdev);
 }
@@ -2701,113 +2723,32 @@ int netdev_neighbor_report_req(struct netdev *netdev,
 	return 0;
 }
 
-static void netdev_radio_measurement_frame_event(struct netdev *netdev,
-						const uint8_t *data, size_t len)
+static void netdev_neighbor_report_frame_event(struct netdev *netdev,
+					const struct mmpdu_header *hdr,
+					const void *body, size_t body_len,
+					void *user_data)
 {
-	uint8_t action;
-
-	if (len < 2) {
-		l_debug("Radio Measurement frame too short");
+	if (body_len < 3) {
+		l_debug("Neighbor Report frame too short");
 		return;
 	}
 
-	action = data[0];
-
-	switch (action) {
-	case 5: /* Neighbor Report Response */
-		if (!netdev->neighbor_report_cb)
-			break;
-
-		/*
-		 * Don't use the dialog token, return the first Neighbor
-		 * Report Response received.
-		 */
-
-		netdev->neighbor_report_cb(netdev, 0, data + 2, len - 2,
-						netdev->user_data);
-		netdev->neighbor_report_cb = NULL;
-
-		l_timeout_remove(netdev->neighbor_report_timeout);
-
-		break;
-
-	default:
-		l_debug("Unknown radio measurement action %u received", action);
-		break;
-	}
-}
-
-static void netdev_action_frame_event(struct netdev *netdev,
-					const uint8_t *data, size_t len)
-{
-	uint8_t category;
-
-	if (len < 1) {
-		l_debug("Action frame too short");
-		return;
-	}
-
-	category = data[0];
-
-	switch (category) {
-	case 5: /* Radio Measurement */
-		netdev_radio_measurement_frame_event(netdev, data + 1, len - 1);
-		break;
-
-	default:
-		l_debug("Unknown action frame category %u received", category);
-		break;
-	}
-}
-
-static void netdev_mgmt_frame_event(struct l_genl_msg *msg,
-					struct netdev *netdev)
-{
-	struct l_genl_attr attr;
-	uint16_t type, len, body_len = 0;
-	const void *data, *body = NULL;
-	uint16_t frame_type;
-
-	if (!l_genl_attr_init(&attr, msg))
+	if (!netdev->neighbor_report_cb)
 		return;
 
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_FRAME:
-			if (body)
-				return;
+	/*
+	 * Don't use the dialog token (byte 3), return the first Neighbor
+	 * Report Response received.
+	 *
+	 * Byte 1 is 0x05 for Radio Measurement, byte 2 is 0x05 for
+	 * Neighbor Report.
+	 */
 
-			body = data;
-			body_len = len;
-			break;
-		}
-	}
+	netdev->neighbor_report_cb(netdev, 0, body + 3, body_len - 3,
+					netdev->user_data);
+	netdev->neighbor_report_cb = NULL;
 
-	if (!body || body_len < 25)
-		return;
-
-	frame_type = l_get_le16(body + 0);
-
-	if (memcmp(body + 4, netdev->addr, 6))
-		return;
-
-	/* Is this a management frame */
-	if (((frame_type >> 2) & 3) != 0) {
-		l_debug("Unknown frame of type %04x received",
-				(unsigned) frame_type);
-		return;
-	}
-
-	switch ((frame_type >> 4) & 15) {
-	case 0xd: /* Action frame */
-		netdev_action_frame_event(netdev, body + 24, body_len - 24);
-		break;
-
-	default:
-		l_debug("Unknown frame of type %04x received",
-				(unsigned) frame_type);
-		break;
-	}
+	l_timeout_remove(netdev->neighbor_report_timeout);
 }
 
 static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
@@ -2865,6 +2806,80 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 	case NL80211_CMD_SET_REKEY_OFFLOAD:
 		netdev_rekey_offload_event(msg, netdev);
 		break;
+	}
+}
+
+struct frame_prefix_info {
+	uint16_t frame_type;
+	const uint8_t *body;
+	size_t body_len;
+};
+
+static bool netdev_frame_watch_match_prefix(const void *a, const void *b)
+{
+	const struct netdev_frame_watch *fw = a;
+	const struct frame_prefix_info *info = b;
+
+	return fw->frame_type == info->frame_type &&
+		fw->prefix_len <= info->body_len &&
+		!memcmp(fw->prefix, info->body, fw->prefix_len);
+}
+
+static void netdev_mgmt_frame_event(struct l_genl_msg *msg,
+					struct netdev *netdev)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len, frame_len = 0;
+	const void *data;
+	const struct mmpdu_header *mpdu = NULL;
+	const uint8_t *body;
+	struct frame_prefix_info info;
+	const struct l_queue_entry *fw_entry;
+	static const uint8_t bcast_addr[6] = {
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+	};
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_FRAME:
+			if (mpdu)
+				return;
+
+			mpdu = data;
+			frame_len = len;
+			break;
+		}
+	}
+
+	if (!mpdu || frame_len < 24)
+		return;
+
+	body = mmpdu_body(mpdu);
+	if (body > (uint8_t *) mpdu + frame_len)
+		return;
+
+	if (memcmp(mpdu->address_1, netdev->addr, 6) &&
+			memcmp(mpdu->address_1, bcast_addr, 6))
+		return;
+
+
+	/* Only match the frame type and subtype like the kernel does */
+#define FC_FTYPE_STYPE_MASK 0x00fc
+	info.frame_type = l_get_le16(mpdu) & FC_FTYPE_STYPE_MASK;
+	info.body = (const uint8_t *) body;
+	info.body_len = (const uint8_t *) mpdu + frame_len - body;
+
+	for (fw_entry = l_queue_get_entries(netdev->frame_watches); fw_entry;
+				fw_entry = fw_entry->next) {
+		const struct netdev_frame_watch *fw = fw_entry->data;
+
+		if (!netdev_frame_watch_match_prefix(fw, &info))
+			continue;
+
+		fw->handler(netdev, mpdu, body, info.body_len, fw->user_data);
 	}
 }
 
@@ -3216,13 +3231,44 @@ check_blacklist:
 	return true;
 }
 
-static void netdev_register_frame(struct netdev *netdev, uint16_t frame_type,
-					const uint8_t *prefix,
-					size_t prefix_len)
+static bool netdev_frame_watch_match_id(const void *a, const void *b)
 {
-	struct l_genl_msg *msg;
+	const struct netdev_frame_watch *fw = a;
+	uint32_t id = L_PTR_TO_UINT(b);
 
-	msg = l_genl_msg_new_sized(NL80211_CMD_REGISTER_FRAME, 128);
+	return fw->id == id;
+}
+
+uint32_t netdev_frame_watch_add(struct netdev *netdev, uint16_t frame_type,
+				const uint8_t *prefix, size_t prefix_len,
+				netdev_frame_watch_func_t handler,
+				void *user_data)
+{
+	struct netdev_frame_watch *fw;
+	struct l_genl_msg *msg;
+	struct frame_prefix_info info = { frame_type, prefix, prefix_len };
+	bool registered;
+
+	fw = l_new(struct netdev_frame_watch, 1);
+	fw->id = netdev->next_frame_watch_id++;
+	fw->frame_type = frame_type;
+	fw->prefix = l_memdup(prefix, prefix_len);
+	fw->prefix_len = prefix_len;
+	fw->handler = handler;
+	fw->user_data = user_data;
+
+	registered = l_queue_find(netdev->frame_watches,
+					netdev_frame_watch_match_prefix,
+					&info);
+
+	if (!netdev->frame_watches)
+		netdev->frame_watches = l_queue_new();
+	l_queue_push_tail(netdev->frame_watches, fw);
+
+	if (registered)
+		return fw->id;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_REGISTER_FRAME, 32 + prefix_len);
 
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_FRAME_TYPE, 2, &frame_type);
@@ -3230,6 +3276,28 @@ static void netdev_register_frame(struct netdev *netdev, uint16_t frame_type,
 				prefix_len, prefix);
 
 	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
+
+	return fw->id;
+}
+
+bool netdev_frame_watch_remove(struct netdev *netdev, uint32_t id)
+{
+	struct netdev_frame_watch *fw;
+
+	/*
+	 * There's no way to unregister from notifications but that's not a
+	 * problem, we leave them active in the kernel but
+	 * netdev_mgmt_frame_event will ignore these events.
+	 */
+
+	fw = l_queue_remove_if(netdev->frame_watches,
+				netdev_frame_watch_match_id, L_UINT_TO_PTR(id));
+	if (!fw)
+		return false;
+
+	netdev_frame_watch_free(fw);
+
+	return true;
 }
 
 static void netdev_create_from_genl(struct l_genl_msg *msg)
@@ -3353,8 +3421,9 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	l_free(rtmmsg);
 
 	/* Subscribe to Management -> Action -> RM -> Neighbor Report frames */
-	netdev_register_frame(netdev, 0x00d0, action_neighbor_report_prefix,
-				sizeof(action_neighbor_report_prefix));
+	netdev_frame_watch_add(netdev, 0x00d0, action_neighbor_report_prefix,
+				sizeof(action_neighbor_report_prefix),
+				netdev_neighbor_report_frame_event, NULL);
 
 	/* Set RSSI threshold for CQM notifications */
 	netdev_cqm_rssi_update(netdev);
