@@ -374,6 +374,11 @@ int main(int argc, char *argv[])
 		goto done;
 	}
 
+	if (!l_cipher_is_supported(L_CIPHER_AES)) {
+		printf("AES support missing, skipping...\n");
+		goto done;
+	}
+
 	l_test_add("/Passphrase Generator/PSK Test Case 1",
 			psk_test, &psk_test_case_1);
 	l_test_add("/Passphrase Generator/PSK Test Case 2",
