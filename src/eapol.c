@@ -292,7 +292,7 @@ uint8_t *eapol_decrypt_key_data(const uint8_t *kek,
 	}
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
-		if (key_data_len < 8 || key_data_len % 8)
+		if (key_data_len < 24 || key_data_len % 8)
 			goto error;
 
 		if (!aes_unwrap(kek, key_data, key_data_len, buf))
