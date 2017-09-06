@@ -3330,7 +3330,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
 	memcpy(netdev->name, ifname, ifname_len);
 	netdev->wiphy = wiphy;
-	watchlist_init(&netdev->event_watches);
+	watchlist_init(&netdev->event_watches, NULL);
 
 	l_queue_push_tail(netdev_list, netdev);
 
