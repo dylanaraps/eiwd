@@ -93,12 +93,10 @@ struct eap_method {
 	bool exports_msk;
 	const char *name;
 
-	int (*probe)(struct eap_state *eap, const char *method_string);
-	void (*remove)(struct eap_state *eap);
-
 	bool (*load_settings)(struct eap_state *eap,
 				struct l_settings *settings,
 				const char *prefix);
+	void (*free)(struct eap_state *eap);
 
 	void (*handle_request)(struct eap_state *eap,
 				const uint8_t *pkt, size_t len);

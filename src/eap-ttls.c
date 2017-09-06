@@ -51,21 +51,7 @@ struct eap_ttls_state {
 	uint8_t negotiated_version;
 };
 
-static int eap_ttls_probe(struct eap_state *eap, const char *name)
-{
-	struct eap_ttls_state *ttls;
-
-	if (strcasecmp(name, "TTLS"))
-		return -ENOTSUP;
-
-	ttls = l_new(struct eap_ttls_state, 1);
-
-	eap_set_data(eap, ttls);
-
-	return 0;
-}
-
-static void eap_ttls_remove(struct eap_state *eap)
+static void eap_ttls_free(struct eap_state *eap)
 {
 	struct eap_ttls_state *ttls = eap_get_data(eap);
 
@@ -648,8 +634,10 @@ static bool eap_ttls_load_settings(struct eap_state *eap,
 					struct l_settings *settings,
 					const char *prefix)
 {
-	struct eap_ttls_state *ttls = eap_get_data(eap);
+	struct eap_ttls_state *ttls;
 	char setting[64];
+
+	ttls = l_new(struct eap_ttls_state, 1);
 
 	snprintf(setting, sizeof(setting), "%sTTLS-CACert", prefix);
 	ttls->ca_cert = l_strdup(l_settings_get_value(settings,
@@ -670,24 +658,40 @@ static bool eap_ttls_load_settings(struct eap_state *eap,
 
 	if (!ttls->client_cert && ttls->client_key) {
 		l_error("Client key present but no client certificate");
-		return false;
+		goto err;
 	}
 
 	if (!ttls->client_key && ttls->passphrase) {
 		l_error("Passphrase present but no client private key");
-		return false;
+		goto err;
 	}
 
 	ttls->eap = eap_new(eap_ttls_eap_tx_packet,
 				eap_ttls_eap_complete, eap);
 	if (!ttls->eap) {
 		l_error("Could not create the TTLS inner EAP instance");
-		return false;
+		goto err;
 	}
 
 	snprintf(setting, sizeof(setting), "%sTTLS-Phase2-", prefix);
 
-	return eap_load_settings(ttls->eap, settings, setting);
+	if (!eap_load_settings(ttls->eap, settings, setting)) {
+		eap_free(ttls->eap);
+		goto err;
+	}
+
+	eap_set_data(eap, ttls);
+
+	return true;
+
+err:
+	l_free(ttls->ca_cert);
+	l_free(ttls->client_cert);
+	l_free(ttls->client_key);
+	l_free(ttls->passphrase);
+	l_free(ttls);
+
+	return false;
 }
 
 static struct eap_method eap_ttls = {
@@ -695,8 +699,7 @@ static struct eap_method eap_ttls = {
 	.exports_msk = true,
 	.name = "TTLS",
 
-	.probe = eap_ttls_probe,
-	.remove = eap_ttls_remove,
+	.free = eap_ttls_free,
 	.handle_request = eap_ttls_handle_request,
 	.load_settings = eap_ttls_load_settings,
 };

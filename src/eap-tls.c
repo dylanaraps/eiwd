@@ -46,21 +46,7 @@ struct eap_tls_state {
 	bool completed;
 };
 
-static int eap_tls_probe(struct eap_state *eap, const char *name)
-{
-	struct eap_tls_state *tls;
-
-	if (strcasecmp(name, "TLS"))
-		return -ENOTSUP;
-
-	tls = l_new(struct eap_tls_state, 1);
-
-	eap_set_data(eap, tls);
-
-	return 0;
-}
-
-static void eap_tls_remove(struct eap_state *eap)
+static void eap_tls_free(struct eap_state *eap)
 {
 	struct eap_tls_state *tls = eap_get_data(eap);
 
@@ -387,8 +373,10 @@ static bool eap_tls_load_settings(struct eap_state *eap,
 					struct l_settings *settings,
 					const char *prefix)
 {
-	struct eap_tls_state *tls = eap_get_data(eap);
+	struct eap_tls_state *tls;
 	char setting[64];
+
+	tls = l_new(struct eap_tls_state, 1);
 
 	snprintf(setting, sizeof(setting), "%sTLS-CACert", prefix);
 	tls->ca_cert = l_strdup(l_settings_get_value(settings,
@@ -408,15 +396,26 @@ static bool eap_tls_load_settings(struct eap_state *eap,
 
 	if (!tls->client_cert && tls->client_key) {
 		l_error("Client key present but no client certificate");
-		return false;
+		goto err;
 	}
 
 	if (!tls->client_key && tls->passphrase) {
 		l_error("Passphrase present but no client private key");
-		return false;
+		goto err;
 	}
 
+	eap_set_data(eap, tls);
+
 	return true;
+
+err:
+	l_free(tls->ca_cert);
+	l_free(tls->client_cert);
+	l_free(tls->client_key);
+	l_free(tls->passphrase);
+	l_free(tls);
+
+	return false;
 }
 
 static struct eap_method eap_tls = {
@@ -424,8 +423,7 @@ static struct eap_method eap_tls = {
 	.exports_msk = true,
 	.name = "TLS",
 
-	.probe = eap_tls_probe,
-	.remove = eap_tls_remove,
+	.free = eap_tls_free,
 	.handle_request = eap_tls_handle_request,
 	.load_settings = eap_tls_load_settings,
 };

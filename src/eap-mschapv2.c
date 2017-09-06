@@ -404,35 +404,21 @@ bool mschapv2_generate_authenticator_response(
 	return true;
 }
 
-static int eap_mschapv2_probe(struct eap_state *eap, const char *name)
-{
-	struct eap_mschapv2_state *state;
-
-	if (strcasecmp(name, "MSCHAPV2"))
-		return -ENOTSUP;
-
-	state = l_new(struct eap_mschapv2_state, 1);
-
-	eap_set_data(eap, state);
-
-	return 0;
-}
-
-static void eap_mschapv2_free(struct eap_mschapv2_state *state)
+static void eap_mschapv2_state_free(struct eap_mschapv2_state *state)
 {
 	l_free(state->user);
 
 	l_free(state);
 }
 
-static void eap_mschapv2_remove(struct eap_state *eap)
+static void eap_mschapv2_free(struct eap_state *eap)
 {
 	struct eap_mschapv2_state *state;
 
 	state = eap_get_data(eap);
 	eap_set_data(eap, NULL);
 
-	eap_mschapv2_free(state);
+	eap_mschapv2_state_free(state);
 }
 
 static bool eap_mschapv2_send_response(struct eap_state *eap)
@@ -659,16 +645,18 @@ static bool eap_mschapv2_load_settings(struct eap_state *eap,
 					struct l_settings *settings,
 					const char *prefix)
 {
-	struct eap_mschapv2_state *state = eap_get_data(eap);
+	struct eap_mschapv2_state *state;
 	const char *password;
 	char setting[64];
+
+	state = l_new(struct eap_mschapv2_state, 1);
 
 	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
 	set_user_name(state,
 			l_settings_get_value(settings, "Security", setting));
 
 	if (!state->user)
-		return false;
+		goto err;
 
 	state->user_len = strlen(state->user);
 
@@ -683,7 +671,7 @@ static bool eap_mschapv2_load_settings(struct eap_state *eap,
 		if (len != 16) {
 			l_error("Read an impossible password hash");
 			l_free(tmp);
-			return false;
+			goto err;
 		}
 
 		memcpy(state->password_hash, tmp, 16);
@@ -693,10 +681,18 @@ static bool eap_mschapv2_load_settings(struct eap_state *eap,
 		password = l_settings_get_value(settings, "Security",
 								setting);
 		if (!password || !set_password_from_string(state, password))
-			return false;
+			goto err;
 	}
 
+	eap_set_data(eap, state);
+
 	return true;
+
+err:
+	l_free(state->user);
+	l_free(state);
+
+	return false;
 }
 
 static struct eap_method eap_mschapv2 = {
@@ -704,8 +700,7 @@ static struct eap_method eap_mschapv2 = {
 	.exports_msk = true,
 	.name = "MSCHAPV2",
 
-	.probe = eap_mschapv2_probe,
-	.remove = eap_mschapv2_remove,
+	.free = eap_mschapv2_free,
 	.handle_request = eap_mschapv2_handle_request,
 	.load_settings = eap_mschapv2_load_settings,
 };

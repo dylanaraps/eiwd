@@ -119,37 +119,7 @@ struct eap_aka_handle {
 	uint8_t k_re[EAP_AKA_K_RE_LEN];
 };
 
-static int eap_aka_probe(struct eap_state *eap, const char *name)
-{
-	struct eap_aka_handle *aka;
-
-	if (strcasecmp(name, "AKA"))
-		return -ENOTSUP;
-
-	aka = l_new(struct eap_aka_handle, 1);
-	aka->type = EAP_TYPE_AKA;
-
-	eap_set_data(eap, aka);
-
-	return 0;
-}
-
-static int eap_aka_prime_probe(struct eap_state *eap, const char *name)
-{
-	struct eap_aka_handle *aka;
-
-	if (strcasecmp(name, "AKA'"))
-		return -ENOTSUP;
-
-	aka = l_new(struct eap_aka_handle, 1);
-	aka->type = EAP_TYPE_AKA_PRIME;
-
-	eap_set_data(eap, aka);
-
-	return 0;
-}
-
-static void eap_aka_remove(struct eap_state *eap)
+static void eap_aka_free(struct eap_state *eap)
 {
 	struct eap_aka_handle *aka = eap_get_data(eap);
 
@@ -573,11 +543,10 @@ req_error:
 	eap_sim_client_error(eap, aka->type, EAP_SIM_ERROR_PROCESS);
 }
 
-static bool eap_aka_load_settings(struct eap_state *eap,
-					struct l_settings *settings,
-					const char *prefix)
+static bool eap_aka_common_load_settings(struct eap_aka_handle *aka,
+						struct l_settings *settings,
+						const char *prefix)
 {
-	struct eap_aka_handle *aka = eap_get_data(eap);
 	char setting[64];
 	const char *imsi;
 	const char *ki;
@@ -630,12 +599,35 @@ static bool eap_aka_load_settings(struct eap_state *eap,
 	return true;
 }
 
+static bool eap_aka_load_settings(struct eap_state *eap,
+					struct l_settings *settings,
+					const char *prefix)
+{
+	struct eap_aka_handle *aka = l_new(struct eap_aka_handle, 1);
+
+	aka->type = EAP_TYPE_AKA;
+	eap_set_data(eap, aka);
+
+	return eap_aka_common_load_settings(aka, settings, prefix);
+}
+
+static bool eap_aka_prime_load_settings(struct eap_state *eap,
+					struct l_settings *settings,
+					const char *prefix)
+{
+	struct eap_aka_handle *aka = l_new(struct eap_aka_handle, 1);
+
+	aka->type = EAP_TYPE_AKA_PRIME;
+	eap_set_data(eap, aka);
+
+	return eap_aka_common_load_settings(aka, settings, prefix);
+}
+
 static struct eap_method eap_aka = {
 	.request_type = EAP_TYPE_AKA,
 	.exports_msk = true,
 	.name = "AKA",
-	.probe = eap_aka_probe,
-	.remove = eap_aka_remove,
+	.free = eap_aka_free,
 	.handle_request = eap_aka_handle_request,
 	.load_settings = eap_aka_load_settings,
 };
@@ -644,10 +636,9 @@ static struct eap_method eap_aka_prime = {
 	.request_type = EAP_TYPE_AKA_PRIME,
 	.exports_msk = true,
 	.name = "AKA'",
-	.probe = eap_aka_prime_probe,
-	.remove = eap_aka_remove,
+	.free = eap_aka_free,
 	.handle_request = eap_aka_handle_request,
-	.load_settings = eap_aka_load_settings,
+	.load_settings = eap_aka_prime_load_settings,
 };
 
 static int eap_aka_init(void)

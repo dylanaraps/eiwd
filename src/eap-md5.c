@@ -34,21 +34,7 @@ struct eap_md5_state {
 	char *secret;
 };
 
-static int eap_md5_probe(struct eap_state *eap, const char *name)
-{
-	struct eap_md5_state *md5;
-
-	if (strcasecmp(name, "MD5"))
-		return -ENOTSUP;
-
-	md5 = l_new(struct eap_md5_state, 1);
-
-	eap_set_data(eap, md5);
-
-	return 0;
-}
-
-static void eap_md5_remove(struct eap_state *eap)
+static void eap_md5_free(struct eap_state *eap)
 {
 	struct eap_md5_state *md5 = eap_get_data(eap);
 
@@ -104,17 +90,21 @@ static bool eap_md5_load_settings(struct eap_state *eap,
 					struct l_settings *settings,
 					const char *prefix)
 {
-	struct eap_md5_state *md5 = eap_get_data(eap);
+	struct eap_md5_state *md5;
 	char setting[64];
+	char *secret;
 
 	snprintf(setting, sizeof(setting), "%sMD5-Secret", prefix);
-	md5->secret = l_strdup(l_settings_get_value(settings,
-						"Security", setting));
+	secret = l_strdup(l_settings_get_value(settings, "Security", setting));
 
-	if (!md5->secret) {
+	if (!secret) {
 		l_error("EAP-MD5 secret is missing");
 		return false;
 	}
+
+	md5 = l_new(struct eap_md5_state, 1);
+	md5->secret = secret;
+	eap_set_data(eap, md5);
 
 	return true;
 }
@@ -124,8 +114,7 @@ static struct eap_method eap_md5 = {
 	.exports_msk = false,
 	.name = "MD5",
 
-	.probe = eap_md5_probe,
-	.remove = eap_md5_remove,
+	.free = eap_md5_free,
 	.handle_request = eap_md5_handle_request,
 	.load_settings = eap_md5_load_settings,
 };

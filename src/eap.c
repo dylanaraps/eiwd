@@ -87,7 +87,7 @@ void eap_set_event_func(struct eap_state *eap, eap_event_func_t func)
 void eap_free(struct eap_state *eap)
 {
 	if (eap->method_state)
-		eap->method->remove(eap);
+		eap->method->free(eap);
 
 	if (eap->identity)
 		l_free(eap->identity);
@@ -319,7 +319,7 @@ void eap_rx_packet(struct eap_state *eap, const uint8_t *pkt, size_t len)
 			return;
 
 		if (eap->method_state)
-			eap->method->remove(eap);
+			eap->method->free(eap);
 
 		eap->method = NULL;
 
@@ -351,7 +351,7 @@ bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
 					entry = entry->next) {
 		method = entry->data;
 
-		if (method->probe(eap, method_name) == 0) {
+		if (!strcasecmp(method_name, method->name)) {
 			eap->method = method;
 
 			break;
@@ -387,8 +387,8 @@ bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
 	return true;
 
 err:
-	if (eap->method->remove)
-		eap->method->remove(eap);
+	if (eap->method_state)
+		eap->method->free(eap);
 
 	eap->method = NULL;
 

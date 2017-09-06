@@ -269,21 +269,7 @@ static bool encrypted_settings_encrypt(struct eap_wsc_state *wsc,
 	return true;
 }
 
-static int eap_wsc_probe(struct eap_state *eap, const char *name)
-{
-	struct eap_wsc_state *wsc;
-
-	if (strcasecmp(name, "WSC"))
-		return -ENOTSUP;
-
-	wsc = l_new(struct eap_wsc_state, 1);
-
-	eap_set_data(eap, wsc);
-
-	return 0;
-}
-
-static void eap_wsc_remove(struct eap_state *eap)
+static void eap_wsc_free(struct eap_state *eap)
 {
 	struct eap_wsc_state *wsc = eap_get_data(eap);
 
@@ -1167,25 +1153,27 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 					struct l_settings *settings,
 					const char *prefix)
 {
-	struct eap_wsc_state *wsc = eap_get_data(eap);
+	struct eap_wsc_state *wsc;
 	const char *v;
 	uint8_t private_key[192];
 	size_t len;
 	unsigned int u32;
 	const char *device_password;
 
+	wsc = l_new(struct eap_wsc_state, 1);
+
 	wsc->m1 = l_new(struct wsc_m1, 1);
 	wsc->m1->version2 = true;
 
 	v = l_settings_get_value(settings, "WSC", "EnrolleeMAC");
 	if (!v)
-		return false;
+		goto err;
 
 	if (!util_string_to_address(v, wsc->m1->addr))
-		return false;
+		goto err;
 
 	if (!wsc_uuid_from_addr(wsc->m1->addr, wsc->m1->uuid_e))
-		return false;
+		goto err;
 
 	if (!load_hexencoded(settings, "EnrolleeNonce",
 						wsc->m1->enrollee_nonce, 16))
@@ -1198,15 +1186,15 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 	memset(private_key, 0, 192);
 
 	if (!wsc->private)
-		return false;
+		goto err;
 
 	len = sizeof(wsc->m1->public_key);
 	if (!l_key_compute_dh_public(dh5_generator, wsc->private, dh5_prime,
 						wsc->m1->public_key, &len))
-		return false;
+		goto err;
 
 	if (len != sizeof(wsc->m1->public_key))
-		return false;
+		goto err;
 
 	wsc->m1->auth_type_flags = WSC_AUTHENTICATION_TYPE_WPA2_PERSONAL |
 					WSC_AUTHENTICATION_TYPE_WPA_PERSONAL |
@@ -1252,7 +1240,7 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 		strcpy(wsc->m1->device_name, " ");
 
 	if (!l_settings_get_uint(settings, "WSC", "RFBand", &u32))
-		return false;
+		goto err;
 
 	switch (u32) {
 	case WSC_RF_BAND_2_4_GHZ:
@@ -1261,7 +1249,7 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 		wsc->m1->rf_bands = u32;
 		break;
 	default:
-		return false;
+		goto err;
 	}
 
 	wsc->m1->association_state = WSC_ASSOCIATION_STATE_NOT_ASSOCIATED;
@@ -1285,11 +1273,11 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 
 		for (i = 0; device_password[i]; i++) {
 			if (!l_ascii_isxdigit(device_password[i]))
-				return false;
+				goto err;
 		}
 
 		if (i < 8)
-			return false;
+			goto err;
 
 		wsc->device_password = strdup(device_password);
 		/*
@@ -1320,7 +1308,20 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 	if (!load_hexencoded(settings, "IV2", wsc->iv2, 16))
 		l_getrandom(wsc->iv2, 16);
 
+	eap_set_data(eap, wsc);
+
 	return true;
+
+err:
+	l_free(wsc->device_password);
+
+	if (wsc->private)
+		l_key_free(wsc->private);
+
+	l_free(wsc->m1);
+	l_free(wsc);
+
+	return false;
 }
 
 static struct eap_method eap_wsc = {
@@ -1329,8 +1330,7 @@ static struct eap_method eap_wsc = {
 	.request_type = EAP_TYPE_EXPANDED,
 	.exports_msk = true,
 	.name = "WSC",
-	.probe = eap_wsc_probe,
-	.remove = eap_wsc_remove,
+	.free = eap_wsc_free,
 	.handle_request = eap_wsc_handle_request,
 	.handle_retransmit = eap_wsc_handle_retransmit,
 	.load_settings = eap_wsc_load_settings,

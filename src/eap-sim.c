@@ -125,21 +125,7 @@ struct eap_sim_handle {
 	bool protected : 1;
 };
 
-static int eap_sim_probe(struct eap_state *eap, const char *name)
-{
-	struct eap_sim_handle *sim;
-
-	if (strcasecmp(name, "SIM"))
-		return -ENOTSUP;
-
-	sim = l_new(struct eap_sim_handle, 1);
-
-	eap_set_data(eap, sim);
-
-	return 0;
-}
-
-static void eap_sim_remove(struct eap_state *eap)
+static void eap_sim_free(struct eap_state *eap)
 {
 	struct eap_sim_handle *sim = eap_get_data(eap);
 
@@ -577,12 +563,15 @@ static bool eap_sim_load_settings(struct eap_state *eap,
 					struct l_settings *settings,
 					const char *prefix)
 {
-	struct eap_sim_handle *sim = eap_get_data(eap);
+	struct eap_sim_handle *sim;
 	char setting[64];
 	const char *kcs;
 	const char *imsi;
 	const char *sres;
 	size_t len;
+
+	sim = l_new(struct eap_sim_handle, 1);
+	eap_set_data(eap, sim);
 
 	/*
 	 * TODO: These values will be loaded from a SIM card. Kc and SRES
@@ -620,8 +609,7 @@ static struct eap_method eap_sim = {
 	.request_type = EAP_TYPE_SIM,
 	.exports_msk = true,
 	.name = "SIM",
-	.probe = eap_sim_probe,
-	.remove = eap_sim_remove,
+	.free = eap_sim_free,
 	.handle_request = eap_sim_handle_request,
 	.load_settings = eap_sim_load_settings,
 };
