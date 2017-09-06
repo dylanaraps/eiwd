@@ -1310,7 +1310,7 @@ static void print_ie_ht_capabilities(unsigned int level,
 			"Minimum MPDU Start Spacing: %s",
 			ht_capabilities_min_mpdu_start_spacing[bits]);
 
-	print_ie_mcs(level + 1, "Suppored MCS", htc + 3, 16);
+	print_ie_mcs(level + 1, "Supported MCS", htc + 3, 16);
 
 	pco = util_is_bit_set(htc[18], 0);
 	print_attr(level + 1, "HT Extended Capabilities: PCO: %s",
