@@ -83,7 +83,7 @@ void __watchlist_prune_stale(struct watchlist *watchlist);
 			struct watchlist_item *item = entry->data;	\
 			type t = item->notify;				\
 									\
-			if (!match(item->notify_data, match_data))	\
+			if (!match(item, match_data))			\
 				continue;				\
 									\
 			t(args, item->notify_data);			\
