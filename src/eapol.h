@@ -197,6 +197,8 @@ uint32_t eapol_frame_watch_add(uint32_t ifindex,
 				eapol_frame_watch_func_t handler,
 				void *user_data);
 bool eapol_frame_watch_remove(uint32_t id);
+void eapol_tx_frame(uint32_t ifindex, uint16_t proto, const uint8_t *dst,
+			const struct eapol_frame *frame);
 
 struct preauth_sm *eapol_preauth_start(const uint8_t *aa,
 					const struct handshake_state *hs,

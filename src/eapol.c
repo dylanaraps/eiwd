@@ -1786,6 +1786,12 @@ bool eapol_frame_watch_remove(uint32_t id)
 	return watchlist_remove(&frame_watches, id);
 }
 
+void eapol_tx_frame(uint32_t ifindex, uint16_t proto, const uint8_t *dst,
+			const struct eapol_frame *frame)
+{
+	pae_write(ifindex, dst, NULL, proto, frame);
+}
+
 struct preauth_sm {
 	uint32_t ifindex;
 	uint8_t aa[6];
