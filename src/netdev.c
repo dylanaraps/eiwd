@@ -3239,16 +3239,16 @@ uint32_t netdev_frame_watch_add(struct netdev *netdev, uint16_t frame_type,
 	bool registered;
 	uint32_t id;
 
+	registered = l_queue_find(netdev->frame_watches.items,
+					netdev_frame_watch_match_prefix,
+					&info);
+
 	fw = l_new(struct netdev_frame_watch, 1);
 	fw->frame_type = frame_type;
 	fw->prefix = l_memdup(prefix, prefix_len);
 	fw->prefix_len = prefix_len;
 	id = watchlist_link(&netdev->frame_watches, &fw->super,
 						handler, user_data, NULL);
-
-	registered = l_queue_find(netdev->frame_watches.items,
-					netdev_frame_watch_match_prefix,
-					&info);
 
 	if (registered)
 		return id;
