@@ -113,6 +113,7 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					src/mpdu.h src/mpdu.c \
 					src/util.h src/util.c \
 					src/crypto.h src/crypto.c \
+					src/watchlist.h src/watchlist.c \
 					src/eapol.h src/eapol.c \
 					src/handshake.h src/handshake.c \
 					src/eap.h src/eap.c \
@@ -150,6 +151,7 @@ endif
 unit_test_eap_sim_SOURCES = unit/test-eap-sim.c \
 		src/crypto.h src/crypto.c src/simutil.h src/simutil.c \
 		src/ie.h src/ie.c \
+		src/watchlist.h src/watchlist.c \
 		src/eapol.h src/eapol.c \
 		src/handshake.h src/handshake.c \
 		src/eap.h src/eap.c \
@@ -205,6 +207,7 @@ unit_test_mpdu_LDADD = ell/libell-internal.la
 unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/crypto.h src/crypto.c \
 				src/ie.h src/ie.c \
+				src/watchlist.h src/watchlist.c \
 				src/eapol.h src/eapol.c \
 				src/handshake.h src/handshake.c \
 				src/eap.h src/eap.c \
@@ -223,6 +226,7 @@ unit_test_ssid_security_LDADD = ell/libell-internal.la
 unit_test_wsc_SOURCES = unit/test-wsc.c src/wscutil.h src/wscutil.c \
 				src/crypto.h src/crypto.c \
 				src/ie.h src/ie.c \
+				src/watchlist.h src/watchlist.c \
 				src/eapol.h src/eapol.c \
 				src/handshake.h src/handshake.c \
 				src/eap.h src/eap.c \

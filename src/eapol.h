@@ -124,6 +124,9 @@ typedef void (*eapol_deauthenticate_func_t)(uint32_t ifindex, const uint8_t *aa,
 						void *user_data);
 typedef void (*eapol_preauth_cb_t)(const uint8_t *pmk, void *user_data);
 typedef void (*eapol_preauth_destroy_func_t)(void *user_data);
+typedef void (*eapol_frame_watch_func_t)(uint16_t proto, const uint8_t *from,
+						const struct eapol_frame *frame,
+						void *user_data);
 
 bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 				uint8_t *mic);
@@ -189,6 +192,11 @@ void eapol_sm_set_event_func(struct eapol_sm *sm, eapol_sm_event_func_t func);
 
 void eapol_register(struct eapol_sm *sm);
 void eapol_start(struct eapol_sm *sm);
+
+uint32_t eapol_frame_watch_add(uint32_t ifindex,
+				eapol_frame_watch_func_t handler,
+				void *user_data);
+bool eapol_frame_watch_remove(uint32_t id);
 
 struct preauth_sm *eapol_preauth_start(const uint8_t *aa,
 					const struct handshake_state *hs,

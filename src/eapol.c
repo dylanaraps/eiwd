@@ -42,9 +42,11 @@
 #include "mpdu.h"
 #include "eap.h"
 #include "handshake.h"
+#include "watchlist.h"
 
 struct l_queue *state_machines;
 struct l_queue *preauths;
+struct watchlist frame_watches;
 
 eapol_deauthenticate_func_t deauthenticate = NULL;
 eapol_rekey_offload_func_t rekey_offload = NULL;
@@ -52,6 +54,8 @@ eapol_rekey_offload_func_t rekey_offload = NULL;
 static struct l_io *pae_io;
 eapol_tx_packet_func_t tx_packet = NULL;
 void *tx_user_data;
+
+uint32_t next_frame_watch_id;
 
 /*
  * BPF filter to match skb->dev->type == 1 (ARPHRD_ETHER) and
@@ -1747,6 +1751,41 @@ eap_error:
 			(int) sm->handshake->ifindex);
 }
 
+struct eapol_frame_watch {
+	uint32_t ifindex;
+	struct watchlist_item super;
+};
+
+static void eapol_frame_watch_free(struct watchlist_item *item)
+{
+	struct eapol_frame_watch *efw =
+		container_of(item, struct eapol_frame_watch, super);
+
+	l_free(efw);
+}
+
+static const struct watchlist_ops eapol_frame_watch_ops = {
+	.item_free = eapol_frame_watch_free,
+};
+
+uint32_t eapol_frame_watch_add(uint32_t ifindex,
+				eapol_frame_watch_func_t handler,
+				void *user_data)
+{
+	struct eapol_frame_watch *efw;
+
+	efw = l_new(struct eapol_frame_watch, 1);
+	efw->ifindex = ifindex;
+
+	return watchlist_link(&frame_watches, &efw->super,
+				handler, user_data, NULL);
+}
+
+bool eapol_frame_watch_remove(uint32_t id)
+{
+	return watchlist_remove(&frame_watches, id);
+}
+
 struct preauth_sm {
 	uint32_t ifindex;
 	uint8_t aa[6];
@@ -1962,7 +2001,15 @@ void eapol_preauth_cancel(uint32_t ifindex)
 				L_UINT_TO_PTR(ifindex));
 }
 
-void __eapol_rx_packet(uint32_t ifindex, const uint8_t *aa, uint16_t proto,
+static bool eapol_frame_watch_match_ifindex(const void *a, const void *b)
+{
+	struct eapol_frame_watch *efw =
+		container_of(a, struct eapol_frame_watch, super);
+
+	return efw->ifindex == L_PTR_TO_UINT(b);
+}
+
+void __eapol_rx_packet(uint32_t ifindex, const uint8_t *src, uint16_t proto,
 					const uint8_t *frame, size_t len)
 {
 	const struct eapol_header *eh;
@@ -1984,15 +2031,21 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *aa, uint16_t proto,
 	if (len < (size_t) 4 + L_BE16_TO_CPU(eh->packet_len))
 		return;
 
+	WATCHLIST_NOTIFY_MATCHES(&frame_watches,
+					eapol_frame_watch_match_ifindex,
+					L_UINT_TO_PTR(ifindex),
+					eapol_frame_watch_func_t, proto, src,
+					(const struct eapol_frame *) eh);
+
 	if (proto == ETH_P_PAE) {
-		struct eapol_sm *sm = eapol_find_sm(ifindex, aa);
+		struct eapol_sm *sm = eapol_find_sm(ifindex, src);
 
 		if (!sm)
 			return;
 
 		eapol_rx_packet(sm, frame, len);
 	} else if (proto == 0x88c7) {
-		struct preauth_sm *sm = preauth_find_sm(ifindex, aa);
+		struct preauth_sm *sm = preauth_find_sm(ifindex, src);
 
 		if (!sm)
 			return;
@@ -2005,6 +2058,7 @@ bool eapol_init()
 {
 	state_machines = l_queue_new();
 	preauths = l_queue_new();
+	watchlist_init(&frame_watches, &eapol_frame_watch_ops);
 
 	return true;
 }
@@ -2020,6 +2074,8 @@ bool eapol_exit()
 		l_warn("stale preauth state machines found");
 
 	l_queue_destroy(preauths, preauth_sm_destroy);
+
+	watchlist_destroy(&frame_watches);
 
 	return true;
 }
