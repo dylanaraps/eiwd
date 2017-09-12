@@ -169,6 +169,9 @@ struct eapol_key *eapol_create_gtk_2_of_2(
 				uint64_t key_replay_counter,
 				bool is_wpa, uint8_t wpa_key_id);
 
+const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len,
+				const uint8_t **optional);
+
 void __eapol_rx_packet(uint32_t ifindex, const uint8_t *aa, uint16_t proto,
 			const uint8_t *frame, size_t len);
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func);

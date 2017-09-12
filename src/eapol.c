@@ -1005,8 +1005,8 @@ error_unspecified:
 	handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
-static const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len,
-					const uint8_t **optional)
+const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len,
+				const uint8_t **optional)
 {
 	struct ie_tlv_iter iter;
 	const uint8_t *first = NULL;
