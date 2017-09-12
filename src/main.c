@@ -43,6 +43,7 @@
 #include "src/wsc.h"
 #include "src/knownnetworks.h"
 #include "src/rfkill.h"
+#include "src/ap.h"
 
 #include "src/backtrace.h"
 
@@ -144,12 +145,15 @@ static void nl80211_appeared(void *user_data)
 
 	if (!wsc_init(nl80211))
 		l_error("Unable to init WSC functionality");
+
+	ap_init(nl80211);
 }
 
 static void nl80211_vanished(void *user_data)
 {
 	l_debug("Lost nl80211 interface");
 
+	ap_exit();
 	wsc_exit();
 	scan_exit();
 	netdev_exit();
