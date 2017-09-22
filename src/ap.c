@@ -65,6 +65,7 @@ struct ap_state {
 struct sta_state {
 	uint8_t addr[6];
 	bool associated;
+	bool rsna;
 	uint16_t aid;
 	struct mmpdu_field_capability capability;
 	uint16_t listen_interval;
@@ -138,16 +139,141 @@ static bool ap_sta_match_addr(const void *a, const void *b)
 	return !memcmp(sta->addr, b, 6);
 }
 
+static void ap_set_sta_cb(struct l_genl_msg *msg, void *user_data)
+{
+	if (l_genl_msg_get_error(msg) < 0)
+		l_error("SET_STATION failed: %i", l_genl_msg_get_error(msg));
+}
+
 static void ap_del_sta_cb(struct l_genl_msg *msg, void *user_data)
 {
 	if (l_genl_msg_get_error(msg) < 0)
 		l_error("DEL_STATION failed: %i", l_genl_msg_get_error(msg));
 }
 
+static void ap_new_key_cb(struct l_genl_msg *msg, void *user_data)
+{
+	if (l_genl_msg_get_error(msg) < 0)
+		l_error("NEW_KEY failed: %i", l_genl_msg_get_error(msg));
+}
+
 static void ap_del_key_cb(struct l_genl_msg *msg, void *user_data)
 {
 	if (l_genl_msg_get_error(msg) < 0)
 		l_debug("DEL_KEY failed: %i", l_genl_msg_get_error(msg));
+}
+
+static void ap_new_rsna(struct ap_state *ap, struct sta_state *sta)
+{
+	struct l_genl_msg *msg;
+	uint32_t ifindex = device_get_ifindex(ap->device);
+	struct nl80211_sta_flag_update flags = {
+		.mask = (1 << NL80211_STA_FLAG_AUTHORIZED) |
+			(1 << NL80211_STA_FLAG_MFP),
+		.set = (1 << NL80211_STA_FLAG_AUTHORIZED),
+	};
+	uint8_t key_id = 0;
+	const struct crypto_ptk *ptk = (struct crypto_ptk *) sta->ptk;
+	uint32_t cipher = ie_rsn_cipher_suite_to_cipher(ap->ciphers);
+	uint32_t key_type = NL80211_KEYTYPE_PAIRWISE;
+	uint8_t tk_buf[32];
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_SET_STATION, 128);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_FLAGS2, 8, &flags);
+
+	if (!l_genl_family_send(nl80211, msg, ap_set_sta_cb, NULL, NULL)) {
+		l_genl_msg_unref(msg);
+		l_error("Issuing SET_STATION failed");
+		return;
+	}
+
+	sta->rsna = true;
+
+	switch (cipher) {
+	case CRYPTO_CIPHER_CCMP:
+		/*
+		 * 802.11-2016 12.8.3 Mapping PTK to CCMP keys:
+		 * "A STA shall use the temporal key as the CCMP key
+		 * for MPDUs between the two communicating STAs."
+		 */
+		memcpy(tk_buf, ptk->tk, 16);
+		break;
+	case CRYPTO_CIPHER_TKIP:
+		/*
+		 * 802.11-2016 12.8.1 Mapping PTK to TKIP keys:
+		 * "A STA shall use bits 0-127 of the temporal key as its
+		 * input to the TKIP Phase 1 and Phase 2 mixing functions.
+		 *
+		 * A STA shall use bits 128-191 of the temporal key as
+		 * the michael key for MSDUs from the Authenticator's STA
+		 * to the Supplicant's STA.
+		 *
+		 * A STA shall use bits 192-255 of the temporal key as
+		 * the michael key for MSDUs from the Supplicant's STA
+		 * to the Authenticator's STA."
+		 */
+		memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_ENCR_KEY, ptk->tk, 16);
+		memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_TX_MIC_KEY,
+			ptk->tk + 16, 8);
+		memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_RX_MIC_KEY,
+			ptk->tk + 24, 8);
+		break;
+	default:
+		l_error("Unexpected cipher: %x", cipher);
+		return;
+	}
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_NEW_KEY, 128);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_DATA,
+				crypto_cipher_key_len(cipher), tk_buf);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_TYPE, 4, &key_type);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_CIPHER, 4, &cipher);
+
+	if (!l_genl_family_send(nl80211, msg, ap_new_key_cb, NULL, NULL)) {
+		l_genl_msg_unref(msg);
+		l_error("Issuing NEW_KEY failed");
+		return;
+	}
+}
+
+static void ap_drop_rsna(struct ap_state *ap, struct sta_state *sta)
+{
+	struct l_genl_msg *msg;
+	uint32_t ifindex = device_get_ifindex(ap->device);
+	struct nl80211_sta_flag_update flags = {
+		.mask = (1 << NL80211_STA_FLAG_AUTHORIZED) |
+			(1 << NL80211_STA_FLAG_MFP),
+		.set = 0,
+	};
+	uint8_t key_id = 0;
+
+	sta->rsna = false;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_SET_STATION, 128);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_AID, 2, &sta->aid);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_FLAGS2, 8, &flags);
+
+	if (!l_genl_family_send(nl80211, msg, ap_set_sta_cb, NULL, NULL)) {
+		l_genl_msg_unref(msg);
+		l_error("Issuing SET_STATION failed");
+	}
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_DEL_KEY, 64);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
+
+	if (!l_genl_family_send(nl80211, msg, ap_del_key_cb, NULL, NULL)) {
+		l_genl_msg_unref(msg);
+		l_error("Issuing DEL_KEY failed");
+	}
 }
 
 #define CIPHER_SUITE_GROUP_NOT_ALLOWED 0x000fac07
@@ -308,6 +434,26 @@ static void ap_handle_ptk_2_of_4(struct sta_state *sta,
 	ap_send_ptk_3_of_4(sta->ap, sta);
 }
 
+/* 802.11-2016 Section 12.7.6.5 */
+static void ap_handle_ptk_4_of_4(struct sta_state *sta,
+					const struct eapol_key *ek)
+{
+	const struct crypto_ptk *ptk = (struct crypto_ptk *) sta->ptk;
+
+	l_debug("");
+
+	if (!eapol_verify_ptk_4_of_4(ek, false))
+		return;
+
+	if (L_BE64_TO_CPU(ek->key_replay_counter) != sta->key_replay_counter)
+		return;
+
+	if (!eapol_verify_mic(ptk->kck, ek))
+		return;
+
+	ap_new_rsna(sta->ap, sta);
+}
+
 static void ap_eapol_key_handle(struct sta_state *sta,
 				const struct eapol_frame *frame)
 {
@@ -326,6 +472,8 @@ static void ap_eapol_key_handle(struct sta_state *sta,
 
 	if (!sta->ptk_complete)
 		ap_handle_ptk_2_of_4(sta, ek);
+	else if (!sta->rsna)
+		ap_handle_ptk_4_of_4(sta, ek);
 }
 
 static void ap_eapol_rx(uint16_t proto, const uint8_t *from,
@@ -506,6 +654,7 @@ static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
 	uint16_t capability = l_get_le16(&sta->capability);
 
 	sta->associated = true;
+	sta->rsna = false;
 	sta->key_replay_counter = 0;
 
 	minr = l_uintset_find_min(sta->rates);
@@ -550,6 +699,7 @@ static void ap_disassociate_sta(struct ap_state *ap, struct sta_state *sta)
 	uint8_t key_id = 0;
 
 	sta->associated = false;
+	sta->rsna = false;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_DEL_STATION, 64);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
@@ -609,6 +759,10 @@ static void ap_success_assoc_resp_cb(struct l_genl_msg *msg, void *user_data)
 
 		return;
 	}
+
+	/* If we were in State 4, go to back to State 3 */
+	if (sta->rsna)
+		ap_drop_rsna(ap, sta);
 
 	/* If we were in State 2 also go to State 3 */
 	if (!sta->associated)
@@ -801,6 +955,19 @@ static void ap_assoc_req_cb(struct netdev *netdev,
 
 unsupported:
 bad_frame:
+	/*
+	 * TODO: MFP
+	 *
+	 * 802.11-2016 11.3.5.3 j)
+	 * "if management frame protection is in use the state for the STA
+	 * shall be left unchanged. and if management frame protection is
+	 * not in use set to State 3 if it was in State 4."
+	 *
+	 * For now, we need to drop the RSNA.
+	 */
+	if (sta && sta->associated && sta->rsna)
+		ap_drop_rsna(ap, sta);
+
 	if (rates)
 		l_uintset_free(rates);
 
