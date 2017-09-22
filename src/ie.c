@@ -330,11 +330,14 @@ bool ie_tlv_builder_recurse(struct ie_tlv_builder *builder,
 void ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
 			unsigned int *out_len)
 {
-	unsigned int len;
+	unsigned int len = 0;
 
-	ie_tlv_builder_write_header(builder);
+	if (builder->tag != 0xffff) {
+		ie_tlv_builder_write_header(builder);
 
-	len = builder->pos + TLV_HEADER_LEN + builder->tlv[builder->pos + 1];
+		len = builder->pos + TLV_HEADER_LEN +
+			builder->tlv[builder->pos + 1];
+	}
 
 	if (out_len)
 		*out_len = len;
