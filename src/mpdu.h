@@ -284,15 +284,7 @@ struct mmpdu_authentication {
 	__le16 algorithm;
 	__le16 transaction_sequence;
 	__le16 status;
-
-	union {
-		struct {
-			uint8_t element_id;
-			uint8_t challenge_text_len;
-			unsigned char challenge_text[253];
-		} __attribute__ ((packed)) shared_key_23;
-	};
-	/* ToDo: FT and SAE parts? */
+	uint8_t ies[];
 } __attribute__ ((packed));
 
 /* 802.11, Section 8.3.3.12 */

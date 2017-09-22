@@ -578,11 +578,36 @@ static bool validate_authentication_mmpdu(const struct mmpdu_header *mpdu,
 {
 	uint16_t transaction_sequence;
 	const struct mmpdu_authentication *body = (const void *) mpdu + *offset;
+	static const enum ie_type ie_order_shared_key[] = {
+		IE_TYPE_CHALLENGE_TEXT,
+		IE_TYPE_MULTIBAND,
+		IE_TYPE_VENDOR_SPECIFIC,
+	};
+	static const enum ie_type ie_order_ft[] = {
+		IE_TYPE_RSN,
+		IE_TYPE_MOBILITY_DOMAIN,
+		IE_TYPE_FAST_BSS_TRANSITION,
+		IE_TYPE_TIMEOUT_INTERVAL,
+		IE_TYPE_RIC_DATA,
+		IE_TYPE_FAST_BSS_TRANSITION,
+		IE_TYPE_MULTIBAND,
+		IE_TYPE_VENDOR_SPECIFIC,
+	};
+	static const enum ie_type ie_order_error[] = {
+		IE_TYPE_NEIGHBOR_REPORT,
+		IE_TYPE_VENDOR_SPECIFIC,
+	};
 
 	if (len < *offset + 6)
 		return false;
 
 	*offset += 6;
+
+	if (L_LE16_TO_CPU(L_LE16_TO_CPU(body->status)) != 0)
+		return validate_mgmt_ies(body->ies, len - *offset,
+						ie_order_error,
+						L_ARRAY_SIZE(ie_order_error),
+						false);
 
 	switch (L_LE16_TO_CPU(body->algorithm)) {
 	case MMPDU_AUTH_ALGO_OPEN_SYSTEM:
@@ -592,17 +617,17 @@ static bool validate_authentication_mmpdu(const struct mmpdu_header *mpdu,
 			L_LE16_TO_CPU(body->transaction_sequence);
 
 		if (transaction_sequence < 2 || transaction_sequence > 3)
-			return *offset == len;
+			return *offset <= len;
 
-		if (len < *offset + 2)
-			return false;
-
-		*offset += 2;
-
-		if (body->shared_key_23.element_id != IE_TYPE_CHALLENGE_TEXT)
-			return false;
-
-		*offset += body->shared_key_23.challenge_text_len;
+		return validate_mgmt_ies(body->ies, len - *offset,
+					ie_order_shared_key,
+					L_ARRAY_SIZE(ie_order_shared_key),
+					false);
+	case MMPDU_AUTH_ALGO_FT:
+		return validate_mgmt_ies(body->ies, len - *offset, ie_order_ft,
+						L_ARRAY_SIZE(ie_order_ft),
+						false);
+	case MMPDU_AUTH_ALGO_SAE:
 		return *offset <= len;
 	default:
 		return false;
