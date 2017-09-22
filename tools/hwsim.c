@@ -1003,11 +1003,6 @@ static void rtnl_link_notify(uint16_t type, const void *data, uint32_t len,
 	}
 }
 
-static bool is_multicast_addr(const uint8_t *addr)
-{
-	return util_is_bit_set(addr[0], 7);
-}
-
 struct hwsim_tx_info {
 	int8_t idx;
 	uint8_t count;
@@ -1035,8 +1030,8 @@ struct hwsim_frame {
 static bool radio_match_addr(const struct radio_info_rec *radio,
 				const uint8_t *addr)
 {
-	if (!radio || is_multicast_addr(addr))
-		return !radio && is_multicast_addr(addr);
+	if (!radio || util_is_broadcast_address(addr))
+		return !radio && util_is_broadcast_address(addr);
 
 	return !memcmp(addr, radio->addrs[0], ETH_ALEN) ||
 		!memcmp(addr, radio->addrs[1], ETH_ALEN);
@@ -1230,7 +1225,7 @@ static void process_frame(struct hwsim_frame *frame)
 	const struct l_queue_entry *entry;
 	bool drop_mcast = false;
 
-	if (is_multicast_addr(frame->dst_ether_addr))
+	if (util_is_broadcast_address(frame->dst_ether_addr))
 		process_rules(frame->src_radio, NULL, frame, &drop_mcast);
 
 	for (entry = l_queue_get_entries(radio_info); entry;
@@ -1256,7 +1251,7 @@ static void process_frame(struct hwsim_frame *frame)
 		 * by only forwarding the frame to the radios that have
 		 * at least one interface with this specific address.
 		 */
-		if (!is_multicast_addr(frame->dst_ether_addr)) {
+		if (!util_is_broadcast_address(frame->dst_ether_addr)) {
 			struct interface_match_data match_data = {
 				radio,
 				frame->dst_ether_addr,
@@ -1785,7 +1780,7 @@ static bool rule_property_get_destination(struct l_dbus *dbus,
 
 	if (rule->destination_any)
 		str = "any";
-	else if (is_multicast_addr(rule->destination))
+	else if (util_is_broadcast_address(rule->destination))
 		str = "multicast";
 	else
 		str = util_address_to_string(rule->destination);
