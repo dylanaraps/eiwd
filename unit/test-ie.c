@@ -258,7 +258,7 @@ static void ie_test_writer_invalid_tag(const void *data)
 	struct ie_tlv_builder builder;
 
 	assert(ie_tlv_builder_init(&builder));
-	assert(!ie_tlv_builder_next(&builder, 256));
+	assert(!ie_tlv_builder_next(&builder, 512));
 }
 
 static void ie_test_writer_invalid_len(const void *data)
@@ -268,6 +268,45 @@ static void ie_test_writer_invalid_len(const void *data)
 	assert(ie_tlv_builder_init(&builder));
 	assert(ie_tlv_builder_next(&builder, 255));
 	assert(!ie_tlv_builder_set_length(&builder, MAX_BUILDER_SIZE));
+}
+
+static void ie_test_reader_extended(const void *data)
+{
+	struct ie_tlv_iter iter;
+	static const uint8_t test_buf[] = {
+		0xff, 0x05, 0x0a, 0xff, 0x01, 0x02, 0x03,
+	};
+
+	ie_tlv_iter_init(&iter, test_buf, L_ARRAY_SIZE(test_buf));
+
+	assert(ie_tlv_iter_next(&iter));
+
+	assert(ie_tlv_iter_get_tag(&iter) == IE_TYPE_EXTENDED_REQUEST);
+	assert(ie_tlv_iter_get_length(&iter) == 4);
+	assert(ie_tlv_iter_get_data(&iter) == test_buf + 3);
+
+	assert(!ie_tlv_iter_next(&iter));
+}
+
+static void ie_test_writer_extended(const void *data)
+{
+	struct ie_tlv_builder builder;
+	unsigned int builder_len;
+	static const uint8_t expected[] = {
+		0xff, 0x05, 0x0a, 0xff, 0x01, 0x02, 0x03,
+	};
+
+	assert(ie_tlv_builder_init(&builder));
+
+	assert(ie_tlv_builder_next(&builder, IE_TYPE_EXTENDED_REQUEST));
+	assert(ie_tlv_builder_set_length(&builder, 4));
+
+	memcpy(ie_tlv_builder_get_data(&builder), expected + 3, 4);
+
+	ie_tlv_builder_finalize(&builder, &builder_len);
+
+	assert(builder_len == L_ARRAY_SIZE(expected));
+	assert(!memcmp(builder.buf, expected, builder_len));
 }
 
 struct ie_rsne_info_test {
@@ -663,6 +702,9 @@ int main(int argc, char *argv[])
 	l_test_add("/ie/writer/invalid-len", ie_test_writer_invalid_len, NULL);
 
 	l_test_add("/ie/writer/create", ie_test_writer, &beacon_frame_data);
+
+	l_test_add("/ie/reader/extended", ie_test_reader_extended, NULL);
+	l_test_add("/ie/writer/extended", ie_test_writer_extended, NULL);
 
 	l_test_add("/ie/RSN Info Parser/Test Case 1",
 				ie_test_rsne_info, &ie_rsne_info_test_1);
