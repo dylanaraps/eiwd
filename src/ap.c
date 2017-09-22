@@ -51,14 +51,25 @@ struct ap_state {
 	unsigned int ciphers;
 	uint32_t beacon_interval;
 	struct l_uintset *rates;
+	uint8_t pmk[32];
 	struct l_queue *frame_watch_ids;
 	uint32_t start_stop_cmd_id;
 
+	uint16_t last_aid;
 	struct l_queue *sta_states;
 };
 
 struct sta_state {
 	uint8_t addr[6];
+	bool associated;
+	uint16_t aid;
+	struct mmpdu_field_capability capability;
+	uint16_t listen_interval;
+	struct l_uintset *rates;
+	uint32_t assoc_resp_cmd_id;
+	struct ap_state *ap;
+	uint8_t *assoc_rsne;
+	size_t assoc_rsne_len;
 };
 
 static struct l_genl_family *nl80211 = NULL;
@@ -68,6 +79,12 @@ static struct l_queue *ap_list = NULL;
 static void ap_sta_free(void *data)
 {
 	struct sta_state *sta = data;
+
+	l_uintset_free(sta->rates);
+	l_free(sta->assoc_rsne);
+
+	if (sta->assoc_resp_cmd_id)
+		l_genl_family_cancel(nl80211, sta->assoc_resp_cmd_id);
 
 	l_free(sta);
 }
@@ -108,6 +125,18 @@ static bool ap_sta_match_addr(const void *a, const void *b)
 	const struct sta_state *sta = a;
 
 	return !memcmp(sta->addr, b, 6);
+}
+
+static void ap_del_sta_cb(struct l_genl_msg *msg, void *user_data)
+{
+	if (l_genl_msg_get_error(msg) < 0)
+		l_error("DEL_STATION failed: %i", l_genl_msg_get_error(msg));
+}
+
+static void ap_del_key_cb(struct l_genl_msg *msg, void *user_data)
+{
+	if (l_genl_msg_get_error(msg) < 0)
+		l_debug("DEL_KEY failed: %i", l_genl_msg_get_error(msg));
 }
 
 #define CIPHER_SUITE_GROUP_NOT_ALLOWED 0x000fac07
@@ -230,6 +259,340 @@ static uint32_t ap_send_mgmt_frame(struct ap_state *ap,
 	return id;
 }
 
+static void ap_new_sta_cb(struct l_genl_msg *msg, void *user_data)
+{
+	if (l_genl_msg_get_error(msg) < 0) {
+		l_error("NEW_STATION failed: %i", l_genl_msg_get_error(msg));
+		return;
+	}
+
+	/* TODO: retry counters and timers */
+	/* TODO: send 4-Way Handshake frame 1/4 */
+}
+
+static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
+{
+	struct l_genl_msg *msg;
+	uint32_t ifindex = device_get_ifindex(ap->device);
+	/*
+	 * This should hopefully work both with and without
+	 * NL80211_FEATURE_FULL_AP_CLIENT_STATE.
+	 */
+	struct nl80211_sta_flag_update flags = {
+		.mask = (1 << NL80211_STA_FLAG_AUTHENTICATED) |
+			(1 << NL80211_STA_FLAG_ASSOCIATED) |
+			(1 << NL80211_STA_FLAG_AUTHORIZED) |
+			(1 << NL80211_STA_FLAG_MFP),
+		.set = (1 << NL80211_STA_FLAG_AUTHENTICATED) |
+			(1 << NL80211_STA_FLAG_ASSOCIATED),
+	};
+	uint8_t key_id = 0;
+	uint8_t rates[256];
+	uint32_t r, minr, maxr, count = 0;
+	uint16_t capability = l_get_le16(&sta->capability);
+
+	sta->associated = true;
+
+	minr = l_uintset_find_min(sta->rates);
+	maxr = l_uintset_find_max(sta->rates);
+
+	for (r = minr; r <= maxr; r++)
+		if (l_uintset_contains(sta->rates, r))
+			rates[count++] = r;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_NEW_STATION, 300);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_AID, 2, &sta->aid);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_FLAGS2, 8, &flags);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_SUPPORTED_RATES,
+				count, &rates);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_LISTEN_INTERVAL, 2,
+				&sta->listen_interval);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_CAPABILITY, 2,
+				&capability);
+
+	if (!l_genl_family_send(nl80211, msg, ap_new_sta_cb, sta, NULL)) {
+		l_genl_msg_unref(msg);
+		l_error("Issuing NEW_STATION failed");
+	}
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_DEL_KEY, 64);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
+
+	if (!l_genl_family_send(nl80211, msg, ap_del_key_cb, NULL, NULL)) {
+		l_genl_msg_unref(msg);
+		l_error("Issuing DEL_KEY failed");
+	}
+}
+
+static void ap_disassociate_sta(struct ap_state *ap, struct sta_state *sta)
+{
+	struct l_genl_msg *msg;
+	uint32_t ifindex = device_get_ifindex(ap->device);
+	uint8_t key_id = 0;
+
+	sta->associated = false;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_DEL_STATION, 64);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_AID, 2, &sta->aid);
+
+	if (!l_genl_family_send(nl80211, msg, ap_del_sta_cb, NULL, NULL)) {
+		l_genl_msg_unref(msg);
+		l_error("Issuing DEL_STATION failed");
+	}
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_DEL_KEY, 64);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
+
+	if (!l_genl_family_send(nl80211, msg, ap_del_key_cb, NULL, NULL)) {
+		l_genl_msg_unref(msg);
+		l_error("Issuing DEL_KEY failed");
+	}
+}
+
+static bool ap_common_rates(struct l_uintset *ap_rates,
+				struct l_uintset *sta_rates)
+{
+	uint32_t r, minr, maxr;
+
+	minr = l_uintset_find_min(ap_rates);
+	maxr = l_uintset_find_max(ap_rates);
+
+	/* Our lowest rate is a Basic Rate so must be supported */
+	if (!l_uintset_contains(sta_rates, minr))
+		return false;
+
+	for (r = minr + 1; r <= maxr; r++)
+		if (l_uintset_contains(ap_rates, r) &&
+				l_uintset_contains(sta_rates, r))
+			return true;
+
+	return false;
+}
+
+static void ap_success_assoc_resp_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct sta_state *sta = user_data;
+	struct ap_state *ap = sta->ap;
+
+	sta->assoc_resp_cmd_id = 0;
+
+	if (l_genl_msg_get_error(msg) < 0) {
+		l_error("AP Association Response not sent or not ACKed: %i",
+			l_genl_msg_get_error(msg));
+
+		/* If we were in State 3 or 4 go to back to State 2 */
+		if (sta->associated)
+			ap_disassociate_sta(ap, sta);
+
+		return;
+	}
+
+	/* If we were in State 2 also go to State 3 */
+	if (!sta->associated)
+		ap_associate_sta(ap, sta);
+
+	l_info("AP Association Response ACK received");
+}
+
+static void ap_fail_assoc_resp_cb(struct l_genl_msg *msg, void *user_data)
+{
+	if (l_genl_msg_get_error(msg) < 0)
+		l_error("AP Association Response with an error status not "
+			"sent or not ACKed: %i", l_genl_msg_get_error(msg));
+	else
+		l_info("AP Association Response with an errror status "
+			"delivered OK");
+}
+
+static uint32_t ap_assoc_resp(struct ap_state *ap, struct sta_state *sta,
+				const uint8_t *dest, uint16_t aid,
+				enum mmpdu_reason_code status_code,
+				l_genl_msg_func_t callback)
+{
+	const uint8_t *addr = device_get_address(ap->device);
+	uint8_t mpdu_buf[128];
+	struct mmpdu_header *mpdu = (void *) mpdu_buf;
+	struct mmpdu_association_response *resp;
+	size_t ies_len = 0;
+	uint16_t capability = IE_BSS_CAP_ESS | IE_BSS_CAP_PRIVACY;
+	uint32_t r, minr, maxr, count;
+
+	memset(mpdu, 0, sizeof(*mpdu));
+
+	/* Header */
+	mpdu->fc.protocol_version = 0;
+	mpdu->fc.type = MPDU_TYPE_MANAGEMENT;
+	mpdu->fc.subtype = MPDU_MANAGEMENT_SUBTYPE_ASSOCIATION_RESPONSE;
+	memcpy(mpdu->address_1, dest, 6);	/* DA */
+	memcpy(mpdu->address_2, addr, 6);	/* SA */
+	memcpy(mpdu->address_3, addr, 6);	/* BSSID */
+
+	/* Association Response body */
+	resp = (void *) mmpdu_body(mpdu);
+	l_put_le16(capability, &resp->capability);
+	resp->status_code = L_CPU_TO_LE16(status_code);
+	resp->aid = L_CPU_TO_LE16(aid | 0xc000);
+
+	/* Supported Rates IE */
+	resp->ies[ies_len++] = IE_TYPE_SUPPORTED_RATES;
+
+	minr = l_uintset_find_min(ap->rates);
+	maxr = l_uintset_find_max(ap->rates);
+	count = 0;
+	for (r = minr; r <= maxr && count < 8; r++)
+		if (l_uintset_contains(ap->rates, r)) {
+			uint8_t flag = 0;
+
+			/* Mark only the lowest rate as Basic Rate */
+			if (count == 0)
+				flag = 0x80;
+
+			resp->ies[ies_len + 1 + count++] = r | flag;
+		}
+
+	resp->ies[ies_len++] = count;
+	ies_len += count;
+
+	return ap_send_mgmt_frame(ap, mpdu, resp->ies + ies_len - mpdu_buf,
+					true, callback, sta);
+}
+
+
+/* 802.11-2016 9.3.3.6 (frame format), 802.11-2016 11.3.5.3 (MLME/SME) */
+static void ap_assoc_req_cb(struct netdev *netdev,
+				const struct mmpdu_header *hdr,
+				const void *body, size_t body_len,
+				void *user_data)
+{
+	struct ap_state *ap = user_data;
+	struct sta_state *sta;
+	const uint8_t *from = hdr->address_2;
+	const struct mmpdu_association_request *req = body;
+	struct ie_tlv_iter iter;
+	const char *ssid = NULL;
+	const uint8_t *rsn = NULL;
+	size_t ssid_len = 0, rsn_len = 0;
+	struct l_uintset *rates = NULL;
+	struct ie_rsn_info rsn_info;
+	const uint8_t *bssid = device_get_address(ap->device);
+	int err;
+
+	l_info("AP Association Request from %s", util_address_to_string(from));
+
+	if (memcmp(hdr->address_1, bssid, 6) ||
+			memcmp(hdr->address_3, bssid, 6))
+		return;
+
+	sta = l_queue_find(ap->sta_states, ap_sta_match_addr, from);
+	if (!sta) {
+		err = MMPDU_REASON_CODE_STA_REQ_ASSOC_WITHOUT_AUTH;
+		goto bad_frame;
+	}
+
+	if (sta->assoc_resp_cmd_id)
+		return;
+
+	sta->capability = req->capability;
+	sta->listen_interval = L_LE16_TO_CPU(req->listen_interval);
+
+	ie_tlv_iter_init(&iter, req->ies, body_len - sizeof(*req));
+
+	while (ie_tlv_iter_next(&iter))
+		switch (ie_tlv_iter_get_tag(&iter)) {
+		case IE_TYPE_SSID:
+			ssid = (const char *) ie_tlv_iter_get_data(&iter);
+			ssid_len = ie_tlv_iter_get_length(&iter);
+			break;
+
+		case IE_TYPE_SUPPORTED_RATES:
+		case IE_TYPE_EXTENDED_SUPPORTED_RATES:
+			if (ie_parse_supported_rates(&iter, &rates) < 0) {
+				err = MMPDU_REASON_CODE_INVALID_IE;
+				goto bad_frame;
+			}
+
+			break;
+
+		case IE_TYPE_RSN:
+			if (ie_parse_rsne(&iter, &rsn_info) < 0) {
+				err = MMPDU_REASON_CODE_INVALID_IE;
+				goto bad_frame;
+			}
+
+			rsn = (const uint8_t *) ie_tlv_iter_get_data(&iter);
+			rsn_len = ie_tlv_iter_get_length(&iter);
+			break;
+		}
+
+	if (!rates || !ssid || !rsn || ssid_len != strlen(ap->ssid) ||
+			memcmp(ssid, ap->ssid, ssid_len)) {
+		err = MMPDU_REASON_CODE_INVALID_IE;
+		goto bad_frame;
+	}
+
+	if (sta->rates)
+		l_uintset_free(sta->rates);
+
+	sta->rates = rates;
+
+	if (!ap_common_rates(ap->rates, sta->rates)) {
+		err = MMPDU_REASON_CODE_UNSPECIFIED;
+		goto unsupported;
+	}
+
+	if (rsn_info.mfpr && rsn_info.spp_a_msdu_required) {
+		err = MMPDU_REASON_CODE_UNSPECIFIED;
+		goto unsupported;
+	}
+
+	if (!(rsn_info.pairwise_ciphers & ap->ciphers)) {
+		err = MMPDU_REASON_CODE_UNSPECIFIED;
+		goto unsupported;
+	}
+
+	if (rsn_info.akm_suites != IE_RSN_AKM_SUITE_PSK) {
+		err = MMPDU_REASON_CODE_UNSPECIFIED;
+		goto unsupported;
+	}
+
+	if (sta->assoc_rsne)
+		l_free(sta->assoc_rsne);
+
+	sta->assoc_rsne = l_memdup(rsn, rsn_len);
+	sta->assoc_rsne_len = rsn_len;
+
+	/*
+	 * Everything fine so far, assign an AID, send response.  According
+	 * to 802.11-2016 11.3.5.3 l) we will only go to State 3
+	 * (set sta->associated) once we receive the station's ACK or gave
+	 * up on resends.
+	 */
+	sta->aid = ++ap->last_aid;
+
+	sta->assoc_resp_cmd_id = ap_assoc_resp(ap, sta, sta->addr, sta->aid, 0,
+						ap_success_assoc_resp_cb);
+	if (!sta->assoc_resp_cmd_id)
+		l_error("Sending success Association Response failed");
+
+	return;
+
+unsupported:
+bad_frame:
+	if (rates)
+		l_uintset_free(rates);
+
+	if (!ap_assoc_resp(ap, NULL, from, 0, err, ap_fail_assoc_resp_cb))
+		l_error("Sending error Association Response failed");
+}
+
 static void ap_probe_resp_cb(struct l_genl_msg *msg, void *user_data)
 {
 	if (l_genl_msg_get_error(msg) < 0)
@@ -335,6 +698,38 @@ static void ap_probe_req_cb(struct netdev *netdev,
 				ap_probe_resp_cb, NULL);
 }
 
+/* 802.11-2016 9.3.3.5 (frame format), 802.11-2016 11.3.5.9 (MLME/SME) */
+static void ap_disassoc_cb(struct netdev *netdev,
+				const struct mmpdu_header *hdr,
+				const void *body, size_t body_len,
+				void *user_data)
+{
+	struct ap_state *ap = user_data;
+	struct sta_state *sta;
+	const struct mmpdu_disassociation *disassoc = body;
+	const uint8_t *bssid = device_get_address(ap->device);
+
+	l_info("AP Disassociation from %s, reason %i",
+		util_address_to_string(hdr->address_2),
+		(int) L_LE16_TO_CPU(disassoc->reason_code));
+
+	if (memcmp(hdr->address_1, bssid, 6) ||
+			memcmp(hdr->address_3, bssid, 6))
+		return;
+
+	sta = l_queue_find(ap->sta_states, ap_sta_match_addr, hdr->address_2);
+
+	if (sta && sta->assoc_resp_cmd_id) {
+		l_genl_family_cancel(nl80211, sta->assoc_resp_cmd_id);
+		sta->assoc_resp_cmd_id = 0;
+	}
+
+	if (!sta || !sta->associated)
+		return;
+
+	ap_disassociate_sta(ap, sta);
+}
+
 static void ap_auth_reply_cb(struct l_genl_msg *msg, void *user_data)
 {
 	if (l_genl_msg_get_error(msg) < 0)
@@ -425,6 +820,7 @@ static void ap_auth_cb(struct netdev *netdev, const struct mmpdu_header *hdr,
 	 */
 	sta = l_new(struct sta_state, 1);
 	memcpy(sta->addr, from, 6);
+	sta->ap = ap;
 
 	if (!ap->sta_states)
 		ap->sta_states = l_queue_new();
@@ -464,6 +860,14 @@ static void ap_deauth_cb(struct netdev *netdev, const struct mmpdu_header *hdr,
 				hdr->address_2);
 	if (!sta)
 		return;
+
+	if (sta->assoc_resp_cmd_id) {
+		l_genl_family_cancel(nl80211, sta->assoc_resp_cmd_id);
+		sta->assoc_resp_cmd_id = 0;
+	}
+
+	if (sta->associated)
+		ap_disassociate_sta(ap, sta);
 
 	ap_sta_free(sta);
 }
@@ -590,8 +994,18 @@ int ap_start(struct device *device, const char *ssid, const char *psk,
 	ap->frame_watch_ids = l_queue_new();
 
 	id = netdev_frame_watch_add(netdev, 0x0000 |
+			(MPDU_MANAGEMENT_SUBTYPE_ASSOCIATION_REQUEST << 4),
+			NULL, 0, ap_assoc_req_cb, ap);
+	l_queue_push_tail(ap->frame_watch_ids, L_UINT_TO_PTR(id));
+
+	id = netdev_frame_watch_add(netdev, 0x0000 |
 				(MPDU_MANAGEMENT_SUBTYPE_PROBE_REQUEST << 4),
 				NULL, 0, ap_probe_req_cb, ap);
+	l_queue_push_tail(ap->frame_watch_ids, L_UINT_TO_PTR(id));
+
+	id = netdev_frame_watch_add(netdev, 0x0000 |
+				(MPDU_MANAGEMENT_SUBTYPE_DISASSOCIATION << 4),
+				NULL, 0, ap_disassoc_cb, ap);
 	l_queue_push_tail(ap->frame_watch_ids, L_UINT_TO_PTR(id));
 
 	id = netdev_frame_watch_add(netdev, 0x0000 |
