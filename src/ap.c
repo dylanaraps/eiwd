@@ -40,6 +40,8 @@
 #include "src/ie.h"
 #include "src/mpdu.h"
 #include "src/util.h"
+#include "src/eapol.h"
+#include "src/handshake.h"
 #include "src/ap.h"
 
 struct ap_state {
@@ -54,6 +56,7 @@ struct ap_state {
 	uint8_t pmk[32];
 	struct l_queue *frame_watch_ids;
 	uint32_t start_stop_cmd_id;
+	uint32_t eapol_watch_id;
 
 	uint16_t last_aid;
 	struct l_queue *sta_states;
@@ -70,6 +73,12 @@ struct sta_state {
 	struct ap_state *ap;
 	uint8_t *assoc_rsne;
 	size_t assoc_rsne_len;
+	uint64_t key_replay_counter;
+	uint8_t anonce[32];
+	uint8_t snonce[32];
+	uint8_t ptk[64];
+	bool have_anonce : 1;
+	bool ptk_complete : 1;
 };
 
 static struct l_genl_family *nl80211 = NULL;
@@ -112,6 +121,8 @@ static void ap_free(void *data)
 	if (ap->start_stop_cmd_id)
 		l_genl_family_cancel(nl80211, ap->start_stop_cmd_id);
 
+	eapol_frame_watch_remove(ap->eapol_watch_id);
+
 	l_queue_destroy(ap->sta_states, ap_sta_free);
 
 	if (ap->rates)
@@ -147,6 +158,99 @@ static void ap_set_rsn_info(struct ap_state *ap, struct ie_rsn_info *rsn)
 	rsn->akm_suites = IE_RSN_AKM_SUITE_PSK;
 	rsn->pairwise_ciphers = ap->ciphers;
 	rsn->group_cipher = IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC;
+}
+
+/* 802.11-2016 Section 12.7.6.2 */
+static void ap_send_ptk_1_of_4(struct ap_state *ap, struct sta_state *sta)
+{
+	uint32_t ifindex = device_get_ifindex(ap->device);
+	const uint8_t *aa = device_get_address(ap->device);
+	uint8_t frame_buf[512];
+	struct eapol_key *ek = (struct eapol_key *) frame_buf;
+	enum crypto_cipher cipher = ie_rsn_cipher_suite_to_cipher(ap->ciphers);
+	uint8_t pmkid[16];
+
+	if (!l_getrandom(sta->anonce, 32)) {
+		l_error("l_getrandom failed");
+		return;
+	}
+
+	sta->have_anonce = true;
+	sta->ptk_complete = false;
+
+	sta->key_replay_counter++;
+
+	memset(ek, 0, sizeof(struct eapol_key));
+	ek->header.protocol_version = EAPOL_PROTOCOL_VERSION_2004;
+	ek->header.packet_type = 0x3;
+	ek->descriptor_type = EAPOL_DESCRIPTOR_TYPE_80211;
+	/* Must be HMAC-SHA1-128 + AES when using CCMP with PSK or 8021X */
+	ek->key_descriptor_version = EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES;
+	ek->key_type = true;
+	ek->key_ack = true;
+	ek->key_length = L_CPU_TO_BE16(crypto_cipher_key_len(cipher));
+	ek->key_replay_counter = L_CPU_TO_BE64(sta->key_replay_counter);
+	memcpy(ek->key_nonce, sta->anonce, sizeof(ek->key_nonce));
+
+	/* Write the PMKID KDE into Key Data field unencrypted */
+	crypto_derive_pmkid(ap->pmk, sta->addr, aa, pmkid, false);
+	eapol_key_data_append(ek, HANDSHAKE_KDE_PMKID, pmkid, 16);
+
+	ek->header.packet_len = L_CPU_TO_BE16(sizeof(struct eapol_key) +
+					L_BE16_TO_CPU(ek->key_data_len) - 4);
+
+	eapol_tx_frame(ifindex, ETH_P_PAE, sta->addr,
+			(struct eapol_frame *) ek);
+}
+
+static void ap_eapol_key_handle(struct sta_state *sta,
+				const struct eapol_frame *frame)
+{
+	size_t frame_len = 4 + L_BE16_TO_CPU(frame->header.packet_len);
+	const struct eapol_key *ek = eapol_key_validate((const void *) frame,
+							frame_len);
+
+	if (!ek)
+		return;
+
+	if (ek->request)
+		return; /* Not supported */
+
+	if (!sta->have_anonce)
+		return; /* Not expecting an EAPoL-Key yet */
+}
+
+static void ap_eapol_rx(uint16_t proto, const uint8_t *from,
+			const struct eapol_frame *frame, void *user_data)
+{
+	struct ap_state *ap = user_data;
+	struct sta_state *sta;
+
+	l_debug("");
+
+	if (proto != ETH_P_PAE) {
+		l_error("AP data frame of unknown protocol %04x from %s",
+			proto, util_address_to_string(from));
+		return;
+	}
+
+	sta = l_queue_find(ap->sta_states, ap_sta_match_addr, from);
+	if (!sta || !sta->associated) {
+		l_error("AP EAPoL from disassociated STA %s",
+			util_address_to_string(from));
+		return;
+	}
+
+	switch (frame->header.packet_type) {
+	case 3: /* EAPoL-Key */
+		ap_eapol_key_handle(sta, frame);
+		break;
+	default:
+		l_error("AP received unknown packet type %i from %s",
+			frame->header.packet_type,
+			util_address_to_string(from));
+		break;
+	}
 }
 
 /*
@@ -261,13 +365,15 @@ static uint32_t ap_send_mgmt_frame(struct ap_state *ap,
 
 static void ap_new_sta_cb(struct l_genl_msg *msg, void *user_data)
 {
+	struct sta_state *sta = user_data;
+
 	if (l_genl_msg_get_error(msg) < 0) {
 		l_error("NEW_STATION failed: %i", l_genl_msg_get_error(msg));
 		return;
 	}
 
 	/* TODO: retry counters and timers */
-	/* TODO: send 4-Way Handshake frame 1/4 */
+	ap_send_ptk_1_of_4(sta->ap, sta);
 }
 
 static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
@@ -292,6 +398,7 @@ static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
 	uint16_t capability = l_get_le16(&sta->capability);
 
 	sta->associated = true;
+	sta->key_replay_counter = 0;
 
 	minr = l_uintset_find_min(sta->rates);
 	maxr = l_uintset_find_max(sta->rates);
@@ -968,6 +1075,7 @@ int ap_start(struct device *device, const char *ssid, const char *psk,
 {
 	struct netdev *netdev = device_get_netdev(device);
 	struct wiphy *wiphy = device_get_wiphy(device);
+	uint32_t ifindex = device_get_ifindex(device);
 	struct ap_state *ap;
 	struct l_genl_msg *cmd;
 	const struct l_queue_entry *entry;
@@ -1033,6 +1141,8 @@ int ap_start(struct device *device, const char *ssid, const char *psk,
 		l_genl_msg_unref(cmd);
 		goto error;
 	}
+
+	ap->eapol_watch_id = eapol_frame_watch_add(ifindex, ap_eapol_rx, ap);
 
 	if (!ap_list)
 		ap_list = l_queue_new();
