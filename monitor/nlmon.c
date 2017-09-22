@@ -2489,10 +2489,12 @@ static void print_mmpdu_header(unsigned int level,
 }
 
 static void print_authentication_mgmt_frame(unsigned int level,
-					const struct mmpdu_header *mmpdu)
+					const struct mmpdu_header *mmpdu,
+					size_t size)
 {
 	const char *str;
 	const struct mmpdu_authentication *body;
+	struct ie_tlv_iter iter;
 
 	if (!mmpdu)
 		return;
@@ -2511,6 +2513,12 @@ static void print_authentication_mgmt_frame(unsigned int level,
 	case MMPDU_AUTH_ALGO_SHARED_KEY:
 		str = "Shared key";
 		break;
+	case MMPDU_AUTH_ALGO_FT:
+		str = "FT";
+		break;
+	case MMPDU_AUTH_ALGO_SAE:
+		str = "SAE";
+		break;
 	default:
 		str = "Reserved";
 		break;
@@ -2527,9 +2535,13 @@ static void print_authentication_mgmt_frame(unsigned int level,
 			L_LE16_TO_CPU(body->transaction_sequence) > 3)
 		return;
 
+	ie_tlv_iter_init(&iter, body->ies, (const uint8_t *) mmpdu + size -
+				body->ies);
+	ie_tlv_iter_next(&iter);
+
 	print_attr(level + 1, "Challenge text: \"%s\" (%u)",
-				body->shared_key_23.challenge_text,
-				body->shared_key_23.challenge_text_len);
+				ie_tlv_iter_get_data(&iter),
+				ie_tlv_iter_get_length(&iter));
 }
 
 static void print_deauthentication_mgmt_frame(unsigned int level,
@@ -2609,7 +2621,7 @@ static void print_frame_type(unsigned int level, const char *label,
 		break;
 	case 0x0b:
 		if (mpdu)
-			print_authentication_mgmt_frame(level + 1, mpdu);
+			print_authentication_mgmt_frame(level + 1, mpdu, size);
 		else
 			str = "Authentication";
 		break;
