@@ -51,15 +51,17 @@ enum mpdu_management_subtype {
 	MPDU_MANAGEMENT_SUBTYPE_ACTION_NO_ACK          = 0xE,
 };
 
-/* 802.11, Section 8.4.1.1 Authentication Algorithm Number field */
+/* 802.11-2016, Section 9.4.1.1 Authentication Algorithm Number field */
 enum mmpdu_authentication_algorithm_number {
 	MMPDU_AUTH_ALGO_OPEN_SYSTEM = 0,
 	MMPDU_AUTH_ALGO_SHARED_KEY,
+	MMPDU_AUTH_ALGO_FT,
+	MMPDU_AUTH_ALGO_SAE,
 };
 
 /*
  * 802.11-2012, Section 8.4.1.7:
-*/
+ */
 enum mmpdu_reason_code {
 	MMPDU_REASON_CODE_UNSPECIFIED = 1,
 	MMPDU_REASON_CODE_PREV_AUTH_NOT_VALID = 2,
