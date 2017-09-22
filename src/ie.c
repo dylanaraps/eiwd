@@ -63,6 +63,14 @@ bool ie_tlv_iter_next(struct ie_tlv_iter *iter)
 	tag = *tlv++;
 	len = *tlv++;
 
+	if (tag == IE_TYPE_EXTENSION) {
+		if (iter->pos + 2 >= iter->max || len < 1)
+			return false;
+
+		tag = 256 + *tlv++;
+		len--;
+	}
+
 	if (tlv + len > end)
 		return false;
 
@@ -255,14 +263,23 @@ static void ie_tlv_builder_write_header(struct ie_tlv_builder *builder)
 {
 	unsigned char *tlv = builder->tlv + builder->pos;
 
-	tlv[0] = builder->tag;
-	tlv[1] = builder->len;
+	if (builder->tag < 256) {
+		tlv[0] = builder->tag;
+		tlv[1] = builder->len;
+	} else {
+		tlv[0] = IE_TYPE_EXTENSION;
+		tlv[1] = builder->len + 1;
+		tlv[2] = builder->tag - 256;
+	}
 }
 
 bool ie_tlv_builder_set_length(struct ie_tlv_builder *builder,
 					unsigned int new_len)
 {
 	unsigned int new_pos = builder->pos + TLV_HEADER_LEN + new_len;
+
+	if (builder->tag >= 256)
+		new_pos += 1;
 
 	if (new_pos > builder->max)
 		return false;
@@ -277,25 +294,23 @@ bool ie_tlv_builder_set_length(struct ie_tlv_builder *builder,
 
 bool ie_tlv_builder_next(struct ie_tlv_builder *builder, unsigned int new_tag)
 {
-	if (new_tag > 0xff)
+	if (new_tag > 0x1ff)
 		return false;
 
 	if (builder->tag != 0xffff) {
 		ie_tlv_builder_write_header(builder);
-		builder->pos += TLV_HEADER_LEN + builder->len;
+		builder->pos += TLV_HEADER_LEN + builder->tlv[builder->pos + 1];
 	}
-
-	if (!ie_tlv_builder_set_length(builder, 0))
-		return false;
 
 	builder->tag = new_tag;
 
-	return true;
+	return ie_tlv_builder_set_length(builder, 0);
 }
 
 unsigned char *ie_tlv_builder_get_data(struct ie_tlv_builder *builder)
 {
-	return builder->tlv + TLV_HEADER_LEN + builder->pos;
+	return builder->tlv + TLV_HEADER_LEN + builder->pos +
+		(builder->tag >= 256 ? 1 : 0);
 }
 
 bool ie_tlv_builder_recurse(struct ie_tlv_builder *builder,
@@ -319,7 +334,7 @@ void ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
 
 	ie_tlv_builder_write_header(builder);
 
-	len = builder->pos + TLV_HEADER_LEN + builder->len;
+	len = builder->pos + TLV_HEADER_LEN + builder->tlv[builder->pos + 1];
 
 	if (out_len)
 		*out_len = len;
