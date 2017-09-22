@@ -50,6 +50,7 @@ enum eapol_key_descriptor_version {
 struct eapol_sm;
 struct handshake_state;
 struct preauth_sm;
+enum handshake_kde;
 
 struct eapol_header {
 	uint8_t protocol_version;
@@ -138,6 +139,8 @@ uint8_t *eapol_decrypt_key_data(const uint8_t *kek,
 bool eapol_encrypt_key_data(const uint8_t *kek, uint8_t *key_data,
 				size_t key_data_len,
 				struct eapol_key *out_frame);
+void eapol_key_data_append(struct eapol_key *ek, enum handshake_kde selector,
+				const uint8_t *data, size_t data_len);
 
 const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len);
 

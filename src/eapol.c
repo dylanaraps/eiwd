@@ -352,6 +352,22 @@ bool eapol_encrypt_key_data(const uint8_t *kek, uint8_t *key_data,
 	return true;
 }
 
+void eapol_key_data_append(struct eapol_key *ek, enum handshake_kde selector,
+				const uint8_t *data, size_t data_len)
+{
+	uint16_t key_data_len = L_BE16_TO_CPU(ek->key_data_len);
+
+	ek->key_data[key_data_len++] = IE_TYPE_VENDOR_SPECIFIC;
+	ek->key_data[key_data_len++] = 4 + data_len; /* OUI + Data type + len */
+	l_put_be32(selector, ek->key_data + key_data_len);
+	key_data_len += 4;
+
+	memcpy(ek->key_data + key_data_len, data, data_len);
+	key_data_len += data_len;
+
+	ek->key_data_len = L_CPU_TO_BE16(key_data_len);
+}
+
 const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len)
 {
 	const struct eapol_key *ek;

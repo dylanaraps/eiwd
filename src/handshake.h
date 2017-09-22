@@ -25,6 +25,21 @@
 #include <asm/byteorder.h>
 #include <linux/types.h>
 
+/* 802.11-2016 Table 12-6 in section 12.7.2 */
+enum handshake_kde {
+	HANDSHAKE_KDE_GTK		= 0x000fac01,
+	HANDSHAKE_KDE_MAC_ADDRESS	= 0x000fac03,
+	HANDSHAKE_KDE_PMKID		= 0x000fac04,
+	HANDSHAKE_KDE_SMK		= 0x000fac05,
+	HANDSHAKE_KDE_NONCE		= 0x000fac06,
+	HANDSHAKE_KDE_LIFETIME		= 0x000fac07,
+	HANDSHAKE_KDE_ERROR		= 0x000fac08,
+	HANDSHAKE_KDE_IGTK		= 0x000fac09,
+	HANDSHAKE_KDE_KEY_ID		= 0x000fac0a,
+	HANDSHAKE_KDE_MULTIBAND_GTK	= 0x000fac0b,
+	HANDSHAKE_KDE_MULTIBAND_KEY_ID	= 0x000fac0c,
+};
+
 typedef bool (*handshake_get_nonce_func_t)(uint8_t nonce[]);
 typedef void (*handshake_install_tk_func_t)(uint32_t ifindex, const uint8_t *aa,
 					const uint8_t *tk, uint32_t cipher,
