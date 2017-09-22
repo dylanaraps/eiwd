@@ -24,7 +24,8 @@
 #include <stddef.h>
 
 /*
- * Information elements, IEEE Std 802.11 ch. 8.4.2
+ * Information elements, IEEE Std 802.11-2012 ch. 8.4.2 and
+ * 802.11-2016 ch. 9.4.2.
  */
 enum ie_type {
 	IE_TYPE_SSID                                 = 0,
@@ -150,11 +151,76 @@ enum ie_type {
 	IE_TYPE_MIC                                  = 140,
 	IE_TYPE_DESTINATION_URI                      = 141,
 	IE_TYPE_U_APSD_COEXISTENCE                   = 142,
-	/* Reserved 143 - 173 */
+	IE_TYPE_DMG_WAKEUP_SCHEDULE                  = 143,
+	IE_TYPE_EXTENDED_SCHEDULE                    = 144,
+	IE_TYPE_STA_AVAILABILITY                     = 145,
+	IE_TYPE_DMG_TSPEC                            = 146,
+	IE_TYPE_NEXT_DMG_ATI                         = 147,
+	IE_TYPE_DMG_CAPABILITIES                     = 148,
+	/* Reserved 149 - 150 */
+	IE_TYPE_DMG_OPERATION                        = 151,
+	IE_TYPE_DMG_BSS_PARAMETER_CHANGE             = 152,
+	IE_TYPE_DMG_BEAM_REFINEMENT                  = 153,
+	IE_TYPE_CHANNEL_MEASUREMENT_FEEDBACK         = 154,
+	/* Reserved 155 - 156 */
+	IE_TYPE_AWAKE_WINDOW                         = 157,
+	IE_TYPE_MULTIBAND                            = 158,
+	IE_TYPE_ADDBA_EXTENSION                      = 159,
+	IE_TYPE_NEXTPCP_LIST                         = 160,
+	IE_TYPE_PCP_HANDOVER                         = 161,
+	IE_TYPE_DMG_LINK_MARGIN                      = 162,
+	IE_TYPE_SWITCHING_STREAM                     = 163,
+	IE_TYPE_SESSION_TRANSITION                   = 164,
+	IE_TYPE_DYNAMIC_TONE_PAIRING_REPORT          = 165,
+	IE_TYPE_CLUSTER_REPORT                       = 166,
+	IE_TYPE_RELAY_CAPABILITIES                   = 167,
+	IE_TYPE_RELAY_TRANSFER_PARAMETER_SET         = 168,
+	IE_TYPE_BEAMLINK_MAINTENANCE                 = 169,
+	IE_TYPE_MULTIPLE_MAC_SUBLAYERS               = 170,
+	IE_TYPE_UPID                                 = 171,
+	IE_TYPE_DMG_LINK_ADAPTATION_ACKNOWLEDGEMENT  = 172,
+	/* Reserved 173 */
 	IE_TYPE_MCCAOP_ADVERTISEMENT_OVERVIEW        = 174,
-	/* Reserved 175 - 220 */
+	IE_TYPE_QUIET_PERIOD_REQUEST                 = 175,
+	/* Reserved 176 */
+	IE_TYPE_QUIET_PERIOD_RESPONSE                = 177,
+	/* Reserved 178-180 */
+	IE_TYPE_QMF_POLICY                           = 181,
+	IE_TYPE_ECAPC_POLICY                         = 182,
+	IE_TYPE_CLUSTER_TIME_OFFSET                  = 183,
+	IE_TYPE_INTRAACCESS_CATEGORY_PRIORITY        = 184,
+	IE_TYPE_SCS_DESCRIPTOR                       = 185,
+	IE_TYPE_QLOAD_REPORT                         = 186,
+	IE_TYPE_HCCA_TXOP_UPDATE_COUNT               = 187,
+	IE_TYPE_HIGHER_LAYER_STREAM_ID               = 188,
+	IE_TYPE_GCR_GROUP_ADDRESS                    = 189,
+	IE_TYPE_ANTENNA_SECTOR_ID_PATTERN            = 190,
+	IE_TYPE_VHT_CAPABILITIES                     = 191,
+	IE_TYPE_VHT_OPERATION                        = 192,
+	IE_TYPE_EXTENDED_BSS_LOAD                    = 193,
+	IE_TYPE_WIDE_BANDWIDTH_CHANNEL_SWITCH        = 194,
+	IE_TYPE_TRANSMIT_POWER_ENVELOPE              = 195,
+	IE_TYPE_CHANNEL_SWITCH_WRAPPER               = 196,
+	IE_TYPE_AID                                  = 197,
+	IE_TYPE_QUIET_CHANNEL                        = 198,
+	IE_TYPE_OPERATING_MODE_NOTIFICATION          = 199,
+	IE_TYPE_UPSIM                                = 200,
+	IE_TYPE_REDUCED_NEIGHBOR_REPORT              = 201,
+	IE_TYPE_TVHT_OPERATION                       = 202,
+	/* Reserved 203 */
+	IE_TYPE_DEVICE_LOCATION                      = 204,
+	IE_TYPE_WHITE_SPACE_MAP                      = 205,
+	IE_TYPE_FINE_TIMING_MEASUREMENT_PARAMETERS   = 206,
+	/* Reserved 207 - 220 */
 	IE_TYPE_VENDOR_SPECIFIC                      = 221,
-	/* Reserved 222 - 255 */
+	/* Reserved 222 - 254 */
+	IE_TYPE_EXTENSION                            = 255,
+
+	/* Reserved extensions 0 - 8 */
+	IE_TYPE_FTM_SYNCHRONIZATION_INFORMATION      = 256 + 9,
+	IE_TYPE_EXTENDED_REQUEST                     = 256 + 10,
+	IE_TYPE_ESTIMATED_SERVICE_PARAMETERS         = 256 + 11,
+	IE_TYPE_FUTURE_CHANNEL_GUIDANCE              = 256 + 14,
 };
 
 enum ie_rsn_cipher_suite {
