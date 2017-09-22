@@ -2819,7 +2819,7 @@ static void netdev_mgmt_frame_event(struct l_genl_msg *msg,
 					struct netdev *netdev)
 {
 	struct l_genl_attr attr;
-	uint16_t type, len, frame_len = 0;
+	uint16_t type, len, frame_len;
 	const void *data;
 	const struct mmpdu_header *mpdu = NULL;
 	const uint8_t *body;
@@ -2834,18 +2834,19 @@ static void netdev_mgmt_frame_event(struct l_genl_msg *msg,
 			if (mpdu)
 				return;
 
-			mpdu = data;
+			mpdu = mpdu_validate(data, len);
+			if (!mpdu)
+				l_error("Frame didn't validate as MMPDU");
+
 			frame_len = len;
 			break;
 		}
 	}
 
-	if (!mpdu || frame_len < 24)
+	if (!mpdu)
 		return;
 
 	body = mmpdu_body(mpdu);
-	if (body > (uint8_t *) mpdu + frame_len)
-		return;
 
 	if (memcmp(mpdu->address_1, netdev->addr, 6) &&
 			!util_is_broadcast_address(mpdu->address_1))
