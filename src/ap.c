@@ -53,11 +53,24 @@ struct ap_state {
 	struct l_uintset *rates;
 	struct l_queue *frame_watch_ids;
 	uint32_t start_stop_cmd_id;
+
+	struct l_queue *sta_states;
+};
+
+struct sta_state {
+	uint8_t addr[6];
 };
 
 static struct l_genl_family *nl80211 = NULL;
 
 static struct l_queue *ap_list = NULL;
+
+static void ap_sta_free(void *data)
+{
+	struct sta_state *sta = data;
+
+	l_free(sta);
+}
 
 static void ap_frame_watch_remove(void *data, void *user_data)
 {
@@ -82,10 +95,19 @@ static void ap_free(void *data)
 	if (ap->start_stop_cmd_id)
 		l_genl_family_cancel(nl80211, ap->start_stop_cmd_id);
 
+	l_queue_destroy(ap->sta_states, ap_sta_free);
+
 	if (ap->rates)
 		l_uintset_free(ap->rates);
 
 	l_free(ap);
+}
+
+static bool ap_sta_match_addr(const void *a, const void *b)
+{
+	const struct sta_state *sta = a;
+
+	return !memcmp(sta->addr, b, 6);
 }
 
 #define CIPHER_SUITE_GROUP_NOT_ALLOWED 0x000fac07
@@ -313,6 +335,139 @@ static void ap_probe_req_cb(struct netdev *netdev,
 				ap_probe_resp_cb, NULL);
 }
 
+static void ap_auth_reply_cb(struct l_genl_msg *msg, void *user_data)
+{
+	if (l_genl_msg_get_error(msg) < 0)
+		l_error("AP Authentication frame 2 not sent or not ACKed: %i",
+			l_genl_msg_get_error(msg));
+	else
+		l_info("AP Authentication frame 2 ACKed by STA");
+}
+
+static void ap_auth_reply(struct ap_state *ap, const uint8_t *dest,
+				enum mmpdu_reason_code status_code)
+{
+	const uint8_t *addr = device_get_address(ap->device);
+	uint8_t mpdu_buf[64];
+	struct mmpdu_header *mpdu = (struct mmpdu_header *) mpdu_buf;
+	struct mmpdu_authentication *auth;
+
+	memset(mpdu, 0, sizeof(*mpdu));
+
+	/* Header */
+	mpdu->fc.protocol_version = 0;
+	mpdu->fc.type = MPDU_TYPE_MANAGEMENT;
+	mpdu->fc.subtype = MPDU_MANAGEMENT_SUBTYPE_AUTHENTICATION;
+	memcpy(mpdu->address_1, dest, 6);	/* DA */
+	memcpy(mpdu->address_2, addr, 6);	/* SA */
+	memcpy(mpdu->address_3, addr, 6);	/* BSSID */
+
+	/* Authentication body */
+	auth = (void *) mmpdu_body(mpdu);
+	auth->algorithm = L_CPU_TO_LE16(MMPDU_AUTH_ALGO_OPEN_SYSTEM);
+	auth->transaction_sequence = L_CPU_TO_LE16(2);
+	auth->status = L_CPU_TO_LE16(status_code);
+
+	ap_send_mgmt_frame(ap, mpdu, (uint8_t *) auth + 6 - mpdu_buf, true,
+				ap_auth_reply_cb, NULL);
+}
+
+/*
+ * 802.11-2016 9.3.3.12 (frame format), 802.11-2016 11.3.4.3 and
+ * 802.11-2016 12.3.3.2 (MLME/SME)
+ */
+static void ap_auth_cb(struct netdev *netdev, const struct mmpdu_header *hdr,
+			const void *body, size_t body_len, void *user_data)
+{
+	struct ap_state *ap = user_data;
+	const struct mmpdu_authentication *auth = body;
+	const uint8_t *from = hdr->address_2;
+	const uint8_t *bssid = device_get_address(ap->device);
+	struct sta_state *sta;
+
+	l_info("AP Authentication from %s", util_address_to_string(from));
+
+	if (memcmp(hdr->address_1, bssid, 6) ||
+			memcmp(hdr->address_3, bssid, 6))
+		return;
+
+	/* Only Open System authentication implemented here */
+	if (L_LE16_TO_CPU(auth->algorithm) !=
+			MMPDU_AUTH_ALGO_OPEN_SYSTEM) {
+		ap_auth_reply(ap, from, MMPDU_REASON_CODE_UNSPECIFIED);
+		return;
+	}
+
+	if (L_LE16_TO_CPU(auth->transaction_sequence) != 1) {
+		ap_auth_reply(ap, from, MMPDU_REASON_CODE_UNSPECIFIED);
+		return;
+	}
+
+	sta = l_queue_find(ap->sta_states, ap_sta_match_addr, from);
+
+	/*
+	 * Figure 11-13 in 802.11-2016 11.3.2 shows a transition from
+	 * States 3 / 4 to State 2 on "Successful 802.11 Authentication"
+	 * however 11.3.4.2 and 11.3.4.3 clearly say the connection goes to
+	 * State 2 only if it was in State 1:
+	 *
+	 * "c) [...] the state for the indicated STA shall be set to State 2
+	 * if it was State 1; the state shall remain unchanged if it was other
+	 * than State 1."
+	 */
+	if (sta)
+		goto done;
+
+	/*
+	 * Per 12.3.3.2.3 with Open System the state change is immediate,
+	 * no waiting for the response to be ACKed as with the association
+	 * frames.
+	 */
+	sta = l_new(struct sta_state, 1);
+	memcpy(sta->addr, from, 6);
+
+	if (!ap->sta_states)
+		ap->sta_states = l_queue_new();
+
+	l_queue_push_tail(ap->sta_states, sta);
+
+	/*
+	 * Nothing to do here netlink-wise as we can't receive any data
+	 * frames until after association anyway.  We do need to add a
+	 * timeout for the authentication and possibly the kernel could
+	 * handle that if we registered the STA with NEW_STATION now (TODO)
+	 */
+
+done:
+	ap_auth_reply(ap, from, 0);
+}
+
+/* 802.11-2016 9.3.3.13 (frame format), 802.11-2016 11.3.4.5 (MLME/SME) */
+static void ap_deauth_cb(struct netdev *netdev, const struct mmpdu_header *hdr,
+				const void *body, size_t body_len,
+				void *user_data)
+{
+	struct ap_state *ap = user_data;
+	struct sta_state *sta;
+	const struct mmpdu_deauthentication *deauth = body;
+	const uint8_t *bssid = device_get_address(ap->device);
+
+	l_info("AP Deauthentication from %s, reason %i",
+		util_address_to_string(hdr->address_2),
+		(int) L_LE16_TO_CPU(deauth->reason_code));
+
+	if (memcmp(hdr->address_1, bssid, 6) ||
+			memcmp(hdr->address_3, bssid, 6))
+		return;
+
+	sta = l_queue_remove_if(ap->sta_states, ap_sta_match_addr,
+				hdr->address_2);
+	if (!sta)
+		return;
+
+	ap_sta_free(sta);
+}
+
 static void ap_stopped(struct ap_state *ap)
 {
 	ap->event_cb(ap->device, AP_EVENT_STOPPED);
@@ -437,6 +592,16 @@ int ap_start(struct device *device, const char *ssid, const char *psk,
 	id = netdev_frame_watch_add(netdev, 0x0000 |
 				(MPDU_MANAGEMENT_SUBTYPE_PROBE_REQUEST << 4),
 				NULL, 0, ap_probe_req_cb, ap);
+	l_queue_push_tail(ap->frame_watch_ids, L_UINT_TO_PTR(id));
+
+	id = netdev_frame_watch_add(netdev, 0x0000 |
+				(MPDU_MANAGEMENT_SUBTYPE_AUTHENTICATION << 4),
+				NULL, 0, ap_auth_cb, ap);
+	l_queue_push_tail(ap->frame_watch_ids, L_UINT_TO_PTR(id));
+
+	id = netdev_frame_watch_add(netdev, 0x0000 |
+				(MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION << 4),
+				NULL, 0, ap_deauth_cb, ap);
 	l_queue_push_tail(ap->frame_watch_ids, L_UINT_TO_PTR(id));
 
 	for (entry = l_queue_get_entries(ap->frame_watch_ids); entry;
