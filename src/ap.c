@@ -203,6 +203,111 @@ static void ap_send_ptk_1_of_4(struct ap_state *ap, struct sta_state *sta)
 			(struct eapol_frame *) ek);
 }
 
+/* 802.11-2016 Section 12.7.6.4 */
+static void ap_send_ptk_3_of_4(struct ap_state *ap, struct sta_state *sta)
+{
+	uint32_t ifindex = device_get_ifindex(ap->device);
+	uint8_t frame_buf[512];
+	uint8_t key_data_buf[128];
+	struct eapol_key *ek = (struct eapol_key *) frame_buf;
+	size_t key_data_len;
+	enum crypto_cipher cipher = ie_rsn_cipher_suite_to_cipher(ap->ciphers);
+	const struct crypto_ptk *ptk = (struct crypto_ptk *) sta->ptk;
+	struct ie_rsn_info rsn;
+
+	sta->key_replay_counter++;
+
+	memset(ek, 0, sizeof(struct eapol_key));
+	ek->header.protocol_version = EAPOL_PROTOCOL_VERSION_2004;
+	ek->header.packet_type = 0x3;
+	ek->descriptor_type = EAPOL_DESCRIPTOR_TYPE_80211;
+	/* Must be HMAC-SHA1-128 + AES when using CCMP with PSK or 8021X */
+	ek->key_descriptor_version = EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES;
+	ek->key_type = true;
+	ek->install = true;
+	ek->key_ack = true;
+	ek->key_mic = true;
+	ek->secure = true;
+	ek->encrypted_key_data = true;
+	ek->key_length = L_CPU_TO_BE16(crypto_cipher_key_len(cipher));
+	ek->key_replay_counter = L_CPU_TO_BE64(sta->key_replay_counter);
+	memcpy(ek->key_nonce, sta->anonce, sizeof(ek->key_nonce));
+	/*
+	 * We don't currently handle group traffic, to support that we'd need
+	 * to provide the NL80211_ATTR_KEY_SEQ value from NL80211_CMD_GET_KEY
+	 * here.
+	 */
+	l_put_be64(1, ek->key_rsc);
+
+	/*
+	 * Just one RSNE in Key Data as we only set one cipher in ap->ciphers
+	 * currently.
+	 */
+	ap_set_rsn_info(ap, &rsn);
+	if (!ie_build_rsne(&rsn, key_data_buf))
+		return;
+
+	if (!eapol_encrypt_key_data(ptk->kek, key_data_buf,
+					2 + key_data_buf[1], ek))
+		return;
+
+	key_data_len = L_BE16_TO_CPU(ek->key_data_len);
+	ek->header.packet_len = L_CPU_TO_BE16(sizeof(struct eapol_key) +
+						key_data_len - 4);
+
+	if (!eapol_calculate_mic(ptk->kck, ek, ek->key_mic_data))
+		return;
+
+	eapol_tx_frame(ifindex, ETH_P_PAE, sta->addr,
+			(struct eapol_frame *) ek);
+}
+
+/* 802.11-2016 Section 12.7.6.3 */
+static void ap_handle_ptk_2_of_4(struct sta_state *sta,
+					const struct eapol_key *ek)
+{
+	const uint8_t *rsne;
+	enum crypto_cipher cipher;
+	size_t ptk_size;
+	uint8_t ptk_buf[64];
+	struct crypto_ptk *ptk = (struct crypto_ptk *) ptk_buf;
+	const uint8_t *aa = device_get_address(sta->ap->device);
+
+	l_debug("");
+
+	if (!eapol_verify_ptk_2_of_4(ek))
+		return;
+
+	if (L_BE64_TO_CPU(ek->key_replay_counter) != sta->key_replay_counter)
+		return;
+
+	cipher = ie_rsn_cipher_suite_to_cipher(sta->ap->ciphers);
+	ptk_size = sizeof(struct crypto_ptk) + crypto_cipher_key_len(cipher);
+
+	if (!crypto_derive_pairwise_ptk(sta->ap->pmk, sta->addr, aa,
+					sta->anonce, ek->key_nonce,
+					ptk, ptk_size, false))
+		return;
+
+	if (!eapol_verify_mic(ptk->kck, ek))
+		return;
+
+	/* Bitwise identical RSNE required */
+	rsne = eapol_find_rsne(ek->key_data,
+				L_BE16_TO_CPU(ek->key_data_len), NULL);
+	if (!rsne || rsne[1] != sta->assoc_rsne_len ||
+			memcmp(rsne + 2, sta->assoc_rsne, rsne[1]))
+		/* TODO: Send Deauthenticate */
+		return;
+
+	memcpy(sta->ptk, ptk_buf, ptk_size);
+	memcpy(sta->snonce, ek->key_nonce, sizeof(sta->snonce));
+	sta->ptk_complete = true;
+
+	/* TODO: retry counters and timers */
+	ap_send_ptk_3_of_4(sta->ap, sta);
+}
+
 static void ap_eapol_key_handle(struct sta_state *sta,
 				const struct eapol_frame *frame)
 {
@@ -218,6 +323,9 @@ static void ap_eapol_key_handle(struct sta_state *sta,
 
 	if (!sta->have_anonce)
 		return; /* Not expecting an EAPoL-Key yet */
+
+	if (!sta->ptk_complete)
+		ap_handle_ptk_2_of_4(sta, ek);
 }
 
 static void ap_eapol_rx(uint16_t proto, const uint8_t *from,
@@ -1099,6 +1207,11 @@ int ap_start(struct device *device, const char *ssid, const char *psk,
 	l_uintset_put(ap->rates, 2); /* 1 Mbps*/
 	l_uintset_put(ap->rates, 11); /* 5.5 Mbps*/
 	l_uintset_put(ap->rates, 22); /* 11 Mbps*/
+
+	if (crypto_psk_from_passphrase(psk, (uint8_t *) ssid, strlen(ssid),
+					ap->pmk) < 0)
+		goto error;
+
 	ap->frame_watch_ids = l_queue_new();
 
 	id = netdev_frame_watch_add(netdev, 0x0000 |
