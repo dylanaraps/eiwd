@@ -57,6 +57,7 @@ struct ap_state {
 	struct l_queue *frame_watch_ids;
 	uint32_t start_stop_cmd_id;
 	uint32_t eapol_watch_id;
+	uint32_t netdev_watch_id;
 
 	uint16_t last_aid;
 	struct l_queue *sta_states;
@@ -123,6 +124,8 @@ static void ap_free(void *data)
 		l_genl_family_cancel(nl80211, ap->start_stop_cmd_id);
 
 	eapol_frame_watch_remove(ap->eapol_watch_id);
+
+	netdev_watch_remove(netdev, ap->netdev_watch_id);
 
 	l_queue_destroy(ap->sta_states, ap_sta_free);
 
@@ -1263,6 +1266,20 @@ static void ap_stopped(struct ap_state *ap)
 	l_queue_remove(ap_list, ap);
 }
 
+static void ap_netdev_notify(struct netdev *netdev,
+				enum netdev_watch_event event, void *user_data)
+{
+	struct ap_state *ap = user_data;
+
+	switch (event) {
+	case NETDEV_WATCH_EVENT_DOWN:
+		ap_stopped(ap);
+		break;
+	default:
+		break;
+	}
+}
+
 static void ap_start_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct ap_state *ap = user_data;
@@ -1423,6 +1440,8 @@ int ap_start(struct device *device, const char *ssid, const char *psk,
 	}
 
 	ap->eapol_watch_id = eapol_frame_watch_add(ifindex, ap_eapol_rx, ap);
+
+	ap->netdev_watch_id = netdev_watch_add(netdev, ap_netdev_notify, ap);
 
 	if (!ap_list)
 		ap_list = l_queue_new();
