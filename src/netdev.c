@@ -2824,9 +2824,6 @@ static void netdev_mgmt_frame_event(struct l_genl_msg *msg,
 	const struct mmpdu_header *mpdu = NULL;
 	const uint8_t *body;
 	struct frame_prefix_info info;
-	static const uint8_t bcast_addr[6] = {
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-	};
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -2851,9 +2848,8 @@ static void netdev_mgmt_frame_event(struct l_genl_msg *msg,
 		return;
 
 	if (memcmp(mpdu->address_1, netdev->addr, 6) &&
-			memcmp(mpdu->address_1, bcast_addr, 6))
+			!util_is_broadcast_address(mpdu->address_1))
 		return;
-
 
 	/* Only match the frame type and subtype like the kernel does */
 #define FC_FTYPE_STYPE_MASK 0x00fc
