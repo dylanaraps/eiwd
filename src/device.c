@@ -43,6 +43,7 @@
 #include "src/network.h"
 #include "src/device.h"
 #include "src/watchlist.h"
+#include "src/ap.h"
 
 struct device_watchlist_item {
 	uint32_t id;
@@ -78,6 +79,8 @@ struct device {
 	uint32_t roam_scan_id;
 	uint8_t preauth_bssid[ETH_ALEN];
 	struct signal_agent *signal_agent;
+	struct l_dbus_message *start_ap_pending;
+	struct l_dbus_message *stop_ap_pending;
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
@@ -162,6 +165,8 @@ static const char *device_state_to_string(enum device_state state)
 		return "disconnecting";
 	case DEVICE_STATE_ROAMING:
 		return "roaming";
+	case DEVICE_STATE_AP:
+		return "accesspoint";
 	}
 
 	return "invalid";
@@ -381,11 +386,16 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 	struct device *device = userdata;
 	struct l_dbus *dbus = dbus_get_bus();
 
-	device->scanning = false;
-	l_dbus_property_changed(dbus, device_get_path(device),
-				IWD_DEVICE_INTERFACE, "Scanning");
+	if (device->scanning) {
+		device->scanning = false;
+		l_dbus_property_changed(dbus, device_get_path(device),
+					IWD_DEVICE_INTERFACE, "Scanning");
+	}
 
 	if (err)
+		return false;
+
+	if (device->state == DEVICE_STATE_AP)
 		return false;
 
 	device_set_scan_results(device, bss_list);
@@ -501,6 +511,9 @@ static void device_enter_state(struct device *device, enum device_state state)
 	case DEVICE_STATE_DISCONNECTING:
 		break;
 	case DEVICE_STATE_ROAMING:
+		break;
+	case DEVICE_STATE_AP:
+		scan_periodic_stop(device->index);
 		break;
 	}
 
@@ -1540,6 +1553,9 @@ static void device_scan_triggered(int err, void *user_data)
 
 	l_debug("device_scan_triggered: %i", err);
 
+	if (!device->scan_pending)
+		return;
+
 	if (err < 0) {
 		dbus_pending_reply(&device->scan_pending,
 				dbus_error_failed(device->scan_pending));
@@ -1567,6 +1583,10 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 
 	if (device->scan_pending)
 		return dbus_error_busy(message);
+
+	if (device->state == DEVICE_STATE_OFF ||
+			device->state == DEVICE_STATE_AP)
+		return dbus_error_failed(message);
 
 	device->scan_pending = l_dbus_message_ref(message);
 
@@ -1776,6 +1796,15 @@ static struct l_dbus_message *device_signal_agent_register(struct l_dbus *dbus,
 	return l_dbus_message_new_method_return(message);
 }
 
+static bool device_remove_network(const void *key, void *data, void *user_data)
+{
+	struct network *network = data;
+
+	network_remove(network, -ESHUTDOWN);
+
+	return true;
+}
+
 static struct l_dbus_message *device_signal_agent_unregister(
 						struct l_dbus *dbus,
 						struct l_dbus_message *message,
@@ -1806,6 +1835,119 @@ static struct l_dbus_message *device_signal_agent_unregister(
 	netdev_set_rssi_report_levels(device->netdev, NULL, 0);
 
 	return l_dbus_message_new_method_return(message);
+}
+
+static void device_ap_event(struct device *device, enum ap_event event_type)
+{
+	struct l_dbus_message *reply;
+
+	switch (event_type) {
+	case AP_EVENT_STARTED:
+		if (!device->start_ap_pending)
+			break;
+
+		reply = l_dbus_message_new_method_return(
+						device->start_ap_pending);
+
+		dbus_pending_reply(&device->start_ap_pending, reply);
+
+		break;
+
+	case AP_EVENT_STOPPED:
+		if (device->state == DEVICE_STATE_AP) {
+			netdev_set_iftype(device->netdev,
+						NETDEV_IFTYPE_STATION);
+
+			device_enter_state(device, DEVICE_STATE_DISCONNECTED);
+		}
+
+		if (device->start_ap_pending) {
+			reply = dbus_error_failed(device->start_ap_pending);
+
+			dbus_pending_reply(&device->start_ap_pending, reply);
+		} else if (device->stop_ap_pending) {
+			reply = l_dbus_message_new_method_return(
+						device->stop_ap_pending);
+
+			dbus_pending_reply(&device->stop_ap_pending, reply);
+		}
+
+		break;
+	}
+}
+
+static struct l_dbus_message *device_start_ap(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct device *device = user_data;
+	const char *ssid, *wpa2_psk;
+
+	if (device->state == DEVICE_STATE_AP)
+		return dbus_error_already_exists(message);
+
+	if (device->state != DEVICE_STATE_DISCONNECTED &&
+			device->state != DEVICE_STATE_AUTOCONNECT)
+		return dbus_error_busy(message);
+
+	if (!l_dbus_message_get_arguments(message, "ss", &ssid, &wpa2_psk))
+		return dbus_error_invalid_args(message);
+
+	netdev_set_iftype(device->netdev, NETDEV_IFTYPE_AP);
+
+	if (ap_start(device, ssid, wpa2_psk, device_ap_event) < 0) {
+		netdev_set_iftype(device->netdev, NETDEV_IFTYPE_STATION);
+
+		return dbus_error_failed(message);
+	}
+
+	device_enter_state(device, DEVICE_STATE_AP);
+
+	device->start_ap_pending = l_dbus_message_ref(message);
+
+	/* Drop all state we can related to client mode */
+
+	if (device->scan_pending)
+		dbus_pending_reply(&device->scan_pending,
+				dbus_error_aborted(device->scan_pending));
+
+	l_hashmap_foreach_remove(device->networks,
+					device_remove_network, device);
+
+	l_queue_destroy(device->autoconnect_list, l_free);
+	device->autoconnect_list = l_queue_new();
+
+	l_queue_destroy(device->bss_list, bss_free);
+	device->bss_list = l_queue_new();
+
+	l_queue_destroy(device->networks_sorted, NULL);
+	device->networks_sorted = l_queue_new();
+
+	return NULL;
+}
+
+static struct l_dbus_message *device_stop_ap(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct device *device = user_data;
+
+	if (device->state != DEVICE_STATE_AP)
+		return dbus_error_not_found(message);
+
+	if (device->stop_ap_pending)
+		return dbus_error_busy(message);
+
+	if (ap_stop(device) < 0)
+		return dbus_error_failed(message);
+
+	if (device->start_ap_pending)
+		dbus_pending_reply(&device->start_ap_pending,
+				dbus_error_aborted(device->start_ap_pending));
+
+	device->stop_ap_pending = l_dbus_message_ref(message);
+
+	return NULL;
 }
 
 static bool device_property_get_name(struct l_dbus *dbus,
@@ -1950,6 +2092,9 @@ static bool device_property_get_state(struct l_dbus *dbus,
 	case DEVICE_STATE_ROAMING:
 		statestr = "roaming";
 		break;
+	case DEVICE_STATE_AP:
+		statestr = "accesspoint";
+		break;
 	}
 
 	l_dbus_message_builder_append_basic(builder, 's', statestr);
@@ -1985,6 +2130,10 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "UnregisterSignalLevelAgent", 0,
 				device_signal_agent_unregister,
 				"", "o", "path");
+	l_dbus_interface_method(interface, "StartAccessPoint", 0,
+				device_start_ap, "", "ss", "ssid", "wpa2_psk");
+	l_dbus_interface_method(interface, "StopAccessPoint", 0,
+				device_stop_ap, "", "");
 
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					device_property_get_name, NULL);
@@ -2002,15 +2151,6 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 					device_property_get_state, NULL);
 	l_dbus_interface_property(interface, "Adapter", 0, "o",
 					device_property_get_adapter, NULL);
-}
-
-static bool device_remove_network(const void *key, void *data, void *user_data)
-{
-	struct network *network = data;
-
-	network_remove(network, -ESHUTDOWN);
-
-	return true;
 }
 
 static void device_netdev_notify(struct netdev *netdev,
