@@ -203,7 +203,8 @@ unit_test_crypto_SOURCES = unit/test-crypto.c \
 unit_test_crypto_LDADD = ell/libell-internal.la
 
 unit_test_mpdu_SOURCES = unit/test-mpdu.c \
-				src/mpdu.h src/mpdu.c
+				src/mpdu.h src/mpdu.c \
+				src/ie.h src/ie.c
 unit_test_mpdu_LDADD = ell/libell-internal.la
 
 unit_test_eapol_SOURCES = unit/test-eapol.c \
