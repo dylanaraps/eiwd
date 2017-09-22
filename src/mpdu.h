@@ -33,7 +33,7 @@ enum mpdu_type {
 	MPDU_TYPE_MANAGEMENT = 0,
 };
 
-/* 802.11, Table 8-1 "Valid type and subtype combinations" */
+/* 802.11-2016, Table 9-1 "Valid type and subtype combinations" */
 enum mpdu_management_subtype {
 	MPDU_MANAGEMENT_SUBTYPE_ASSOCIATION_REQUEST    = 0x0,
 	MPDU_MANAGEMENT_SUBTYPE_ASSOCIATION_RESPONSE   = 0x1,
@@ -47,6 +47,8 @@ enum mpdu_management_subtype {
 	MPDU_MANAGEMENT_SUBTYPE_DISASSOCIATION         = 0xA,
 	MPDU_MANAGEMENT_SUBTYPE_AUTHENTICATION         = 0xB,
 	MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION       = 0xC,
+	MPDU_MANAGEMENT_SUBTYPE_ACTION                 = 0xD,
+	MPDU_MANAGEMENT_SUBTYPE_ACTION_NO_ACK          = 0xE,
 };
 
 /* 802.11, Section 8.4.1.1 Authentication Algorithm Number field */

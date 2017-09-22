@@ -153,6 +153,9 @@ static bool validate_mgmt_mpdu(const struct mmpdu_header *mpdu, int len,
 		return validate_authentication_mmpdu(mpdu, len, offset);
 	case MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION:
 		return validate_deauthentication_mmpdu(mpdu, len, offset);
+	case MPDU_MANAGEMENT_SUBTYPE_ACTION:
+	case MPDU_MANAGEMENT_SUBTYPE_ACTION_NO_ACK:
+		return true;
 	default:
 		return false;
 	}
