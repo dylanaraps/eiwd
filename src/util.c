@@ -131,3 +131,19 @@ bool util_string_to_address(const char *str, uint8_t *addr)
 
 	return true;
 }
+
+bool util_is_group_address(const uint8_t *addr)
+{
+	/* 802.11-2016 section 9.2.2 */
+	return util_is_bit_set(addr[0], 0);
+}
+
+bool util_is_broadcast_address(const uint8_t *addr)
+{
+	/* 802.11-2016 section 9.2.4.3 */
+	static const uint8_t bcast_addr[6] = {
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+	};
+
+	return !memcmp(addr, bcast_addr, 6);
+}

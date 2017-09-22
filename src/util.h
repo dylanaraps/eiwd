@@ -36,6 +36,8 @@ const char *util_ssid_to_utf8(size_t len, const uint8_t *ssid);
 bool util_ssid_is_utf8(size_t len, const uint8_t *ssid);
 const char *util_address_to_string(const uint8_t *addr);
 bool util_string_to_address(const char *str, uint8_t *addr);
+bool util_is_group_address(const uint8_t *addr);
+bool util_is_broadcast_address(const uint8_t *addr);
 
 static inline uint8_t util_bit_field(const uint8_t oct, int start, int num)
 {
