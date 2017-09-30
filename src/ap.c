@@ -855,9 +855,6 @@ static void ap_assoc_req_cb(struct netdev *netdev,
 	if (sta->assoc_resp_cmd_id)
 		return;
 
-	sta->capability = req->capability;
-	sta->listen_interval = L_LE16_TO_CPU(req->listen_interval);
-
 	ie_tlv_iter_init(&iter, req->ies, body_len - sizeof(*req));
 
 	while (ie_tlv_iter_next(&iter))
@@ -893,12 +890,7 @@ static void ap_assoc_req_cb(struct netdev *netdev,
 		goto bad_frame;
 	}
 
-	if (sta->rates)
-		l_uintset_free(sta->rates);
-
-	sta->rates = rates;
-
-	if (!ap_common_rates(ap->rates, sta->rates)) {
+	if (!ap_common_rates(ap->rates, rates)) {
 		err = MMPDU_REASON_CODE_UNSPECIFIED;
 		goto unsupported;
 	}
@@ -918,12 +910,6 @@ static void ap_assoc_req_cb(struct netdev *netdev,
 		goto unsupported;
 	}
 
-	if (sta->assoc_rsne)
-		l_free(sta->assoc_rsne);
-
-	sta->assoc_rsne = l_memdup(rsn, rsn_len);
-	sta->assoc_rsne_len = rsn_len;
-
 	/*
 	 * Everything fine so far, assign an AID, send response.  According
 	 * to 802.11-2016 11.3.5.3 l) we will only go to State 3
@@ -931,6 +917,24 @@ static void ap_assoc_req_cb(struct netdev *netdev,
 	 * up on resends.
 	 */
 	sta->aid = ++ap->last_aid;
+
+	sta->capability = req->capability;
+	sta->listen_interval = L_LE16_TO_CPU(req->listen_interval);
+
+	if (sta->rates)
+		l_uintset_free(sta->rates);
+
+	sta->rates = rates;
+
+	if (sta->assoc_rsne)
+		l_free(sta->assoc_rsne);
+
+	sta->assoc_rsne = l_memdup(rsn, rsn_len);
+	sta->assoc_rsne_len = rsn_len;
+
+	/* 802.11-2016 11.3.5.3 j) */
+	if (sta->rsna)
+		ap_drop_rsna(ap, sta);
 
 	sta->assoc_resp_cmd_id = ap_assoc_resp(ap, sta, sta->addr, sta->aid, 0,
 						ap_success_assoc_resp_cb);
@@ -944,10 +948,12 @@ bad_frame:
 	/*
 	 * TODO: MFP
 	 *
-	 * 802.11-2016 11.3.5.3 j)
-	 * "if management frame protection is in use the state for the STA
-	 * shall be left unchanged. and if management frame protection is
-	 * not in use set to State 3 if it was in State 4."
+	 * 802.11-2016 11.3.5.3 m)
+	 * "If the ResultCode in the MLME-ASSOCIATE.response primitive is
+	 * not SUCCESS and management frame protection is in use the state
+	 * for the STA shall be left unchanged.  If the ResultCode is not
+	 * SUCCESS and management frame protection is not in use the state
+	 * for the STA shall be set to State 3 if it was State 4."
 	 *
 	 * For now, we need to drop the RSNA.
 	 */
