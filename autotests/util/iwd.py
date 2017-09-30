@@ -99,7 +99,9 @@ class AsyncOpAbstract(object):
 
         self._is_completed = False
         if self._exception is not None:
-            raise self._exception
+            tmp = self._exception
+            self._exception = None
+            raise tmp
 
 
 class IWDDBusAbstract(AsyncOpAbstract):
