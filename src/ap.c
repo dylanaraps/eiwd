@@ -1457,11 +1457,6 @@ static void ap_deauth_cb(struct netdev *netdev, const struct mmpdu_header *hdr,
 	if (!sta)
 		return;
 
-	if (sta->assoc_resp_cmd_id) {
-		l_genl_family_cancel(nl80211, sta->assoc_resp_cmd_id);
-		sta->assoc_resp_cmd_id = 0;
-	}
-
 	if (sta->associated)
 		ap_disassociate_sta(ap, sta);
 
