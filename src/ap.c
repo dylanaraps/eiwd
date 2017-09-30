@@ -706,12 +706,13 @@ static uint32_t ap_send_mgmt_frame(struct ap_state *ap,
 	return id;
 }
 
-static void ap_new_sta_cb(struct l_genl_msg *msg, void *user_data)
+static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct sta_state *sta = user_data;
 
 	if (l_genl_msg_get_error(msg) < 0) {
-		l_error("NEW_STATION failed: %i", l_genl_msg_get_error(msg));
+		l_error("NEW_STATION/SET_STATION failed: %i",
+			l_genl_msg_get_error(msg));
 		return;
 	}
 
@@ -738,6 +739,10 @@ static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
 	uint8_t rates[256];
 	uint32_t r, minr, maxr, count = 0;
 	uint16_t capability = l_get_le16(&sta->capability);
+	uint8_t cmd = NL80211_CMD_NEW_STATION;
+
+	if (sta->associated)
+		cmd = NL80211_CMD_SET_STATION;
 
 	sta->associated = true;
 	sta->rsna = false;
@@ -750,7 +755,7 @@ static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
 		if (l_uintset_contains(sta->rates, r))
 			rates[count++] = r;
 
-	msg = l_genl_msg_new_sized(NL80211_CMD_NEW_STATION, 300);
+	msg = l_genl_msg_new_sized(cmd, 300);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_AID, 2, &sta->aid);
@@ -762,9 +767,12 @@ static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
 	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_CAPABILITY, 2,
 				&capability);
 
-	if (!l_genl_family_send(nl80211, msg, ap_new_sta_cb, sta, NULL)) {
+	if (!l_genl_family_send(nl80211, msg, ap_associate_sta_cb, sta, NULL)) {
 		l_genl_msg_unref(msg);
-		l_error("Issuing NEW_STATION failed");
+		if (cmd == NL80211_CMD_NEW_STATION)
+			l_error("Issuing NEW_STATION failed");
+		else
+			l_error("Issuing SET_STATION failed");
 	}
 }
 
@@ -812,7 +820,7 @@ static void ap_success_assoc_resp_cb(struct l_genl_msg *msg, void *user_data)
 	sta->assoc_resp_cmd_id = 0;
 
 	if (l_genl_msg_get_error(msg) < 0) {
-		l_error("AP Association Response not sent or not ACKed: %i",
+		l_error("AP (Re)Association Response not sent or not ACKed: %i",
 			l_genl_msg_get_error(msg));
 
 		/* If we were in State 3 or 4 go to back to State 2 */
@@ -822,31 +830,26 @@ static void ap_success_assoc_resp_cb(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	/* If we were in State 4, go to back to State 3 */
-	if (sta->rsna)
-		ap_drop_rsna(ap, sta);
+	/* If we were in State 2, 3 or 4 also go to State 3 */
+	ap_associate_sta(ap, sta);
 
-	/* If we were in State 2 also go to State 3 */
-	if (!sta->associated)
-		ap_associate_sta(ap, sta);
-
-	l_info("AP Association Response ACK received");
+	l_info("AP (Re)Association Response ACK received");
 }
 
 static void ap_fail_assoc_resp_cb(struct l_genl_msg *msg, void *user_data)
 {
 	if (l_genl_msg_get_error(msg) < 0)
-		l_error("AP Association Response with an error status not "
+		l_error("AP (Re)Association Response with an error status not "
 			"sent or not ACKed: %i", l_genl_msg_get_error(msg));
 	else
-		l_info("AP Association Response with an errror status "
+		l_info("AP (Re)Association Response with an errror status "
 			"delivered OK");
 }
 
 static uint32_t ap_assoc_resp(struct ap_state *ap, struct sta_state *sta,
 				const uint8_t *dest, uint16_t aid,
 				enum mmpdu_reason_code status_code,
-				l_genl_msg_func_t callback)
+				bool reassoc, l_genl_msg_func_t callback)
 {
 	const uint8_t *addr = device_get_address(ap->device);
 	uint8_t mpdu_buf[128];
@@ -861,7 +864,9 @@ static uint32_t ap_assoc_resp(struct ap_state *ap, struct sta_state *sta,
 	/* Header */
 	mpdu->fc.protocol_version = 0;
 	mpdu->fc.type = MPDU_TYPE_MANAGEMENT;
-	mpdu->fc.subtype = MPDU_MANAGEMENT_SUBTYPE_ASSOCIATION_RESPONSE;
+	mpdu->fc.subtype = reassoc ?
+		MPDU_MANAGEMENT_SUBTYPE_REASSOCIATION_RESPONSE :
+		MPDU_MANAGEMENT_SUBTYPE_ASSOCIATION_RESPONSE;
 	memcpy(mpdu->address_1, dest, 6);	/* DA */
 	memcpy(mpdu->address_2, addr, 6);	/* SA */
 	memcpy(mpdu->address_3, addr, 6);	/* BSSID */
@@ -896,53 +901,78 @@ static uint32_t ap_assoc_resp(struct ap_state *ap, struct sta_state *sta,
 					true, callback, sta);
 }
 
-
-/* 802.11-2016 9.3.3.6 (frame format), 802.11-2016 11.3.5.3 (MLME/SME) */
-static void ap_assoc_req_cb(struct netdev *netdev,
-				const struct mmpdu_header *hdr,
-				const void *body, size_t body_len,
-				void *user_data)
+/*
+ * This handles both the Association and Reassociation Request frames.
+ * Association Request is documented in 802.11-2016 9.3.3.6 (frame format),
+ * 802.11-2016 11.3.5.3 (MLME/SME) and Reassociation in 802.11-2016
+ * 9.3.3.8 (frame format), 802.11-2016 11.3.5.3 (MLME/SME).
+ *
+ * The difference between Association and Reassociation procedures is
+ * documented in 11.3.5.1 "General" but seems inconsistent with specific
+ * instructions in 11.3.5.3 vs. 11.3.5.5 and 11.3.5.2 vs. 11.3.5.4.
+ * According to 11.3.5.1:
+ *  1. Reassociation requires the STA to be already associated in the ESS,
+ *     Association doesn't.
+ *  2. Unsuccessful Reassociation should not cause a state transition of
+ *     the authentication state between the two STAs.
+ *
+ * The first requirement is not present in 11.3.5.5 which is virtually
+ * identical with 11.3.5.3, but we do implement it.  Number 2 is also not
+ * reflected in 11.3.5.5 where the state transitions are the same as in
+ * 11.3.5.3 and 11.3.5.4 where the state transitions are the same as in
+ * 11.3.5.2 including f) "If a Reassociation Response frame is received
+ * with a status code other than SUCCESS [...] 1. [...] the state for
+ * the AP [...] shall be set to State 2 [...]"
+ *
+ * For the record here are the apparent differences between 802.11-2016
+ * 11.3.5.2 and 11.3.5.4 ignoring the s/Associate/Reassociate/ changes
+ * and the special case of Reassociation during a Fast Transition.
+ *  o Points c) and d) are switched around.
+ *  o On success, the STA is disassociated from all other APs in 11.3.5.2,
+ *    and from the previous AP in 11.3.5.4 c).  (Shouldn't make a
+ *    difference as there seems to be no way for the STA to become
+ *    associated with more than one AP)
+ *  o After Association a 4-Way Handshake is always performed, after
+ *    Reassociation it is only performed if STA was in State 3 according
+ *    to 11.3.5.4 g).  This is not reflected in 11.3.5.5 though.
+ *    Additionally 11.3.5.4 and 11.3.5.5 require the STA and AP
+ *    respectively to delete current PTKSA/GTKSA/IGTKSA at the beginning
+ *    of the procedure independent of the STA state so without a 4-Way
+ *    Handshake the two stations end up with no encryption keys.
+ *
+ * The main difference between 11.3.5.3 and 11.3.5.5 is presence of p).
+ */
+static void ap_assoc_reassoc(struct sta_state *sta, bool reassoc,
+				const struct mmpdu_field_capability *capability,
+				uint16_t listen_interval,
+				struct ie_tlv_iter *ies)
 {
-	struct ap_state *ap = user_data;
-	struct sta_state *sta;
-	const uint8_t *from = hdr->address_2;
-	const struct mmpdu_association_request *req = body;
-	struct ie_tlv_iter iter;
+	struct ap_state *ap = sta->ap;
 	const char *ssid = NULL;
 	const uint8_t *rsn = NULL;
 	size_t ssid_len = 0, rsn_len = 0;
 	struct l_uintset *rates = NULL;
 	struct ie_rsn_info rsn_info;
-	const uint8_t *bssid = device_get_address(ap->device);
 	int err;
-
-	l_info("AP Association Request from %s", util_address_to_string(from));
-
-	if (memcmp(hdr->address_1, bssid, 6) ||
-			memcmp(hdr->address_3, bssid, 6))
-		return;
-
-	sta = l_queue_find(ap->sta_states, ap_sta_match_addr, from);
-	if (!sta) {
-		err = MMPDU_REASON_CODE_STA_REQ_ASSOC_WITHOUT_AUTH;
-		goto bad_frame;
-	}
 
 	if (sta->assoc_resp_cmd_id)
 		return;
 
-	ie_tlv_iter_init(&iter, req->ies, body_len - sizeof(*req));
+	if (reassoc && !sta->associated) {
+		err = MMPDU_REASON_CODE_CLASS3_FRAME_FROM_NONASSOC_STA;
+		goto unsupported;
+	}
 
-	while (ie_tlv_iter_next(&iter))
-		switch (ie_tlv_iter_get_tag(&iter)) {
+	while (ie_tlv_iter_next(ies))
+		switch (ie_tlv_iter_get_tag(ies)) {
 		case IE_TYPE_SSID:
-			ssid = (const char *) ie_tlv_iter_get_data(&iter);
-			ssid_len = ie_tlv_iter_get_length(&iter);
+			ssid = (const char *) ie_tlv_iter_get_data(ies);
+			ssid_len = ie_tlv_iter_get_length(ies);
 			break;
 
 		case IE_TYPE_SUPPORTED_RATES:
 		case IE_TYPE_EXTENDED_SUPPORTED_RATES:
-			if (ie_parse_supported_rates(&iter, &rates) < 0) {
+			if (ie_parse_supported_rates(ies, &rates) < 0) {
 				err = MMPDU_REASON_CODE_INVALID_IE;
 				goto bad_frame;
 			}
@@ -950,13 +980,13 @@ static void ap_assoc_req_cb(struct netdev *netdev,
 			break;
 
 		case IE_TYPE_RSN:
-			if (ie_parse_rsne(&iter, &rsn_info) < 0) {
+			if (ie_parse_rsne(ies, &rsn_info) < 0) {
 				err = MMPDU_REASON_CODE_INVALID_IE;
 				goto bad_frame;
 			}
 
-			rsn = (const uint8_t *) ie_tlv_iter_get_data(&iter);
-			rsn_len = ie_tlv_iter_get_length(&iter);
+			rsn = (const uint8_t *) ie_tlv_iter_get_data(ies);
+			rsn_len = ie_tlv_iter_get_length(ies);
 			break;
 		}
 
@@ -977,25 +1007,27 @@ static void ap_assoc_req_cb(struct netdev *netdev,
 	}
 
 	if (!(rsn_info.pairwise_ciphers & ap->ciphers)) {
-		err = MMPDU_REASON_CODE_UNSPECIFIED;
+		err = MMPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER;
 		goto unsupported;
 	}
 
 	if (rsn_info.akm_suites != IE_RSN_AKM_SUITE_PSK) {
-		err = MMPDU_REASON_CODE_UNSPECIFIED;
+		err = MMPDU_REASON_CODE_INVALID_AKMP;
 		goto unsupported;
 	}
 
-	/*
-	 * Everything fine so far, assign an AID, send response.  According
-	 * to 802.11-2016 11.3.5.3 l) we will only go to State 3
-	 * (set sta->associated) once we receive the station's ACK or gave
-	 * up on resends.
-	 */
-	sta->aid = ++ap->last_aid;
+	if (!sta->associated) {
+		/*
+		 * Everything fine so far, assign an AID, send response.
+		 * According to 802.11-2016 11.3.5.3 l) we will only go to
+		 * State 3 (set sta->associated) once we receive the station's
+		 * ACK or gave up on resends.
+		 */
+		sta->aid = ++ap->last_aid;
+	}
 
-	sta->capability = req->capability;
-	sta->listen_interval = L_LE16_TO_CPU(req->listen_interval);
+	sta->capability = *capability;
+	sta->listen_interval = listen_interval;
 
 	if (sta->rates)
 		l_uintset_free(sta->rates);
@@ -1013,9 +1045,10 @@ static void ap_assoc_req_cb(struct netdev *netdev,
 		ap_drop_rsna(ap, sta);
 
 	sta->assoc_resp_cmd_id = ap_assoc_resp(ap, sta, sta->addr, sta->aid, 0,
+						reassoc,
 						ap_success_assoc_resp_cb);
 	if (!sta->assoc_resp_cmd_id)
-		l_error("Sending success Association Response failed");
+		l_error("Sending success (Re)Association Response failed");
 
 	return;
 
@@ -1039,8 +1072,85 @@ bad_frame:
 	if (rates)
 		l_uintset_free(rates);
 
-	if (!ap_assoc_resp(ap, NULL, from, 0, err, ap_fail_assoc_resp_cb))
-		l_error("Sending error Association Response failed");
+	if (!ap_assoc_resp(ap, NULL, sta->addr, 0, err, reassoc,
+				ap_fail_assoc_resp_cb))
+		l_error("Sending error (Re)Association Response failed");
+}
+
+/* 802.11-2016 9.3.3.6 */
+static void ap_assoc_req_cb(struct netdev *netdev,
+				const struct mmpdu_header *hdr,
+				const void *body, size_t body_len,
+				void *user_data)
+{
+	struct ap_state *ap = user_data;
+	struct sta_state *sta;
+	const uint8_t *from = hdr->address_2;
+	const struct mmpdu_association_request *req = body;
+	const uint8_t *bssid = device_get_address(ap->device);
+	struct ie_tlv_iter iter;
+
+	l_info("AP Association Request from %s", util_address_to_string(from));
+
+	if (memcmp(hdr->address_1, bssid, 6) ||
+			memcmp(hdr->address_3, bssid, 6))
+		return;
+
+	sta = l_queue_find(ap->sta_states, ap_sta_match_addr, from);
+	if (!sta) {
+		if (!ap_assoc_resp(ap, NULL, from, 0,
+				MMPDU_REASON_CODE_STA_REQ_ASSOC_WITHOUT_AUTH,
+				false, ap_fail_assoc_resp_cb))
+			l_error("Sending error Association Response failed");
+
+		return;
+	}
+
+	ie_tlv_iter_init(&iter, req->ies, body_len - sizeof(*req));
+	ap_assoc_reassoc(sta, false, &req->capability,
+				L_LE16_TO_CPU(req->listen_interval), &iter);
+}
+
+/* 802.11-2016 9.3.3.8 */
+static void ap_reassoc_req_cb(struct netdev *netdev,
+				const struct mmpdu_header *hdr,
+				const void *body, size_t body_len,
+				void *user_data)
+{
+	struct ap_state *ap = user_data;
+	struct sta_state *sta;
+	const uint8_t *from = hdr->address_2;
+	const struct mmpdu_reassociation_request *req = body;
+	const uint8_t *bssid = device_get_address(ap->device);
+	struct ie_tlv_iter iter;
+	int err;
+
+	l_info("AP Reassociation Request from %s",
+		util_address_to_string(from));
+
+	if (memcmp(hdr->address_1, bssid, 6) ||
+			memcmp(hdr->address_3, bssid, 6))
+		return;
+
+	sta = l_queue_find(ap->sta_states, ap_sta_match_addr, from);
+	if (!sta) {
+		err = MMPDU_REASON_CODE_STA_REQ_ASSOC_WITHOUT_AUTH;
+		goto bad_frame;
+	}
+
+	if (memcmp(req->current_ap_address, bssid, 6)) {
+		err = MMPDU_REASON_CODE_UNSPECIFIED;
+		goto bad_frame;
+	}
+
+	ie_tlv_iter_init(&iter, req->ies, body_len - sizeof(*req));
+	ap_assoc_reassoc(sta, true, &req->capability,
+				L_LE16_TO_CPU(req->listen_interval), &iter);
+	return;
+
+bad_frame:
+	if (!ap_assoc_resp(ap, NULL, from, 0, err, true, ap_fail_assoc_resp_cb))
+		l_error("Sending error Reassociation Response failed");
 }
 
 static void ap_probe_resp_cb(struct l_genl_msg *msg, void *user_data)
@@ -1466,6 +1576,11 @@ int ap_start(struct device *device, const char *ssid, const char *psk,
 	id = netdev_frame_watch_add(netdev, 0x0000 |
 			(MPDU_MANAGEMENT_SUBTYPE_ASSOCIATION_REQUEST << 4),
 			NULL, 0, ap_assoc_req_cb, ap);
+	l_queue_push_tail(ap->frame_watch_ids, L_UINT_TO_PTR(id));
+
+	id = netdev_frame_watch_add(netdev, 0x0000 |
+			(MPDU_MANAGEMENT_SUBTYPE_REASSOCIATION_REQUEST << 4),
+			NULL, 0, ap_reassoc_req_cb, ap);
 	l_queue_push_tail(ap->frame_watch_ids, L_UINT_TO_PTR(id));
 
 	id = netdev_frame_watch_add(netdev, 0x0000 |
