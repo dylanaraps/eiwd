@@ -656,7 +656,6 @@ static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
 		.set = (1 << NL80211_STA_FLAG_AUTHENTICATED) |
 			(1 << NL80211_STA_FLAG_ASSOCIATED),
 	};
-	uint8_t key_id = 0;
 	uint8_t rates[256];
 	uint32_t r, minr, maxr, count = 0;
 	uint16_t capability = l_get_le16(&sta->capability);
@@ -688,23 +687,12 @@ static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
 		l_genl_msg_unref(msg);
 		l_error("Issuing NEW_STATION failed");
 	}
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_DEL_KEY, 64);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
-
-	if (!l_genl_family_send(nl80211, msg, ap_del_key_cb, NULL, NULL)) {
-		l_genl_msg_unref(msg);
-		l_error("Issuing DEL_KEY failed");
-	}
 }
 
 static void ap_disassociate_sta(struct ap_state *ap, struct sta_state *sta)
 {
 	struct l_genl_msg *msg;
 	uint32_t ifindex = device_get_ifindex(ap->device);
-	uint8_t key_id = 0;
 
 	sta->associated = false;
 	sta->rsna = false;
@@ -717,16 +705,6 @@ static void ap_disassociate_sta(struct ap_state *ap, struct sta_state *sta)
 	if (!l_genl_family_send(nl80211, msg, ap_del_sta_cb, NULL, NULL)) {
 		l_genl_msg_unref(msg);
 		l_error("Issuing DEL_STATION failed");
-	}
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_DEL_KEY, 64);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
-
-	if (!l_genl_family_send(nl80211, msg, ap_del_key_cb, NULL, NULL)) {
-		l_genl_msg_unref(msg);
-		l_error("Issuing DEL_KEY failed");
 	}
 }
 
