@@ -299,6 +299,9 @@ static void ap_set_rsn_info(struct ap_state *ap, struct ie_rsn_info *rsn)
 	rsn->group_cipher = IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC;
 }
 
+static void ap_error_deauth_sta(struct sta_state *sta,
+				enum mmpdu_reason_code reason);
+
 /* Default dot11RSNAConfigPairwiseUpdateCount value */
 #define AP_PAIRWISE_UPDATE_COUNT 3
 
@@ -381,7 +384,8 @@ static void ap_ptk_1_of_4_retry(struct l_timeout *timeout, void *user_data)
 	struct sta_state *sta = user_data;
 
 	if (sta->frame_retry >= AP_PAIRWISE_UPDATE_COUNT) {
-		/* TODO: Send Deauthenticate */
+		ap_error_deauth_sta(sta,
+				MMPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT);
 		return;
 	}
 
@@ -456,7 +460,8 @@ static void ap_ptk_3_of_4_retry(struct l_timeout *timeout, void *user_data)
 	struct sta_state *sta = user_data;
 
 	if (sta->frame_retry >= AP_PAIRWISE_UPDATE_COUNT) {
-		/* TODO: Send Deauthenticate */
+		ap_error_deauth_sta(sta,
+				MMPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT);
 		return;
 	}
 
@@ -501,9 +506,10 @@ static void ap_handle_ptk_2_of_4(struct sta_state *sta,
 	rsne = eapol_find_rsne(ek->key_data,
 				L_BE16_TO_CPU(ek->key_data_len), NULL);
 	if (!rsne || rsne[1] != sta->assoc_rsne_len ||
-			memcmp(rsne + 2, sta->assoc_rsne, rsne[1]))
-		/* TODO: Send Deauthenticate */
+			memcmp(rsne + 2, sta->assoc_rsne, rsne[1])) {
+		ap_error_deauth_sta(sta, MMPDU_REASON_CODE_IE_DIFFERENT);
 		return;
+	}
 
 	memcpy(sta->ptk, ptk_buf, ptk_size);
 	memcpy(sta->snonce, ek->key_nonce, sizeof(sta->snonce));
@@ -798,6 +804,36 @@ static void ap_disassociate_sta(struct ap_state *ap, struct sta_state *sta)
 		l_genl_msg_unref(msg);
 		l_error("Issuing DEL_STATION failed");
 	}
+}
+
+static void ap_error_deauth_sta(struct sta_state *sta,
+				enum mmpdu_reason_code reason)
+{
+	struct ap_state *ap = sta->ap;
+	const uint8_t *bssid = device_get_address(ap->device);
+	uint8_t mpdu_buf[128];
+	struct mmpdu_header *mpdu = (void *) mpdu_buf;
+	struct mmpdu_deauthentication *deauth;
+
+	memset(mpdu, 0, sizeof(*mpdu));
+	mpdu->fc.protocol_version = 0;
+	mpdu->fc.type = MPDU_TYPE_MANAGEMENT;
+	mpdu->fc.subtype = MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION;
+	memcpy(mpdu->address_1, sta->addr, 6);	/* DA */
+	memcpy(mpdu->address_2, bssid, 6);	/* SA */
+	memcpy(mpdu->address_3, bssid, 6);	/* BSSID */
+
+	deauth = (void *) mmpdu_body(mpdu);
+	deauth->reason_code = L_CPU_TO_LE16(reason);
+
+	ap_send_mgmt_frame(ap, mpdu, deauth->ies - mpdu_buf, false, NULL, NULL);
+
+	if (sta->associated)
+		ap_disassociate_sta(ap, sta);
+
+	l_queue_remove(ap->sta_states, sta);
+
+	ap_sta_free(sta);
 }
 
 static bool ap_common_rates(struct l_uintset *ap_rates,
