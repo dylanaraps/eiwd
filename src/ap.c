@@ -795,19 +795,11 @@ static void ap_disassociate_sta(struct ap_state *ap, struct sta_state *sta)
 static bool ap_common_rates(struct l_uintset *ap_rates,
 				struct l_uintset *sta_rates)
 {
-	uint32_t r, minr, maxr;
-
-	minr = l_uintset_find_min(ap_rates);
-	maxr = l_uintset_find_max(ap_rates);
+	uint32_t minr = l_uintset_find_min(ap_rates);
 
 	/* Our lowest rate is a Basic Rate so must be supported */
-	if (!l_uintset_contains(sta_rates, minr))
-		return false;
-
-	for (r = minr + 1; r <= maxr; r++)
-		if (l_uintset_contains(ap_rates, r) &&
-				l_uintset_contains(sta_rates, r))
-			return true;
+	if (l_uintset_contains(sta_rates, minr))
+		return true;
 
 	return false;
 }
