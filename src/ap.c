@@ -523,10 +523,12 @@ static size_t ap_build_beacon_pr_head(struct ap_state *ap,
 					const uint8_t *dest, uint8_t *out_buf)
 {
 	struct mmpdu_header *mpdu = (void *) out_buf;
-	size_t len;
+	unsigned int len;
 	uint16_t capability = IE_BSS_CAP_ESS | IE_BSS_CAP_PRIVACY;
 	const uint8_t *bssid = device_get_address(ap->device);
 	uint32_t minr, maxr, count, r;
+	uint8_t *rates;
+	struct ie_tlv_builder builder;
 
 	memset(mpdu, 0, 36); /* Zero out header + non-IE fields */
 
@@ -541,16 +543,18 @@ static size_t ap_build_beacon_pr_head(struct ap_state *ap,
 	/* Body non-IE fields */
 	l_put_le16(ap->beacon_interval, out_buf + 32);	/* Beacon Interval */
 	l_put_le16(capability, out_buf + 34);		/* Capability Info */
-	len = 36;
+
+	ie_tlv_builder_init(&builder);
+	builder.tlv = out_buf + 36;
 
 	/* SSID IE */
-	out_buf[len++] = IE_TYPE_SSID;
-	out_buf[len++] = strlen(ap->ssid);
-	memcpy(out_buf + len, ap->ssid, strlen(ap->ssid));
-	len += strlen(ap->ssid);
+	ie_tlv_builder_next(&builder, IE_TYPE_SSID);
+	ie_tlv_builder_set_length(&builder, strlen(ap->ssid));
+	memcpy(ie_tlv_builder_get_data(&builder), ap->ssid, strlen(ap->ssid));
 
 	/* Supported Rates IE */
-	out_buf[len++] = IE_TYPE_SUPPORTED_RATES;
+	ie_tlv_builder_next(&builder, IE_TYPE_SUPPORTED_RATES);
+	rates = ie_tlv_builder_get_data(&builder);
 
 	minr = l_uintset_find_min(ap->rates);
 	maxr = l_uintset_find_max(ap->rates);
@@ -563,18 +567,19 @@ static size_t ap_build_beacon_pr_head(struct ap_state *ap,
 			if (count == 0)
 				flag = 0x80;
 
-			out_buf[len + 1 + count++] = r | flag;
+			*rates++ = r | flag;
 		}
 
-	out_buf[len++] = count;
-	len += count;
+	ie_tlv_builder_set_length(&builder, rates -
+					ie_tlv_builder_get_data(&builder));
 
 	/* DSSS Parameter Set IE for DSSS, HR, ERP and HT PHY rates */
-	out_buf[len++] = IE_TYPE_DSSS_PARAMETER_SET;
-	out_buf[len++] = 1;
-	out_buf[len++] = ap->channel;
+	ie_tlv_builder_next(&builder, IE_TYPE_DSSS_PARAMETER_SET);
+	ie_tlv_builder_set_length(&builder, 1);
+	((uint8_t *) ie_tlv_builder_get_data(&builder))[0] = ap->channel;
 
-	return len;
+	ie_tlv_builder_finalize(&builder, &len);
+	return 36 + len;
 }
 
 /* Beacon / Probe Response frame portion after the TIM IE */
