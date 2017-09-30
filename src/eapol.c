@@ -1820,6 +1820,7 @@ struct preauth_sm {
 	eapol_preauth_destroy_func_t destroy;
 	void *user_data;
 	struct l_timeout *timeout;
+	uint32_t watch_id;
 	bool initial_rx:1;
 };
 
@@ -1834,28 +1835,8 @@ static void preauth_sm_destroy(void *value)
 
 	eap_free(sm->eap);
 	l_timeout_remove(sm->timeout);
+	eapol_frame_watch_remove(sm->watch_id);
 	l_free(sm);
-}
-
-static struct preauth_sm *preauth_find_sm(uint32_t ifindex, const uint8_t *aa)
-{
-	const struct l_queue_entry *entry;
-	struct preauth_sm *sm;
-
-	for (entry = l_queue_get_entries(preauths); entry;
-			entry = entry->next) {
-		sm = entry->data;
-
-		if (sm->ifindex != ifindex)
-			continue;
-
-		if (memcmp(sm->aa, aa, 6))
-			continue;
-
-		return sm;
-	}
-
-	return NULL;
 }
 
 static void preauth_frame(struct preauth_sm *sm, uint8_t packet_type,
@@ -1874,12 +1855,16 @@ static void preauth_frame(struct preauth_sm *sm, uint8_t packet_type,
 	pae_write(sm->ifindex, sm->aa, sm->spa, 0x88c7, frame);
 }
 
-static void preauth_rx_packet(struct preauth_sm *sm,
-				const uint8_t *frame, size_t len)
+static void preauth_rx_packet(uint16_t proto, const uint8_t *from,
+				const struct eapol_frame *frame,
+				void *user_data)
 {
-	const struct eapol_header *eh = (const struct eapol_header *) frame;
+	struct preauth_sm *sm = user_data;
 
-	if (eh->packet_type != 0) /* EAPOL-EAP */
+	if (proto != 0x88c7 || memcmp(from, sm->aa, 6))
+		return;
+
+	if (frame->header.packet_type != 0) /* EAPOL-EAP */
 		return;
 
 	if (!sm->initial_rx) {
@@ -1895,7 +1880,8 @@ static void preauth_rx_packet(struct preauth_sm *sm,
 		l_timeout_modify(sm->timeout, EAPOL_TIMEOUT_SEC * 3);
 	}
 
-	eap_rx_packet(sm->eap, frame + 4, L_BE16_TO_CPU(eh->packet_len));
+	eap_rx_packet(sm->eap, frame->data,
+			L_BE16_TO_CPU(frame->header.packet_len));
 }
 
 static void preauth_eap_msg_cb(const uint8_t *eap_data, size_t len,
@@ -1992,6 +1978,9 @@ struct preauth_sm *eapol_preauth_start(const uint8_t *aa,
 	sm->timeout = l_timeout_create(EAPOL_TIMEOUT_SEC, preauth_timeout,
 					sm, NULL);
 
+	sm->watch_id = eapol_frame_watch_add(sm->ifindex,
+						preauth_rx_packet, sm);
+
 	l_queue_push_head(preauths, sm);
 
 	/* Send EAPOL-Start */
@@ -2060,15 +2049,6 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *src, uint16_t proto,
 					L_UINT_TO_PTR(ifindex),
 					eapol_frame_watch_func_t, proto, src,
 					(const struct eapol_frame *) eh);
-
-	if (proto == 0x88c7) {
-		struct preauth_sm *sm = preauth_find_sm(ifindex, src);
-
-		if (!sm)
-			return;
-
-		preauth_rx_packet(sm, frame, len);
-	}
 }
 
 bool eapol_init()
