@@ -104,7 +104,7 @@ class Test(unittest.TestCase):
         testutil.test_iface_operstate(device.name)
         testutil.test_ifaces_connected(bss_hostapd[0].ifname, device.name)
         self.assertRaises(Exception, testutil.test_ifaces_connected,
-                          (bss_hostapd[1].ifname, device.name))
+                          bss_hostapd[1].ifname, device.name)
 
         # Check that iwd starts transition to BSS 1 in less than 15 seconds
         rule0.signal = -8000
