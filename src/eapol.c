@@ -772,11 +772,6 @@ struct eapol_key *eapol_create_gtk_2_of_2(
 	return step2;
 }
 
-struct eapol_buffer {
-	size_t len;
-	uint8_t data[0];
-};
-
 struct eapol_sm {
 	struct handshake_state *handshake;
 	enum eapol_protocol_version protocol_version;
@@ -791,7 +786,8 @@ struct eapol_sm {
 	bool require_handshake:1;
 	bool eap_exchanged:1;
 	struct eap_state *eap;
-	struct eapol_buffer *early_frame;
+	struct eapol_frame *early_frame;
+	uint32_t watch_id;
 };
 
 static void eapol_sm_destroy(void *value)
@@ -805,6 +801,8 @@ static void eapol_sm_destroy(void *value)
 		eap_free(sm->eap);
 
 	l_free(sm->early_frame);
+
+	eapol_frame_watch_remove(sm->watch_id);
 
 	l_free(sm);
 
@@ -1390,7 +1388,7 @@ static struct eapol_sm *eapol_find_sm(uint32_t ifindex, const uint8_t *aa)
 }
 
 static void eapol_key_handle(struct eapol_sm *sm,
-				const uint8_t *frame, size_t len)
+				const struct eapol_frame *frame)
 {
 	const struct eapol_key *ek;
 	const struct crypto_ptk *ptk;
@@ -1398,7 +1396,9 @@ static void eapol_key_handle(struct eapol_sm *sm,
 	size_t key_data_len = 0;
 	uint64_t replay_counter;
 
-	ek = eapol_key_validate(frame, len);
+	ek = eapol_key_validate((const uint8_t *) frame,
+				sizeof(struct eapol_header) +
+				L_BE16_TO_CPU(frame->header.packet_len));
 	if (!ek)
 		return;
 
@@ -1599,13 +1599,18 @@ void eapol_sm_set_require_handshake(struct eapol_sm *sm, bool enabled)
 		sm->use_eapol_start = false;
 }
 
-static void eapol_rx_packet(struct eapol_sm *sm,
-					const uint8_t *frame, size_t len)
+static void eapol_rx_packet(uint16_t proto, const uint8_t *from,
+				const struct eapol_frame *frame,
+				void *user_data)
 {
-	const struct eapol_header *eh = (const struct eapol_header *) frame;
+	struct eapol_sm *sm = user_data;
+
+	if (proto != ETH_P_PAE || memcmp(from, sm->handshake->aa, 6))
+		return;
 
 	if (!sm->started) {
-		struct eapol_buffer *buf;
+		size_t len = sizeof(struct eapol_header) +
+			L_BE16_TO_CPU(frame->header.packet_len);
 
 		/*
 		 * If the state machine hasn't started yet save the frame
@@ -1614,20 +1619,15 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 		if (sm->early_frame) /* Is the 1-element queue full */
 			return;
 
-		buf = l_malloc(sizeof(struct eapol_buffer) + len);
-
-		buf->len = len;
-		memcpy(buf->data, frame, len);
-
-		sm->early_frame = buf;
+		sm->early_frame = l_memdup(frame, len);
 
 		return;
 	}
 
 	if (!sm->protocol_version)
-		sm->protocol_version = eh->protocol_version;
+		sm->protocol_version = frame->header.protocol_version;
 
-	switch (eh->packet_type) {
+	switch (frame->header.packet_type) {
 	case 0: /* EAPOL-EAP */
 		l_timeout_remove(sm->eapol_start_timeout);
 		sm->eapol_start_timeout = 0;
@@ -1646,8 +1646,8 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 
 		sm->eap_exchanged = true;
 
-		eap_rx_packet(sm->eap, frame + 4,
-				L_BE16_TO_CPU(eh->packet_len));
+		eap_rx_packet(sm->eap, frame->data,
+				L_BE16_TO_CPU(frame->header.packet_len));
 
 		break;
 
@@ -1668,7 +1668,7 @@ static void eapol_rx_packet(struct eapol_sm *sm,
 			return;
 		}
 
-		eapol_key_handle(sm, frame, len);
+		eapol_key_handle(sm, frame);
 		break;
 
 	default:
@@ -1715,6 +1715,9 @@ void __eapol_set_rekey_offload_func(eapol_rekey_offload_func_t func)
 void eapol_register(struct eapol_sm *sm)
 {
 	l_queue_push_head(state_machines, sm);
+
+	sm->watch_id = eapol_frame_watch_add(sm->handshake->ifindex,
+						eapol_rx_packet, sm);
 }
 
 void eapol_start(struct eapol_sm *sm)
@@ -1753,11 +1756,10 @@ void eapol_start(struct eapol_sm *sm)
 
 	/* Process any frames received early due to scheduling */
 	if (sm->early_frame) {
-		struct eapol_buffer *tmp = sm->early_frame;
-
+		eapol_rx_packet(ETH_P_PAE, sm->handshake->aa,
+				sm->early_frame, sm);
+		l_free(sm->early_frame);
 		sm->early_frame = NULL;
-		eapol_rx_packet(sm, tmp->data, tmp->len);
-		l_free(tmp);
 	}
 
 	return;
@@ -2050,7 +2052,7 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *src, uint16_t proto,
 		return;
 	}
 
-	if (len < (size_t) 4 + L_BE16_TO_CPU(eh->packet_len))
+	if (len < sizeof(struct eapol_header) + L_BE16_TO_CPU(eh->packet_len))
 		return;
 
 	WATCHLIST_NOTIFY_MATCHES(&frame_watches,
@@ -2059,14 +2061,7 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *src, uint16_t proto,
 					eapol_frame_watch_func_t, proto, src,
 					(const struct eapol_frame *) eh);
 
-	if (proto == ETH_P_PAE) {
-		struct eapol_sm *sm = eapol_find_sm(ifindex, src);
-
-		if (!sm)
-			return;
-
-		eapol_rx_packet(sm, frame, len);
-	} else if (proto == 0x88c7) {
+	if (proto == 0x88c7) {
 		struct preauth_sm *sm = preauth_find_sm(ifindex, src);
 
 		if (!sm)
