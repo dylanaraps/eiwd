@@ -79,6 +79,8 @@ struct sta_state {
 	uint8_t anonce[32];
 	uint8_t snonce[32];
 	uint8_t ptk[64];
+	unsigned int frame_retry;
+	struct l_timeout *frame_timeout;
 	bool have_anonce : 1;
 	bool ptk_complete : 1;
 };
@@ -96,6 +98,9 @@ static void ap_sta_free(void *data)
 
 	if (sta->assoc_resp_cmd_id)
 		l_genl_family_cancel(nl80211, sta->assoc_resp_cmd_id);
+
+	if (sta->frame_timeout)
+		l_timeout_remove(sta->frame_timeout);
 
 	l_free(sta);
 }
@@ -257,6 +262,11 @@ static void ap_drop_rsna(struct ap_state *ap, struct sta_state *sta)
 
 	sta->rsna = false;
 
+	if (sta->frame_timeout) {
+		l_timeout_remove(sta->frame_timeout);
+		sta->frame_timeout = NULL;
+	}
+
 	msg = l_genl_msg_new_sized(NL80211_CMD_SET_STATION, 128);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
@@ -287,6 +297,40 @@ static void ap_set_rsn_info(struct ap_state *ap, struct ie_rsn_info *rsn)
 	rsn->akm_suites = IE_RSN_AKM_SUITE_PSK;
 	rsn->pairwise_ciphers = ap->ciphers;
 	rsn->group_cipher = IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC;
+}
+
+/* Default dot11RSNAConfigPairwiseUpdateCount value */
+#define AP_PAIRWISE_UPDATE_COUNT 3
+
+static void ap_set_eapol_key_timeout(struct sta_state *sta,
+					l_timeout_notify_cb_t cb)
+{
+	/*
+	 * 802.11-2016 12.7.6.6: "The retransmit timeout value shall be
+	 * 100 ms for the first timeout, half the listen interval for the
+	 * second timeout, and the listen interval for subsequent timeouts.
+	 * If there is no listen interval or the listen interval is zero,
+	 * then 100 ms shall be used for all timeout values."
+	 */
+	unsigned int timeout_ms = 100;
+	unsigned int beacon_us = sta->ap->beacon_interval * 1024;
+
+	sta->frame_retry++;
+
+	if (sta->frame_retry == 2 && sta->listen_interval != 0)
+		timeout_ms = sta->listen_interval * beacon_us / 2000;
+	else if (sta->frame_retry > 2 && sta->listen_interval != 0)
+		timeout_ms = sta->listen_interval * beacon_us / 1000;
+
+	if (sta->frame_retry > 1)
+		l_timeout_modify_ms(sta->frame_timeout, timeout_ms);
+	else {
+		if (sta->frame_timeout)
+			l_timeout_remove(sta->frame_timeout);
+
+		sta->frame_timeout = l_timeout_create_ms(timeout_ms, cb, sta,
+								NULL);
+	}
 }
 
 /* 802.11-2016 Section 12.7.6.2 */
@@ -330,6 +374,22 @@ static void ap_send_ptk_1_of_4(struct ap_state *ap, struct sta_state *sta)
 
 	eapol_tx_frame(ifindex, ETH_P_PAE, sta->addr,
 			(struct eapol_frame *) ek);
+}
+
+static void ap_ptk_1_of_4_retry(struct l_timeout *timeout, void *user_data)
+{
+	struct sta_state *sta = user_data;
+
+	if (sta->frame_retry >= AP_PAIRWISE_UPDATE_COUNT) {
+		/* TODO: Send Deauthenticate */
+		return;
+	}
+
+	ap_send_ptk_1_of_4(sta->ap, sta);
+
+	ap_set_eapol_key_timeout(sta, ap_ptk_1_of_4_retry);
+
+	l_debug("attempt %i", sta->frame_retry);
 }
 
 /* 802.11-2016 Section 12.7.6.4 */
@@ -391,6 +451,22 @@ static void ap_send_ptk_3_of_4(struct ap_state *ap, struct sta_state *sta)
 			(struct eapol_frame *) ek);
 }
 
+static void ap_ptk_3_of_4_retry(struct l_timeout *timeout, void *user_data)
+{
+	struct sta_state *sta = user_data;
+
+	if (sta->frame_retry >= AP_PAIRWISE_UPDATE_COUNT) {
+		/* TODO: Send Deauthenticate */
+		return;
+	}
+
+	ap_send_ptk_3_of_4(sta->ap, sta);
+
+	ap_set_eapol_key_timeout(sta, ap_ptk_3_of_4_retry);
+
+	l_debug("attempt %i", sta->frame_retry);
+}
+
 /* 802.11-2016 Section 12.7.6.3 */
 static void ap_handle_ptk_2_of_4(struct sta_state *sta,
 					const struct eapol_key *ek)
@@ -433,8 +509,8 @@ static void ap_handle_ptk_2_of_4(struct sta_state *sta,
 	memcpy(sta->snonce, ek->key_nonce, sizeof(sta->snonce));
 	sta->ptk_complete = true;
 
-	/* TODO: retry counters and timers */
-	ap_send_ptk_3_of_4(sta->ap, sta);
+	sta->frame_retry = 0;
+	ap_ptk_3_of_4_retry(NULL, sta);
 }
 
 /* 802.11-2016 Section 12.7.6.5 */
@@ -453,6 +529,9 @@ static void ap_handle_ptk_4_of_4(struct sta_state *sta,
 
 	if (!eapol_verify_mic(ptk->kck, ek))
 		return;
+
+	l_timeout_remove(sta->frame_timeout);
+	sta->frame_timeout = NULL;
 
 	ap_new_rsna(sta->ap, sta);
 }
@@ -636,8 +715,8 @@ static void ap_new_sta_cb(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	/* TODO: retry counters and timers */
-	ap_send_ptk_1_of_4(sta->ap, sta);
+	sta->frame_retry = 0;
+	ap_ptk_1_of_4_retry(NULL, sta);
 }
 
 static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
@@ -696,6 +775,11 @@ static void ap_disassociate_sta(struct ap_state *ap, struct sta_state *sta)
 
 	sta->associated = false;
 	sta->rsna = false;
+
+	if (sta->frame_timeout) {
+		l_timeout_remove(sta->frame_timeout);
+		sta->frame_timeout = NULL;
+	}
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_DEL_STATION, 64);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
