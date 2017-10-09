@@ -134,8 +134,7 @@ tools_test_runner_LDADD = ell/libell-internal.la
 
 unit_tests = unit/test-cmac-aes \
 		unit/test-hmac-md5 unit/test-hmac-sha1 unit/test-hmac-sha256 \
-		unit/test-pbkdf2-sha1 unit/test-prf-sha1 \
-		unit/test-kdf-sha256 \
+		unit/test-prf-sha1 unit/test-kdf-sha256 \
 		unit/test-crypto unit/test-eapol unit/test-mpdu \
 		unit/test-ie unit/test-ssid-to-utf8 unit/test-ssid-security \
 		unit/test-arc4 unit/test-wsc unit/test-eap-mschapv2 \
@@ -182,10 +181,6 @@ unit_test_hmac_sha1_LDADD = ell/libell-internal.la
 unit_test_hmac_sha256_SOURCES = unit/test-hmac-sha256.c \
 					src/crypto.h src/crypto.c
 unit_test_hmac_sha256_LDADD = ell/libell-internal.la
-
-unit_test_pbkdf2_sha1_SOURCES = unit/test-pbkdf2-sha1.c \
-					src/crypto.h src/crypto.c
-unit_test_pbkdf2_sha1_LDADD = ell/libell-internal.la
 
 unit_test_prf_sha1_SOURCES = unit/test-prf-sha1.c \
 					src/crypto.h src/crypto.c
