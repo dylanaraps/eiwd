@@ -72,10 +72,6 @@ bool arc4_skip(const uint8_t *key, size_t key_len, size_t skip,
 int crypto_cipher_key_len(enum crypto_cipher cipher);
 int crypto_cipher_tk_bits(enum crypto_cipher cipher);
 
-bool pbkdf2_sha1(const void *password, size_t password_len,
-			const void *salt, size_t salt_len,
-			unsigned int iterations, void *output, size_t size);
-
 int crypto_psk_from_passphrase(const char *passphrase,
 				const unsigned char *ssid, size_t ssid_len,
 				unsigned char *out_psk);
