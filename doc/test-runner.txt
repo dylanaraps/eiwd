@@ -279,6 +279,12 @@ follows:
 
 		#CONFIG_IEEE80211R=y
 
+	For EAP-SIM/AKA tests uncomment the following:
+
+		#CONFIG_EAP_SIM=y
+		#CONDIG_EAP_AKA=y
+		#CONFIG_EAP_AKA_PRIME=y
+
 	Note: You may need to pre-install: 'gnutls-devel' and 'libgcrypt-devel'
 	libraries.
 
