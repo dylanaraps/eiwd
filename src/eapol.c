@@ -1246,12 +1246,6 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 
 	ptk = handshake_state_get_ptk(sm->handshake);
 
-	/*
-	 * 802.11-2012, Section 11.6.6.4, step b):
-	 * Verifies the Message 3 MIC. If the calculated MIC does not match
-	 * the MIC that the Authenticator included in the EAPOL-Key frame,
-	 * the Supplicant silently discards Message 3.
-	 */
 	if (!eapol_calculate_mic(ptk->kck, step4, mic))
 		goto fail;
 
@@ -1341,11 +1335,6 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 					sm->replay_counter,
 					sm->handshake->wpa_ie, ek->wpa_key_id);
 
-	/*
-	 * 802.11-2012, Section 11.6.7.3, step b):
-	 * Verifies that the MIC is valid, i.e., it uses the KCK that is
-	 * part of the PTK to verify that there is no data integrity error.
-	 */
 	ptk = handshake_state_get_ptk(sm->handshake);
 
 	if (!eapol_calculate_mic(ptk->kck, step2, mic))
