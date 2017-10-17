@@ -1,6 +1,8 @@
 import socket
 import os
 import threading
+import sys
+import signal
 from Crypto.Cipher import AES
 
 class AuthCenter:
@@ -13,7 +15,7 @@ class AuthCenter:
         self._read_config(config_file)
         self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         self._socket.setblocking(0)
-        if os.path.isfile(sock_path):
+        if os.path.exists(sock_path):
             os.unlink(sock_path)
         self._socket.bind(sock_path)
 
@@ -48,7 +50,12 @@ class AuthCenter:
         if data[:12] == "SIM-REQ-AUTH":
             # SIM requests just return the stored values for the IMSI
             imsi, num_chals = data[13:].split(' ')
-            data = self._database[imsi]
+            if not imsi or not num_chals:
+                return "ERROR"
+
+            data = self._database.get(imsi, None)
+            if not data:
+                return "ERROR"
 
             response = "SIM-RESP-AUTH %s" % imsi
             response += (' ' + data)*int(num_chals)
@@ -57,7 +64,13 @@ class AuthCenter:
         elif data[:12] == "AKA-REQ-AUTH":
             # AKA requests must compute the milenage parameters for the IMSI
             imsi = data.split(' ')[1]
-            data = self._database[imsi]
+            data = self._database.get(imsi, None)
+            if not data:
+                return "ERROR"
+
+            # make sure this is an AKA entry
+            if len(data.split(':')) < 4:
+                return "ERROR"
 
             k, opc, amf, sqn = data.split(':')
 
@@ -172,3 +185,22 @@ class AuthCenter:
         self._rxhandle.shutdown = True
         self._rxhandle.join()
         self._socket.close()
+
+if __name__ == '__main__':
+    '''
+        This will run in a stand-alone mode for testing
+    '''
+    if len(sys.argv) < 3:
+        print('Usage: ./hlrauc.py <sock_path> <config>')
+        sys.exit()
+
+    hlrauc = AuthCenter(sys.argv[1], sys.argv[2])
+
+    def signal_handler(signal, frame):
+        print('Exiting...')
+        hlrauc.stop()
+        sys.exit()
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    signal.pause()
