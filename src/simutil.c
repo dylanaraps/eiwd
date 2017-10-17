@@ -469,7 +469,7 @@ void eap_sim_client_error(struct eap_state *eap, enum eap_type type,
 }
 
 size_t eap_sim_add_attribute(uint8_t *buf, enum eap_sim_at attr,
-		uint8_t ptype, uint8_t *data, uint16_t dlen)
+		uint8_t ptype, const uint8_t *data, uint16_t dlen)
 {
 	int i;
 	uint8_t pos = 0;
