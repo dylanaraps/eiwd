@@ -1260,11 +1260,15 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 
 	ptk = handshake_state_get_ptk(sm->handshake);
 
-	if (!eapol_calculate_mic(ptk->kck, step4, mic))
-		goto fail;
+	if (!eapol_calculate_mic(ptk->kck, step4, mic)) {
+		l_free(step4);
+		handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
+		return;
+	}
 
 	memcpy(step4->key_mic_data, mic, sizeof(mic));
 	eapol_write(sm, (struct eapol_frame *) step4);
+	l_free(step4);
 
 	handshake_state_install_ptk(sm->handshake);
 
@@ -1279,9 +1283,6 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 	if (rekey_offload)
 		rekey_offload(sm->handshake->ifindex, ptk->kek, ptk->kck,
 				sm->replay_counter, sm->user_data);
-
-fail:
-	l_free(step4);
 
 	return;
 
@@ -1369,11 +1370,15 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 
 	ptk = handshake_state_get_ptk(sm->handshake);
 
-	if (!eapol_calculate_mic(ptk->kck, step2, mic))
-		goto done;
+	if (!eapol_calculate_mic(ptk->kck, step2, mic)) {
+		l_free(step2);
+		handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
+		return;
+	}
 
 	memcpy(step2->key_mic_data, mic, sizeof(mic));
 	eapol_write(sm, (struct eapol_frame *) step2);
+	l_free(step2);
 
 	handshake_state_install_gtk(sm->handshake, gtk_key_index,
 					gtk, gtk_len, ek->key_rsc, 6);
@@ -1382,9 +1387,6 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 		handshake_state_install_igtk(sm->handshake, igtk_key_index,
 						igtk + 6, igtk_len - 6, igtk);
 	}
-
-done:
-	l_free(step2);
 }
 
 static struct eapol_sm *eapol_find_sm(uint32_t ifindex, const uint8_t *aa)
