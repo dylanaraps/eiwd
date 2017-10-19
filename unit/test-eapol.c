@@ -50,6 +50,7 @@ static size_t expected_step2_frame_size;
 static bool verify_step4_called;
 /* Whether install_tk was called with the right info */
 static bool verify_install_tk_called;
+static bool verify_install_gtk_called;
 /* PTK Handshake 4-of-4 frame we are expected to generate + its size */
 static const uint8_t *expected_step4_frame;
 static size_t expected_step4_frame_size;
@@ -2424,6 +2425,252 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 	eapol_exit();
 }
 
+static void verify_install_tk(uint32_t ifindex, const uint8_t *aa_addr,
+				const uint8_t *tk, uint32_t cipher,
+				void *user_data)
+{
+	assert(ifindex == 1);
+	assert(!memcmp(aa_addr, aa, 6));
+
+	if (user_data) {
+		assert(!memcmp(tk, user_data, 32));
+		assert(cipher == CRYPTO_CIPHER_TKIP);
+	}
+
+	verify_install_tk_called = true;
+}
+
+static void verify_install_gtk(uint32_t ifindex, uint8_t key_index,
+				const uint8_t *gtk, uint8_t gtk_len,
+				const uint8_t *rsc, uint8_t rsc_len,
+				uint32_t cipher, void *user_data)
+{
+	assert(ifindex == 1);
+	verify_install_gtk_called = true;
+}
+
+static inline size_t EKL(const struct eapol_key *frame)
+{
+	return sizeof(*frame) + L_BE16_TO_CPU(frame->key_data_len);
+}
+
+static struct eapol_key *UPDATED_REPLAY_COUNTER(const struct eapol_key *frame,
+							uint64_t replay_counter,
+							struct crypto_ptk *ptk)
+{
+	struct eapol_key *ret = l_memdup(frame, EKL(frame));
+	uint8_t mic[16];
+
+	ret->key_replay_counter = L_CPU_TO_BE64(replay_counter);
+	memset(ret->key_mic_data, 0, sizeof(ret->key_mic_data));
+	eapol_calculate_mic(ptk->kck, ret, mic);
+	memcpy(ret->key_mic_data, mic, sizeof(mic));
+
+	return ret;
+}
+
+static void eapol_sm_wpa2_retransmit_test(const void *data)
+{
+	static uint8_t ap_address[] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	static uint8_t sta_address[] = { 0x02, 0x00, 0x00, 0x00, 0x01, 0x00 };
+	const char *passphrase = "EasilyGuessedPassword";
+	const char *ssid = "TestWPA";
+	unsigned char psk[32];
+	const unsigned char ap_rsne[] = {
+		0x30, 0x12, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04,
+		0x01, 0x00, 0x00, 0x0f, 0xac, 0x04, 0x01, 0x00,
+		0x00, 0x0f, 0xac, 0x02 };
+	uint8_t new_snonce[32];
+	struct crypto_ptk *ptk;
+	size_t ptk_len;
+	struct eapol_key *expect;
+	struct eapol_key *retransmit;
+	bool r;
+	const struct eapol_key *ptk_step1;
+	const struct eapol_key *ptk_step2;
+	const struct eapol_key *ptk_step3;
+	const struct eapol_key *ptk_step4;
+	const struct eapol_key *gtk_step1;
+	const struct eapol_key *gtk_step2;
+	struct handshake_state *hs;
+	struct eapol_sm *sm;
+	uint64_t replay_counter;
+
+	aa = ap_address;
+	spa = sta_address;
+
+	crypto_psk_from_passphrase(passphrase, (uint8_t *) ssid,
+							strlen(ssid), psk);
+
+	eapol_init();
+	hs = handshake_state_new(1);
+	sm = eapol_sm_new(hs);
+	eapol_register(sm);
+
+	handshake_state_set_pmk(hs, psk);
+	handshake_state_set_authenticator_address(hs, ap_address);
+	handshake_state_set_supplicant_address(hs, sta_address);
+
+	r = handshake_state_set_own_rsn(hs,
+				eapol_key_data_8 + sizeof(struct eapol_key));
+	assert(r);
+
+	handshake_state_set_ap_rsn(hs, ap_rsne);
+	eapol_start(sm);
+
+	ptk_step1 = eapol_key_validate(eapol_key_data_7,
+					sizeof(eapol_key_data_7));
+	assert(ptk_step1);
+
+	ptk_step2 = eapol_key_validate(eapol_key_data_8,
+					sizeof(eapol_key_data_8));
+	assert(ptk_step2);
+
+	replay_counter = L_BE64_TO_CPU(ptk_step1->key_replay_counter);
+	snonce = ptk_step2->key_nonce;
+	__handshake_set_get_nonce_func(test_nonce);
+	__handshake_set_install_tk_func(verify_install_tk);
+	__handshake_set_install_gtk_func(verify_install_gtk);
+
+	ptk_len = sizeof(struct crypto_ptk) +
+			crypto_cipher_key_len(CRYPTO_CIPHER_CCMP);
+	ptk = l_malloc(ptk_len);
+	assert(crypto_derive_pairwise_ptk(psk, aa, spa,
+						ptk_step1->key_nonce,
+						ptk_step2->key_nonce,
+						ptk, ptk_len, false));
+
+	verify_step2_called = false;
+	expected_step2_frame = (const uint8_t *) ptk_step2;
+	expected_step2_frame_size = EKL(ptk_step2);
+	__eapol_set_tx_packet_func(verify_step2);
+	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
+				(const uint8_t *) ptk_step1, EKL(ptk_step1));
+	assert(verify_step2_called);
+
+	/* Detect whether we generate a new snonce when we shouldn't */
+	memset(new_snonce, 0xff, sizeof(new_snonce));
+	snonce = new_snonce;
+
+	/*
+	 * Now retransmit frame 1 again without updating the counter.  This
+	 * seems to be legal since the STA should not update the replay counter
+	 * unless the packet has a MIC.
+	 */
+	verify_step2_called = false;
+	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
+				(const uint8_t *) ptk_step1, EKL(ptk_step1));
+	assert(verify_step2_called);
+
+	/* Now retransmit frame 1 with an updated counter */
+	replay_counter += 1;
+	retransmit = l_memdup(ptk_step1, EKL(ptk_step1));
+	retransmit->key_replay_counter = L_CPU_TO_BE64(replay_counter);
+
+	expect = UPDATED_REPLAY_COUNTER(ptk_step2, replay_counter, ptk);
+
+	verify_step2_called = false;
+	expected_step2_frame = (const uint8_t *) expect;
+	expected_step2_frame_size = EKL(expect);
+	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
+				(const uint8_t *) retransmit, EKL(retransmit));
+	assert(verify_step2_called);
+
+	l_free(expect);
+	l_free(retransmit);
+
+	ptk_step3 = eapol_key_validate(eapol_key_data_9,
+					sizeof(eapol_key_data_9));
+	assert(ptk_step3);
+
+	ptk_step4 = eapol_key_validate(eapol_key_data_10,
+					sizeof(eapol_key_data_10));
+	assert(ptk_step4);
+
+	verify_install_tk_called = false;
+	verify_step4_called = false;
+	expected_step4_frame = (const uint8_t *) ptk_step4;
+	expected_step4_frame_size = EKL(ptk_step4);
+	__eapol_set_tx_packet_func(verify_step4);
+	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
+				(const uint8_t *) ptk_step3, EKL(ptk_step3));
+	assert(verify_step4_called);
+	assert(verify_install_tk_called);
+
+	/*
+	 * Now retransmit message 3.  Make sure install_tk_called is false
+	 * this time.  This prevents KRACK style attacks.
+	 */
+	replay_counter += 1;
+	retransmit = UPDATED_REPLAY_COUNTER(ptk_step3, replay_counter, ptk);
+	expect = UPDATED_REPLAY_COUNTER(ptk_step4, replay_counter, ptk);
+
+	verify_install_tk_called = false;
+	verify_step4_called = false;
+	expected_step4_frame = (const uint8_t *) expect;
+	expected_step4_frame_size = EKL(expect);
+	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
+				(const uint8_t *) retransmit, EKL(retransmit));
+	assert(verify_step4_called);
+	assert(!verify_install_tk_called);
+
+	l_free(expect);
+	l_free(retransmit);
+
+	gtk_step1 = eapol_key_validate(eapol_key_data_11,
+					sizeof(eapol_key_data_11));
+	assert(gtk_step1);
+
+	gtk_step2 = eapol_key_validate(eapol_key_data_12,
+					sizeof(eapol_key_data_12));
+	assert(gtk_step2);
+
+	/*
+	 * Now run the GTK handshake.  Since we retransmitted Step 3 above,
+	 * update the replay counter and perform the initial transmission
+	 */
+	replay_counter += 1;
+	retransmit = UPDATED_REPLAY_COUNTER(gtk_step1, replay_counter, ptk);
+	expect = UPDATED_REPLAY_COUNTER(gtk_step2, replay_counter, ptk);
+
+	verify_install_gtk_called = false;
+	verify_gtk_step2_called = false;
+	expected_gtk_step2_frame = (const uint8_t *) expect;
+	expected_gtk_step2_frame_size = EKL(expect);
+	__eapol_set_tx_packet_func(verify_step2_gtk);
+	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
+				(const uint8_t *) retransmit, EKL(retransmit));
+	assert(verify_gtk_step2_called);
+	assert(verify_install_gtk_called);
+
+	l_free(retransmit);
+	l_free(expect);
+
+	/* Now send a retransmit, make sure GTK isn't installed again */
+	replay_counter += 1;
+	retransmit = UPDATED_REPLAY_COUNTER(gtk_step1, replay_counter, ptk);
+	expect = UPDATED_REPLAY_COUNTER(gtk_step2, replay_counter, ptk);
+
+	verify_install_gtk_called = false;
+	verify_gtk_step2_called = false;
+	expected_gtk_step2_frame = (const uint8_t *) expect;
+	expected_gtk_step2_frame_size = EKL(expect);
+	__eapol_set_tx_packet_func(verify_step2_gtk);
+	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
+				(const uint8_t *) retransmit, EKL(retransmit));
+	assert(verify_gtk_step2_called);
+	assert(!verify_install_gtk_called);
+
+	l_free(retransmit);
+	l_free(expect);
+
+	l_free(ptk);
+
+	eapol_sm_free(sm);
+	handshake_state_free(hs);
+	eapol_exit();
+}
+
 static const uint8_t eap_identity_req[] = {
 	0x02, 0x00, 0x00, 0x05, 0x01, 0x01, 0x00, 0x05, 0x01
 };
@@ -2573,19 +2820,6 @@ static void verify_deauthenticate(uint32_t ifindex, const uint8_t *aa,
 					uint16_t reason_code, void *user_data)
 {
 	assert(false);
-}
-
-static void verify_install_tk(uint32_t ifindex, const uint8_t *aa_addr,
-				const uint8_t *tk, uint32_t cipher,
-				void *user_data)
-{
-	assert(ifindex == 1);
-	assert(!memcmp(aa_addr, aa, 6));
-	assert(!memcmp(tk, user_data, 32));
-	assert(cipher == CRYPTO_CIPHER_TKIP);
-
-	assert(!verify_install_tk_called);
-	verify_install_tk_called = true;
 }
 
 static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
@@ -3211,6 +3445,9 @@ int main(int argc, char *argv[])
 
 	l_test_add("EAPoL/WPA PTK & GTK State Machine Test 2",
 			&eapol_sm_test_wpa_ptk_gtk_2, NULL);
+
+	l_test_add("EAPoL/WPA2 Retransmit Test",
+			&eapol_sm_wpa2_retransmit_test, NULL);
 
 	l_test_add("EAPoL/8021x EAP-TLS & 4-Way Handshake",
 			&eapol_sm_test_eap_tls, NULL);
