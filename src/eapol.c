@@ -788,6 +788,10 @@ struct eapol_sm {
 	struct eap_state *eap;
 	struct eapol_frame *early_frame;
 	uint32_t watch_id;
+	uint8_t installed_gtk_len;
+	uint8_t installed_gtk[CRYPTO_MAX_GTK_LEN];
+	uint8_t installed_igtk_len;
+	uint8_t installed_igtk[CRYPTO_MAX_IGTK_LEN];
 };
 
 static void eapol_sm_destroy(void *value)
@@ -803,6 +807,11 @@ static void eapol_sm_destroy(void *value)
 	l_free(sm->early_frame);
 
 	eapol_frame_watch_remove(sm->watch_id);
+
+	sm->installed_gtk_len = 0;
+	memset(sm->installed_gtk, 0, sizeof(sm->installed_gtk));
+	sm->installed_igtk_len = 0;
+	memset(sm->installed_igtk, 0, sizeof(sm->installed_igtk));
 
 	l_free(sm);
 
@@ -870,6 +879,46 @@ static void eapol_write(struct eapol_sm *sm, const struct eapol_frame *ef)
 {
 	pae_write(sm->handshake->ifindex,
 			sm->handshake->aa, sm->handshake->spa, ETH_P_PAE, ef);
+}
+
+static void eapol_install_gtk(struct eapol_sm *sm, uint8_t gtk_key_index,
+					const uint8_t *gtk, size_t gtk_len,
+					const uint8_t *rsc)
+{
+	if (!gtk)
+		return;
+	/*
+	 * Don't install the same GTK.  On older kernels this resets the
+	 * replay counters, etc and can lead to various attacks
+	 */
+	if (sm->installed_gtk_len == gtk_len &&
+			!memcmp(sm->installed_gtk, gtk, gtk_len))
+		return;
+
+	handshake_state_install_gtk(sm->handshake, gtk_key_index,
+					gtk, gtk_len, rsc, 6);
+	memcpy(sm->installed_gtk, gtk, gtk_len);
+	sm->installed_gtk_len = gtk_len;
+}
+
+static void eapol_install_igtk(struct eapol_sm *sm, uint8_t igtk_key_index,
+					const uint8_t *igtk, size_t igtk_len)
+{
+	if (!igtk)
+		return;
+
+	/*
+	 * Don't install the same IGTK.  On older kernels this resets the
+	 * replay counters, etc and can lead to various attacks
+	 */
+	if (sm->installed_igtk_len == igtk_len - 6 &&
+			!memcmp(sm->installed_igtk, igtk + 6, igtk_len - 6))
+		return;
+
+	handshake_state_install_igtk(sm->handshake, igtk_key_index,
+						igtk + 6, igtk_len - 6, igtk);
+	memcpy(sm->installed_igtk, igtk + 6, igtk_len - 6);
+	sm->installed_igtk_len = igtk_len - 6;
 }
 
 static void send_eapol_start(struct l_timeout *timeout, void *user_data)
@@ -1293,14 +1342,8 @@ retransmit:
 		return;
 
 	handshake_state_install_ptk(sm->handshake);
-
-	if (gtk)
-		handshake_state_install_gtk(sm->handshake, gtk_key_index,
-						gtk, gtk_len, ek->key_rsc, 6);
-
-	if (igtk)
-		handshake_state_install_igtk(sm->handshake, igtk_key_index,
-						igtk + 6, igtk_len - 6, igtk);
+	eapol_install_gtk(sm, gtk_key_index, gtk, gtk_len, ek->key_rsc);
+	eapol_install_igtk(sm, igtk_key_index, igtk, igtk_len);
 
 	if (rekey_offload)
 		rekey_offload(sm->handshake->ifindex, ptk->kek, ptk->kck,
@@ -1401,12 +1444,8 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 	eapol_write(sm, (struct eapol_frame *) step2);
 	l_free(step2);
 
-	handshake_state_install_gtk(sm->handshake, gtk_key_index,
-					gtk, gtk_len, ek->key_rsc, 6);
-
-	if (igtk)
-		handshake_state_install_igtk(sm->handshake, igtk_key_index,
-						igtk + 6, igtk_len - 6, igtk);
+	eapol_install_gtk(sm, gtk_key_index, gtk, gtk_len, ek->key_rsc);
+	eapol_install_igtk(sm, igtk_key_index, igtk, igtk_len);
 }
 
 static struct eapol_sm *eapol_find_sm(uint32_t ifindex, const uint8_t *aa)
