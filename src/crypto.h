@@ -43,6 +43,12 @@ enum crypto_akm {
 	CRYPTO_AKM_FT_OVER_SAE_SHA256 = 0x000fac09,
 };
 
+/* Min & Max reported by crypto_cipher_key_len when ignoring WEP */
+#define CRYPTO_MIN_GTK_LEN 16
+#define CRYPTO_MAX_GTK_LEN 32
+#define CRYPTO_MIN_IGTK_LEN 16
+#define CRYPTO_MAX_IGTK_LEN 32
+
 struct crypto_ptk {
 	uint8_t kck[16];
 	uint8_t kek[16];

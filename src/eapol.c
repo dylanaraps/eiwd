@@ -1231,7 +1231,7 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 		gtk = handshake_util_find_gtk_kde(decrypted_key_data,
 							decrypted_key_data_size,
 							&gtk_len);
-		if (!gtk || gtk_len < 8) {
+		if (!gtk) {
 			handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 			return;
 		}
@@ -1248,7 +1248,7 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 		igtk = handshake_util_find_igtk_kde(decrypted_key_data,
 							decrypted_key_data_size,
 							&igtk_len);
-		if (!igtk || igtk_len < 8) {
+		if (!igtk) {
 			handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 			return;
 		}
@@ -1336,29 +1336,28 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 		gtk = handshake_util_find_gtk_kde(decrypted_key_data,
 							decrypted_key_data_size,
 							&gtk_len);
-
-		if (!gtk || gtk_len < 8)
+		if (!gtk)
 			return;
+
+		gtk_key_index = util_bit_field(gtk[0], 0, 2);
+		gtk += 2;
+		gtk_len -= 2;
 	} else {
 		gtk = decrypted_key_data;
 		gtk_len = decrypted_key_data_size;
 
-		if (!gtk || gtk_len < 6)
+		if (!gtk || gtk_len < CRYPTO_MIN_GTK_LEN ||
+						gtk_len > CRYPTO_MAX_GTK_LEN)
 			return;
-	}
 
-	if (!sm->handshake->wpa_ie) {
-		gtk_key_index = util_bit_field(gtk[0], 0, 2);
-		gtk += 2;
-		gtk_len -= 2;
-	} else
 		gtk_key_index = ek->wpa_key_id;
+	}
 
 	if (sm->handshake->mfp) {
 		igtk = handshake_util_find_igtk_kde(decrypted_key_data,
 							decrypted_key_data_size,
 							&igtk_len);
-		if (!igtk || igtk_len < 8)
+		if (!igtk)
 			return;
 
 		igtk_key_index = l_get_le16(igtk);;

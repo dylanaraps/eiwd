@@ -512,8 +512,26 @@ const uint8_t *handshake_util_find_gtk_kde(const uint8_t *data, size_t data_len,
 						size_t *out_gtk_len)
 {
 	static const unsigned char gtk_oui[] = { 0x00, 0x0f, 0xac, 0x01 };
+	size_t gtk_len;
+	const uint8_t *gtk = find_kde(data, data_len, &gtk_len, gtk_oui);
 
-	return find_kde(data, data_len, out_gtk_len, gtk_oui);
+	if (!gtk)
+		return NULL;
+
+	/*
+	 * Account for KeyId, TX and Reserved octet
+	 * See 802.11-2016, Figure 12-35
+	 */
+	if (gtk_len < CRYPTO_MIN_GTK_LEN + 2)
+		return NULL;
+
+	if (gtk_len > CRYPTO_MAX_GTK_LEN + 2)
+		return NULL;
+
+	if (out_gtk_len)
+		*out_gtk_len = gtk_len;
+
+	return gtk;
 }
 
 const uint8_t *handshake_util_find_igtk_kde(const uint8_t *data,
@@ -521,8 +539,26 @@ const uint8_t *handshake_util_find_igtk_kde(const uint8_t *data,
 						size_t *out_igtk_len)
 {
 	static const unsigned char igtk_oui[] = { 0x00, 0x0f, 0xac, 0x09 };
+	size_t igtk_len;
+	const uint8_t *igtk = find_kde(data, data_len, &igtk_len, igtk_oui);
 
-	return find_kde(data, data_len, out_igtk_len, igtk_oui);
+	if (!igtk)
+		return NULL;
+
+	/*
+	 * Account for KeyId and IPN
+	 * See 802.11-2016, Figure 12-42
+	 */
+	if (igtk_len < CRYPTO_MIN_IGTK_LEN + 8)
+		return NULL;
+
+	if (igtk_len > CRYPTO_MAX_IGTK_LEN + 8)
+		return NULL;
+
+	if (out_igtk_len)
+		*out_igtk_len = igtk_len;
+
+	return igtk;
 }
 
 const uint8_t *handshake_util_find_pmkid_kde(const uint8_t *data,
