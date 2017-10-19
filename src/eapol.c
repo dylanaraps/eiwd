@@ -991,7 +991,7 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 
 	step2 = eapol_create_ptk_2_of_4(sm->protocol_version,
 					ek->key_descriptor_version,
-					sm->replay_counter,
+					L_BE64_TO_CPU(ek->key_replay_counter),
 					sm->handshake->snonce, ies_len, ies,
 					sm->handshake->wpa_ie);
 
@@ -1086,9 +1086,11 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 	}
 
 	/*
-	 * 11.6.6.4: "On reception of Message 3, the Supplicant silently
-	 * discards the message if ... or if the ANonce value in Message 3
-	 * differs from the ANonce value in Message 1"
+	 * 802.11-2016, Section 12.7.6.4:
+	 * "On reception of message 3, the Supplicant silently discards the
+	 * message if the Key Replay Counter field value has already been used
+	 * or if the ANonce value in message 3 differs from the ANonce value
+	 * in message 1."
 	 */
 	if (memcmp(sm->handshake->anonce, ek->key_nonce, sizeof(ek->key_nonce)))
 		return;
@@ -1239,6 +1241,18 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 	} else
 		igtk = NULL;
 
+	/*
+	 * 802.11-2016, Section 12.7.6.4:
+	 * "b) Verifies the message 3 MIC. If the calculated MIC does not match
+	 * the MIC that the Authenticator included in the EAPOL-Key frame, the
+	 * Supplicant silently discards message 3."
+	 * "c) Updates the last-seen value of the Key Replay Counter field."
+	 *
+	 * Note that part b was done in eapol_key_handle
+	 */
+	sm->replay_counter = L_BE64_TO_CPU(ek->key_replay_counter);
+	sm->have_replay = true;
+
 	step4 = eapol_create_ptk_4_of_4(sm->protocol_version,
 					ek->key_descriptor_version,
 					sm->replay_counter,
@@ -1330,6 +1344,24 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 	} else
 		igtk = NULL;
 
+	/*
+	 * 802.11-2016, Section 12.7.7.2:
+	 * "
+	 * a) Verifies that the Key Replay Counter field value has not yet been
+	 * seen before, i.e., its value is strictly larger than that in any
+	 * other EAPOL-Key frame received thus far during this session.
+	 * b) Verifies that the MIC is valid, i.e., it uses the KCK that is
+	 * part of the PTK to verify that there is no data integrity error.
+	 * c) Uses the MLME-SETKEYS.request primitive to configure the temporal
+	 * GTK and, when present, IGTK into its IEEE 802.11 MAC.
+	 * d) Responds by creating and sending message 2 of the group key
+	 * handshake to the Authenticator and incrementing the replay counter.
+	 * "
+	 * Note: steps a & b are performed in eapol_key_handle
+	 */
+	sm->replay_counter = L_BE64_TO_CPU(ek->key_replay_counter);
+	sm->have_replay = true;
+
 	step2 = eapol_create_gtk_2_of_2(sm->protocol_version,
 					ek->key_descriptor_version,
 					sm->replay_counter,
@@ -1406,19 +1438,31 @@ static void eapol_key_handle(struct eapol_sm *sm,
 	replay_counter = L_BE64_TO_CPU(ek->key_replay_counter);
 
 	/*
-	 * 11.6.6.2: "If the Key Replay Counter field value is less than or
-	 * equal to the current local value, the Supplicant discards the
-	 * message.
+	 * 802.11-2016, Section 12.7.2:
+	 * "The Supplicant and Authenticator shall track the key replay counter
+	 * per security association. The key replay counter shall be
+	 * initialized to 0 on (re)association. The Authenticator shall
+	 * increment the key replay counter on each successive EAPOL-Key frame."
 	 *
-	 * 11.6.6.4: "On reception of Message 3, the Supplicant silently
-	 * discards the message if the Key Replay Counter field value has
-	 * already been used...
+	 * and
+	 *
+	 * "The Supplicant should also use the key replay counter and ignore
+	 * EAPOL-Key frames with a Key Replay Counter field value smaller than
+	 * or equal to any received in a valid message. The local Key Replay
+	 * Counter field should not be updated until after the EAPOL-Key MIC is
+	 * checked and is found to be valid. In other words, the Supplicant
+	 * never updates the Key Replay Counter field for message 1 in the
+	 * 4-way handshake, as it includes no MIC. This implies the Supplicant
+	 * needs to allow for retransmission of message 1 when checking for
+	 * the key replay counter of message 3."
+	 *
+	 * Note: The latter condition implies that Message 1 and Message 3
+	 * can have the same replay counter, though other parts of the spec
+	 * mandate that the Authenticator has to increment the replay counter
+	 * for each frame sent.  Contradictory.
 	 */
 	if (sm->have_replay && sm->replay_counter >= replay_counter)
 		return;
-
-	sm->replay_counter = replay_counter;
-	sm->have_replay = true;
 
 	ptk = handshake_state_get_ptk(sm->handshake);
 
