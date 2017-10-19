@@ -953,12 +953,21 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 		}
 	}
 
-	handshake_state_new_snonce(sm->handshake);
+	/*
+	 * If we're in a state where we have successfully processed Message 3,
+	 * then assume that the new message 1 is a PTK rekey and start a new
+	 * handshake
+	 */
+	if (!sm->handshake->have_snonce ||
+			memcmp(sm->handshake->anonce,
+					ek->key_nonce, sizeof(ek->key_nonce)) ||
+			sm->handshake->ptk_complete) {
+		handshake_state_new_snonce(sm->handshake);
+		handshake_state_set_anonce(sm->handshake, ek->key_nonce);
 
-	handshake_state_set_anonce(sm->handshake, ek->key_nonce);
-
-	if (!handshake_state_derive_ptk(sm->handshake))
-		goto error_unspecified;
+		if (!handshake_state_derive_ptk(sm->handshake))
+			goto error_unspecified;
+	}
 
 	if (sm->handshake->akm_suite &
 			(IE_RSN_AKM_SUITE_FT_OVER_8021X |
@@ -1153,6 +1162,15 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 	}
 
 	/*
+	 * If ptk_complete is set, then we are receiving Message 3 again.
+	 * It must be a retransmission, otherwise the anonce wouldn't match
+	 * and we wouldn't get here.  Skip processing the rest of the message
+	 * and send our reply.  Do not install the keys again.
+	 */
+	if (sm->handshake->ptk_complete)
+		goto retransmit;
+
+	/*
 	 * 11.6.6.4: "If a second RSNE is provided in the message, the
 	 * Supplicant uses the pairwise cipher suite specified in the second
 	 * RSNE or deauthenticates."
@@ -1241,6 +1259,7 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 	} else
 		igtk = NULL;
 
+retransmit:
 	/*
 	 * 802.11-2016, Section 12.7.6.4:
 	 * "b) Verifies the message 3 MIC. If the calculated MIC does not match
@@ -1269,6 +1288,9 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 	memcpy(step4->key_mic_data, mic, sizeof(mic));
 	eapol_write(sm, (struct eapol_frame *) step4);
 	l_free(step4);
+
+	if (sm->handshake->ptk_complete)
+		return;
 
 	handshake_state_install_ptk(sm->handshake);
 
@@ -1506,9 +1528,6 @@ static void eapol_key_handle(struct eapol_sm *sm,
 	if (!ek->key_mic)
 		eapol_handle_ptk_1_of_4(sm, ek);
 	else {
-		if (sm->handshake->ptk_complete)
-			goto done;
-
 		if (!key_data_len)
 			goto done;
 
