@@ -1491,7 +1491,7 @@ static void eapol_key_handle(struct eapol_sm *sm,
 		key_data_len = L_BE16_TO_CPU(ek->key_data_len);
 
 	if (ek->key_type == 0) {
-		/* Only GTK handshake allowed after PTK handshake complete */
+		/* GTK handshake allowed only after PTK handshake complete */
 		if (!sm->handshake->ptk_complete)
 			goto done;
 
