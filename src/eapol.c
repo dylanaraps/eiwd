@@ -1383,10 +1383,9 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 	handshake_state_install_gtk(sm->handshake, gtk_key_index,
 					gtk, gtk_len, ek->key_rsc, 6);
 
-	if (igtk) {
+	if (igtk)
 		handshake_state_install_igtk(sm->handshake, igtk_key_index,
 						igtk + 6, igtk_len - 6, igtk);
-	}
 }
 
 static struct eapol_sm *eapol_find_sm(uint32_t ifindex, const uint8_t *aa)
