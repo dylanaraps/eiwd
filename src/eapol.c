@@ -1268,10 +1268,8 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 								override);
 	}
 
-	/*
-	 * TODO: Handle IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC case
-	 */
-	if (!sm->handshake->wpa_ie) {
+	if (!sm->handshake->wpa_ie && sm->handshake->group_cipher !=
+			IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC) {
 		gtk = handshake_util_find_gtk_kde(decrypted_key_data,
 							decrypted_key_data_size,
 							&gtk_len);
@@ -1553,6 +1551,10 @@ static void eapol_key_handle(struct eapol_sm *sm,
 	if (ek->key_type == 0) {
 		/* GTK handshake allowed only after PTK handshake complete */
 		if (!sm->handshake->ptk_complete)
+			goto done;
+
+		if (sm->handshake->group_cipher ==
+				IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC)
 			goto done;
 
 		if (!decrypted_key_data)

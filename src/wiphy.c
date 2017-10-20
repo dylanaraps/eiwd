@@ -70,6 +70,9 @@ static struct l_queue *wiphy_list = NULL;
 
 enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy, uint16_t mask)
 {
+	if (mask == IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC)
+		return IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC;
+
 	mask &= wiphy->supported_ciphers;
 
 	/* CCMP is our first choice, TKIP second */
