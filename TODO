@@ -229,16 +229,6 @@ Wireless daemon
   Priority: Low
   Complexity: C4
 
-- Add support for Pre-authentication from 802.11-2007.  This allows the client
-  to pre-authenticate to a target AP.  The 802.1X exchange is done through the
-  currently connected AP, but with the target AP as the 'authenticator'.  The
-  process creates a new PMK which is cached by both the target AP and the
-  client.  The client can then roam onto the target AP using a process similar
-  to PMK caching outlined above.
-
-  Priority: Low
-  Complexity: C4
-
 - Add support for Opportunistic Key Caching (OKC).  This is not defined by
   any 802.11 standards, but is made available by major vendors such as Cisco
   and Microsoft.

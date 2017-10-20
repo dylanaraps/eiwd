@@ -24,6 +24,13 @@ pending connection attempt.
 - IWD supports the full RSN 4-Way Handshake for PTK generation.  Support for
 handling the optional (second) RSN element from the AP is included.
 
+- IWD supports Pre-authentication from 802.11-2007.  If the currently
+connected AP supports pre-authentication and iwd determines that a roam is
+required, then the pre-authentication process is kicked off.  This is done
+using the current connection, running 802.1X over 0x88c7 protocol. This results
+in the creation of a new PMK which is cached by both the target and iwd.  iwd
+can then roam onto the target AP using the cached PMK.
+
 
 Wireless monitor
 ================
