@@ -272,6 +272,21 @@ Wireless daemon
   Priority: Medium
   Complexity: C8
 
+- Add support for the STK 4-Way Handshake into eapol.c as described in
+  802.11-2016 Setion 12.7.
+
+  Priority: Medium
+  Complexity: C8
+
+- Add support for WiFi P2P.  This tasks depends on 'STK 4-Way Handshake' task.
+  iwd will require a new P2P D-Bus API to be exposed in order for clients to
+  manage P2P connections.  P2P specific logic for device management and
+  switching between P2P and STA/AP modes for a particular interface will be
+  required.
+
+  Priority: Medium
+  Complexity: C8
+
 - Take EAP MSK size into consideration.
 
   MSK is mandated to be 64 bytes long, and depending on the AKM, different parts
