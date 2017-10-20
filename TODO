@@ -287,6 +287,12 @@ Wireless daemon
   Priority: Medium
   Complexity: C8
 
+- Add support for EAP-LEAP.  This is a Cisco proprietary EAP method that is
+  quite widespread.
+
+  Priority: Medium
+  Complexity: C4
+
 - Take EAP MSK size into consideration.
 
   MSK is mandated to be 64 bytes long, and depending on the AKM, different parts
