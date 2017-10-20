@@ -350,6 +350,19 @@ class Device(IWDDBusAbstract):
                                                error_handler=self._failure)
         self._wait_for_async_op()
 
+    def start_ap(self, ssid, psk):
+        self._iface.StartAccessPoint(ssid, psk,
+                                     dbus_interface=self._iface_name,
+                                     reply_handler=self._success,
+                                     error_handler=self._failure)
+        self._wait_for_async_op()
+
+    def stop_ap(self):
+        self._iface.StopAccessPoint(dbus_interface=self._iface_name,
+                                    reply_handler=self._success,
+                                    error_handler=self._failure)
+        self._wait_for_async_op()
+
     def __str__(self, prefix = ''):
         return prefix + 'Device: ' + self.device_path + '\n'\
                + prefix + '\tName:\t\t' + self.name + '\n'\
