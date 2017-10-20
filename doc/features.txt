@@ -31,6 +31,11 @@ using the current connection, running 802.1X over 0x88c7 protocol. This results
 in the creation of a new PMK which is cached by both the target and iwd.  iwd
 can then roam onto the target AP using the cached PMK.
 
+- IWD supports Fast Transitions for fast roaming between access points.  Only
+FT-over-Air (fastest option) is currently supported by iwd.  Whenever iwd
+determines that a roam is required and a suitable target that supports fast
+transitions is available, iwd roams to the target AP using FT automatically.
+
 
 Wireless monitor
 ================
