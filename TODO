@@ -89,27 +89,6 @@ mac80211_hwsim
   Complexity: C2
 
 
-cfg80211 / nl80211
-==================
-
-- Disconnect from network / station when client crashes
-
-  When associating or connecting to a network, it should be possible to
-  bind this transaction to a specific netlink client.  So that in case
-  this client terminates without, any connection will be also terminated.
-
-  This should affect NL80211_CMD_ASSOCIATE and NL80211_CMD_CONNECT.  It
-  seems that this is not needed for NL80211_CMD_AUTHENTICATE since that
-  command will eventually time out, but it might be a good idea to even
-  support it there.
-
-  Maybe a new attribute similar to NL80211_ATTR_IFACE_SOCKET_OWNER should
-  be used for this behavior.
-
-  Priority: High
-  Complexity: C4
-
-
 Wireless monitor
 ================
 
