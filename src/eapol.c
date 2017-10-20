@@ -885,8 +885,6 @@ static void eapol_install_gtk(struct eapol_sm *sm, uint8_t gtk_key_index,
 					const uint8_t *gtk, size_t gtk_len,
 					const uint8_t *rsc)
 {
-	if (!gtk)
-		return;
 	/*
 	 * Don't install the same GTK.  On older kernels this resets the
 	 * replay counters, etc and can lead to various attacks
@@ -904,9 +902,6 @@ static void eapol_install_gtk(struct eapol_sm *sm, uint8_t gtk_key_index,
 static void eapol_install_igtk(struct eapol_sm *sm, uint8_t igtk_key_index,
 					const uint8_t *igtk, size_t igtk_len)
 {
-	if (!igtk)
-		return;
-
 	/*
 	 * Don't install the same IGTK.  On older kernels this resets the
 	 * replay counters, etc and can lead to various attacks
@@ -1129,9 +1124,9 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 	const struct crypto_ptk *ptk;
 	struct eapol_key *step4;
 	uint8_t mic[16];
-	const uint8_t *gtk;
+	const uint8_t *gtk = NULL;
 	size_t gtk_len;
-	const uint8_t *igtk;
+	const uint8_t *igtk = NULL;
 	size_t igtk_len;
 	const uint8_t *rsne;
 	const uint8_t *optional_rsne = NULL;
@@ -1342,8 +1337,12 @@ retransmit:
 		return;
 
 	handshake_state_install_ptk(sm->handshake);
-	eapol_install_gtk(sm, gtk_key_index, gtk, gtk_len, ek->key_rsc);
-	eapol_install_igtk(sm, igtk_key_index, igtk, igtk_len);
+
+	if (gtk)
+		eapol_install_gtk(sm, gtk_key_index, gtk, gtk_len, ek->key_rsc);
+
+	if (igtk)
+		eapol_install_igtk(sm, igtk_key_index, igtk, igtk_len);
 
 	if (rekey_offload)
 		rekey_offload(sm->handshake->ifindex, ptk->kek, ptk->kck,
@@ -1445,7 +1444,9 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 	l_free(step2);
 
 	eapol_install_gtk(sm, gtk_key_index, gtk, gtk_len, ek->key_rsc);
-	eapol_install_igtk(sm, igtk_key_index, igtk, igtk_len);
+
+	if (igtk)
+		eapol_install_igtk(sm, igtk_key_index, igtk, igtk_len);
 }
 
 static struct eapol_sm *eapol_find_sm(uint32_t ifindex, const uint8_t *aa)
