@@ -248,19 +248,6 @@ Wireless daemon
   Priority: Low
   Complexity: C4
 
-- Add support for Radio Resource Management from 802.11k.  If supported by the
-  AP, allows the client to optimize its scanning strategy by obtaining the
-  channels of nearby APs that are part of the same ESS as the currently
-  connected AP.  This requires the client to enable 'RM Enabled Capabilities'
-  element (section 8.4.2.47) appropriately, and send appropriately formatted
-  Action frames to request relevant reports from the AP.  The reports from the
-  AP will be received via Management frames and contain multiple Neighbor
-  Report elements (8.4.2.39).  Also examine how AP Channel Report element
-  (8.4.2.38) is used.
-
-  Priority: Medium
-  Complexity: C4
-
 - Add support for Fast BSS Transition (FT) from 802.11r.  FT over air is
   already supported by iwd.  Add support for 'FT over DS'. In FT over DS,
   action frames can be used to perform a 4-way handshake to the target AP

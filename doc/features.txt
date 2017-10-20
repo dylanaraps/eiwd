@@ -36,6 +36,13 @@ FT-over-Air (fastest option) is currently supported by iwd.  Whenever iwd
 determines that a roam is required and a suitable target that supports fast
 transitions is available, iwd roams to the target AP using FT automatically.
 
+- IWD supports Radio Resource Management from 802.11k.  In particular iwd
+can request and utilize Neighbor Reports.  When iwd determines that a roam
+is required, iwd will try to obtain a Neighbor Report from the currently
+connected AP (using a special Action frame).  This enables iwd to optimize
+the list of channels to scan in order to find a suitable target for roaming
+much quicker.
+
 
 Wireless monitor
 ================
