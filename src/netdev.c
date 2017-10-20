@@ -78,6 +78,7 @@ struct netdev {
 	uint32_t pairwise_set_key_cmd_id;
 	uint32_t group_new_key_cmd_id;
 	uint32_t group_management_new_key_cmd_id;
+	uint32_t set_station_cmd_id;
 	uint32_t connect_cmd_id;
 	uint32_t disconnect_cmd_id;
 	enum netdev_result result;
@@ -474,6 +475,11 @@ static void netdev_connect_free(struct netdev *netdev)
 		l_genl_family_cancel(nl80211,
 			netdev->group_management_new_key_cmd_id);
 		netdev->group_management_new_key_cmd_id = 0;
+	}
+
+	if (netdev->set_station_cmd_id) {
+		l_genl_family_cancel(nl80211, netdev->set_station_cmd_id);
+		netdev->set_station_cmd_id = 0;
 	}
 
 	if (netdev->connect_cmd_id) {
@@ -893,6 +899,9 @@ static void netdev_setting_keys_failed(struct netdev *netdev,
 		netdev->group_management_new_key_cmd_id);
 	netdev->group_management_new_key_cmd_id = 0;
 
+	l_genl_family_cancel(nl80211, netdev->set_station_cmd_id);
+	netdev->set_station_cmd_id = 0;
+
 	netdev->result = NETDEV_RESULT_KEY_SETTING_FAILED;
 	msg = netdev_build_cmd_disconnect(netdev,
 						MMPDU_REASON_CODE_UNSPECIFIED);
@@ -905,6 +914,8 @@ static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
 	int err;
+
+	netdev->set_station_cmd_id = 0;
 
 	if (!netdev->connected)
 		return;
@@ -1127,9 +1138,13 @@ static void netdev_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 
 	msg = netdev_build_cmd_set_station(netdev);
 
-	l_genl_family_send(nl80211, msg, netdev_set_station_cb, netdev, NULL);
-	return;
+	netdev->set_station_cmd_id =
+		l_genl_family_send(nl80211, msg, netdev_set_station_cb,
+					netdev, NULL);
+	if (netdev->set_station_cmd_id > 0)
+		return;
 
+	l_genl_msg_unref(msg);
 error:
 	netdev_setting_keys_failed(netdev, MMPDU_REASON_CODE_UNSPECIFIED);
 }
