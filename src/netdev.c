@@ -949,19 +949,10 @@ static void netdev_new_group_key_cb(struct l_genl_msg *msg, void *data)
 
 	netdev->group_new_key_cmd_id = 0;
 
-	if (l_genl_msg_get_error(msg) < 0) {
-		l_error("New Key for Group Key failed for ifindex: %d",
-				netdev->index);
-		goto error;
-	}
-
-	msg = netdev_build_cmd_set_station(netdev);
-
-	if (l_genl_family_send(nl80211, msg, netdev_set_station_cb,
-							netdev, NULL) > 0)
+	if (l_genl_msg_get_error(msg) >= 0)
 		return;
 
-error:
+	l_error("New Key for Group Key failed for ifindex: %d", netdev->index);
 	netdev_setting_keys_failed(netdev, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
@@ -1125,11 +1116,21 @@ static void netdev_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 
 	netdev->pairwise_set_key_cmd_id = 0;
 
-	if (l_genl_msg_get_error(msg) >= 0)
+	if (l_genl_msg_get_error(msg) < 0) {
+		l_error("Set Key for Pairwise Key failed for ifindex: %d",
+				netdev->index);
+		goto error;
+	}
+
+	if (netdev->operational)
 		return;
 
-	l_error("Set Key for Pairwise Key failed for ifindex: %d",
-								netdev->index);
+	msg = netdev_build_cmd_set_station(netdev);
+
+	l_genl_family_send(nl80211, msg, netdev_set_station_cb, netdev, NULL);
+	return;
+
+error:
 	netdev_setting_keys_failed(netdev, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
