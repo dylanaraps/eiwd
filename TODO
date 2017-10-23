@@ -212,14 +212,6 @@ Wireless daemon
   Priority: Low
   Complexity: C1
 
-- Handle "Group addressed traffic not allowed" option for group ciphers
-
-  If the AP specifies "Group addressed traffic not allowed" as its group cipher
-  suite, then make sure that install_gtk callback is not used.
-
-  Priority: Low
-  Complexity: C1
-
 - Add support for PMK Caching from 802.11-2007.  This is sometimes referred to
   as "fast, secure roam back".  Essentially the client caches PMKIDs generated
   when connecting to various APs.  If the client roams back to an AP that has
