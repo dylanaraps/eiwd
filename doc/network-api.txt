@@ -18,6 +18,7 @@ Methods		void Connect()
 					 net.connman.iwd.NotSupported
 					 net.connman.iwd.Timeout
 					 net.connman.iwd.InProgress
+					 net.connman.iwd.NotConfigured
 
 Properties	string Name [readonly]
 
