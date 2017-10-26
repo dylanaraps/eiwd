@@ -160,6 +160,12 @@ struct l_dbus_message *dbus_error_not_connected(struct l_dbus_message *msg)
 					"Not connected");
 }
 
+struct l_dbus_message *dbus_error_not_configured(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".NotConfigured",
+					"Not configured");
+}
+
 struct l_dbus_message *dbus_error_not_implemented(struct l_dbus_message *msg)
 {
 	return l_dbus_message_new_error(msg, IWD_SERVICE ".NotImplemented",
