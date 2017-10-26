@@ -49,6 +49,7 @@ class NotFoundEx(dbus.DBusException): pass
 class NotSupportedEx(dbus.DBusException): pass
 class NoAgentEx(dbus.DBusException): pass
 class NotConnectedEx(dbus.DBusException): pass
+class NotConfiguredEx(dbus.DBusException): pass
 class NotImplementedEx(dbus.DBusException): pass
 class CanceledEx(dbus.DBusException):
     _dbus_error_name = 'net.connman.iwd.Error.Canceled'
@@ -66,6 +67,7 @@ _dbus_ex_to_py = {
     'NotSupported' :    NotSupportedEx,
     'NoAgent' :         NoAgentEx,
     'NotConnected' :    NotConnectedEx,
+    'NotConfigured' :   NotConfiguredEx,
     'NotImplemented' :  NotImplementedEx,
 }
 
