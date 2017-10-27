@@ -1607,7 +1607,8 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 		 * Start processing EAPoL frames now that the state machine
 		 * has all the input data even in FT mode.
 		 */
-		eapol_start(netdev->sm);
+		if (!eapol_start(netdev->sm))
+			goto error;
 
 		if (!netdev->in_ft) {
 			if (netdev->event_filter)
