@@ -1814,22 +1814,8 @@ void eapol_register(struct eapol_sm *sm)
 						eapol_rx_packet, sm);
 }
 
-void eapol_start(struct eapol_sm *sm)
+bool eapol_start(struct eapol_sm *sm)
 {
-	if (sm->require_handshake)
-		sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);
-
-	sm->started = true;
-
-	if (sm->use_eapol_start) {
-		/*
-		 * We start a short timeout, if EAP packets are not received
-		 * from AP, then we send the EAPoL-Start
-		 */
-		sm->eapol_start_timeout =
-				l_timeout_create(1, send_eapol_start, sm, NULL);
-	}
-
 	if (sm->handshake->settings_8021x) {
 		sm->eap = eap_new(eapol_eap_msg_cb, eapol_eap_complete_cb, sm);
 
@@ -1848,6 +1834,20 @@ void eapol_start(struct eapol_sm *sm)
 		eap_set_event_func(sm->eap, eapol_eap_event_cb);
 	}
 
+	sm->started = true;
+
+	if (sm->require_handshake)
+		sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);
+
+	if (sm->use_eapol_start) {
+		/*
+		 * We start a short timeout, if EAP packets are not received
+		 * from AP, then we send the EAPoL-Start
+		 */
+		sm->eapol_start_timeout =
+				l_timeout_create(1, send_eapol_start, sm, NULL);
+	}
+
 	/* Process any frames received early due to scheduling */
 	if (sm->early_frame) {
 		eapol_rx_packet(ETH_P_PAE, sm->handshake->aa,
@@ -1856,11 +1856,13 @@ void eapol_start(struct eapol_sm *sm)
 		sm->early_frame = NULL;
 	}
 
-	return;
+	return true;
 
 eap_error:
 	l_error("Error initializing EAP for ifindex %i",
 			(int) sm->handshake->ifindex);
+
+	return false;
 }
 
 struct eapol_frame_watch {

@@ -197,7 +197,7 @@ void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data);
 void eapol_sm_set_event_func(struct eapol_sm *sm, eapol_sm_event_func_t func);
 
 void eapol_register(struct eapol_sm *sm);
-void eapol_start(struct eapol_sm *sm);
+bool eapol_start(struct eapol_sm *sm);
 
 uint32_t eapol_frame_watch_add(uint32_t ifindex,
 				eapol_frame_watch_func_t handler,
