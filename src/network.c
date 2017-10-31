@@ -153,12 +153,13 @@ bool network_connected(struct network *network)
 		break;
 	case -ENOENT:
 		/*
+		 * This is an open network seen for the first time:
+		 *
 		 * Write an empty settings file to keep track of the
 		 * last connected time.  This will also make iwd autoconnect
 		 * to this network in the future.
 		 */
-		if (!network_settings_load(network))
-			return false;
+		network->settings = l_settings_new();
 
 		storage_network_sync(strtype, network->info->ssid,
 					network->settings);
@@ -394,7 +395,9 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 		if (network->ask_psk)
 			return -ENOKEY;
 
-		network_settings_load(network);
+		if (!network_settings_load(network))
+			return -ENOKEY;
+
 		psk = l_settings_get_value(network->settings, "Security",
 						"PreSharedKey");
 
@@ -414,7 +417,9 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 		break;
 	}
 	case SECURITY_8021X:
-		network_settings_load(network);
+		if (!network_settings_load(network))
+			return -ENOKEY;
+
 		break;
 	default:
 		return -ENOTSUP;
@@ -572,26 +577,28 @@ static struct l_dbus_message *network_connect_psk(struct network *network,
 
 	l_debug("");
 
-	network_settings_load(network);
+	if (network_settings_load(network)) {
+		psk = l_settings_get_value(network->settings, "Security",
+						"PreSharedKey");
 
-	psk = l_settings_get_value(network->settings, "Security",
-					"PreSharedKey");
+		if (psk) {
+			size_t len;
 
-	if (psk) {
-		size_t len;
+			l_debug("psk: %s", psk);
 
-		l_debug("psk: %s", psk);
-
-		l_free(network->psk);
-		network->psk = l_util_from_hexstring(psk, &len);
-
-		l_debug("len: %zd", len);
-
-		if (network->psk && len != 32) {
-			l_debug("Can't parse PSK");
 			l_free(network->psk);
-			network->psk = NULL;
+			network->psk = l_util_from_hexstring(psk, &len);
+
+			l_debug("len: %zd", len);
+
+			if (network->psk && len != 32) {
+				l_debug("Can't parse PSK");
+				l_free(network->psk);
+				network->psk = NULL;
+			}
 		}
+	} else {
+		network->settings = l_settings_new();
 	}
 
 	l_debug("ask_psk: %s", network->ask_psk ? "true" : "false");
@@ -643,7 +650,9 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 		device_connect_network(device, network, bss, message);
 		return NULL;
 	case SECURITY_8021X:
-		network_settings_load(network);
+		if (!network_settings_load(network))
+			return dbus_error_not_configured(message);
+
 		device_connect_network(device, network, bss, message);
 		return NULL;
 	default:
