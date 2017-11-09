@@ -369,20 +369,24 @@ bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
 		goto err;
 	}
 
-	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-	eap->identity = l_strdup(l_settings_get_value(settings,
-						"Security", setting));
+	if (eap->method->load_settings)
+		if (!eap->method->load_settings(eap, settings, prefix))
+			goto err;
+
+	/* get identity from settings or from EAP method */
+	if (!eap->method->get_identity) {
+		snprintf(setting, sizeof(setting), "%sIdentity", prefix);
+		eap->identity = l_strdup(l_settings_get_value(settings,
+				"Security", setting));
+	} else {
+		eap->identity = l_strdup(eap->method->get_identity(eap));
+	}
+
 	if (!eap->identity) {
 		l_error("EAP Identity is missing");
 
 		goto err;
 	}
-
-	if (!eap->method->load_settings)
-		return true;
-
-	if (!eap->method->load_settings(eap, settings, prefix))
-		goto err;
 
 	return true;
 

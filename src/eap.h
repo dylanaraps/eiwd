@@ -102,6 +102,7 @@ struct eap_method {
 				const uint8_t *pkt, size_t len);
 	void (*handle_retransmit)(struct eap_state *eap,
 				const uint8_t *pkt, size_t len);
+	const char *(*get_identity)(struct eap_state *eap);
 };
 
 struct eap_method_desc {
