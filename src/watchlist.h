@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2016  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2016-2017  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -87,6 +87,22 @@ void __watchlist_prune_stale(struct watchlist *watchlist);
 				continue;				\
 									\
 			t(args, item->notify_data);			\
+		}							\
+		(watchlist)->in_notify = false;				\
+		if ((watchlist)->stale_items)				\
+			__watchlist_prune_stale(watchlist);		\
+	} while	(false)
+
+#define WATCHLIST_NOTIFY_NO_ARGS(watchlist, type)			\
+	do {								\
+		const struct l_queue_entry *entry =			\
+				l_queue_get_entries((watchlist)->items);\
+									\
+		(watchlist)->in_notify = true;				\
+		for (; entry; entry = entry->next) {			\
+			struct watchlist_item *item = entry->data;	\
+			type t = item->notify;				\
+			t(item->notify_data);			\
 		}							\
 		(watchlist)->in_notify = false;				\
 		if ((watchlist)->stale_items)				\
