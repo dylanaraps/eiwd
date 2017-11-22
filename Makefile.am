@@ -92,7 +92,8 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/ftutil.h src/ftutil.c \
 					src/iwd.h src/eap-sim.c src/eap-aka.c \
 					src/simutil.h src/simutil.c \
-					src/ap.h src/ap.c
+					src/ap.h src/ap.c \
+					src/plugin.h src/plugin.c \
 					$(builtin_sources)
 
 src_iwd_LDADD = ell/libell-internal.la -ldl
