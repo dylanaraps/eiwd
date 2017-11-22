@@ -3,6 +3,9 @@ AM_MAKEFLAGS = --no-print-directory
 
 ACLOCAL_AMFLAGS = -I build-aux
 
+builtin_modules =
+builtin_sources =
+
 noinst_LTLIBRARIES = ell/libell-internal.la
 
 dbusdir = @DBUS_CONFDIR@/dbus-1/system.d
@@ -90,6 +93,8 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/iwd.h src/eap-sim.c src/eap-aka.c \
 					src/simutil.h src/simutil.c \
 					src/ap.h src/ap.c
+					$(builtin_sources)
+
 src_iwd_LDADD = ell/libell-internal.la -ldl
 
 dist_sysconf_DATA = src/iwd.conf
@@ -246,7 +251,7 @@ if BUILD_DOCS
 dist_man_MANS = $(manual_pages)
 endif
 
-EXTRA_DIST = $(manual_pages:.1=.txt)
+EXTRA_DIST = src/genbuiltin $(manual_pages:.1=.txt)
 
 AM_CFLAGS = -fvisibility=hidden
 
@@ -254,7 +259,7 @@ MAINTAINERCLEANFILES = Makefile.in configure config.h.in aclocal.m4
 
 DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests) $(manual_pages)
 
-BUILT_SOURCES = ell/internal
+BUILT_SOURCES = ell/internal src/builtin.h
 
 ell/internal: Makefile
 	$(AM_V_at)$(MKDIR_P) ell
@@ -283,3 +288,6 @@ ell/unit/test_data: Makefile
 
 maintainer-clean-local:
 	-rm -rf build-aux ell
+
+src/builtin.h: src/genbuiltin config.status
+	$(AM_V_GEN)$(srcdir)/src/genbuiltin $(builtin_modules) > $@

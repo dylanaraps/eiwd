@@ -1,0 +1,17 @@
+#!/bin/sh
+
+for i in $*
+do
+	echo "extern struct l_plugin_desc __iwd_builtin_$i;"
+done
+
+echo
+echo "static struct l_plugin_desc *__iwd_builtin[] = {"
+
+for i in $*
+do
+	echo "  &__iwd_builtin_$i,"
+done
+
+echo "  NULL"
+echo "};"
