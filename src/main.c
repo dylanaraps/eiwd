@@ -44,6 +44,7 @@
 #include "src/knownnetworks.h"
 #include "src/rfkill.h"
 #include "src/ap.h"
+#include "src/plugin.h"
 
 #include "src/backtrace.h"
 
@@ -54,6 +55,8 @@ static const char *nointerfaces;
 static const char *phys;
 static const char *nophys;
 static const char *config_dir;
+static const char *plugins;
+static const char *noplugins;
 static bool terminating;
 
 static void main_loop_quit(struct l_timeout *timeout, void *user_data)
@@ -103,6 +106,8 @@ static void usage(void)
 		"\t-p, --phys             Phys to manage\n"
 		"\t-P, --nophys           Phys to ignore\n"
 		"\t-c, --config           Configuration directory to use\n"
+		"\t-l, --plugin           Plugins to include\n"
+		"\t-L, --noplugin         Plugins to exclude\n"
 		"\t-h, --help             Show help options\n");
 }
 
@@ -114,6 +119,8 @@ static const struct option main_options[] = {
 	{ "phys",         required_argument, NULL, 'p' },
 	{ "nophys",       required_argument, NULL, 'P' },
 	{ "config",       required_argument, NULL, 'c' },
+	{ "plugin",       required_argument, NULL, 'l' },
+	{ "noplugin",     required_argument, NULL, 'L' },
 	{ "help",         no_argument,       NULL, 'h' },
 	{ }
 };
@@ -201,6 +208,12 @@ int main(int argc, char *argv[])
 		case 'c':
 			config_dir = optarg;
 			break;
+		case 'l':
+			plugins = optarg;
+			break;
+		case 'L':
+			noplugins = optarg;
+			break;
 		case 'h':
 			usage();
 			return EXIT_SUCCESS;
@@ -249,6 +262,8 @@ int main(int argc, char *argv[])
 		goto done;
 	}
 
+	plugin_init(plugins, noplugins);
+
 	genl = l_genl_new_default();
 	if (!genl) {
 		l_error("Failed to open generic netlink socket");
@@ -293,6 +308,7 @@ int main(int argc, char *argv[])
 	network_exit();
 	eapol_exit();
 	eap_exit();
+	plugin_exit();
 
 	l_genl_family_unref(nl80211);
 
