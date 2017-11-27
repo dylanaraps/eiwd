@@ -2162,6 +2162,7 @@ static void device_netdev_notify(struct netdev *netdev,
 
 	switch (event) {
 	case NETDEV_WATCH_EVENT_UP:
+		device->autoconnect = true;
 		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 
 		WATCHLIST_NOTIFY(&device_watches, device_watch_func_t,
