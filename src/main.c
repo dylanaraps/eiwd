@@ -45,6 +45,7 @@
 #include "src/rfkill.h"
 #include "src/ap.h"
 #include "src/plugin.h"
+#include "src/simauth.h"
 
 #include "src/backtrace.h"
 
@@ -262,6 +263,12 @@ int main(int argc, char *argv[])
 		goto done;
 	}
 
+	if (!sim_auth_init()) {
+		l_error("Failed to start sim auth module");
+		exit_status = EXIT_FAILURE;
+		goto done;
+	}
+
 	plugin_init(plugins, noplugins);
 
 	genl = l_genl_new_default();
@@ -309,6 +316,7 @@ int main(int argc, char *argv[])
 	eapol_exit();
 	eap_exit();
 	plugin_exit();
+	sim_auth_exit();
 
 	l_genl_family_unref(nl80211);
 
