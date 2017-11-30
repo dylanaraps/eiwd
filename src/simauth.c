@@ -79,6 +79,8 @@ static void destroy_provider(void *data)
 	if (auth->driver->remove)
 		auth->driver->remove(auth);
 
+	watchlist_destroy(&auth->destory_watches);
+
 	l_free(auth->nai);
 	l_free(auth);
 }
