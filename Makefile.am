@@ -139,6 +139,11 @@ tools_hwsim_SOURCES = tools/hwsim.c src/mpdu.h \
 tools_hwsim_LDADD = ell/libell-internal.la
 tools_test_runner_LDADD = ell/libell-internal.la
 
+if SIM_HARDCODED
+builtin_modules += sim_hardcoded
+builtin_sources += plugins/sim_hardcoded.c
+endif
+
 unit_tests = unit/test-cmac-aes \
 		unit/test-hmac-md5 unit/test-hmac-sha1 unit/test-hmac-sha256 \
 		unit/test-prf-sha1 unit/test-kdf-sha256 \

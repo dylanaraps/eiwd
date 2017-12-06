@@ -53,6 +53,11 @@ AC_ARG_ENABLE(pie, AC_HELP_STRING([--enable-pie],
 	fi
 ])
 
+AC_ARG_ENABLE(sim_hardcoded, AC_HELP_STRING([--disable-sim-hardcoded],
+			[disable hard coded SIM keys]),
+			[enable_sim_hardcoded=${enableval}])
+AM_CONDITIONAL(SIM_HARDCODED, test "${enable_sim_hardcoded}" != "no")
+
 if (test "${prefix}" = "NONE"); then
 	dnl no prefix and no localstatedir, so default to /var
 	if (test "$localstatedir" = '${prefix}/var'); then
