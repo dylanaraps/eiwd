@@ -56,7 +56,8 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/asn1-private.h \
 			ell/pkcs5.h ell/pkcs5.c \
 			ell/pkcs5-private.h \
-			ell/file.h ell/file.c
+			ell/file.h ell/file.c \
+			ell/dbus-client.h ell/dbus-client.c
 
 ell_libell_internal_la_SOURCES = $(ell_sources)
 
