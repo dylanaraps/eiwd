@@ -367,14 +367,21 @@ end:
 		return -EINVAL;
 	}
 
-	sim->auth = iwd_sim_auth_create(sim->sim_supported, sim->aka_supported,
-			sim->identity, &hardcoded_sim_driver, NULL);
+	sim->auth = iwd_sim_auth_create(&hardcoded_sim_driver);
+
+	iwd_sim_auth_set_nai(sim->auth, sim->identity);
+	iwd_sim_auth_set_capabilities(sim->auth, sim->sim_supported,
+			sim->aka_supported);
+
+	iwd_sim_auth_register(sim->auth);
 
 	return 0;
 }
 
 static void sim_hardcoded_exit(void)
 {
+	iwd_sim_auth_remove(sim->auth);
+
 	if (sim)
 		l_free(sim->identity);
 
