@@ -37,28 +37,56 @@ struct iwd_sim_auth {
 	bool sim_supported : 1;
 	char *nai;
 	int pending;
-	struct watchlist destory_watches;
+	struct watchlist auth_watchers;
 };
 
-struct iwd_sim_auth *iwd_sim_auth_create(bool sim_supported, bool aka_supported,
-		char *nai, const struct iwd_sim_auth_driver *driver,
-		void *driver_data)
+struct iwd_sim_auth *iwd_sim_auth_create(
+		const struct iwd_sim_auth_driver *driver)
 {
 	struct iwd_sim_auth *auth = l_new(struct iwd_sim_auth, 1);
 
-	if (!auth)
-		return NULL;
-
-	auth->aka_supported = aka_supported;
-	auth->sim_supported = sim_supported;
-	auth->nai = l_strdup(nai);
 	auth->driver = driver;
-	auth->driver_data = driver_data;
-	watchlist_init(&auth->destory_watches, NULL);
-
-	l_queue_push_head(auth_providers, auth);
+	watchlist_init(&auth->auth_watchers, NULL);
 
 	return auth;
+}
+
+void iwd_sim_auth_set_nai(struct iwd_sim_auth *auth, const char *nai)
+{
+	auth->nai = l_strdup(nai);
+}
+
+void iwd_sim_auth_set_capabilities(struct iwd_sim_auth *auth,
+		bool sim_supported, bool aka_supported)
+{
+	auth->sim_supported = sim_supported;
+	auth->aka_supported = aka_supported;
+}
+
+void iwd_sim_auth_set_data(struct iwd_sim_auth *auth, void *driver_data)
+{
+	auth->driver_data = driver_data;
+}
+
+bool iwd_sim_auth_register(struct iwd_sim_auth *auth)
+{
+	return l_queue_push_head(auth_providers, auth);
+}
+
+void iwd_sim_auth_unregister(struct iwd_sim_auth *auth)
+{
+	if (auth->driver->cancel_request)
+		auth->driver->cancel_request(auth, auth->pending);
+
+	WATCHLIST_NOTIFY_NO_ARGS(&auth->auth_watchers,
+			sim_auth_unregistered_cb_t);
+
+	l_free(auth->nai);
+
+	auth->aka_supported = false;
+	auth->sim_supported = false;
+
+	l_queue_remove(auth_providers, auth);
 }
 
 void *iwd_sim_auth_get_data(struct iwd_sim_auth *auth)
@@ -70,32 +98,20 @@ static void destroy_provider(void *data)
 {
 	struct iwd_sim_auth *auth = data;
 
-	if (auth->driver->cancel_request)
-		auth->driver->cancel_request(auth, auth->pending);
-
-	WATCHLIST_NOTIFY_NO_ARGS(&auth->destory_watches,
-			sim_auth_destroyed_cb_t);
-
 	if (auth->driver->remove)
 		auth->driver->remove(auth);
 
-	watchlist_destroy(&auth->destory_watches);
+	watchlist_destroy(&auth->auth_watchers);
 
 	l_free(auth->nai);
 	l_free(auth);
 }
 
-int iwd_sim_auth_remove(struct iwd_sim_auth *auth)
+void iwd_sim_auth_remove(struct iwd_sim_auth *auth)
 {
-	bool r;
-
-	r = l_queue_remove(auth_providers, auth);
-	if (!r)
-		return -ENOENT;
+	iwd_sim_auth_unregister(auth);
 
 	destroy_provider(auth);
-
-	return 0;
 }
 
 const char *iwd_sim_auth_get_nai(struct iwd_sim_auth *auth)
@@ -124,16 +140,16 @@ struct iwd_sim_auth *iwd_sim_auth_find(bool sim, bool aka)
 	return NULL;
 }
 
-unsigned int sim_auth_destroyed_watch_add(struct iwd_sim_auth *auth,
-		sim_auth_destroyed_cb_t cb, void *data)
+unsigned int sim_auth_unregistered_watch_add(struct iwd_sim_auth *auth,
+		sim_auth_unregistered_cb_t cb, void *data)
 {
-	return watchlist_add(&auth->destory_watches, cb, data, NULL);
+	return watchlist_add(&auth->auth_watchers, cb, data, NULL);
 }
 
-void sim_auth_destroyed_watch_remove(struct iwd_sim_auth *auth,
+void sim_auth_unregistered_watch_remove(struct iwd_sim_auth *auth,
 		unsigned int id)
 {
-	watchlist_remove(&auth->destory_watches, id);
+	watchlist_remove(&auth->auth_watchers, id);
 }
 
 bool sim_auth_check_milenage(struct iwd_sim_auth *auth,

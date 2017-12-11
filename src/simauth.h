@@ -34,7 +34,7 @@
 
 struct iwd_sim_auth;
 
-typedef void (*sim_auth_destroyed_cb_t)(void *data);
+typedef void (*sim_auth_unregistered_cb_t)(void *data);
 
 /*
  * Callback containing Milenage keys.
@@ -83,20 +83,30 @@ struct iwd_sim_auth_driver {
  * the list of available providers. It is expected that the auth provider
  * should be immediately available for auth requests.
  */
-struct iwd_sim_auth *iwd_sim_auth_create(bool sim_supported,
-		bool aka_supported, char *nai,
-		const struct iwd_sim_auth_driver *driver, void *driver_data);
+struct iwd_sim_auth *iwd_sim_auth_create(
+		const struct iwd_sim_auth_driver *driver);
+
+void iwd_sim_auth_set_nai(struct iwd_sim_auth *auth, const char *nai);
+
+void iwd_sim_auth_set_capabilities(struct iwd_sim_auth *auth,
+		bool sim_supported, bool aka_supported);
+
+void iwd_sim_auth_set_data(struct iwd_sim_auth *auth, void *driver_data);
+
+bool iwd_sim_auth_register(struct iwd_sim_auth *auth);
+
+void iwd_sim_auth_unregister(struct iwd_sim_auth *auth);
 
 void *iwd_sim_auth_get_data(struct iwd_sim_auth *auth);
 
-int iwd_sim_auth_remove(struct iwd_sim_auth *auth);
+void iwd_sim_auth_remove(struct iwd_sim_auth *auth);
 
 const char *iwd_sim_auth_get_nai(struct iwd_sim_auth *auth);
 
-unsigned int sim_auth_destroyed_watch_add(struct iwd_sim_auth *auth,
-		sim_auth_destroyed_cb_t cb, void *data);
+unsigned int sim_auth_unregistered_watch_add(struct iwd_sim_auth *auth,
+		sim_auth_unregistered_cb_t cb, void *data);
 
-void sim_auth_destroyed_watch_remove(struct iwd_sim_auth *auth,
+void sim_auth_unregistered_watch_remove(struct iwd_sim_auth *auth,
 		unsigned int id);
 /*
  * Find an appropriate driver for running SIM/AKA algorithms
