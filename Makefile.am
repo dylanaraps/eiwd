@@ -145,6 +145,11 @@ builtin_modules += sim_hardcoded
 builtin_sources += plugins/sim_hardcoded.c
 endif
 
+if OFONO
+builtin_modules += ofono
+builtin_sources += plugins/ofono.c
+endif
+
 unit_tests = unit/test-cmac-aes \
 		unit/test-hmac-md5 unit/test-hmac-sha1 unit/test-hmac-sha256 \
 		unit/test-prf-sha1 unit/test-kdf-sha256 \
