@@ -152,12 +152,12 @@ void sim_auth_unregistered_watch_remove(struct iwd_sim_auth *auth,
 	watchlist_remove(&auth->auth_watchers, id);
 }
 
-bool sim_auth_check_milenage(struct iwd_sim_auth *auth,
+int sim_auth_check_milenage(struct iwd_sim_auth *auth,
 		const uint8_t *rand, const uint8_t *autn,
 		sim_auth_check_milenage_cb_t cb, void *data)
 {
 	if (!auth->aka_supported)
-		return false;
+		return -1;
 
 	/* save ID in case simauth is destroyed */
 	auth->pending = auth->driver->check_milenage(auth, rand, autn,
@@ -166,11 +166,11 @@ bool sim_auth_check_milenage(struct iwd_sim_auth *auth,
 	return auth->pending;
 }
 
-bool sim_auth_run_gsm(struct iwd_sim_auth *auth, const uint8_t *rands,
+int sim_auth_run_gsm(struct iwd_sim_auth *auth, const uint8_t *rands,
 		int num_rands, sim_auth_run_gsm_cb_t cb, void *data)
 {
 	if (!auth->sim_supported)
-		return false;
+		return -1;
 
 	/* save ID in case simauth is destroyed */
 	auth->pending = auth->driver->run_gsm(auth, rands, num_rands, cb, data);

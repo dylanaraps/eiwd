@@ -126,9 +126,10 @@ struct iwd_sim_auth *iwd_sim_auth_find(bool sim, bool aka);
  * @param cb		Callback with milenage values
  * @param data		User data
  *
- * @param		False if there was an error
+ * @return		Transaction ID, used to cancel the request if needed
+ * 			< 0 in case of an error
  */
-bool sim_auth_check_milenage(struct iwd_sim_auth *auth,
+int sim_auth_check_milenage(struct iwd_sim_auth *auth,
 		const uint8_t *rand, const uint8_t *autn,
 		sim_auth_check_milenage_cb_t cb, void *data);
 
@@ -141,9 +142,10 @@ bool sim_auth_check_milenage(struct iwd_sim_auth *auth,
  * @param cb		Callback with GSM key values
  * @param data		User data
  *
- * @return		False if there was an error
+ * @return		Transaction ID, used to cancel the request if needed
+ * 			< 0 in case of an error
  */
-bool sim_auth_run_gsm(struct iwd_sim_auth *auth, const uint8_t *rands,
+int sim_auth_run_gsm(struct iwd_sim_auth *auth, const uint8_t *rands,
 		int num_rands, sim_auth_run_gsm_cb_t cb, void *data);
 
 void sim_auth_cancel_request(struct iwd_sim_auth *auth, int id);
