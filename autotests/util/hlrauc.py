@@ -31,7 +31,10 @@ class AuthCenter:
                 data, addr = self._socket.recvfrom(1000)
                 data = data.decode('ascii')
                 resp = self._process_data(data)
+            except BlockingIOError:
+                continue
             except:
+                print("Exception:", sys.exc_info()[0])
                 continue
             if resp:
                 self._socket.sendto(bytearray(resp, 'UTF-8'), addr)
@@ -43,7 +46,7 @@ class AuthCenter:
                 if line[0] == '#':
                     continue
                 else:
-                    data = line.split(':')
+                    data = line.strip('\n').split(':')
                     self._database[data[0]] = data[1:]
 
     def _process_data(self, data):
