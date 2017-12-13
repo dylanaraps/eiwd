@@ -175,6 +175,7 @@ unit_test_eap_sim_SOURCES = unit/test-eap-sim.c \
 		src/handshake.h src/handshake.c \
 		src/eap.h src/eap.c \
 		src/util.h src/util.c \
+		src/simauth.h src/simauth.c \
 		src/eap-sim.c
 
 unit_test_eap_sim_LDADD = ell/libell-internal.la
