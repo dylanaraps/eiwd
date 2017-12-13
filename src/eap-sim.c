@@ -31,8 +31,8 @@
 
 #include "crypto.h"
 #include "simutil.h"
+#include "simauth.h"
 #include "util.h"
-#include "src/dbus.h"
 
 /*
  * EAP-SIM authentication protocol.
@@ -64,8 +64,6 @@
 
 /* EAP-SIM value lengths */
 #define EAP_SIM_NONCE_LEN	16
-#define EAP_SIM_KC_LEN		8
-#define EAP_SIM_SRES_LEN	4
 
 /*
  * Internal client state, tracked to ensure that we are receiving the right
@@ -91,12 +89,6 @@ struct eap_sim_handle {
 	/* Negotiated EAP-SIM version */
 	uint16_t selected_version;
 
-	/* RAND's from AT_RAND attribute */
-	uint8_t rands[3][EAP_SIM_RAND_LEN];
-
-	/* Kc values from SIM */
-	uint8_t kc[3][EAP_SIM_KC_LEN];
-
 	/* Random generated nonce */
 	uint8_t nonce[EAP_SIM_NONCE_LEN];
 
@@ -115,24 +107,28 @@ struct eap_sim_handle {
 	/* Derived EMSK from PRNG */
 	uint8_t emsk[EAP_SIM_EMSK_LEN];
 
-	/* SRES values from SIM */
-	uint8_t sres[3][EAP_SIM_SRES_LEN];
-
 	/* Flag set if AT_ANY_ID_REQ was present */
 	bool any_id_req : 1;
 
 	/* Flag to indicate protected status indications */
 	bool protected : 1;
+
+	uint8_t *chal_pkt;
+	uint32_t pkt_len;
+
+	struct iwd_sim_auth *auth;
+	unsigned int auth_watch;
 };
 
 static void eap_sim_free(struct eap_state *eap)
 {
 	struct eap_sim_handle *sim = eap_get_data(eap);
 
+	if (sim->auth)
+		sim_auth_unregistered_watch_remove(sim->auth, sim->auth_watch);
+
 	l_free(sim->identity);
 	l_free(sim->vlist);
-	/* Kc values are crucial to security, zero them just in case */
-	memset(sim->kc, 0, sizeof(sim->kc));
 	l_free(sim);
 
 	eap_set_data(eap, NULL);
@@ -284,6 +280,107 @@ start_error:
 	eap_sim_client_error(eap, EAP_TYPE_SIM, EAP_SIM_ERROR_PROCESS);
 }
 
+static void gsm_callback(const uint8_t *sres, const uint8_t *kc,
+		void *user_data)
+{
+	struct eap_state *eap = user_data;
+	struct eap_sim_handle *sim = eap_get_data(eap);
+	uint16_t resp_len = 8 + 20;
+	uint8_t response[resp_len + 4 + (EAP_SIM_SRES_LEN * 3)];
+	uint8_t *pos = response;
+	uint8_t prng_buf[160];
+	uint8_t *mac_pos;
+
+	if (!sres || !kc) {
+		l_free(sim->chal_pkt);
+		goto chal_error;
+	}
+
+	if (sim->protected)
+		resp_len += 4;
+
+	if (!derive_master_key(sim->identity, kc, sim->nonce, sim->vlist,
+			sim->vlist_len, sim->selected_version, sim->mk)) {
+		l_error("error deriving master key");
+		goto chal_fatal;
+	}
+
+	eap_sim_fips_prf(sim->mk, 20, prng_buf, 160);
+
+	if (!eap_sim_get_encryption_keys(prng_buf, sim->k_encr, sim->k_aut,
+			sim->msk, sim->emsk)) {
+		l_error("could not derive encryption keys");
+		goto chal_fatal;
+	}
+
+	if (!eap_sim_verify_mac(eap, EAP_TYPE_SIM, sim->chal_pkt,
+			sim->pkt_len, sim->k_aut, sim->nonce,
+			EAP_SIM_NONCE_LEN)) {
+		l_error("server MAC was invalid");
+		l_free(sim->chal_pkt);
+		goto chal_error;
+	}
+
+	sim->state = EAP_SIM_STATE_CHALLENGE;
+
+	/*
+	 * TODO: When/If fast re-authentication is supported, the AT_ENCR_DATA
+	 *       attribute would be decrypted here. Currently there is no need
+	 *       or reason to do this without support for fast
+	 *       re-authentication.
+	 */
+
+	/* build response packet */
+	pos += eap_sim_build_header(eap, EAP_TYPE_SIM, EAP_SIM_ST_CHALLENGE,
+			pos, resp_len);
+
+	if (sim->protected)
+		pos += eap_sim_add_attribute(pos, EAP_SIM_AT_RESULT_IND,
+				EAP_SIM_PAD_NONE, NULL, 2);
+
+	/* save MAC position to know where to write it to */
+	mac_pos = pos;
+	pos += eap_sim_add_attribute(pos, EAP_SIM_AT_MAC, EAP_SIM_PAD_NONE,
+			NULL, EAP_SIM_MAC_LEN);
+
+	/* append SRES for MAC derivation */
+	memcpy(pos, sres, EAP_SIM_SRES_LEN * 3);
+	pos += EAP_SIM_SRES_LEN * 3;
+
+	if (!eap_sim_derive_mac(EAP_TYPE_SIM, response, pos - response,
+			sim->k_aut, mac_pos + 4)) {
+		l_error("could not derive MAC");
+		goto chal_fatal;
+	}
+
+	l_free(sim->chal_pkt);
+
+	eap_send_response(eap, EAP_TYPE_SIM, response, resp_len);
+
+	if (!sim->protected) {
+		/*
+		 * Result indication not required, we must accept success.
+		 */
+		eap_method_success(eap);
+		eap_set_key_material(eap, sim->msk, 32, NULL, 0, NULL, 0);
+
+		sim->state = EAP_SIM_STATE_SUCCESS;
+	}
+
+	return;
+
+	/*
+	 * fatal, unrecoverable error
+	 */
+chal_fatal:
+	eap_method_error(eap);
+	sim->state = EAP_SIM_STATE_ERROR;
+	return;
+
+chal_error:
+	eap_sim_client_error(eap, EAP_TYPE_SIM, EAP_SIM_ERROR_PROCESS);
+}
+
 /*
  * Handles EAP-SIM Challenge subtype
  */
@@ -293,17 +390,8 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 	struct eap_sim_handle *sim = eap_get_data(eap);
 	struct eap_sim_tlv_iter iter;
 	enum eap_sim_error code = EAP_SIM_ERROR_PROCESS;
-	/* header + AT_MAC */
-	uint16_t resp_len = 8 + 20;
-	/*
-	 * The response buf adds SRES*3 for MAC derivation + the response
-	 * indicator, which is not always present.
-	 * (resp_len gets incremented only if AT_RESPONSE_IND is present)
-	 */
-	uint8_t response[resp_len + 4 + (EAP_SIM_SRES_LEN * 3)];
-	uint8_t *pos = response;
-	uint8_t prng_buf[160];
-	uint8_t *mac_pos;
+
+	const uint8_t *rands = NULL;
 
 	if (sim->state != EAP_SIM_STATE_START) {
 		l_error("invalid packet for EAP-SIM state");
@@ -334,12 +422,11 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 			 * should only exist if we are re-authenticating to the
 			 * server, which is currently not implemented.
 			 */
-			memcpy(sim->rands, contents + 2, length - 2);
+			rands = contents + 2;
 			break;
 
 		case EAP_SIM_AT_RESULT_IND:
 			sim->protected = true;
-			resp_len += 4;
 			break;
 
 		case EAP_SIM_AT_IV:
@@ -355,78 +442,14 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 		}
 	}
 
-	if (!derive_master_key(sim->identity, sim->kc, sim->nonce, sim->vlist,
-			sim->vlist_len, sim->selected_version, sim->mk)) {
-		l_error("error deriving master key");
-		goto chal_fatal;
-	}
+	sim->chal_pkt = l_memdup(pkt, len);
+	sim->pkt_len = len;
 
-	eap_sim_fips_prf(sim->mk, 20, prng_buf, 160);
-
-	if (!eap_sim_get_encryption_keys(prng_buf, sim->k_encr, sim->k_aut,
-			sim->msk, sim->emsk)) {
-		l_error("could not derive encryption keys");
-		goto chal_fatal;
-	}
-
-	if (!eap_sim_verify_mac(eap, EAP_TYPE_SIM, pkt, len, sim->k_aut,
-			sim->nonce, EAP_SIM_NONCE_LEN)) {
-		l_error("server MAC was invalid");
+	if (sim_auth_run_gsm(sim->auth, rands, 3, gsm_callback, eap) < 0) {
+		l_free(sim->chal_pkt);
 		goto chal_error;
 	}
 
-	sim->state = EAP_SIM_STATE_CHALLENGE;
-
-	/*
-	 * TODO: When/If fast re-authentication is supported, the AT_ENCR_DATA
-	 *       attribute would be decrypted here. Currently there is no need
-	 *       or reason to do this without support for fast
-	 *       re-authentication.
-	 */
-
-	/* build response packet */
-	pos += eap_sim_build_header(eap, EAP_TYPE_SIM, EAP_SIM_ST_CHALLENGE,
-			pos, resp_len);
-
-	if (sim->protected)
-		pos += eap_sim_add_attribute(pos, EAP_SIM_AT_RESULT_IND,
-				EAP_SIM_PAD_NONE, NULL, 2);
-
-	/* save MAC position to know where to write it to */
-	mac_pos = pos;
-	pos += eap_sim_add_attribute(pos, EAP_SIM_AT_MAC, EAP_SIM_PAD_NONE,
-			NULL, EAP_SIM_MAC_LEN);
-
-	/* append SRES for MAC derivation */
-	memcpy(pos, sim->sres, EAP_SIM_SRES_LEN * 3);
-	pos += EAP_SIM_SRES_LEN * 3;
-
-	if (!eap_sim_derive_mac(EAP_TYPE_SIM, response, pos - response,
-			sim->k_aut, mac_pos + 4)) {
-		l_error("could not derive MAC");
-		goto chal_fatal;
-	}
-
-	eap_send_response(eap, EAP_TYPE_SIM, response, resp_len);
-
-	if (!sim->protected) {
-		/*
-		 * Result indication not required, we must accept success.
-		 */
-		eap_method_success(eap);
-		eap_set_key_material(eap, sim->msk, 32, NULL, 0, NULL, 0);
-
-		sim->state = EAP_SIM_STATE_SUCCESS;
-	}
-
-	return;
-
-	/*
-	 * fatal, unrecoverable error
-	 */
-chal_fatal:
-	eap_method_error(eap);
-	sim->state = EAP_SIM_STATE_ERROR;
 	return;
 
 chal_error:
@@ -559,48 +582,55 @@ req_error:
 	eap_sim_client_error(eap, EAP_TYPE_SIM, EAP_SIM_ERROR_PROCESS);
 }
 
+static const char *eap_sim_get_identity(struct eap_state *eap)
+{
+	struct eap_sim_handle *sim = eap_get_data(eap);
+
+	return sim->identity;
+}
+
+static void auth_destroyed(void *data)
+{
+	struct eap_state *eap = data;
+	struct eap_sim_handle *sim = eap_get_data(eap);
+
+	/*
+	 * If AKA was already successful we can return. Also if the state
+	 * has been set to ERROR, then eap_method_error has already been called,
+	 * so we can return.
+	 */
+	if (sim->state == EAP_SIM_STATE_SUCCESS ||
+			sim->state == EAP_SIM_STATE_ERROR)
+		return;
+
+	l_error("auth provider destroyed before SIM could finish");
+
+	sim->state = EAP_SIM_STATE_ERROR;
+	eap_method_error(eap);
+}
+
 static bool eap_sim_load_settings(struct eap_state *eap,
 					struct l_settings *settings,
 					const char *prefix)
 {
 	struct eap_sim_handle *sim;
-	char setting[64];
-	const char *kcs;
-	const char *imsi;
-	const char *sres;
-	size_t len;
 
+	/*
+	 * No specific settings for EAP-SIM, the auth provider will have all
+	 * required data.
+	 */
 	sim = l_new(struct eap_sim_handle, 1);
 	eap_set_data(eap, sim);
 
-	/*
-	 * TODO: These values will be loaded from a SIM card. Kc and SRES
-	 * values should be kept secret and crucial to the security of EAP-SIM.
-	 * It may be better to load them on the fly (from the SIM) as needed
-	 * rather than storing them in the eap_sim_state structure.
-	 */
-	snprintf(setting, sizeof(setting), "%sSIM-Kc", prefix);
-	kcs = l_settings_get_value(settings, "Security", setting);
-	if (kcs) {
-		uint8_t *val = l_util_from_hexstring(kcs, &len);
-
-		memcpy(sim->kc, val, len);
-		l_free(val);
+	sim->auth = iwd_sim_auth_find(true, false);
+	if (!sim->auth) {
+		l_debug("no SIM driver available for %s", sim->identity);
+		return false;
 	}
 
-	snprintf(setting, sizeof(setting), "%sSIM-IMSI", prefix);
-	imsi = l_settings_get_value(settings, "Security", setting);
-	if (imsi)
-		sim->identity = l_strdup(imsi);
-
-	snprintf(setting, sizeof(setting), "%sSIM-SRES", prefix);
-	sres = l_settings_get_value(settings, "Security", setting);
-	if (sres) {
-		uint8_t *val = l_util_from_hexstring(sres, &len);
-
-		memcpy(sim->sres, val, len);
-		l_free(val);
-	}
+	sim->auth_watch = sim_auth_unregistered_watch_add(sim->auth,
+			auth_destroyed, eap);
+	sim->identity = l_strdup(iwd_sim_auth_get_nai(sim->auth));
 
 	return true;
 }
@@ -612,6 +642,7 @@ static struct eap_method eap_sim = {
 	.free = eap_sim_free,
 	.handle_request = eap_sim_handle_request,
 	.load_settings = eap_sim_load_settings,
+	.get_identity = eap_sim_get_identity
 };
 
 static int eap_sim_init(void)
