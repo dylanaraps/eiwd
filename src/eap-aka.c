@@ -37,6 +37,7 @@
  * EAP-AKA specific values
  */
 #define EAP_AKA_AUTN_LEN	16
+#define EAP_AKA_AUTS_LEN	14
 #define EAP_AKA_RES_LEN		8
 #define EAP_AKA_K_RE_LEN	32
 
@@ -162,6 +163,24 @@ static void check_milenage_cb(const uint8_t *res, const uint8_t *ck,
 	uint8_t *pos = response;
 	uint8_t ik_p[EAP_AKA_IK_LEN];
 	uint8_t ck_p[EAP_AKA_CK_LEN];
+
+	if (auts) {
+		/*
+		 * If AUTS is non NULL then the SQN was not correct, send AUTS
+		 * to server which will update the SQN and send another
+		 * challenge packet.
+		 */
+		l_free(aka->chal_pkt);
+
+		pos += eap_sim_build_header(eap, aka->type,
+				EAP_AKA_ST_SYNC_FAILURE, pos, 24);
+		pos += eap_sim_add_attribute(pos, EAP_SIM_AT_AUTS,
+				EAP_SIM_PAD_NONE, auts, EAP_AKA_AUTS_LEN);
+
+		eap_send_response(eap, aka->type, response, 24);
+
+		return;
+	}
 
 	if (!res || !ck || !ik) {
 		l_free(aka->chal_pkt);
