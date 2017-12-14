@@ -55,6 +55,8 @@
 
 #define BIN_IW				"iw"
 #define BIN_HWSIM			"hwsim"
+#define BIN_OFONO			"ofonod"
+#define BIN_PHONESIM			"phonesim"
 
 #define HWSIM_RADIOS_MAX		100
 #define TEST_MAX_EXEC_TIME_SEC		20
@@ -698,6 +700,78 @@ static void terminate_medium(pid_t medium_pid)
 
 #define HOSTAPD_CTRL_INTERFACE_PREFIX "/var/run/hostapd"
 
+static bool loopback_started;
+
+static void start_loopback(void)
+{
+	char *argv[7];
+
+	if (loopback_started)
+		return;
+
+	argv[0] = "ifconfig";
+	argv[1] = "lo";
+	argv[2] = "127.0.0.1";
+	argv[3] = "up";
+	argv[4] = NULL;
+	execute_program(argv, false);
+
+	argv[0] = "route";
+	argv[1] = "add";
+	argv[2] = "127.0.0.1";
+	argv[3] = NULL;
+	execute_program(argv, false);
+
+	loopback_started = true;
+}
+
+static pid_t start_phonesim(void)
+{
+	char *argv[5];
+
+	argv[0] = BIN_PHONESIM;
+	argv[1] = "-p";
+	argv[2] = "12345";
+	argv[3] = "/usr/share/phonesim/default.xml";
+	argv[4] = NULL;
+
+	start_loopback();
+
+	setenv("OFONO_PHONESIM_CONFIG", "/tmp/phonesim.conf", true);
+
+	return execute_program(argv, false);
+}
+
+static void stop_phonesim(pid_t pid)
+{
+	kill_process(pid);
+}
+
+static pid_t start_ofono(void)
+{
+	char *argv[5];
+
+	argv[0] = BIN_OFONO;
+	argv[1] = "-n";
+	argv[2] = "--plugin=atmodem,phonesim";
+
+	if (verbose_out)
+		argv[3] = "-d";
+	else
+		argv[3] = NULL;
+
+	argv[4] = NULL;
+
+	start_loopback();
+
+	return execute_program(argv, false);
+}
+
+static void stop_ofono(pid_t pid)
+{
+	kill_process(pid);
+}
+
 static pid_t start_hostapd(const char *config_file, const char *interface_name,
 				const char *ctrl_interface)
 {
@@ -1101,16 +1175,18 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 	return true;
 }
 
-static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list)
+static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
+		const char *ext_options)
 {
-	char *argv[6];
+	char *argv[7];
 	char *iwd_phys = NULL;
 	pid_t ret;
+	int idx = 0;
 
-	argv[0] = "iwd";
-	argv[1] = "-c";
-	argv[2] = (char *) config_dir;
-	argv[3] = NULL;
+	argv[idx++] = "iwd";
+	argv[idx++] = "-c";
+	argv[idx++] = (char *) config_dir;
+	argv[idx] = NULL;
 
 	if (wiphy_list) {
 		const struct l_queue_entry *wiphy_entry;
@@ -1134,10 +1210,13 @@ static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list)
 		/* Take care of last comma */
 		iwd_phys[strlen(iwd_phys) - 1] = '\0';
 
-		argv[3] = "-p";
-		argv[4] = iwd_phys;
-		argv[5] = NULL;
+		argv[idx++] = "-p";
+		argv[idx++] = iwd_phys;
+		argv[idx] = NULL;
 	}
+
+	argv[idx++] = (char *)ext_options;
+	argv[idx] = NULL;
 
 	ret = execute_program(argv, false);
 
@@ -1537,6 +1616,8 @@ static void create_network_and_run_tests(const void *key, void *value,
 	pid_t hostapd_pids[HWSIM_RADIOS_MAX];
 	pid_t iwd_pid = -1;
 	pid_t medium_pid = -1;
+	pid_t ofono_pid = -1;
+	pid_t phonesim_pid = -1;
 	char *config_dir_path;
 	char *iwd_config_dir;
 	char **tmpfs_extra_stuff = NULL;
@@ -1545,6 +1626,9 @@ static void create_network_and_run_tests(const void *key, void *value,
 	struct l_queue *test_queue;
 	struct l_queue *test_stats_queue;
 	bool start_iwd_daemon = true;
+	bool ofono_req = false;
+	const char *sim_keys;
+	const char *iwd_ext_options = NULL;
 
 	memset(hostapd_pids, -1, sizeof(hostapd_pids));
 
@@ -1578,6 +1662,33 @@ static void create_network_and_run_tests(const void *key, void *value,
 						HW_CONFIG_SETUP_TMPFS_EXTRAS,
 									':');
 
+	sim_keys = l_settings_get_string(hw_settings, HW_CONFIG_GROUP_SETUP,
+			"sim_keys");
+
+	if (sim_keys) {
+		if (!strcmp(sim_keys, "ofono")) {
+			bool ofono_found = false;
+			bool phonesim_found = false;
+
+			if (!system("which ofonod > /dev/null 2>&1"))
+				ofono_found = true;
+
+			if (!system("which phonesim > /dev/null 2>&1"))
+				phonesim_found = true;
+
+			if (!ofono_found || !phonesim_found) {
+				l_info("ofono or phonesim not found, skipping");
+				goto exit_hwsim;
+			}
+
+			ofono_req = true;
+			iwd_ext_options = "--plugin=ofono";
+		} else {
+			setenv("IWD_SIM_KEYS", sim_keys, true);
+			iwd_ext_options = "--plugin=sim_hardcoded";
+		}
+	}
+
 	if (!create_tmpfs_extra_stuff(tmpfs_extra_stuff))
 		goto exit_hwsim;
 
@@ -1608,10 +1719,16 @@ static void create_network_and_run_tests(const void *key, void *value,
 		if (!iwd_config_dir)
 			iwd_config_dir = CONFIGDIR;
 
-		iwd_pid = start_iwd(iwd_config_dir, wiphy_list);
+		iwd_pid = start_iwd(iwd_config_dir, wiphy_list,
+				iwd_ext_options);
 
 		if (iwd_pid == -1)
 			goto exit_hostapd;
+	}
+
+	if (ofono_req) {
+		phonesim_pid = start_phonesim();
+		ofono_pid = start_ofono();
 	}
 
 	set_wiphy_list(wiphy_list);
@@ -1625,6 +1742,12 @@ static void create_network_and_run_tests(const void *key, void *value,
 		terminate_iwd(iwd_pid);
 
 	terminate_medium(medium_pid);
+
+	if (ofono_req) {
+		loopback_started = false;
+		stop_ofono(ofono_pid);
+		stop_phonesim(phonesim_pid);
+	}
 
 exit_hostapd:
 	destroy_hostapd_instances(hostapd_pids);
