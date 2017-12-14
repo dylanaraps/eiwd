@@ -1,8 +1,3 @@
 [Security]
 EAP-Method=AKA'
-EAP-Identity=abc@example.com
-EAP-AKA-IMSI=632010000000000@example.com
-EAP-AKA-KI=90dca4eda45b53cf0f12d7c9c3bc6a89
-EAP-AKA-OPC=cb9cccc4b9258e6dca4760379fb82581
-EAP-AKA-AMF=61df
-EAP-AKA-SQN=000000000021
+EAP-Identity=632010000000000@example.com
