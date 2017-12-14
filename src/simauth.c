@@ -73,22 +73,6 @@ bool iwd_sim_auth_register(struct iwd_sim_auth *auth)
 	return l_queue_push_head(auth_providers, auth);
 }
 
-void iwd_sim_auth_unregister(struct iwd_sim_auth *auth)
-{
-	if (auth->driver->cancel_request)
-		auth->driver->cancel_request(auth, auth->pending);
-
-	WATCHLIST_NOTIFY_NO_ARGS(&auth->auth_watchers,
-			sim_auth_unregistered_cb_t);
-
-	l_free(auth->nai);
-
-	auth->aka_supported = false;
-	auth->sim_supported = false;
-
-	l_queue_remove(auth_providers, auth);
-}
-
 void *iwd_sim_auth_get_data(struct iwd_sim_auth *auth)
 {
 	return auth->driver_data;
@@ -109,7 +93,13 @@ static void destroy_provider(void *data)
 
 void iwd_sim_auth_remove(struct iwd_sim_auth *auth)
 {
-	iwd_sim_auth_unregister(auth);
+	if (auth->driver->cancel_request)
+		auth->driver->cancel_request(auth, auth->pending);
+
+	WATCHLIST_NOTIFY_NO_ARGS(&auth->auth_watchers,
+			sim_auth_unregistered_cb_t);
+
+	l_queue_remove(auth_providers, auth);
 
 	destroy_provider(auth);
 }

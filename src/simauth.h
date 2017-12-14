@@ -95,8 +95,6 @@ void iwd_sim_auth_set_data(struct iwd_sim_auth *auth, void *driver_data);
 
 bool iwd_sim_auth_register(struct iwd_sim_auth *auth);
 
-void iwd_sim_auth_unregister(struct iwd_sim_auth *auth);
-
 void *iwd_sim_auth_get_data(struct iwd_sim_auth *auth);
 
 void iwd_sim_auth_remove(struct iwd_sim_auth *auth);
