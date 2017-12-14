@@ -630,7 +630,12 @@ static bool eap_sim_load_settings(struct eap_state *eap,
 
 	sim->auth_watch = sim_auth_unregistered_watch_add(sim->auth,
 			auth_destroyed, eap);
-	sim->identity = l_strdup(iwd_sim_auth_get_nai(sim->auth));
+	/*
+	 * RFC 4186 Section 4.2.1.6
+	 * EAP-SIM identity prefix is '1'
+	 */
+	sim->identity = l_strdup_printf("%c%s", '1',
+			iwd_sim_auth_get_nai(sim->auth));
 
 	return true;
 }

@@ -608,6 +608,14 @@ static bool eap_aka_common_load_settings(struct eap_state *eap,
 						const char *prefix)
 {
 	struct eap_aka_handle *aka = eap_get_data(eap);
+	/*
+	 * RFC 4187 Section 4.1.1.6
+	 * For AKA, the permanent username prefix is '0'
+	 *
+	 * RFC 5448 Section 3
+	 * For AKA', the permanent username prefix is '6'
+	 */
+	char id_prefix = (aka->type == EAP_TYPE_AKA) ? '0' : '6';
 
 	/*
 	 * No specific settings for EAP-SIM, the auth provider will have all
@@ -622,7 +630,8 @@ static bool eap_aka_common_load_settings(struct eap_state *eap,
 
 	aka->auth_watch = sim_auth_unregistered_watch_add(aka->auth,
 			auth_destroyed, eap);
-	aka->identity = l_strdup(iwd_sim_auth_get_nai(aka->auth));
+	aka->identity = l_strdup_printf("%c%s", id_prefix,
+			iwd_sim_auth_get_nai(aka->auth));
 
 	return true;
 }
