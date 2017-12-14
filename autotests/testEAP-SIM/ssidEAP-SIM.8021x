@@ -1,6 +1,2 @@
 [Security]
 EAP-Method=SIM
-EAP-Identity=abc@example.com
-EAP-SIM-Kc=d0d1d2d3d4d5d6d7d0d1d2d3d4d5d6d7d0d1d2d3d4d5d6d7
-EAP-SIM-IMSI=132010000000000@example.com
-EAP-SIM-SRES=e1e2e3e4e1e2e3e4e1e2e3e4
