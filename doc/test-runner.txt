@@ -33,6 +33,9 @@ in step 2 above.
 Note: The test-runner mounts host's file system in readonly mode and executes
 the above binaries inside of an emulated environment directly from it.
 
+Note: Running EAP-SIM/AKA/AKA' tests using oFono will require oFono and
+phonesim to be installed on the host. This is explained further in the
+"Running with oFono and phonesim" section.
 
 Building Kernel
 ===============
@@ -310,6 +313,36 @@ found at:
 
 	https://w1.fi/cgit/hostap/plain/hostapd/hostapd.conf
 
+Running with oFono and phonesim
+-------------------------------
+EAP-SIM/AKA/AKA' require SIM card access to perform the authentication
+algorithms. This is achieved in test runner using oFono and phonesim. If
+either oFono or phonesim are not found when test runner starts, any test
+involving oFono will be skipped. Using the option "sim_keys=ofono" in the
+hardware config file will tell test runner that the test should use oFono.
+There is some setup that needs to be done before test runner will work with
+ofono/phonesim
+
+setup ofono:
+
+	$ git clone git://git.kernel.org/pub/scm/network/ofono/ofono.git
+	$ cd ofono
+	$ ./bootstrap-configure
+	$ make install
+
+setup phonesim:
+
+	$ git clone git://git.kernel.org/pub/scm/network/ofono/phonesim.git
+	$ cd phonesim
+	$ ./bootstrap-configure
+	$ make install
+
+Now test runner should pick up both installed binaries.
+
+Note: EAP-SIM/AKA/AKA' can also be tested using the hardcoded SIM plugin. This
+just reads hardcoded SIM values from a local file. Tests using this plugin
+should not need any additional setup. This plugin is enabled by setting
+"sim_keys=<file>" in the hardware config file.
 
 Writing Python Test Scripts
 ---------------------------
