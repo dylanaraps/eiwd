@@ -313,6 +313,13 @@ found at:
 
 	https://w1.fi/cgit/hostap/plain/hostapd/hostapd.conf
 
+Note: for EAP-SIM/AKA/AKA' hostapd needs an authenticator running separately.
+IWD has a python version of hostapd's "hlrauc.c". This may work out of the box
+on your system, but the pycrypto library is required. This can be installed
+with python pip3:
+
+	sudo pip3 install pycrypto
+
 Running with oFono and phonesim
 -------------------------------
 EAP-SIM/AKA/AKA' require SIM card access to perform the authentication
