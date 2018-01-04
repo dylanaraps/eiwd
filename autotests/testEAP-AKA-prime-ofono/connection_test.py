@@ -43,7 +43,11 @@ class Test(unittest.TestCase):
         condition = 'not obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
 
-        ordered_network.network_object.connect()
+        try:
+                ordered_network.network_object.connect()
+        except:
+                auth.stop()
+                raise
 
         condition = 'obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
@@ -54,6 +58,7 @@ class Test(unittest.TestCase):
         wd.wait_for_object_condition(ordered_network.network_object, condition)
 
         auth.stop()
+
     @classmethod
     def setUpClass(cls):
         IWD.copy_to_storage('ssidEAP-AKA.8021x')

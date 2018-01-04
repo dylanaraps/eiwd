@@ -6,7 +6,6 @@ import sys
 sys.path.append('../util')
 import iwd
 from iwd import IWD
-from iwd import PSKAgent
 from iwd import NetworkType
 from hlrauc import AuthCenter
 
@@ -38,7 +37,11 @@ class Test(unittest.TestCase):
         condition = 'not obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
 
-        ordered_network.network_object.connect()
+        try:
+                ordered_network.network_object.connect()
+        except:
+                auth.stop()
+                raise
 
         condition = 'obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
