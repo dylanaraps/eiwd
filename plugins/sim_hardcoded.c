@@ -361,9 +361,11 @@ try_aka:
 		sim->aka_supported = 1;
 	}
 end:
+	l_settings_free(key_settings);
+
 	if (!sim->sim_supported && !sim->aka_supported) {
 		l_debug("error parsing config file, values missing");
-		l_settings_free(key_settings);
+
 		return -EINVAL;
 	}
 
@@ -371,7 +373,7 @@ end:
 
 	iwd_sim_auth_set_nai(sim->auth, sim->identity);
 	iwd_sim_auth_set_capabilities(sim->auth, sim->sim_supported,
-			sim->aka_supported);
+							sim->aka_supported);
 
 	iwd_sim_auth_register(sim->auth);
 
