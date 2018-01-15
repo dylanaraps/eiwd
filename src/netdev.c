@@ -1133,9 +1133,11 @@ static void netdev_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 		goto error;
 	}
 
-	if (netdev->operational)
-		return;
-
+	/*
+	 * Set the AUTHORIZED flag using a SET_STATION command even if
+	 * we're already operational, it will not hurt during re-keying
+	 * and is necessary after an FT.
+	 */
 	msg = netdev_build_cmd_set_station(netdev);
 
 	netdev->set_station_cmd_id =
