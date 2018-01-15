@@ -1036,8 +1036,6 @@ static bool device_roam_scan_notify(uint32_t wiphy_id, uint32_t ifindex,
 	 * list in its device->networks entry.
 	 */
 
-	network = device->connected_network;
-
 	orig_security = network_get_security(network);
 
 	if (hs->mde)
