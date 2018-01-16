@@ -31,7 +31,11 @@ class TestConnectAutoconnect(unittest.TestCase):
                 ordered_network.network_object.connect()
             return
         else:
-            ordered_network.network_object.connect()
+            try:
+                ordered_network.network_object.connect()
+            except:
+                del wd
+                raise
 
         condition = 'obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
