@@ -14,28 +14,29 @@ class AuthCenter:
     def __init__(self, sock_path, config_file):
         self._read_config(config_file)
         self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-        self._socket.setblocking(0)
         if os.path.exists(sock_path):
             os.unlink(sock_path)
         self._socket.bind(sock_path)
 
         self._rxhandle = threading.Thread(target=self._rx_thread)
-        self._rxhandle.shutdown = False
+        self._rxhandle.ready = threading.Event()
         self._rxhandle.start()
 
+        # wait for rx thread to start
+        self._rxhandle.ready.wait()
+
     def _rx_thread(self):
+        self._rxhandle.ready.set()
         while (True):
-            if self._rxhandle.shutdown == True:
-                break
             try:
                 data, addr = self._socket.recvfrom(1000)
                 data = data.decode('ascii')
                 resp = self._process_data(data)
-            except BlockingIOError:
-                continue
+            except OSError:
+                break
             except:
                 print("Exception:", sys.exc_info()[0])
-                continue
+                break
             if resp:
                 self._socket.sendto(bytearray(resp, 'UTF-8'), addr)
 
@@ -235,9 +236,9 @@ class AuthCenter:
         '''
             Stop the Authentication server and close the socket
         '''
-        self._rxhandle.shutdown = True
-        self._rxhandle.join()
+        self._socket.shutdown(socket.SHUT_RDWR)
         self._socket.close()
+        self._rxhandle.join()
 
 if __name__ == '__main__':
     '''
