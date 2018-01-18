@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2013-2016  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2013-2018  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -90,6 +90,9 @@ struct device {
 	bool preparing_roam : 1;
 	bool signal_low : 1;
 	bool roam_no_orig_ap : 1;
+	bool ap_directed_roaming : 1;
+
+	uint32_t ap_roam_watch;
 };
 
 struct signal_agent {
@@ -763,6 +766,7 @@ static void device_roam_failed(struct device *device)
 
 	device->preparing_roam = false;
 	device->roam_no_orig_ap = false;
+	device->ap_directed_roaming = false;
 
 	if (device->state == DEVICE_STATE_ROAMING)
 		device_disassociated(device);
@@ -921,6 +925,9 @@ static void device_transition_start(struct device *device, struct scan_bss *bss)
 	l_debug("%d, target %s", device->index,
 			util_address_to_string(bss->addr));
 
+	/* Reset AP roam flag, at this point the roaming behaves the same */
+	device->ap_directed_roaming = false;
+
 	if (hs->mde)
 		ie_parse_mobility_domain_from_data(hs->mde, hs->mde[1] + 2,
 							&mdid, NULL, NULL);
@@ -1054,6 +1061,11 @@ static bool device_roam_scan_notify(uint32_t wiphy_id, uint32_t ifindex,
 		struct ie_rsn_info info;
 		int r;
 
+		/* Skip the BSS we are connected to if doing an AP roam */
+		if (device->ap_directed_roaming && !memcmp(bss->addr,
+				device->connected_bss->addr, 6))
+			goto next;
+
 		/* Skip result if it is not part of the ESS */
 
 		if (bss->ssid_len != hs->ssid_len ||
@@ -1153,6 +1165,29 @@ static void device_roam_scan(struct device *device,
 		device_roam_failed(device);
 }
 
+static uint32_t device_freq_from_neighbor_report(const uint8_t *country,
+		struct ie_neighbor_report_info *info)
+{
+	enum scan_band band;
+	uint32_t freq;
+
+	band = scan_oper_class_to_band(country, info->oper_class);
+	if (!band) {
+		l_debug("Ignored: unsupported oper class");
+
+		return 0;
+	}
+
+	freq = scan_channel_to_freq(info->channel_num, band);
+	if (!freq) {
+		l_debug("Ignored: unsupported channel");
+
+		return 0;
+	}
+
+	return freq;
+}
+
 static void device_neighbor_report_cb(struct netdev *netdev, int err,
 					const uint8_t *reports,
 					size_t reports_len, void *user_data)
@@ -1186,7 +1221,6 @@ static void device_neighbor_report_cb(struct netdev *netdev, int err,
 	/* First see if any of the reports contain the MD bit set */
 	while (ie_tlv_iter_next(&iter)) {
 		struct ie_neighbor_report_info info;
-		enum scan_band band;
 		uint32_t freq;
 		const uint8_t *cc = NULL;
 
@@ -1205,19 +1239,9 @@ static void device_neighbor_report_cb(struct netdev *netdev, int err,
 		if (device->connected_bss->cc_present)
 			cc = device->connected_bss->cc;
 
-		band = scan_oper_class_to_band(cc, info.oper_class);
-		if (!band) {
-			l_debug("Ignored: unsupported oper class");
-
+		freq = device_freq_from_neighbor_report(cc, &info);
+		if (!freq)
 			continue;
-		}
-
-		freq = scan_channel_to_freq(info.channel_num, band);
-		if (!freq) {
-			l_debug("Ignored: unsupported channel");
-
-			continue;
-		}
 
 		if (!memcmp(info.addr, device->connected_bss->addr, ETH_ALEN)) {
 			/*
@@ -1331,6 +1355,91 @@ static void device_roam_timeout_rearm(struct device *device, int seconds)
 
 	device->roam_trigger_timeout =
 		l_timeout_create(seconds, device_roam_trigger_cb, device, NULL);
+}
+
+#define AP_ROAM_BSS_LIST_BIT			(1 << 0)
+#define AP_ROAM_BSS_TERMINATION_BIT		(1 << 3)
+#define AP_ROAM_ESS_DISSASSOCIATION_IMMINENT	(1 << 4)
+
+static void device_ap_roam_frame_event(struct netdev *netdev,
+		const struct mmpdu_header *hdr,
+		const void *body, size_t body_len,
+		void *user_data)
+{
+	struct device *device = user_data;
+	uint32_t pos = 0;
+	uint8_t req_mode;
+	uint16_t dtimer;
+	uint8_t valid_interval;
+
+	if (device->preparing_roam || device->state == DEVICE_STATE_ROAMING)
+		return;
+
+	if (body_len < 7)
+		goto format_error;
+
+	/*
+	 * First two bytes are checked by the frame watch (WNM category and
+	 * WNM action). The third is the dialog token which is not relevant
+	 * because we did not send a BSS transition query -- so skip these
+	 * first three bytes.
+	 */
+	pos += 3;
+
+	req_mode = l_get_u8(body + pos);
+	pos++;
+
+	/*
+	 * TODO: Disassociation timer and validity interval are currently not
+	 * used since the BSS transition request is being handled immediately.
+	 */
+	dtimer = l_get_le16(body + pos);
+	pos += 2;
+	valid_interval = l_get_u8(body + pos);
+	pos++;
+
+	l_debug("BSS transition received from AP: Disassociation Time: %u, "
+			"Validity interval: %u", dtimer, valid_interval);
+
+	/* check req_mode for optional values */
+	if (req_mode & AP_ROAM_BSS_TERMINATION_BIT) {
+		if (pos + 12 > body_len)
+			goto format_error;
+
+		pos += 12;
+	}
+
+	if (req_mode & AP_ROAM_ESS_DISSASSOCIATION_IMMINENT) {
+		uint8_t url_len;
+
+		if (pos + 1 > body_len)
+			goto format_error;
+
+		url_len = l_get_u8(body + pos);
+		pos++;
+
+		if (pos + url_len > body_len)
+			goto format_error;
+
+		pos += url_len;
+	}
+
+	device->ap_directed_roaming = true;
+	device->preparing_roam = true;
+
+	l_timeout_remove(device->roam_trigger_timeout);
+	device->roam_trigger_timeout = NULL;
+
+	if (req_mode & AP_ROAM_BSS_LIST_BIT)
+		device_neighbor_report_cb(device->netdev, 0, body + pos,
+				body_len - pos, device);
+	else
+		device_roam_scan(device, NULL);
+
+	return;
+
+format_error:
+	l_debug("bad AP roam frame formatting");
 }
 
 static void device_lost_beacon(struct device *device)
@@ -2216,6 +2325,7 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	struct device *device;
 	struct l_dbus *dbus = dbus_get_bus();
 	uint32_t ifindex = netdev_get_ifindex(netdev);
+	const uint8_t action_ap_roam_prefix[2] = { 0x0a, 0x07 };
 
 	device = l_new(struct device, 1);
 	device->bss_list = l_queue_new();
@@ -2251,6 +2361,13 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 						device);
 	device->netdev_watch_id =
 		netdev_watch_add(netdev, device_netdev_notify, device);
+
+	/*
+	 * register for AP roam transition watch
+	 */
+	device->ap_roam_watch = netdev_frame_watch_add(netdev, 0x00d0,
+			action_ap_roam_prefix, sizeof(action_ap_roam_prefix),
+			device_ap_roam_frame_event, device);
 
 	return device;
 }
@@ -2297,6 +2414,9 @@ static void device_free(void *user)
 	l_timeout_remove(device->roam_trigger_timeout);
 
 	scan_ifindex_remove(device->index);
+
+	netdev_frame_watch_remove(device->netdev, device->ap_roam_watch);
+
 	l_free(device);
 }
 
