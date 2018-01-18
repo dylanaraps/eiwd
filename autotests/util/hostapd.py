@@ -40,6 +40,29 @@ class HostapdCLI:
         os.system(self.cmdline + ' set_neighbor ' + addr + ' ssid=\\""' + ssid +
                     '"\\" nr=' + nr)
 
+    def send_bss_transition(self, device, nr_list):
+        # Send a BSS transition to a station (device). nr_list should be an
+        # array of tuples containing the BSS address and neighbor report.
+        # Parsing the neighbor report is a bit ugly but it makes it more
+        # consistent with the set_neighbor() API, i.e. the same neighbor report
+        # string could be used in both API's.
+        pref = 1
+        cmd = self.cmdline + ' bss_tm_req ' + device
+        for i in nr_list:
+            addr = i[0]
+            nr = i[1]
+
+            bss_info=str(int(nr[0:8], 16))
+            op_class=str(int(nr[8:10], 16))
+            chan_num=nr[10:12]
+            phy_num=nr[14:16]
+
+            cmd += ' pref=%s neighbor=%s,%s,%s,%s,%s' % \
+                    (str(pref), addr, bss_info, op_class, chan_num, phy_num)
+            pref += 1
+
+        os.system(cmd)
+
     @staticmethod
     def kill_all():
         os.system('killall hostapd')
