@@ -13,6 +13,7 @@ scripts/config --enable CONFIG_CRYPTO_AES_NI_INTEL
 scripts/config --enable CONFIG_CRYPTO_MD4
 scripts/config --enable CONFIG_CRYPTO_SHA1_SSSE3
 scripts/config --enable CONFIG_CRYPTO_SHA256_SSSE3
+scripts/config --enable CONFIG_CRYPTO_SHA512_SSSE3
 scripts/config --enable CONFIG_CRYPTO_ECB
 scripts/config --enable CONFIG_CRYPTO_CMAC
 scripts/config --enable CONFIG_CRYPTO_DES
