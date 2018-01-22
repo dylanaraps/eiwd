@@ -465,6 +465,19 @@ static void periodic_scan_trigger(int err, void *user_data)
 				IWD_DEVICE_INTERFACE, "Scanning");
 }
 
+static void periodic_scan_stop(struct device *device)
+{
+	struct l_dbus *dbus = dbus_get_bus();
+
+	scan_periodic_stop(device->index);
+
+	if (device->scanning) {
+		device->scanning = false;
+		l_dbus_property_changed(dbus, device_get_path(device),
+					IWD_DEVICE_INTERFACE, "Scanning");
+	}
+}
+
 uint32_t device_add_state_watch(struct device *device,
 					device_state_watch_func_t func,
 					void *user_data,
@@ -497,17 +510,17 @@ static void device_enter_state(struct device *device, enum device_state state)
 
 	switch (state) {
 	case DEVICE_STATE_OFF:
-		scan_periodic_stop(device->index);
+		periodic_scan_stop(device);
 		break;
 	case DEVICE_STATE_AUTOCONNECT:
 		scan_periodic_start(device->index, periodic_scan_trigger,
 					new_scan_results, device);
 		break;
 	case DEVICE_STATE_DISCONNECTED:
-		scan_periodic_stop(device->index);
+		periodic_scan_stop(device);
 		break;
 	case DEVICE_STATE_CONNECTED:
-		scan_periodic_stop(device->index);
+		periodic_scan_stop(device);
 		break;
 	case DEVICE_STATE_CONNECTING:
 		break;
@@ -516,7 +529,7 @@ static void device_enter_state(struct device *device, enum device_state state)
 	case DEVICE_STATE_ROAMING:
 		break;
 	case DEVICE_STATE_AP:
-		scan_periodic_stop(device->index);
+		periodic_scan_stop(device);
 		break;
 	}
 
