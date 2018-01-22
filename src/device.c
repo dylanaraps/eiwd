@@ -1357,9 +1357,9 @@ static void device_roam_timeout_rearm(struct device *device, int seconds)
 		l_timeout_create(seconds, device_roam_trigger_cb, device, NULL);
 }
 
-#define AP_ROAM_BSS_LIST_BIT			(1 << 0)
-#define AP_ROAM_BSS_TERMINATION_BIT		(1 << 3)
-#define AP_ROAM_ESS_DISSASSOCIATION_IMMINENT	(1 << 4)
+#define WNM_REQUEST_MODE_PREFERRED_CANDIDATE_LIST	(1 << 0)
+#define WNM_REQUEST_MODE_TERMINATION_IMMINENT		(1 << 3)
+#define WNM_REQUEST_MODE_ESS_DISASSOCIATION_IMMINENT	(1 << 4)
 
 static void device_ap_roam_frame_event(struct netdev *netdev,
 		const struct mmpdu_header *hdr,
@@ -1402,14 +1402,14 @@ static void device_ap_roam_frame_event(struct netdev *netdev,
 			"Validity interval: %u", dtimer, valid_interval);
 
 	/* check req_mode for optional values */
-	if (req_mode & AP_ROAM_BSS_TERMINATION_BIT) {
+	if (req_mode & WNM_REQUEST_MODE_TERMINATION_IMMINENT) {
 		if (pos + 12 > body_len)
 			goto format_error;
 
 		pos += 12;
 	}
 
-	if (req_mode & AP_ROAM_ESS_DISSASSOCIATION_IMMINENT) {
+	if (req_mode & WNM_REQUEST_MODE_ESS_DISASSOCIATION_IMMINENT ) {
 		uint8_t url_len;
 
 		if (pos + 1 > body_len)
@@ -1430,7 +1430,7 @@ static void device_ap_roam_frame_event(struct netdev *netdev,
 	l_timeout_remove(device->roam_trigger_timeout);
 	device->roam_trigger_timeout = NULL;
 
-	if (req_mode & AP_ROAM_BSS_LIST_BIT)
+	if (req_mode & WNM_REQUEST_MODE_PREFERRED_CANDIDATE_LIST)
 		device_neighbor_report_cb(device->netdev, 0, body + pos,
 				body_len - pos, device);
 	else
