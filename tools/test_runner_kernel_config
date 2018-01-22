@@ -4,7 +4,6 @@ scripts/config --enable CONFIG_MAC80211_HWSIM
 scripts/config --enable CONFIG_DRIVER_NL80211
 scripts/config --enable CONFIG_VLAN_8021Q
 
-scripts/config --enable CONFIG_CRYPTO_USER_API_AKCIPHER
 scripts/config --enable CONFIG_CRYPTO_USER_API_SKCIPHER
 scripts/config --enable CONFIG_CRYPTO_USER_API_HASH
 scripts/config --enable CONFIG_CRYPTO_RSA
