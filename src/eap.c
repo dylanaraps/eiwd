@@ -86,7 +86,7 @@ void eap_set_event_func(struct eap_state *eap, eap_event_func_t func)
 
 void eap_free(struct eap_state *eap)
 {
-	if (eap->method_state)
+	if (eap->method_state && eap->method->free)
 		eap->method->free(eap);
 
 	if (eap->identity)
@@ -195,7 +195,8 @@ static void eap_handle_request(struct eap_state *eap, uint16_t id,
 	}
 
 	if (id == eap->last_id)
-		op = eap->method->handle_retransmit;
+		op = eap->method->handle_retransmit ? :
+						eap->method->handle_request;
 	else
 		op = eap->method->handle_request;
 
@@ -318,7 +319,7 @@ void eap_rx_packet(struct eap_state *eap, const uint8_t *pkt, size_t len)
 			 */
 			return;
 
-		if (eap->method_state)
+		if (eap->method_state && eap->method->free)
 			eap->method->free(eap);
 
 		eap->method = NULL;
@@ -391,7 +392,7 @@ bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
 	return true;
 
 err:
-	if (eap->method_state)
+	if (eap->method_state && eap->method->free)
 		eap->method->free(eap);
 
 	eap->method = NULL;
@@ -455,6 +456,9 @@ void eap_restore_last_id(struct eap_state *eap, uint8_t last_id)
 
 int eap_register_method(struct eap_method *method)
 {
+	if (!method->handle_request)
+		return -EPERM;
+
 	l_queue_push_head(eap_methods, method);
 	return 0;
 }
