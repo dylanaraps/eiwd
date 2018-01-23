@@ -53,6 +53,7 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/tls-record.c \
 			ell/uuid.h ell/uuid.c \
 			ell/key.h ell/key.c \
+			ell/key-private.h \
 			ell/asn1-private.h \
 			ell/pkcs5.h ell/pkcs5.c \
 			ell/pkcs5-private.h \
