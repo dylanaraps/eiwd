@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <linux/if_ether.h>
 #include <ell/ell.h>
+#include <ell/key-private.h>
 
 #include "src/wscutil.h"
 #include "src/eapol.h"
@@ -2297,12 +2298,18 @@ int main(int argc, char *argv[])
 	l_test_add("/wsc/build/wsc_done 1", wsc_test_build_wsc_done,
 							&wsc_done_data_1);
 
+	if (!l_key_is_supported(L_KEY_FEATURE_DH))
+		goto done;
+
 	l_test_add("/wsc/diffie-hellman/generate pubkey 1",
 					wsc_test_dh_generate_pubkey,
 					&dh_generate_pubkey_test_data_1);
 	l_test_add("/wsc/diffie-hellman/generate pubkey 2",
 					wsc_test_dh_generate_pubkey,
 					&dh_generate_pubkey_test_data_2);
+
+	if (!l_cipher_is_supported(L_CIPHER_AES_CBC))
+		goto done;
 
 	l_test_add("/wsc/handshake/PBC Handshake Test",
 						wsc_test_pbc_handshake, NULL);
