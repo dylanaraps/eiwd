@@ -39,6 +39,11 @@ enum peap_version {
 	PEAP_VERSION_NOT_NEGOTIATED  = 0x08,
 };
 
+enum peap_flag {
+	/* Reserved    = 0x00, */
+	PEAP_FLAG_S    = 0x20,
+};
+
 struct eap_peap_state {
 	enum peap_version version;
 
@@ -62,9 +67,47 @@ static void eap_peap_free(struct eap_state *eap)
 	l_free(peap);
 }
 
+static bool eap_peap_validate_version(struct eap_state *eap,
+							uint8_t flags_version)
+{
+	struct eap_peap_state *peap = eap_get_data(eap);
+	enum peap_version version_proposed = flags_version & PEAP_VERSION_MASK;
+
+	if (peap->version == version_proposed)
+		return true;
+
+	if (!(flags_version & PEAP_FLAG_S) ||
+			peap->version != PEAP_VERSION_NOT_NEGOTIATED)
+		return false;
+
+	if (version_proposed < __PEAP_VERSION_MAX_SUPPORTED)
+		peap->version = version_proposed;
+	else
+		peap->version = __PEAP_VERSION_MAX_SUPPORTED;
+
+	return true;
+}
+
 static void eap_peap_handle_request(struct eap_state *eap,
 					const uint8_t *pkt, size_t len)
 {
+	uint8_t flags_version;
+
+	if (len < 1) {
+		l_error("EAP-PEAP request too short");
+		goto error;
+	}
+
+	flags_version = pkt[0];
+
+	if (!eap_peap_validate_version(eap, flags_version)) {
+		l_error("EAP-PEAP version negotiation failed");
+		goto error;
+	}
+
+	return;
+
+error:
 	eap_method_error(eap);
 }
 
