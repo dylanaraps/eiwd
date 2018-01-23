@@ -97,6 +97,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/ap.h src/ap.c \
 					src/simauth.h src/simauth.c \
 					src/plugin.h src/plugin.c \
+					src/eap-peap.c \
 					$(builtin_sources)
 
 src_iwd_LDADD = ell/libell-internal.la -ldl
