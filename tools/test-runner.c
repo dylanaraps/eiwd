@@ -57,6 +57,8 @@
 #define BIN_HWSIM			"hwsim"
 #define BIN_OFONO			"ofonod"
 #define BIN_PHONESIM			"phonesim"
+#define BIN_HOSTAPD			"hostapd"
+#define BIN_IWD				"iwd"
 
 #define HWSIM_RADIOS_MAX		100
 #define TEST_MAX_EXEC_TIME_SEC		20
@@ -69,7 +71,8 @@ static enum action {
 static const char *own_binary;
 static char **test_argv;
 static int test_argc;
-static bool verbose_out;
+static char **verbose_apps;
+static char *verbose_opt;
 static bool enable_debug;
 const char *debug_filter;
 static const char *qemu_binary;
@@ -151,6 +154,20 @@ struct wiphy {
 	char *hostapd_ctrl_interface;
 	char *hostapd_config;
 };
+
+static bool check_verbosity(const char *app)
+{
+	char **apps = verbose_apps;
+
+	while (*apps) {
+		if (!strcmp(app, *apps))
+			return true;
+
+		apps++;
+	}
+
+	return false;
+}
 
 static bool path_exist(const char *path_name)
 {
@@ -355,10 +372,10 @@ static void start_qemu(void)
 			"rootflags=trans=virtio,version=9p2000.u "
 			"acpi=off pci=noacpi noapic quiet ro "
 			"mac80211_hwsim.radios=0 init=%s TESTHOME=%s "
-			"TESTVERBOUT=%u DEBUG_FILTER=\'%s\'"
+			"TESTVERBOUT=\'%s\' DEBUG_FILTER=\'%s\'"
 			"TEST_ACTION=%u TEST_ACTION_PARAMS=\'%s\' "
 			"TESTARGS=\'%s\' PATH=\'%s\'",
-			initcmd, cwd, verbose_out,
+			initcmd, cwd, verbose_opt,
 			enable_debug ? debug_filter : "",
 			test_action,
 			test_action_params ? test_action_params : "",
@@ -388,9 +405,6 @@ static void set_output_visibility(void)
 {
 	int fd;
 
-	if (verbose_out)
-		return;
-
 	fd = open("/dev/null", O_WRONLY);
 
 	dup2(fd, 1);
@@ -399,7 +413,7 @@ static void set_output_visibility(void)
 	close(fd);
 }
 
-static pid_t execute_program(char *argv[], bool wait)
+static pid_t execute_program(char *argv[], bool wait, bool verbose)
 {
 	int status;
 	pid_t pid, child_pid;
@@ -419,7 +433,8 @@ static pid_t execute_program(char *argv[], bool wait)
 	}
 
 	if (child_pid == 0) {
-		set_output_visibility();
+		if (!verbose)
+			set_output_visibility();
 
 		execvp(argv[0], argv);
 
@@ -514,7 +529,7 @@ static bool start_dbus_daemon(void)
 	argv[1] = "--system";
 	argv[2] = NULL;
 
-	pid = execute_program(argv, false);
+	pid = execute_program(argv, false, false);
 	if (pid < 0)
 		return false;
 
@@ -534,7 +549,7 @@ static bool start_haveged(void)
 	argv[0] = "haveged";
 	argv[1] = NULL;
 
-	pid = execute_program(argv, true);
+	pid = execute_program(argv, true, false);
 	if (pid < 0)
 		return false;
 
@@ -556,7 +571,7 @@ static bool set_interface_state(const char *if_name, bool isUp)
 	argv[2] = state;
 	argv[3] = NULL;
 
-	pid = execute_program(argv, true);
+	pid = execute_program(argv, true, false);
 	if (pid < 0)
 		return false;
 
@@ -578,7 +593,7 @@ static bool create_interface(const char *if_name, const char *phy_name)
 	argv[7] = "managed";
 	argv[8] = NULL;
 
-	pid = execute_program(argv, true);
+	pid = execute_program(argv, true, false);
 	if (pid < 0)
 		return false;
 
@@ -596,7 +611,7 @@ static bool delete_interface(const char *if_name)
 	argv[3] = "del";
 	argv[4] = NULL;
 
-	pid = execute_program(argv, true);
+	pid = execute_program(argv, true, false);
 	if (pid < 0)
 		return false;
 
@@ -612,7 +627,7 @@ static bool list_interfaces(void)
 	argv[1] = "-a";
 	argv[2] = NULL;
 
-	pid = execute_program(argv, true);
+	pid = execute_program(argv, true, true);
 	if (pid < 0)
 		return false;
 
@@ -628,7 +643,7 @@ static bool list_hwsim_radios(void)
 	argv[1] = "--list";
 	argv[2] = NULL;
 
-	pid = execute_program(argv, true);
+	pid = execute_program(argv, true, true);
 	if (pid < 0)
 		return false;
 
@@ -657,7 +672,7 @@ static int create_hwsim_radio(const char *radio_name,
 	argv[4] = "--nointerface";
 	argv[5] = NULL;
 
-	pid = execute_program(argv, true);
+	pid = execute_program(argv, true, false);
 	if (pid < 0)
 		return -1;
 
@@ -676,7 +691,7 @@ static bool destroy_hwsim_radio(int radio_id)
 	argv[1] = destroy_param;
 	argv[2] = NULL;
 
-	pid = execute_program(argv, true);
+	pid = execute_program(argv, true, false);
 	if (pid < 0)
 		return false;
 
@@ -690,7 +705,7 @@ static pid_t register_hwsim_as_trans_medium(void)
 	argv[0] = BIN_HWSIM;
 	argv[1] = NULL;
 
-	return execute_program(argv, false);
+	return execute_program(argv, false, false);
 }
 
 static void terminate_medium(pid_t medium_pid)
@@ -714,13 +729,13 @@ static void start_loopback(void)
 	argv[2] = "127.0.0.1";
 	argv[3] = "up";
 	argv[4] = NULL;
-	execute_program(argv, false);
+	execute_program(argv, false, false);
 
 	argv[0] = "route";
 	argv[1] = "add";
 	argv[2] = "127.0.0.1";
 	argv[3] = NULL;
-	execute_program(argv, false);
+	execute_program(argv, false, false);
 
 	loopback_started = true;
 }
@@ -739,7 +754,7 @@ static pid_t start_phonesim(void)
 
 	setenv("OFONO_PHONESIM_CONFIG", "/tmp/phonesim.conf", true);
 
-	return execute_program(argv, false);
+	return execute_program(argv, false, false);
 }
 
 static void stop_phonesim(pid_t pid)
@@ -750,12 +765,13 @@ static void stop_phonesim(pid_t pid)
 static pid_t start_ofono(void)
 {
 	char *argv[5];
+	bool verbose = check_verbosity(BIN_OFONO);
 
 	argv[0] = BIN_OFONO;
 	argv[1] = "-n";
 	argv[2] = "--plugin=atmodem,phonesim";
 
-	if (verbose_out)
+	if (verbose)
 		argv[3] = "-d";
 	else
 		argv[3] = NULL;
@@ -764,7 +780,7 @@ static pid_t start_ofono(void)
 
 	start_loopback();
 
-	return execute_program(argv, false);
+	return execute_program(argv, false, verbose);
 }
 
 static void stop_ofono(pid_t pid)
@@ -775,18 +791,25 @@ static void stop_ofono(pid_t pid)
 static pid_t start_hostapd(const char *config_file, const char *interface_name,
 				const char *ctrl_interface)
 {
-	char *argv[7];
+	char *argv[8];
 	pid_t pid;
+	bool verbose = check_verbosity(BIN_HOSTAPD);
 
-	argv[0] = "hostapd";
+	argv[0] = BIN_HOSTAPD;
 	argv[1] = "-g";
 	argv[2] = (char *) ctrl_interface;
 	argv[3] = "-i";
 	argv[4] = (char *) interface_name;
 	argv[5] = (char *) config_file;
-	argv[6] = NULL;
 
-	pid = execute_program(argv, false);
+	if (verbose) {
+		argv[6] = "-d";
+		argv[7] = NULL;
+	} else {
+		argv[6] = NULL;
+	}
+
+	pid = execute_program(argv, false, verbose);
 	if (pid < 0) {
 		goto exit;
 	}
@@ -1183,7 +1206,7 @@ static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 	pid_t ret;
 	int idx = 0;
 
-	argv[idx++] = "iwd";
+	argv[idx++] = BIN_IWD;
 	argv[idx++] = "-c";
 	argv[idx++] = (char *) config_dir;
 	argv[idx] = NULL;
@@ -1218,7 +1241,7 @@ static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 	argv[idx++] = (char *)ext_options;
 	argv[idx] = NULL;
 
-	ret = execute_program(argv, false);
+	ret = execute_program(argv, false, check_verbosity(BIN_IWD));
 
 	if (iwd_phys)
 		l_free(iwd_phys);
@@ -1326,9 +1349,7 @@ static void print_test_status(char *test_name, enum test_status ts,
 	case TEST_STATUS_STARTED:
 		color_str = CONSOLE_LN_RESET;
 		status_str = "STARTED   ";
-
-		if (verbose_out)
-			line_end = "\n";
+		line_end = "\n";
 
 		break;
 	case TEST_STATUS_PASSED:
@@ -1482,7 +1503,7 @@ start_next_test:
 	argv[2] = NULL;
 
 	print_test_status(py_test, TEST_STATUS_STARTED, 0);
-	test_exec_pid = execute_program(argv, false);
+	test_exec_pid = execute_program(argv, false, false);
 
 	gettimeofday(&time_before, NULL);
 
@@ -1699,7 +1720,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 	if (medium_pid < 0)
 		goto exit_hwsim;
 
-	if (verbose_out) {
+	if (check_verbosity("hwsim")) {
 		list_hwsim_radios();
 		list_interfaces();
 	}
@@ -1946,6 +1967,7 @@ static void run_auto_tests(void)
 	l_queue_destroy(test_stat_queue, test_stat_queue_entry_destroy);
 
 exit:
+	l_strfreev(verbose_apps);
 	l_strfreev(test_config_dirs);
 	l_hashmap_destroy(test_config_map, NULL);
 }
@@ -1971,7 +1993,7 @@ static void run_unit_tests(void)
 		argv[0] = unit_test_abs_path;
 		argv[1] = NULL;
 
-		execute_program(argv, true);
+		execute_program(argv, true, false);
 
 		l_free(unit_test_abs_path);
 	}
@@ -2029,13 +2051,6 @@ static void run_tests(void)
 
 	*ptr = '\0';
 
-	ptr = strstr(cmdline, "TESTVERBOUT=1");
-
-	if (ptr) {
-		l_info("Enable verbose output");
-		verbose_out = true;
-	}
-
 	ptr = strstr(cmdline, "TEST_ACTION_PARAMS=");
 
 	if (ptr) {
@@ -2087,6 +2102,24 @@ static void run_tests(void)
 		}
 	}
 
+	ptr = strstr(cmdline, "TESTVERBOUT=");
+
+	if (ptr) {
+		verbose_opt = ptr + 13;
+
+		ptr = strchr(verbose_opt, '\'');
+		if (!ptr) {
+			l_error("Malformed verbose parameter");
+			return;
+		}
+
+		*ptr = '\0';
+
+		l_info("Enable verbose output for %s", verbose_opt);
+
+		verbose_apps = l_strsplit(verbose_opt, ',');
+	}
+
 	ptr = strstr(cmdline, "TESTHOME=");
 
 	if (ptr) {
@@ -2125,7 +2158,9 @@ static void usage(void)
 	l_info("Options:\n"
 		"\t-q, --qemu <path>	QEMU binary\n"
 		"\t-k, --kernel <image>	Kernel image (bzImage)\n"
-		"\t-v, --verbose		Enable verbose output\n"
+		"\t-v, --verbose <apps>	Comma separated list of "
+						"applications to enable\n"
+						"\t\t\t\tverbose output\n"
 		"\t-h, --help		Show help options\n");
 	l_info("Commands:\n"
 		"\t-A, --auto-tests <dirs>	Comma separated list of the "
@@ -2140,7 +2175,7 @@ static const struct option main_options[] = {
 	{ "unit-tests",	required_argument, NULL, 'U' },
 	{ "qemu",	required_argument, NULL, 'q' },
 	{ "kernel",	required_argument, NULL, 'k' },
-	{ "verbose",	no_argument,       NULL, 'v' },
+	{ "verbose",	required_argument, NULL, 'v' },
 	{ "debug",	optional_argument, NULL, 'd' },
 	{ "help",	no_argument,       NULL, 'h' },
 	{ }
@@ -2167,7 +2202,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "A:U:q:k:vdh", main_options,
+		opt = getopt_long(argc, argv, "A:U:q:k:v:dh", main_options,
 									NULL);
 		if (opt < 0)
 			break;
@@ -2182,7 +2217,6 @@ int main(int argc, char *argv[])
 			test_action = ACTION_UNIT_TEST;
 			test_action_params = optarg;
 			actions++;
-			verbose_out = true;
 			break;
 		case 'q':
 			qemu_binary = optarg;
@@ -2201,7 +2235,7 @@ int main(int argc, char *argv[])
 			l_debug_enable(debug_filter);
 			break;
 		case 'v':
-			verbose_out = true;
+			verbose_opt = optarg;
 			break;
 		case 'h':
 			usage();
