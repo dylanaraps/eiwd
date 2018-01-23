@@ -373,6 +373,7 @@ void network_sync_psk(struct network *network)
 int network_autoconnect(struct network *network, struct scan_bss *bss)
 {
 	struct wiphy *wiphy = device_get_wiphy(network->device);
+	bool is_autoconnectable;
 
 	switch (network_get_security(network)) {
 	case SECURITY_NONE:
@@ -425,6 +426,16 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 		return -ENOTSUP;
 	}
 
+	if (!l_settings_get_bool(network->settings, "Settings",
+					"Autoconnect", &is_autoconnectable))
+		goto connect;
+
+	if (!is_autoconnectable) {
+		network_settings_close(network);
+		return -EPERM;
+	}
+
+connect:
 	device_connect_network(network->device, network, bss, NULL);
 	return 0;
 }
