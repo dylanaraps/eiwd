@@ -30,6 +30,7 @@
 #include <linux/if_ether.h>
 #include <ell/ell.h>
 #include <ell/tls-private.h>
+#include <ell/key-private.h>
 
 #include "src/eapol.h"
 #include "src/crypto.h"
@@ -3423,6 +3424,10 @@ int main(int argc, char *argv[])
 	l_test_add("/EAPoL Key/Calculate MIC Test 1",
 			eapol_calculate_mic_test, &eapol_calculate_mic_test_1);
 
+	if (!l_cipher_is_supported(L_CIPHER_AES) ||
+			!l_cipher_is_supported(L_CIPHER_ARC4))
+		goto done;
+
 	l_test_add("EAPoL/WPA2 4-Way Handshake",
 			&eapol_4way_test, NULL);
 
@@ -3449,14 +3454,18 @@ int main(int argc, char *argv[])
 	l_test_add("EAPoL/WPA2 Retransmit Test",
 			&eapol_sm_wpa2_retransmit_test, NULL);
 
-	l_test_add("EAPoL/8021x EAP-TLS & 4-Way Handshake",
-			&eapol_sm_test_eap_tls, NULL);
+	if (l_cipher_is_supported(L_CIPHER_DES3_EDE_CBC) &&
+			l_cipher_is_supported(L_CIPHER_AES_CBC) &&
+			l_key_is_supported(L_KEY_FEATURE_RESTRICT |
+							L_KEY_FEATURE_CRYPTO)) {
+		l_test_add("EAPoL/8021x EAP-TLS & 4-Way Handshake",
+					&eapol_sm_test_eap_tls, NULL);
 
-	l_test_add("EAPoL/8021x EAP-TTLS+EAP-MD5 & 4-Way Handshake",
-			&eapol_sm_test_eap_ttls_md5, NULL);
-
-	l_test_add("EAPoL/8021x EAP NAK",
-			&eapol_sm_test_eap_nak, NULL);
+		l_test_add("EAPoL/8021x EAP-TTLS+EAP-MD5 & 4-Way Handshake",
+					&eapol_sm_test_eap_ttls_md5, NULL);
+		l_test_add("EAPoL/8021x EAP NAK",
+				&eapol_sm_test_eap_nak, NULL);
+	}
 
 	l_test_add("EAPoL/FT-Using-PSK 4-Way Handshake",
 			&eapol_ft_handshake_test, NULL);
