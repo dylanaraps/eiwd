@@ -2236,7 +2236,9 @@ int main(int argc, char *argv[])
 
 	l_test_add("/wsc/pin/valid pin", wsc_test_pin_valid, NULL);
 	l_test_add("/wsc/pin/valid checksum", wsc_test_pin_checksum, NULL);
-	l_test_add("/wsc/pin/generate", wsc_test_pin_generate, NULL);
+
+	if (l_getrandom_is_supported())
+		l_test_add("/wsc/pin/generate", wsc_test_pin_generate, NULL);
 
 	l_test_add("/wsc/gen_uuid/1", wsc_test_uuid_from_addr,
 					&uuid_from_addr_data_1);
