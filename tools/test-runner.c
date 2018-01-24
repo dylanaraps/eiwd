@@ -370,11 +370,12 @@ static void start_qemu(void)
 			"rootfstype=9p "
 			"root=/dev/root "
 			"rootflags=trans=virtio,version=9p2000.u "
-			"acpi=off pci=noacpi noapic quiet ro "
+			"acpi=off pci=noacpi noapic %s ro "
 			"mac80211_hwsim.radios=0 init=%s TESTHOME=%s "
 			"TESTVERBOUT=\'%s\' DEBUG_FILTER=\'%s\'"
 			"TEST_ACTION=%u TEST_ACTION_PARAMS=\'%s\' "
 			"TESTARGS=\'%s\' PATH=\'%s\'",
+			check_verbosity("kernel") ? "ignore_loglevel" : "quiet",
 			initcmd, cwd, verbose_opt,
 			enable_debug ? debug_filter : "",
 			test_action,
@@ -672,7 +673,7 @@ static int create_hwsim_radio(const char *radio_name,
 	argv[4] = "--nointerface";
 	argv[5] = NULL;
 
-	pid = execute_program(argv, true, false);
+	pid = execute_program(argv, true, check_verbosity(BIN_HWSIM));
 	if (pid < 0)
 		return -1;
 
@@ -705,7 +706,7 @@ static pid_t register_hwsim_as_trans_medium(void)
 	argv[0] = BIN_HWSIM;
 	argv[1] = NULL;
 
-	return execute_program(argv, false, false);
+	return execute_program(argv, false, check_verbosity(BIN_HWSIM));
 }
 
 static void terminate_medium(pid_t medium_pid)
@@ -1503,7 +1504,8 @@ start_next_test:
 	argv[2] = NULL;
 
 	print_test_status(py_test, TEST_STATUS_STARTED, 0);
-	test_exec_pid = execute_program(argv, false, false);
+	test_exec_pid = execute_program(argv, false,
+			check_verbosity("pytests"));
 
 	gettimeofday(&time_before, NULL);
 
@@ -1993,7 +1995,7 @@ static void run_unit_tests(void)
 		argv[0] = unit_test_abs_path;
 		argv[1] = NULL;
 
-		execute_program(argv, true, false);
+		execute_program(argv, true, check_verbosity("unit"));
 
 		l_free(unit_test_abs_path);
 	}
@@ -2236,6 +2238,7 @@ int main(int argc, char *argv[])
 			break;
 		case 'v':
 			verbose_opt = optarg;
+			verbose_apps = l_strsplit(verbose_opt, ',');
 			break;
 		case 'h':
 			usage();
