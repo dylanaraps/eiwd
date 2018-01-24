@@ -2254,8 +2254,15 @@ int main(int argc, char *argv[])
 		goto done;
 	}
 
-	l_test_add("/wsc/parse/m2 1", wsc_test_parse_m2, &m2_data_1);
-	l_test_add("/wsc/parse/m2 2", wsc_test_parse_m2, &m2_data_2);
+	if (!l_key_is_supported(L_KEY_FEATURE_CRYPTO)) {
+		printf("Key crypto not supported, skipping other tests...\n");
+		goto done;
+	}
+
+	if (l_key_is_supported(L_KEY_FEATURE_DH)) {
+		l_test_add("/wsc/parse/m2 1", wsc_test_parse_m2, &m2_data_1);
+		l_test_add("/wsc/parse/m2 2", wsc_test_parse_m2, &m2_data_2);
+	}
 
 	l_test_add("/wsc/build/m2 1", wsc_test_build_m2, &m2_data_1);
 
