@@ -59,6 +59,12 @@ Service		net.connman.iwd.hwsim
 Interface	net.connman.iwd.hwsim.Interface [Experimental]
 Object path	/{radio0,radio1,...}/{1,2,...}
 
+Methods		void SendFrame(string addr, uint32 freq, int32 signal,
+				array(byte) frame)
+			Send an arbitrary frame out to a station. 'addr' is the
+			station address. 'freq' and 'signal' are the frequency
+			and signal strength.
+
 Properties	string Name [readonly]
 			The interface name.
 
