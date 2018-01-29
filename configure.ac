@@ -107,7 +107,12 @@ if (test "${enable_dbusconf}" != "no" && test -z "${path_dbusconfdir}"); then
 fi
 AC_SUBST(DBUS_CONFDIR, [${path_dbusconfdir}])
 
-AC_PATH_PROG(A2X, [a2x], [], $PATH:/sbin:/usr/sbin)
+AC_ARG_ENABLE([docs], AC_HELP_STRING([--enable-docs],
+				[build documentation and manual pages]),
+					[enable_docs=${enableval}])
+if (test "${enable_docs}" = "yes"); then
+	AC_PATH_PROG(A2X, [a2x], [], $PATH:/sbin:/usr/sbin)
+fi
 AM_CONDITIONAL(BUILD_DOCS, test "$A2X" != "")
 
 AC_CONFIG_FILES(Makefile)
