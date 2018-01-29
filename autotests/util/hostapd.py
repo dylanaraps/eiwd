@@ -15,6 +15,12 @@ class HostapdCLI:
         self.cmdline = 'hostapd_cli -p"' + socket_path + '" -i"' + \
                 self.ifname + '"'
 
+        self._hostapd_restarted = False
+
+    def __del__(self):
+        if self._hostapd_restarted:
+            os.system('killall hostapd')
+
     def wps_push_button(self):
         os.system(self.cmdline + ' wps_pbc')
 
@@ -66,3 +72,21 @@ class HostapdCLI:
     @staticmethod
     def kill_all():
         os.system('killall hostapd')
+
+    def ungraceful_restart(self):
+        '''
+            Ungracefully kill and restart hostapd
+        '''
+        for wname in wiphy.wiphy_map:
+            name = wiphy.wiphy_map[wname]
+            intf = list(name.values())[0]
+            if intf.use == 'hostapd':
+                os.system('killall -9 hostapd')
+                os.system('ifconfig %s down' % intf.name)
+                os.system('ifconfig %s up' % intf.name)
+                os.system('hostapd -g %s -i %s %s &' %
+                          (intf.ctrl_interface, intf.name, intf.config))
+                break;
+
+        # set flag so hostapd can be killed after the test
+        self._hostapd_restarted = True
