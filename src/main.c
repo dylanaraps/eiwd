@@ -254,7 +254,7 @@ int main(int argc, char *argv[])
 	iwd_config = l_settings_new();
 
 	if (!l_settings_load_from_file(iwd_config, config_path))
-		l_warn("Failed to load configuration file %s", config_path);
+		l_warn("Skipping optional configuration file %s", config_path);
 
 	l_free(config_path);
 
