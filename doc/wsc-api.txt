@@ -37,7 +37,7 @@ Methods		void PushButton()
 		void StartPin(string pin)
 			Start WSC in PIN mode.  If iwd's WSC configuration
 			indicates that the device does not support a display,
-			a static PIN from the iwd.conf configuration file is
+			a static PIN from the main.conf configuration file is
 			used.  Contents of pin are ignored in this case.
 
 			Otherwise, the pin provided will be utilized.  This

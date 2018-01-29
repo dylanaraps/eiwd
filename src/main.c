@@ -249,7 +249,7 @@ int main(int argc, char *argv[])
 	if (!config_dir)
 		config_dir = CONFIGDIR;
 
-	config_path = l_strdup_printf("/%s/%s", config_dir, "iwd.conf");
+	config_path = l_strdup_printf("/%s/%s", config_dir, "main.conf");
 
 	iwd_config = l_settings_new();
 

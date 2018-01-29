@@ -205,7 +205,7 @@ radio_confs=rad0:rad1
 # This field is optional. Default: 1 (true)
 #start_iwd=0
 
-# Configuration directory to use for IWD daemon. IWD expects 'iwd.conf' to be
+# Configuration directory to use for IWD daemon. IWD expects 'main.conf' to be
 # inside of the specified directory.
 # This field is optional. Default: /etc/iwd
 #iwd_config_dir=/etc/iwd
