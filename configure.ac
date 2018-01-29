@@ -89,10 +89,15 @@ AC_CHECK_HEADERS(linux/types.h linux/if_alg.h)
 AC_CHECK_HEADERS(readline/readline.h, enable_readline=yes,
 			AC_MSG_ERROR(readline header files are required))
 
+AC_ARG_ENABLE([dbusconf], AC_HELP_STRING([--disable-dbusconf],
+				[don't install D-Bus system policy file]),
+					[enable_dbusconf=${enableval}])
+AM_CONDITIONAL(DBUSCONF, test "${enable_dbusconf}" != "no")
+
 AC_ARG_WITH([dbusconfdir], AC_HELP_STRING([--with-dbusconfdir=DIR],
 				[path to D-Bus configuration directory]),
 					[path_dbusconfdir=${withval}])
-if (test -z "${path_dbusconfdir}"); then
+if (test "${enable_dbusconf}" != "no" && test -z "${path_dbusconfdir}"); then
 	AC_MSG_CHECKING([D-Bus configuration directory])
 	path_dbusconfdir="`$PKG_CONFIG --variable=sysconfdir dbus-1`"
 	if (test -z "${path_dbusconfdir}"); then

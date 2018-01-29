@@ -8,8 +8,10 @@ builtin_sources =
 
 noinst_LTLIBRARIES = ell/libell-internal.la
 
+if DBUSCONF
 dbusdir = @DBUS_CONFDIR@/dbus-1/system.d
 dist_dbus_DATA = src/iwd-dbus.conf
+endif
 
 ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/util.h ell/util.c \
@@ -269,9 +271,11 @@ EXTRA_DIST = src/genbuiltin doc/main.conf $(manual_pages:.1=.txt)
 
 AM_CFLAGS = -fvisibility=hidden
 
-MAINTAINERCLEANFILES = Makefile.in configure config.h.in aclocal.m4
+DISTCHECK_CONFIGURE_FLAGS = --disable-dbusconf
 
 DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests) $(manual_pages)
+
+MAINTAINERCLEANFILES = Makefile.in configure config.h.in aclocal.m4
 
 BUILT_SOURCES = ell/internal src/builtin.h
 
