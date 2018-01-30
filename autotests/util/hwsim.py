@@ -13,6 +13,7 @@ HWSIM_RULE_MANAGER_INTERFACE =  'net.connman.iwd.hwsim.RuleManager'
 HWSIM_RULE_INTERFACE =          'net.connman.iwd.hwsim.Rule'
 HWSIM_RADIO_MANAGER_INTERFACE = 'net.connman.iwd.hwsim.RadioManager'
 HWSIM_RADIO_INTERFACE =         'net.connman.iwd.hwsim.Radio'
+HWSIM_INTERFACE_INTERFACE =     'net.connman.iwd.hwsim.Interface'
 
 HWSIM_AGENT_MANAGER_PATH =      '/'
 
@@ -266,3 +267,35 @@ class Hwsim(iwd.AsyncOpAbstract):
     @property
     def object_manager(self):
         return self._object_manager_if
+
+    def spoof_disassociate(self, radio, freq, station):
+        '''
+            Send a spoofed disassociate frame to a station
+        '''
+        frame = 'a0 00 3a 01'
+        frame += station.replace(':', '')
+        frame += radio.addresses[0].replace(':', '')
+        frame += radio.addresses[0].replace(':', '')
+        frame += '30 01 02 00'
+        self.spoof_frame(radio, freq, station, frame)
+
+    def spoof_frame(self, radio, freq, station, frame):
+        '''
+            Send a spoofed arbitrary frame to a station
+        '''
+        radio_path = None
+        objects = self.object_manager.GetManagedObjects()
+
+        for path in objects:
+            obj = objects[path]
+            for interface in obj:
+                if interface == HWSIM_INTERFACE_INTERFACE:
+                    if obj[interface]['Address'] == radio.addresses[0]:
+                        radio_path = path
+                        break
+
+        iface = dbus.Interface(self._bus.get_object(HWSIM_SERVICE, radio_path),
+                HWSIM_INTERFACE_INTERFACE)
+
+        iface.SendFrame(bytearray.fromhex(station.replace(':', '')),
+                        freq, -30, bytearray.fromhex(frame))
