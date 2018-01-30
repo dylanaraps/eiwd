@@ -1,6 +1,25 @@
 #!/usr/bin/python3
 import os, os.path
 import wiphy
+import re
+
+chan_freq_map = [
+    None,
+    2412,
+    2417,
+    2422,
+    2427,
+    2432,
+    2437,
+    2442,
+    2447,
+    2452,
+    2457,
+    2462,
+    2467,
+    2472,
+    2484
+]
 
 hostapd_map = {ifname: intf for wname, wiphy in wiphy.wiphy_map.items()
         for ifname, intf in wiphy.items() if intf.use == 'hostapd'}
@@ -72,6 +91,21 @@ class HostapdCLI:
     @staticmethod
     def kill_all():
         os.system('killall hostapd')
+
+    def get_config_value(self, key):
+        # first find the right config file
+        for wname in hostapd_map:
+            if wname == self.ifname:
+                with open(hostapd_map[wname].config, 'r') as f:
+                    # read in config file and search for key
+                    cfg = f.read();
+                    match = re.search(r'%s=.*' % key, cfg)
+                    if match:
+                        return match.group(0).split('=')[1]
+        return None
+
+    def get_freq(self):
+        return chan_freq_map[int(self.get_config_value('channel'))]
 
     def ungraceful_restart(self):
         '''
