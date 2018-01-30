@@ -1088,6 +1088,7 @@ static void process_rules(const struct radio_info_rec *src_radio,
 struct send_frame_info {
 	struct hwsim_frame *frame;
 	struct radio_info_rec *radio;
+	void *user_data;
 };
 
 static bool send_frame_tx_info(struct hwsim_frame *frame)
@@ -1199,6 +1200,70 @@ static void send_frame_destroy(void *user_data)
 
 	hwsim_frame_unref(info->frame);
 	l_free(info);
+}
+
+static void send_custom_frame_callback(struct l_genl_msg *msg, void *user_data)
+{
+	struct send_frame_info *info = user_data;
+	struct l_dbus_message *message = info->user_data;
+	struct l_dbus_message *reply;
+
+	if (l_genl_msg_get_error(msg) < 0) {
+		/* Radio address or frequency didn't match */
+		l_debug("HWSIM_CMD_FRAME failed for destination %s: %d",
+				util_address_to_string(info->radio->addrs[0]),
+				l_genl_msg_get_error(msg));
+		dbus_pending_reply(&message, dbus_error_invalid_args(message));
+		return;
+	}
+
+	reply = l_dbus_message_new_method_return(message);
+	l_dbus_message_set_arguments(reply, "");
+	dbus_pending_reply(&message, reply);
+}
+
+static void send_custom_frame_destroy(void *user_data)
+{
+	struct send_frame_info *info = user_data;
+
+	l_free(info->frame);
+	l_free(info->radio);
+	l_free(info);
+}
+
+static bool send_custom_frame(const uint8_t *addr, uint32_t freq,
+		int32_t signal, const void *payload, uint32_t len,
+		void *user_data)
+{
+	struct hwsim_frame *frame = l_new(struct hwsim_frame, 1);
+	struct radio_info_rec *radio = l_new(struct radio_info_rec, 1);
+	struct send_frame_info *info = l_new(struct send_frame_info, 1);
+
+	frame->frequency = freq;
+	frame->signal = signal;
+	frame->payload_len = len;
+	frame->payload = payload;
+
+	info->frame = frame;
+	info->radio = radio;
+	info->user_data = user_data;
+
+	memcpy(info->radio->addrs[0], addr, ETH_ALEN);
+	memcpy(info->radio->addrs[1], addr, ETH_ALEN);
+
+	/* hwsim expects the first nibble of the address byte to be '4' */
+	info->radio->addrs[1][0] |= 0x40;
+
+	if (!send_frame(info, send_custom_frame_callback,
+			send_custom_frame_destroy)) {
+		l_free(frame);
+		l_free(radio);
+		l_free(info);
+
+		return false;
+	}
+
+	return true;
 }
 
 struct interface_match_data {
@@ -1631,6 +1696,44 @@ static void setup_radio_interface(struct l_dbus_interface *interface)
 					radio_property_get_regdom, NULL);
 }
 
+static struct l_dbus_message *interface_send_frame(struct l_dbus *dbus,
+		struct l_dbus_message *message,
+		void *user_data)
+{
+	struct l_dbus_message_iter addr;
+	struct l_dbus_message_iter data;
+	const void *frame;
+	const uint8_t *receiver;
+	uint32_t len;
+	uint32_t freq;
+	int32_t signal;
+
+	if (!l_dbus_message_get_arguments(message, "ayuiay", &addr, &freq,
+			&signal, &data))
+		goto invalid_args;
+
+	if (!l_dbus_message_iter_get_fixed_array(&addr,
+			(const void **)&receiver, &len))
+		goto invalid_args;
+
+	if (len != 6)
+		goto invalid_args;
+
+	if (!l_dbus_message_iter_get_fixed_array(&data, &frame, &len))
+		goto invalid_args;
+
+	if (!send_custom_frame(receiver, freq, signal, frame, len,
+			l_dbus_message_ref(message))) {
+		l_dbus_message_unref(message);
+		goto invalid_args;
+	}
+
+	return NULL;
+
+invalid_args:
+	return dbus_error_invalid_args(message);
+}
+
 static bool interface_property_get_name(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -1658,6 +1761,10 @@ static bool interface_property_get_address(struct l_dbus *dbus,
 
 static void setup_interface_interface(struct l_dbus_interface *interface)
 {
+	l_dbus_interface_method(interface, "SendFrame", 0,
+			interface_send_frame, "", "ayuiay", "station",
+			"frequency", "signal", "frame");
+
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					interface_property_get_name, NULL);
 	l_dbus_interface_property(interface, "Address", 0, "s",
