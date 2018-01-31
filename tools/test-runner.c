@@ -159,6 +159,9 @@ static bool check_verbosity(const char *app)
 {
 	char **apps = verbose_apps;
 
+	if (!apps)
+		return false;
+
 	while (*apps) {
 		if (!strcmp(app, *apps))
 			return true;
@@ -376,7 +379,7 @@ static void start_qemu(void)
 			"TEST_ACTION=%u TEST_ACTION_PARAMS=\'%s\' "
 			"TESTARGS=\'%s\' PATH=\'%s\'",
 			check_verbosity("kernel") ? "ignore_loglevel" : "quiet",
-			initcmd, cwd, verbose_opt,
+			initcmd, cwd, verbose_opt ? verbose_opt : "none",
 			enable_debug ? debug_filter : "",
 			test_action,
 			test_action_params ? test_action_params : "",
