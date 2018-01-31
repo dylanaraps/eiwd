@@ -46,6 +46,7 @@ enum peap_flag {
 
 struct eap_peap_state {
 	enum peap_version version;
+	struct l_tls *tunnel;
 
 	char *ca_cert;
 	char *client_cert;
@@ -57,6 +58,11 @@ static void eap_peap_free(struct eap_state *eap)
 {
 	struct eap_peap_state *peap = eap_get_data(eap);
 
+	if (peap->tunnel) {
+		l_tls_free(peap->tunnel);
+		peap->tunnel = NULL;
+	}
+
 	eap_set_data(eap, NULL);
 
 	l_free(peap->ca_cert);
@@ -65,6 +71,56 @@ static void eap_peap_free(struct eap_state *eap)
 	l_free(peap->passphrase);
 
 	l_free(peap);
+}
+
+static void eap_peap_tunnel_data_send(const uint8_t *data, size_t data_len,
+								void *user_data)
+{
+}
+
+static void eap_peap_tunnel_data_received(const uint8_t *data, size_t data_len,
+								void *user_data)
+{
+}
+
+static void eap_peap_tunnel_ready(const char *peer_identity, void *user_data)
+{
+}
+
+static void eap_peap_tunnel_disconnected(enum l_tls_alert_desc reason,
+						bool remote, void *user_data)
+{
+	l_info("PEAP TLS tunnel has disconnected");
+}
+
+static bool eap_peap_tunnel_init(struct eap_state *eap)
+{
+	struct eap_peap_state *peap = eap_get_data(eap);
+
+	if (peap->tunnel)
+		return false;
+
+	peap->tunnel = l_tls_new(false, eap_peap_tunnel_data_received,
+					eap_peap_tunnel_data_send,
+					eap_peap_tunnel_ready,
+					eap_peap_tunnel_disconnected,
+					eap);
+
+	if (!peap->tunnel) {
+		l_error("Failed to create a TLS instance.");
+		return false;
+	}
+
+	if (!l_tls_set_auth_data(peap->tunnel, peap->client_cert,
+					peap->client_key, NULL)) {
+		l_error("Failed to set authentication data.");
+		return false;
+	}
+
+	if (peap->ca_cert)
+		l_tls_set_cacert(peap->tunnel, peap->ca_cert);
+
+	return true;
 }
 
 static bool eap_peap_validate_version(struct eap_state *eap,
@@ -104,6 +160,10 @@ static void eap_peap_handle_request(struct eap_state *eap,
 		l_error("EAP-PEAP version negotiation failed");
 		goto error;
 	}
+
+	if (flags_version & PEAP_FLAG_S)
+		if (!eap_peap_tunnel_init(eap))
+			goto error;
 
 	return;
 
