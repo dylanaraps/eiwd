@@ -48,11 +48,26 @@ struct eap_peap_state {
 	enum peap_version version;
 	struct l_tls *tunnel;
 
+	uint8_t *tx_pdu_buf;
+	size_t tx_pdu_buf_len;
+
 	char *ca_cert;
 	char *client_cert;
 	char *client_key;
 	char *passphrase;
 };
+
+static void eap_peap_free_tx_buffer(struct eap_state *eap)
+{
+	struct eap_peap_state *peap = eap_get_data(eap);
+
+	if (!peap->tx_pdu_buf)
+		return;
+
+	l_free(peap->tx_pdu_buf);
+	peap->tx_pdu_buf = NULL;
+	peap->tx_pdu_buf_len = 0;
+}
 
 static void eap_peap_free(struct eap_state *eap)
 {
@@ -63,6 +78,8 @@ static void eap_peap_free(struct eap_state *eap)
 		peap->tunnel = NULL;
 	}
 
+	eap_peap_free_tx_buffer(eap);
+
 	eap_set_data(eap, NULL);
 
 	l_free(peap->ca_cert);
@@ -71,6 +88,11 @@ static void eap_peap_free(struct eap_state *eap)
 	l_free(peap->passphrase);
 
 	l_free(peap);
+}
+
+static void eap_peap_send_response(struct eap_state *eap,
+					const uint8_t *pdu, size_t pdu_len)
+{
 }
 
 static void eap_peap_tunnel_data_send(const uint8_t *data, size_t data_len,
@@ -123,6 +145,12 @@ static bool eap_peap_tunnel_init(struct eap_state *eap)
 	return true;
 }
 
+static void eap_peap_handle_payload(struct eap_state *eap,
+						const uint8_t *pkt,
+						size_t pkt_len)
+{
+}
+
 static bool eap_peap_validate_version(struct eap_state *eap,
 							uint8_t flags_version)
 {
@@ -147,6 +175,7 @@ static bool eap_peap_validate_version(struct eap_state *eap,
 static void eap_peap_handle_request(struct eap_state *eap,
 					const uint8_t *pkt, size_t len)
 {
+	struct eap_peap_state *peap = eap_get_data(eap);
 	uint8_t flags_version;
 
 	if (len < 1) {
@@ -161,9 +190,39 @@ static void eap_peap_handle_request(struct eap_state *eap,
 		goto error;
 	}
 
-	if (flags_version & PEAP_FLAG_S)
+	pkt += 1;
+	len -= 1;
+
+	/*
+	 * tx_pdu_buf is used for the retransmission and needs to be cleared on
+	 * a new request
+	 */
+	eap_peap_free_tx_buffer(eap);
+
+	if (flags_version & PEAP_FLAG_S) {
 		if (!eap_peap_tunnel_init(eap))
 			goto error;
+
+		/*
+		 * PEAPv2 packets may include optional Outer TLVs (TLVs outside
+		 * the TLS tunnel), which are only allowed in the first two
+		 * messages before the version negotiation has occurred. Since
+		 * PEAPv2 is not currently supported, we set len to zero to
+		 * ignore them.
+		 */
+		len = 0;
+	}
+
+	if (!len)
+		goto send_response;
+
+	eap_peap_handle_payload(eap, pkt, len);
+
+send_response:
+	if (!peap->tx_pdu_buf)
+		return;
+
+	eap_peap_send_response(eap, peap->tx_pdu_buf, peap->tx_pdu_buf_len);
 
 	return;
 
