@@ -276,7 +276,7 @@ class Hwsim(iwd.AsyncOpAbstract):
         frame += station.replace(':', '')
         frame += radio.addresses[0].replace(':', '')
         frame += radio.addresses[0].replace(':', '')
-        frame += '30 01 02 00'
+        frame += '30 01 07 00'
         self.spoof_frame(radio, freq, station, frame)
 
     def spoof_frame(self, radio, freq, station, frame):
