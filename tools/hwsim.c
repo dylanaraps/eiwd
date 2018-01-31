@@ -1208,6 +1208,8 @@ static void send_custom_frame_callback(struct l_genl_msg *msg, void *user_data)
 	struct l_dbus_message *message = info->user_data;
 	struct l_dbus_message *reply;
 
+	info->user_data = NULL;
+
 	if (l_genl_msg_get_error(msg) < 0) {
 		/* Radio address or frequency didn't match */
 		l_debug("HWSIM_CMD_FRAME failed for destination %s: %d",
@@ -1225,6 +1227,9 @@ static void send_custom_frame_callback(struct l_genl_msg *msg, void *user_data)
 static void send_custom_frame_destroy(void *user_data)
 {
 	struct send_frame_info *info = user_data;
+
+	if (info->user_data)
+		l_dbus_message_unref(info->user_data);
 
 	l_free(info->frame);
 	l_free(info->radio);
