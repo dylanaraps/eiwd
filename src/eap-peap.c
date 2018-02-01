@@ -33,6 +33,11 @@
 
 #define PEAP_PDU_MAX_LEN 65536
 
+#define PEAP_HEADER_LEN  6
+
+#define PEAP_HEADER_OCTET_FLAGS 5
+#define PEAP_HEADER_OCTET_FRAG_LEN 6
+
 enum peap_version {
 	PEAP_VERSION_0               = 0x00,
 	PEAP_VERSION_1               = 0x01,
@@ -113,13 +118,37 @@ static void eap_peap_free(struct eap_state *eap)
 	l_free(peap);
 }
 
+static void eap_peap_send_fragment(struct eap_state *eap)
+{
+}
+
 static void eap_peap_send_response(struct eap_state *eap,
 					const uint8_t *pdu, size_t pdu_len)
 {
+	struct eap_peap_state *peap = eap_get_data(eap);
+	size_t msg_len = PEAP_HEADER_LEN + pdu_len;
+
+	if (msg_len <= eap_get_mtu(eap)) {
+		uint8_t buf[msg_len];
+
+		buf[PEAP_HEADER_OCTET_FLAGS] = peap->version;
+		memcpy(buf + PEAP_HEADER_LEN, pdu, pdu_len);
+
+		eap_send_response(eap, EAP_TYPE_PEAP, buf, msg_len);
+		return;
+	}
+
+	eap_peap_send_fragment(eap);
 }
 
 static void eap_peap_send_empty_response(struct eap_state *eap)
 {
+	struct eap_peap_state *peap = eap_get_data(eap);
+	uint8_t buf[PEAP_HEADER_LEN];
+
+	buf[PEAP_HEADER_OCTET_FLAGS] = peap->version;
+
+	eap_send_response(eap, EAP_TYPE_PEAP, buf, PEAP_HEADER_LEN);
 }
 
 static void eap_peap_tunnel_data_send(const uint8_t *data, size_t data_len,
