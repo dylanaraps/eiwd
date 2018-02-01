@@ -73,6 +73,7 @@ static char **test_argv;
 static int test_argc;
 static char **verbose_apps;
 static char *verbose_opt;
+static bool valgrind;
 static bool enable_debug;
 const char *debug_filter;
 static const char *qemu_binary;
@@ -377,14 +378,15 @@ static void start_qemu(void)
 			"mac80211_hwsim.radios=0 init=%s TESTHOME=%s "
 			"TESTVERBOUT=\'%s\' DEBUG_FILTER=\'%s\'"
 			"TEST_ACTION=%u TEST_ACTION_PARAMS=\'%s\' "
-			"TESTARGS=\'%s\' PATH=\'%s\'",
+			"TESTARGS=\'%s\' PATH=\'%s\' VALGRIND=%u",
 			check_verbosity("kernel") ? "ignore_loglevel" : "quiet",
 			initcmd, cwd, verbose_opt ? verbose_opt : "none",
 			enable_debug ? debug_filter : "",
 			test_action,
 			test_action_params ? test_action_params : "",
 			testargs,
-			getenv("PATH"));
+			getenv("PATH"),
+			valgrind);
 
 	argv = alloca(sizeof(qemu_argv) + sizeof(char *) * 7);
 	memcpy(argv, qemu_argv, sizeof(qemu_argv));
@@ -1205,10 +1207,15 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 		const char *ext_options)
 {
-	char *argv[7];
+	char *argv[9];
 	char *iwd_phys = NULL;
 	pid_t ret;
 	int idx = 0;
+
+	if (valgrind) {
+		argv[idx++] = "valgrind";
+		argv[idx++] = "--leak-check=full";
+	}
 
 	argv[idx++] = BIN_IWD;
 	argv[idx++] = "-c";
@@ -2029,6 +2036,21 @@ static void run_tests(void)
 		return;
 	}
 
+	ptr = strstr(cmdline, "VALGRIND=");
+
+	if (ptr) {
+		test_action_str = ptr + 9;
+		ptr += 1;
+		*ptr = '\0';
+
+		valgrind = (bool) atoi(test_action_str);
+
+		if (valgrind != true && valgrind != false) {
+			l_error("malformed valgrind option");
+			return;
+		}
+	}
+
 	ptr = strstr(cmdline, "PATH=");
 
 	if (!ptr) {
@@ -2166,7 +2188,11 @@ static void usage(void)
 		"\t-v, --verbose <apps>	Comma separated list of "
 						"applications to enable\n"
 						"\t\t\t\tverbose output\n"
-		"\t-h, --help		Show help options\n");
+		"\t-h, --help		Show help options\n"
+		"\t-V, --valgrind		Run valgrind on iwd. Note: \"-v"
+						" iwd\" is required\n"
+						"\t\t\t\tto see valgrind"
+						" output");
 	l_info("Commands:\n"
 		"\t-A, --auto-tests <dirs>	Comma separated list of the "
 						"test configuration\n\t\t\t\t"
@@ -2182,6 +2208,7 @@ static const struct option main_options[] = {
 	{ "kernel",	required_argument, NULL, 'k' },
 	{ "verbose",	required_argument, NULL, 'v' },
 	{ "debug",	optional_argument, NULL, 'd' },
+	{ "valgrind",	no_argument,       NULL, 'V' },
 	{ "help",	no_argument,       NULL, 'h' },
 	{ }
 };
@@ -2207,7 +2234,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "A:U:q:k:v:dh", main_options,
+		opt = getopt_long(argc, argv, "A:U:q:k:v:Vdh", main_options,
 									NULL);
 		if (opt < 0)
 			break;
@@ -2242,6 +2269,9 @@ int main(int argc, char *argv[])
 		case 'v':
 			verbose_opt = optarg;
 			verbose_apps = l_strsplit(verbose_opt, ',');
+			break;
+		case 'V':
+			valgrind = true;
 			break;
 		case 'h':
 			usage();
