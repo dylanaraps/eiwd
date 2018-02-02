@@ -31,6 +31,8 @@
 
 #include "eap.h"
 
+#define PEAP_PDU_MAX_LEN 65536
+
 enum peap_version {
 	PEAP_VERSION_0               = 0x00,
 	PEAP_VERSION_1               = 0x01,
@@ -42,6 +44,8 @@ enum peap_version {
 enum peap_flag {
 	/* Reserved    = 0x00, */
 	PEAP_FLAG_S    = 0x20,
+	PEAP_FLAG_M    = 0x40,
+	PEAP_FLAG_L    = 0x80,
 };
 
 struct eap_peap_state {
@@ -50,6 +54,10 @@ struct eap_peap_state {
 
 	uint8_t *tx_pdu_buf;
 	size_t tx_pdu_buf_len;
+
+	uint8_t *rx_pdu_buf;
+	size_t rx_pdu_buf_len;
+	size_t rx_pdu_buf_offset;
 
 	char *ca_cert;
 	char *client_cert;
@@ -69,6 +77,19 @@ static void eap_peap_free_tx_buffer(struct eap_state *eap)
 	peap->tx_pdu_buf_len = 0;
 }
 
+static void eap_peap_free_rx_buffer(struct eap_state *eap)
+{
+	struct eap_peap_state *peap = eap_get_data(eap);
+
+	if (!peap->rx_pdu_buf)
+		return;
+
+	l_free(peap->rx_pdu_buf);
+	peap->rx_pdu_buf = NULL;
+	peap->rx_pdu_buf_len = 0;
+	peap->rx_pdu_buf_offset = 0;
+}
+
 static void eap_peap_free(struct eap_state *eap)
 {
 	struct eap_peap_state *peap = eap_get_data(eap);
@@ -79,6 +100,8 @@ static void eap_peap_free(struct eap_state *eap)
 	}
 
 	eap_peap_free_tx_buffer(eap);
+
+	eap_peap_free_rx_buffer(eap);
 
 	eap_set_data(eap, NULL);
 
@@ -92,6 +115,10 @@ static void eap_peap_free(struct eap_state *eap)
 
 static void eap_peap_send_response(struct eap_state *eap,
 					const uint8_t *pdu, size_t pdu_len)
+{
+}
+
+static void eap_peap_send_empty_response(struct eap_state *eap)
 {
 }
 
@@ -151,6 +178,41 @@ static void eap_peap_handle_payload(struct eap_state *eap,
 {
 }
 
+static bool eap_peap_init_request_assembly(struct eap_state *eap,
+						const uint8_t *pkt, size_t len,
+						uint8_t flags) {
+	struct eap_peap_state *peap = eap_get_data(eap);
+
+	if (peap->rx_pdu_buf || !(flags & PEAP_FLAG_M) || len < 4)
+		return false;
+
+	peap->rx_pdu_buf_len = l_get_be32(pkt);
+
+	if (!peap->rx_pdu_buf_len || peap->rx_pdu_buf_len > PEAP_PDU_MAX_LEN) {
+		l_warn("Fragmented pkt size is outside of alowed boundaries "
+					"[1, %u]", PEAP_PDU_MAX_LEN);
+
+		return false;
+	}
+
+	if (peap->rx_pdu_buf_len < len) {
+		l_warn("Fragmented pkt size is smaller than the received "
+								"packet");
+
+		return false;
+	}
+
+	peap->rx_pdu_buf = l_malloc(peap->rx_pdu_buf_len);
+	peap->rx_pdu_buf_offset = 0;
+
+	return true;
+}
+
+static void eap_peap_send_fragmented_request_ack(struct eap_state *eap)
+{
+	eap_peap_send_empty_response(eap);
+}
+
 static bool eap_peap_validate_version(struct eap_state *eap,
 							uint8_t flags_version)
 {
@@ -170,6 +232,46 @@ static bool eap_peap_validate_version(struct eap_state *eap,
 		peap->version = __PEAP_VERSION_MAX_SUPPORTED;
 
 	return true;
+}
+
+static int eap_peap_handle_fragmented_request(struct eap_state *eap,
+						const uint8_t *pkt,
+						size_t len,
+						uint8_t flags_version)
+{
+	struct eap_peap_state *peap = eap_get_data(eap);
+	size_t rx_header_offset = 0;
+	size_t pdu_len;
+
+	if (flags_version & PEAP_FLAG_L) {
+		if (!eap_peap_init_request_assembly(eap, pkt, len,
+								flags_version))
+			return -EINVAL;
+
+		rx_header_offset = 4;
+	}
+
+	if (!peap->rx_pdu_buf)
+		return -EINVAL;
+
+	pdu_len = len - rx_header_offset;
+
+	if (peap->rx_pdu_buf_len < peap->rx_pdu_buf_offset + pdu_len) {
+		l_error("Request fragment pkt size mismatch");
+		return -EINVAL;
+	}
+
+	memcpy(peap->rx_pdu_buf + peap->rx_pdu_buf_offset,
+					pkt + rx_header_offset, pdu_len);
+	peap->rx_pdu_buf_offset += pdu_len;
+
+	if (flags_version & PEAP_FLAG_M) {
+		eap_peap_send_fragmented_request_ack(eap);
+
+		return -EAGAIN;
+	}
+
+	return 0;
 }
 
 static void eap_peap_handle_request(struct eap_state *eap,
@@ -192,6 +294,25 @@ static void eap_peap_handle_request(struct eap_state *eap,
 
 	pkt += 1;
 	len -= 1;
+
+	if (flags_version & PEAP_FLAG_L || peap->rx_pdu_buf) {
+		int r = eap_peap_handle_fragmented_request(eap, pkt, len,
+								flags_version);
+
+		if (r == -EAGAIN)
+			return;
+
+		if (r < 0)
+			goto error;
+
+		if (peap->rx_pdu_buf_len != peap->rx_pdu_buf_offset) {
+			l_error("Request fragment pkt size mismatch");
+			goto error;
+		}
+
+		pkt = peap->rx_pdu_buf;
+		len = peap->rx_pdu_buf_len;
+	}
 
 	/*
 	 * tx_pdu_buf is used for the retransmission and needs to be cleared on
@@ -217,6 +338,8 @@ static void eap_peap_handle_request(struct eap_state *eap,
 		goto send_response;
 
 	eap_peap_handle_payload(eap, pkt, len);
+
+	eap_peap_free_rx_buffer(eap);
 
 send_response:
 	if (!peap->tx_pdu_buf)
