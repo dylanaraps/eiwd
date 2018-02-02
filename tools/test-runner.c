@@ -2268,7 +2268,6 @@ int main(int argc, char *argv[])
 			break;
 		case 'v':
 			verbose_opt = optarg;
-			verbose_apps = l_strsplit(verbose_opt, ',');
 			break;
 		case 'V':
 			valgrind = true;
