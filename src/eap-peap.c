@@ -64,6 +64,11 @@ struct eap_peap_state {
 	size_t rx_pdu_buf_len;
 	size_t rx_pdu_buf_offset;
 
+	size_t tx_frag_offset;
+	size_t tx_frag_last_len;
+
+	bool expecting_frag_ack:1;
+
 	char *ca_cert;
 	char *client_cert;
 	char *client_key;
@@ -120,6 +125,32 @@ static void eap_peap_free(struct eap_state *eap)
 
 static void eap_peap_send_fragment(struct eap_state *eap)
 {
+	struct eap_peap_state *peap = eap_get_data(eap);
+	size_t mtu = eap_get_mtu(eap);
+	uint8_t buf[mtu];
+	size_t len = peap->tx_pdu_buf_len - peap->tx_frag_offset;
+	size_t header_len = PEAP_HEADER_LEN;
+
+	buf[PEAP_HEADER_OCTET_FLAGS] = peap->version;
+
+	if (len > mtu - PEAP_HEADER_LEN) {
+		len = mtu - PEAP_HEADER_LEN;
+		buf[PEAP_HEADER_OCTET_FLAGS] |= PEAP_FLAG_M;
+		peap->expecting_frag_ack = true;
+	}
+
+	if (!peap->tx_frag_offset) {
+		buf[PEAP_HEADER_OCTET_FLAGS] |= PEAP_FLAG_L;
+		l_put_be32(peap->tx_pdu_buf_len,
+					&buf[PEAP_HEADER_OCTET_FRAG_LEN]);
+		len -= 4;
+		header_len += 4;
+	}
+
+	memcpy(buf + header_len, peap->tx_pdu_buf + peap->tx_frag_offset, len);
+	eap_send_response(eap, EAP_TYPE_PEAP, buf, header_len + len);
+
+	peap->tx_frag_last_len = len;
 }
 
 static void eap_peap_send_response(struct eap_state *eap,
@@ -138,6 +169,7 @@ static void eap_peap_send_response(struct eap_state *eap,
 		return;
 	}
 
+	peap->tx_frag_offset = 0;
 	eap_peap_send_fragment(eap);
 }
 
@@ -242,6 +274,26 @@ static void eap_peap_send_fragmented_request_ack(struct eap_state *eap)
 	eap_peap_send_empty_response(eap);
 }
 
+static bool eap_peap_handle_fragmented_response_ack(struct eap_state *eap,
+								size_t len)
+{
+	struct eap_peap_state *peap = eap_get_data(eap);
+
+	if (len)
+		return false;
+
+	if (!peap->tx_frag_last_len)
+		return false;
+
+	peap->tx_frag_offset += peap->tx_frag_last_len;
+	peap->tx_frag_last_len = 0;
+	peap->expecting_frag_ack = false;
+
+	eap_peap_send_fragment(eap);
+
+	return true;
+}
+
 static bool eap_peap_validate_version(struct eap_state *eap,
 							uint8_t flags_version)
 {
@@ -323,6 +375,13 @@ static void eap_peap_handle_request(struct eap_state *eap,
 
 	pkt += 1;
 	len -= 1;
+
+	if (peap->expecting_frag_ack) {
+		if (!eap_peap_handle_fragmented_response_ack(eap, len))
+			goto error;
+
+		return;
+	}
 
 	if (flags_version & PEAP_FLAG_L || peap->rx_pdu_buf) {
 		int r = eap_peap_handle_fragmented_request(eap, pkt, len,
