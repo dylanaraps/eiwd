@@ -407,18 +407,6 @@ static void start_qemu(void)
 	execve(argv[0], argv, qemu_envp);
 }
 
-static void set_output_visibility(void)
-{
-	int fd;
-
-	fd = open("/dev/null", O_WRONLY);
-
-	dup2(fd, 1);
-	dup2(fd, 2);
-
-	close(fd);
-}
-
 static pid_t execute_program(char *argv[], bool wait, bool verbose)
 {
 	int status;
@@ -439,8 +427,14 @@ static pid_t execute_program(char *argv[], bool wait, bool verbose)
 	}
 
 	if (child_pid == 0) {
-		if (!verbose)
-			set_output_visibility();
+		if (!verbose) {
+			int fd = open("/dev/null", O_WRONLY);
+
+			dup2(fd, 1);
+			dup2(fd, 2);
+
+			close(fd);
+		}
 
 		execvp(argv[0], argv);
 
