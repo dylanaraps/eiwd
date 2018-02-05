@@ -1360,7 +1360,9 @@ static void print_test_status(char *test_name, enum test_status ts,
 	case TEST_STATUS_STARTED:
 		color_str = CONSOLE_LN_RESET;
 		status_str = "STARTED   ";
-		line_end = "\n";
+
+		if (strcmp(verbose_opt, "none"))
+			line_end = "\n";
 
 		break;
 	case TEST_STATUS_PASSED:
