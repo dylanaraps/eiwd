@@ -2765,6 +2765,50 @@ static void netdev_neighbor_report_frame_event(struct netdev *netdev,
 	l_timeout_remove(netdev->neighbor_report_timeout);
 }
 
+static void netdev_sa_query_resp_cb(struct l_genl_msg *msg,
+		void *user_data)
+{
+	if (l_genl_msg_get_error(msg) < 0)
+		l_debug("error sending SA Query request");
+}
+
+static void netdev_sa_query_req_frame_event(struct netdev *netdev,
+		const struct mmpdu_header *hdr,
+		const void *body, size_t body_len,
+		void *user_data)
+{
+	uint8_t sa_resp[4];
+	uint16_t transaction;
+
+	if (body_len < 4) {
+		l_debug("SA Query request too short");
+		return;
+	}
+
+	if (!netdev->connected)
+		return;
+
+	/* only care about SA Queries from our connected AP */
+	if (memcmp(hdr->address_2, netdev->handshake->aa, 6))
+		return;
+
+	transaction = l_get_u16(body + 2);
+
+	sa_resp[0] = 0x08;	/* SA Query */
+	sa_resp[1] = 0x01;	/* Response */
+	memcpy(sa_resp + 2, &transaction, 2);
+
+	l_info("received SA Query request from "MAC", transaction=%u",
+			MAC_STR(hdr->address_2), transaction);
+
+	if (!netdev_send_action_frame(netdev, netdev->handshake->aa,
+			sa_resp, sizeof(sa_resp),
+			netdev_sa_query_resp_cb)) {
+		l_error("error sending SA Query response");
+		return;
+	}
+}
+
 static void netdev_sa_query_resp_frame_event(struct netdev *netdev,
 		const struct mmpdu_header *hdr,
 		const void *body, size_t body_len,
@@ -3454,6 +3498,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	size_t bufsize;
 	const uint8_t action_neighbor_report_prefix[2] = { 0x05, 0x05 };
 	const uint8_t action_sa_query_resp_prefix[2] = { 0x08, 0x01 };
+	const uint8_t action_sa_query_req_prefix[2] = { 0x08, 0x00 };
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -3569,6 +3614,10 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	netdev_frame_watch_add(netdev, 0x00d0, action_sa_query_resp_prefix,
 				sizeof(action_sa_query_resp_prefix),
 				netdev_sa_query_resp_frame_event, NULL);
+
+	netdev_frame_watch_add(netdev, 0x00d0, action_sa_query_req_prefix,
+				sizeof(action_sa_query_req_prefix),
+				netdev_sa_query_req_frame_event, NULL);
 
 	/* Set RSSI threshold for CQM notifications */
 	netdev_cqm_rssi_update(netdev);
