@@ -89,23 +89,23 @@ AC_CHECK_HEADERS(linux/types.h linux/if_alg.h)
 AC_CHECK_HEADERS(readline/readline.h, enable_readline=yes,
 			AC_MSG_ERROR(readline header files are required))
 
-AC_ARG_ENABLE([dbusconf], AC_HELP_STRING([--disable-dbusconf],
+AC_ARG_ENABLE([dbus-policy], AC_HELP_STRING([--disable-dbus-policy],
 				[don't install D-Bus system policy file]),
-					[enable_dbusconf=${enableval}])
-AM_CONDITIONAL(DBUSCONF, test "${enable_dbusconf}" != "no")
+					[enable_dbus_policy=${enableval}])
+AM_CONDITIONAL(DBUS_POLICY, test "${enable_dbus_policy}" != "no")
 
-AC_ARG_WITH([dbusconfdir], AC_HELP_STRING([--with-dbusconfdir=DIR],
-				[path to D-Bus configuration directory]),
-					[path_dbusconfdir=${withval}])
-if (test "${enable_dbusconf}" != "no" && test -z "${path_dbusconfdir}"); then
-	AC_MSG_CHECKING([D-Bus configuration directory])
-	path_dbusconfdir="`$PKG_CONFIG --variable=sysconfdir dbus-1`"
-	if (test -z "${path_dbusconfdir}"); then
-		AC_MSG_ERROR([D-Bus configuration directory is required])
+AC_ARG_WITH([dbus-datadir], AC_HELP_STRING([--with-dbus-datadir=DIR],
+				[path to D-Bus data directory]),
+					[path_dbus_datadir=${withval}])
+if (test "${enable_dbus_policy}" != "no" && test -z "${path_dbus_datadir}"); then
+	AC_MSG_CHECKING([D-Bus data directory])
+	path_dbus_datadir="`$PKG_CONFIG --variable=datadir dbus-1`"
+	if (test -z "${path_dbus_datadir}"); then
+		AC_MSG_ERROR([D-Bus data directory is required])
 	fi
-	AC_MSG_RESULT([${path_dbusconfdir}])
+	AC_MSG_RESULT([${path_dbus_datadir}])
 fi
-AC_SUBST(DBUS_CONFDIR, [${path_dbusconfdir}])
+AC_SUBST(DBUS_DATADIR, [${path_dbus_datadir}])
 
 AC_ARG_ENABLE([docs], AC_HELP_STRING([--enable-docs],
 				[build documentation and manual pages]),

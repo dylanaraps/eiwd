@@ -9,4 +9,4 @@ fi
 		--enable-debug \
 		--prefix=/usr \
 		--localstatedir=/var \
-		--disable-dbusconf $*
+		--disable-dbus-policy $*

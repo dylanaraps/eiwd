@@ -8,9 +8,9 @@ builtin_sources =
 
 noinst_LTLIBRARIES = ell/libell-internal.la
 
-if DBUSCONF
-dbusdir = @DBUS_CONFDIR@/dbus-1/system.d
-dist_dbus_DATA = src/iwd-dbus.conf
+if DBUS_POLICY
+dbus_datadir = @DBUS_DATADIR@/dbus-1/system.d
+dist_dbus_data_DATA = src/iwd-dbus.conf
 endif
 
 ell_sources = ell/ell.h ell/private.h ell/missing.h \
@@ -271,7 +271,7 @@ EXTRA_DIST = src/genbuiltin doc/main.conf $(manual_pages:.1=.txt)
 
 AM_CFLAGS = -fvisibility=hidden
 
-DISTCHECK_CONFIGURE_FLAGS = --disable-dbusconf
+DISTCHECK_CONFIGURE_FLAGS = --disable-dbus-policy
 
 DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests) $(manual_pages)
 
