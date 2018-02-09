@@ -89,6 +89,16 @@ AC_CHECK_HEADERS(linux/types.h linux/if_alg.h)
 AC_CHECK_HEADERS(readline/readline.h, enable_readline=yes,
 			AC_MSG_ERROR(readline header files are required))
 
+AC_ARG_ENABLE([client], AC_HELP_STRING([--disable-client],
+				[don't install iwctl client utility]),
+					[enable_client=${enableval}])
+AM_CONDITIONAL(CLIENT, test "${enable_client}" != "no")
+
+AC_ARG_ENABLE([monitor], AC_HELP_STRING([--disable-monitor],
+				[don't install iwmon monitor utility]),
+					[enable_monitor=${enableval}])
+AM_CONDITIONAL(MONITOR, test "${enable_monitor}" != "no")
+
 AC_ARG_ENABLE([dbus-policy], AC_HELP_STRING([--disable-dbus-policy],
 				[don't install D-Bus system policy file]),
 					[enable_dbus_policy=${enableval}])

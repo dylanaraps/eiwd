@@ -64,7 +64,7 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 
 ell_libell_internal_la_SOURCES = $(ell_sources)
 
-bin_PROGRAMS = src/iwd client/iwctl monitor/iwmon
+bin_PROGRAMS = src/iwd
 
 src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/netdev.h src/netdev.c \
@@ -104,6 +104,9 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 
 src_iwd_LDADD = ell/libell-internal.la -ldl
 
+if CLIENT
+bin_PROGRAMS += client/iwctl
+
 client_iwctl_SOURCES = client/main.c \
 			client/adapter.c \
 			client/agent-manager.c \
@@ -115,6 +118,10 @@ client_iwctl_SOURCES = client/main.c \
 			client/network.h client/network.c \
 			client/wsc.c
 client_iwctl_LDADD = ell/libell-internal.la -lreadline
+endif
+
+if MONITOR
+bin_PROGRAMS += monitor/iwmon
 
 monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					monitor/nlmon.h monitor/nlmon.c \
@@ -131,6 +138,7 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					src/eap.h src/eap.c \
 					src/eap-tls.c src/eap-ttls.c
 monitor_iwmon_LDADD = ell/libell-internal.la
+endif
 
 noinst_PROGRAMS = tools/hwsim
 noinst_PROGRAMS += tools/test-runner
