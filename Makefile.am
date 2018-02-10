@@ -64,7 +64,9 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 
 ell_libell_internal_la_SOURCES = $(ell_sources)
 
-bin_PROGRAMS = src/iwd
+bin_PROGRAMS =
+
+libexec_PROGRAMS = src/iwd
 
 src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/netdev.h src/netdev.c \
@@ -103,6 +105,13 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					$(builtin_sources)
 
 src_iwd_LDADD = ell/libell-internal.la -ldl
+
+if SYSTEMD_SERVICE
+src_iwd_DEPENDENCIES = src/iwd.service
+
+systemd_unitdir = @SYSTEMD_UNITDIR@
+systemd_unit_DATA = src/iwd.service
+endif
 
 if CLIENT
 bin_PROGRAMS += client/iwctl
@@ -275,11 +284,14 @@ if BUILD_DOCS
 dist_man_MANS = $(manual_pages)
 endif
 
-EXTRA_DIST = src/genbuiltin doc/main.conf $(manual_pages:.1=.txt)
+EXTRA_DIST = src/genbuiltin src/iwd.service.in \
+			doc/main.conf $(manual_pages:.1=.txt)
 
 AM_CFLAGS = -fvisibility=hidden
 
-DISTCHECK_CONFIGURE_FLAGS = --disable-dbus-policy
+CLEANFILES = src/iwd.service
+
+DISTCHECK_CONFIGURE_FLAGS = --disable-dbus-policy --disable-systemd-service
 
 DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests) $(manual_pages)
 
@@ -308,6 +320,13 @@ ell/unit/test_data: Makefile
 			$(LN_S) -t ell/unit -f $(abs_srcdir)/../ell/unit/$$f ; \
 		fi \
 	done > $@
+
+SED_PROCESS = $(AM_V_GEN)$(MKDIR_P) $(dir $@) && \
+		$(SED) -e 's,@libexecdir\@,$(libexecdir),g' \
+		< $< > $@
+
+%.service: %.service.in Makefile
+	$(SED_PROCESS)
 
 %.1: %.txt
 	$(AM_V_GEN)$(A2X) --doctype manpage --format manpage $(srcdir)/$<

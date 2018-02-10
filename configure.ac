@@ -122,6 +122,24 @@ if (test "${enable_dbus_policy}" != "no" && test -z "${path_dbus_datadir}"); the
 fi
 AC_SUBST(DBUS_DATADIR, [${path_dbus_datadir}])
 
+AC_ARG_ENABLE([systemd-service], AC_HELP_STRING([--disable-systemd-service],
+				[don't install systemd service file]),
+					[enable_systemd_service=${enableval}])
+AM_CONDITIONAL(SYSTEMD_SERVICE, test "${enable_systemd_service}" != "no")
+
+AC_ARG_WITH([systemd-unitdir], AC_HELP_STRING([--with-systemd-unitdir=DIR],
+				[path to systemd unit directory]),
+					[path_systemd_unitdir=${withval}])
+if (test "${enable_systemd_service}" != "no" && test -z "${path_systemd_unitdir}"); then
+	AC_MSG_CHECKING([systemd unit directory])
+	path_systemd_unitdir="`$PKG_CONFIG --variable=systemdsystemunitdir systemd`"
+	if (test -z "${path_systemd_unitdir}"); then
+		AC_MSG_ERROR([systemd unit directory is required])
+	fi
+	AC_MSG_RESULT([${path_systemd_unitdir}])
+fi
+AC_SUBST(SYSTEMD_UNITDIR, [${path_systemd_unitdir}])
+
 AC_ARG_ENABLE([docs], AC_HELP_STRING([--enable-docs],
 				[build documentation and manual pages]),
 					[enable_docs=${enableval}])

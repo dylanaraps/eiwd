@@ -1,0 +1,9 @@
+[Unit]
+Description=Wireless service
+
+[Service]
+ExecStart=@libexecdir@/iwd
+LimitNPROC=1
+
+[Install]
+WantedBy=network-pre.target

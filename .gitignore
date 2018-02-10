@@ -19,6 +19,7 @@ build-aux
 autom4te.cache
 ell
 src/iwd
+src/iwd.service
 client/iwctl
 monitor/iwmon
 tools/hwsim
