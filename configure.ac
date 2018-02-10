@@ -111,7 +111,10 @@ if (test "${enable_dbus_policy}" != "no" && test -z "${path_dbus_datadir}"); the
 	AC_MSG_CHECKING([D-Bus data directory])
 	path_dbus_datadir="`$PKG_CONFIG --variable=datadir dbus-1`"
 	if (test -z "${path_dbus_datadir}"); then
-		AC_MSG_ERROR([D-Bus data directory is required])
+		path_dbus_datadir="`$PKG_CONFIG --variable=sysconfdir dbus-1`"
+		if (test -z "${path_dbus_datadir}"); then
+			AC_MSG_ERROR([D-Bus data directory is required])
+		fi
 	fi
 	AC_MSG_RESULT([${path_dbus_datadir}])
 fi
