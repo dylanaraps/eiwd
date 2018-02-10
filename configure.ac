@@ -86,8 +86,10 @@ AC_DEFINE_UNQUOTED(CONFIGDIR, "/etc/iwd", [Configuration directory])
 
 AC_CHECK_HEADERS(linux/types.h linux/if_alg.h)
 
-AC_CHECK_HEADERS(readline/readline.h, enable_readline=yes,
+if (test "${enable_client}" != "no"); then
+	AC_CHECK_HEADERS(readline/readline.h, enable_readline=yes,
 			AC_MSG_ERROR(readline header files are required))
+fi
 
 AC_ARG_ENABLE([client], AC_HELP_STRING([--disable-client],
 				[don't install iwctl client utility]),
