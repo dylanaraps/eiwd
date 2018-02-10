@@ -8,5 +8,4 @@ fi
     ./configure --enable-maintainer-mode \
 		--enable-debug \
 		--prefix=/usr \
-		--localstatedir=/var \
-		--disable-dbus-policy $*
+		--localstatedir=/var $*
