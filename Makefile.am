@@ -106,8 +106,10 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 
 src_iwd_LDADD = ell/libell-internal.la -ldl
 
+src_iwd_DEPENDENCIES = ell/libell-internal.la
+
 if SYSTEMD_SERVICE
-src_iwd_DEPENDENCIES = src/iwd.service
+src_iwd_DEPENDENCIES += src/iwd.service
 
 systemd_unitdir = @SYSTEMD_UNITDIR@
 systemd_unit_DATA = src/iwd.service
