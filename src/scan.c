@@ -1264,7 +1264,8 @@ static const uint8_t oper_class_us_to_global[] = {
 	[13] = 94,  [14] = 95,  [15] = 96,  [22] = 116,
 	[23] = 119, [24] = 122, [25] = 126, [26] = 126,
 	[27] = 117, [28] = 120, [29] = 123, [30] = 127,
-	[31] = 127, [32] = 83,  [33] = 84
+	[31] = 127, [32] = 83,  [33] = 84,  [34] = 180,
+	/* 128 - 130 is a 1 to 1 mapping */
 };
 
 /* Annex E, table E-2 */
@@ -1272,7 +1273,8 @@ static const uint8_t oper_class_eu_to_global[] = {
 	[1]  = 115, [2]  = 118, [3]  = 121, [4]  = 81,
 	[5]  = 116, [6]  = 119, [7]  = 122, [8]  = 117,
 	[9]  = 120, [10] = 123, [11] = 83,  [12] = 84,
-	[17] = 125
+	[17] = 125, [18] = 130,
+	/* 128 - 130 is a 1 to 1 mapping */
 };
 
 /* Annex E, table E-3 */
@@ -1291,13 +1293,22 @@ static const uint8_t oper_class_jp_to_global[] = {
 	[45] = 123, [46] = 104, [47] = 104, [48] = 104,
 	[49] = 104, [50] = 104, [51] = 105, [52] = 105,
 	[53] = 105, [54] = 105, [55] = 105, [56] = 83,
-	[57] = 84,  [58] = 121
+	[57] = 84,  [58] = 121, [59] = 180,
+	/* 128 - 130 is a 1 to 1 mapping */
 };
 
 /* Annex E, table E-4 (only 2.4GHz and 4.9 / 5GHz bands) */
 static const enum scan_band oper_class_to_band_global[] = {
 	[81 ... 84]   = SCAN_BAND_2_4_GHZ,
-	[104 ... 127] = SCAN_BAND_5_GHZ,
+	[104 ... 130] = SCAN_BAND_5_GHZ,
+};
+
+/* Annex E, table E-5 */
+static const uint8_t oper_class_cn_to_global[] = {
+	[1]  = 115, [2]  = 118, [3]  = 125, [4]  = 116,
+	[5]  = 119, [6]  = 126, [7]  = 81,  [8]  = 83,
+	[9]  = 84,
+	/* 128 - 130 is a 1 to 1 mapping */
 };
 
 enum scan_band scan_oper_class_to_band(const uint8_t *country,
@@ -1306,7 +1317,7 @@ enum scan_band scan_oper_class_to_band(const uint8_t *country,
 	unsigned int i;
 	int table = 0;
 
-	if (country && country[2] >= 1 && country[2] <= 4)
+	if (country && country[2] >= 1 && country[2] <= 5)
 		table = country[2];
 	else if (country) {
 		for (i = 0; i < L_ARRAY_SIZE(oper_class_us_codes); i++)
@@ -1326,6 +1337,10 @@ enum scan_band scan_oper_class_to_band(const uint8_t *country,
 		if (!memcmp("JP", country, 2))
 			/* Use table E-3 */
 			table = 3;
+
+		if (!memcmp("CN", country, 2))
+			/* Use table E-5 */
+			table = 5;
 	}
 
 	switch (table) {
@@ -1340,6 +1355,10 @@ enum scan_band scan_oper_class_to_band(const uint8_t *country,
 	case 3:
 		if (oper_class < L_ARRAY_SIZE(oper_class_jp_to_global))
 			oper_class = oper_class_jp_to_global[oper_class];
+		break;
+	case 5:
+		if (oper_class < L_ARRAY_SIZE(oper_class_cn_to_global))
+			oper_class = oper_class_cn_to_global[oper_class];
 		break;
 	}
 
