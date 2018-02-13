@@ -1184,11 +1184,31 @@ static uint32_t device_freq_from_neighbor_report(const uint8_t *country,
 	enum scan_band band;
 	uint32_t freq;
 
-	band = scan_oper_class_to_band(country, info->oper_class);
-	if (!band) {
-		l_debug("Ignored: unsupported oper class");
+	if (info->oper_class == 0) {
+		/*
+		 * Some Cisco APs report all operating class values as 0
+		 * in the Neighbor Report Responses.  Work around this by
+		 * using the most likely operating class for the channel
+		 * number as the 2.4GHz and 5GHz bands happen to mostly
+		 * use channels in two disjoint ranges.
+		 */
+		if (info->channel_num >= 1 && info->channel_num <= 14)
+			band = SCAN_BAND_2_4_GHZ;
+		else if (info->channel_num >= 36 && info->channel_num <= 169)
+			band = SCAN_BAND_5_GHZ;
+		else {
+			l_debug("Ignored: 0 oper class with an unusual "
+				"channel number");
 
-		return 0;
+			return 0;
+		}
+	} else {
+		band = scan_oper_class_to_band(country, info->oper_class);
+		if (!band) {
+			l_debug("Ignored: unsupported oper class");
+
+			return 0;
+		}
 	}
 
 	freq = scan_channel_to_freq(info->channel_num, band);
