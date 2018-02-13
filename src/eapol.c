@@ -1063,8 +1063,8 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 	eapol_write(sm, (struct eapol_frame *) step2);
 	l_free(step2);
 
-	l_timeout_remove(sm->timeout);
-	sm->timeout = NULL;
+	l_timeout_remove(sm->eapol_start_timeout);
+	sm->eapol_start_timeout = NULL;
 
 	return;
 
@@ -1345,6 +1345,9 @@ retransmit:
 	if (rekey_offload)
 		rekey_offload(sm->handshake->ifindex, ptk->kek, ptk->kck,
 				sm->replay_counter, sm->user_data);
+
+	l_timeout_remove(sm->timeout);
+	sm->timeout = NULL;
 
 	return;
 
