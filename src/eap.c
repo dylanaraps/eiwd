@@ -173,7 +173,7 @@ static void eap_send_identity_response(struct eap_state *eap, char *identity)
 	eap_send_response(eap, EAP_TYPE_IDENTITY, buf, len + 5);
 }
 
-static void eap_handle_request(struct eap_state *eap, uint16_t id,
+void __eap_handle_request(struct eap_state *eap, uint16_t id,
 				const uint8_t *pkt, size_t len)
 {
 	enum eap_type type;
@@ -282,7 +282,7 @@ void eap_rx_packet(struct eap_state *eap, const uint8_t *pkt, size_t len)
 
 	switch ((enum eap_code) code) {
 	case EAP_CODE_REQUEST:
-		eap_handle_request(eap, id, pkt + 4, eap_len - 4);
+		__eap_handle_request(eap, id, pkt + 4, eap_len - 4);
 		return;
 
 	case EAP_CODE_FAILURE:
