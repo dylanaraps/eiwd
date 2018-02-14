@@ -32,6 +32,13 @@
 
 #include "eap.h"
 
+/*
+ * Protected EAP Protocol (PEAP): EAP type 25 as described in:
+ *
+ * PEAPv0: draft-kamath-pppext-peapv0-00
+ * PEAPv1: draft-josefsson-pppext-eap-tls-eap-05
+ */
+
 #define PEAP_PDU_MAX_LEN 65536
 
 #define PEAP_HEADER_LEN  6
