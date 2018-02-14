@@ -228,6 +228,8 @@ static void eap_peap_tunnel_ready(const char *peer_identity, void *user_data)
 				msk_emsk, 128);
 
 	eap_set_key_material(eap, msk_emsk + 0, 64, NULL, 0, NULL, 0);
+
+	eap_peap_send_empty_response(eap);
 }
 
 static void eap_peap_tunnel_disconnected(enum l_tls_alert_desc reason,
