@@ -71,9 +71,7 @@ struct eap_peap_state {
 	enum peap_version version;
 	struct l_tls *tunnel;
 
-	uint8_t *tx_pdu_buf;
-	size_t tx_pdu_buf_len;
-
+	struct databuf *tx_pdu_buf;
 	struct databuf *plain_buf;
 
 	uint8_t *rx_pdu_buf;
@@ -134,18 +132,6 @@ static void databuf_free(struct databuf *databuf)
 	l_free(databuf);
 }
 
-static void eap_peap_free_tx_buffer(struct eap_state *eap)
-{
-	struct eap_peap_state *peap = eap_get_data(eap);
-
-	if (!peap->tx_pdu_buf)
-		return;
-
-	l_free(peap->tx_pdu_buf);
-	peap->tx_pdu_buf = NULL;
-	peap->tx_pdu_buf_len = 0;
-}
-
 static void eap_peap_free_rx_buffer(struct eap_state *eap)
 {
 	struct eap_peap_state *peap = eap_get_data(eap);
@@ -168,7 +154,10 @@ static void eap_peap_free(struct eap_state *eap)
 		peap->tunnel = NULL;
 	}
 
-	eap_peap_free_tx_buffer(eap);
+	if (peap->tx_pdu_buf) {
+		databuf_free(peap->tx_pdu_buf);
+		peap->tx_pdu_buf = NULL;
+	}
 
 	if (peap->plain_buf) {
 		databuf_free(peap->plain_buf);
@@ -192,7 +181,7 @@ static void eap_peap_send_fragment(struct eap_state *eap)
 	struct eap_peap_state *peap = eap_get_data(eap);
 	size_t mtu = eap_get_mtu(eap);
 	uint8_t buf[mtu];
-	size_t len = peap->tx_pdu_buf_len - peap->tx_frag_offset;
+	size_t len = peap->tx_pdu_buf->len - peap->tx_frag_offset;
 	size_t header_len = PEAP_HEADER_LEN;
 
 	buf[PEAP_HEADER_OCTET_FLAGS] = peap->version;
@@ -205,13 +194,14 @@ static void eap_peap_send_fragment(struct eap_state *eap)
 
 	if (!peap->tx_frag_offset) {
 		buf[PEAP_HEADER_OCTET_FLAGS] |= PEAP_FLAG_L;
-		l_put_be32(peap->tx_pdu_buf_len,
+		l_put_be32(peap->tx_pdu_buf->len,
 					&buf[PEAP_HEADER_OCTET_FRAG_LEN]);
 		len -= 4;
 		header_len += 4;
 	}
 
-	memcpy(buf + header_len, peap->tx_pdu_buf + peap->tx_frag_offset, len);
+	memcpy(buf + header_len, peap->tx_pdu_buf->data + peap->tx_frag_offset,
+									len);
 	eap_send_response(eap, EAP_TYPE_PEAP, buf, header_len + len);
 
 	peap->tx_frag_last_len = len;
@@ -504,7 +494,10 @@ static void eap_peap_handle_request(struct eap_state *eap,
 	 * tx_pdu_buf is used for the retransmission and needs to be cleared on
 	 * a new request
 	 */
-	eap_peap_free_tx_buffer(eap);
+	if (peap->tx_pdu_buf) {
+		databuf_free(peap->tx_pdu_buf);
+		peap->tx_pdu_buf = NULL;
+	}
 
 	if (flags_version & PEAP_FLAG_S) {
 		if (!eap_peap_tunnel_init(eap))
@@ -531,7 +524,8 @@ send_response:
 	if (!peap->tx_pdu_buf)
 		return;
 
-	eap_peap_send_response(eap, peap->tx_pdu_buf, peap->tx_pdu_buf_len);
+	eap_peap_send_response(eap, peap->tx_pdu_buf->data,
+							peap->tx_pdu_buf->len);
 
 	return;
 
