@@ -71,6 +71,8 @@ struct eap_peap_state {
 	enum peap_version version;
 	struct l_tls *tunnel;
 
+	struct eap_state *phase2_eap;
+
 	struct databuf *tx_pdu_buf;
 	struct databuf *plain_buf;
 
@@ -154,6 +156,11 @@ static void eap_peap_free(struct eap_state *eap)
 		peap->tunnel = NULL;
 	}
 
+	if (peap->phase2_eap) {
+		eap_free(peap->phase2_eap);
+		peap->phase2_eap = NULL;
+	}
+
 	if (peap->tx_pdu_buf) {
 		databuf_free(peap->tx_pdu_buf);
 		peap->tx_pdu_buf = NULL;
@@ -174,6 +181,25 @@ static void eap_peap_free(struct eap_state *eap)
 	l_free(peap->passphrase);
 
 	l_free(peap);
+}
+
+static void eap_peap_phase2_send_response(const uint8_t *pdu, size_t pdu_len,
+								void *user_data)
+{
+}
+
+static void eap_peap_phase2_complete(enum eap_result result, void *user_data)
+{
+	struct eap_state *eap = user_data;
+	struct eap_peap_state *peap = eap_get_data(eap);
+
+	/*
+	 * PEAPv1 Section 2.2
+	 *
+	 * The receipt of a EAP-Failure or EAP-Success within the TLS protected
+	 * channel results in a shutdown of the TLS channel by the peer.
+	 */
+	l_tls_close(peap->tunnel);
 }
 
 static void eap_peap_send_fragment(struct eap_state *eap)
@@ -574,6 +600,22 @@ static bool eap_peap_load_settings(struct eap_state *eap,
 
 	if (!peap->client_key && peap->passphrase) {
 		l_error("Passphrase present but no client private key");
+		goto error;
+	}
+
+	peap->phase2_eap = eap_new(eap_peap_phase2_send_response,
+					eap_peap_phase2_complete, eap);
+
+	if (!peap->phase2_eap) {
+		l_error("Could not create the PEAP phase two EAP instance");
+		goto error;
+	}
+
+	snprintf(entry, sizeof(entry), "%sPEAP-Phase2-", prefix);
+
+	if (!eap_load_settings(peap->phase2_eap, settings, entry)) {
+		eap_free(peap->phase2_eap);
+
 		goto error;
 	}
 
