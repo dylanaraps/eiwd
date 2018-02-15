@@ -240,6 +240,13 @@ static void eap_peap_send_empty_response(struct eap_state *eap)
 static void eap_peap_tunnel_data_send(const uint8_t *data, size_t data_len,
 								void *user_data)
 {
+	struct eap_state *eap = user_data;
+	struct eap_peap_state *peap = eap_get_data(eap);
+
+	if (!peap->tx_pdu_buf)
+		peap->tx_pdu_buf = databuf_new(data_len);
+
+	databuf_append(peap->tx_pdu_buf, data, data_len);
 }
 
 static void eap_peap_tunnel_data_received(const uint8_t *data, size_t data_len,
