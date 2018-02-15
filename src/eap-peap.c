@@ -186,6 +186,20 @@ static void eap_peap_free(struct eap_state *eap)
 static void eap_peap_phase2_send_response(const uint8_t *pdu, size_t pdu_len,
 								void *user_data)
 {
+	struct eap_state *eap = user_data;
+	struct eap_peap_state *peap = eap_get_data(eap);
+
+	if (peap->version == PEAP_VERSION_0) {
+		if (pdu_len < 5)
+			return;
+
+		if (pdu[4] != EAP_TYPE_EXTENSIONS) {
+			pdu += 4;
+			pdu_len -= 4;
+		}
+	}
+
+	l_tls_write(peap->tunnel, pdu, pdu_len);
 }
 
 static void eap_peap_phase2_complete(enum eap_result result, void *user_data)
@@ -200,6 +214,46 @@ static void eap_peap_phase2_complete(enum eap_result result, void *user_data)
 	 * channel results in a shutdown of the TLS channel by the peer.
 	 */
 	l_tls_close(peap->tunnel);
+}
+
+static void eap_extensions_handle_request(struct eap_state *eap,
+							const uint8_t *pkt,
+								size_t len)
+{
+}
+
+static void eap_peap_phase2_handle_request(struct eap_state *eap,
+							const uint8_t *pkt,
+								size_t len)
+{
+	struct eap_peap_state *peap = eap_get_data(eap);
+
+	if (peap->version == PEAP_VERSION_0) {
+		uint8_t id;
+
+		if (len < 1)
+			return;
+
+		if (len > 4 && pkt[4] == EAP_TYPE_EXTENSIONS) {
+			eap_extensions_handle_request(eap, pkt, len);
+
+			return;
+		}
+
+		/*
+		 * The PEAPv0 phase2 packets are headerless. Our implementation
+		 * of the EAP methods requires packet identifier. Therefore,
+		 * PEAP packet identifier is used for the headerless
+		 * phase2 packets.
+		 */
+		eap_save_last_id(eap, &id);
+
+		__eap_handle_request(peap->phase2_eap, id, pkt, len);
+
+		return;
+	}
+
+	eap_rx_packet(peap->phase2_eap, pkt, len);
 }
 
 static void eap_peap_send_fragment(struct eap_state *eap)
@@ -358,6 +412,19 @@ static void eap_peap_handle_payload(struct eap_state *eap,
 						const uint8_t *pkt,
 						size_t pkt_len)
 {
+	struct eap_peap_state *peap = eap_get_data(eap);
+
+	l_tls_handle_rx(peap->tunnel, pkt, pkt_len);
+
+	/* Plaintext phase two eap packet is stored into peap->plain_buf */
+	if (!peap->plain_buf)
+		return;
+
+	eap_peap_phase2_handle_request(eap, peap->plain_buf->data,
+							peap->plain_buf->len);
+
+	databuf_free(peap->plain_buf);
+	peap->plain_buf = NULL;
 }
 
 static bool eap_peap_init_request_assembly(struct eap_state *eap,
