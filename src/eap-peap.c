@@ -633,6 +633,49 @@ error:
 	eap_method_error(eap);
 }
 
+static void eap_peap_handle_retransmit(struct eap_state *eap,
+						const uint8_t *pkt, size_t len)
+{
+	struct eap_peap_state *peap = eap_get_data(eap);
+	uint8_t flags_version;
+
+	if (len < 1) {
+		l_error("EAP-PEAP request too short");
+		goto error;
+	}
+
+	flags_version = pkt[0];
+
+	if (!eap_peap_validate_version(eap, flags_version)) {
+		l_error("EAP-PEAP version validation failed");
+		goto error;
+	}
+
+	if (flags_version & PEAP_FLAG_M) {
+		if (!peap->rx_pdu_buf)
+			goto error;
+
+		eap_peap_send_fragmented_request_ack(eap);
+
+		return;
+	}
+
+	if (!peap->tx_pdu_buf || !peap->tx_pdu_buf->data ||
+							!peap->tx_pdu_buf->len)
+		goto error;
+
+	if (PEAP_HEADER_LEN + peap->tx_pdu_buf->len > eap_get_mtu(eap))
+		eap_peap_send_fragment(eap);
+	else
+		eap_peap_send_response(eap, peap->tx_pdu_buf->data,
+							peap->tx_pdu_buf->len);
+
+	return;
+
+error:
+	eap_method_error(eap);
+}
+
 static bool eap_peap_load_settings(struct eap_state *eap,
 					struct l_settings *settings,
 					const char *prefix)
@@ -706,6 +749,7 @@ static struct eap_method eap_peap = {
 	.exports_msk = true,
 
 	.handle_request = eap_peap_handle_request,
+	.handle_retransmit = eap_peap_handle_retransmit,
 	.load_settings = eap_peap_load_settings,
 	.free = eap_peap_free,
 };
