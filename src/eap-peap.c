@@ -61,12 +61,20 @@ enum peap_flag {
 	PEAP_FLAG_L    = 0x80,
 };
 
+struct databuf {
+	uint8_t *data;
+	size_t len;
+	size_t capacity;
+};
+
 struct eap_peap_state {
 	enum peap_version version;
 	struct l_tls *tunnel;
 
 	uint8_t *tx_pdu_buf;
 	size_t tx_pdu_buf_len;
+
+	struct databuf *plain_buf;
 
 	uint8_t *rx_pdu_buf;
 	size_t rx_pdu_buf_len;
@@ -82,6 +90,49 @@ struct eap_peap_state {
 	char *client_key;
 	char *passphrase;
 };
+
+static struct databuf *databuf_new(size_t capacity)
+{
+	struct databuf *databuf;
+
+	if (!capacity)
+		return NULL;
+
+	databuf = l_new(struct databuf, 1);
+	databuf->data = l_malloc(capacity);
+	databuf->capacity = capacity;
+
+	return databuf;
+}
+
+static void databuf_append(struct databuf *databuf, const uint8_t *data,
+								size_t data_len)
+{
+	size_t new_len;
+
+	if (!databuf)
+		return;
+
+	new_len = databuf->len + data_len;
+
+	if (new_len > databuf->capacity) {
+		databuf->capacity = new_len * 2;
+		databuf->data = l_realloc(databuf->data, databuf->capacity);
+	}
+
+	memcpy(databuf->data + databuf->len, data, data_len);
+
+	databuf->len = new_len;
+}
+
+static void databuf_free(struct databuf *databuf)
+{
+	if (!databuf)
+		return;
+
+	l_free(databuf->data);
+	l_free(databuf);
+}
 
 static void eap_peap_free_tx_buffer(struct eap_state *eap)
 {
@@ -118,6 +169,11 @@ static void eap_peap_free(struct eap_state *eap)
 	}
 
 	eap_peap_free_tx_buffer(eap);
+
+	if (peap->plain_buf) {
+		databuf_free(peap->plain_buf);
+		peap->plain_buf = NULL;
+	}
 
 	eap_peap_free_rx_buffer(eap);
 
@@ -199,6 +255,13 @@ static void eap_peap_tunnel_data_send(const uint8_t *data, size_t data_len,
 static void eap_peap_tunnel_data_received(const uint8_t *data, size_t data_len,
 								void *user_data)
 {
+	struct eap_state *eap = user_data;
+	struct eap_peap_state *peap = eap_get_data(eap);
+
+	if (!peap->plain_buf)
+		peap->plain_buf = databuf_new(data_len);
+
+	databuf_append(peap->plain_buf, data, data_len);
 }
 
 static void eap_peap_tunnel_ready(const char *peer_identity, void *user_data)
