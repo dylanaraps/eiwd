@@ -290,9 +290,17 @@ void eap_rx_packet(struct eap_state *eap, const uint8_t *pkt, size_t len)
 		l_timeout_remove(eap->complete_timeout);
 		eap->complete_timeout = NULL;
 
-		/* Section 4.2 */
-
-		if (id != eap->last_id)
+		/* RFC3748, Section 4.2
+		 *
+		 * The Identifier field of the Success and Failure packets
+		 * MUST match the Identifier field of the Response packet that
+		 * it is sent in response to. However, many currently deployed
+		 * implementations ignore this rule and increment Identity for
+		 * the Success and Failure packets. In order to support
+		 * interoperability with these products we validate id against
+		 * eap->last_id and its incremented value.
+		 */
+		if (id != eap->last_id && id != eap->last_id + 1)
 			return;
 
 		if (eap_len != 4)
