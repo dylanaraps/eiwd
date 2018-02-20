@@ -381,8 +381,20 @@ bool agent_request_cancel(unsigned int req_id, int reason)
 	if (!request)
 		return false;
 
-	if (!request->message)
+	if (!request->message) {
 		send_cancel_request(agent, reason);
+
+		l_dbus_cancel(dbus_get_bus(), agent->pending_id);
+
+		agent->pending_id = 0;
+
+		if (agent->timeout) {
+			l_timeout_remove(agent->timeout);
+			agent->timeout = NULL;
+		}
+
+		agent_send_next_request(agent);
+	}
 
 	agent_request_free(request);
 
