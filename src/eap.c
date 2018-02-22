@@ -438,6 +438,11 @@ void eap_method_event(struct eap_state *eap, unsigned int id, const void *data)
 	eap->event_func(id, data, eap->user_data);
 }
 
+bool eap_method_is_success(struct eap_state *eap)
+{
+	return eap->method_success;
+}
+
 void eap_method_success(struct eap_state *eap)
 {
 	eap->method_success = true;

@@ -139,6 +139,7 @@ void eap_set_key_material(struct eap_state *eap,
 
 void eap_start_complete_timeout(struct eap_state *eap);
 
+bool eap_method_is_success(struct eap_state *eap);
 void eap_method_success(struct eap_state *eap);
 void eap_method_error(struct eap_state *eap);
 void eap_method_event(struct eap_state *eap, unsigned int type,
