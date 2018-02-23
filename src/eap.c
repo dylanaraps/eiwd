@@ -49,6 +49,8 @@ struct eap_state {
 	void *method_state;
 	bool method_success;
 	struct l_timeout *complete_timeout;
+
+	bool discard_success_and_failure:1;
 };
 
 struct eap_state *eap_new(eap_tx_packet_func_t tx_packet,
@@ -287,6 +289,9 @@ void eap_rx_packet(struct eap_state *eap, const uint8_t *pkt, size_t len)
 
 	case EAP_CODE_FAILURE:
 	case EAP_CODE_SUCCESS:
+		if (eap->discard_success_and_failure)
+			return;
+
 		l_timeout_remove(eap->complete_timeout);
 		eap->complete_timeout = NULL;
 
@@ -446,6 +451,11 @@ bool eap_method_is_success(struct eap_state *eap)
 void eap_method_success(struct eap_state *eap)
 {
 	eap->method_success = true;
+}
+
+void eap_discard_success_and_failure(struct eap_state *eap, bool discard)
+{
+	eap->discard_success_and_failure = discard;
 }
 
 void eap_method_error(struct eap_state *eap)

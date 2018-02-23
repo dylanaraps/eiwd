@@ -62,6 +62,8 @@ void eap_rx_packet(struct eap_state *eap, const uint8_t *pkt, size_t len);
 void __eap_handle_request(struct eap_state *eap, uint16_t id,
 						const uint8_t *pkt, size_t len);
 
+void eap_discard_success_and_failure(struct eap_state *eap, bool discard);
+
 void eap_init(uint32_t default_mtu);
 void eap_exit(void);
 
