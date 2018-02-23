@@ -70,6 +70,7 @@ struct databuf {
 struct eap_peap_state {
 	enum peap_version version;
 	struct l_tls *tunnel;
+	bool completed:1;
 
 	struct eap_state *phase2_eap;
 
@@ -208,18 +209,121 @@ static void eap_peap_phase2_complete(enum eap_result result, void *user_data)
 	struct eap_peap_state *peap = eap_get_data(eap);
 
 	/*
-	 * PEAPv1 Section 2.2
+	 * PEAPv1: draft-josefsson-pppext-eap-tls-eap-05, Section 2.2
 	 *
 	 * The receipt of a EAP-Failure or EAP-Success within the TLS protected
 	 * channel results in a shutdown of the TLS channel by the peer.
 	 */
 	l_tls_close(peap->tunnel);
+
+	eap_discard_success_and_failure(eap, false);
+	peap->completed = true;
+
+	if (result != EAP_RESULT_SUCCESS) {
+		eap_method_error(eap);
+		return;
+	}
+
+	eap_method_success(eap);
+}
+
+/*
+ * PEAPv0: draft-kamath-pppext-peapv0-00, Section 2
+ */
+#define EAP_EXTENSIONS_HEADER_LEN 5
+#define EAP_EXTENSIONS_AVP_HEADER_LEN 4
+
+enum eap_extensions_avp_type {
+	/* Reserved = 0x0000, */
+	/* Reserved = 0x0001, */
+	/* Reserved = 0x0002, */
+	EAP_EXTENSIONS_AVP_TYPE_RESULT = 0x8003,
+};
+
+enum eap_extensions_result {
+	EAP_EXTENSIONS_RESULT_SUCCCESS = 1,
+	EAP_EXTENSIONS_RESULT_FAILURE  = 2,
+};
+
+static int eap_extensions_handle_result_avp(struct eap_state *eap,
+						const uint8_t *data,
+						size_t data_len,
+						uint8_t *response)
+{
+	struct eap_peap_state *peap = eap_get_data(eap);
+	uint16_t type;
+	uint16_t len;
+	uint16_t result;
+
+	if (data_len < EAP_EXTENSIONS_AVP_HEADER_LEN + 2)
+		return -ENOENT;
+
+	type = l_get_be16(data);
+
+	if (type != EAP_EXTENSIONS_AVP_TYPE_RESULT)
+		return -ENOENT;
+
+	data += 2;
+
+	len = l_get_be16(data);
+
+	if (len != 2)
+		return -ENOENT;
+
+	data += 2;
+
+	result = l_get_be16(data);
+
+	switch (result) {
+	case EAP_EXTENSIONS_RESULT_SUCCCESS:
+		result = eap_method_is_success(peap->phase2_eap) ?
+					EAP_EXTENSIONS_RESULT_SUCCCESS :
+					EAP_EXTENSIONS_RESULT_FAILURE;
+		/* fall through */
+	case EAP_EXTENSIONS_RESULT_FAILURE:
+		break;
+	default:
+		return -ENOENT;
+	}
+
+	l_put_be16(EAP_EXTENSIONS_AVP_TYPE_RESULT,
+					&response[EAP_EXTENSIONS_HEADER_LEN]);
+	l_put_be16(2, &response[EAP_EXTENSIONS_HEADER_LEN + 2]);
+	l_put_be16(result, &response[EAP_EXTENSIONS_HEADER_LEN +
+						EAP_EXTENSIONS_AVP_HEADER_LEN]);
+
+	return result;
 }
 
 static void eap_extensions_handle_request(struct eap_state *eap,
+							uint8_t id,
 							const uint8_t *pkt,
-								size_t len)
+							size_t len)
 {
+	struct eap_peap_state *peap = eap_get_data(eap);
+	uint8_t response[EAP_EXTENSIONS_HEADER_LEN +
+					EAP_EXTENSIONS_AVP_HEADER_LEN + 2];
+	int r = eap_extensions_handle_result_avp(eap, pkt, len, response);
+
+	if (r < 0)
+		return;
+
+	response[0] = EAP_CODE_RESPONSE;
+	response[1] = id;
+	l_put_be16(sizeof(response), &response[2]);
+	response[4] = EAP_TYPE_EXTENSIONS;
+
+	eap_peap_phase2_send_response(response, sizeof(response), eap);
+
+	l_tls_close(peap->tunnel);
+
+	eap_discard_success_and_failure(eap, false);
+	peap->completed = true;
+
+	if (r != EAP_EXTENSIONS_RESULT_SUCCCESS)
+		return;
+
+	eap_method_success(eap);
 }
 
 static void eap_peap_phase2_handle_request(struct eap_state *eap,
@@ -231,14 +335,28 @@ static void eap_peap_phase2_handle_request(struct eap_state *eap,
 	if (peap->version == PEAP_VERSION_0) {
 		uint8_t id;
 
-		if (len < 1)
-			return;
-
 		if (len > 4 && pkt[4] == EAP_TYPE_EXTENSIONS) {
-			eap_extensions_handle_request(eap, pkt, len);
+			uint16_t pkt_len;
+			uint8_t code = pkt[0];
+
+			if (code != EAP_CODE_REQUEST)
+				return;
+
+			pkt_len = l_get_be16(pkt + 2);
+			if (pkt_len != len)
+				return;
+
+			id = pkt[1];
+
+			eap_extensions_handle_request(eap, id,
+					pkt + EAP_EXTENSIONS_HEADER_LEN,
+					len - EAP_EXTENSIONS_HEADER_LEN);
 
 			return;
 		}
+
+		if (len < 1)
+			return;
 
 		/*
 		 * The PEAPv0 phase2 packets are headerless. Our implementation
@@ -350,12 +468,21 @@ static void eap_peap_tunnel_ready(const char *peer_identity, void *user_data)
 	uint8_t random[64];
 
 	/*
-	* PEAP V5, Section 2.1.1
+	* PEAPv1: draft-josefsson-pppext-eap-tls-eap-05, Section 2.1.1
 	*
-	* Cleartext Failure packets MUST be silently discarded once TLS tunnel
-	* has been brought up.
+	* Cleartext Success/Failure packets MUST be silently discarded once TLS
+	* tunnel has been brought up.
 	*/
-	eap_method_success(eap);
+	eap_discard_success_and_failure(eap, true);
+
+	/*
+	 * PEAPv1: draft-josefsson-pppext-eap-tls-eap-05, Section 2.2
+	 *
+	 * Since authenticator may not send us EAP-Success/EAP-Failure
+	 * in cleartext for the outer EAP method (PEAP), we reinforce
+	 * the completion with a timer.
+	 */
+	eap_start_complete_timeout(eap);
 
 	/* MSK, EMSK and challenge derivation */
 	memcpy(random +  0, peap->tunnel->pending.client_random, 32);
@@ -548,6 +675,9 @@ static void eap_peap_handle_request(struct eap_state *eap,
 {
 	struct eap_peap_state *peap = eap_get_data(eap);
 	uint8_t flags_version;
+
+	if (peap->completed)
+		return;
 
 	if (len < 1) {
 		l_error("EAP-PEAP request too short");
