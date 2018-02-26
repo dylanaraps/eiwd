@@ -1634,8 +1634,10 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 
 		netdev->in_ft = false;
 
-		if (is_rsn)
+		if (is_rsn) {
 			handshake_state_install_ptk(netdev->handshake);
+			return;
+		}
 	}
 
 	netdev_connect_ok(netdev);
