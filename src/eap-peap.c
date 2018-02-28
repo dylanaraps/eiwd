@@ -71,6 +71,7 @@ struct eap_peap_state {
 	enum peap_version version;
 	struct l_tls *tunnel;
 	bool completed:1;
+	bool phase2_failed:1;
 
 	struct eap_state *phase2_eap;
 
@@ -220,7 +221,7 @@ static void eap_peap_phase2_complete(enum eap_result result, void *user_data)
 	peap->completed = true;
 
 	if (result != EAP_RESULT_SUCCESS) {
-		eap_method_error(eap);
+		peap->phase2_failed = true;
 		return;
 	}
 
@@ -751,11 +752,18 @@ static void eap_peap_handle_request(struct eap_state *eap,
 	eap_peap_free_rx_buffer(eap);
 
 send_response:
-	if (!peap->tx_pdu_buf)
+	if (!peap->tx_pdu_buf) {
+		if (peap->phase2_failed)
+			goto error;
+
 		return;
+	}
 
 	eap_peap_send_response(eap, peap->tx_pdu_buf->data,
 							peap->tx_pdu_buf->len);
+
+	if (peap->phase2_failed)
+		goto error;
 
 	return;
 
