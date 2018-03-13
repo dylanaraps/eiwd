@@ -3077,6 +3077,58 @@ static void netdev_mgmt_frame_event(struct l_genl_msg *msg,
 					netdev, mpdu, body, info.body_len);
 }
 
+static void netdev_control_port_frame_event(struct l_genl_msg *msg,
+							struct netdev *netdev)
+{
+	struct l_genl_attr attr;
+	uint16_t type;
+	uint16_t len;
+	const void *data;
+	const uint8_t *frame = NULL;
+	uint16_t frame_len = 0;
+	const uint8_t *src = NULL;
+	uint16_t proto = 0;
+	bool unencrypted = false;
+
+	l_debug("");
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_FRAME:
+			if (frame)
+				return;
+
+			frame = data;
+			frame_len = len;
+			break;
+		case NL80211_ATTR_MAC:
+			if (src)
+				return;
+
+			src = data;
+			break;
+		case NL80211_ATTR_CONTROL_PORT_ETHERTYPE:
+			if (len != sizeof(proto))
+				return;
+
+			proto = *((const uint16_t *) data);
+			break;
+		case NL80211_ATTR_CONTROL_PORT_NO_ENCRYPT:
+			unencrypted = true;
+			break;
+		}
+	}
+
+	if (!src || !frame || !proto)
+		return;
+
+	__eapol_rx_packet(netdev->index, src, proto,
+						frame, frame_len, unencrypted);
+}
+
 static void netdev_unicast_notify(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = NULL;
@@ -3115,6 +3167,9 @@ static void netdev_unicast_notify(struct l_genl_msg *msg, void *user_data)
 	switch (cmd) {
 	case NL80211_CMD_FRAME:
 		netdev_mgmt_frame_event(msg, netdev);
+		break;
+	case NL80211_CMD_CONTROL_PORT_FRAME:
+		netdev_control_port_frame_event(msg, netdev);
 		break;
 	}
 }
