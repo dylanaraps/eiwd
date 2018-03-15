@@ -953,6 +953,8 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 	pmkid = handshake_util_find_pmkid_kde(ek->key_data,
 					L_BE16_TO_CPU(ek->key_data_len));
 
+	ie_parse_rsne_from_data(own_ie, own_ie[1] + 2, &rsn_info);
+
 	/*
 	 * Require the PMKID KDE whenever we've sent a list of PMKIDs in
 	 * our RSNE and we've haven't seen any EAPOL-EAP frame since
@@ -962,8 +964,6 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 	 * send no PMKID KDE.
 	 */
 	if (!sm->eap_exchanged && !sm->handshake->wpa_ie &&
-			ie_parse_rsne_from_data(own_ie, own_ie[1] + 2,
-						&rsn_info) >= 0 &&
 			rsn_info.num_pmkids) {
 		bool found = false;
 		int i;
