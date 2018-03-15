@@ -103,9 +103,10 @@ void handshake_state_set_authenticator_address(struct handshake_state *s,
 	memcpy(s->aa, aa, sizeof(s->aa));
 }
 
-void handshake_state_set_pmk(struct handshake_state *s, const uint8_t *pmk)
+void handshake_state_set_pmk(struct handshake_state *s, const uint8_t *pmk,
+				size_t pmk_len)
 {
-	memcpy(s->pmk, pmk, sizeof(s->pmk));
+	memcpy(s->pmk, pmk, pmk_len);
 	s->have_pmk = true;
 }
 
@@ -278,11 +279,24 @@ bool handshake_state_derive_ptk(struct handshake_state *s)
 				IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256)) {
 		uint16_t mdid;
 		uint8_t ptk_name[16];
+		const uint8_t *xxkey = s->pmk;
+
+		/*
+		 * In a Fast Transition initial mobility domain association
+		 * the PMK maps to the XXKey, except with EAP:
+		 * 802.11-2016 12.7.1.7.3:
+		 *    "If the AKM negotiated is 00-0F-AC:3, then [...] XXKey
+		 *    shall be the second 256 bits of the MSK (which is
+		 *    derived from the IEEE 802.1X authentication), i.e.,
+		 *    XXKey = L(MSK, 256, 256)."
+		 */
+		if (s->akm_suite == IE_RSN_AKM_SUITE_FT_OVER_8021X)
+			xxkey = s->pmk + 32;
 
 		ie_parse_mobility_domain_from_data(s->mde, s->mde[1] + 2,
 							&mdid, NULL, NULL);
 
-		if (!crypto_derive_pmk_r0(s->pmk, s->ssid, s->ssid_len, mdid,
+		if (!crypto_derive_pmk_r0(xxkey, s->ssid, s->ssid_len, mdid,
 						s->r0khid, s->r0khid_len,
 						s->spa,
 						s->pmk_r0, s->pmk_r0_name))

@@ -72,7 +72,7 @@ struct handshake_state {
 	enum ie_rsn_cipher_suite group_cipher;
 	enum ie_rsn_cipher_suite group_management_cipher;
 	enum ie_rsn_akm_suite akm_suite;
-	uint8_t pmk[32];
+	uint8_t pmk[64];
 	uint8_t snonce[32];
 	uint8_t anonce[32];
 	uint8_t ptk[64];
@@ -102,7 +102,8 @@ void handshake_state_set_supplicant_address(struct handshake_state *s,
 void handshake_state_set_authenticator_address(struct handshake_state *s,
 						const uint8_t *aa);
 void handshake_state_set_user_data(struct handshake_state *s, void *user_data);
-void handshake_state_set_pmk(struct handshake_state *s, const uint8_t *pmk);
+void handshake_state_set_pmk(struct handshake_state *s, const uint8_t *pmk,
+				size_t pmk_len);
 void handshake_state_set_8021x_config(struct handshake_state *s,
 					struct l_settings *settings);
 struct l_settings *handshake_state_get_8021x_config(struct handshake_state *s);

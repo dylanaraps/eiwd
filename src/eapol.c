@@ -1624,8 +1624,6 @@ static void eapol_eap_results_cb(const uint8_t *msk_data, size_t msk_len,
 				void *user_data)
 {
 	struct eapol_sm *sm = user_data;
-	ssize_t pmk_len;
-	const uint8_t *pmk_data;
 
 	l_debug("EAP key material received");
 
@@ -1634,34 +1632,35 @@ static void eapol_eap_results_cb(const uint8_t *msk_data, size_t msk_len,
 	 *    "When not using a PSK, the PMK is derived from the AAA key.
 	 *    The PMK shall be computed as the first 256 bits (bits 0–255)
 	 *    of the AAA key: PMK ← L(PTK, 0, 256)."
-	 * 802.11 11.6.1.3:
+	 * 802.11-2016 12.7.1.3:
 	 *    "When not using a PSK, the PMK is derived from the MSK.
-	 *    The PMK shall be computed as the first 256 bits (bits 0–255)
-	 *    of the MSK: PMK ← L(MSK, 0, 256)."
+	 *    The PMK shall be computed as the first PMK_bits bits
+	 *    (bits 0 to PMK_bits–1) of the MSK: PMK = L(MSK, 0, PMK_bits)."
 	 * RFC5247 explains AAA-Key refers to the MSK and confirms the
 	 * first 32 bytes of the MSK are used.  MSK is at least 64 octets
 	 * long per RFC3748.  Note WEP derives the PTK from MSK differently.
 	 *
 	 * In a Fast Transition initial mobility domain association the PMK
-	 * maps to the XXKey except with EAP:
-	 * 802.11 11.6.1.7.3:
-	 *    "If the AKM negotiated is 00-0F-AC:3, then XXKey shall be the
-	 *    second 256 bits of the MSK (which is derived from the IEEE
+	 * maps to the XXKey, except with EAP:
+	 * 802.11-2016 12.7.1.7.3:
+	 *    "If the AKM negotiated is 00-0F-AC:3, then [...] XXKey shall be
+	 *    the second 256 bits of the MSK (which is derived from the IEEE
 	 *    802.1X authentication), i.e., XXKey = L(MSK, 256, 256)."
+	 * So we need to save the first 64 bytes at minimum.
 	 */
 
 	if (sm->handshake->akm_suite == IE_RSN_AKM_SUITE_FT_OVER_8021X) {
-		pmk_len = (ssize_t) msk_len - 32;
-		pmk_data = msk_data + 32;
+		if (msk_len < 64)
+			goto msk_short;
 	} else {
-		pmk_len = msk_len;
-		pmk_data = msk_data;
+		if (msk_len < 32)
+			goto msk_short;
 	}
 
-	if (pmk_len < 32)
-		goto msk_short;
+	if (msk_len > sizeof(sm->handshake->pmk))
+		msk_len = sizeof(sm->handshake->pmk);
 
-	handshake_state_set_pmk(sm->handshake, pmk_data);
+	handshake_state_set_pmk(sm->handshake, msk_data, msk_len);
 
 	return;
 

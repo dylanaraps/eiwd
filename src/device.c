@@ -731,7 +731,8 @@ static struct handshake_state *device_handshake_setup(struct device *device,
 		}
 
 		if (security == SECURITY_PSK)
-			handshake_state_set_pmk(hs, network_get_psk(network));
+			handshake_state_set_pmk(hs, network_get_psk(network),
+						32);
 		else
 			handshake_state_set_8021x_config(hs,
 						network_get_settings(network));
@@ -898,7 +899,7 @@ static void device_preauthenticate_cb(struct netdev *netdev,
 		uint8_t rsne_buf[300];
 		struct ie_rsn_info rsn_info;
 
-		handshake_state_set_pmk(new_hs, pmk);
+		handshake_state_set_pmk(new_hs, pmk, 32);
 		handshake_state_set_authenticator_address(new_hs,
 					device->preauth_bssid);
 		handshake_state_set_supplicant_address(new_hs,
