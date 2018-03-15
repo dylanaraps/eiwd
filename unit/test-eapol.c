@@ -2132,7 +2132,7 @@ static void eapol_sm_test_ptk(const void *data)
 	/* key_data_3 uses 2004 while key_data_3 uses 2001, so force 2001 */
 	eapol_sm_set_protocol_version(sm, EAPOL_PROTOCOL_VERSION_2001);
 
-	handshake_state_set_pmk(hs, psk);
+	handshake_state_set_pmk(hs, psk, sizeof(psk));
 	handshake_state_set_authenticator_address(hs, aa);
 	handshake_state_set_supplicant_address(hs, spa);
 
@@ -2196,7 +2196,7 @@ static void eapol_sm_test_igtk(const void *data)
 	/* key_data_29 uses 2004 while key_data_30 uses 2001, so force 2001 */
 	eapol_sm_set_protocol_version(sm, EAPOL_PROTOCOL_VERSION_2001);
 
-	handshake_state_set_pmk(hs, psk);
+	handshake_state_set_pmk(hs, psk, sizeof(psk));
 	handshake_state_set_authenticator_address(hs, aa);
 	handshake_state_set_supplicant_address(hs, spa);
 
@@ -2260,7 +2260,7 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
-	handshake_state_set_pmk(hs, psk);
+	handshake_state_set_pmk(hs, psk, sizeof(psk));
 	handshake_state_set_authenticator_address(hs, aa);
 	handshake_state_set_supplicant_address(hs, spa);
 
@@ -2328,7 +2328,7 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
-	handshake_state_set_pmk(hs, psk);
+	handshake_state_set_pmk(hs, psk, sizeof(psk));
 	handshake_state_set_authenticator_address(hs, ap_address);
 	handshake_state_set_supplicant_address(hs, sta_address);
 	r = handshake_state_set_own_wpa(hs,
@@ -2395,7 +2395,7 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
-	handshake_state_set_pmk(hs, psk);
+	handshake_state_set_pmk(hs, psk, sizeof(psk));
 	handshake_state_set_authenticator_address(hs, ap_address);
 	handshake_state_set_supplicant_address(hs, sta_address);
 
@@ -2508,7 +2508,7 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
-	handshake_state_set_pmk(hs, psk);
+	handshake_state_set_pmk(hs, psk, 32);
 	handshake_state_set_authenticator_address(hs, ap_address);
 	handshake_state_set_supplicant_address(hs, sta_address);
 
@@ -3316,7 +3316,7 @@ static void eapol_ft_handshake_test(const void *data)
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
-	handshake_state_set_pmk(hs, psk);
+	handshake_state_set_pmk(hs, psk, sizeof(psk));
 	handshake_state_set_authenticator_address(hs, aa);
 	handshake_state_set_supplicant_address(hs, spa);
 	handshake_state_set_ssid(hs, (void *) ssid, strlen(ssid));
