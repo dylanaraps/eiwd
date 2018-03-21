@@ -1794,8 +1794,6 @@ static void create_network_and_run_tests(const void *key, void *value,
 	if (iwd_pid > 0)
 		terminate_iwd(iwd_pid);
 
-	terminate_medium(medium_pid);
-
 	if (ofono_req) {
 		loopback_started = false;
 		stop_ofono(ofono_pid);
@@ -1804,6 +1802,8 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 exit_hostapd:
 	destroy_hostapd_instances(hostapd_pids);
+
+	terminate_medium(medium_pid);
 
 exit_hwsim:
 	l_queue_destroy(wiphy_list, wiphy_free);
