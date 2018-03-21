@@ -788,25 +788,42 @@ static void stop_ofono(pid_t pid)
 	kill_process(pid);
 }
 
-static pid_t start_hostapd(const char *config_file, const char *interface_name,
-				const char *ctrl_interface)
+static pid_t start_hostapd(char **config_files, struct wiphy **wiphys)
 {
-	char *argv[8];
+	char **argv;
 	pid_t pid;
 	bool verbose = check_verbosity(BIN_HOSTAPD);
+	size_t ifnames_size;
+	char *ifnames;
+	int i;
 
+	for (i = 0, ifnames_size = 0; wiphys[i]; i++)
+		ifnames_size += 1 + strlen(wiphys[i]->interface_name);
+
+	argv = alloca(sizeof(char *) * (7 + i));
 	argv[0] = BIN_HOSTAPD;
-	argv[1] = "-g";
-	argv[2] = (char *) ctrl_interface;
-	argv[3] = "-i";
-	argv[4] = (char *) interface_name;
-	argv[5] = (char *) config_file;
+
+	ifnames = alloca(ifnames_size);
+	argv[1] = "-i";
+	argv[2] = ifnames;
+
+	argv[3] = "-g";
+	argv[4] = wiphys[0]->hostapd_ctrl_interface;
+
+	for (i = 0, ifnames_size = 0; wiphys[i]; i++) {
+		if (ifnames_size)
+			ifnames[ifnames_size++] = ',';
+		strcpy(ifnames + ifnames_size, wiphys[i]->interface_name);
+		ifnames_size += strlen(wiphys[i]->interface_name);
+
+		argv[5 + i] = config_files[i];
+	}
 
 	if (verbose) {
-		argv[6] = "-d";
-		argv[7] = NULL;
+		argv[5 + i] = "-d";
+		argv[6 + i] = NULL;
 	} else {
-		argv[6] = NULL;
+		argv[5 + i] = NULL;
 	}
 
 	pid = execute_program(argv, false, verbose);
@@ -814,7 +831,7 @@ static pid_t start_hostapd(const char *config_file, const char *interface_name,
 		goto exit;
 	}
 
-	if (!wait_for_socket(ctrl_interface, 25 * 10000))
+	if (!wait_for_socket(wiphys[0]->hostapd_ctrl_interface, 25 * 10000))
 		pid = -1;
 
 exit:
@@ -1123,7 +1140,9 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 						pid_t hostapd_pids_out[])
 {
 	char **hostap_keys;
-	int i = 0;
+	int i;
+	char **hostapd_config_file_paths;
+	struct wiphy **wiphys;
 
 	if (!l_settings_has_group(hw_settings, HW_CONFIG_GROUP_HOSTAPD)) {
 		l_info("No hostapd instances to create");
@@ -1133,34 +1152,38 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 	hostap_keys =
 		l_settings_get_keys(hw_settings, HW_CONFIG_GROUP_HOSTAPD);
 
-	while (hostap_keys[i]) {
-		char hostapd_config_file_path[PATH_MAX];
-		const char *hostapd_config_file;
+	for (i = 0; hostap_keys[i]; i++);
+
+	hostapd_config_file_paths = l_new(char *, i + 1);
+	wiphys = alloca(sizeof(struct wiphy *) * (i + 1));
+	wiphys[i] = NULL;
+
+	hostapd_pids_out[0] = -1;
+
+	for (i = 0; hostap_keys[i]; i++) {
 		const struct l_queue_entry *wiphy_entry;
-		struct wiphy *wiphy;
+		const char *hostapd_config_file;
 
 		hostapd_config_file =
 			l_settings_get_value(hw_settings,
 						HW_CONFIG_GROUP_HOSTAPD,
 						hostap_keys[i]);
 
-		snprintf(hostapd_config_file_path, PATH_MAX - 1, "%s/%s",
-				config_dir_path,
-				hostapd_config_file);
+		hostapd_config_file_paths[i] =
+			l_strdup_printf("%s/%s", config_dir_path,
+					hostapd_config_file);
 
-		hostapd_config_file_path[PATH_MAX - 1] = '\0';
-
-		if (!path_exist(hostapd_config_file_path)) {
+		if (!path_exist(hostapd_config_file_paths[i])) {
 			l_error("%s : hostapd configuration file [%s] "
 				"does not exist.", HW_CONFIG_FILE_NAME,
-						hostapd_config_file_path);
-			return false;
+						hostapd_config_file_paths[i]);
+			goto done;
 		}
 
 		for (wiphy_entry = l_queue_get_entries(wiphy_list);
 					wiphy_entry;
 					wiphy_entry = wiphy_entry->next) {
-			wiphy = wiphy_entry->data;
+			struct wiphy *wiphy = wiphy_entry->data;
 
 			if (strcmp(wiphy->name, hostap_keys[i]))
 				continue;
@@ -1168,32 +1191,33 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 			if (wiphy->used_by_hostapd) {
 				l_error("Wiphy %s already used by hostapd",
 					wiphy->name);
-				return false;
+				goto done;
 			}
 
-			wiphy->used_by_hostapd = true;
+			wiphys[i] = wiphy;
 			break;
 		}
 
 		if (!wiphy_entry) {
 			l_error("Failed to find available interface.");
-			return false;
+			goto done;
 		}
 
-		wiphy->hostapd_ctrl_interface =
+		wiphys[i]->used_by_hostapd = true;
+		wiphys[i]->hostapd_ctrl_interface =
 			l_strdup_printf("%s/%s", HOSTAPD_CTRL_INTERFACE_PREFIX,
-					wiphy->interface_name);
-		wiphy->hostapd_config = l_strdup(hostapd_config_file);
-
-		hostapd_pids_out[i] = start_hostapd(hostapd_config_file_path,
-						wiphy->interface_name,
-						wiphy->hostapd_ctrl_interface);
-
-		if (hostapd_pids_out[i] < 1)
-			return false;
-
-		i++;
+					wiphys[0]->interface_name);
+		wiphys[i]->hostapd_config = l_strdup(hostapd_config_file);
 	}
+
+	hostapd_pids_out[0] = start_hostapd(hostapd_config_file_paths, wiphys);
+	hostapd_pids_out[1] = -1;
+
+done:
+	l_strfreev(hostapd_config_file_paths);
+
+	if (hostapd_pids_out[0] < 1)
+		return false;
 
 	return true;
 }
