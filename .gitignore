@@ -44,5 +44,6 @@ unit/test-ssid-security
 unit/test-wsc
 unit/test-eap-mschapv2
 unit/test-eap-sim
+unit/test-client
 test-suite.log
 src/builtin.h
