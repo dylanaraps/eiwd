@@ -67,6 +67,87 @@ void network_connect(const char *path)
 						check_errors_method_callback);
 }
 
+static const char *skip_spaces(const char *p)
+{
+	while (*p == ' ')
+		p++;
+
+	return p;
+}
+
+struct network_args *network_parse_args(const char *args)
+{
+	struct network_args *network_args;
+	char **arg_arr;
+	size_t quoted_len = 0;
+	size_t i;
+	const char *p;
+
+	if (unlikely(!args))
+		return NULL;
+
+	if (args[0] == '\0')
+		return NULL;
+
+	args = skip_spaces(args);
+	p = args;
+
+	network_args = l_new(struct network_args, 1);
+
+	if (*p == '"') {
+		for (++p, i = 0; *p; p++) {
+			i++;
+
+			if (*p != '"')
+				continue;
+
+			quoted_len = i;
+		}
+
+		if (!quoted_len) {
+			p = args;
+			goto split;
+		}
+
+		network_args->name = l_strndup(args + 1, quoted_len - 1);
+		p = args + quoted_len + 1;
+		p = skip_spaces(p);
+	}
+split:
+
+	arg_arr = l_strsplit(p, ' ');
+	if (!arg_arr || !arg_arr[0])
+		goto done;
+
+	if (quoted_len) {
+		network_args->type = l_strdup(arg_arr[0]);
+	} else {
+		network_args->name = l_strdup(arg_arr[0]);
+
+		i = 1;
+
+		while (arg_arr[i] && *arg_arr[i] == '\0')
+			i++;
+
+		network_args->type = l_strdup(arg_arr[i]);
+	}
+
+done:
+	l_strfreev(arg_arr);
+
+	return network_args;
+}
+
+void network_args_destroy(struct network_args *network_args)
+{
+	if (unlikely(!network_args))
+		return;
+
+	l_free(network_args->name);
+	l_free(network_args->type);
+	l_free(network_args);
+}
+
 static void set_name(void *data, struct l_dbus_message_iter *variant)
 {
 	struct network *network = data;
