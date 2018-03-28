@@ -177,7 +177,7 @@ unit_tests = unit/test-cmac-aes \
 		unit/test-crypto unit/test-eapol unit/test-mpdu \
 		unit/test-ie unit/test-ssid-to-utf8 unit/test-ssid-security \
 		unit/test-arc4 unit/test-wsc unit/test-eap-mschapv2 \
-		unit/test-eap-sim
+		unit/test-eap-sim unit/test-client
 
 ell_pem_files = cert-ca-key.pem cert-client-key.pem cert-client-key-pkcs8.pem \
 		cert-server-key.pem cert-server-key-pkcs8.pem \
@@ -277,6 +277,15 @@ unit_test_eap_mschapv2_SOURCES = src/eap-mschapv2.h src/eap-mschapv2.c \
 				unit/test-eap-mschapv2.c
 
 unit_test_eap_mschapv2_LDADD = ell/libell-internal.la
+
+unit_test_client_SOURCES = unit/test-client.c \
+				readline/readline.h readline/history.h \
+				client/adapter.c \
+				client/command.h client/command.c \
+				client/dbus-proxy.h client/dbus-proxy.c \
+				client/display.h client/display.c \
+				client/network.h client/network.c
+unit_test_client_LDADD = ell/libell-internal.la -lreadline
 
 TESTS = $(unit_tests)
 
