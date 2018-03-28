@@ -588,9 +588,7 @@ static enum cmd_status cmd_set_property(const char *device_name, char *args)
 
 static enum cmd_status cmd_connect(const char *device_name, char *args)
 {
-	char **arg_arr;
-	const char *network_name;
-	const char *network_type;
+	struct network_args *network_args;
 	struct l_queue *match;
 	const struct device *device;
 	const struct l_queue_entry *entry;
@@ -601,9 +599,10 @@ static enum cmd_status cmd_connect(const char *device_name, char *args)
 	if (!proxy)
 		return CMD_STATUS_INVALID_VALUE;
 
-	arg_arr = l_strsplit(args, ' ');
-	if (!arg_arr || !arg_arr[0]) {
-		l_strfreev(arg_arr);
+	network_args = network_parse_args(args);
+
+	if (!network_args || !network_args->name) {
+		network_args_destroy(network_args);
 
 		return CMD_STATUS_INVALID_ARGS;
 	}
@@ -613,19 +612,18 @@ static enum cmd_status cmd_connect(const char *device_name, char *args)
 	if (!device->ordered_networks) {
 		display("Use 'get-networks' command to obtain a list of "
 						"available networks first\n");
-		l_strfreev(arg_arr);
+		network_args_destroy(network_args);
 
 		return CMD_STATUS_OK;
 	}
 
-	network_name = arg_arr[0];
 	match = NULL;
 
 	for (entry = l_queue_get_entries(device->ordered_networks); entry;
 							entry = entry->next) {
 		ordered_network = entry->data;
 
-		if (strcmp(ordered_network->name, network_name))
+		if (strcmp(ordered_network->name, network_args->name))
 			continue;
 
 		if (!match)
@@ -635,31 +633,30 @@ static enum cmd_status cmd_connect(const char *device_name, char *args)
 	}
 
 	if (!match) {
-		display("Invalid network name '%s'\n", network_name);
-		l_strfreev(arg_arr);
+		display("Invalid network name '%s'\n", network_args->name);
+		network_args_destroy(network_args);
 
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
 	if (l_queue_length(match) > 1) {
-		if (!arg_arr[1]) {
+		if (!network_args->type) {
 			display("Provided network name is ambiguous. "
 				"Please specify security type.\n");
 
 			l_queue_destroy(match, NULL);
-			l_strfreev(arg_arr);
+			network_args_destroy(network_args);
 
 			return CMD_STATUS_INVALID_VALUE;
 		}
 
-		network_type = arg_arr[1];
 		ordered_network = NULL;
 
 		for (entry = l_queue_get_entries(match); entry;
 							entry = entry->next) {
 			ordered_network = entry->data;
 
-			if (!strcmp(ordered_network->type, network_type))
+			if (!strcmp(ordered_network->type, network_args->type))
 				break;
 		}
 	} else {
@@ -667,7 +664,7 @@ static enum cmd_status cmd_connect(const char *device_name, char *args)
 	}
 
 	l_queue_destroy(match, NULL);
-	l_strfreev(arg_arr);
+	network_args_destroy(network_args);
 
 	if (!ordered_network) {
 		display("No network with specified parameters was found\n");
@@ -713,7 +710,7 @@ static const struct command device_commands[] = {
 					cmd_set_property,
 						"Set property",       false },
 	{ "<wlan>", "connect",
-				"<network name> [security]",
+				"<\"network name\"> [security]",
 					cmd_connect,
 						"Connect to network", false },
 	{ "<wlan>", "disconnect",
