@@ -184,6 +184,7 @@ void __eapol_set_deauthenticate_func(eapol_deauthenticate_func_t func);
 void __eapol_set_rekey_offload_func(eapol_rekey_offload_func_t func);
 void __eapol_update_replay_counter(uint32_t ifindex, const uint8_t *spa,
 				const uint8_t *aa, uint64_t replay_counter);
+void __eapol_set_config(struct l_settings *config);
 
 struct eapol_sm *eapol_sm_new(struct handshake_state *hs);
 void eapol_sm_free(struct eapol_sm *sm);

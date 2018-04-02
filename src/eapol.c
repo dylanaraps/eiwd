@@ -47,6 +47,7 @@
 struct l_queue *state_machines;
 struct l_queue *preauths;
 struct watchlist frame_watches;
+static uint32_t eapol_4way_handshake_time = 2;
 
 eapol_deauthenticate_func_t deauthenticate = NULL;
 eapol_rekey_offload_func_t rekey_offload = NULL;
@@ -1839,7 +1840,8 @@ bool eapol_start(struct eapol_sm *sm)
 	sm->started = true;
 
 	if (sm->require_handshake)
-		sm->timeout = l_timeout_create(2, eapol_timeout, sm, NULL);
+		sm->timeout = l_timeout_create(eapol_4way_handshake_time,
+				eapol_timeout, sm, NULL);
 
 	if (sm->use_eapol_start) {
 		/*
@@ -2147,6 +2149,13 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *src, uint16_t proto,
 					L_UINT_TO_PTR(ifindex),
 					eapol_frame_watch_func_t, proto, src,
 					(const struct eapol_frame *) eh);
+}
+
+void __eapol_set_config(struct l_settings *config)
+{
+	if (!l_settings_get_uint(config, "EAPoL",
+			"max_4way_handshake_time", &eapol_4way_handshake_time))
+		eapol_4way_handshake_time = 2;
 }
 
 bool eapol_init()
