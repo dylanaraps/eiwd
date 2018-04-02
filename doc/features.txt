@@ -43,6 +43,11 @@ connected AP (using a special Action frame).  This enables iwd to optimize
 the list of channels to scan in order to find a suitable target for roaming
 much quicker.
 
+- IWD supports receiving and generating SA Query action frames. If there is a
+spoofed disassociate frame, IWD will generate a SA Query frame to ask the AP if
+the disassociate frame was valid. The alternate case is if the AP receives
+an (re)associate frame while the STA is still connected. In this case the AP
+will send an SA Query frame, which IWD will respond to if it is still connected.
 
 Wireless monitor
 ================

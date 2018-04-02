@@ -228,29 +228,6 @@ Wireless daemon
   Priority: Low
   Complexity: C4
 
-- Add support for receiving SA Query and generating SA Response Action frames
-when connected to a network with Protected Management Frame support enabled.
-The AP generates SA Query frames when it receives a new unprotected
-(Re)Associate request when it thinks an STA is still connected.  If the request
-was spoofed it gives a chance for the currently connected STA to tell the AP
-that it is still connected.  Support for this feature is mandatory when PMF is
-enabled.
-
-  Priority: High
-  Complexity: C2
-
-- Add support for sending SA Query and handling SA Response Action frames when
-connected to a network with Protected Management Frame support enabled.  If the
-STA receives an unprotected Disassociate request with a valid reason code and
-the STA thinks it is still connected to an AP (e.g. the Disassociate was
-spoofed) it can send an SA Query Action frame out to the AP.  If the AP comes
-back within a given timeout with an SA Response, then the Disassociate can be
-ignored.  Otherwise the STA should honor the Disassociate frame and disconnect.
-Support for this feature is mandatory when PMF is enabled.
-
-  Priority: High
-  Complexity: C2
-
 - Add support for Direct Link Setup from 802.11e.
 
   Priority: Low
