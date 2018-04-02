@@ -301,6 +301,8 @@ int main(int argc, char *argv[])
 	if (!l_settings_get_uint(iwd_config, "EAP", "mtu", &eap_mtu))
 		eap_mtu = 1400; /* on WiFi the real MTU is around 2304 */
 
+	__eapol_set_config(iwd_config);
+
 	eap_init(eap_mtu);
 	eapol_init();
 	network_init();
