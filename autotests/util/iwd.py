@@ -590,11 +590,12 @@ class IWD(AsyncOpAbstract):
 
         tries = 0
         while not self._bus.name_has_owner(IWD_SERVICE):
-            if tries > 100:
-                if start_iwd_daemon:
-                    iwd_proc.terminate()
-                raise TimeoutError('IWD has failed to start')
-            tries += 1
+            if os.environ['IWD_TEST_TIMEOUTS'] == 'on':
+                if tries > 100:
+                    if start_iwd_daemon:
+                        iwd_proc.terminate()
+                    raise TimeoutError('IWD has failed to start')
+                tries += 1
             time.sleep(0.05)
 
     def __del__(self):
@@ -641,7 +642,7 @@ class IWD(AsyncOpAbstract):
         context = mainloop.get_context()
         while not eval(condition_str):
             context.iteration(may_block=True)
-            if self._wait_timed_out:
+            if self._wait_timed_out and os.environ['IWD_TEST_TIMEOUTS'] == 'on':
                 raise TimeoutError('[' + condition_str + ']'\
                                    ' condition was not met in '\
                                    + str(max_wait) + ' sec')
