@@ -1523,7 +1523,7 @@ static void run_py_tests(struct l_settings *hw_settings,
 					struct l_queue *test_stats_queue)
 {
 	char *argv[3];
-	pid_t test_exec_pid, test_timer_pid;
+	pid_t test_exec_pid, test_timer_pid = -1;
 	struct timeval time_before, time_after, time_elapsed;
 	unsigned int max_exec_interval;
 	char *py_test = NULL;
@@ -1575,7 +1575,8 @@ start_next_test:
 		if (test_exec_pid == corpse) {
 			gettimeofday(&time_after, NULL);
 
-			kill_process(test_timer_pid);
+			if (test_timer_pid != -1)
+				kill_process(test_timer_pid);
 
 			timersub(&time_after, &time_before, &time_elapsed);
 			interval = time_elapsed.tv_sec +
