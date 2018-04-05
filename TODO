@@ -285,14 +285,6 @@ Wireless daemon
   Priority: Medium
   Complexity: C4
 
-- Add support for EAP-GTC.  GTC stands for 'Generic Token Card' and can be
-  found in RFC3784.  Essentially it prompts the user to enter some value which
-  is reported back to the authenticator.  EAP-GTC is generally tunneled inside
-  EAP-PEAP and is used in the PEAPv1 authentication suite.
-
-  Priority: Medium
-  Complexity: C4
-
 - Add support for EAP-OTP.  OTP stands for 'One Time Password' and can be
   found in RFC3784.
 
