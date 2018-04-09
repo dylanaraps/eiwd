@@ -1180,7 +1180,7 @@ static void device_roam_scan(struct device *device,
 }
 
 static uint32_t device_freq_from_neighbor_report(const uint8_t *country,
-		struct ie_neighbor_report_info *info)
+		struct ie_neighbor_report_info *info, enum scan_band *out_band)
 {
 	enum scan_band band;
 	uint32_t freq;
@@ -1219,6 +1219,9 @@ static uint32_t device_freq_from_neighbor_report(const uint8_t *country,
 		return 0;
 	}
 
+	if (out_band)
+		*out_band = band;
+
 	return freq;
 }
 
@@ -1256,6 +1259,7 @@ static void device_neighbor_report_cb(struct netdev *netdev, int err,
 	while (ie_tlv_iter_next(&iter)) {
 		struct ie_neighbor_report_info info;
 		uint32_t freq;
+		enum scan_band band;
 		const uint8_t *cc = NULL;
 
 		if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_NEIGHBOR_REPORT)
@@ -1273,8 +1277,12 @@ static void device_neighbor_report_cb(struct netdev *netdev, int err,
 		if (device->connected_bss->cc_present)
 			cc = device->connected_bss->cc;
 
-		freq = device_freq_from_neighbor_report(cc, &info);
+		freq = device_freq_from_neighbor_report(cc, &info, &band);
 		if (!freq)
+			continue;
+
+		/* Skip if the band is not supported */
+		if (!(band & wiphy_get_supported_bands(device->wiphy)))
 			continue;
 
 		if (!memcmp(info.addr, device->connected_bss->addr, ETH_ALEN)) {
