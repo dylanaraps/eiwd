@@ -1727,6 +1727,7 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 						void *user_data)
 {
 	struct device *device = user_data;
+	uint32_t id;
 
 	l_debug("Scan called from DBus");
 
@@ -1739,8 +1740,19 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 
 	device->scan_pending = l_dbus_message_ref(message);
 
-	if (!scan_passive(device->index, device_scan_triggered,
-				new_scan_results, device, NULL))
+	/*
+	 * If device is not connected to a BSS use a passive scan to
+	 * avoid advertising our address until we support address
+	 * randomization (on the devices that support it).
+	 */
+	if (!device->connected_bss)
+		id = scan_passive(device->index, device_scan_triggered,
+					new_scan_results, device, NULL);
+	else
+		id = scan_active(device->index, NULL, 0, device_scan_triggered,
+					new_scan_results, device, NULL);
+
+	if (!id)
 		return dbus_error_failed(message);
 
 	return NULL;
