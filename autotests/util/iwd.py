@@ -532,10 +532,13 @@ class OrderedNetwork(object):
 
 class PSKAgent(dbus.service.Object):
 
-    def __init__(self, passphrases = []):
+    def __init__(self, passphrases=[], users=[]):
         if type(passphrases) != list:
             passphrases = [passphrases]
-        self._passphrases = passphrases
+        self.passphrases = passphrases
+        if type(users) != list:
+            users = [users]
+        self.users = users
         self._path = '/test/agent/' + str(int(round(time.time() * 1000)))
 
         dbus.service.Object.__init__(self, dbus.SystemBus(), self._path)
@@ -548,20 +551,55 @@ class PSKAgent(dbus.service.Object):
     def Release(self):
         print("Agent released")
 
-    @dbus.service.method(IWD_AGENT_INTERFACE, in_signature='o',
-                                                              out_signature='s')
-    def RequestPassphrase(self, path):
-        print('Requested passphrase for ' + path)
-
-        if not self._passphrases:
-            raise CanceledEx("canceled")
-
-        return self._passphrases.pop(0)
-
     @dbus.service.method(IWD_AGENT_INTERFACE, in_signature='s',
                                                                out_signature='')
     def Cancel(self, reason):
         print("Cancel: " + reason)
+
+
+    @dbus.service.method(IWD_AGENT_INTERFACE, in_signature='o',
+                                                              out_signature='s')
+    def RequestPassphrase(self, path):
+        print('Requested PSK for ' + path)
+
+        if not self.passphrases:
+            raise CanceledEx("canceled")
+
+        return self.passphrases.pop(0)
+
+    @dbus.service.method(IWD_AGENT_INTERFACE, in_signature='o',
+                                                              out_signature='s')
+    def RequestPrivateKeyPassphrase(self, path):
+        print('Requested private-key passphrase for ' + path)
+
+        if not self.passphrases:
+            raise CanceledEx("canceled")
+
+        return self.passphrases.pop(0)
+
+    @dbus.service.method(IWD_AGENT_INTERFACE, in_signature='o',
+                                                             out_signature='ss')
+    def RequestUserNameAndPassword(self, path):
+        print('Requested the user name and password for ' + path)
+
+        if not self.users:
+            raise CanceledEx("canceled")
+
+        return self.users.pop(0)
+
+    @dbus.service.method(IWD_AGENT_INTERFACE, in_signature='os',
+                                                              out_signature='s')
+    def RequestUserPassword(self, path, req_user):
+        print('Requested the password for ' + path + ' for user ' + req_user)
+
+        if not self.users:
+            raise CanceledEx("canceled")
+
+        user, passwd = self.users.pop(0)
+        if user != req_user:
+            raise CanceledEx("canceled")
+
+        return passwd
 
 
 class IWD(AsyncOpAbstract):
