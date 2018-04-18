@@ -603,6 +603,27 @@ static void auth_destroyed(void *data)
 	eap_method_error(eap);
 }
 
+static bool eap_aka_check_settings(struct l_settings *settings,
+					struct l_queue *secrets,
+					const char *prefix,
+					struct l_queue **out_missing)
+{
+	struct iwd_sim_auth *auth;
+
+	auth = iwd_sim_auth_find(false, true);
+	if (!auth) {
+		l_debug("No SIM driver available for EAP-AKA");
+		return false;
+	}
+
+	if (!iwd_sim_auth_get_nai(auth)) {
+		l_error("SIM driver didn't provide NAI");
+		return false;
+	}
+
+	return true;
+}
+
 static bool eap_aka_common_load_settings(struct eap_state *eap,
 						struct l_settings *settings,
 						const char *prefix)
@@ -623,10 +644,8 @@ static bool eap_aka_common_load_settings(struct eap_state *eap,
 	 */
 
 	aka->auth = iwd_sim_auth_find(false, true);
-	if (!aka->auth) {
-		l_debug("no AKA driver available for %s", aka->identity);
+	if (!aka->auth)
 		return false;
-	}
 
 	aka->auth_watch = sim_auth_unregistered_watch_add(aka->auth,
 			auth_destroyed, eap);
@@ -666,6 +685,7 @@ static struct eap_method eap_aka = {
 	.name = "AKA",
 	.free = eap_aka_free,
 	.handle_request = eap_aka_handle_request,
+	.check_settings = eap_aka_check_settings,
 	.load_settings = eap_aka_load_settings,
 	.get_identity = eap_aka_get_identity
 };
@@ -676,6 +696,7 @@ static struct eap_method eap_aka_prime = {
 	.name = "AKA'",
 	.free = eap_aka_free,
 	.handle_request = eap_aka_handle_request,
+	.check_settings = eap_aka_check_settings,
 	.load_settings = eap_aka_prime_load_settings,
 	.get_identity = eap_aka_get_identity
 };
