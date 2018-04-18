@@ -33,6 +33,19 @@ enum eap_result {
 	EAP_RESULT_TIMEOUT,
 };
 
+enum eap_secret_type {
+	EAP_SECRET_LOCAL_PKEY_PASSPHRASE,
+	EAP_SECRET_REMOTE_PASSWORD,
+	EAP_SECRET_REMOTE_USER_PASSWORD,
+};
+
+struct eap_secret_info {
+	char *id;
+	enum eap_secret_type type;
+	char *parameter;
+	char *value;
+};
+
 typedef void (*eap_tx_packet_func_t)(const uint8_t *eap_data, size_t len,
 					void *user_data);
 typedef void (*eap_key_material_func_t)(const uint8_t *msk_data, size_t msk_len,
@@ -47,6 +60,14 @@ struct eap_state *eap_new(eap_tx_packet_func_t tx_packet,
 			eap_complete_func_t complete, void *user_data);
 void eap_free(struct eap_state *eap);
 
+bool eap_secret_info_match(const void *a, const void *b);
+void eap_append_secret(struct l_queue **out_missing, enum eap_secret_type type,
+			const char *id, const char *parameter);
+void eap_secret_info_free(void *data);
+
+bool eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
+			const char *prefix, bool set_key_material,
+			struct l_queue **out_missing);
 bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
 			const char *prefix);
 
@@ -100,6 +121,10 @@ struct eap_method {
 	uint32_t vendor_type;
 	bool exports_msk;
 	const char *name;
+
+	bool (*check_settings)(struct l_settings *settings,
+				struct l_queue *secrets, const char *prefix,
+				struct l_queue **out_missing);
 
 	bool (*load_settings)(struct eap_state *eap,
 				struct l_settings *settings,
