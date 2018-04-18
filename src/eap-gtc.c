@@ -69,6 +69,23 @@ error:
 	eap_method_error(eap);
 }
 
+static bool eap_gtc_check_settings(struct l_settings *settings,
+					struct l_queue *secrets,
+					const char *prefix,
+					struct l_queue **out_missing)
+{
+	char setting[64];
+
+	snprintf(setting, sizeof(setting), "%sGTC-Secret", prefix);
+
+	if (!l_settings_get_value(settings, "Security", setting)) {
+		l_error("Property %s is missing", setting);
+		return false;
+	}
+
+	return true;
+}
+
 static bool eap_gtc_load_settings(struct eap_state *eap,
 					struct l_settings *settings,
 					const char *prefix)
@@ -79,11 +96,6 @@ static bool eap_gtc_load_settings(struct eap_state *eap,
 
 	snprintf(setting, sizeof(setting), "%sGTC-Secret", prefix);
 	secret = l_strdup(l_settings_get_value(settings, "Security", setting));
-
-	if (!secret) {
-		l_error("EAP-GTC secret is missing");
-		return false;
-	}
 
 	gtc = l_new(struct eap_gtc_state, 1);
 	gtc->secret = secret;
@@ -98,6 +110,7 @@ static struct eap_method eap_gtc = {
 	.name = "GTC",
 	.free = eap_gtc_free,
 	.handle_request = eap_gtc_handle_request,
+	.check_settings = eap_gtc_check_settings,
 	.load_settings = eap_gtc_load_settings,
 };
 
