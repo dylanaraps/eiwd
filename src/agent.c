@@ -227,7 +227,8 @@ static void agent_receive_reply(struct l_dbus_message *message,
 
 	agent_finalize_pending(agent, message);
 
-	agent_send_next_request(agent);
+	if (!agent->pending_id)
+		agent_send_next_request(agent);
 }
 
 static void agent_send_next_request(struct agent *agent)
