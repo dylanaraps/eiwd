@@ -20,6 +20,32 @@ Methods		void Release()
 
 			Possible Errors: net.connman.iwd.Agent.Error.Canceled
 
+		string RequestPrivateKeyPassphrase(object network)
+
+			This method gets called when connecting to
+			a network that requires authentication using a
+			locally-stored encrypted private key file, to
+			obtain that private key's encryption passphrase.
+
+			Possible Errors: net.connman.iwd.Agent.Error.Canceled
+
+		(string, string) RequestUserNameAndPassword(object network)
+
+			This method gets called when connecting to
+			a network that requires authentication using a
+			user name and password.
+
+			Possible Errors: net.connman.iwd.Agent.Error.Canceled
+
+		string RequestUserPassword(object network, string user)
+
+			This method gets called when connecting to
+			a network that requires authentication with a
+			user password.  The user name is optionally passed
+			in the parameter.
+
+			Possible Errors: net.connman.iwd.Agent.Error.Canceled
+
 		void Cancel(string reason)
 
 			This method gets called to indicate that the agent
