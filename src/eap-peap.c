@@ -814,6 +814,115 @@ error:
 	eap_method_error(eap);
 }
 
+static bool eap_peap_check_settings(struct l_settings *settings,
+					struct l_queue *secrets,
+					const char *prefix,
+					struct l_queue **out_missing)
+{
+	char entry[64], client_cert_entry[64], passphrase_entry[64];
+	const char *path, *client_cert, *passphrase;
+	uint8_t *cert;
+	size_t size;
+
+	snprintf(entry, sizeof(entry), "%sPEAP-CACert", prefix);
+	path = l_settings_get_value(settings, "Security", entry);
+	if (path) {
+		cert = l_pem_load_certificate(path, &size);
+		if (!cert) {
+			l_error("Failed to load %s", path);
+			return false;
+		}
+
+		l_free(cert);
+	}
+
+	snprintf(client_cert_entry, sizeof(client_cert_entry),
+			"%sPEAP-ClientCert", prefix);
+	client_cert = l_settings_get_value(settings, "Security",
+						client_cert_entry);
+	if (client_cert) {
+		cert = l_pem_load_certificate(client_cert, &size);
+		if (!cert) {
+			l_error("Failed to load %s", client_cert);
+			return false;
+		}
+
+		l_free(cert);
+	}
+
+	snprintf(entry, sizeof(entry), "%sPEAP-ClientKey", prefix);
+	path = l_settings_get_value(settings, "Security", entry);
+
+	if (path && !client_cert) {
+		l_error("%s present but no client certificate (%s)",
+			entry, client_cert_entry);
+		return false;
+	}
+
+	snprintf(passphrase_entry, sizeof(passphrase_entry),
+			"%sPEAP-ClientKeyPassphrase", prefix);
+	passphrase = l_settings_get_value(settings, "Security",
+						passphrase_entry);
+
+	if (!passphrase) {
+		const struct eap_secret_info *secret;
+
+		secret = l_queue_find(secrets, eap_secret_info_match,
+					passphrase_entry);
+		if (secret)
+			passphrase = secret->value;
+	}
+
+	if (path) {
+		bool encrypted;
+		uint8_t *priv_key;
+		size_t size;
+
+		priv_key = l_pem_load_private_key(path, passphrase,
+							&encrypted, &size);
+		if (!priv_key) {
+			if (!encrypted) {
+				l_error("Error loading client private key %s",
+					path);
+				return false;
+			}
+
+			if (passphrase) {
+				l_error("Error loading encrypted client "
+					"private key %s", path);
+				return false;
+			}
+
+			/*
+			 * We've got an encrypted key and passphrase was not
+			 * saved in the network settings, need to request
+			 * the passphrase.
+			 */
+			eap_append_secret(out_missing,
+					EAP_SECRET_LOCAL_PKEY_PASSPHRASE,
+					passphrase_entry, path);
+		} else {
+			memset(priv_key, 0, size);
+			l_free(priv_key);
+
+			if (passphrase && !encrypted) {
+				l_error("%s present but client private "
+					"key %s is not encrypted",
+					passphrase_entry, path);
+				return false;
+			}
+		}
+	} else if (passphrase) {
+		l_error("%s present but no client private key path set (%s)",
+			passphrase_entry, entry);
+		return false;
+	}
+
+	snprintf(entry, sizeof(entry), "%sPEAP-Phase2-", prefix);
+
+	return eap_check_settings(settings, secrets, entry, false, out_missing);
+}
+
 static bool eap_peap_load_settings(struct eap_state *eap,
 					struct l_settings *settings,
 					const char *prefix)
@@ -840,16 +949,6 @@ static bool eap_peap_load_settings(struct eap_state *eap,
 	snprintf(entry, sizeof(entry), "%sPEAP-ClientKeyPassphrase", prefix);
 	peap->passphrase = l_strdup(l_settings_get_value(settings, "Security",
 									entry));
-
-	if (!peap->client_cert && peap->client_key) {
-		l_error("Client key present but no client certificate");
-		goto error;
-	}
-
-	if (!peap->client_key && peap->passphrase) {
-		l_error("Passphrase present but no client private key");
-		goto error;
-	}
 
 	peap->phase2_eap = eap_new(eap_peap_phase2_send_response,
 					eap_peap_phase2_complete, eap);
@@ -888,6 +987,7 @@ static struct eap_method eap_peap = {
 
 	.handle_request = eap_peap_handle_request,
 	.handle_retransmit = eap_peap_handle_retransmit,
+	.check_settings = eap_peap_check_settings,
 	.load_settings = eap_peap_load_settings,
 	.free = eap_peap_free,
 };
