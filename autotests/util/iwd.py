@@ -532,8 +532,10 @@ class OrderedNetwork(object):
 
 class PSKAgent(dbus.service.Object):
 
-    def __init__(self, passphrase = None):
-        self._passphrase = passphrase
+    def __init__(self, passphrases = []):
+        if type(passphrases) != list:
+            passphrases = [passphrases]
+        self._passphrases = passphrases
         self._path = '/test/agent/' + str(int(round(time.time() * 1000)))
 
         dbus.service.Object.__init__(self, dbus.SystemBus(), self._path)
@@ -551,10 +553,10 @@ class PSKAgent(dbus.service.Object):
     def RequestPassphrase(self, path):
         print('Requested passphrase for ' + path)
 
-        if self._passphrase is None:
+        if not self._passphrases:
             raise CanceledEx("canceled")
 
-        return self._passphrase
+        return self._passphrases.pop(0)
 
     @dbus.service.method(IWD_AGENT_INTERFACE, in_signature='s',
                                                                out_signature='')
