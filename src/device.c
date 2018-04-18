@@ -588,7 +588,7 @@ static void device_disassociated(struct device *device)
 		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 }
 
-static void device_disconnect_by_ap(struct device *device)
+static void device_disconnect_event(struct device *device)
 {
 	l_debug("%d", device->index);
 
@@ -1603,10 +1603,8 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 		device_lost_beacon(device);
 		break;
 	case NETDEV_EVENT_DISCONNECT_BY_AP:
-		device_disconnect_by_ap(device);
-		break;
 	case NETDEV_EVENT_DISCONNECT_BY_SME:
-		device_disassociated(device);
+		device_disconnect_event(device);
 		break;
 	case NETDEV_EVENT_RSSI_THRESHOLD_LOW:
 		if (device->signal_low)
