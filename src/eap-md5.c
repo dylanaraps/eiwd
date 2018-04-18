@@ -86,6 +86,23 @@ err:
 	eap_method_error(eap);
 }
 
+static bool eap_md5_check_settings(struct l_settings *settings,
+					struct l_queue *secrets,
+					const char *prefix,
+					struct l_queue **out_missing)
+{
+	char setting[64];
+
+	snprintf(setting, sizeof(setting), "%sMD5-Secret", prefix);
+
+	if (!l_settings_get_value(settings, "Security", setting)) {
+		l_error("Property %s is missing", setting);
+		return false;
+	}
+
+	return true;
+}
+
 static bool eap_md5_load_settings(struct eap_state *eap,
 					struct l_settings *settings,
 					const char *prefix)
@@ -96,11 +113,6 @@ static bool eap_md5_load_settings(struct eap_state *eap,
 
 	snprintf(setting, sizeof(setting), "%sMD5-Secret", prefix);
 	secret = l_strdup(l_settings_get_value(settings, "Security", setting));
-
-	if (!secret) {
-		l_error("EAP-MD5 secret is missing");
-		return false;
-	}
 
 	md5 = l_new(struct eap_md5_state, 1);
 	md5->secret = secret;
@@ -116,6 +128,7 @@ static struct eap_method eap_md5 = {
 
 	.free = eap_md5_free,
 	.handle_request = eap_md5_handle_request,
+	.check_settings = eap_md5_check_settings,
 	.load_settings = eap_md5_load_settings,
 };
 
