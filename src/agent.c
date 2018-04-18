@@ -32,8 +32,14 @@
 
 static unsigned int next_request_id = 0;
 
+enum agent_request_type {
+	AGENT_REQUEST_TYPE_PASSPHRASE,
+	AGENT_REQUEST_TYPE_USER_NAME_PASSWD,
+};
+
 /* Agent dbus request is done from iwd towards the agent */
 struct agent_request {
+	enum agent_request_type type;
 	struct l_dbus_message *message;
 	unsigned int id;
 	void *user_data;
@@ -157,6 +163,29 @@ done:
 	user_callback(result, passphrase, request->trigger, request->user_data);
 }
 
+static void user_name_passwd_reply(struct l_dbus_message *reply,
+					struct agent_request *request)
+{
+	const char *error, *text;
+	char *username = NULL;
+	char *passwd = NULL;
+	enum agent_result result = AGENT_RESULT_FAILED;
+	agent_request_user_name_passwd_func_t user_callback =
+		request->user_callback;
+
+	if (l_dbus_message_get_error(reply, &error, &text))
+		goto done;
+
+	if (!l_dbus_message_get_arguments(reply, "ss", &username, &passwd))
+		goto done;
+
+	result = AGENT_RESULT_OK;
+
+done:
+	user_callback(result, username, passwd,
+			request->trigger, request->user_data);
+}
+
 static void agent_finalize_pending(struct agent *agent,
 						struct l_dbus_message *reply)
 {
@@ -169,7 +198,14 @@ static void agent_finalize_pending(struct agent *agent,
 
 	pending = l_queue_pop_head(agent->requests);
 
-	passphrase_reply(reply, pending);
+	switch (pending->type) {
+	case AGENT_REQUEST_TYPE_PASSPHRASE:
+		passphrase_reply(reply, pending);
+		break;
+	case AGENT_REQUEST_TYPE_USER_NAME_PASSWD:
+		user_name_passwd_reply(reply, pending);
+		break;
+	}
 
 	if (pending->trigger) {
 		l_dbus_message_unref(pending->trigger);
@@ -256,6 +292,7 @@ static void agent_send_next_request(struct agent *agent)
 }
 
 static unsigned int agent_queue_request(struct agent *agent,
+					enum agent_request_type type,
 					struct l_dbus_message *message,
 					int timeout, void *callback,
 					struct l_dbus_message *trigger,
@@ -266,6 +303,7 @@ static unsigned int agent_queue_request(struct agent *agent,
 
 	request = l_new(struct agent_request, 1);
 
+	request->type = type;
 	request->message = message;
 	request->id = ++next_request_id;
 	request->user_data = user_data;
@@ -351,8 +389,85 @@ unsigned int agent_request_passphrase(const char *path,
 
 	l_dbus_message_set_arguments(message, "o", path);
 
-	return agent_queue_request(agent, message,
-					agent_timeout_input_request(),
+	return agent_queue_request(agent, AGENT_REQUEST_TYPE_PASSPHRASE,
+					message, agent_timeout_input_request(),
+					callback, trigger, user_data, destroy);
+}
+
+unsigned int agent_request_pkey_passphrase(const char *path,
+				agent_request_passphrase_func_t callback,
+				struct l_dbus_message *trigger,
+				void *user_data,
+				agent_request_destroy_func_t destroy)
+{
+	struct agent *agent = get_agent(l_dbus_message_get_sender(trigger));
+	struct l_dbus_message *message;
+
+	if (!agent || !callback)
+		return 0;
+
+	l_debug("agent %p owner %s path %s", agent, agent->owner, agent->path);
+
+	message = l_dbus_message_new_method_call(dbus_get_bus(),
+						agent->owner, agent->path,
+						IWD_AGENT_INTERFACE,
+						"RequestPrivateKeyPassphrase");
+
+	l_dbus_message_set_arguments(message, "o", path);
+
+	return agent_queue_request(agent, AGENT_REQUEST_TYPE_PASSPHRASE,
+					message, agent_timeout_input_request(),
+					callback, trigger, user_data, destroy);
+}
+
+unsigned int agent_request_user_name_password(const char *path,
+				agent_request_user_name_passwd_func_t callback,
+				struct l_dbus_message *trigger,
+				void *user_data,
+				agent_request_destroy_func_t destroy)
+{
+	struct agent *agent = get_agent(l_dbus_message_get_sender(trigger));
+	struct l_dbus_message *message;
+
+	if (!agent || !callback)
+		return 0;
+
+	l_debug("agent %p owner %s path %s", agent, agent->owner, agent->path);
+
+	message = l_dbus_message_new_method_call(dbus_get_bus(),
+						agent->owner, agent->path,
+						IWD_AGENT_INTERFACE,
+						"RequestUserNameAndPassword");
+
+	l_dbus_message_set_arguments(message, "o", path);
+
+	return agent_queue_request(agent, AGENT_REQUEST_TYPE_USER_NAME_PASSWD,
+					message, agent_timeout_input_request(),
+					callback, trigger, user_data, destroy);
+}
+
+unsigned int agent_request_user_password(const char *path, const char *user,
+				agent_request_passphrase_func_t callback,
+				struct l_dbus_message *trigger, void *user_data,
+				agent_request_destroy_func_t destroy)
+{
+	struct agent *agent = get_agent(l_dbus_message_get_sender(trigger));
+	struct l_dbus_message *message;
+
+	if (!agent || !callback)
+		return 0;
+
+	l_debug("agent %p owner %s path %s", agent, agent->owner, agent->path);
+
+	message = l_dbus_message_new_method_call(dbus_get_bus(),
+						agent->owner, agent->path,
+						IWD_AGENT_INTERFACE,
+						"RequestUserPassword");
+
+	l_dbus_message_set_arguments(message, "os", path, user ?: "");
+
+	return agent_queue_request(agent, AGENT_REQUEST_TYPE_PASSPHRASE,
+					message, agent_timeout_input_request(),
 					callback, trigger, user_data, destroy);
 }
 

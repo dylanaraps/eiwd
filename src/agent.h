@@ -31,6 +31,10 @@ typedef void (*agent_request_passphrase_func_t) (enum agent_result result,
 					const char *passphrase,
 					struct l_dbus_message *message,
 					void *user_data);
+typedef void (*agent_request_user_name_passwd_func_t) (enum agent_result result,
+					const char *user, const char *password,
+					struct l_dbus_message *message,
+					void *user_data);
 typedef void (*agent_request_destroy_func_t)(void *user_data);
 
 bool agent_init(struct l_dbus *dbus);
@@ -41,5 +45,19 @@ unsigned int agent_request_passphrase(const char *path,
 				agent_request_passphrase_func_t callback,
 				struct l_dbus_message *message,
 				void *user_data,
+				agent_request_destroy_func_t destroy);
+unsigned int agent_request_pkey_passphrase(const char *path,
+				agent_request_passphrase_func_t callback,
+				struct l_dbus_message *trigger,
+				void *user_data,
+				agent_request_destroy_func_t destroy);
+unsigned int agent_request_user_name_password(const char *path,
+				agent_request_user_name_passwd_func_t callback,
+				struct l_dbus_message *trigger,
+				void *user_data,
+				agent_request_destroy_func_t destroy);
+unsigned int agent_request_user_password(const char *path, const char *user,
+				agent_request_passphrase_func_t callback,
+				struct l_dbus_message *trigger, void *user_data,
 				agent_request_destroy_func_t destroy);
 bool agent_request_cancel(unsigned int req_id, int reason);
