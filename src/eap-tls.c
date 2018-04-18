@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <ell/ell.h>
 #include <ell/tls-private.h>
+#include <ell/pem.h>
 
 #include "eap.h"
 
@@ -369,6 +370,113 @@ err:
 	eap_method_error(eap);
 }
 
+static bool eap_tls_check_settings(struct l_settings *settings,
+					struct l_queue *secrets,
+					const char *prefix,
+					struct l_queue **out_missing)
+{
+	char setting[64], client_cert_setting[64], passphrase_setting[64];
+	const char *path, *client_cert, *passphrase;
+	uint8_t *cert;
+	size_t size;
+
+	snprintf(setting, sizeof(setting), "%sTLS-CACert", prefix);
+	path = l_settings_get_value(settings, "Security", setting);
+	if (path) {
+		cert = l_pem_load_certificate(path, &size);
+		if (!cert) {
+			l_error("Failed to load %s", path);
+			return false;
+		}
+
+		l_free(cert);
+	}
+
+	snprintf(client_cert_setting, sizeof(client_cert_setting),
+			"%sTLS-ClientCert", prefix);
+	client_cert = l_settings_get_value(settings, "Security",
+						client_cert_setting);
+	if (client_cert) {
+		cert = l_pem_load_certificate(client_cert, &size);
+		if (!cert) {
+			l_error("Failed to load %s", client_cert);
+			return false;
+		}
+
+		l_free(cert);
+	}
+
+	snprintf(setting, sizeof(setting), "%sTLS-ClientKey", prefix);
+	path = l_settings_get_value(settings, "Security", setting);
+
+	if (path && !client_cert) {
+		l_error("%s present but no client certificate (%s)",
+			setting, client_cert_setting);
+		return false;
+	}
+
+	snprintf(passphrase_setting, sizeof(passphrase_setting),
+			"%sTLS-ClientKeyPassphrase", prefix);
+	passphrase = l_settings_get_value(settings, "Security",
+						passphrase_setting);
+
+	if (!passphrase) {
+		const struct eap_secret_info *secret;
+
+		secret = l_queue_find(secrets, eap_secret_info_match,
+					passphrase_setting);
+		if (secret)
+			passphrase = secret->value;
+	}
+
+	if (path) {
+		bool encrypted;
+		uint8_t *priv_key;
+		size_t size;
+
+		priv_key = l_pem_load_private_key(path, passphrase,
+							&encrypted, &size);
+		if (!priv_key) {
+			if (!encrypted) {
+				l_error("Error loading client private key %s",
+					path);
+				return false;
+			}
+
+			if (passphrase) {
+				l_error("Error loading encrypted client "
+					"private key %s", path);
+				return false;
+			}
+
+			/*
+			 * We've got an encrypted key and passphrase was not
+			 * saved in the network settings, need to request
+			 * the passphrase.
+			 */
+			eap_append_secret(out_missing,
+					EAP_SECRET_LOCAL_PKEY_PASSPHRASE,
+					passphrase_setting, path);
+		} else {
+			memset(priv_key, 0, size);
+			l_free(priv_key);
+
+			if (passphrase && !encrypted) {
+				l_error("%s present but client private "
+					"key %s is not encrypted",
+					passphrase_setting, path);
+				return false;
+			}
+		}
+	} else if (passphrase) {
+		l_error("%s present but no client private key path set (%s)",
+			passphrase_setting, setting);
+		return false;
+	}
+
+	return true;
+}
+
 static bool eap_tls_load_settings(struct eap_state *eap,
 					struct l_settings *settings,
 					const char *prefix)
@@ -394,28 +502,9 @@ static bool eap_tls_load_settings(struct eap_state *eap,
 	tls->passphrase = l_strdup(l_settings_get_value(settings,
 						"Security", setting));
 
-	if (!tls->client_cert && tls->client_key) {
-		l_error("Client key present but no client certificate");
-		goto err;
-	}
-
-	if (!tls->client_key && tls->passphrase) {
-		l_error("Passphrase present but no client private key");
-		goto err;
-	}
-
 	eap_set_data(eap, tls);
 
 	return true;
-
-err:
-	l_free(tls->ca_cert);
-	l_free(tls->client_cert);
-	l_free(tls->client_key);
-	l_free(tls->passphrase);
-	l_free(tls);
-
-	return false;
 }
 
 static struct eap_method eap_tls = {
@@ -425,6 +514,7 @@ static struct eap_method eap_tls = {
 
 	.free = eap_tls_free,
 	.handle_request = eap_tls_handle_request,
+	.check_settings = eap_tls_check_settings,
 	.load_settings = eap_tls_load_settings,
 };
 
