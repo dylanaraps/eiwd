@@ -430,11 +430,14 @@ bool eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 		return false;
 	}
 
-	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-	if (!l_settings_get_value(settings, "Security", setting)) {
-		l_error("Property %s is missing", setting);
+	/* method may not store identity in settings file */
+	if (!method->get_identity) {
+		snprintf(setting, sizeof(setting), "%sIdentity", prefix);
+		if (!l_settings_get_value(settings, "Security", setting)) {
+			l_error("Property %s is missing", setting);
 
-		return false;
+			return false;
+		}
 	}
 
 	if (!method->check_settings)
