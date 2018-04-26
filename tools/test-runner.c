@@ -1802,6 +1802,10 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 		if (iwd_pid == -1)
 			goto exit_hostapd;
+	} else {
+		/* tells pytest to start iwd with valgrind */
+		if (valgrind)
+			setenv("IWD_TEST_VALGRIND", "on", true);
 	}
 
 	if (ofono_req) {
