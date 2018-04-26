@@ -724,37 +724,62 @@ static bool eap_mschapv2_load_settings(struct eap_state *eap,
 					const char *prefix)
 {
 	struct eap_mschapv2_state *state;
-	const char *password;
+	const char *identity, *password = NULL;
 	char setting[64];
 
 	state = l_new(struct eap_mschapv2_state, 1);
 
 	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-	set_user_name(state,
-			l_settings_get_value(settings, "Security", setting));
+	identity = l_settings_get_value(settings, "Security", setting);
 
+	if (!identity) {
+		snprintf(setting, sizeof(setting), "%sIdentity-User", prefix);
+		identity = l_settings_get_value(settings, "Security", setting);
+		if (!identity)
+			goto error;
+
+		snprintf(setting, sizeof(setting), "%sIdentity-Password",
+				prefix);
+		password = l_settings_get_value(settings, "Security", setting);
+		if (!password)
+			goto error;
+
+		set_password_from_string(state, password);
+	}
+
+	set_user_name(state, identity);
 	state->user_len = strlen(state->user);
 
 	/* Either read the password-hash from hexdump or password and hash it */
-	snprintf(setting, sizeof(setting), "%sPassword-Hash", prefix);
-	password = l_settings_get_value(settings, "Security", setting);
-	if (password) {
-		unsigned char *tmp;
-		size_t len;
+	if (!password) {
+		snprintf(setting, sizeof(setting), "%sPassword-Hash", prefix);
+		password = l_settings_get_value(settings, "Security", setting);
+		if (password) {
+			unsigned char *tmp;
+			size_t len;
 
-		tmp = l_util_from_hexstring(password, &len);
-		memcpy(state->password_hash, tmp, 16);
-		l_free(tmp);
-	} else {
+			tmp = l_util_from_hexstring(password, &len);
+			memcpy(state->password_hash, tmp, 16);
+			l_free(tmp);
+		}
+	}
+
+	if (!password) {
 		snprintf(setting, sizeof(setting), "%sPassword", prefix);
-		password = l_settings_get_value(settings, "Security",
-								setting);
+		password = l_settings_get_value(settings, "Security", setting);
+		if (!password)
+			goto error;
+
 		set_password_from_string(state, password);
 	}
 
 	eap_set_data(eap, state);
 
 	return true;
+
+error:
+	free(state);
+	return false;
 }
 
 static struct eap_method eap_mschapv2 = {
