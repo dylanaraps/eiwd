@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <limits.h>
+#include <stdio.h>
 
 #include <ell/ell.h>
 
@@ -362,6 +363,50 @@ struct l_settings *network_get_settings(const struct network *network)
 	return network->settings;
 }
 
+static bool network_set_8021x_secrets(struct network *network)
+{
+	const struct l_queue_entry *entry;
+
+	if (!network->settings)
+		return false;
+
+	for (entry = l_queue_get_entries(network->secrets); entry;
+			entry = entry->next) {
+		struct eap_secret_info *secret = entry->data;
+		char *setting;
+
+		switch (secret->type) {
+		case EAP_SECRET_LOCAL_PKEY_PASSPHRASE:
+		case EAP_SECRET_REMOTE_PASSWORD:
+			if (!l_settings_set_string(network->settings,
+							"Security", secret->id,
+							secret->value))
+				return false;
+			break;
+
+		case EAP_SECRET_REMOTE_USER_PASSWORD:
+			setting = alloca(strlen(secret->id) + 10);
+
+			sprintf(setting, "%s-User", secret->id);
+			if (!l_settings_set_string(network->settings,
+							"Security", setting,
+							secret->value))
+				return false;
+
+			sprintf(setting, "%s-Password", secret->id);
+			if (!l_settings_set_string(network->settings,
+							"Security", setting,
+							secret->value + 1 +
+							strlen(secret->value)))
+				return false;
+
+			break;
+		}
+	}
+
+	return true;
+}
+
 void network_sync_psk(struct network *network)
 {
 	char *hex;
@@ -433,7 +478,8 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 
 		if (!eap_check_settings(network->settings, network->secrets,
 					"EAP-", true, &missing_secrets) ||
-				!l_queue_isempty(missing_secrets)) {
+				!l_queue_isempty(missing_secrets) ||
+				!network_set_8021x_secrets(network)) {
 			l_queue_destroy(missing_secrets, eap_secret_info_free);
 			network_settings_close(network);
 			return -ENOKEY;
@@ -848,20 +894,16 @@ static struct l_dbus_message *network_connect_8021x(struct network *network,
 {
 	bool r;
 	struct l_queue *missing_secrets = NULL;
+	struct l_dbus_message *reply;
 
 	l_debug("");
 
 	r = eap_check_settings(network->settings, network->secrets, "EAP-",
 				true, &missing_secrets);
 	if (!r) {
-		l_queue_destroy(missing_secrets, eap_secret_info_free);
+		reply = dbus_error_not_configured(message);
 
-		network_settings_close(network);
-
-		l_queue_destroy(network->secrets, eap_secret_info_free);
-		network->secrets = NULL;
-
-		return dbus_error_not_configured(message);
+		goto error;
 	}
 
 	l_debug("supplied %u secrets, %u more needed for EAP",
@@ -869,6 +911,12 @@ static struct l_dbus_message *network_connect_8021x(struct network *network,
 		l_queue_length(missing_secrets));
 
 	if (l_queue_isempty(missing_secrets)) {
+		if (!network_set_8021x_secrets(network)) {
+			reply = dbus_error_failed(message);
+
+			goto error;
+		}
+
 		device_connect_network(network->device, network, bss, message);
 
 		return NULL;
@@ -878,9 +926,17 @@ static struct l_dbus_message *network_connect_8021x(struct network *network,
 				eap_secret_done))
 		return NULL;
 
+	reply = dbus_error_no_agent(message);
+
+error:
+	l_queue_destroy(missing_secrets, eap_secret_info_free);
+
 	network_settings_close(network);
 
-	return dbus_error_no_agent(message);
+	l_queue_destroy(network->secrets, eap_secret_info_free);
+	network->secrets = NULL;
+
+	return reply;
 }
 
 static struct l_dbus_message *network_connect(struct l_dbus *dbus,
