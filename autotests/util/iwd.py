@@ -617,14 +617,24 @@ class IWD(AsyncOpAbstract):
         mainloop = GLib.MainLoop()
 
         if start_iwd_daemon:
+            args = []
             iwd_wiphys = [wname for wname, wiphy in wiphy.wiphy_map.items()
                           if any(intf for intf in wiphy.values()
                                  if intf.use == 'iwd')]
             whitelist = ','.join(iwd_wiphys)
 
+            if os.environ.get('IWD_TEST_VALGRIND', None) == 'on':
+                    args.append('valgrind')
+                    args.append('--leak-check=full')
+
+            args.append('iwd')
+            args.append('-c')
+            args.append(iwd_config_dir)
+            args.append('-p')
+            args.append(whitelist)
+
             import subprocess
-            iwd_proc = subprocess.Popen(['iwd', '-c', iwd_config_dir, '-p',
-                                         whitelist])
+            iwd_proc = subprocess.Popen(args)
 
             self._iwd_proc = iwd_proc
 
