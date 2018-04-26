@@ -180,6 +180,8 @@ static void eap_peap_free(struct eap_state *eap)
 	l_free(peap->ca_cert);
 	l_free(peap->client_cert);
 	l_free(peap->client_key);
+	if (peap->passphrase)
+		memset(peap->passphrase, 0, strlen(peap->passphrase));
 	l_free(peap->passphrase);
 
 	l_free(peap);
@@ -974,6 +976,8 @@ error:
 	l_free(peap->ca_cert);
 	l_free(peap->client_cert);
 	l_free(peap->client_key);
+	if (peap->passphrase)
+		memset(peap->passphrase, 0, strlen(peap->passphrase));
 	l_free(peap->passphrase);
 	l_free(peap);
 

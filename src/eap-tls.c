@@ -56,6 +56,8 @@ static void eap_tls_free(struct eap_state *eap)
 	l_free(tls->ca_cert);
 	l_free(tls->client_cert);
 	l_free(tls->client_key);
+	if (tls->passphrase)
+		memset(tls->passphrase, 0, strlen(tls->passphrase));
 	l_free(tls->passphrase);
 
 	if (tls->rx_pkt_buf) {

@@ -60,6 +60,8 @@ static void eap_ttls_free(struct eap_state *eap)
 	l_free(ttls->ca_cert);
 	l_free(ttls->client_cert);
 	l_free(ttls->client_key);
+	if (ttls->passphrase)
+		memset(ttls->passphrase, 0, strlen(ttls->passphrase));
 	l_free(ttls->passphrase);
 
 	if (ttls->rx_pkt_buf) {
@@ -788,6 +790,8 @@ err:
 	l_free(ttls->ca_cert);
 	l_free(ttls->client_cert);
 	l_free(ttls->client_key);
+	if (ttls->passphrase)
+		memset(ttls->passphrase, 0, strlen(ttls->passphrase));
 	l_free(ttls->passphrase);
 	l_free(ttls);
 
