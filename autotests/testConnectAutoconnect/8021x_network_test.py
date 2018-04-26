@@ -18,7 +18,7 @@ class Test8021xNetwork(unittest.TestCase):
     --------------------------------------------------------------------------
     False                             True          NotConfiguredEx is thrown
     True                              True          Connection succeeds
-    True - EAP method in              True          FailedEx is thrown
+    True - EAP method in    True                    NotSupportedEx is thrown
        config file is not
        supported by IWD
     '''
@@ -33,7 +33,7 @@ class Test8021xNetwork(unittest.TestCase):
         IWD.clear_storage()
         IWD.copy_to_storage('ssidEAP-Other.8021x')
 
-        tca.validate('ssidEAP-Other', False, iwd.FailedEx)
+        tca.validate('ssidEAP-Other', False, iwd.NotSupportedEx)
 
         IWD.clear_storage()
 
