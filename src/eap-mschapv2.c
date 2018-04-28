@@ -658,7 +658,7 @@ static int eap_mschapv2_check_settings(struct l_settings *settings,
 		secret = l_queue_find(secrets, eap_secret_info_match, setting);
 		if (secret) {
 			identity = secret->value;
-			password = secret->value + strlen(secret->value);
+			password = secret->value + strlen(secret->value) + 1;
 
 			goto validate;
 		}
