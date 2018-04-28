@@ -390,7 +390,7 @@ void eap_secret_info_free(void *data)
 	l_free(info);
 }
 
-bool eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
+int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 			const char *prefix, bool set_key_material,
 			struct l_queue **out_missing)
 {
@@ -405,7 +405,7 @@ bool eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 	if (!method_name) {
 		l_error("Property %s missing", setting);
 
-		return false;
+		return -ENOENT;
 	}
 
 	for (entry = l_queue_get_entries(eap_methods); entry;
@@ -419,7 +419,7 @@ bool eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 	if (!entry) {
 		l_error("EAP method \"%s\" unsupported", method_name);
 
-		return false;
+		return -ENOTSUP;
 	}
 
 	/* Check if selected method is suitable for 802.1x */
@@ -427,7 +427,7 @@ bool eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 		l_error("EAP method \"%s\" doesn't export key material",
 				method_name);
 
-		return false;
+		return -ENOTSUP;
 	}
 
 	/* method may not store identity in settings file */
@@ -436,12 +436,12 @@ bool eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 		if (!l_settings_get_value(settings, "Security", setting)) {
 			l_error("Property %s is missing", setting);
 
-			return false;
+			return -ENOENT;
 		}
 	}
 
 	if (!method->check_settings)
-		return true;
+		return 0;
 
 	return method->check_settings(settings, secrets, prefix, out_missing);
 }

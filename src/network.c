@@ -476,7 +476,7 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 		if (!network_settings_load(network))
 			return -ENOKEY;
 
-		if (!eap_check_settings(network->settings, network->secrets,
+		if (eap_check_settings(network->settings, network->secrets,
 					"EAP-", true, &missing_secrets) ||
 				!l_queue_isempty(missing_secrets) ||
 				!network_set_8021x_secrets(network)) {
@@ -892,7 +892,7 @@ static struct l_dbus_message *network_connect_8021x(struct network *network,
 						struct scan_bss *bss,
 						struct l_dbus_message *message)
 {
-	bool r;
+	int r;
 	struct l_queue *missing_secrets = NULL;
 	struct l_dbus_message *reply;
 
@@ -900,8 +900,15 @@ static struct l_dbus_message *network_connect_8021x(struct network *network,
 
 	r = eap_check_settings(network->settings, network->secrets, "EAP-",
 				true, &missing_secrets);
-	if (!r) {
-		reply = dbus_error_not_configured(message);
+	if (r) {
+		if (r == -EUNATCH)
+			reply = dbus_error_not_available(message);
+		else if (r == -ENOTSUP)
+			reply = dbus_error_not_supported(message);
+		else if (r == -EACCES)
+			reply = dbus_error_failed(message);
+		else
+			reply = dbus_error_not_configured(message);
 
 		goto error;
 	}

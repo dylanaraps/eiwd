@@ -816,7 +816,7 @@ error:
 	eap_method_error(eap);
 }
 
-static bool eap_peap_check_settings(struct l_settings *settings,
+static int eap_peap_check_settings(struct l_settings *settings,
 					struct l_queue *secrets,
 					const char *prefix,
 					struct l_queue **out_missing)
@@ -832,7 +832,7 @@ static bool eap_peap_check_settings(struct l_settings *settings,
 		cert = l_pem_load_certificate(path, &size);
 		if (!cert) {
 			l_error("Failed to load %s", path);
-			return false;
+			return -EIO;
 		}
 
 		l_free(cert);
@@ -846,7 +846,7 @@ static bool eap_peap_check_settings(struct l_settings *settings,
 		cert = l_pem_load_certificate(client_cert, &size);
 		if (!cert) {
 			l_error("Failed to load %s", client_cert);
-			return false;
+			return -EIO;
 		}
 
 		l_free(cert);
@@ -858,7 +858,7 @@ static bool eap_peap_check_settings(struct l_settings *settings,
 	if (path && !client_cert) {
 		l_error("%s present but no client certificate (%s)",
 			entry, client_cert_entry);
-		return false;
+		return -ENOENT;
 	}
 
 	snprintf(passphrase_entry, sizeof(passphrase_entry),
@@ -886,13 +886,13 @@ static bool eap_peap_check_settings(struct l_settings *settings,
 			if (!encrypted) {
 				l_error("Error loading client private key %s",
 					path);
-				return false;
+				return -EIO;
 			}
 
 			if (passphrase) {
 				l_error("Error loading encrypted client "
 					"private key %s", path);
-				return false;
+				return -EACCES;
 			}
 
 			/*
@@ -911,13 +911,13 @@ static bool eap_peap_check_settings(struct l_settings *settings,
 				l_error("%s present but client private "
 					"key %s is not encrypted",
 					passphrase_entry, path);
-				return false;
+				return -EIO;
 			}
 		}
 	} else if (passphrase) {
 		l_error("%s present but no client private key path set (%s)",
 			passphrase_entry, entry);
-		return false;
+		return -ENOENT;
 	}
 
 	snprintf(entry, sizeof(entry), "%sPEAP-Phase2-", prefix);

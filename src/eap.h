@@ -65,7 +65,7 @@ void eap_append_secret(struct l_queue **out_missing, enum eap_secret_type type,
 			const char *id, const char *parameter);
 void eap_secret_info_free(void *data);
 
-bool eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
+int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 			const char *prefix, bool set_key_material,
 			struct l_queue **out_missing);
 bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
@@ -123,7 +123,7 @@ struct eap_method {
 	bool exports_msk;
 	const char *name;
 
-	bool (*check_settings)(struct l_settings *settings,
+	int (*check_settings)(struct l_settings *settings,
 				struct l_queue *secrets, const char *prefix,
 				struct l_queue **out_missing);
 

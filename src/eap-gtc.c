@@ -25,6 +25,7 @@
 #endif
 
 #include <stdio.h>
+#include <errno.h>
 #include <ell/ell.h>
 
 #include "eap.h"
@@ -69,7 +70,7 @@ error:
 	eap_method_error(eap);
 }
 
-static bool eap_gtc_check_settings(struct l_settings *settings,
+static int eap_gtc_check_settings(struct l_settings *settings,
 					struct l_queue *secrets,
 					const char *prefix,
 					struct l_queue **out_missing)
@@ -80,10 +81,10 @@ static bool eap_gtc_check_settings(struct l_settings *settings,
 
 	if (!l_settings_get_value(settings, "Security", setting)) {
 		l_error("Property %s is missing", setting);
-		return false;
+		return -ENOENT;
 	}
 
-	return true;
+	return 0;
 }
 
 static bool eap_gtc_load_settings(struct eap_state *eap,

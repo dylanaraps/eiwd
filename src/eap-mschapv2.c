@@ -641,7 +641,7 @@ static void set_user_name(struct eap_mschapv2_state *state, const char *user)
 	state->user = l_strdup(user);
 }
 
-static bool eap_mschapv2_check_settings(struct l_settings *settings,
+static int eap_mschapv2_check_settings(struct l_settings *settings,
 					struct l_queue *secrets,
 					const char *prefix,
 					struct l_queue **out_missing)
@@ -665,7 +665,7 @@ static bool eap_mschapv2_check_settings(struct l_settings *settings,
 
 		eap_append_secret(out_missing, EAP_SECRET_REMOTE_USER_PASSWORD,
 					setting, NULL);
-		return true;
+		return 0;
 	}
 
 	snprintf(setting, sizeof(setting), "%sPassword-Hash", prefix);
@@ -678,7 +678,7 @@ static bool eap_mschapv2_check_settings(struct l_settings *settings,
 	if (password && password_hash) {
 		l_error("Exactly one of (%s, %s) must be present",
 			setting, setting2);
-		return false;
+		return -EEXIST;
 	}
 
 	if (password_hash) {
@@ -691,10 +691,10 @@ static bool eap_mschapv2_check_settings(struct l_settings *settings,
 		if (!tmp || len != 16) {
 			l_error("Property %s is not a 16-byte hexstring",
 				setting);
-			return false;
+			return -EINVAL;
 		}
 
-		return true;
+		return 0;
 	} else if (password)
 		goto validate;
 
@@ -702,7 +702,7 @@ static bool eap_mschapv2_check_settings(struct l_settings *settings,
 	if (!secret) {
 		eap_append_secret(out_missing, EAP_SECRET_REMOTE_PASSWORD,
 					setting2, identity);
-		return true;
+		return 0;
 	}
 
 	password = secret->value;
@@ -710,13 +710,13 @@ static bool eap_mschapv2_check_settings(struct l_settings *settings,
 validate:
 	if (!l_utf8_validate(password, strlen(password), NULL)) {
 		l_error("Password is not valid UTF-8");
-		return false;
+		return -EINVAL;
 	}
 
 	if (!mschapv2_nt_password_hash(password, hash))
-		return false;
+		return -EINVAL;
 
-	return true;
+	return 0;
 }
 
 static bool eap_mschapv2_load_settings(struct eap_state *eap,

@@ -609,7 +609,7 @@ static void auth_destroyed(void *data)
 	eap_method_error(eap);
 }
 
-static bool eap_sim_check_settings(struct l_settings *settings,
+static int eap_sim_check_settings(struct l_settings *settings,
 					struct l_queue *secrets,
 					const char *prefix,
 					struct l_queue **out_missing)
@@ -619,15 +619,15 @@ static bool eap_sim_check_settings(struct l_settings *settings,
 	auth = iwd_sim_auth_find(true, false);
 	if (!auth) {
 		l_debug("No SIM driver available for EAP-SIM");
-		return false;
+		return -EUNATCH;
 	}
 
 	if (!iwd_sim_auth_get_nai(auth)) {
 		l_error("SIM driver didn't provide NAI");
-		return false;
+		return -ENOENT;
 	}
 
-	return true;
+	return 0;
 }
 
 static bool eap_sim_load_settings(struct eap_state *eap,
