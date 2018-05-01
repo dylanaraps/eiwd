@@ -106,6 +106,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/plugin.h src/plugin.c \
 					src/eap-peap.c \
 					src/eap-gtc.c \
+					src/eap-pwd.c \
 					src/ecc.h src/ecc.c \
 					$(builtin_sources)
 
