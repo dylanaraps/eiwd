@@ -2145,6 +2145,12 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 						bss->ssid_len, bss->ssid);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
 
+	if (wiphy_get_ext_feature(netdev->wiphy,
+				NL80211_EXT_FEATURE_CONTROL_PORT_OVER_NL80211))
+		l_genl_msg_append_attr(msg,
+				NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
+				0, NULL);
+
 	if (prev_bssid)
 		l_genl_msg_append_attr(msg, NL80211_ATTR_PREV_BSSID, ETH_ALEN,
 						prev_bssid);
@@ -3169,6 +3175,107 @@ static void netdev_control_port_frame_event(struct l_genl_msg *msg,
 						frame, frame_len, unencrypted);
 }
 
+static struct l_genl_msg *netdev_build_control_port_frame(struct netdev *netdev,
+							const uint8_t *to,
+							uint16_t proto,
+							bool unencrypted,
+							const void *body,
+							size_t body_len)
+{
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_CONTROL_PORT_FRAME,
+							128 + body_len);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_FRAME, body_len, body);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_CONTROL_PORT_ETHERTYPE, 2,
+				&proto);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, to);
+
+	if (unencrypted)
+		l_genl_msg_append_attr(msg,
+				NL80211_ATTR_CONTROL_PORT_NO_ENCRYPT, 0, NULL);
+
+	return msg;
+}
+
+static void netdev_control_port_frame_cb(struct l_genl_msg *msg,
+							void *user_data)
+{
+	int err;
+
+	err = l_genl_msg_get_error(msg);
+
+	l_debug("%d", err);
+
+	if (err < 0)
+		l_info("CMD_CONTROL_PORT failed: %s", strerror(-err));
+}
+
+static int netdev_control_port_write_pae(struct netdev *netdev,
+						const uint8_t *dest,
+						uint16_t proto,
+						const struct eapol_frame *ef,
+						bool noencrypt)
+{
+	int fd = l_io_get_fd(netdev->pae_io);
+	struct sockaddr_ll sll;
+	size_t frame_size = sizeof(struct eapol_header) +
+					L_BE16_TO_CPU(ef->header.packet_len);
+	ssize_t r;
+
+	memset(&sll, 0, sizeof(sll));
+	sll.sll_family = AF_PACKET;
+	sll.sll_ifindex = netdev->index;
+	sll.sll_protocol = htons(proto);
+	sll.sll_halen = ETH_ALEN;
+	memcpy(sll.sll_addr, dest, ETH_ALEN);
+
+	r = sendto(fd, ef, frame_size, 0,
+			(struct sockaddr *) &sll, sizeof(sll));
+	if (r < 0)
+		l_error("EAPoL write socket: %s", strerror(errno));
+
+	return r;
+}
+
+static int netdev_control_port_frame(uint32_t ifindex,
+					const uint8_t *dest, uint16_t proto,
+					const struct eapol_frame *ef,
+					bool noencrypt,
+					void *user_data)
+{
+	struct l_genl_msg *msg;
+	struct netdev *netdev;
+	size_t frame_size;
+
+	netdev = netdev_find(ifindex);
+	if (!netdev)
+		return -ENOENT;
+
+	frame_size = sizeof(struct eapol_header) +
+			L_BE16_TO_CPU(ef->header.packet_len);
+
+	if (!wiphy_get_ext_feature(netdev->wiphy,
+			NL80211_EXT_FEATURE_CONTROL_PORT_OVER_NL80211))
+		return netdev_control_port_write_pae(netdev, dest, proto,
+							ef, noencrypt);
+
+	msg = netdev_build_control_port_frame(netdev, dest, proto, noencrypt,
+						ef, frame_size);
+	if (!msg)
+		return -ENOMEM;
+
+	if (!l_genl_family_send(nl80211, msg, netdev_control_port_frame_cb,
+				netdev, NULL)) {
+		l_genl_msg_unref(msg);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static void netdev_unicast_notify(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = NULL;
@@ -3938,6 +4045,7 @@ bool netdev_init(struct l_genl_family *in,
 
 	__eapol_set_deauthenticate_func(netdev_handshake_failed);
 	__eapol_set_rekey_offload_func(netdev_set_rekey_offload);
+	__eapol_set_tx_packet_func(netdev_control_port_frame);
 
 	if (whitelist)
 		whitelist_filter = l_strsplit(whitelist, ',');
