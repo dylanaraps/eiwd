@@ -1519,6 +1519,7 @@ static struct l_genl_msg *ap_build_cmd_start_ap(struct ap_state *ap)
 
 	uint32_t dtim_period = 3;
 	uint32_t ifindex = device_get_ifindex(ap->device);
+	struct wiphy *wiphy = device_get_wiphy(ap->device);
 	uint32_t hidden_ssid = NL80211_HIDDEN_SSID_NOT_IN_USE;
 	uint32_t nl_ciphers = ie_rsn_cipher_suite_to_cipher(ap->ciphers);
 	uint32_t nl_akm = CRYPTO_AKM_PSK;
@@ -1538,7 +1539,7 @@ static struct l_genl_msg *ap_build_cmd_start_ap(struct ap_state *ap)
 	if (!head_len || !tail_len)
 		return NULL;
 
-	cmd = l_genl_msg_new_sized(NL80211_CMD_START_AP, 128 + head_len +
+	cmd = l_genl_msg_new_sized(NL80211_CMD_START_AP, 256 + head_len +
 					tail_len + strlen(ap->ssid));
 
 	/* SET_BEACON attrs */
@@ -1564,6 +1565,14 @@ static struct l_genl_msg *ap_build_cmd_start_ap(struct ap_state *ap)
 	l_genl_msg_append_attr(cmd, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
 	l_genl_msg_append_attr(cmd, NL80211_ATTR_WIPHY_FREQ, 4, &ch_freq);
 	l_genl_msg_append_attr(cmd, NL80211_ATTR_CHANNEL_WIDTH, 4, &ch_width);
+
+	if (wiphy_get_ext_feature(wiphy,
+			NL80211_EXT_FEATURE_CONTROL_PORT_OVER_NL80211)) {
+		l_genl_msg_append_attr(cmd, NL80211_ATTR_SOCKET_OWNER, 0, NULL);
+		l_genl_msg_append_attr(cmd,
+				NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
+				0, NULL);
+	}
 
 	return cmd;
 }
