@@ -375,8 +375,8 @@ static void ap_send_ptk_1_of_4(struct ap_state *ap, struct sta_state *sta)
 	ek->header.packet_len = L_CPU_TO_BE16(sizeof(struct eapol_key) +
 					L_BE16_TO_CPU(ek->key_data_len) - 4);
 
-	eapol_tx_frame(ifindex, ETH_P_PAE, sta->addr,
-			(struct eapol_frame *) ek);
+	__eapol_tx_packet(ifindex, sta->addr, ETH_P_PAE,
+				(struct eapol_frame *) ek, false);
 }
 
 static void ap_ptk_1_of_4_retry(struct l_timeout *timeout, void *user_data)
@@ -451,8 +451,8 @@ static void ap_send_ptk_3_of_4(struct ap_state *ap, struct sta_state *sta)
 	if (!eapol_calculate_mic(ptk->kck, ek, ek->key_mic_data))
 		return;
 
-	eapol_tx_frame(ifindex, ETH_P_PAE, sta->addr,
-			(struct eapol_frame *) ek);
+	__eapol_tx_packet(ifindex, sta->addr, ETH_P_PAE,
+				(struct eapol_frame *) ek, false);
 }
 
 static void ap_ptk_3_of_4_retry(struct l_timeout *timeout, void *user_data)

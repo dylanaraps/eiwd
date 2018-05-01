@@ -107,10 +107,11 @@ struct eapol_key {
 	uint8_t key_data[0];
 } __attribute__ ((packed));
 
-typedef int (*eapol_tx_packet_func_t)(uint32_t ifindex, const uint8_t *aa,
-				const uint8_t *spa,
-				const struct eapol_frame *ef,
-				void *user_data);
+typedef int (*eapol_tx_packet_func_t)(uint32_t ifindex,
+					const uint8_t *dest, uint16_t proto,
+					const struct eapol_frame *ef,
+					bool noencrypt,
+					void *user_data);
 typedef void (*eapol_rekey_offload_func_t)(uint32_t ifindex,
 					const uint8_t *kek,
 					const uint8_t *kck,
@@ -175,8 +176,10 @@ struct eapol_key *eapol_create_gtk_2_of_2(
 const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len,
 				const uint8_t **optional);
 
-void __eapol_rx_packet(uint32_t ifindex, const uint8_t *aa, uint16_t proto,
-			const uint8_t *frame, size_t len);
+void __eapol_rx_packet(uint32_t ifindex, const uint8_t *src, uint16_t proto,
+			const uint8_t *frame, size_t len, bool noencrypt);
+void __eapol_tx_packet(uint32_t ifindex, const uint8_t *dst, uint16_t proto,
+			const struct eapol_frame *frame, bool noencrypt);
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func);
 void __eapol_set_tx_user_data(void *user_data);
 
@@ -204,17 +207,12 @@ uint32_t eapol_frame_watch_add(uint32_t ifindex,
 				eapol_frame_watch_func_t handler,
 				void *user_data);
 bool eapol_frame_watch_remove(uint32_t id);
-void eapol_tx_frame(uint32_t ifindex, uint16_t proto, const uint8_t *dst,
-			const struct eapol_frame *frame);
 
 struct preauth_sm *eapol_preauth_start(const uint8_t *aa,
 					const struct handshake_state *hs,
 					eapol_preauth_cb_t cb, void *user_data,
 					eapol_preauth_destroy_func_t destroy);
 void eapol_preauth_cancel(uint32_t ifindex);
-
-void eapol_pae_open();
-void eapol_pae_close();
 
 bool eapol_init();
 bool eapol_exit();

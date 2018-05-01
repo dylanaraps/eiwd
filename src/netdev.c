@@ -3590,9 +3590,6 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 
 	l_queue_push_tail(netdev_list, netdev);
 
-	if (l_queue_length(netdev_list) == 1)
-		eapol_pae_open();
-
 	l_debug("Created interface %s[%d]", netdev->name, netdev->index);
 
 	/* Query interface flags */
@@ -3809,6 +3806,4 @@ void netdev_shutdown(void)
 
 	l_queue_destroy(netdev_list, netdev_free);
 	netdev_list = NULL;
-
-	eapol_pae_close();
 }
