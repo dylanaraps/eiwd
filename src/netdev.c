@@ -1308,7 +1308,8 @@ static void netdev_handshake_failed(uint32_t ifindex,
 	if (!netdev)
 		return;
 
-	l_error("4-Way handshake failed for ifindex: %d", ifindex);
+	l_error("4-Way handshake failed for ifindex: %d, reason: %u",
+				ifindex, reason_code);
 
 	netdev->sm = NULL;
 
