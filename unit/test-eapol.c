@@ -2029,16 +2029,17 @@ static void eapol_wpa_handshake_test(const void *data)
 	l_free(ptk);
 }
 
-static int verify_step2(uint32_t ifindex, const uint8_t *aa_addr,
-			const uint8_t *sta_addr,
-			const struct eapol_frame *ef, void *user_data)
+static int verify_step2(uint32_t ifindex,
+			const uint8_t *aa_addr, uint16_t proto,
+			const struct eapol_frame *ef, bool noencrypt,
+			void *user_data)
 {
 	const struct eapol_key *ek = (const struct eapol_key *) ef;
 	size_t ek_len = sizeof(struct eapol_key) +
 				L_BE16_TO_CPU(ek->key_data_len);
 
 	assert(ifindex == 1);
-	assert(!memcmp(sta_addr, spa, 6));
+	assert(proto == ETH_P_PAE);
 	assert(!memcmp(aa_addr, aa, 6));
 	assert(ek_len == expected_step2_frame_size);
 	assert(!memcmp(ek, expected_step2_frame, expected_step2_frame_size));
@@ -2048,17 +2049,18 @@ static int verify_step2(uint32_t ifindex, const uint8_t *aa_addr,
 	return 0;
 }
 
-static int verify_step4(uint32_t ifindex, const uint8_t *aa_addr,
-			const uint8_t *sta_addr,
-			const struct eapol_frame *ef, void *user_data)
+static int verify_step4(uint32_t ifindex,
+			const uint8_t *aa_addr, uint16_t proto,
+			const struct eapol_frame *ef, bool noencrypt,
+			void *user_data)
 {
 	const struct eapol_key *ek = (const struct eapol_key *) ef;
 	size_t ek_len = sizeof(struct eapol_key) +
 				L_BE16_TO_CPU(ek->key_data_len);
 
 	assert(ifindex == 1);
-	assert(!memcmp(sta_addr, spa, 6));
 	assert(!memcmp(aa_addr, aa, 6));
+	assert(proto == ETH_P_PAE);
 	assert(ek_len == expected_step4_frame_size);
 	assert(!memcmp(ek, expected_step4_frame, expected_step4_frame_size));
 
@@ -2067,17 +2069,18 @@ static int verify_step4(uint32_t ifindex, const uint8_t *aa_addr,
 	return 0;
 }
 
-static int verify_step2_gtk(uint32_t ifindex, const uint8_t *aa_addr,
-				const uint8_t *sta_addr,
-				const struct eapol_frame *ef, void *user_data)
+static int verify_step2_gtk(uint32_t ifindex,
+				const uint8_t *aa_addr, uint16_t proto,
+				const struct eapol_frame *ef, bool noencrypt,
+				void *user_data)
 {
 	const struct eapol_key *ek = (const struct eapol_key *) ef;
 	size_t ek_len = sizeof(struct eapol_key) +
 				L_BE16_TO_CPU(ek->key_data_len);
 
 	assert(ifindex == 1);
-	assert(!memcmp(sta_addr, spa, 6));
 	assert(!memcmp(aa_addr, aa, 6));
+	assert(proto == ETH_P_PAE);
 	assert(ek_len == expected_gtk_step2_frame_size);
 	assert(!memcmp(ek, expected_gtk_step2_frame,
 			expected_gtk_step2_frame_size));
@@ -2145,12 +2148,12 @@ static void eapol_sm_test_ptk(const void *data)
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, aa, ETH_P_PAE, eapol_key_data_3,
-					sizeof(eapol_key_data_3));
+					sizeof(eapol_key_data_3), false);
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__eapol_rx_packet(1, aa, ETH_P_PAE, eapol_key_data_5,
-					sizeof(eapol_key_data_5));
+					sizeof(eapol_key_data_5), false);
 	assert(verify_step4_called);
 
 	eapol_sm_free(sm);
@@ -2209,12 +2212,12 @@ static void eapol_sm_test_igtk(const void *data)
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, aa, ETH_P_PAE, eapol_key_data_29,
-					sizeof(eapol_key_data_29));
+					sizeof(eapol_key_data_29), false);
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__eapol_rx_packet(1, aa, ETH_P_PAE, eapol_key_data_31,
-					sizeof(eapol_key_data_31));
+					sizeof(eapol_key_data_31), false);
 	assert(verify_step4_called);
 
 	eapol_sm_free(sm);
@@ -2273,17 +2276,17 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, aa, ETH_P_PAE, eapol_key_data_7,
-				sizeof(eapol_key_data_7));
+				sizeof(eapol_key_data_7), false);
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__eapol_rx_packet(1, aa, ETH_P_PAE, eapol_key_data_9,
-					sizeof(eapol_key_data_9));
+					sizeof(eapol_key_data_9), false);
 	assert(verify_step4_called);
 
 	__eapol_set_tx_packet_func(verify_step2_gtk);
 	__eapol_rx_packet(1, aa, ETH_P_PAE, eapol_key_data_11,
-					sizeof(eapol_key_data_11));
+					sizeof(eapol_key_data_11), false);
 	assert(verify_gtk_step2_called);
 
 	eapol_sm_free(sm);
@@ -2340,17 +2343,17 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eapol_key_data_13,
-					sizeof(eapol_key_data_13));
+					sizeof(eapol_key_data_13), false);
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eapol_key_data_15,
-					sizeof(eapol_key_data_15));
+					sizeof(eapol_key_data_15), false);
 	assert(verify_step4_called);
 
 	__eapol_set_tx_packet_func(verify_step2_gtk);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eapol_key_data_17,
-					sizeof(eapol_key_data_17));
+					sizeof(eapol_key_data_17), false);
 	assert(verify_gtk_step2_called);
 
 	eapol_sm_free(sm);
@@ -2408,17 +2411,17 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eapol_key_data_19,
-					sizeof(eapol_key_data_19));
+					sizeof(eapol_key_data_19), false);
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eapol_key_data_21,
-					sizeof(eapol_key_data_21));
+					sizeof(eapol_key_data_21), false);
 	assert(verify_step4_called);
 
 	__eapol_set_tx_packet_func(verify_step2_gtk);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eapol_key_data_23,
-					sizeof(eapol_key_data_23));
+					sizeof(eapol_key_data_23), false);
 	assert(verify_gtk_step2_called);
 
 	eapol_sm_free(sm);
@@ -2546,7 +2549,8 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 	expected_step2_frame_size = EKL(ptk_step2);
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
-				(const uint8_t *) ptk_step1, EKL(ptk_step1));
+				(const uint8_t *) ptk_step1, EKL(ptk_step1),
+				false);
 	assert(verify_step2_called);
 
 	/* Detect whether we generate a new snonce when we shouldn't */
@@ -2560,7 +2564,8 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 	 */
 	verify_step2_called = false;
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
-				(const uint8_t *) ptk_step1, EKL(ptk_step1));
+				(const uint8_t *) ptk_step1, EKL(ptk_step1),
+				false);
 	assert(verify_step2_called);
 
 	/* Now retransmit frame 1 with an updated counter */
@@ -2574,7 +2579,8 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 	expected_step2_frame = (const uint8_t *) expect;
 	expected_step2_frame_size = EKL(expect);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
-				(const uint8_t *) retransmit, EKL(retransmit));
+				(const uint8_t *) retransmit, EKL(retransmit),
+				false);
 	assert(verify_step2_called);
 
 	l_free(expect);
@@ -2594,7 +2600,8 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 	expected_step4_frame_size = EKL(ptk_step4);
 	__eapol_set_tx_packet_func(verify_step4);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
-				(const uint8_t *) ptk_step3, EKL(ptk_step3));
+				(const uint8_t *) ptk_step3, EKL(ptk_step3),
+				false);
 	assert(verify_step4_called);
 	assert(verify_install_tk_called);
 
@@ -2611,7 +2618,8 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 	expected_step4_frame = (const uint8_t *) expect;
 	expected_step4_frame_size = EKL(expect);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
-				(const uint8_t *) retransmit, EKL(retransmit));
+				(const uint8_t *) retransmit, EKL(retransmit),
+				false);
 	assert(verify_step4_called);
 	assert(!verify_install_tk_called);
 
@@ -2640,7 +2648,8 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 	expected_gtk_step2_frame_size = EKL(expect);
 	__eapol_set_tx_packet_func(verify_step2_gtk);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
-				(const uint8_t *) retransmit, EKL(retransmit));
+				(const uint8_t *) retransmit, EKL(retransmit),
+				false);
 	assert(verify_gtk_step2_called);
 	assert(verify_install_gtk_called);
 
@@ -2658,7 +2667,8 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 	expected_gtk_step2_frame_size = EKL(expect);
 	__eapol_set_tx_packet_func(verify_step2_gtk);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
-				(const uint8_t *) retransmit, EKL(retransmit));
+				(const uint8_t *) retransmit, EKL(retransmit),
+				false);
 	assert(verify_gtk_step2_called);
 	assert(!verify_install_gtk_called);
 
@@ -2700,9 +2710,10 @@ struct eapol_8021x_tls_test_state {
 	uint8_t pmk[32];
 };
 
-static int verify_8021x_identity_resp(uint32_t ifindex, const uint8_t *aa_addr,
-					const uint8_t *sta_addr,
+static int verify_8021x_identity_resp(uint32_t ifindex,
+					const uint8_t *aa_addr, uint16_t proto,
 					const struct eapol_frame *ef,
+					bool noencrypt,
 					void *user_data)
 {
 	struct eapol_8021x_tls_test_state *s = user_data;
@@ -2710,8 +2721,8 @@ static int verify_8021x_identity_resp(uint32_t ifindex, const uint8_t *aa_addr,
 		L_BE16_TO_CPU(ef->header.packet_len);
 
 	assert(ifindex == 1);
-	assert(!memcmp(sta_addr, spa, 6));
 	assert(!memcmp(aa_addr, aa, 6));
+	assert(proto == ETH_P_PAE);
 	assert(len == sizeof(eap_identity_resp));
 	assert(!memcmp(ef, eap_identity_resp, sizeof(eap_identity_resp)));
 
@@ -2721,9 +2732,10 @@ static int verify_8021x_identity_resp(uint32_t ifindex, const uint8_t *aa_addr,
 	return 0;
 }
 
-static int verify_8021x_tls_resp(uint32_t ifindex, const uint8_t *aa_addr,
-					const uint8_t *sta_addr,
+static int verify_8021x_tls_resp(uint32_t ifindex,
+					const uint8_t *aa_addr, uint16_t proto,
 					const struct eapol_frame *ef,
+					bool noencrypt,
 					void *user_data)
 {
 	struct eapol_8021x_tls_test_state *s = user_data;
@@ -2732,8 +2744,8 @@ static int verify_8021x_tls_resp(uint32_t ifindex, const uint8_t *aa_addr,
 	size_t fragment_len, header_len;
 
 	assert(ifindex == 1);
-	assert(!memcmp(sta_addr, spa, 6));
 	assert(!memcmp(aa_addr, aa, 6));
+	assert(proto == ETH_P_PAE);
 	assert(len >= 10);
 	assert(ef->header.protocol_version == EAPOL_PROTOCOL_VERSION_2004);
 	assert(ef->header.packet_type == 0x00); /* EAPoL-EAP */
@@ -2876,7 +2888,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	__eapol_set_tx_packet_func(verify_8021x_identity_resp);
 	s->pending_req = 1;
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_identity_req,
-						sizeof(eap_identity_req));
+					sizeof(eap_identity_req), false);
 	assert(!s->pending_req);
 
 	s->tls = l_tls_new(true, s->app_data_cb, eapol_sm_test_tls_test_write,
@@ -2939,7 +2951,8 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 
 		s->pending_req = 1;
 
-		__eapol_rx_packet(1, ap_address, ETH_P_PAE, tx_buf, tx_len);
+		__eapol_rx_packet(1, ap_address, ETH_P_PAE,
+					tx_buf, tx_len, false);
 
 		assert(!s->pending_req);
 
@@ -2960,7 +2973,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 			s->pending_req = 1;
 
 			__eapol_rx_packet(1, ap_address, ETH_P_PAE,
-						tx_buf, tx_len);
+						tx_buf, tx_len, false);
 
 			assert(!s->pending_req);
 		}
@@ -2979,7 +2992,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	tx_buf[tx_len++] = 0x00;
 	tx_buf[tx_len++] = 0x04; /* Length */
 
-	__eapol_rx_packet(1, ap_address, ETH_P_PAE, tx_buf, tx_len);
+	__eapol_rx_packet(1, ap_address, ETH_P_PAE, tx_buf, tx_len, false);
 
 	memcpy(step1_buf, eapol_key_data_13, sizeof(eapol_key_data_13));
 	step1 = (struct eapol_key *)
@@ -3019,7 +3032,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
-				step1_buf, sizeof(eapol_key_data_13));
+				step1_buf, sizeof(eapol_key_data_13), false);
 	assert(verify_step2_called);
 
 	verify_step4_called = false;
@@ -3031,7 +3044,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	__handshake_set_install_tk_func(verify_install_tk);
 	handshake_state_set_user_data(hs, ptk->tk);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
-				step3_buf, sizeof(eapol_key_data_15));
+				step3_buf, sizeof(eapol_key_data_15), false);
 	assert(verify_step4_called);
 	assert(verify_install_tk_called);
 
@@ -3167,17 +3180,18 @@ static const uint8_t eap_failure[] = {
 	0x02, 0x00, 0x00, 0x04, 0x04, 0x02, 0x00, 0x04
 };
 
-static int verify_8021x_eap_nak(uint32_t ifindex, const uint8_t *aa_addr,
-				const uint8_t *sta_addr,
-				const struct eapol_frame *ef, void *user_data)
+static int verify_8021x_eap_nak(uint32_t ifindex,
+				const uint8_t *aa_addr, uint16_t proto,
+				const struct eapol_frame *ef, bool noencrypt,
+				void *user_data)
 {
 	struct eapol_8021x_tls_test_state *s = user_data;
 	size_t len = sizeof(struct eapol_header) +
 		L_BE16_TO_CPU(ef->header.packet_len);
 
 	assert(ifindex == 1);
-	assert(!memcmp(sta_addr, spa, 6));
 	assert(!memcmp(aa_addr, aa, 6));
+	assert(proto == ETH_P_PAE);
 	assert(len == sizeof(eap_nak_tls));
 	assert(!memcmp(ef, eap_nak_tls, sizeof(eap_nak_tls)));
 
@@ -3240,19 +3254,19 @@ static void eapol_sm_test_eap_nak(const void *data)
 	__eapol_set_tx_packet_func(verify_8021x_identity_resp);
 	s.pending_req = 1;
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_identity_req,
-				sizeof(eap_identity_req));
+				sizeof(eap_identity_req), false);
 	assert(!s.pending_req);
 
 	s.pending_req = 1;
 	__eapol_set_tx_packet_func(verify_8021x_eap_nak);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_ttls_start_req,
-				sizeof(eap_ttls_start_req));
+				sizeof(eap_ttls_start_req), false);
 	assert(!s.pending_req);
 
 	eap_nak_verify_deauthenticate_called = false;
 	__eapol_set_deauthenticate_func(eap_nak_verify_deauthenticate);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_failure,
-				sizeof(eap_failure));
+				sizeof(eap_failure), false);
 	assert(eap_nak_verify_deauthenticate_called);
 
 	handshake_state_free(hs);
@@ -3330,12 +3344,14 @@ static void eapol_ft_handshake_test(const void *data)
 
 	__eapol_set_tx_packet_func(verify_step2);
 	__eapol_rx_packet(1, aa, ETH_P_PAE,
-				eapol_key_data_25, sizeof(eapol_key_data_25));
+				eapol_key_data_25, sizeof(eapol_key_data_25),
+				false);
 	assert(verify_step2_called);
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__eapol_rx_packet(1, aa, ETH_P_PAE,
-				eapol_key_data_27, sizeof(eapol_key_data_27));
+				eapol_key_data_27, sizeof(eapol_key_data_27),
+				false);
 	assert(verify_step4_called);
 
 	eapol_sm_free(sm);

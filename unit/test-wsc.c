@@ -1917,10 +1917,10 @@ static void verify_deauthenticate(uint32_t ifindex, const uint8_t *aa,
 	data->eapol_failed = true;
 }
 
-static int verify_8021x(uint32_t ifindex, const uint8_t *aa_addr,
-					const uint8_t *sta_addr,
-					const struct eapol_frame *ef,
-					void *user_data)
+static int verify_8021x(uint32_t ifindex,
+			const uint8_t *aa_addr, uint16_t proto,
+			const struct eapol_frame *ef, bool noencrypt,
+			void *user_data)
 {
 	struct verify_data *data = user_data;
 	size_t len = sizeof(struct eapol_header) +
@@ -2017,27 +2017,27 @@ static void wsc_test_pbc_handshake(const void *data)
 
 	VERIFY_RESET(verify, eap_identity_resp);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_identity_req,
-						sizeof(eap_identity_req));
+					sizeof(eap_identity_req), false);
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_m1_2);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_start,
-						sizeof(eap_wsc_start));
+						sizeof(eap_wsc_start), false);
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_m3);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_m2_2,
-						sizeof(eap_wsc_m2_2));
+						sizeof(eap_wsc_m2_2), false);
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_m5);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_m4,
-						sizeof(eap_wsc_m4));
+						sizeof(eap_wsc_m4), false);
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_m7);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_m6,
-						sizeof(eap_wsc_m6));
+						sizeof(eap_wsc_m6), false);
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_done);
@@ -2045,11 +2045,12 @@ static void wsc_test_pbc_handshake(const void *data)
 	verify.n_creds = 1;
 	verify.cur_cred = 0;
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_m8,
-						sizeof(eap_wsc_m8));
+						sizeof(eap_wsc_m8), false);
 	assert(verify.response_sent);
 	assert(verify.cur_cred == 1);
 
-	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_fail, sizeof(eap_fail));
+	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
+					eap_fail, sizeof(eap_fail), false);
 	assert(verify.eapol_failed);
 
 	handshake_state_free(hs);
@@ -2124,47 +2125,47 @@ static void wsc_test_retransmission_no_fragmentation(const void *data)
 
 	VERIFY_RESET(verify, eap_identity_resp);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_identity_req,
-						sizeof(eap_identity_req));
+					sizeof(eap_identity_req), false);
 	assert(verify.response_sent);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_identity_req,
-						sizeof(eap_identity_req));
+					sizeof(eap_identity_req), false);
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_m1_2);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_start,
-						sizeof(eap_wsc_start));
+						sizeof(eap_wsc_start), false);
 	assert(verify.response_sent);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_start,
-						sizeof(eap_wsc_start));
+						sizeof(eap_wsc_start), false);
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_m3);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_m2_2,
-						sizeof(eap_wsc_m2_2));
+						sizeof(eap_wsc_m2_2), false);
 	assert(verify.response_sent);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_m2_2,
-						sizeof(eap_wsc_m2_2));
+						sizeof(eap_wsc_m2_2), false);
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_m3);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_m2_2,
-						sizeof(eap_wsc_m2_2));
+						sizeof(eap_wsc_m2_2), false);
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_m5);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_m4,
-						sizeof(eap_wsc_m4));
+						sizeof(eap_wsc_m4), false);
 	assert(verify.response_sent);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_m4,
-						sizeof(eap_wsc_m4));
+						sizeof(eap_wsc_m4), false);
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_m7);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_m6,
-						sizeof(eap_wsc_m6));
+						sizeof(eap_wsc_m6), false);
 	assert(verify.response_sent);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_m6,
-						sizeof(eap_wsc_m6));
+						sizeof(eap_wsc_m6), false);
 	assert(verify.response_sent);
 
 	VERIFY_RESET(verify, eap_wsc_done);
@@ -2172,15 +2173,15 @@ static void wsc_test_retransmission_no_fragmentation(const void *data)
 	verify.n_creds = 1;
 	verify.cur_cred = 0;
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_wsc_m8,
-						sizeof(eap_wsc_m8));
+						sizeof(eap_wsc_m8), false);
 	assert(verify.response_sent);
 	assert(verify.cur_cred == 1);
 
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_fail,
-						sizeof(eap_fail));
+						sizeof(eap_fail), false);
 	assert(verify.eapol_failed);
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_fail,
-						sizeof(eap_fail));
+						sizeof(eap_fail), false);
 	assert(verify.eapol_failed);
 
 	handshake_state_free(hs);
