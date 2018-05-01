@@ -30,6 +30,8 @@
 #include <linux/if.h>
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
+#include <arpa/inet.h>
+#include <linux/filter.h>
 #include <sys/socket.h>
 #include <errno.h>
 #include <fnmatch.h>
@@ -96,6 +98,8 @@ struct netdev {
 	struct watchlist event_watches;
 
 	struct watchlist frame_watches;
+
+	struct l_io *pae_io;  /* for drivers without EAPoL over NL80211 */
 
 	bool connected : 1;
 	bool operational : 1;
@@ -547,6 +551,8 @@ static void netdev_free(void *data)
 	device_remove(netdev->device);
 	watchlist_destroy(&netdev->event_watches);
 	watchlist_destroy(&netdev->frame_watches);
+
+	l_io_destroy(netdev->pae_io);
 
 	l_free(netdev);
 }
@@ -3077,6 +3083,40 @@ static void netdev_mgmt_frame_event(struct l_genl_msg *msg,
 					netdev, mpdu, body, info.body_len);
 }
 
+static void netdev_pae_destroy(void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	netdev->pae_io = NULL;
+}
+
+static bool netdev_pae_read(struct l_io *io, void *user_data)
+{
+	int fd = l_io_get_fd(io);
+	struct sockaddr_ll sll;
+	socklen_t sll_len;
+	ssize_t bytes;
+	uint8_t frame[IEEE80211_MAX_DATA_LEN];
+
+	memset(&sll, 0, sizeof(sll));
+	sll_len = sizeof(sll);
+
+	bytes = recvfrom(fd, frame, sizeof(frame), 0,
+				(struct sockaddr *) &sll, &sll_len);
+	if (bytes <= 0) {
+		l_error("EAPoL read socket: %s", strerror(errno));
+		return false;
+	}
+
+	if (sll.sll_halen != ETH_ALEN)
+		return true;
+
+	__eapol_rx_packet(sll.sll_ifindex, sll.sll_addr,
+				ntohs(sll.sll_protocol), frame, bytes, false);
+
+	return true;
+}
+
 static void netdev_control_port_frame_event(struct l_genl_msg *msg,
 							struct netdev *netdev)
 {
@@ -3540,6 +3580,60 @@ bool netdev_frame_watch_remove(struct netdev *netdev, uint32_t id)
 	return watchlist_remove(&netdev->frame_watches, id);
 }
 
+static struct l_io *pae_open(uint32_t ifindex)
+{
+	/*
+	 * BPF filter to match skb->dev->type == 1 (ARPHRD_ETHER) and
+	 * match skb->protocol == 0x888e (PAE) or 0x88c7 (preauthentication).
+	 */
+	struct sock_filter pae_filter[] = {
+		{ 0x20,  0,  0, 0xfffff008 },	/* ld #ifidx		*/
+		{ 0x15,  0,  6, 0x00000000 },	/* jne #0, drop		*/
+		{ 0x28,  0,  0, 0xfffff01c },	/* ldh #hatype		*/
+		{ 0x15,  0,  4, 0x00000001 },	/* jne #1, drop		*/
+		{ 0x28,  0,  0, 0xfffff000 },	/* ldh #proto		*/
+		{ 0x15,  1,  0, 0x0000888e },	/* je  #0x888e, keep	*/
+		{ 0x15,  0,  1, 0x000088c7 },	/* jne #0x88c7, drop	*/
+		{ 0x06,  0,  0, 0xffffffff },	/* keep: ret #-1	*/
+		{ 0x06,  0,  0, 0000000000 },	/* drop: ret #0		*/
+	};
+
+	const struct sock_fprog pae_fprog = {
+		.len = L_ARRAY_SIZE(pae_filter),
+		.filter = pae_filter
+	};
+
+	struct l_io *io;
+	int fd;
+
+	fd = socket(PF_PACKET, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK,
+							htons(ETH_P_ALL));
+	if (fd < 0)
+		return NULL;
+
+	/*
+	 * Here we modify the k value in the BPF program above to match the
+	 * given ifindex.  We do it this way instead of using bind to attach
+	 * to a specific interface index to avoid having to re-open the fd
+	 * whenever the device is powered down / up
+	 */
+
+	pae_filter[1].k = ifindex;
+
+	if (setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER,
+					&pae_fprog, sizeof(pae_fprog)) < 0)
+		goto error;
+
+	io = l_io_new(fd);
+	l_io_set_close_on_destroy(io, true);
+
+	return io;
+
+error:
+	close(fd);
+	return NULL;
+}
+
 static void netdev_create_from_genl(struct l_genl_msg *msg)
 {
 	struct l_genl_attr attr;
@@ -3556,6 +3650,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	const uint8_t action_neighbor_report_prefix[2] = { 0x05, 0x05 };
 	const uint8_t action_sa_query_resp_prefix[2] = { 0x08, 0x01 };
 	const uint8_t action_sa_query_req_prefix[2] = { 0x08, 0x00 };
+	struct l_io *pae_io = NULL;
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -3633,6 +3728,17 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 		return;
 	}
 
+	if (!wiphy_get_ext_feature(wiphy,
+			NL80211_EXT_FEATURE_CONTROL_PORT_OVER_NL80211)) {
+		l_debug("No Control Port over NL80211 support for ifindex: %u,"
+				" using PAE socket", *ifindex);
+		pae_io = pae_open(*ifindex);
+		if (!pae_io) {
+			l_error("Unable to open PAE interface");
+			return;
+		}
+	}
+
 	netdev = l_new(struct netdev, 1);
 	netdev->index = *ifindex;
 	netdev->type = *iftype;
@@ -3640,6 +3746,13 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
 	memcpy(netdev->name, ifname, ifname_len);
 	netdev->wiphy = wiphy;
+
+	if (pae_io) {
+		netdev->pae_io = pae_io;
+		l_io_set_read_handler(netdev->pae_io, netdev_pae_read, netdev,
+							netdev_pae_destroy);
+	}
+
 	watchlist_init(&netdev->event_watches, NULL);
 	watchlist_init(&netdev->frame_watches, &netdev_frame_watch_ops);
 
