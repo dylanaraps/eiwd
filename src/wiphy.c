@@ -54,7 +54,7 @@ struct wiphy {
 	uint32_t id;
 	char name[20];
 	uint32_t feature_flags;
-	uint8_t ext_features[2];
+	uint8_t ext_features[(NUM_NL80211_EXT_FEATURES + 7) / 8];
 	bool support_scheduled_scan:1;
 	bool support_rekey_offload:1;
 	uint16_t supported_ciphers;
