@@ -492,7 +492,7 @@ static const struct proxy_interface *get_device_proxy_by_name(
 	if (l_queue_length(match))
 		proxy = l_queue_pop_head(match);
 	else
-		display("Device %s not found", device_name);
+		display("Device %s not found.\n", device_name);
 
 	l_queue_destroy(match, NULL);
 
