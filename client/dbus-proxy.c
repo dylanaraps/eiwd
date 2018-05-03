@@ -639,6 +639,11 @@ void proxy_interface_type_unregister(
 	l_queue_remove(proxy_interface_types, (void *) interface_type);
 }
 
+struct l_dbus *dbus_get_bus(void)
+{
+	return dbus;
+}
+
 extern struct interface_type_desc __start___interface[];
 extern struct interface_type_desc __stop___interface[];
 

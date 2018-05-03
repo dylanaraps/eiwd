@@ -126,6 +126,7 @@ bin_PROGRAMS += client/iwctl
 
 client_iwctl_SOURCES = client/main.c \
 			client/adapter.c \
+			client/agent.h client/agent.c \
 			client/agent-manager.h client/agent-manager.c \
 			client/command.h client/command.c \
 			client/dbus-proxy.h client/dbus-proxy.c \
@@ -288,6 +289,7 @@ unit_test_eap_mschapv2_LDADD = ell/libell-internal.la
 unit_test_client_SOURCES = unit/test-client.c \
 				readline/readline.h readline/history.h \
 				client/adapter.c \
+				client/agent.h client/agent.c \
 				client/agent-manager.h client/agent-manager.c \
 				client/command.h client/command.c \
 				client/dbus-proxy.h client/dbus-proxy.c \

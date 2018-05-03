@@ -91,6 +91,8 @@ void proxy_interface_type_register(
 void proxy_interface_type_unregister(
 			const struct proxy_interface_type *interface_type);
 
+struct l_dbus *dbus_get_bus(void);
+
 struct interface_type_desc {
 	const char *interface;
 	int (*init)(void);
