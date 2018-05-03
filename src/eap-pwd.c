@@ -24,7 +24,6 @@
 #include <config.h>
 #endif
 
-#include <arpa/inet.h>
 #include <ell/ell.h>
 
 #include "eap.h"
@@ -118,10 +117,10 @@ static bool kdf(uint8_t *key, size_t key_len, const char *label,
 	struct l_checksum *hmac;
 	struct iovec iov[4];
 	uint16_t ibuf, i = 1;
-	uint16_t L = htons(olen * 8);
-	int len = 0;
+	uint16_t L = L_CPU_TO_BE16(olen * 8);
+	size_t len = 0;
 
-	while (len < (int)olen) {
+	while (len < olen) {
 		int iov_pos = 0;
 
 		hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, key, key_len);
@@ -134,7 +133,7 @@ static bool kdf(uint8_t *key, size_t key_len, const char *label,
 			iov[iov_pos++].iov_len = 32;
 		}
 
-		ibuf = htons(i);
+		ibuf = L_CPU_TO_BE16(i);
 		iov[iov_pos].iov_base = (void *) &ibuf;
 		iov[iov_pos++].iov_len = 2;
 		iov[iov_pos].iov_base = (void *)label;
@@ -188,8 +187,8 @@ static void eap_pwd_free(struct eap_state *eap)
 	eap_set_data(eap, NULL);
 }
 
-static void eap_pwd_send_response(struct eap_state *eap, uint8_t *pkt,
-		size_t len)
+static void eap_pwd_send_response(struct eap_state *eap,
+					uint8_t *pkt, size_t len)
 {
 	struct eap_pwd_handle *pwd = eap_get_data(eap);
 	size_t mtu = eap_get_mtu(eap);
@@ -235,8 +234,8 @@ static void eap_pwd_send_response(struct eap_state *eap, uint8_t *pkt,
 	pwd->tx_frag_pos = pwd->tx_frag_buf;
 }
 
-static void eap_pwd_handle_id(struct eap_state *eap, const uint8_t *pkt,
-		size_t len)
+static void eap_pwd_handle_id(struct eap_state *eap,
+				const uint8_t *pkt, size_t len)
 {
 	struct eap_pwd_handle *pwd = eap_get_data(eap);
 	uint16_t group;
@@ -358,8 +357,8 @@ error:
 	eap_method_error(eap);
 }
 
-static void eap_pwd_handle_commit(struct eap_state *eap, const uint8_t *pkt,
-		size_t len)
+static void eap_pwd_handle_commit(struct eap_state *eap,
+					const uint8_t *pkt, size_t len)
 {
 	struct eap_pwd_handle *pwd = eap_get_data(eap);
 	uint8_t resp[102];
@@ -464,8 +463,8 @@ error:
 	eap_method_error(eap);
 }
 
-static void eap_pwd_handle_confirm(struct eap_state *eap, const uint8_t *pkt,
-		size_t len)
+static void eap_pwd_handle_confirm(struct eap_state *eap,
+					const uint8_t *pkt, size_t len)
 {
 	struct eap_pwd_handle *pwd = eap_get_data(eap);
 	struct ecc_point kp;
@@ -561,8 +560,8 @@ error:
 	eap_method_error(eap);
 }
 
-static void eap_pwd_process(struct eap_state *eap, const uint8_t *pkt,
-		size_t len)
+static void eap_pwd_process(struct eap_state *eap,
+				const uint8_t *pkt, size_t len)
 {
 	uint8_t pwd_exch = util_bit_field(pkt[0], 0, 6);
 
@@ -594,7 +593,7 @@ static void eap_pwd_send_ack(struct eap_state *eap)
 			remaining
 
 static void eap_pwd_handle_request(struct eap_state *eap,
-		const uint8_t *pkt, size_t len)
+					const uint8_t *pkt, size_t len)
 {
 	struct eap_pwd_handle *pwd = eap_get_data(eap);
 	uint8_t len_bit = false;
@@ -708,8 +707,9 @@ static void eap_pwd_handle_request(struct eap_state *eap,
 }
 
 static int eap_pwd_check_settings(struct l_settings *settings,
-		struct l_queue *secrets, const char *prefix,
-		struct l_queue **out_missing)
+					struct l_queue *secrets,
+					const char *prefix,
+					struct l_queue **out_missing)
 {
 	const char *identity, *password = NULL;
 	const struct eap_secret_info *secret;
