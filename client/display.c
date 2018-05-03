@@ -29,17 +29,20 @@
 #include <readline/readline.h>
 #include <stdio.h>
 
+#include "agent.h"
 #include "command.h"
 #include "display.h"
 
 #define IWD_PROMPT COLOR_GREEN "[iwd]" COLOR_OFF "# "
-#define LINE_LEN   81
+#define IWD_AGENT_PROMPT COLOR_BLUE "Passphrase: " COLOR_OFF
+#define LINE_LEN 81
 
 static struct l_signal *resize_signal;
 static struct l_io *io;
 static char dashed_line[LINE_LEN];
 static char empty_line[LINE_LEN];
 static struct l_timeout *refresh_timeout;
+static struct saved_input *agent_saved_input;
 
 static struct display_refresh {
 	char *family;
@@ -365,6 +368,9 @@ static void readline_callback(char *prompt)
 		return;
 	}
 
+	if (agent_prompt(prompt))
+		goto done;
+
 	if (!strlen(prompt))
 		goto done;
 
@@ -416,6 +422,69 @@ void display_disable_cmd_prompt(void)
 	rl_redisplay();
 }
 
+void display_agent_prompt(const char *network_name)
+{
+	if (agent_saved_input)
+		return;
+
+	display("Type the network passphrase for %s.\n", network_name);
+
+	agent_saved_input = l_new(struct saved_input, 1);
+
+	agent_saved_input->point = rl_point;
+	agent_saved_input->line = rl_copy_text(0, rl_end);
+	rl_set_prompt("");
+	rl_replace_line("", 0);
+	rl_redisplay();
+
+	rl_erase_empty_line = 0;
+	rl_set_prompt(IWD_AGENT_PROMPT);
+	rl_forced_update_display();
+}
+
+void display_agent_prompt_release(void)
+{
+	if (!agent_saved_input)
+		return;
+
+	if (display_refresh.cmd) {
+		char *prompt;
+		char *text = rl_copy_text(0, rl_end);
+
+		if (text) {
+			prompt = l_strdup_printf(IWD_AGENT_PROMPT "%s\n",
+									text);
+			l_free(text);
+		} else {
+			prompt = IWD_AGENT_PROMPT;
+		}
+
+		l_queue_push_tail(display_refresh.redo_entries, prompt);
+		display_refresh.undo_lines++;
+	}
+
+	rl_erase_empty_line = 1;
+
+	rl_replace_line(agent_saved_input->line, 0);
+	rl_point = agent_saved_input->point;
+
+	l_free(agent_saved_input->line);
+	l_free(agent_saved_input);
+	agent_saved_input = NULL;
+
+	rl_set_prompt(IWD_PROMPT);
+
+	rl_redisplay();
+}
+
+bool display_agent_is_active(void)
+{
+	if (agent_saved_input)
+		return true;
+
+	return false;
+}
+
 void display_quit(void)
 {
 	rl_insert_text("quit");
@@ -461,6 +530,12 @@ void display_init(void)
 
 void display_exit(void)
 {
+	if (agent_saved_input) {
+		l_free(agent_saved_input->line);
+		l_free(agent_saved_input);
+		agent_saved_input = NULL;
+	}
+
 	l_timeout_remove(refresh_timeout);
 	refresh_timeout = NULL;
 

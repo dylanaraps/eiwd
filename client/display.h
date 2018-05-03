@@ -27,6 +27,7 @@ struct command_family;
 #define COLOR_GRAY	"\x1b[37m"
 #define COLOR_GREEN	"\x1b[32m"
 #define COLOR_RED	"\x1B[0;91m"
+#define COLOR_BLUE	"\x1B[94m"
 #define COLOR_OFF	"\x1B[0m"
 #define CLEAR_SCREEN	"\033[2J"
 #define MARGIN		"  "
@@ -45,6 +46,10 @@ void display_refresh_set_cmd(const char *family, const char *entity,
 
 void display_enable_cmd_prompt(void);
 void display_disable_cmd_prompt(void);
+
+void display_agent_prompt(const char *network_name);
+void display_agent_prompt_release(void);
+bool display_agent_is_active(void);
 
 void display_quit(void);
 
