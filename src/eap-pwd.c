@@ -379,11 +379,6 @@ static void eap_pwd_handle_commit(struct eap_state *eap,
 
 	pwd->state = EAP_PWD_STATE_COMMIT;
 
-	if (len < 96) {
-		l_error("commit request packet was too small");
-		goto error;
-	}
-
 	/*
 	 * RFC 5114 Section 2.6 - 256-bit Random ECP Group
 	 * Prime p is 32 bytes in length, therefore x and y will also each be
@@ -565,6 +560,9 @@ static void eap_pwd_process(struct eap_state *eap,
 {
 	uint8_t pwd_exch = util_bit_field(pkt[0], 0, 6);
 
+	if (len < 1)
+		return;
+
 	switch (pwd_exch) {
 	case EAP_PWD_EXCH_ID:
 		eap_pwd_handle_id(eap, pkt + 1, len - 1);
@@ -654,6 +652,11 @@ static void eap_pwd_handle_request(struct eap_state *eap,
 
 	/* first rx fragment */
 	if (len_bit) {
+		if (len < 3) {
+			l_error("malformed packet");
+			return;
+		}
+
 		/* remove length of Total-Length parameter (2) */
 		pwd->rx_frag_total = l_get_be16(pkt + 1) - 2;
 		pwd->rx_frag_buf = l_malloc(pwd->rx_frag_total);
