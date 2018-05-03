@@ -25,7 +25,9 @@
 #endif
 
 #include <ell/ell.h>
+#include <unistd.h>
 
+#include "agent.h"
 #include "dbus-proxy.h"
 #include "agent-manager.h"
 
@@ -78,8 +80,32 @@ bool agent_manager_unregister_agent(void)
 	return true;
 }
 
+static void *agent_manager_create(void)
+{
+	char *path = l_strdup_printf("/agent/%lu", getpid());
+
+	agent_init(path);
+
+	return path;
+}
+
+static void agent_manager_destroy(void *data)
+{
+	char *path = data;
+
+	agent_exit(path);
+
+	l_free(path);
+}
+
+static const struct proxy_interface_type_ops agent_manager_ops = {
+	.create = agent_manager_create,
+	.destroy = agent_manager_destroy,
+};
+
 static struct proxy_interface_type agent_manager_interface_type = {
 	.interface = IWD_AGENT_MANAGER_INTERFACE,
+	.ops = &agent_manager_ops,
 };
 
 static int agent_manager_interface_init(void)
