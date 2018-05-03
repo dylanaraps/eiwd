@@ -34,13 +34,93 @@
 
 static struct l_dbus_message *pending_message;
 
+static struct l_dbus_message *release_method_call(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	display_agent_prompt_release();
+
+	l_dbus_message_unref(pending_message);
+	pending_message = NULL;
+
+	return l_dbus_message_new_method_return(message);
+}
+
+static struct l_dbus_message *request_passphrase_method_call(
+						struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	const struct proxy_interface *proxy;
+	const char *path;
+
+	if (dbus_message_has_error(message))
+		return NULL;
+
+	l_dbus_message_get_arguments(message, "o", &path);
+	if (!path)
+		return NULL;
+
+	proxy = proxy_interface_find(IWD_NETWORK_INTERFACE, path);
+	if (!proxy)
+		return NULL;
+
+	display_agent_prompt(proxy_interface_get_identity_str(proxy));
+
+	pending_message = l_dbus_message_ref(message);
+
+	return NULL;
+}
+
+static struct l_dbus_message *cancel_method_call(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	display_agent_prompt_release();
+
+	l_dbus_message_unref(pending_message);
+	pending_message = NULL;
+
+	return l_dbus_message_new_method_return(message);
+}
+
 static void setup_agent_interface(struct l_dbus_interface *interface)
 {
+	l_dbus_interface_method(interface, "Release", 0, release_method_call,
+									"", "");
+
+	l_dbus_interface_method(interface, "RequestPassphrase", 0,
+				request_passphrase_method_call, "s", "o",
+						"passphrase", "network");
+
+	l_dbus_interface_method(interface, "Cancel", 0, cancel_method_call,
+							"", "s", "reason");
 }
 
 bool agent_prompt(const char *prompt)
 {
-	return false;
+	struct l_dbus_message *reply;
+
+	if (!pending_message)
+		return false;
+
+	display_agent_prompt_release();
+
+	if (strlen(prompt)) {
+		reply = l_dbus_message_new_method_return(pending_message);
+		l_dbus_message_set_arguments(reply, "s", prompt);
+	} else {
+		reply = l_dbus_message_new_error(pending_message,
+					IWD_AGENT_INTERFACE ".Error.Canceled",
+					"Canceled by user");
+	}
+
+	l_dbus_send(dbus_get_bus(), reply);
+
+	l_dbus_message_unref(pending_message);
+	pending_message = NULL;
+
+	return true;
 }
 
 bool agent_init(const char *path)
