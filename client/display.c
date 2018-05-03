@@ -387,6 +387,14 @@ done:
 	l_free(prompt);
 }
 
+bool display_agent_is_active(void)
+{
+	if (agent_saved_input)
+		return true;
+
+	return false;
+}
+
 static bool read_handler(struct l_io *io, void *user_data)
 {
 	rl_callback_read_char();
@@ -475,14 +483,6 @@ void display_agent_prompt_release(void)
 	rl_set_prompt(IWD_PROMPT);
 
 	rl_redisplay();
-}
-
-bool display_agent_is_active(void)
-{
-	if (agent_saved_input)
-		return true;
-
-	return false;
 }
 
 void display_quit(void)

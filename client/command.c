@@ -226,6 +226,11 @@ char **command_completion(const char *text, int start, int end)
 	char *prompt = NULL;
 	bool ends_with_space = false;
 
+	if (display_agent_is_active()) {
+		rl_attempted_completion_over = 1;
+		return NULL;
+	}
+
 	if (!start) {
 		matches = rl_completion_matches(text, cmd_generator);
 
