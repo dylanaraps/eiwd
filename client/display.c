@@ -356,6 +356,50 @@ static void display_completion_matches(char **matches, int num_matches,
 	display_text(line);
 }
 
+#define MAX_PASSPHRASE_LEN 63
+
+static struct masked_input {
+	char passphrase[MAX_PASSPHRASE_LEN];
+	char mask[MAX_PASSPHRASE_LEN];
+} masked_input;
+
+static void mask_input(void)
+{
+	int point;
+	char *line = rl_copy_text(0, rl_end);
+	size_t len = strlen(line);
+
+	if (!len)
+		goto done;
+
+	point = rl_point;
+
+	if (len > MAX_PASSPHRASE_LEN) {
+		point--;
+	} else if (strlen(masked_input.passphrase) > len) {
+		masked_input.passphrase[len] = 0;
+		masked_input.mask[len] = 0;
+	} else {
+		masked_input.passphrase[len - 1] = line[len - 1];
+		masked_input.mask[len - 1] = '*';
+	}
+
+	rl_replace_line("", 0);
+	rl_redisplay();
+	rl_replace_line(masked_input.mask, 0);
+	rl_point = point;
+	rl_redisplay();
+
+done:
+	l_free(line);
+}
+
+static void reset_masked_input(void)
+{
+	memset(masked_input.passphrase, 0, MAX_PASSPHRASE_LEN);
+	memset(masked_input.mask, 0, MAX_PASSPHRASE_LEN);
+}
+
 static void readline_callback(char *prompt)
 {
 	HIST_ENTRY *previous_prompt;
@@ -368,7 +412,7 @@ static void readline_callback(char *prompt)
 		return;
 	}
 
-	if (agent_prompt(prompt))
+	if (agent_prompt(masked_input.passphrase))
 		goto done;
 
 	if (!strlen(prompt))
@@ -398,6 +442,9 @@ bool display_agent_is_active(void)
 static bool read_handler(struct l_io *io, void *user_data)
 {
 	rl_callback_read_char();
+
+	if (display_agent_is_active())
+		mask_input();
 
 	return true;
 }
@@ -434,6 +481,8 @@ void display_agent_prompt(const char *network_name)
 {
 	if (agent_saved_input)
 		return;
+
+	reset_masked_input();
 
 	display("Type the network passphrase for %s.\n", network_name);
 
