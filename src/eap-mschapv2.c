@@ -796,6 +796,13 @@ static struct eap_method eap_mschapv2 = {
 static int eap_mschapv2_init(void)
 {
 	l_debug("");
+
+	if (!l_checksum_is_supported(L_CHECKSUM_MD4, false)) {
+		l_warn("EAP_MSCHAPv2 init: MD4 support not found, skipping");
+		l_warn("Ensure that CONFIG_CRYPTO_MD4 is enabled");
+		return -ENOTSUP;
+	}
+
 	return eap_register_method(&eap_mschapv2);
 }
 
