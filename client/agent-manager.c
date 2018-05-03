@@ -27,10 +27,59 @@
 #include <ell/ell.h>
 
 #include "dbus-proxy.h"
-#include "display.h"
+#include "agent-manager.h"
+
+#define IWD_AGENT_MANAGER_INTERFACE	"net.connman.iwd.AgentManager"
+#define IWD_AGENT_MANAGER_PATH		"/"
+
+static void check_errors_method_callback(struct l_dbus_message *message,
+								void *user_data)
+{
+	dbus_message_has_error(message);
+}
+
+bool agent_manager_register_agent(void)
+{
+	const char *path;
+	const struct proxy_interface *proxy =
+		proxy_interface_find(IWD_AGENT_MANAGER_INTERFACE,
+							IWD_AGENT_MANAGER_PATH);
+
+	if (!proxy)
+		return false;
+
+	path = proxy_interface_get_data(proxy);
+	if (!path)
+		return false;
+
+	proxy_interface_method_call(proxy, "RegisterAgent", "o",
+					check_errors_method_callback, path);
+
+	return true;
+}
+
+bool agent_manager_unregister_agent(void)
+{
+	const char *path;
+	const struct proxy_interface *proxy =
+		proxy_interface_find(IWD_AGENT_MANAGER_INTERFACE,
+							IWD_AGENT_MANAGER_PATH);
+
+	if (!proxy)
+		return false;
+
+	path = proxy_interface_get_data(proxy);
+	if (!path)
+		return false;
+
+	proxy_interface_method_call(proxy, "UnregisterAgent", "o",
+					check_errors_method_callback, path);
+
+	return true;
+}
 
 static struct proxy_interface_type agent_manager_interface_type = {
-	.interface = "net.connman.iwd.AgentManager",
+	.interface = IWD_AGENT_MANAGER_INTERFACE,
 };
 
 static int agent_manager_interface_init(void)

@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <ell/ell.h>
 
+#include "agent-manager.h"
 #include "dbus-proxy.h"
 #include "display.h"
 
@@ -578,6 +579,12 @@ static void get_managed_objects_callback(struct l_dbus_message *message,
 	while (l_dbus_message_iter_next_entry(&objects, &path, &object))
 		proxy_interface_create(path, &object);
 
+	if (!agent_manager_register_agent()) {
+		l_main_quit();
+
+		return;
+	}
+
 	display_enable_cmd_prompt();
 }
 
@@ -669,6 +676,8 @@ bool dbus_proxy_init(void)
 bool dbus_proxy_exit(void)
 {
 	struct interface_type_desc *desc;
+
+	agent_manager_unregister_agent();
 
 	for (desc = __start___interface; desc < __stop___interface; desc++) {
 		if (!desc->exit)
