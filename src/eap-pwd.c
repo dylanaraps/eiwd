@@ -761,7 +761,7 @@ static bool eap_pwd_load_settings(struct eap_state *eap,
 
 	if (!pwd->identity) {
 		l_error("EAP-Identity is missing");
-		return false;
+		goto error;
 	}
 
 	snprintf(setting, sizeof(setting), "%sPWD-Password", prefix);
@@ -770,12 +770,18 @@ static bool eap_pwd_load_settings(struct eap_state *eap,
 
 	if (!pwd->password) {
 		l_error("EAP-PWD password is missing");
-		return false;
+		goto error;
 	}
 
 	eap_set_data(eap, pwd);
 
 	return true;
+
+error:
+	l_free(pwd->identity);
+	l_free(pwd->password);
+	l_free(pwd);
+	return false;
 }
 
 static struct eap_method eap_pwd = {
