@@ -32,13 +32,28 @@
 
 #define IWD_AGENT_INTERFACE "net.connman.iwd.Agent"
 
+#define PROMPT_USERNAME  "Username:"
+#define PROMPT_PASSWORD   "Password:"
+#define PROMPT_PASSPHRASE "Passphrase:"
+
+enum AGENT_OP_TYPE {
+	AGENT_OP_TYPE_PASSPHRASE = 1,
+	AGENT_OP_TYPE_PASSWORD,
+	AGENT_OP_TYPE_UNAME_PASSWORD,
+};
+
 static struct l_dbus_message *pending_message;
+static struct pending_op {
+	enum AGENT_OP_TYPE type;
+	char *last_label;
+	struct l_queue *saved_input;
+} pending_op;
 
 static struct l_dbus_message *release_method_call(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
 {
-	display_agent_prompt_release();
+	display_agent_prompt_release(pending_op.last_label);
 
 	l_dbus_message_unref(pending_message);
 	pending_message = NULL;
@@ -65,7 +80,113 @@ static struct l_dbus_message *request_passphrase_method_call(
 	if (!proxy)
 		return NULL;
 
-	display_agent_prompt(proxy_interface_get_identity_str(proxy));
+	display("Type the network passphrase for %s.\n",
+				proxy_interface_get_identity_str(proxy));
+	display_agent_prompt(PROMPT_PASSPHRASE, true);
+
+	pending_op.type = AGENT_OP_TYPE_PASSPHRASE;
+	pending_op.last_label = PROMPT_PASSPHRASE;
+
+	pending_message = l_dbus_message_ref(message);
+
+	return NULL;
+}
+
+static struct l_dbus_message *request_private_key_passphrase_method_call(
+						struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	const struct proxy_interface *proxy;
+	const char *path;
+
+	if (dbus_message_has_error(message))
+		return NULL;
+
+	l_dbus_message_get_arguments(message, "o", &path);
+	if (!path)
+		return NULL;
+
+	proxy = proxy_interface_find(IWD_NETWORK_INTERFACE, path);
+	if (!proxy)
+		return NULL;
+
+	display("Type the passphrase for the network encrypted private key for "
+			"%s.\n", proxy_interface_get_identity_str(proxy));
+	display_agent_prompt(PROMPT_PASSPHRASE, true);
+
+	pending_op.type = AGENT_OP_TYPE_PASSPHRASE;
+	pending_op.last_label = PROMPT_PASSPHRASE;
+
+	pending_message = l_dbus_message_ref(message);
+
+	return NULL;
+}
+
+static struct l_dbus_message *request_username_and_password_method_call(
+						struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	const struct proxy_interface *proxy;
+	const char *path;
+
+	if (dbus_message_has_error(message))
+		return NULL;
+
+	l_dbus_message_get_arguments(message, "o", &path);
+	if (!path)
+		return NULL;
+
+	proxy = proxy_interface_find(IWD_NETWORK_INTERFACE, path);
+	if (!proxy)
+		return NULL;
+
+	display("Type the network credentials for %s.\n",
+				proxy_interface_get_identity_str(proxy));
+	display_agent_prompt(PROMPT_USERNAME, false);
+
+	pending_op.type = AGENT_OP_TYPE_UNAME_PASSWORD;
+	pending_op.last_label = PROMPT_USERNAME;
+
+	pending_message = l_dbus_message_ref(message);
+
+	return NULL;
+}
+
+static struct l_dbus_message *request_user_password_method_call(
+						struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	const struct proxy_interface *proxy;
+	const char *path;
+	const char *username;
+	char *username_prompt;
+
+	if (dbus_message_has_error(message))
+		return NULL;
+
+	l_dbus_message_get_arguments(message, "os", &path, &username);
+	if (!path || !username)
+		return NULL;
+
+	proxy = proxy_interface_find(IWD_NETWORK_INTERFACE, path);
+	if (!proxy)
+		return NULL;
+
+	display("Type the network password for %s.\n",
+				proxy_interface_get_identity_str(proxy));
+
+	username_prompt = l_strdup_printf(COLOR_BLUE PROMPT_USERNAME " "
+						COLOR_OFF "%s\n", username);
+	display(username_prompt);
+	l_free(username_prompt);
+
+	display_agent_prompt(PROMPT_PASSWORD, true);
+
+	pending_op.type = AGENT_OP_TYPE_PASSWORD;
+	pending_op.last_label = PROMPT_PASSWORD;
 
 	pending_message = l_dbus_message_ref(message);
 
@@ -76,7 +197,7 @@ static struct l_dbus_message *cancel_method_call(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
 {
-	display_agent_prompt_release();
+	display_agent_prompt_release(pending_op.last_label);
 
 	l_dbus_message_unref(pending_message);
 	pending_message = NULL;
@@ -93,32 +214,109 @@ static void setup_agent_interface(struct l_dbus_interface *interface)
 				request_passphrase_method_call, "s", "o",
 						"passphrase", "network");
 
+	l_dbus_interface_method(interface, "RequestPrivateKeyPassphrase", 0,
+				request_private_key_passphrase_method_call,
+				"s", "o", "private_key_path", "network");
+
+	l_dbus_interface_method(interface, "RequestUserNameAndPassword", 0,
+				request_username_and_password_method_call,
+				"ss", "o", "user", "password", "network");
+
+	l_dbus_interface_method(interface, "RequestUserPassword", 0,
+				request_user_password_method_call, "s", "os",
+						"password", "network", "user");
+
 	l_dbus_interface_method(interface, "Cancel", 0, cancel_method_call,
 							"", "s", "reason");
 }
 
-bool agent_prompt(const char *prompt)
+static void agent_send_reply(struct l_dbus_message *reply)
 {
-	struct l_dbus_message *reply;
-
-	if (!pending_message)
-		return false;
-
-	display_agent_prompt_release();
-
-	if (strlen(prompt)) {
-		reply = l_dbus_message_new_method_return(pending_message);
-		l_dbus_message_set_arguments(reply, "s", prompt);
-	} else {
-		reply = l_dbus_message_new_error(pending_message,
-					IWD_AGENT_INTERFACE ".Error.Canceled",
-					"Canceled by user");
-	}
-
 	l_dbus_send(dbus_get_bus(), reply);
 
 	l_dbus_message_unref(pending_message);
 	pending_message = NULL;
+}
+
+static void process_input_username_password(const char *prompt)
+{
+	struct l_dbus_message *reply;
+	char *username;
+
+	if (l_queue_isempty(pending_op.saved_input)) {
+		/* received username */
+		if (!strlen(prompt)) {
+			reply = l_dbus_message_new_error(pending_message,
+					IWD_AGENT_INTERFACE ".Error.Canceled",
+					"Canceled by user");
+			goto send_reply;
+		}
+
+		l_queue_push_tail(pending_op.saved_input, l_strdup(prompt));
+
+		display_agent_prompt(PROMPT_PASSWORD, true);
+		pending_op.last_label = PROMPT_PASSWORD;
+
+		return;
+	}
+
+	username = l_queue_pop_head(pending_op.saved_input);
+
+	reply = l_dbus_message_new_method_return(pending_message);
+	l_dbus_message_set_arguments(reply, "ss", username, prompt);
+
+	l_free(username);
+
+send_reply:
+	agent_send_reply(reply);
+}
+
+static void process_input_passphrase(const char *prompt)
+{
+	struct l_dbus_message *reply;
+
+	if (!strlen(prompt)) {
+		reply = l_dbus_message_new_error(pending_message,
+					IWD_AGENT_INTERFACE ".Error.Canceled",
+					"Canceled by user");
+		goto send_reply;
+	}
+
+	reply = l_dbus_message_new_method_return(pending_message);
+	l_dbus_message_set_arguments(reply, "s", prompt);
+
+send_reply:
+	agent_send_reply(reply);
+}
+
+static void process_input_password(const char *prompt)
+{
+	struct l_dbus_message *reply =
+			l_dbus_message_new_method_return(pending_message);
+
+	l_dbus_message_set_arguments(reply, "s", prompt);
+
+	agent_send_reply(reply);
+}
+
+bool agent_prompt(const char *prompt)
+{
+	if (!pending_message)
+		return false;
+
+	display_agent_prompt_release(pending_op.last_label);
+
+	switch (pending_op.type) {
+	case AGENT_OP_TYPE_UNAME_PASSWORD:
+		process_input_username_password(prompt);
+		break;
+	case AGENT_OP_TYPE_PASSPHRASE:
+		process_input_password(prompt);
+		break;
+	case AGENT_OP_TYPE_PASSWORD:
+		process_input_passphrase(prompt);
+		break;
+	}
 
 	return true;
 }
@@ -143,6 +341,8 @@ bool agent_init(const char *path)
 		return false;
 	}
 
+	pending_op.saved_input = l_queue_new();
+
 	return true;
 }
 
@@ -152,6 +352,8 @@ bool agent_exit(const char *path)
 
 	if (pending_message)
 		l_dbus_message_unref(pending_message);
+
+	l_queue_destroy(pending_op.saved_input, l_free);
 
 	l_dbus_unregister_object(dbus, path);
 	l_dbus_unregister_interface(dbus, IWD_AGENT_INTERFACE);
