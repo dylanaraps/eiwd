@@ -62,6 +62,10 @@ void ecc_point_add(struct ecc_point *ret, struct ecc_point *p,
 
 bool ecc_valid_point(struct ecc_point *point);
 
+void ecc_be2native(uint64_t bytes[NUM_ECC_DIGITS]);
+
+void ecc_native2be(uint64_t native[NUM_ECC_DIGITS]);
+
 bool ecc_compute_y(uint64_t *y, uint64_t *x);
 
 void vli_mod_inv(uint64_t *result, const uint64_t *input, const uint64_t *mod);

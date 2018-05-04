@@ -33,6 +33,8 @@
 #include <sys/types.h>
 #include <string.h>
 
+#include <ell/ell.h>
+
 #include "ecc.h"
 
 #define MAX_TRIES 16
@@ -753,6 +755,35 @@ bool ecc_valid_point(struct ecc_point *point)
 
 	/* Make sure that y^2 == x^3 + ax + b */
 	return vli_equal(tmp1, tmp2);
+}
+
+/*
+ * These two byte conversion functions were modified to allow for conversion
+ * to and from both BE and LE architectures.
+ */
+
+/* Big endian byte-array to native conversion */
+void ecc_be2native(uint64_t bytes[NUM_ECC_DIGITS])
+{
+	int i;
+	uint64_t tmp[NUM_ECC_DIGITS];
+
+	for (i = 0; i < NUM_ECC_DIGITS; i++)
+		tmp[NUM_ECC_DIGITS - 1 - i] = l_get_be64(&bytes[i]);
+
+	memcpy(bytes, tmp, 32);
+}
+
+/* Native to big endian byte-array conversion */
+void ecc_native2be(uint64_t native[NUM_ECC_DIGITS])
+{
+	int i;
+	uint64_t tmp[NUM_ECC_DIGITS];
+
+	for (i = 0; i < NUM_ECC_DIGITS; i++)
+		l_put_be64(native[NUM_ECC_DIGITS - 1 - i], &tmp[i]);
+
+	memcpy(native, tmp, 32);
 }
 
 /*
