@@ -8,10 +8,14 @@
 
 #include "src/ecc.h"
 
-#define HEX2BUF(s) ((uint64_t *) l_util_from_hexstring(s, NULL))
+#define HEX2BUF(s, buf) { \
+	unsigned char *tmp = l_util_from_hexstring(s, NULL); \
+	memcpy(buf, tmp, 32); \
+	l_free(tmp); \
+}
 
-#define CURVE_P_32_STR "FFFFFFFF000000010000000000000000"\
-			"00000000FFFFFFFFFFFFFFFFFFFFFFFF"
+#define CURVE_P_32_STR "ffffffffffffffffffffffff00000000"\
+			"000000000000000001000000ffffffff"
 
 enum ecc_test_type {
 	TEST_ADD = 0,
@@ -40,194 +44,197 @@ struct ecc_test_data {
 /* (a + b) mod c */
 struct ecc_test_data add_test = {
 	.type = TEST_ADD,
-	.a = "a86c9f9e8694ffebbee433936784c0edacebd4725a95fd734098444362d5e1ca",
-	.b = "6184c8ce87b6ccd1de1da88ffa79b2257893994cea3fbf338ae3159de82aa093",
+	.a = "cae1d5624344984073fd955a72d4ebacedc084679333e4beebff94869e9f6ca8",
+	.b = "93a02ae89d15e38a33bf3fea4c99937825b279fa8fa81dded1ccb687cec88461",
 	.mod = CURVE_P_32_STR,
-	.result = "0af1676d0d4bccbc9d02dc2262fe7213"
-			"257f6ebf45d5bca7ca7b5ae04a00825e"
+	.result = "5e82004ae05a7bcaa7bcd545bf6e7f25"
+			"1372fe6222dc029dbccc4b0d6d67f10a"
 };
 
 /* (a - b) mod c */
 struct ecc_test_data sub_test = {
 	.type = TEST_SUB,
-	.a = "a86c9f9e8694ffebbee433936784c0edacebd4725a95fd734098444362d5e1ca",
-	.b = "6184c8ce87b6ccd1de1da88ffa79b2257893994cea3fbf338ae3159de82aa093",
+	.a = "cae1d5624344984073fd955a72d4ebacedc084679333e4beebff94869e9f6ca8",
+	.b = "93a02ae89d15e38a33bf3fea4c99937825b279fa8fa81dded1ccb687cec88461",
 	.mod = CURVE_P_32_STR,
-	.result = "47e8d6cffedd321ae0c68b036d0a0ec8"
-			"34583b2670553e40b6b42ea679aa4137"
+	.result = "3741aa79a62eb4b6403e5570263b5834"
+			"c80e0a6d038bc6e01a32ddfecfd6e847"
 };
 
 /* (a * b) mod c */
 struct ecc_test_data mult_test = {
 	.type = TEST_MULT,
-	.a = "a86c9f9e8694ffebbee433936784c0edacebd4725a95fd734098444362d5e1ca",
-	.b = "6184c8ce87b6ccd1de1da88ffa79b2257893994cea3fbf338ae3159de82aa093",
+	.a = "cae1d5624344984073fd955a72d4ebacedc084679333e4beebff94869e9f6ca8",
+	.b = "93a02ae89d15e38a33bf3fea4c99937825b279fa8fa81dded1ccb687cec88461",
 	.mod = CURVE_P_32_STR,
-	.result = "b5aa2ffc5ea754a6f62097c1282e072c"
-			"bcf1d1277f40b006d88b5dd6c7f51fa3"
+	.result = "a31ff5c7d65d8bd806b0407f27d1f1bc"
+			"2c072e28c19720f6a654a75efc2faab5"
+
 };
 
 /* (a^-1) mod c */
 struct ecc_test_data inv_test = {
 	.type = TEST_INV,
-	.a = "a86c9f9e8694ffebbee433936784c0edacebd4725a95fd734098444362d5e1ca",
+	.a = "cae1d5624344984073fd955a72d4ebacedc084679333e4beebff94869e9f6ca8",
 	.mod = CURVE_P_32_STR,
-	.result = "c50ba653449ad70fb17ae85567983c63"
-			"fd34c31f9165d5ea47105715c1aafa48"
+	.result = "48faaac115571047ead565911fc334fd"
+			"633c986755e87ab10fd79a4453a60bc5"
+
 };
 
 /* (a^-1) mod c */
 struct ecc_test_data inv_test2 = {
 	.type = TEST_INV,
-	.a = "184423e8cda58cfaf8c03af9da31bb9f5c2f4d7f3f0b72a9799c3ab6105c8e69",
+	.a = "698e5c10b63a9c79a9720b3f7f4d2f5c9fbb31daf93ac0f8fa8ca5cde8234418",
 	.mod = CURVE_P_32_STR,
-	.result = "2bb4d9671dfcb7db5e34478a8a70a0c5"
-			"20856c8217594ee5383c05b6c313d15f"
+	.result = "5fd113c3b6053c38e54e5917826c8520"
+			"c5a0708a8a47345edbb7fc1d67d9b42b"
+
 };
 
 /* (a ^ b) mod c */
 struct ecc_test_data exp_test = {
 	.type = TEST_EXP,
-	.a = "a86c9f9e8694ffebbee433936784c0edacebd4725a95fd734098444362d5e1ca",
-	.b = "6184c8ce87b6ccd1de1da88ffa79b2257893994cea3fbf338ae3159de82aa093",
+	.a = "cae1d5624344984073fd955a72d4ebacedc084679333e4beebff94869e9f6ca8",
+	.b = "93a02ae89d15e38a33bf3fea4c99937825b279fa8fa81dded1ccb687cec88461",
 	.mod = CURVE_P_32_STR,
-	.result = "5a4d81b5ffbf089e79958ce1f80d96b4"
-			"6ffec09843a68948bfd0dfb2002e5b41"
+	.result = "415b2e00b2dfd0bf4889a64398c0fe6f"
+			"b4960df8e18c95799e08bfffb5814d5a"
+
 };
 
 struct ecc_test_data point_add_test = {
 	.type = TEST_POINT_ADD,
-	.ax = "df5294c307b02dd667e49dfdd6c6a24f"
-		"35139bc15cbfa523be9f27a368676bd3",
-	.ay = "c480972a157533f44c0f2fefb0dd184c"
-		"c5744258e72d4557f3d7efe37b1e604d",
-	.bx = "e0296a73bd051756ceb6410c1c8980f0"
-		"41cf5dce7a59167fd36e91abd3c533c8",
-	.by = "4aa0404d653adde7e6b8a71005df3351"
-		"b076a3448f2379968d3ebaa85b6e269d",
-	.mod = CURVE_P_32_STR,
-	.rx = "01315318631812cd4f1111dc26aab387c"
-		"a1f5b7ea6aeca4c14dddb40e3edc424",
-	.ry = "14556f1f7ef8af98c86f4bffcad4237d0"
-		"e967b251c25e986f22b94b21f39961d"
+	.ax = "d36b6768a3279fbe23a5bf5cc19b13354"
+		"fa2c6d6fd9de467d62db007c39452df",
+	.ay = "4d601e7be3efd7f357452de7584274c54"
+		"c18ddb0ef2f0f4cf43375152a9780c4",
+	.bx = "c833c5d3ab916ed37f16597ace5dcf41f"
+		"080891c0c41b6ce561705bd736a29e0",
+	.by = "9d266e5ba8ba3e8d9679238f44a376b05"
+		"133df0510a7b8e6e7dd3a654d40a04a",
+	.rx = "24c4ede340dbdd144ccaaea67e5b1fca"
+		"87b3aa26dc11114fcd12186318533101",
+	.ry = "1d96391fb2942bf286e9251c257b960e"
+		"7d23d4caff4b6fc898aff87e1f6f5514"
+
 };
 
 struct ecc_test_data point_mult_test = {
 	.type = TEST_SCALAR_MULT,
-	.ax = "67ac46c3e9e10ba9262c76065314c7bf6"
-		"245996840bd2f28494ebf7ff1c28b76",
-	.ay = "6184c8ce87b6ccd1de1da88ffa79b2257"
-		"893994cea3fbf338ae3159de82aa093",
-	.scalar = "8b0532ad431bd6701f34aa8eac6c829c"
-		"6165867bd24e1175163c07aa40d92175",
-	.mod = CURVE_P_32_STR,
-	.rx = "66feed4d184383dc0f6afe4fb7ce65a93"
-		"65d88804e982c54f56d9649e30dc8d4",
-	.ry = "3b0f88a5c3c97fcc399d3bf5c72384ae1"
-		"eb0940ee0a086324192d3d1c31a3a6d"
+	.ax = "768bc2f17fbf4e49282fbd4068994562b"
+		"fc7145306762c26a90be1e9c346ac67",
+	.ay = "93a02ae89d15e38a33bf3fea4c9993782"
+		"5b279fa8fa81dded1ccb687cec88461",
+	.scalar = "7521d940aa073c1675114ed27b866561"
+		"9c826cac8eaa341f70d61b43ad32058b",
+	.rx = "d4c80de349966df5542c984e80885d36"
+		"a965ceb74ffe6a0fdc8343184dedfe66",
+	.ry = "6d3a1ac3d1d392413286a0e00e94b01e"
+		"ae8423c7f53b9d39cc7fc9c3a5880f3b"
+
 };
 
 static void run_test(const void *arg)
 {
 	const struct ecc_test_data *data = arg;
-	uint64_t *a = NULL, *b = NULL, *c = NULL, *d = NULL, *mod = NULL;
-	uint64_t result[NUM_ECC_DIGITS];
-	uint64_t rx[NUM_ECC_DIGITS] = { 0 }, ry[NUM_ECC_DIGITS] = { 0 };
-	uint64_t *check = NULL;
-	struct ecc_point point1;
-	struct ecc_point point2;
-	struct ecc_point point_ret;
+	uint64_t a[NUM_ECC_DIGITS], b[NUM_ECC_DIGITS], mod[NUM_ECC_DIGITS],
+			scalar[NUM_ECC_DIGITS], result[NUM_ECC_DIGITS],
+			check[NUM_ECC_DIGITS];
+	struct ecc_point point1, point2, point_ret;
 
 	memset(result, 0, sizeof(result));
 
+	if (data->a) {
+		HEX2BUF(data->a, a);
+		ecc_be2native(a);
+	}
+
+	if (data->b) {
+		HEX2BUF(data->b, b);
+		ecc_be2native(b);
+	}
+
+	if (data->mod) {
+		HEX2BUF(data->mod, mod);
+		ecc_be2native(mod);
+	}
+
+	if (data->ax) {
+		HEX2BUF(data->ax, point1.x);
+		ecc_be2native(point1.x);
+	}
+
+	if (data->ay) {
+		HEX2BUF(data->ay, point1.y);
+		ecc_be2native(point1.y);
+	}
+
+	if (data->bx) {
+		HEX2BUF(data->bx, point2.x);
+		ecc_be2native(point2.x);
+	}
+
+	if (data->by) {
+		HEX2BUF(data->by, point2.y);
+		ecc_be2native(point2.y);
+	}
+
+	if (data->scalar) {
+		HEX2BUF(data->scalar, scalar);
+		ecc_be2native(scalar);
+	}
+
 	switch (data->type) {
 	case TEST_ADD:
-		a = HEX2BUF(data->a);
-		b = HEX2BUF(data->b);
-		mod = HEX2BUF(data->mod);
 		vli_mod_add(result, a, b, mod);
 		break;
 	case TEST_SUB:
-		a = HEX2BUF(data->a);
-		b = HEX2BUF(data->b);
-		mod = HEX2BUF(data->mod);
 		vli_mod_sub(result, a, b, mod);
 		break;
 	case TEST_MULT:
-		a = HEX2BUF(data->a);
-		b = HEX2BUF(data->b);
-		mod = HEX2BUF(data->mod);
 		vli_mod_mult_fast(result, a, b);
 		break;
 	case TEST_INV:
-		a = HEX2BUF(data->a);
-		mod = HEX2BUF(data->mod);
 		vli_mod_inv(result, a, mod);
 		break;
 	case TEST_EXP:
-		a = HEX2BUF(data->a);
-		b = HEX2BUF(data->b);
-		mod = HEX2BUF(data->mod);
 		vli_mod_exp(result, a, b, mod);
 		break;
 	case TEST_POINT_ADD:
-		a = HEX2BUF(data->ax);
-		b = HEX2BUF(data->ay);
-		c = HEX2BUF(data->bx);
-		d = HEX2BUF(data->by);
-
-		memcpy(point1.x, a, 32);
-		memcpy(point1.y, b, 32);
-		memcpy(point2.x, c, 32);
-		memcpy(point2.y, d, 32);
-
 		assert(ecc_valid_point(&point1) == true);
 		assert(ecc_valid_point(&point2) == true);
-
-		mod = HEX2BUF(data->mod);
-		memcpy(rx, a, 32);
-		memcpy(ry, b, 32);
 
 		ecc_point_add(&point_ret, &point1, &point2);
 
 		break;
 	case TEST_SCALAR_MULT:
-		a = HEX2BUF(data->ax);
-		b = HEX2BUF(data->ay);
-		c = HEX2BUF(data->scalar);
-		mod = HEX2BUF(data->mod);
-
-		memcpy(point1.x, a, 32);
-		memcpy(point1.y, b, 32);
-
 		assert(ecc_valid_point(&point1) == true);
 
-		ecc_point_mult(&point_ret, &point1, c, NULL, vli_num_bits(c));
+		ecc_point_mult(&point_ret, &point1, scalar, NULL,
+				vli_num_bits(scalar));
 
 		break;
 	}
 
 	if (data->type <= TEST_EXP) {
-		check = HEX2BUF(data->result);
+		HEX2BUF(data->result, check);
+		ecc_native2be(check);
 		assert(memcmp(result, check, 32) == 0);
 	} else {
-		uint64_t *checkx = HEX2BUF(data->rx);
-		uint64_t *checky = HEX2BUF(data->ry);
+		uint64_t checkx[NUM_ECC_DIGITS];
+		uint64_t checky[NUM_ECC_DIGITS];
+
+		HEX2BUF(data->rx, checkx);
+		ecc_native2be(checkx);
+		HEX2BUF(data->ry, checky);
+		ecc_native2be(checky);
 
 		assert(memcmp(checkx, point_ret.x, 32) == 0);
 		assert(memcmp(checky, point_ret.y, 32) == 0);
 		assert(ecc_valid_point(&point_ret) == true);
 
-		l_free(checkx);
-		l_free(checky);
 	}
-
-	l_free(a);
-	l_free(b);
-	l_free(c);
-	l_free(d);
-	l_free(mod);
-	l_free(check);
 }
 
 int main(int argc, char *argv[])
