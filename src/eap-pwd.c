@@ -154,26 +154,6 @@ static bool kdf(uint8_t *key, size_t key_len, const char *label,
 	return true;
 }
 
-/*
- * Keys sent from server are all stored MSB first in memory. Before using
- * these values with the math API's they need to be byte reversed as the
- * math functions expect LSB first byte ordering. The same is true sending
- * any other data back to the server, they keys/data must be reversed back
- * to store MSB first.
- */
-static void byte_reverse32(uint64_t *num64)
-{
-	uint8_t *num = (uint8_t *) num64;
-	int i;
-
-	for (i = 0; i < 16; i++) {
-		uint8_t tmp = num[i];
-
-		num[i] = num[31 - i];
-		num[31 - i] = tmp;
-	}
-}
-
 static void eap_pwd_free(struct eap_state *eap)
 {
 	struct eap_pwd_handle *pwd = eap_get_data(eap);
@@ -314,7 +294,7 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 				strlen("EAP-pwd Hunting And Pecking"),
 				pwd_value, 32);
 
-		byte_reverse32(pwd_value);
+		ecc_be2native(pwd_value);
 
 		if (ecc_compute_y(y_value, pwd_value)) {
 			l_info("computed y in %u tries", counter);
@@ -389,9 +369,9 @@ static void eap_pwd_handle_commit(struct eap_state *eap,
 	memcpy(pwd->element_s.y, pkt + ECC_BYTES, ECC_BYTES);
 	memcpy(pwd->scalar_s, pkt + 64, ECC_BYTES);
 
-	byte_reverse32(pwd->element_s.x);
-	byte_reverse32(pwd->element_s.y);
-	byte_reverse32(pwd->scalar_s);
+	ecc_be2native(pwd->element_s.x);
+	ecc_be2native(pwd->element_s.y);
+	ecc_be2native(pwd->scalar_s);
 
 	if (!ecc_valid_point(&pwd->element_s))
 		goto invalid_point;
@@ -434,9 +414,9 @@ static void eap_pwd_handle_commit(struct eap_state *eap,
 		goto invalid_point;
 
 	/* change peer into to MSB first byte ordering before sending back */
-	byte_reverse32(pwd->element_p.x);
-	byte_reverse32(pwd->element_p.y);
-	byte_reverse32(pwd->scalar_p);
+	ecc_native2be(pwd->element_p.x);
+	ecc_native2be(pwd->element_p.y);
+	ecc_native2be(pwd->scalar_p);
 
 	/* send element_p and scalar_p */
 	pos = resp + 5; /* header */
@@ -502,10 +482,10 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 	if (!ecc_valid_point(&kp))
 		goto invalid_point;
 
-	byte_reverse32(kp.x);
-	byte_reverse32(pwd->element_s.x);
-	byte_reverse32(pwd->element_s.y);
-	byte_reverse32(pwd->scalar_s);
+	ecc_native2be(kp.x);
+	ecc_native2be(pwd->element_s.x);
+	ecc_native2be(pwd->element_s.y);
+	ecc_native2be(pwd->scalar_s);
 
 	/*
 	 * compute Confirm_P = H(kp | Element_P | Scalar_P |
