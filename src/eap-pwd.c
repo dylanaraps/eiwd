@@ -221,7 +221,7 @@ static void eap_pwd_send_response(struct eap_state *eap,
 
 	pwd->tx_frag_remaining = len - EAP_PWD_HDR_LEN - send_bytes;
 
-	l_info("sending initial fragment, %lu bytes\n", mtu);
+	l_info("sending initial fragment, %zu bytes", mtu);
 
 	eap_send_response(eap, EAP_TYPE_PWD, frag, mtu);
 
@@ -368,7 +368,7 @@ static void eap_pwd_handle_commit(struct eap_state *eap,
 	uint64_t curve_n[NUM_ECC_DIGITS] = CURVE_N_32;
 
 	if (len != 96) {
-		l_error("bad packet length, expected 96, got %lu", len);
+		l_error("bad packet length, expected 96, got %zu", len);
 		goto error;
 	}
 
@@ -524,7 +524,7 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 			pwd->scalar_p, ECC_BYTES, &pwd->ciphersuite, 4);
 
 	if (memcmp(confirm_s, expected_confirm_s, ECC_BYTES)) {
-		l_error("Confirm_S did not verify\n");
+		l_error("Confirm_S did not verify");
 		goto error;
 	}
 
@@ -681,7 +681,7 @@ static void eap_pwd_handle_request(struct eap_state *eap,
 		memcpy(pwd->rx_frag_buf + pwd->rx_frag_count, pkt + 1, len - 1);
 		pwd->rx_frag_count += (len - 1);
 
-		l_info("received another fragment, %lu bytes", len);
+		l_info("received another fragment, %zu bytes", len);
 
 		/* more fragments coming */
 		if (more_bit) {
