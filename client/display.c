@@ -34,7 +34,6 @@
 #include "display.h"
 
 #define IWD_PROMPT COLOR_GREEN "[iwd]" COLOR_OFF "# "
-#define IWD_AGENT_PROMPT COLOR_BLUE "Passphrase: " COLOR_OFF
 #define LINE_LEN 81
 
 static struct l_signal *resize_signal;
@@ -359,6 +358,7 @@ static void display_completion_matches(char **matches, int num_matches,
 #define MAX_PASSPHRASE_LEN 63
 
 static struct masked_input {
+	bool use_mask;
 	char passphrase[MAX_PASSPHRASE_LEN];
 	char mask[MAX_PASSPHRASE_LEN];
 } masked_input;
@@ -366,8 +366,14 @@ static struct masked_input {
 static void mask_input(void)
 {
 	int point;
-	char *line = rl_copy_text(0, rl_end);
-	size_t len = strlen(line);
+	char *line;
+	size_t len;
+
+	if (!masked_input.use_mask)
+		return;
+
+	line = rl_copy_text(0, rl_end);
+	len = strlen(line);
 
 	if (!len)
 		goto done;
@@ -412,7 +418,8 @@ static void readline_callback(char *prompt)
 		return;
 	}
 
-	if (agent_prompt(masked_input.passphrase))
+	if (agent_prompt(masked_input.use_mask ?
+					masked_input.passphrase : prompt))
 		goto done;
 
 	if (!strlen(prompt))
@@ -477,14 +484,17 @@ void display_disable_cmd_prompt(void)
 	rl_redisplay();
 }
 
-void display_agent_prompt(const char *network_name)
+void display_agent_prompt(const char *label, bool mask_input)
 {
+	char *prompt;
+
 	if (agent_saved_input)
 		return;
 
-	reset_masked_input();
+	masked_input.use_mask = mask_input;
 
-	display("Type the network passphrase for %s.\n", network_name);
+	if (mask_input)
+		reset_masked_input();
 
 	agent_saved_input = l_new(struct saved_input, 1);
 
@@ -495,26 +505,24 @@ void display_agent_prompt(const char *network_name)
 	rl_redisplay();
 
 	rl_erase_empty_line = 0;
-	rl_set_prompt(IWD_AGENT_PROMPT);
+
+	prompt = l_strdup_printf(COLOR_BLUE "%s " COLOR_OFF, label);
+	rl_set_prompt(prompt);
+	l_free(prompt);
+
 	rl_forced_update_display();
 }
 
-void display_agent_prompt_release(void)
+void display_agent_prompt_release(const char *label)
 {
 	if (!agent_saved_input)
 		return;
 
 	if (display_refresh.cmd) {
-		char *prompt;
 		char *text = rl_copy_text(0, rl_end);
-
-		if (text) {
-			prompt = l_strdup_printf(IWD_AGENT_PROMPT "%s\n",
-									text);
-			l_free(text);
-		} else {
-			prompt = IWD_AGENT_PROMPT;
-		}
+		char *prompt = l_strdup_printf(COLOR_BLUE "%s " COLOR_OFF
+							"%s\n", label, text);
+		l_free(text);
 
 		l_queue_push_tail(display_refresh.redo_entries, prompt);
 		display_refresh.undo_lines++;
@@ -531,7 +539,7 @@ void display_agent_prompt_release(void)
 
 	rl_set_prompt(IWD_PROMPT);
 
-	rl_redisplay();
+	rl_forced_update_display();
 }
 
 void display_quit(void)

@@ -47,8 +47,8 @@ void display_refresh_set_cmd(const char *family, const char *entity,
 void display_enable_cmd_prompt(void);
 void display_disable_cmd_prompt(void);
 
-void display_agent_prompt(const char *network_name);
-void display_agent_prompt_release(void);
+void display_agent_prompt(const char *label, bool mask_input);
+void display_agent_prompt_release(const char *label);
 bool display_agent_is_active(void);
 
 void display_quit(void);
