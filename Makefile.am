@@ -287,7 +287,6 @@ unit_test_eap_mschapv2_SOURCES = src/eap-mschapv2.h src/eap-mschapv2.c \
 unit_test_eap_mschapv2_LDADD = ell/libell-internal.la
 
 unit_test_client_SOURCES = unit/test-client.c \
-				readline/readline.h readline/history.h \
 				client/adapter.c \
 				client/agent.h client/agent.c \
 				client/agent-manager.h client/agent-manager.c \
