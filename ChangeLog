@@ -1,2 +1,12 @@
+ver 0.2:
+	Fix issue with unsupported bands from roam scan frequency set.
+	Fix issue with handling disconnect by AP and by SME events.
+	Fix issue with string start calculation for MS-CHAP v2.
+	Add workaround for 0 oper class in neighbor report.
+	Add support for EAPoL over NL80211 kernel feature.
+	Add support for EAP-PWD authentication method.
+	Add support for EAP-GTC authentication method.
+	Add support for agent functionality to client.
+
 ver 0.1:
 	Initial public release.
