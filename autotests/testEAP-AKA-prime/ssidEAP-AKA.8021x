@@ -1,3 +1,5 @@
 [Security]
 EAP-Method=AKA'
-EAP-Identity=632010000000000@example.com
+
+[Settings]
+Autoconnect=false

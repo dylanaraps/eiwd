@@ -1,2 +1,5 @@
 [Security]
 EAP-Method=SIM
+
+[Settings]
+Autoconnect=false
