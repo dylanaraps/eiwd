@@ -55,6 +55,7 @@ struct wiphy {
 	char name[20];
 	uint32_t feature_flags;
 	uint8_t ext_features[(NUM_NL80211_EXT_FEATURES + 7) / 8];
+	uint8_t max_num_ssids_per_scan;
 	bool support_scheduled_scan:1;
 	bool support_rekey_offload:1;
 	uint16_t supported_ciphers;
@@ -188,6 +189,11 @@ bool wiphy_get_ext_feature(struct wiphy *wiphy, unsigned int idx)
 {
 	return idx < sizeof(wiphy->ext_features) * 8 &&
 		util_is_bit_set(wiphy->ext_features[idx >> 3], idx & 7);
+}
+
+uint8_t wiphy_get_max_num_ssids_per_scan(struct wiphy *wiphy)
+{
+	return wiphy->max_num_ssids_per_scan;
 }
 
 static void wiphy_print_basic_info(struct wiphy *wiphy)
@@ -369,6 +375,13 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 			if (l_genl_attr_recurse(attr, &nested))
 				parse_supported_bands(wiphy, &nested);
 
+			break;
+		case NL80211_ATTR_MAX_NUM_SCAN_SSIDS:
+			if (len != sizeof(uint8_t))
+				l_warn("Invalid MAX_NUM_SCAN_SSIDS attribute");
+			else
+				wiphy->max_num_ssids_per_scan =
+							*((uint8_t *) data);
 			break;
 		}
 	}
