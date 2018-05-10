@@ -1904,7 +1904,7 @@ static void print_test_stat(void *data, void *user_data)
 
 static void print_results(struct l_queue *test_stat_queue)
 {
-	struct stat_totals stat_totals;
+	struct stat_totals stat_totals = { 0, 0, 0, 0 };
 	char sep_line[80];
 
 	memset(sep_line, '_', sizeof(sep_line) - 1);
