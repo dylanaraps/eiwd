@@ -429,6 +429,7 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 
 	switch (network_get_security(network)) {
 	case SECURITY_NONE:
+		network_settings_load(network);
 		break;
 	case SECURITY_PSK:
 	{
