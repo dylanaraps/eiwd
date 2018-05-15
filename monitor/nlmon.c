@@ -94,6 +94,8 @@ struct nlmon {
 	struct l_queue *req_list;
 	struct pcap *pcap;
 	bool nortnl;
+	bool nowiphy;
+	bool noscan;
 };
 
 struct nlmon_req {
@@ -3945,7 +3947,8 @@ static void netlink_str(char *str, size_t size,
 	}
 }
 
-static void print_message(const struct timeval *tv, enum msg_type type,
+static void print_message(struct nlmon *nlmon, const struct timeval *tv,
+						enum msg_type type,
 						uint16_t flags, int status,
 						uint8_t cmd, uint8_t version,
 						const void *data, uint32_t len)
@@ -3956,6 +3959,13 @@ static void print_message(const struct timeval *tv, enum msg_type type,
 	const char *cmd_str;
 	bool out = false;
 	int i;
+
+	if (nlmon->nowiphy && (cmd == NL80211_CMD_NEW_WIPHY))
+		return;
+
+	if (nlmon->noscan && ((cmd == NL80211_CMD_NEW_SCAN_RESULTS) ||
+			(cmd == NL80211_CMD_TRIGGER_SCAN)))
+		return;
 
 	switch (type) {
 	case MSG_REQUEST:
@@ -4099,7 +4109,7 @@ static void nlmon_message(struct nlmon *nlmon, const struct timeval *tv,
 			}
 
 			store_message(nlmon, tv, nlmsg);
-			print_message(tv, type, nlmsg->nlmsg_flags, status,
+			print_message(nlmon, tv, type, nlmsg->nlmsg_flags, status,
 						req->cmd, req->version,
 						NULL, sizeof(status));
 			nlmon_req_free(req);
@@ -4128,7 +4138,7 @@ static void nlmon_message(struct nlmon *nlmon, const struct timeval *tv,
 		l_queue_push_tail(nlmon->req_list, req);
 
 		store_message(nlmon, tv, nlmsg);
-		print_message(tv, MSG_REQUEST, flags, 0,
+		print_message(nlmon, tv, MSG_REQUEST, flags, 0,
 					req->cmd, req->version,
 					NLMSG_DATA(nlmsg) + GENL_HDRLEN,
 					NLMSG_PAYLOAD(nlmsg, GENL_HDRLEN));
@@ -4151,7 +4161,7 @@ static void nlmon_message(struct nlmon *nlmon, const struct timeval *tv,
 		}
 
 		store_message(nlmon, tv, nlmsg);
-		print_message(tv, type, nlmsg->nlmsg_flags, 0,
+		print_message(nlmon, tv, type, nlmsg->nlmsg_flags, 0,
 					genlmsg->cmd, genlmsg->version,
 					NLMSG_DATA(nlmsg) + GENL_HDRLEN,
 					NLMSG_PAYLOAD(nlmsg, GENL_HDRLEN));
@@ -5288,7 +5298,7 @@ static struct l_io *open_pae(void)
 }
 
 struct nlmon *nlmon_open(const char *ifname, uint16_t id, const char *pathname,
-				bool nortnl)
+				const struct nlmon_config *config)
 {
 	struct nlmon *nlmon;
 	struct l_io *io, *pae_io;
@@ -5321,7 +5331,9 @@ struct nlmon *nlmon_open(const char *ifname, uint16_t id, const char *pathname,
 	nlmon->pae_io = pae_io;
 	nlmon->req_list = l_queue_new();
 	nlmon->pcap = pcap;
-	nlmon->nortnl = nortnl;
+	nlmon->nortnl = config->nortnl;
+	nlmon->nowiphy = config->nowiphy;
+	nlmon->noscan = config->noscan;
 
 	l_io_set_read_handler(nlmon->io, nlmon_receive, nlmon, NULL);
 	l_io_set_read_handler(nlmon->pae_io, pae_receive, nlmon, NULL);

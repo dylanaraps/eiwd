@@ -49,7 +49,7 @@
 static struct nlmon *nlmon = NULL;
 static const char *writer_path = NULL;
 static struct l_timeout *timeout = NULL;
-static bool nortnl;
+static struct nlmon_config config;
 
 #define NLA_OK(nla,len)         ((len) >= (int) sizeof(struct nlattr) && \
 				(nla)->nla_len >= sizeof(struct nlattr) && \
@@ -105,7 +105,7 @@ static void genl_parse(uint16_t type, const void *data, uint32_t len,
 		return;
 
 	if (!strcmp(name, NL80211_GENL_NAME)) {
-		nlmon = nlmon_open(ifname, id, writer_path, nortnl);
+		nlmon = nlmon_open(ifname, id, writer_path, &config);
 		if (!nlmon)
 			l_main_quit();
 	}
@@ -674,6 +674,8 @@ static void usage(void)
 		"\t-a, --analyze <file>   Analyze netlink PCAP trace file\n"
 		"\t-i, --interface <dev>  Use specified netlink monitor\n"
 		"\t-n, --nortnl           Don't show RTNL output\n"
+		"\t-y, --nowiphy          Don't show 'New Wiphy' output\n"
+		"\t-s, --noscan           Don't show scan result output\n"
 		"\t-h, --help             Show help options\n");
 }
 
@@ -684,6 +686,8 @@ static const struct option main_options[] = {
 	{ "nl80211",   required_argument, NULL, 'F' },
 	{ "interface", required_argument, NULL, 'i' },
 	{ "nortnl",    no_argument,       NULL, 'n' },
+	{ "nowiphy",   no_argument,       NULL, 'y' },
+	{ "noscan",    no_argument,       NULL, 's' },
 	{ "version",   no_argument,       NULL, 'v' },
 	{ "help",      no_argument,       NULL, 'h' },
 	{ }
@@ -703,7 +707,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "r:w:a:F:i:nvh",
+		opt = getopt_long(argc, argv, "r:w:a:F:i:nvhys",
 						main_options, NULL);
 		if (opt < 0)
 			break;
@@ -742,7 +746,13 @@ int main(int argc, char *argv[])
 			ifname = optarg;
 			break;
 		case 'n':
-			nortnl = true;
+			config.nortnl = true;
+			break;
+		case 'y':
+			config.nowiphy = true;
+			break;
+		case 's':
+			config.noscan = true;
 			break;
 		case 'v':
 			printf("%s\n", VERSION);

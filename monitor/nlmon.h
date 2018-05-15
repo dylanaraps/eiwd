@@ -25,8 +25,14 @@
 
 struct nlmon;
 
+struct nlmon_config {
+	bool nortnl;
+	bool nowiphy;
+	bool noscan;
+};
+
 struct nlmon *nlmon_open(const char *ifname, uint16_t id, const char *pathname,
-				bool nortnl);
+				const struct nlmon_config *config);
 void nlmon_close(struct nlmon *nlmon);
 
 struct nlmon *nlmon_create(uint16_t id);
