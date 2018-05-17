@@ -31,6 +31,8 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <net/ethernet.h>
+#include <netinet/ether.h>
 #include <linux/if.h>
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
@@ -38,8 +40,6 @@
 #include <linux/genetlink.h>
 #include <linux/rtnetlink.h>
 #include <linux/filter.h>
-#include <net/ethernet.h>
-#include <netinet/ether.h>
 #include <ell/ell.h>
 
 #ifndef ARPHRD_NETLINK
