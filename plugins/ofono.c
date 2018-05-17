@@ -653,7 +653,9 @@ static void parse_modem(const char *path, struct l_dbus_message_iter *props)
 		 * has been seen to happen.
 		 */
 		l_error("modem %s already found", path);
+#ifdef HAVE_EXECINFO_H
 		__iwd_backtrace_print(2);
+#endif
 		exit(1);
 	}
 
