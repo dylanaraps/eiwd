@@ -181,8 +181,7 @@ void __eap_handle_request(struct eap_state *eap, uint16_t id,
 	enum eap_type type;
 	uint8_t buf[10];
 	int buf_len;
-	void (*op)(struct eap_state *eap,
-				const uint8_t *pkt, size_t len);
+	bool retransmit;
 
 	if (len < 1)
 		/* Invalid packets to be ignored */
@@ -196,15 +195,13 @@ void __eap_handle_request(struct eap_state *eap, uint16_t id,
 		goto unsupported_method;
 	}
 
-	if (id == eap->last_id)
-		op = eap->method->handle_retransmit ? :
-						eap->method->handle_request;
-	else
-		op = eap->method->handle_request;
-
+	retransmit = id == eap->last_id ? true : false;
 	eap->last_id = id;
 
 	if (type >= __EAP_TYPE_MIN_METHOD) {
+		void (*op)(struct eap_state *eap,
+					const uint8_t *pkt, size_t len);
+
 		if (type != eap->method->request_type) {
 			l_warn("EAP server tried method %i while client was "
 					"configured for method %i",
@@ -212,6 +209,10 @@ void __eap_handle_request(struct eap_state *eap, uint16_t id,
 
 			goto unsupported_method;
 		}
+
+		op = retransmit && eap->method->handle_retransmit ?
+						eap->method->handle_retransmit :
+						eap->method->handle_request;
 
 		if (type != EAP_TYPE_EXPANDED) {
 			op(eap, pkt + 1, len - 1);
