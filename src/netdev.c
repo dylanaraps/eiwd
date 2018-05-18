@@ -3641,6 +3641,13 @@ static const struct watchlist_ops netdev_frame_watch_ops = {
 	.item_free = netdev_frame_watch_free,
 };
 
+static void netdev_frame_cb(struct l_genl_msg *msg, void *user_data)
+{
+	if (l_genl_msg_get_error(msg) < 0)
+		l_error("Could not register frame watch type %04x: %i",
+			L_PTR_TO_UINT(user_data), l_genl_msg_get_error(msg));
+}
+
 uint32_t netdev_frame_watch_add(struct netdev *netdev, uint16_t frame_type,
 				const uint8_t *prefix, size_t prefix_len,
 				netdev_frame_watch_func_t handler,
@@ -3673,7 +3680,8 @@ uint32_t netdev_frame_watch_add(struct netdev *netdev, uint16_t frame_type,
 	l_genl_msg_append_attr(msg, NL80211_ATTR_FRAME_MATCH,
 				prefix_len, prefix);
 
-	l_genl_family_send(nl80211, msg, NULL, NULL, NULL);
+	l_genl_family_send(nl80211, msg, netdev_frame_cb,
+			L_UINT_TO_PTR(frame_type), NULL);
 
 	return id;
 }
