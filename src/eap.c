@@ -34,6 +34,13 @@
 static uint32_t default_mtu;
 struct l_queue *eap_methods;
 
+static void dump_eap(const char *str, void *user_data)
+{
+	const char *prefix = user_data;
+
+	l_info("%s%s\n", prefix, str);
+}
+
 struct eap_state {
 	eap_tx_packet_func_t tx_packet;
 	eap_key_material_func_t set_key_material;
@@ -253,6 +260,11 @@ void __eap_handle_request(struct eap_state *eap, uint16_t id,
 
 	default:
 	unsupported_method:
+		if (!eap->method) {
+			l_info("Received an unhandled EAP packet:");
+			l_util_hexdump(true, pkt, len, dump_eap, "[EAP] ");
+		}
+
 		/* Send a legacy NAK response */
 		buf_len = 5;
 
