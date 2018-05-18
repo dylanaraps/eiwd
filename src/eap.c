@@ -233,7 +233,7 @@ void __eap_handle_request(struct eap_state *eap, uint16_t id,
 	case EAP_TYPE_IDENTITY:
 		if (len >= 2)
 			l_warn("EAP identity prompt: \"%.*s\"",
-					(int) len - 1, buf + 1);
+					(int) len - 1, pkt + 1);
 
 		eap_send_identity_response(eap, eap->identity);
 
@@ -244,7 +244,7 @@ void __eap_handle_request(struct eap_state *eap, uint16_t id,
 			/* Invalid packets to be ignored */
 			return;
 
-		l_warn("EAP notification: \"%.*s\"", (int) len - 1, buf + 1);
+		l_warn("EAP notification: \"%.*s\"", (int) len - 1, pkt + 1);
 
 		eap_send_response(eap, EAP_TYPE_NOTIFICATION, buf, 5);
 
