@@ -60,6 +60,7 @@ static const char *nophys;
 static const char *config_dir;
 static const char *plugins;
 static const char *noplugins;
+static const char *debugopt;
 static bool terminating;
 
 static void main_loop_quit(struct l_timeout *timeout, void *user_data)
@@ -111,6 +112,7 @@ static void usage(void)
 		"\t-c, --config           Configuration directory to use\n"
 		"\t-l, --plugin           Plugins to include\n"
 		"\t-L, --noplugin         Plugins to exclude\n"
+		"\t-d, --debug            Enable debug output\n"
 		"\t-h, --help             Show help options\n");
 }
 
@@ -124,6 +126,7 @@ static const struct option main_options[] = {
 	{ "config",       required_argument, NULL, 'c' },
 	{ "plugin",       required_argument, NULL, 'l' },
 	{ "noplugin",     required_argument, NULL, 'L' },
+	{ "debug",        optional_argument, NULL, 'd' },
 	{ "help",         no_argument,       NULL, 'h' },
 	{ }
 };
@@ -312,7 +315,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "Bi:I:p:P:c:vh",
+		opt = getopt_long(argc, argv, "Bi:I:p:P:c:vd::h",
 							main_options, NULL);
 		if (opt < 0)
 			break;
@@ -345,6 +348,14 @@ int main(int argc, char *argv[])
 		case 'L':
 			noplugins = optarg;
 			break;
+		case 'd':
+			if (optarg)
+				debugopt = optarg;
+			else if (argv[optind] && argv[optind][0] != '-')
+				debugopt = argv[optind++];
+			else
+				debugopt = "*";
+			break;
 		case 'h':
 			usage();
 			return EXIT_SUCCESS;
@@ -372,7 +383,8 @@ int main(int argc, char *argv[])
 
 	signal = l_signal_create(&mask, signal_handler, NULL, NULL);
 
-	l_debug_enable("*");
+	if (debugopt)
+		l_debug_enable(debugopt);
 
 #ifdef __GLIBC__
 	__iwd_backtrace_init();
