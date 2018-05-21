@@ -281,12 +281,16 @@ follows:
 	For 802.11r (fast roaming) tests uncomment the following:
 
 		#CONFIG_IEEE80211R=y
+		#CONFIG_WNM_AP=y
 
 	For EAP-SIM/AKA tests uncomment the following:
 
 		#CONFIG_EAP_SIM=y
 		#CONDIG_EAP_AKA=y
 		#CONFIG_EAP_AKA_PRIME=y
+
+	For EAP-PWD tests uncomment the following:
+		#CONFIG_EAP_PWD=y
 
 	Note: You may need to pre-install: 'gnutls-devel' and 'libgcrypt-devel'
 	libraries.
