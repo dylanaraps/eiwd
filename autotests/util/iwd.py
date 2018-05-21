@@ -630,7 +630,7 @@ class DeviceList(collections.Mapping):
         self._dict.pop(key).remove()
 
     def _interfaces_added_handler(self, path, interfaces):
-        self._dict[path] = Device(interfaces[IWD_DEVICE_INTERFACE])
+        self._dict[path] = Device(path, interfaces[IWD_DEVICE_INTERFACE])
 
     def _interfaces_removed_handler(self, path, interfaces):
         del _dict[path]
