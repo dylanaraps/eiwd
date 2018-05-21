@@ -59,14 +59,13 @@ class TestMFP(unittest.TestCase):
         condition = 'not obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
 
-    def stage_iwd(self, config_dir):
+        IWD.clear_storage()
 
-        wd = IWD(True, config_dir)
-
-        psk_agent = PSKAgent("secret123")
+    def stage_iwd(self, wd, config_dir):
+        psk_agent = PSKAgent( ['secret123', 'secret123', 'secret123'] )
         wd.register_psk_agent(psk_agent)
 
-        devices = wd.list_devices();
+        devices = wd.list_devices(True);
         self.assertIsNotNone(devices)
         device = devices[0]
 
@@ -92,18 +91,38 @@ class TestMFP(unittest.TestCase):
 
         wd.unregister_psk_agent(psk_agent)
 
+    def test_iwd_mfp0(self):
+        wd = IWD(True, '/tmp/IWD-MFP0')
+
+        try:
+            self.stage_iwd(wd, '/tmp/IWD-MFP0')
+        except:
+            del wd
+            raise
+
         del wd
 
-        IWD.clear_storage()
-
-    def test_iwd_mfp0(self):
-        self.stage_iwd('/tmp/IWD-MFP0')
-
     def test_iwd_mfp1(self):
-        self.stage_iwd('/tmp/IWD-MFP1')
+        wd = IWD(True, '/tmp/IWD-MFP1')
+
+        try:
+            self.stage_iwd(wd, '/tmp/IWD-MFP1')
+        except:
+            del wd
+            raise
+
+        del wd
 
     def test_iwd_mfp2(self):
-        self.stage_iwd('/tmp/IWD-MFP2')
+        wd = IWD(True, '/tmp/IWD-MFP2')
+
+        try:
+            self.stage_iwd(wd, '/tmp/IWD-MFP2')
+        except:
+            del wd
+            raise
+
+        del wd
 
 if __name__ == '__main__':
     unittest.main(exit=True)
