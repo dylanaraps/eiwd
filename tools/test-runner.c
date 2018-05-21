@@ -1247,7 +1247,7 @@ done:
 static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 		const char *ext_options)
 {
-	char *argv[11];
+	char *argv[12];
 	char *iwd_phys = NULL;
 	pid_t ret;
 	int idx = 0;
@@ -1265,6 +1265,10 @@ static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 	argv[idx++] = BIN_IWD;
 	argv[idx++] = "-c";
 	argv[idx++] = (char *) config_dir;
+
+	if (check_verbosity(BIN_IWD))
+		argv[idx++] = "-d";
+
 	argv[idx] = NULL;
 
 	if (wiphy_list) {
