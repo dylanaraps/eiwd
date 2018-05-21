@@ -11,14 +11,12 @@ from iwd import NetworkType
 
 class Test(unittest.TestCase):
 
-    def test_connection_success(self):
-        wd = IWD(True)
-        wd.wait(1)
-
-        psk_agent = PSKAgent('eap-pwd-identity', ('eap-pwd-identity', 'secret123'))
+    def validate_connection(self, wd):
+        psk_agent = PSKAgent('eap-pwd-identity', ('eap-pwd-identity',
+                                                                  'secret123'))
         wd.register_psk_agent(psk_agent)
 
-        devices = wd.list_devices();
+        devices = wd.list_devices(True);
         self.assertIsNotNone(devices)
         device = devices[0]
 
@@ -44,10 +42,7 @@ class Test(unittest.TestCase):
         condition = 'not obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
 
-        try:
-                ordered_network.network_object.connect()
-        except:
-                raise
+        ordered_network.network_object.connect()
 
         condition = 'obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
@@ -58,6 +53,15 @@ class Test(unittest.TestCase):
         wd.wait_for_object_condition(ordered_network.network_object, condition)
 
         wd.unregister_psk_agent(psk_agent)
+
+    def test_connection_success(self):
+        wd = IWD(True)
+
+        try:
+            self.validate_connection(wd)
+        except:
+            del wd
+            raise
 
         del wd
 
