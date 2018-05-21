@@ -11,14 +11,10 @@ from iwd import NetworkType
 
 class Test(unittest.TestCase):
 
-    def test_connection_success(self):
+    def validate_connection(self, wd):
         ssid_to_connect = 'ssidEAP-PEAPv0'
 
-        wd = IWD(True)
-        wd.wait(1)
-
-        devices = wd.list_devices();
-
+        devices = wd.list_devices(True);
         self.assertIsNotNone(devices)
         device = devices[0]
 
@@ -54,6 +50,15 @@ class Test(unittest.TestCase):
 
         condition = 'not obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
+
+    def test_connection_success(self):
+        wd = IWD(True)
+
+        try:
+            self.validate_connection(wd)
+        except:
+            del wd
+            raise
 
         del wd
 
