@@ -708,10 +708,16 @@ static bool destroy_hwsim_radio(int radio_id)
 
 static pid_t register_hwsim_as_trans_medium(void)
 {
-	char *argv[2];
+	char *argv[16];
+	unsigned int idx = 0;
 
-	argv[0] = BIN_HWSIM;
-	argv[1] = NULL;
+	if (strcmp(gdb_opt, "hwsim") == 0) {
+		argv[idx++] = "gdb";
+		argv[idx++] = "--args";
+	}
+
+	argv[idx++] = BIN_HWSIM;
+	argv[idx++] = NULL;
 
 	return execute_program(argv, false, check_verbosity(BIN_HWSIM));
 }
@@ -2344,9 +2350,10 @@ int main(int argc, char *argv[])
 		case 'g':
 			gdb_opt = optarg;
 			if (!(!strcmp(gdb_opt, "iwd") ||
-					!strcmp(gdb_opt, "hostapd"))) {
+					!strcmp(gdb_opt, "hostapd") ||
+					!strcmp(gdb_opt, "hwsim"))) {
 				l_error("--gdb can only be used with iwd"
-					" or hostapd");
+					", hwsim or hostapd");
 				return EXIT_FAILURE;
 			}
 			break;
