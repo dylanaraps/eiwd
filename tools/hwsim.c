@@ -1171,7 +1171,8 @@ static void hwsim_frame_unref(struct hwsim_frame *frame)
 				frame->flags |= HWSIM_TX_STAT_ACK;
 		}
 
-		send_frame_tx_info(frame);
+		if (frame->src_radio)
+			send_frame_tx_info(frame);
 	}
 
 	l_genl_msg_unref(frame->msg);
