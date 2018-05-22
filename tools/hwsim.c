@@ -340,6 +340,14 @@ static bool radio_info_match_wiphy_id(const void *a, const void *b)
 	return rec->wiphy_id == id;
 }
 
+static bool radio_info_match_addr0(const void *a, const void *b)
+{
+	const struct radio_info_rec *rec = a;
+	const uint8_t *addr0 = b;
+
+	return !memcmp(rec->addrs[0], addr0, ETH_ALEN);
+}
+
 static bool radio_info_match_addr1(const void *a, const void *b)
 {
 	const struct radio_info_rec *rec = a;
@@ -1233,7 +1241,6 @@ static void send_custom_frame_destroy(void *user_data)
 		l_dbus_message_unref(info->user_data);
 
 	l_free(info->frame);
-	l_free(info->radio);
 	l_free(info);
 }
 
@@ -1242,7 +1249,6 @@ static bool send_custom_frame(const uint8_t *addr, uint32_t freq,
 		void *user_data)
 {
 	struct hwsim_frame *frame = l_new(struct hwsim_frame, 1);
-	struct radio_info_rec *radio = l_new(struct radio_info_rec, 1);
 	struct send_frame_info *info = l_new(struct send_frame_info, 1);
 
 	frame->frequency = freq;
@@ -1251,25 +1257,24 @@ static bool send_custom_frame(const uint8_t *addr, uint32_t freq,
 	frame->payload = payload;
 
 	info->frame = frame;
-	info->radio = radio;
 	info->user_data = user_data;
 
-	memcpy(info->radio->addrs[0], addr, ETH_ALEN);
-	memcpy(info->radio->addrs[1], addr, ETH_ALEN);
-
-	/* hwsim expects the first nibble of the address byte to be '4' */
-	info->radio->addrs[1][0] |= 0x40;
+	info->radio = l_queue_find(radio_info, radio_info_match_addr0, addr) ?:
+		l_queue_find(radio_info, radio_info_match_addr1, addr);
+	if (!info->radio)
+		goto error;
 
 	if (!send_frame(info, send_custom_frame_callback,
-			send_custom_frame_destroy)) {
-		l_free(frame);
-		l_free(radio);
-		l_free(info);
-
-		return false;
-	}
+			send_custom_frame_destroy))
+		goto error;
 
 	return true;
+
+error:
+	l_free(frame);
+	l_free(info);
+
+	return false;
 }
 
 struct interface_match_data {
