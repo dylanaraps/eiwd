@@ -20,9 +20,19 @@
  *
  */
 
+#include <stdint.h>
 #include <stdbool.h>
 
-enum security;
+struct ie_rsn_info;
+
+enum security {
+	SECURITY_NONE,
+	SECURITY_WEP,
+	SECURITY_PSK,
+	SECURITY_8021X,
+};
 
 const char *security_to_str(enum security security);
 bool security_from_str(const char *str, enum security *security);
+enum security security_determine(uint16_t bss_capability,
+					const struct ie_rsn_info *info);

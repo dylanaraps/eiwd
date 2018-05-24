@@ -92,8 +92,6 @@ void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
 			uint32_t scan_interval, scan_func_t callback,
 			void *user_data);
 
-enum security scan_get_security(enum ie_bss_capability bss_cap,
-						const struct ie_rsn_info *info);
 void scan_bss_free(struct scan_bss *bss);
 int scan_bss_rank_compare(const void *a, const void *b, void *user);
 

@@ -278,9 +278,9 @@ static void process_bss(struct device *device, struct scan_bss *bss,
 		if (r != -ENOENT)
 			return;
 
-		security = scan_get_security(bss->capability, NULL);
+		security = security_determine(bss->capability, NULL);
 	} else
-		security = scan_get_security(bss->capability, &info);
+		security = security_determine(bss->capability, &info);
 
 	path = iwd_network_get_path(device, ssid, security);
 
@@ -1092,9 +1092,9 @@ static bool device_roam_scan_notify(uint32_t wiphy_id, uint32_t ifindex,
 			if (r != -ENOENT)
 				goto next;
 
-			security = scan_get_security(bss->capability, NULL);
+			security = security_determine(bss->capability, NULL);
 		} else
-			security = scan_get_security(bss->capability, &info);
+			security = security_determine(bss->capability, &info);
 
 		if (security != orig_security)
 			goto next;

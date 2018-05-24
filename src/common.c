@@ -29,6 +29,7 @@
 
 #include "src/iwd.h"
 #include "src/common.h"
+#include "src/ie.h"
 
 const char *security_to_str(enum security security)
 {
@@ -60,4 +61,25 @@ bool security_from_str(const char *str, enum security *security)
 		return false;
 
 	return true;
+}
+
+enum security security_determine(uint16_t bss_capability,
+					const struct ie_rsn_info *info)
+{
+	if (info && (info->akm_suites & IE_RSN_AKM_SUITE_PSK ||
+			info->akm_suites & IE_RSN_AKM_SUITE_PSK_SHA256 ||
+			info->akm_suites & IE_RSN_AKM_SUITE_FT_USING_PSK ||
+			info->akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256 ||
+			info->akm_suites & IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256))
+		return SECURITY_PSK;
+
+	if (info && (info->akm_suites & IE_RSN_AKM_SUITE_8021X ||
+			info->akm_suites & IE_RSN_AKM_SUITE_8021X_SHA256 ||
+			info->akm_suites & IE_RSN_AKM_SUITE_FT_OVER_8021X))
+		return SECURITY_8021X;
+
+	if (bss_capability & IE_BSS_CAP_PRIVACY)
+		return SECURITY_WEP;
+
+	return SECURITY_NONE;
 }
