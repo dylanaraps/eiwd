@@ -22,6 +22,9 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <unistd.h>
+
+struct l_uintset;
 
 /*
  * Information elements, IEEE Std 802.11-2012 ch. 8.4.2 and
