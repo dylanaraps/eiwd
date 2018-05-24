@@ -186,7 +186,7 @@ static unsigned int scan_send_start(struct l_genl_msg **msg,
 	return id;
 }
 
-static void scan_done(struct l_genl_msg *msg, void *userdata)
+static void scan_triggered(struct l_genl_msg *msg, void *userdata)
 {
 	struct scan_context *sc = userdata;
 	struct scan_request *sr = l_queue_peek_head(sc->requests);
@@ -331,7 +331,7 @@ static uint32_t scan_common(uint32_t ifindex, bool passive,
 	if (sc->state != SCAN_STATE_NOT_RUNNING)
 		goto done;
 
-	sc->start_cmd_id = scan_send_start(&sr->start_cmd, scan_done, sc);
+	sc->start_cmd_id = scan_send_start(&sr->start_cmd, scan_triggered, sc);
 	if (sc->start_cmd_id > 0)
 		goto done;
 
@@ -593,7 +593,7 @@ static bool start_next_scan_request(struct scan_context *sc)
 		sr = l_queue_peek_head(sc->requests);
 
 		sc->start_cmd_id = scan_send_start(&sr->start_cmd,
-							scan_done, sc);
+							scan_triggered, sc);
 
 		if (sc->start_cmd_id)
 			return true;
