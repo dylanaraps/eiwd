@@ -36,6 +36,7 @@
 #include "linux/nl80211.h"
 #include "src/iwd.h"
 #include "src/wiphy.h"
+#include "src/netdev.h"
 #include "src/ie.h"
 #include "src/scan.h"
 
@@ -76,6 +77,7 @@ struct scan_context {
 	struct scan_periodic sp;
 	struct l_queue *requests;
 	unsigned int start_cmd_id;
+	struct wiphy *wiphy;
 };
 
 struct scan_results {
@@ -114,11 +116,21 @@ static void scan_request_free(void *data)
 
 static struct scan_context *scan_context_new(uint32_t ifindex)
 {
+	struct netdev *netdev = netdev_find(ifindex);
+	struct wiphy *wiphy;
 	struct scan_context *sc;
+
+	if (!netdev)
+		return NULL;
+
+	wiphy = netdev_get_wiphy(netdev);
+	if (!wiphy)
+		return NULL;
 
 	sc = l_new(struct scan_context, 1);
 
 	sc->ifindex = ifindex;
+	sc->wiphy = wiphy;
 	sc->state = SCAN_STATE_NOT_RUNNING;
 	sc->requests = l_queue_new();
 
@@ -148,6 +160,9 @@ bool scan_ifindex_add(uint32_t ifindex)
 		return false;
 
 	sc = scan_context_new(ifindex);
+	if (!sc)
+		return false;
+
 	l_queue_push_head(scan_contexts, sc);
 
 	return true;
