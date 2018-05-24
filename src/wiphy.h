@@ -35,7 +35,7 @@ const char *wiphy_get_path(struct wiphy *wiphy);
 uint32_t wiphy_get_supported_bands(struct wiphy *wiphy);
 bool wiphy_can_connect(struct wiphy *wiphy, struct scan_bss *bss);
 bool wiphy_has_feature(struct wiphy *wiphy, uint32_t feature);
-bool wiphy_has_ext_feature(struct wiphy *wiphy, unsigned int idx);
+bool wiphy_has_ext_feature(struct wiphy *wiphy, uint32_t feature);
 uint8_t wiphy_get_max_num_ssids_per_scan(struct wiphy *wiphy);
 
 bool wiphy_init(struct l_genl_family *in, const char *whitelist,

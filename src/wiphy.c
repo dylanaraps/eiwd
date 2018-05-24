@@ -190,10 +190,10 @@ bool wiphy_has_feature(struct wiphy *wiphy, uint32_t feature)
 	return wiphy->feature_flags & feature;
 }
 
-bool wiphy_get_ext_feature(struct wiphy *wiphy, unsigned int idx)
+bool wiphy_has_ext_feature(struct wiphy *wiphy, uint32_t feature)
 {
-	return idx < sizeof(wiphy->ext_features) * 8 &&
-		util_is_bit_set(wiphy->ext_features[idx >> 3], idx & 7);
+	return feature < sizeof(wiphy->ext_features) * 8 &&
+		util_is_bit_set(wiphy->ext_features[feature >> 3], feature & 7);
 }
 
 uint8_t wiphy_get_max_num_ssids_per_scan(struct wiphy *wiphy)

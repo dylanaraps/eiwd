@@ -394,7 +394,7 @@ static void netdev_rssi_poll(struct l_timeout *timeout, void *user_data)
 /* To be called whenever operational or rssi_levels_num are updated */
 static void netdev_rssi_polling_update(struct netdev *netdev)
 {
-	if (wiphy_get_ext_feature(netdev->wiphy,
+	if (wiphy_has_ext_feature(netdev->wiphy,
 					NL80211_EXT_FEATURE_CQM_RSSI_LIST))
 		return;
 
@@ -2151,7 +2151,7 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 						bss->ssid_len, bss->ssid);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
 
-	if (wiphy_get_ext_feature(netdev->wiphy,
+	if (wiphy_has_ext_feature(netdev->wiphy,
 				NL80211_EXT_FEATURE_CONTROL_PORT_OVER_NL80211))
 		l_genl_msg_append_attr(msg,
 				NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
@@ -3263,7 +3263,7 @@ static int netdev_control_port_frame(uint32_t ifindex,
 	frame_size = sizeof(struct eapol_header) +
 			L_BE16_TO_CPU(ef->header.packet_len);
 
-	if (!wiphy_get_ext_feature(netdev->wiphy,
+	if (!wiphy_has_ext_feature(netdev->wiphy,
 			NL80211_EXT_FEATURE_CONTROL_PORT_OVER_NL80211))
 		return netdev_control_port_write_pae(netdev, dest, proto,
 							ef, noencrypt);
@@ -3396,7 +3396,7 @@ int netdev_set_rssi_report_levels(struct netdev *netdev, const int8_t *levels,
 	if (levels_num > L_ARRAY_SIZE(netdev->rssi_levels))
 		return -ENOSPC;
 
-	if (!wiphy_get_ext_feature(netdev->wiphy,
+	if (!wiphy_has_ext_feature(netdev->wiphy,
 					NL80211_EXT_FEATURE_CQM_RSSI_LIST))
 		goto done;
 
@@ -3849,7 +3849,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 		return;
 	}
 
-	if (!wiphy_get_ext_feature(wiphy,
+	if (!wiphy_has_ext_feature(wiphy,
 			NL80211_EXT_FEATURE_CONTROL_PORT_OVER_NL80211)) {
 		l_debug("No Control Port over NL80211 support for ifindex: %u,"
 				" using PAE socket", *ifindex);
