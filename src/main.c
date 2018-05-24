@@ -38,7 +38,6 @@
 #include "src/device.h"
 #include "src/wiphy.h"
 #include "src/dbus.h"
-#include "src/network.h"
 #include "src/eap.h"
 #include "src/eapol.h"
 #include "src/scan.h"

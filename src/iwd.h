@@ -38,3 +38,6 @@ void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data);
 const struct l_settings *iwd_get_config(void);
 
 void iwd_shutdown(void);
+
+void network_init();
+void network_exit();

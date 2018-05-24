@@ -31,9 +31,9 @@
 #include <ell/ell.h>
 
 #include "iwd.h"
-#include "network.h"
 #include "storage.h"
 #include "common.h"
+#include "network.h"
 #include "dbus.h"
 #include "knownnetworks.h"
 
