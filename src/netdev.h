@@ -91,6 +91,7 @@ typedef void (*netdev_frame_watch_func_t)(struct netdev *netdev,
 					const void *body, size_t body_len,
 					void *user_data);
 
+struct wiphy *netdev_get_wiphy(struct netdev *netdev);
 const uint8_t *netdev_get_address(struct netdev *netdev);
 uint32_t netdev_get_ifindex(struct netdev *netdev);
 enum netdev_iftype netdev_get_iftype(struct netdev *netdev);

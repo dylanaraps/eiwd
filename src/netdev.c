@@ -145,6 +145,11 @@ struct cb_data {
 	void *user_data;
 };
 
+struct wiphy *netdev_get_wiphy(struct netdev *netdev)
+{
+	return netdev->wiphy;
+}
+
 static void netlink_result(int error, uint16_t type, const void *data,
 			uint32_t len, void *user_data)
 {
