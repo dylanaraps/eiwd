@@ -185,6 +185,11 @@ bool wiphy_can_connect(struct wiphy *wiphy, struct scan_bss *bss)
 	return true;
 }
 
+bool wiphy_has_feature(struct wiphy *wiphy, uint32_t feature)
+{
+	return wiphy->feature_flags & feature;
+}
+
 bool wiphy_get_ext_feature(struct wiphy *wiphy, unsigned int idx)
 {
 	return idx < sizeof(wiphy->ext_features) * 8 &&
