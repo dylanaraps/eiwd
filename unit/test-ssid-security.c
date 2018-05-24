@@ -30,8 +30,8 @@
 #include <ell/ell.h>
 
 #include "src/iwd.h"
+#include "src/common.h"
 #include "src/ie.h"
-#include "src/scan.h"
 
 struct test_data {
 	unsigned char *rsne;
@@ -105,7 +105,7 @@ static void ssid_security_test(const void *data)
 	} else
 		infop = NULL;
 
-	assert(scan_get_security(test->capability, infop) == test->expected);
+	assert(security_determine(test->capability, infop) == test->expected);
 }
 
 int main(int argc, char *argv[])

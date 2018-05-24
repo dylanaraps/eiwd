@@ -266,7 +266,7 @@ unit_test_ssid_to_utf8_SOURCES = src/util.h src/util.c \
 unit_test_ssid_to_utf8_LDADD = ell/libell-internal.la
 
 unit_test_ssid_security_SOURCES = unit/test-ssid-security.c src/ie.h src/ie.c \
-				src/scan.h src/scan.c
+				src/common.h src/common.c
 unit_test_ssid_security_LDADD = ell/libell-internal.la
 
 unit_test_wsc_SOURCES = unit/test-wsc.c src/wscutil.h src/wscutil.c \
