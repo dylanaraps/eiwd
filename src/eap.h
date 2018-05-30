@@ -70,6 +70,7 @@ int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 			struct l_queue **out_missing);
 bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
 			const char *prefix);
+bool eap_reset(struct eap_state *eap);
 
 void eap_set_key_material_func(struct eap_state *eap,
 				eap_key_material_func_t func);
@@ -130,6 +131,9 @@ struct eap_method {
 	bool (*load_settings)(struct eap_state *eap,
 				struct l_settings *settings,
 				const char *prefix);
+
+	/* Reset the internal state back to initial conditions */
+	bool (*reset_state)(struct eap_state *eap);
 	void (*free)(struct eap_state *eap);
 
 	void (*handle_request)(struct eap_state *eap,

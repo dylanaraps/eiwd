@@ -93,6 +93,20 @@ void eap_set_event_func(struct eap_state *eap, eap_event_func_t func)
 	eap->event_func = func;
 }
 
+bool eap_reset(struct eap_state *eap)
+{
+	if (eap->method_state && eap->method->reset_state) {
+		if (!eap->method->reset_state(eap))
+			return false;
+	}
+
+	eap->method_success = false;
+	l_timeout_remove(eap->complete_timeout);
+	eap->complete_timeout = NULL;
+
+	return true;
+}
+
 void eap_free(struct eap_state *eap)
 {
 	if (eap->method_state && eap->method->free)
