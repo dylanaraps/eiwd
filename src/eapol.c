@@ -1487,11 +1487,14 @@ static void eapol_eap_complete_cb(enum eap_result result, void *user_data)
 			"eapSuccess" : (result == EAP_RESULT_FAIL ?
 				"eapFail" : "eapTimeout"));
 
-	eap_free(sm->eap);
-	sm->eap = NULL;
-
-	if (result != EAP_RESULT_SUCCESS)
+	if (result != EAP_RESULT_SUCCESS) {
+		eap_free(sm->eap);
+		sm->eap = NULL;
 		handshake_failed(sm, MMPDU_REASON_CODE_IEEE8021X_FAILED);
+		return;
+	}
+
+	eap_reset(sm->eap);
 }
 
 /* This respresentes the eapResults message */
