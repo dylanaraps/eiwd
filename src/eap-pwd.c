@@ -154,14 +154,41 @@ static bool kdf(uint8_t *key, size_t key_len, const char *label,
 	return true;
 }
 
+static bool eap_pwd_reset_state(struct eap_state *eap)
+{
+	struct eap_pwd_handle *pwd = eap_get_data(eap);
+
+	pwd->state = EAP_PWD_STATE_INIT;
+
+	l_free(pwd->tx_frag_buf);
+	pwd->tx_frag_buf = NULL;
+	pwd->tx_frag_pos = NULL;
+	pwd->tx_frag_remaining = 0;
+
+	l_free(pwd->rx_frag_buf);
+	pwd->rx_frag_buf = NULL;
+	pwd->rx_frag_count = 0;
+	pwd->rx_frag_total = 0;
+
+	pwd->prep = EAP_PWD_PREP_NONE;
+	memset(&pwd->pwe, 0, sizeof(struct ecc_point));
+	memset(&pwd->element_s, 0, sizeof(struct ecc_point));
+	memset(&pwd->element_p, 0, sizeof(struct ecc_point));
+	pwd->ciphersuite = 0;
+	memset(pwd->scalar_s, 0, sizeof(pwd->scalar_s));
+	memset(pwd->scalar_p, 0, sizeof(pwd->scalar_p));
+	memset(pwd->p_rand, 0, sizeof(pwd->p_rand));
+
+	return true;
+}
+
 static void eap_pwd_free(struct eap_state *eap)
 {
 	struct eap_pwd_handle *pwd = eap_get_data(eap);
 
+	eap_pwd_reset_state(eap);
 	l_free(pwd->identity);
 	l_free(pwd->password);
-	l_free(pwd->tx_frag_buf);
-	l_free(pwd->rx_frag_buf);
 	l_free(pwd);
 
 	eap_set_data(eap, NULL);
@@ -775,6 +802,7 @@ static struct eap_method eap_pwd = {
 	.handle_request = eap_pwd_handle_request,
 	.check_settings = eap_pwd_check_settings,
 	.load_settings = eap_pwd_load_settings,
+	.reset_state = eap_pwd_reset_state,
 };
 
 static int eap_pwd_init(void)
