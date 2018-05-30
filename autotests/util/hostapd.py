@@ -2,6 +2,7 @@
 import os, os.path
 import wiphy
 import re
+import socket
 
 chan_freq_map = [
     None,
@@ -29,9 +30,9 @@ class HostapdCLI:
         self.ifname = interface.name
         self.ctrl_interface = interface.ctrl_interface
 
-        socket_path = os.path.dirname(self.ctrl_interface)
+        self.socket_path = os.path.dirname(self.ctrl_interface)
 
-        self.cmdline = 'hostapd_cli -p"' + socket_path + '" -i"' + \
+        self.cmdline = 'hostapd_cli -p"' + self.socket_path + '" -i"' + \
                 self.ifname + '"'
 
         self._hostapd_restarted = False
@@ -45,6 +46,13 @@ class HostapdCLI:
 
     def deauthenticate(self, client_address):
         os.system(self.cmdline + ' deauthenticate ' + client_address)
+
+    def eapol_reauth(self, client_address):
+        cmd = 'IFNAME=' + self.ifname + ' EAPOL_REAUTH ' + client_address
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        s.connect(self.socket_path + '/' + self.ifname)
+        s.sendall(cmd.encode('utf-8'))
+        s.close()
 
     def reload(self):
         # Seemingly all three commands needed for the instance to notice
