@@ -633,13 +633,11 @@ static enum cmd_status cmd_connect(const char *device_name, char *args)
 {
 	struct network_args *network_args;
 	struct l_queue *match;
-	const struct device *device;
-	const struct l_queue_entry *entry;
-	struct ordered_network *ordered_network;
-	const struct proxy_interface *proxy =
+	const struct proxy_interface *network_proxy;
+	const struct proxy_interface *device_proxy =
 					get_device_proxy_by_name(device_name);
 
-	if (!proxy)
+	if (!device_proxy)
 		return CMD_STATUS_INVALID_VALUE;
 
 	network_args = network_parse_args(args);
@@ -650,30 +648,7 @@ static enum cmd_status cmd_connect(const char *device_name, char *args)
 		return CMD_STATUS_INVALID_ARGS;
 	}
 
-	device = proxy_interface_get_data(proxy);
-
-	if (!device->ordered_networks) {
-		display("Use 'get-networks' command to obtain a list of "
-						"available networks first\n");
-		network_args_destroy(network_args);
-
-		return CMD_STATUS_OK;
-	}
-
-	match = NULL;
-
-	for (entry = l_queue_get_entries(device->ordered_networks); entry;
-							entry = entry->next) {
-		ordered_network = entry->data;
-
-		if (strcmp(ordered_network->name, network_args->name))
-			continue;
-
-		if (!match)
-			match = l_queue_new();
-
-		l_queue_push_tail(match, ordered_network);
-	}
+	match = network_match_by_device_and_args(device_proxy, network_args);
 
 	if (!match) {
 		display("Invalid network name '%s'\n", network_args->name);
@@ -686,36 +661,20 @@ static enum cmd_status cmd_connect(const char *device_name, char *args)
 		if (!network_args->type) {
 			display("Provided network name is ambiguous. "
 				"Please specify security type.\n");
-
-			l_queue_destroy(match, NULL);
-			network_args_destroy(network_args);
-
-			return CMD_STATUS_INVALID_VALUE;
 		}
 
-		ordered_network = NULL;
-
-		for (entry = l_queue_get_entries(match); entry;
-							entry = entry->next) {
-			ordered_network = entry->data;
-
-			if (!strcmp(ordered_network->type, network_args->type))
-				break;
-		}
-	} else {
-		ordered_network = l_queue_pop_head(match);
-	}
-
-	l_queue_destroy(match, NULL);
-	network_args_destroy(network_args);
-
-	if (!ordered_network) {
-		display("No network with specified parameters was found\n");
+		l_queue_destroy(match, NULL);
+		network_args_destroy(network_args);
 
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
-	network_connect(ordered_network->network_path);
+	network_proxy = l_queue_pop_head(match);
+
+	l_queue_destroy(match, NULL);
+	network_args_destroy(network_args);
+
+	network_connect(network_proxy);
 
 	return CMD_STATUS_OK;
 }
