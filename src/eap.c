@@ -359,11 +359,6 @@ void eap_rx_packet(struct eap_state *eap, const uint8_t *pkt, size_t len)
 			 */
 			return;
 
-		if (eap->method_state && eap->method->free)
-			eap->method->free(eap);
-
-		eap->method = NULL;
-
 		eap->complete(code == EAP_CODE_SUCCESS ? EAP_RESULT_SUCCESS :
 				EAP_RESULT_FAIL, eap->user_data);
 		return;
