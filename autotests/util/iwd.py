@@ -681,7 +681,7 @@ class IWD(AsyncOpAbstract):
                         iwd_proc.terminate()
                     raise TimeoutError('IWD has failed to start')
                 tries += 1
-            time.sleep(0.05)
+            time.sleep(0.1)
 
         self._devices = DeviceList(self,
                                        self._object_manager.GetManagedObjects())
