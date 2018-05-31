@@ -667,6 +667,7 @@ class IWD(AsyncOpAbstract):
             args.append(iwd_config_dir)
             args.append('-p')
             args.append(whitelist)
+            args.append('-d')
 
             import subprocess
             iwd_proc = subprocess.Popen(args)
