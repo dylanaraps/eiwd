@@ -739,6 +739,16 @@ static char *get_networks_cmd_arg_completion(const char *text, int state)
 	return NULL;
 }
 
+static char *connect_cmd_arg_completion(const char *text, int state)
+{
+	const struct proxy_interface *device = device_get_default();
+
+	if (!device)
+		return NULL;
+
+	return network_name_completion(device, text, state);
+}
+
 static const struct command device_commands[] = {
 	{ NULL,     "list",     NULL,   cmd_list, "List devices",     true },
 	{ "<wlan>", "show",     NULL,   cmd_show, "Show device info", true },
@@ -755,7 +765,8 @@ static const struct command device_commands[] = {
 	{ "<wlan>", "connect",
 				"<\"network name\"> [security]",
 					cmd_connect,
-						"Connect to network", false },
+						"Connect to network", false,
+		connect_cmd_arg_completion },
 	{ "<wlan>", "disconnect",
 				NULL,   cmd_disconnect, "Disconnect" },
 	{ }

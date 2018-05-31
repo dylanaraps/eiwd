@@ -148,6 +148,13 @@ void network_args_destroy(struct network_args *network_args)
 	l_free(network_args);
 }
 
+static const char *get_name(const void *data)
+{
+	const struct network *network = data;
+
+	return network->name;
+}
+
 static void set_name(void *data, struct l_dbus_message_iter *variant)
 {
 	struct network *network = data;
@@ -209,7 +216,7 @@ static void set_type(void *data, struct l_dbus_message_iter *variant)
 }
 
 static const struct proxy_interface_property network_properties[] = {
-	{ "Name",       "s", set_name},
+	{ "Name",       "s", set_name, get_name },
 	{ "Connected",  "b", set_connected},
 	{ "Device",     "o", set_device},
 	{ "Type",       "s", set_type},
@@ -266,6 +273,44 @@ static struct proxy_interface_type network_interface_type = {
 	.properties = network_properties,
 	.ops = &ops,
 };
+
+struct completion_search_parameters {
+	const char *text;
+	const struct proxy_interface *device;
+};
+
+static bool match_by_partial_name(const void *a, const void *b)
+{
+	const struct network *network = a;
+	const struct completion_search_parameters *params = b;
+	const char *name;
+	const char *text;
+
+	if (!proxy_interface_is_same(network->device, params->device))
+		return false;
+
+	for (text = params->text, name = network->name; *text && *name;
+							name++, text++) {
+		if (*name == *text)
+			continue;
+
+		return false;
+	}
+
+	return true;
+}
+
+char *network_name_completion(const struct proxy_interface *device,
+						const char *text, int state)
+{
+	const struct completion_search_parameters params = {
+		.text = text, .device = device,
+	};
+
+	return proxy_property_str_completion(&network_interface_type,
+						match_by_partial_name, "Name",
+						&params, state);
+}
 
 static int network_interface_init(void)
 {

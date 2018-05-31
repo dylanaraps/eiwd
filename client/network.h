@@ -30,3 +30,6 @@ void network_connect(const char *path);
 
 struct network_args *network_parse_args(const char *args);
 void network_args_destroy(struct network_args *network_args);
+
+char *network_name_completion(const struct proxy_interface *device,
+						const char *text, int state);
