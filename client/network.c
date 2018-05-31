@@ -309,6 +309,40 @@ char *network_name_completion(const struct proxy_interface *device,
 						&params, state);
 }
 
+struct network_search_parameters {
+	const struct network_args *args;
+	const struct proxy_interface *device;
+};
+
+static bool match_by_device_and_args(const void *a, const void *b)
+{
+	const struct network *network = a;
+	const struct network_search_parameters *params = b;
+
+	if (!proxy_interface_is_same(network->device, params->device))
+		return false;
+
+	if (strcmp(network->name, params->args->name))
+		return false;
+
+	if (params->args->type && strcmp(network->type, params->args->type))
+		return false;
+
+	return true;
+}
+
+struct l_queue *network_match_by_device_and_args(
+					const struct proxy_interface *device,
+					const struct network_args *args)
+{
+	struct network_search_parameters params = {
+		.args = args, .device = device
+	};
+
+	return proxy_interface_find_all(network_interface_type.interface,
+					match_by_device_and_args, &params);
+}
+
 static int network_interface_init(void)
 {
 	proxy_interface_type_register(&network_interface_type);
