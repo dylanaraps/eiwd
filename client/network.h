@@ -26,7 +26,7 @@ struct network_args {
 };
 
 bool network_is_connected(const char *path);
-void network_connect(const char *path);
+void network_connect(const struct proxy_interface *proxy);
 
 struct network_args *network_parse_args(const char *args);
 void network_args_destroy(struct network_args *network_args);
