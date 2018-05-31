@@ -46,6 +46,7 @@ struct command_family {
 	const struct command *command_list;
 	command_completion_func_t family_arg_completion;
 	command_completion_func_t entity_arg_completion;
+	void (*set_default_entity)(const char *entity);
 };
 
 char **command_completion(const char *text, int start, int end);

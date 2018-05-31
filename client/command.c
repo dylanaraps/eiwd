@@ -209,6 +209,9 @@ static char **cmd_completion_match_family_cmd(const char *cmd_family,
 			break;
 		}
 
+		if (family->set_default_entity)
+			family->set_default_entity(arg1);
+
 		matches = cmd_completion_match_entity_cmd(arg2, text,
 							family->command_list);
 
