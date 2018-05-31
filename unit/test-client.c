@@ -29,6 +29,7 @@
 #include <assert.h>
 #include <ell/ell.h>
 
+#include "client/dbus-proxy.h"
 #include "client/network.h"
 
 struct network_args_data {
