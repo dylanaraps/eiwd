@@ -64,6 +64,9 @@ struct l_queue *proxy_interface_find_all(const char *interface,
 					proxy_property_match_func_t function,
 					const void *value);
 
+bool proxy_interface_is_same(const struct proxy_interface *a,
+					const struct proxy_interface *b);
+
 bool dbus_message_has_error(struct l_dbus_message *message);
 
 bool proxy_interface_method_call(const struct proxy_interface *proxy,

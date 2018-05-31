@@ -269,6 +269,12 @@ static struct l_queue *proxy_interface_find_by_path(const char *path)
 	return match;
 }
 
+bool proxy_interface_is_same(const struct proxy_interface *a,
+					const struct proxy_interface *b)
+{
+	return !strcmp(a->path, b->path);
+}
+
 static void properties_changed_callback(struct l_dbus_message *message,
 								void *data)
 {
