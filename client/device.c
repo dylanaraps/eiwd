@@ -44,6 +44,8 @@ struct device {
 	const struct proxy_interface *wsc;
 };
 
+static struct proxy_interface *default_device;
+
 static void display_device(const struct proxy_interface *proxy)
 {
 	const struct device *device = proxy_interface_get_data(proxy);
@@ -477,6 +479,47 @@ static bool match_by_partial_name_and_wsc(const void *a, const void *b)
 	return match_by_partial_name(a, b) && device->wsc ? true : false;
 }
 
+static bool match_all(const void *a, const void *b)
+{
+	return true;
+}
+
+static void device_set_default(const char *device_name)
+{
+	struct l_queue *match;
+
+	if (!device_name)
+		return;
+
+	match = proxy_interface_find_all(device_interface_type.interface,
+						match_by_name, device_name);
+
+	if (!match)
+		return;
+
+	default_device = l_queue_pop_head(match);
+	l_queue_destroy(match, NULL);
+}
+
+static const struct proxy_interface *device_get_default(void)
+{
+	struct l_queue *match;
+
+	if (default_device)
+		return default_device;
+
+	match = proxy_interface_find_all(device_interface_type.interface,
+							match_all, NULL);
+
+	if (!match)
+		return NULL;
+
+	default_device = l_queue_pop_head(match);
+	l_queue_destroy(match, NULL);
+
+	return default_device;
+}
+
 static const struct proxy_interface *get_device_proxy_by_name(
 							const char *device_name)
 {
@@ -781,6 +824,7 @@ static struct command_family device_command_family = {
 	.command_list = device_commands,
 	.family_arg_completion = family_arg_completion,
 	.entity_arg_completion = entity_arg_completion,
+	.set_default_entity = device_set_default,
 };
 
 static int device_command_family_init(void)
