@@ -141,7 +141,7 @@ static void interface_update_properties(struct proxy_interface *proxy,
 char *proxy_property_str_completion(const struct proxy_interface_type *type,
 					proxy_property_match_func_t function,
 					const char *property_name,
-					const char *value, int state)
+					const void *value, int state)
 {
 	static struct l_queue *match;
 	static const struct l_queue_entry *entry;
