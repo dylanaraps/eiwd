@@ -56,6 +56,20 @@ Methods		void Scan()
 				Contains the type of the network.  Possible
 				types are "open", "psk", "8021x" (EAP)
 
+		void ConnectHiddenNetwork(string name)
+
+			Connect to the hidden network. Request the device
+			to connect to a hidden network implied by the name -
+			Network	SSID.
+
+			Possible errors: net.connman.iwd.Busy
+					 net.connman.iwd.Failed
+					 net.connman.iwd.InvalidArgs
+					 net.connman.iwd.NotConfigured
+					 net.connman.iwd.NotConnected
+					 net.connman.iwd.NotFound
+					 net.connman.iwd.ServiceSetOverlap
+
 		void RegisterSignalLevelAgent(object path,
 						 array(int16) levels)
 
