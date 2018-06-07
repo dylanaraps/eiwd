@@ -404,9 +404,23 @@ bool mschapv2_generate_authenticator_response(
 	return true;
 }
 
+static bool eap_mschapv2_reset_state(struct eap_state *eap)
+{
+	struct eap_mschapv2_state *state = eap_get_data(eap);
+
+	memset(state->peer_challenge, 0, sizeof(state->peer_challenge));
+	memset(state->server_challenge, 0, sizeof(state->server_challenge));
+
+	return true;
+}
+
 static void eap_mschapv2_state_free(struct eap_mschapv2_state *state)
 {
+	memset(state->password_hash, 0, sizeof(state->password_hash));
+
+	memset(state->user, 0, state->user_len);
 	l_free(state->user);
+	state->user_len = 0;
 
 	l_free(state);
 }
@@ -414,6 +428,8 @@ static void eap_mschapv2_state_free(struct eap_mschapv2_state *state)
 static void eap_mschapv2_free(struct eap_state *eap)
 {
 	struct eap_mschapv2_state *state;
+
+	eap_mschapv2_reset_state(eap);
 
 	state = eap_get_data(eap);
 	eap_set_data(eap, NULL);
@@ -791,6 +807,7 @@ static struct eap_method eap_mschapv2 = {
 	.handle_request = eap_mschapv2_handle_request,
 	.check_settings = eap_mschapv2_check_settings,
 	.load_settings = eap_mschapv2_load_settings,
+	.reset_state = eap_mschapv2_reset_state,
 };
 
 static int eap_mschapv2_init(void)
