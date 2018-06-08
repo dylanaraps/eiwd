@@ -136,10 +136,8 @@ static void databuf_free(struct databuf *databuf)
 	l_free(databuf);
 }
 
-static void eap_peap_free_rx_buffer(struct eap_state *eap)
+static void eap_peap_free_rx_buffer(struct eap_peap_state *peap)
 {
-	struct eap_peap_state *peap = eap_get_data(eap);
-
 	if (!peap->rx_pdu_buf)
 		return;
 
@@ -149,19 +147,20 @@ static void eap_peap_free_rx_buffer(struct eap_state *eap)
 	peap->rx_pdu_buf_offset = 0;
 }
 
-static void eap_peap_free(struct eap_state *eap)
+static void __eap_peap_reset_state(struct eap_peap_state *peap)
 {
-	struct eap_peap_state *peap = eap_get_data(eap);
+	peap->version = PEAP_VERSION_NOT_NEGOTIATED;
+	peap->completed = false;
+	peap->phase2_failed = false;
+	peap->expecting_frag_ack = false;
 
 	if (peap->tunnel) {
 		l_tls_free(peap->tunnel);
 		peap->tunnel = NULL;
 	}
 
-	if (peap->phase2_eap) {
-		eap_free(peap->phase2_eap);
-		peap->phase2_eap = NULL;
-	}
+	peap->tx_frag_offset = 0;
+	peap->tx_frag_last_len = 0;
 
 	if (peap->tx_pdu_buf) {
 		databuf_free(peap->tx_pdu_buf);
@@ -173,16 +172,43 @@ static void eap_peap_free(struct eap_state *eap)
 		peap->plain_buf = NULL;
 	}
 
-	eap_peap_free_rx_buffer(eap);
+	eap_peap_free_rx_buffer(peap);
+}
 
+static bool eap_peap_reset_state(struct eap_state *eap)
+{
+	struct eap_peap_state *peap = eap_get_data(eap);
+
+	if (!peap->phase2_eap)
+		return false;
+
+	if (!eap_reset(peap->phase2_eap))
+		return false;
+
+	__eap_peap_reset_state(peap);
+	return true;
+}
+
+static void eap_peap_free(struct eap_state *eap)
+{
+	struct eap_peap_state *peap = eap_get_data(eap);
+
+	__eap_peap_reset_state(peap);
 	eap_set_data(eap, NULL);
+
+	if (peap->phase2_eap) {
+		eap_free(peap->phase2_eap);
+		peap->phase2_eap = NULL;
+	}
 
 	l_free(peap->ca_cert);
 	l_free(peap->client_cert);
 	l_free(peap->client_key);
-	if (peap->passphrase)
+
+	if (peap->passphrase) {
 		memset(peap->passphrase, 0, strlen(peap->passphrase));
-	l_free(peap->passphrase);
+		l_free(peap->passphrase);
+	}
 
 	l_free(peap);
 }
@@ -751,7 +777,7 @@ static void eap_peap_handle_request(struct eap_state *eap,
 
 	eap_peap_handle_payload(eap, pkt, len);
 
-	eap_peap_free_rx_buffer(eap);
+	eap_peap_free_rx_buffer(peap);
 
 send_response:
 	if (!peap->tx_pdu_buf) {
@@ -994,6 +1020,7 @@ static struct eap_method eap_peap = {
 	.check_settings = eap_peap_check_settings,
 	.load_settings = eap_peap_load_settings,
 	.free = eap_peap_free,
+	.reset_state = eap_peap_reset_state,
 };
 
 static int eap_peap_init(void)
