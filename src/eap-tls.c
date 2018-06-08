@@ -47,34 +47,49 @@ struct eap_tls_state {
 	bool completed;
 };
 
+static void __eap_tls_reset_state(struct eap_tls_state *tls)
+{
+	tls->completed = false;
+
+	l_free(tls->rx_pkt_buf);
+	tls->rx_pkt_buf = NULL;
+	tls->rx_pkt_received = 0;
+	tls->rx_pkt_len = 0;
+
+	l_free(tls->tx_pkt_buf);
+	tls->tx_pkt_buf = NULL;
+	tls->tx_pkt_capacity = 0;
+	tls->tx_pkt_len = 0;
+	tls->tx_pkt_offset = 0;
+
+	if (tls->tls) {
+		l_tls_free(tls->tls);
+		tls->tls = NULL;
+	}
+}
+
+static bool eap_tls_reset_state(struct eap_state *eap)
+{
+	struct eap_tls_state *tls = eap_get_data(eap);
+
+	__eap_tls_reset_state(tls);
+	return true;
+}
+
 static void eap_tls_free(struct eap_state *eap)
 {
 	struct eap_tls_state *tls = eap_get_data(eap);
 
+	__eap_tls_reset_state(tls);
 	eap_set_data(eap, NULL);
 
 	l_free(tls->ca_cert);
 	l_free(tls->client_cert);
 	l_free(tls->client_key);
-	if (tls->passphrase)
+
+	if (tls->passphrase) {
 		memset(tls->passphrase, 0, strlen(tls->passphrase));
-	l_free(tls->passphrase);
-
-	if (tls->rx_pkt_buf) {
-		l_free(tls->rx_pkt_buf);
-		tls->rx_pkt_buf = NULL;
-	}
-
-	if (tls->tx_pkt_buf) {
-		l_free(tls->tx_pkt_buf);
-		tls->tx_pkt_buf = NULL;
-		tls->tx_pkt_capacity = 0;
-		tls->tx_pkt_len = 0;
-	}
-
-	if (tls->tls) {
-		l_tls_free(tls->tls);
-		tls->tls = NULL;
+		l_free(tls->passphrase);
 	}
 
 	l_free(tls);
@@ -518,6 +533,7 @@ static struct eap_method eap_tls = {
 	.handle_request = eap_tls_handle_request,
 	.check_settings = eap_tls_check_settings,
 	.load_settings = eap_tls_load_settings,
+	.reset_state = eap_tls_reset_state,
 };
 
 static int eap_tls_init(void)
