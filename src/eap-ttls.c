@@ -51,45 +51,67 @@ struct eap_ttls_state {
 	uint8_t negotiated_version;
 };
 
+static void __eap_ttls_reset_state(struct eap_ttls_state *ttls)
+{
+	ttls->phase1_completed = false;
+	ttls->completed = false;
+
+	l_free(ttls->rx_pkt_buf);
+	ttls->rx_pkt_buf = NULL;
+	ttls->rx_pkt_received = 0;
+	ttls->rx_pkt_len = 0;
+
+	l_free(ttls->tx_pkt_buf);
+	ttls->tx_pkt_buf = NULL;
+	ttls->tx_pkt_capacity = 0;
+	ttls->tx_pkt_len = 0;
+	ttls->tx_pkt_offset = 0;
+
+	l_free(ttls->avp_buf);
+	ttls->avp_buf = NULL;
+	ttls->avp_received = 0;
+	ttls->avp_capacity = 0;
+
+	if (ttls->tls) {
+		l_tls_free(ttls->tls);
+		ttls->tls = NULL;
+	}
+}
+
+static bool eap_ttls_reset_state(struct eap_state *eap)
+{
+	struct eap_ttls_state *ttls = eap_get_data(eap);
+
+	if (!ttls->eap)
+		return false;
+
+	if (!eap_reset(ttls->eap))
+		return false;
+
+	__eap_ttls_reset_state(ttls);
+	return true;
+}
+
 static void eap_ttls_free(struct eap_state *eap)
 {
 	struct eap_ttls_state *ttls = eap_get_data(eap);
+
+	__eap_ttls_reset_state(ttls);
 
 	eap_set_data(eap, NULL);
 
 	l_free(ttls->ca_cert);
 	l_free(ttls->client_cert);
 	l_free(ttls->client_key);
-	if (ttls->passphrase)
+
+	if (ttls->passphrase) {
 		memset(ttls->passphrase, 0, strlen(ttls->passphrase));
-	l_free(ttls->passphrase);
-
-	if (ttls->rx_pkt_buf) {
-		l_free(ttls->rx_pkt_buf);
-		ttls->rx_pkt_buf = NULL;
-	}
-
-	if (ttls->tx_pkt_buf) {
-		l_free(ttls->tx_pkt_buf);
-		ttls->tx_pkt_buf = NULL;
-		ttls->tx_pkt_capacity = 0;
-		ttls->tx_pkt_len = 0;
-	}
-
-	if (ttls->avp_buf) {
-		l_free(ttls->avp_buf);
-		ttls->avp_buf = NULL;
-		ttls->avp_received = 0;
+		l_free(ttls->passphrase);
 	}
 
 	if (ttls->eap) {
 		eap_free(ttls->eap);
 		ttls->eap = NULL;
-	}
-
-	if (ttls->tls) {
-		l_tls_free(ttls->tls);
-		ttls->tls = NULL;
 	}
 
 	l_free(ttls);
@@ -807,6 +829,7 @@ static struct eap_method eap_ttls = {
 	.handle_request = eap_ttls_handle_request,
 	.check_settings = eap_ttls_check_settings,
 	.load_settings = eap_ttls_load_settings,
+	.reset_state = eap_ttls_reset_state,
 };
 
 static int eap_ttls_init(void)
