@@ -1,0 +1,19 @@
+#!/usr/bin/python3
+
+import dbus
+import sys
+
+if len(sys.argv) != 3:
+	print("Usage: %s device up|down" % (sys.argv[0]))
+	sys.exit(1)
+
+bus = dbus.SystemBus()
+device = dbus.Interface(bus.get_object("net.connman.iwd", sys.argv[1]),
+                        "org.freedesktop.DBus.Properties")
+if (sys.argv[2] == 'up'):
+    device.Set("net.connman.iwd.Device", "Powered", dbus.Boolean(1))
+elif (sys.argv[2] == 'down'):
+    device.Set("net.connman.iwd.Device", "Powered", dbus.Boolean(0))
+else:
+    print("Invalid argument.  Must be 'up' or 'down'")
+    sys.exit(1);
