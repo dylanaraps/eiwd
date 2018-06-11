@@ -9,9 +9,20 @@ from iwd import IWD
 from iwd import NetworkType
 from hlrauc import AuthCenter
 
+from hostapd import HostapdCLI
+from hostapd import hostapd_map
+
 class Test(unittest.TestCase):
 
     def test_connection_success(self):
+        hostapd = None
+
+        for hostapd_if in list(hostapd_map.values()):
+            hpd = HostapdCLI(hostapd_if)
+            if hpd.get_config_value('ssid') == 'ssidEAP-SIM':
+                hostapd = hpd
+                break
+
         auth = AuthCenter('/tmp/hlrauc.sock', '/tmp/sim.db')
 
         wd = IWD()
@@ -42,6 +53,13 @@ class Test(unittest.TestCase):
         except:
                 auth.stop()
                 raise
+
+        condition = 'obj.connected'
+        wd.wait_for_object_condition(ordered_network.network_object, condition)
+
+        hostapd.eapol_reauth(device.address)
+
+        wd.wait(10)
 
         condition = 'obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
