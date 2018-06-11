@@ -171,6 +171,7 @@ static void check_milenage_cb(const uint8_t *res, const uint8_t *ck,
 		 * challenge packet.
 		 */
 		l_free(aka->chal_pkt);
+		aka->chal_pkt = NULL;
 
 		pos += eap_sim_build_header(eap, aka->type,
 				EAP_AKA_ST_SYNC_FAILURE, pos, 24);
@@ -182,10 +183,8 @@ static void check_milenage_cb(const uint8_t *res, const uint8_t *ck,
 		return;
 	}
 
-	if (!res || !ck || !ik) {
-		l_free(aka->chal_pkt);
+	if (!res || !ck || !ik)
 		goto chal_error;
-	}
 
 	if (aka->type == EAP_TYPE_AKA_PRIME) {
 		if (!eap_aka_derive_primes(ck, ik, aka->autn,
@@ -218,7 +217,6 @@ static void check_milenage_cb(const uint8_t *res, const uint8_t *ck,
 	if (!eap_sim_verify_mac(eap, aka->type, aka->chal_pkt, aka->pkt_len,
 			aka->k_aut, NULL, 0)) {
 		l_error("MAC was not valid");
-		l_free(aka->chal_pkt);
 		goto chal_error;
 	}
 
@@ -243,6 +241,7 @@ static void check_milenage_cb(const uint8_t *res, const uint8_t *ck,
 	}
 
 	l_free(aka->chal_pkt);
+	aka->chal_pkt = NULL;
 
 	eap_send_response(eap, aka->type, response, resp_len);
 
@@ -262,6 +261,8 @@ chal_fatal:
 	return;
 
 chal_error:
+	l_free(aka->chal_pkt);
+	aka->chal_pkt = NULL;
 	eap_sim_client_error(eap, aka->type, EAP_SIM_ERROR_PROCESS);
 }
 
@@ -410,6 +411,7 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 	if (sim_auth_check_milenage(aka->auth, rand, autn, check_milenage_cb,
 			eap) < 0) {
 		l_free(aka->chal_pkt);
+		aka->chal_pkt = NULL;
 		goto chal_error;
 	}
 
@@ -679,6 +681,28 @@ static bool eap_aka_prime_load_settings(struct eap_state *eap,
 	return eap_aka_common_load_settings(eap, settings, prefix);
 }
 
+static bool eap_aka_reset_state(struct eap_state *eap)
+{
+	struct eap_aka_handle *aka = eap_get_data(eap);
+
+	aka->state = EAP_AKA_STATE_UNCONNECTED;
+
+	l_free(aka->kdf_in);
+	aka->kdf_in = NULL;
+	l_free(aka->chal_pkt);
+	aka->chal_pkt = NULL;
+
+	memset(aka->mk, 0, sizeof(aka->mk));
+	memset(aka->k_encr, 0, sizeof(aka->k_encr));
+	memset(aka->k_aut, 0, sizeof(aka->k_aut));
+	memset(aka->msk, 0, sizeof(aka->msk));
+	memset(aka->emsk, 0, sizeof(aka->emsk));
+	memset(aka->k_re, 0, sizeof(aka->k_re));
+	memset(aka->autn, 0, sizeof(aka->autn));
+
+	return true;
+}
+
 static struct eap_method eap_aka = {
 	.request_type = EAP_TYPE_AKA,
 	.exports_msk = true,
@@ -687,7 +711,8 @@ static struct eap_method eap_aka = {
 	.handle_request = eap_aka_handle_request,
 	.check_settings = eap_aka_check_settings,
 	.load_settings = eap_aka_load_settings,
-	.get_identity = eap_aka_get_identity
+	.get_identity = eap_aka_get_identity,
+	.reset_state = eap_aka_reset_state
 };
 
 static struct eap_method eap_aka_prime = {
@@ -698,7 +723,8 @@ static struct eap_method eap_aka_prime = {
 	.handle_request = eap_aka_handle_request,
 	.check_settings = eap_aka_check_settings,
 	.load_settings = eap_aka_prime_load_settings,
-	.get_identity = eap_aka_get_identity
+	.get_identity = eap_aka_get_identity,
+	.reset_state = eap_aka_reset_state
 };
 
 static int eap_aka_init(void)
