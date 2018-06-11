@@ -291,10 +291,8 @@ static void gsm_callback(const uint8_t *sres, const uint8_t *kc,
 	uint8_t prng_buf[160];
 	uint8_t *mac_pos;
 
-	if (!sres || !kc) {
-		l_free(sim->chal_pkt);
+	if (!sres || !kc)
 		goto chal_error;
-	}
 
 	if (sim->protected)
 		resp_len += 4;
@@ -317,7 +315,6 @@ static void gsm_callback(const uint8_t *sres, const uint8_t *kc,
 			sim->pkt_len, sim->k_aut, sim->nonce,
 			EAP_SIM_NONCE_LEN)) {
 		l_error("server MAC was invalid");
-		l_free(sim->chal_pkt);
 		goto chal_error;
 	}
 
@@ -354,6 +351,7 @@ static void gsm_callback(const uint8_t *sres, const uint8_t *kc,
 	}
 
 	l_free(sim->chal_pkt);
+	sim->chal_pkt = NULL;
 
 	eap_send_response(eap, EAP_TYPE_SIM, response, resp_len);
 
@@ -378,6 +376,8 @@ chal_fatal:
 	return;
 
 chal_error:
+	l_free(sim->chal_pkt);
+	sim->chal_pkt = NULL;
 	eap_sim_client_error(eap, EAP_TYPE_SIM, EAP_SIM_ERROR_PROCESS);
 }
 
@@ -447,6 +447,7 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 
 	if (sim_auth_run_gsm(sim->auth, rands, 3, gsm_callback, eap) < 0) {
 		l_free(sim->chal_pkt);
+		sim->chal_pkt = NULL;
 		goto chal_error;
 	}
 
@@ -630,6 +631,27 @@ static int eap_sim_check_settings(struct l_settings *settings,
 	return 0;
 }
 
+static bool eap_sim_reset_state(struct eap_state *eap)
+{
+	struct eap_sim_handle *sim = eap_get_data(eap);
+
+	sim->state = EAP_SIM_STATE_UNCONNECTED;
+
+	l_free(sim->vlist);
+	sim->vlist = NULL;
+	l_free(sim->chal_pkt);
+	sim->chal_pkt = NULL;
+
+	memset(sim->nonce, 0, sizeof(sim->nonce));
+	memset(sim->mk, 0, sizeof(sim->mk));
+	memset(sim->k_encr, 0, sizeof(sim->k_encr));
+	memset(sim->k_aut, 0, sizeof(sim->k_aut));
+	memset(sim->msk, 0, sizeof(sim->msk));
+	memset(sim->emsk, 0, sizeof(sim->emsk));
+
+	return true;
+}
+
 static bool eap_sim_load_settings(struct eap_state *eap,
 					struct l_settings *settings,
 					const char *prefix)
@@ -667,7 +689,8 @@ static struct eap_method eap_sim = {
 	.handle_request = eap_sim_handle_request,
 	.check_settings = eap_sim_check_settings,
 	.load_settings = eap_sim_load_settings,
-	.get_identity = eap_sim_get_identity
+	.get_identity = eap_sim_get_identity,
+	.reset_state = eap_sim_reset_state
 };
 
 static int eap_sim_init(void)
