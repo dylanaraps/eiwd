@@ -3472,6 +3472,30 @@ int netdev_set_iftype(struct netdev *netdev, enum netdev_iftype type)
 	return 0;
 }
 
+static void netdev_bridge_port_event(const struct ifinfomsg *ifi, int bytes,
+					bool added)
+{
+	struct netdev *netdev;
+	struct rtattr *attr;
+	uint32_t master = 0;
+
+	netdev = netdev_find(ifi->ifi_index);
+	if (!netdev)
+		return;
+
+	for (attr = IFLA_RTA(ifi); RTA_OK(attr, bytes);
+			attr = RTA_NEXT(attr, bytes)) {
+		switch (attr->rta_type) {
+		case IFLA_MASTER:
+			memcpy(&master, RTA_DATA(attr), sizeof(master));
+			break;
+		}
+	}
+
+	l_debug("netdev: %d %s bridge: %d", ifi->ifi_index,
+		(added ? "added to" : "removed from"), master);
+}
+
 static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 {
 	struct netdev *netdev;
@@ -3479,6 +3503,11 @@ static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 	char old_name[IFNAMSIZ];
 	uint8_t old_addr[ETH_ALEN];
 	struct rtattr *attr;
+
+	if (ifi->ifi_family == AF_BRIDGE) {
+		netdev_bridge_port_event(ifi, bytes, true);
+		return;
+	}
 
 	netdev = netdev_find(ifi->ifi_index);
 	if (!netdev)
@@ -3524,6 +3553,11 @@ static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 static void netdev_dellink_notify(const struct ifinfomsg *ifi, int bytes)
 {
 	struct netdev *netdev;
+
+	if (ifi->ifi_family == AF_BRIDGE) {
+		netdev_bridge_port_event(ifi, bytes, false);
+		return;
+	}
 
 	netdev = l_queue_remove_if(netdev_list, netdev_match,
 						L_UINT_TO_PTR(ifi->ifi_index));
