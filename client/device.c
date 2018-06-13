@@ -35,6 +35,7 @@
 struct device {
 	bool powered;
 	bool scanning;
+	bool wds;
 	char *address;
 	char *name;
 	char *state;
@@ -180,6 +181,27 @@ static void set_powered(void *data, struct l_dbus_message_iter *variant)
 	device->powered = value;
 }
 
+static const char *get_wds_tostr(const void *data)
+{
+	const struct device *device = data;
+
+	return device->wds ? "on" : "off";
+}
+
+static void set_wds(void *data, struct l_dbus_message_iter *variant)
+{
+	struct device *device = data;
+	bool value;
+
+	if (!l_dbus_message_iter_get_variant(variant, "b", &value)) {
+		device->wds = false;
+
+		return;
+	}
+
+	device->wds = value;
+}
+
 static const char *get_scanning_tostr(const void *data)
 {
 	const struct device *device = data;
@@ -220,6 +242,7 @@ static const struct proxy_interface_property device_properties[] = {
 	{ "Powered",  "b", set_powered,  get_powered_tostr, true },
 	{ "Adapter",  "o", set_adapter },
 	{ "Address",  "s", set_address,  get_address },
+	{ "WDS",      "b", set_wds,      get_wds_tostr,     true },
 	{ "Scanning", "b", set_scanning, get_scanning_tostr },
 	{ "State",    "s", set_state,    get_state },
 	{ "ConnectedNetwork",
