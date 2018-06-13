@@ -701,7 +701,7 @@ static int eap_mschapv2_check_settings(struct l_settings *settings,
 		unsigned char *tmp;
 		size_t len;
 
-		tmp = l_util_from_hexstring(password, &len);
+		tmp = l_util_from_hexstring(password_hash, &len);
 		l_free(tmp);
 
 		if (!tmp || len != 16) {
