@@ -1488,7 +1488,8 @@ static void device_lost_beacon(struct device *device)
 {
 	l_debug("%d", device->index);
 
-	if (device->preparing_roam || device->state == DEVICE_STATE_ROAMING)
+	if (device->state != DEVICE_STATE_ROAMING &&
+			device->state != DEVICE_STATE_CONNECTED)
 		return;
 
 	/*
@@ -1499,6 +1500,9 @@ static void device_lost_beacon(struct device *device)
 	 * and we might wasting our time with those mechanisms.
 	 */
 	device->roam_no_orig_ap = true;
+
+	if (device->preparing_roam || device->state == DEVICE_STATE_ROAMING)
+		return;
 
 	device_roam_trigger_cb(NULL, device);
 }
