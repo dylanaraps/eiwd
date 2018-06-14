@@ -634,9 +634,6 @@ err:
 static bool set_password_from_string(struct eap_mschapv2_state *state,
 						const char *password)
 {
-	if (!l_utf8_validate(password, strlen(password), NULL))
-		return false;
-
 	return mschapv2_nt_password_hash(password, state->password_hash);
 }
 
@@ -728,11 +725,6 @@ static int eap_mschapv2_check_settings(struct l_settings *settings,
 	password = l_strdup(secret->value);
 
 validate:
-	if (!l_utf8_validate(password, strlen(password), NULL)) {
-		l_error("Password is not valid UTF-8");
-		return -EINVAL;
-	}
-
 	if (!mschapv2_nt_password_hash(password, hash))
 		return -EINVAL;
 
