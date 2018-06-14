@@ -256,7 +256,7 @@ static void netdev_set_powered_result(int error, uint16_t type,
 	if (!cb_data)
 		return;
 
-	cb_data->callback(cb_data->netdev, -error, cb_data->user_data);
+	cb_data->callback(cb_data->netdev, error, cb_data->user_data);
 }
 
 static void netdev_set_powered_destroy(void *user_data)
@@ -3517,7 +3517,7 @@ static void netdev_set_4addr_cb(struct l_genl_msg *msg, void *user_data)
 	if (!error)
 		cb_data->netdev->use_4addr = cb_data->value;
 
-	cb_data->callback(cb_data->netdev, -error, cb_data->user_data);
+	cb_data->callback(cb_data->netdev, error, cb_data->user_data);
 }
 
 static void netdev_set_4addr_destroy(void *user_data)
