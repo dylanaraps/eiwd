@@ -660,7 +660,7 @@ static int eap_mschapv2_check_settings(struct l_settings *settings,
 					struct l_queue **out_missing)
 {
 	const char *password_hash;
-	L_AUTO_FREE_VAR(char *, password);
+	L_AUTO_FREE_VAR(char *, password) = NULL;
 	L_AUTO_FREE_VAR(char *, identity);
 	const struct eap_secret_info *secret;
 	char setting[64], setting2[64];
@@ -670,12 +670,10 @@ static int eap_mschapv2_check_settings(struct l_settings *settings,
 	identity = l_settings_get_string(settings, "Security", setting);
 
 	snprintf(setting2, sizeof(setting2), "%sPassword", prefix);
-	password = l_settings_get_string(settings, "Security", setting2);
 
 	if (!identity) {
 		secret = l_queue_find(secrets, eap_secret_info_match, setting);
 		if (secret) {
-			l_free(password);
 			identity = l_strdup(secret->value);
 			password = l_strdup(secret->value +
 						strlen(secret->value) + 1);
@@ -687,6 +685,8 @@ static int eap_mschapv2_check_settings(struct l_settings *settings,
 					setting, setting2, NULL);
 		return 0;
 	}
+
+	password = l_settings_get_string(settings, "Security", setting2);
 
 	snprintf(setting, sizeof(setting), "%sPassword-Hash", prefix);
 	password_hash = l_settings_get_value(settings, "Security",
