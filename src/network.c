@@ -410,6 +410,29 @@ static bool network_set_8021x_secrets(struct network *network)
 	return true;
 }
 
+static int network_load_psk(struct network *network)
+{
+	size_t len;
+	const char *psk = l_settings_get_value(network->settings,
+						"Security", "PreSharedKey");
+
+	if (!psk)
+		return -ENOKEY;
+
+	l_free(network->psk);
+	network->psk = l_util_from_hexstring(psk, &len);
+	if (!network->psk)
+		return -EINVAL;
+
+	if (len != 32) {
+		l_free(network->psk);
+		network->psk = NULL;
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 void network_sync_psk(struct network *network)
 {
 	char *hex;
@@ -429,16 +452,27 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 {
 	struct wiphy *wiphy = device_get_wiphy(network->device);
 	bool is_autoconnectable;
+	bool is_rsn;
+	int ret;
 
 	switch (network_get_security(network)) {
 	case SECURITY_NONE:
-		network_settings_load(network);
+		is_rsn = false;
 		break;
 	case SECURITY_PSK:
-	{
+		if (network->ask_psk)
+			return -ENOKEY;
+
+		/* Fall through */
+	case SECURITY_8021X:
+		is_rsn = true;
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	if (is_rsn) {
 		struct ie_rsn_info rsn;
-		const char *psk;
-		size_t len;
 
 		memset(&rsn, 0, sizeof(rsn));
 		scan_bss_get_rsn_info(bss, &rsn);
@@ -448,65 +482,48 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 			l_debug("Cipher mis-match");
 			return -ENETUNREACH;
 		}
-
-		if (network->ask_psk)
-			return -ENOKEY;
-
-		if (!network_settings_load(network))
-			return -ENOKEY;
-
-		psk = l_settings_get_value(network->settings, "Security",
-						"PreSharedKey");
-
-		if (!psk) {
-			network_settings_close(network);
-			return -ENOKEY;
-		}
-
-		l_free(network->psk);
-		network->psk = l_util_from_hexstring(psk, &len);
-
-		if (network->psk && len != 32) {
-			network_settings_close(network);
-			return -ENOKEY;
-		}
-
-		break;
-	}
-	case SECURITY_8021X:
-	{
-		struct l_queue *missing_secrets = NULL;
-
-		if (!network_settings_load(network))
-			return -ENOKEY;
-
-		if (eap_check_settings(network->settings, network->secrets,
-					"EAP-", true, &missing_secrets) ||
-				!l_queue_isempty(missing_secrets) ||
-				!network_set_8021x_secrets(network)) {
-			l_queue_destroy(missing_secrets, eap_secret_info_free);
-			network_settings_close(network);
-			return -ENOKEY;
-		}
-
-		break;
-	}
-	default:
-		return -ENOTSUP;
 	}
 
+	if (!network_settings_load(network))
+		return -ENOKEY;
+
+	/* If no entry, default to Autoconnectable=True */
 	if (!l_settings_get_bool(network->settings, "Settings",
 					"Autoconnect", &is_autoconnectable))
-		goto connect;
+		is_autoconnectable = true;
 
-	if (!is_autoconnectable) {
-		network_settings_close(network);
-		return -EPERM;
+	ret = -EPERM;
+	if (!is_autoconnectable)
+		goto close_settings;
+
+	if (network_get_security(network) == SECURITY_PSK) {
+		ret = network_load_psk(network);
+		if (ret < 0)
+			goto close_settings;
+	} else if (network_get_security(network) == SECURITY_8021X) {
+		struct l_queue *missing_secrets = NULL;
+
+		ret = eap_check_settings(network->settings, network->secrets,
+					"EAP-", true, &missing_secrets);
+		if (ret < 0)
+			goto close_settings;
+
+		ret = -ENOKEY;
+		if (!l_queue_isempty(missing_secrets)) {
+			l_queue_destroy(missing_secrets, eap_secret_info_free);
+			goto close_settings;
+		}
+
+		if (!network_set_8021x_secrets(network))
+			goto close_settings;
 	}
 
-connect:
 	device_connect_network(network->device, network, bss, NULL);
 	return 0;
+
+close_settings:
+	network_settings_close(network);
+	return ret;
 }
 
 void network_connect_failed(struct network *network)
