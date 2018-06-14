@@ -96,7 +96,7 @@ static bool eap_gtc_load_settings(struct eap_state *eap,
 	char *secret;
 
 	snprintf(setting, sizeof(setting), "%sGTC-Secret", prefix);
-	secret = l_strdup(l_settings_get_value(settings, "Security", setting));
+	secret = l_settings_get_string(settings, "Security", setting);
 
 	gtc = l_new(struct eap_gtc_state, 1);
 	gtc->secret = secret;

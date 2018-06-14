@@ -721,12 +721,13 @@ static int eap_pwd_check_settings(struct l_settings *settings,
 					const char *prefix,
 					struct l_queue **out_missing)
 {
-	const char *identity, *password = NULL;
+	const char *password;
+	L_AUTO_FREE_VAR(char *, identity);
 	const struct eap_secret_info *secret;
 	char setting[64], setting2[64];
 
 	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-	identity = l_settings_get_value(settings, "Security", setting);
+	identity = l_settings_get_string(settings, "Security", setting);
 
 	snprintf(setting2, sizeof(setting2), "%sPWD-Password", prefix);
 	password = l_settings_get_value(settings, "Security", setting2);
@@ -766,8 +767,7 @@ static bool eap_pwd_load_settings(struct eap_state *eap,
 	pwd->state = EAP_PWD_STATE_INIT;
 
 	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-	pwd->identity = l_strdup(l_settings_get_value(settings, "Security",
-			setting));
+	pwd->identity = l_settings_get_string(settings, "Security", setting);
 
 	if (!pwd->identity) {
 		l_error("EAP-Identity is missing");
@@ -775,8 +775,7 @@ static bool eap_pwd_load_settings(struct eap_state *eap,
 	}
 
 	snprintf(setting, sizeof(setting), "%sPWD-Password", prefix);
-	pwd->password = l_strdup(l_settings_get_value(settings, "Security",
-			setting));
+	pwd->password = l_settings_get_string(settings, "Security", setting);
 
 	if (!pwd->password) {
 		l_error("EAP-PWD password is missing");

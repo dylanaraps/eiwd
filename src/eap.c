@@ -509,8 +509,8 @@ bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
 	/* get identity from settings or from EAP method */
 	if (!eap->method->get_identity) {
 		snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-		eap->identity = l_strdup(l_settings_get_value(settings,
-				"Security", setting));
+		eap->identity = l_settings_get_string(settings,
+							"Security", setting);
 	} else {
 		eap->identity = l_strdup(eap->method->get_identity(eap));
 	}

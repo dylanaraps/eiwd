@@ -660,12 +660,14 @@ static int eap_ttls_check_settings(struct l_settings *settings,
 					struct l_queue **out_missing)
 {
 	char setting[64], client_cert_setting[64], passphrase_setting[64];
-	const char *path, *client_cert, *passphrase;
+	L_AUTO_FREE_VAR(char *, path) = NULL;
+	L_AUTO_FREE_VAR(char *, client_cert) = NULL;
+	L_AUTO_FREE_VAR(char *, passphrase) = NULL;
 	uint8_t *cert;
 	size_t size;
 
 	snprintf(setting, sizeof(setting), "%sTTLS-CACert", prefix);
-	path = l_settings_get_value(settings, "Security", setting);
+	path = l_settings_get_string(settings, "Security", setting);
 	if (path) {
 		cert = l_pem_load_certificate(path, &size);
 		if (!cert) {
@@ -678,7 +680,7 @@ static int eap_ttls_check_settings(struct l_settings *settings,
 
 	snprintf(client_cert_setting, sizeof(client_cert_setting),
 			"%sTTLS-ClientCert", prefix);
-	client_cert = l_settings_get_value(settings, "Security",
+	client_cert = l_settings_get_string(settings, "Security",
 						client_cert_setting);
 	if (client_cert) {
 		cert = l_pem_load_certificate(client_cert, &size);
@@ -690,8 +692,10 @@ static int eap_ttls_check_settings(struct l_settings *settings,
 		l_free(cert);
 	}
 
+	l_free(path);
+
 	snprintf(setting, sizeof(setting), "%sTTLS-ClientKey", prefix);
-	path = l_settings_get_value(settings, "Security", setting);
+	path = l_settings_get_string(settings, "Security", setting);
 
 	if (path && !client_cert) {
 		l_error("%s present but no client certificate (%s)",
@@ -701,7 +705,7 @@ static int eap_ttls_check_settings(struct l_settings *settings,
 
 	snprintf(passphrase_setting, sizeof(passphrase_setting),
 			"%sTTLS-ClientKeyPassphrase", prefix);
-	passphrase = l_settings_get_value(settings, "Security",
+	passphrase = l_settings_get_string(settings, "Security",
 						passphrase_setting);
 
 	if (!passphrase) {
@@ -774,21 +778,18 @@ static bool eap_ttls_load_settings(struct eap_state *eap,
 	ttls = l_new(struct eap_ttls_state, 1);
 
 	snprintf(setting, sizeof(setting), "%sTTLS-CACert", prefix);
-	ttls->ca_cert = l_strdup(l_settings_get_value(settings,
-						"Security", setting));
+	ttls->ca_cert = l_settings_get_string(settings, "Security", setting);
 
 	snprintf(setting, sizeof(setting), "%sTTLS-ClientCert", prefix);
-	ttls->client_cert = l_strdup(l_settings_get_value(settings,
-						"Security", setting));
+	ttls->client_cert = l_settings_get_string(settings,
+							"Security", setting);
 
 	snprintf(setting, sizeof(setting), "%sTTLS-ClientKey", prefix);
-	ttls->client_key = l_strdup(l_settings_get_value(settings,
-						"Security", setting));
+	ttls->client_key = l_settings_get_string(settings, "Security", setting);
 
 	snprintf(setting, sizeof(setting), "%sTTLS-ClientKeyPassphrase",
 			prefix);
-	ttls->passphrase = l_strdup(l_settings_get_value(settings,
-						"Security", setting));
+	ttls->passphrase = l_settings_get_string(settings, "Security", setting);
 
 	ttls->eap = eap_new(eap_ttls_eap_tx_packet,
 				eap_ttls_eap_complete, eap);

@@ -848,12 +848,14 @@ static int eap_peap_check_settings(struct l_settings *settings,
 					struct l_queue **out_missing)
 {
 	char entry[64], client_cert_entry[64], passphrase_entry[64];
-	const char *path, *client_cert, *passphrase;
+	L_AUTO_FREE_VAR(char *, path) = NULL;
+	L_AUTO_FREE_VAR(char *, client_cert) = NULL;
+	L_AUTO_FREE_VAR(char *, passphrase) = NULL;
 	uint8_t *cert;
 	size_t size;
 
 	snprintf(entry, sizeof(entry), "%sPEAP-CACert", prefix);
-	path = l_settings_get_value(settings, "Security", entry);
+	path = l_settings_get_string(settings, "Security", entry);
 	if (path) {
 		cert = l_pem_load_certificate(path, &size);
 		if (!cert) {
@@ -866,7 +868,7 @@ static int eap_peap_check_settings(struct l_settings *settings,
 
 	snprintf(client_cert_entry, sizeof(client_cert_entry),
 			"%sPEAP-ClientCert", prefix);
-	client_cert = l_settings_get_value(settings, "Security",
+	client_cert = l_settings_get_string(settings, "Security",
 						client_cert_entry);
 	if (client_cert) {
 		cert = l_pem_load_certificate(client_cert, &size);
@@ -878,8 +880,10 @@ static int eap_peap_check_settings(struct l_settings *settings,
 		l_free(cert);
 	}
 
+	l_free(path);
+
 	snprintf(entry, sizeof(entry), "%sPEAP-ClientKey", prefix);
-	path = l_settings_get_value(settings, "Security", entry);
+	path = l_settings_get_string(settings, "Security", entry);
 
 	if (path && !client_cert) {
 		l_error("%s present but no client certificate (%s)",
@@ -889,7 +893,7 @@ static int eap_peap_check_settings(struct l_settings *settings,
 
 	snprintf(passphrase_entry, sizeof(passphrase_entry),
 			"%sPEAP-ClientKeyPassphrase", prefix);
-	passphrase = l_settings_get_value(settings, "Security",
+	passphrase = l_settings_get_string(settings, "Security",
 						passphrase_entry);
 
 	if (!passphrase) {
@@ -963,20 +967,16 @@ static bool eap_peap_load_settings(struct eap_state *eap,
 	peap->version = PEAP_VERSION_NOT_NEGOTIATED;
 
 	snprintf(entry, sizeof(entry), "%sPEAP-CACert", prefix);
-	peap->ca_cert = l_strdup(l_settings_get_value(settings, "Security",
-									entry));
+	peap->ca_cert = l_settings_get_string(settings, "Security", entry);
 
 	snprintf(entry, sizeof(entry), "%sPEAP-ClientCert", prefix);
-	peap->client_cert = l_strdup(l_settings_get_value(settings, "Security",
-									entry));
+	peap->client_cert = l_settings_get_string(settings, "Security", entry);
 
 	snprintf(entry, sizeof(entry), "%sPEAP-ClientKey", prefix);
-	peap->client_key = l_strdup(l_settings_get_value(settings, "Security",
-									entry));
+	peap->client_key = l_settings_get_string(settings, "Security", entry);
 
 	snprintf(entry, sizeof(entry), "%sPEAP-ClientKeyPassphrase", prefix);
-	peap->passphrase = l_strdup(l_settings_get_value(settings, "Security",
-									entry));
+	peap->passphrase = l_settings_get_string(settings, "Security", entry);
 
 	peap->phase2_eap = eap_new(eap_peap_phase2_send_response,
 					eap_peap_phase2_complete, eap);

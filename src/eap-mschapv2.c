@@ -662,22 +662,26 @@ static int eap_mschapv2_check_settings(struct l_settings *settings,
 					const char *prefix,
 					struct l_queue **out_missing)
 {
-	const char *identity, *password = NULL, *password_hash;
+	const char *password_hash;
+	L_AUTO_FREE_VAR(char *, password);
+	L_AUTO_FREE_VAR(char *, identity);
 	const struct eap_secret_info *secret;
 	char setting[64], setting2[64];
 	uint8_t hash[16];
 
 	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-	identity = l_settings_get_value(settings, "Security", setting);
+	identity = l_settings_get_string(settings, "Security", setting);
 
 	snprintf(setting2, sizeof(setting2), "%sPassword", prefix);
-	password = l_settings_get_value(settings, "Security", setting2);
+	password = l_settings_get_string(settings, "Security", setting2);
 
 	if (!identity) {
 		secret = l_queue_find(secrets, eap_secret_info_match, setting);
 		if (secret) {
-			identity = secret->value;
-			password = secret->value + strlen(secret->value) + 1;
+			l_free(password);
+			identity = l_strdup(secret->value);
+			password = l_strdup(secret->value +
+						strlen(secret->value) + 1);
 
 			goto validate;
 		}
@@ -721,7 +725,7 @@ static int eap_mschapv2_check_settings(struct l_settings *settings,
 		return 0;
 	}
 
-	password = secret->value;
+	password = l_strdup(secret->value);
 
 validate:
 	if (!l_utf8_validate(password, strlen(password), NULL)) {
@@ -740,13 +744,14 @@ static bool eap_mschapv2_load_settings(struct eap_state *eap,
 					const char *prefix)
 {
 	struct eap_mschapv2_state *state;
-	const char *identity, *password;
+	L_AUTO_FREE_VAR(char *, identity);
+	L_AUTO_FREE_VAR(char *, password) = NULL;
 	char setting[64];
 
 	state = l_new(struct eap_mschapv2_state, 1);
 
 	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-	identity = l_settings_get_value(settings, "Security", setting);
+	identity = l_settings_get_string(settings, "Security", setting);
 	if (!identity)
 		goto error;
 
@@ -755,20 +760,21 @@ static bool eap_mschapv2_load_settings(struct eap_state *eap,
 
 	/* Either read the password-hash from hexdump or password and hash it */
 	snprintf(setting, sizeof(setting), "%sPassword", prefix);
-	password = l_settings_get_value(settings, "Security", setting);
+	password = l_settings_get_string(settings, "Security", setting);
+
 	if (password)
 		set_password_from_string(state, password);
-
-	if (!password) {
+	else {
 		unsigned char *tmp;
 		size_t len;
+		const char *hash_str;
 
 		snprintf(setting, sizeof(setting), "%sPassword-Hash", prefix);
-		password = l_settings_get_value(settings, "Security", setting);
-		if (!password)
+		hash_str = l_settings_get_value(settings, "Security", setting);
+		if (!hash_str)
 			goto error;
 
-		tmp = l_util_from_hexstring(password, &len);
+		tmp = l_util_from_hexstring(hash_str, &len);
 		memcpy(state->password_hash, tmp, 16);
 		l_free(tmp);
 	}

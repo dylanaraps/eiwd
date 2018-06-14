@@ -112,7 +112,7 @@ static bool eap_md5_load_settings(struct eap_state *eap,
 	char *secret;
 
 	snprintf(setting, sizeof(setting), "%sMD5-Secret", prefix);
-	secret = l_strdup(l_settings_get_value(settings, "Security", setting));
+	secret = l_settings_get_string(settings, "Security", setting);
 
 	md5 = l_new(struct eap_md5_state, 1);
 	md5->secret = secret;
