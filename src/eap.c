@@ -422,6 +422,7 @@ int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 	const char *method_name;
 	const struct l_queue_entry *entry;
 	struct eap_method *method;
+	int ret = 0;
 
 	snprintf(setting, sizeof(setting), "%sMethod", prefix);
 	method_name = l_settings_get_value(settings, "Security", setting);
@@ -454,20 +455,32 @@ int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 		return -ENOTSUP;
 	}
 
-	/* method may not store identity in settings file */
-	if (!method->get_identity) {
-		snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-		if (!l_settings_get_value(settings, "Security", setting)) {
-			l_error("Property %s is missing", setting);
+	if (method->check_settings)
+		ret = method->check_settings(settings, secrets,
+						prefix, out_missing);
+	if (ret)
+		return ret;
 
-			return -ENOENT;
-		}
-	}
-
-	if (!method->check_settings)
+	/*
+	 * Methods that provide the get_identity callback are responsible
+	 * for ensuring, inside check_settings(), that they have enough data
+	 * to return the identity after load_settings().
+	 */
+	if (method->get_identity)
 		return 0;
 
-	return method->check_settings(settings, secrets, prefix, out_missing);
+	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
+	if (!l_settings_get_value(settings, "Security", setting) &&
+			!l_queue_find(secrets, eap_secret_info_match,
+					setting) &&
+			!l_queue_find(*out_missing, eap_secret_info_match,
+					setting)) {
+		l_error("Property %s is missing", setting);
+
+		return -ENOENT;
+	}
+
+	return 0;
 }
 
 bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
