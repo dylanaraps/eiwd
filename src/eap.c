@@ -492,6 +492,11 @@ int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 		}
 	}
 
+	if (missing && l_queue_isempty(missing)) {
+		l_queue_destroy(missing, NULL);
+		missing = NULL;
+	}
+
 	*out_missing = missing;
 	return 0;
 
