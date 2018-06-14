@@ -2100,41 +2100,43 @@ static void run_tests(void)
 	}
 
 	ptr = strstr(cmdline, "GDB=");
-
 	if (ptr) {
+		*ptr = '\0';
 		test_action_str = ptr + 5;
 
 		ptr = strchr(test_action_str, '\'');
-
 		*ptr = '\0';
-
 		gdb_opt = l_strdup(test_action_str);
 	}
 
 	ptr = strstr(cmdline, "VALGRIND=");
-
 	if (ptr) {
-		test_action_str = ptr + 9;
-		ptr += 1;
+		char *end;
+		unsigned long v;
+
 		*ptr = '\0';
-
-		valgrind = (bool) atoi(test_action_str);
-
-		if (valgrind != true && valgrind != false) {
+		test_action_str = ptr + 9;
+		v = strtoul(test_action_str, &end, 10);
+		if ((v != 0 && v != 1) || end != test_action_str + 1) {
 			l_error("malformed valgrind option");
 			return;
 		}
+
+		valgrind = (bool) v;
 	}
 
 	ptr = strstr(cmdline, "PATH=");
-
 	if (!ptr) {
 		l_error("No $PATH section found");
 		return;
 	}
 
-	ptr += 5;
-	setenv("PATH", ptr, true);
+	*ptr = '\0';
+	test_action_str = ptr + 6;
+	ptr = strchr(test_action_str, '\'');
+	*ptr = '\0';
+	l_info("%s", test_action_str);
+	setenv("PATH", test_action_str, true);
 
 	ptr = strstr(cmdline, "TESTARGS=");
 
