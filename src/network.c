@@ -940,8 +940,6 @@ static struct l_dbus_message *network_connect_8021x(struct network *network,
 	reply = dbus_error_no_agent(message);
 
 error:
-	l_queue_destroy(missing_secrets, eap_secret_info_free);
-
 	network_settings_close(network);
 
 	l_queue_destroy(network->secrets, eap_secret_info_free);

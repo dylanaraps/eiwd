@@ -414,12 +414,30 @@ void eap_secret_info_free(void *data)
 	l_free(info);
 }
 
+static int eap_setting_exists(struct l_settings *settings,
+				const char *setting,
+				struct l_queue *secrets,
+				struct l_queue *missing)
+{
+	if (l_settings_get_value(settings, "Security", setting))
+		return 0;
+
+	if (l_queue_find(secrets, eap_secret_info_match, setting))
+		return 0;
+
+	if (l_queue_find(missing, eap_secret_info_match, setting))
+		return 0;
+
+	return -ENOENT;
+}
+
 int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 			const char *prefix, bool set_key_material,
 			struct l_queue **out_missing)
 {
 	char setting[64];
 	const char *method_name;
+	struct l_queue *missing = NULL;
 	const struct l_queue_entry *entry;
 	struct eap_method *method;
 	int ret = 0;
@@ -429,7 +447,6 @@ int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 
 	if (!method_name) {
 		l_error("Property %s missing", setting);
-
 		return -ENOENT;
 	}
 
@@ -443,7 +460,6 @@ int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 
 	if (!entry) {
 		l_error("EAP method \"%s\" unsupported", method_name);
-
 		return -ENOTSUP;
 	}
 
@@ -451,36 +467,37 @@ int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 	if (set_key_material && !method->exports_msk) {
 		l_error("EAP method \"%s\" doesn't export key material",
 				method_name);
-
 		return -ENOTSUP;
 	}
 
 	if (method->check_settings)
 		ret = method->check_settings(settings, secrets,
-						prefix, out_missing);
+						prefix, &missing);
 	if (ret)
-		return ret;
+		goto error;
 
 	/*
 	 * Methods that provide the get_identity callback are responsible
 	 * for ensuring, inside check_settings(), that they have enough data
 	 * to return the identity after load_settings().
 	 */
-	if (method->get_identity)
-		return 0;
+	if (!method->get_identity) {
+		snprintf(setting, sizeof(setting), "%sIdentity", prefix);
 
-	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-	if (!l_settings_get_value(settings, "Security", setting) &&
-			!l_queue_find(secrets, eap_secret_info_match,
-					setting) &&
-			!l_queue_find(*out_missing, eap_secret_info_match,
-					setting)) {
-		l_error("Property %s is missing", setting);
-
-		return -ENOENT;
+		ret = eap_setting_exists(settings, setting, secrets, missing);
+		if (ret < 0) {
+			l_error("Property %s is missing", setting);
+			ret = -ENOENT;
+			goto error;
+		}
 	}
 
+	*out_missing = missing;
 	return 0;
+
+error:
+	l_queue_destroy(missing, eap_secret_info_free);
+	return ret;
 }
 
 bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
