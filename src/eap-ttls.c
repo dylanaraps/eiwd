@@ -714,7 +714,7 @@ static int eap_ttls_check_settings(struct l_settings *settings,
 		secret = l_queue_find(secrets, eap_secret_info_match,
 					passphrase_setting);
 		if (secret)
-			passphrase = secret->value;
+			passphrase = l_strdup(secret->value);
 	}
 
 	if (path) {
