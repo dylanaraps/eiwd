@@ -385,15 +385,18 @@ static bool network_set_8021x_secrets(struct network *network)
 			break;
 
 		case EAP_SECRET_REMOTE_USER_PASSWORD:
-			setting = alloca(strlen(secret->id) + 10);
-
-			sprintf(setting, "%s-User", secret->id);
 			if (!l_settings_set_string(network->settings,
-							"Security", setting,
+							"Security", secret->id,
 							secret->value))
 				return false;
 
-			sprintf(setting, "%s-Password", secret->id);
+			if (secret->id2)
+				setting = secret->id2;
+			else {
+				setting = alloca(strlen(secret->id) + 10);
+				sprintf(setting, "%s-Password", secret->id);
+			}
+
 			if (!l_settings_set_string(network->settings,
 							"Security", setting,
 							secret->value + 1 +

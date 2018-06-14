@@ -723,31 +723,31 @@ static int eap_pwd_check_settings(struct l_settings *settings,
 {
 	const char *identity, *password = NULL;
 	const struct eap_secret_info *secret;
-	char setting[64];
+	char setting[64], setting2[64];
 
 	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
 	identity = l_settings_get_value(settings, "Security", setting);
+
+	snprintf(setting2, sizeof(setting2), "%sPWD-Password", prefix);
+	password = l_settings_get_value(settings, "Security", setting2);
 
 	if (!identity) {
 		secret = l_queue_find(secrets, eap_secret_info_match, setting);
 		if (!secret) {
 			eap_append_secret(out_missing,
 					EAP_SECRET_REMOTE_USER_PASSWORD,
-					setting, NULL);
+					setting, setting2, NULL);
 		}
 
 		return 0;
 	}
 
-	snprintf(setting, sizeof(setting), "%sPWD-Password", prefix);
-	password = l_settings_get_value(settings, "Security", setting);
-
 	if (!password) {
-		secret = l_queue_find(secrets, eap_secret_info_match, setting);
+		secret = l_queue_find(secrets, eap_secret_info_match, setting2);
 		if (!secret) {
 			eap_append_secret(out_missing,
 					EAP_SECRET_REMOTE_PASSWORD,
-					setting, identity);
+					setting2, NULL, identity);
 		}
 	}
 

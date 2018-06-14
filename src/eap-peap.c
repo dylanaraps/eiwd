@@ -928,7 +928,7 @@ static int eap_peap_check_settings(struct l_settings *settings,
 			 */
 			eap_append_secret(out_missing,
 					EAP_SECRET_LOCAL_PKEY_PASSPHRASE,
-					passphrase_entry, path);
+					passphrase_entry, NULL, path);
 		} else {
 			memset(priv_key, 0, size);
 			l_free(priv_key);

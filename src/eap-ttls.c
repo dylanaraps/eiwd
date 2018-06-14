@@ -740,7 +740,7 @@ static int eap_ttls_check_settings(struct l_settings *settings,
 			 */
 			eap_append_secret(out_missing,
 					EAP_SECRET_LOCAL_PKEY_PASSPHRASE,
-					passphrase_setting, path);
+					passphrase_setting, NULL, path);
 		} else {
 			memset(priv_key, 0, size);
 			l_free(priv_key);

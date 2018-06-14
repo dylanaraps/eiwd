@@ -41,6 +41,7 @@ enum eap_secret_type {
 
 struct eap_secret_info {
 	char *id;
+	char *id2;
 	enum eap_secret_type type;
 	char *parameter;
 	char *value;
@@ -62,7 +63,7 @@ void eap_free(struct eap_state *eap);
 
 bool eap_secret_info_match(const void *a, const void *b);
 void eap_append_secret(struct l_queue **out_missing, enum eap_secret_type type,
-			const char *id, const char *parameter);
+			const char *id, const char *id2, const char *parameter);
 void eap_secret_info_free(void *data);
 
 int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
