@@ -764,7 +764,7 @@ static int eap_ttls_check_settings(struct l_settings *settings,
 
 	snprintf(setting, sizeof(setting), "%sTTLS-Phase2-", prefix);
 
-	return eap_check_settings(settings, secrets, setting, false,
+	return __eap_check_settings(settings, secrets, setting, false,
 					out_missing);
 }
 

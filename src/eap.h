@@ -66,6 +66,9 @@ void eap_append_secret(struct l_queue **out_missing, enum eap_secret_type type,
 			const char *id, const char *id2, const char *parameter);
 void eap_secret_info_free(void *data);
 
+int __eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
+				const char *prefix, bool set_key_material,
+				struct l_queue **missing);
 int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 			const char *prefix, bool set_key_material,
 			struct l_queue **out_missing);

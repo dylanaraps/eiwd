@@ -431,13 +431,12 @@ static int eap_setting_exists(struct l_settings *settings,
 	return -ENOENT;
 }
 
-int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
-			const char *prefix, bool set_key_material,
-			struct l_queue **out_missing)
+int __eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
+				const char *prefix, bool set_key_material,
+				struct l_queue **missing)
 {
 	char setting[64];
 	const char *method_name;
-	struct l_queue *missing = NULL;
 	const struct l_queue_entry *entry;
 	struct eap_method *method;
 	int ret = 0;
@@ -470,11 +469,13 @@ int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 		return -ENOTSUP;
 	}
 
-	if (method->check_settings)
+	if (method->check_settings) {
 		ret = method->check_settings(settings, secrets,
-						prefix, &missing);
-	if (ret)
-		goto error;
+						prefix, missing);
+
+		if (ret < 0)
+			return ret;
+	}
 
 	/*
 	 * Methods that provide the get_identity callback are responsible
@@ -484,12 +485,27 @@ int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 	if (!method->get_identity) {
 		snprintf(setting, sizeof(setting), "%sIdentity", prefix);
 
-		ret = eap_setting_exists(settings, setting, secrets, missing);
+		ret = eap_setting_exists(settings, setting, secrets, *missing);
 		if (ret < 0) {
 			l_error("Property %s is missing", setting);
-			ret = -ENOENT;
-			goto error;
+			return -ENOENT;
 		}
+	}
+
+	return 0;
+}
+
+int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
+			const char *prefix, bool set_key_material,
+			struct l_queue **out_missing)
+{
+	struct l_queue *missing = NULL;
+	int ret = __eap_check_settings(settings, secrets, prefix,
+					set_key_material, &missing);
+
+	if (ret < 0) {
+		l_queue_destroy(missing, eap_secret_info_free);
+		return ret;
 	}
 
 	if (missing && l_queue_isempty(missing)) {
@@ -499,10 +515,6 @@ int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 
 	*out_missing = missing;
 	return 0;
-
-error:
-	l_queue_destroy(missing, eap_secret_info_free);
-	return ret;
 }
 
 bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,

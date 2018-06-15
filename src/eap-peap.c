@@ -952,7 +952,8 @@ static int eap_peap_check_settings(struct l_settings *settings,
 
 	snprintf(entry, sizeof(entry), "%sPEAP-Phase2-", prefix);
 
-	return eap_check_settings(settings, secrets, entry, false, out_missing);
+	return __eap_check_settings(settings, secrets, entry, false,
+					out_missing);
 }
 
 static bool eap_peap_load_settings(struct eap_state *eap,
