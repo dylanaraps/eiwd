@@ -447,6 +447,12 @@ static bool eap_mschapv2_send_response(struct eap_state *eap)
 				(struct mschapv2_response *) (output + 5);
 	bool ret;
 
+	/*
+	 * Make sure to initialize the response structure to 0 since
+	 * we're not filling in some of the reserved or optional fields
+	 */
+	memset(response, 0, size);
+
 	ret = mschapv2_generate_nt_response(state->password_hash,
 						state->peer_challenge,
 						state->server_challenge,
