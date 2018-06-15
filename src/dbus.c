@@ -214,6 +214,8 @@ struct l_dbus *dbus_get_bus(void)
 bool dbus_init(bool enable_debug)
 {
 	g_dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
+	if (!g_dbus)
+		return false;
 
 	if (enable_debug)
 		l_dbus_set_debug(g_dbus, do_debug, "[DBUS] ", NULL);
