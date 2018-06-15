@@ -24,7 +24,6 @@
 #include <ell/ell.h>
 #include <ell/plugin.h>
 
-#include "src/simutil.h"
 #include "src/simauth.h"
 
 struct hardcoded_sim {

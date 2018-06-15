@@ -30,7 +30,6 @@
 #include <ell/dbus.h>
 
 #include "src/dbus.h"
-#include "src/simutil.h"
 #include "src/simauth.h"
 #include "src/backtrace.h"
 
