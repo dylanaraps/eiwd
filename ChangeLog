@@ -1,3 +1,12 @@
+ver 0.3:
+	Fix issue with auto-connect settings for open networks.
+	Fix issue with handling beacon loss in roaming situations.
+	Fix issue with handling bridged wireless network interfaces.
+	Fix issue with handling EAP identity prompt or notification.
+	Fix issue with handling EAP state reset and reauthentication.
+	Add support for user specified hidden network connections.
+	Add support for configuring WDS / 4ADDR operation.
+
 ver 0.2:
 	Fix issue with unsupported bands from roam scan frequency set.
 	Fix issue with handling disconnect by AP and by SME events.
