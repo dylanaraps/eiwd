@@ -5,7 +5,7 @@ EAP-PEAP-CACert=/tmp/certs/cert-ca.pem
 EAP-PEAP-ClientCert=/tmp/certs/cert-client.pem
 EAP-PEAP-ClientKey=/tmp/certs/cert-client-key-pkcs8.pem
 EAP-PEAP-Phase2-Method=MSCHAPV2
-EAP-PEAP-Phase2-Identity=domain\User
+EAP-PEAP-Phase2-Identity=domain\\User
 EAP-PEAP-Phase2-Password=Password
 
 [Settings]
