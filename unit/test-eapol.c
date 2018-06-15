@@ -36,6 +36,7 @@
 #include "src/crypto.h"
 #include "src/ie.h"
 #include "src/eap.h"
+#include "src/eap-private.h"
 #include "src/handshake.h"
 
 /* Our nonce to use + its size */

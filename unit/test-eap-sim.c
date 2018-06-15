@@ -29,6 +29,8 @@
 #include <assert.h>
 #include <ell/ell.h>
 
+#include "src/eap.h"
+#include "src/eap-private.h"
 #include "src/simutil.h"
 
 static uint8_t attr_data[] = {

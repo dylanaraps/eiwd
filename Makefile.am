@@ -203,7 +203,7 @@ unit_test_eap_sim_SOURCES = unit/test-eap-sim.c \
 		src/watchlist.h src/watchlist.c \
 		src/eapol.h src/eapol.c \
 		src/handshake.h src/handshake.c \
-		src/eap.h src/eap.c \
+		src/eap.h src/eap.c src/eap-private.h \
 		src/util.h src/util.c \
 		src/simauth.h src/simauth.c \
 		src/eap-sim.c
@@ -257,7 +257,7 @@ unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/watchlist.h src/watchlist.c \
 				src/eapol.h src/eapol.c \
 				src/handshake.h src/handshake.c \
-				src/eap.h src/eap.c \
+				src/eap.h src/eap.c src/eap-private.h \
 				src/eap-tls.c src/eap-ttls.c \
 				src/eap-md5.c
 unit_test_eapol_LDADD = ell/libell-internal.la
@@ -276,13 +276,13 @@ unit_test_wsc_SOURCES = unit/test-wsc.c src/wscutil.h src/wscutil.c \
 				src/watchlist.h src/watchlist.c \
 				src/eapol.h src/eapol.c \
 				src/handshake.h src/handshake.c \
-				src/eap.h src/eap.c \
+				src/eap.h src/eap.c src/eap-private.h \
 				src/util.h src/util.c \
 				src/eap-wsc.h src/eap-wsc.c
 unit_test_wsc_LDADD = ell/libell-internal.la
 
 unit_test_eap_mschapv2_SOURCES = src/eap-mschapv2.h src/eap-mschapv2.c \
-				src/eap.c src/eap.h \
+				src/eap.c src/eap.h src/eap-private.h \
 				unit/test-eap-mschapv2.c
 
 unit_test_eap_mschapv2_LDADD = ell/libell-internal.la
