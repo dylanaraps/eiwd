@@ -253,31 +253,20 @@ const char *storage_network_ssid_from_path(const char *path,
 struct l_settings *storage_network_open(const char *type, const char *ssid)
 {
 	struct l_settings *settings;
-	struct stat st;
 	char *path;
 
 	if (ssid == NULL || type == NULL)
 		return NULL;
 
 	path = get_network_file_path(type, ssid);
-
-	if (lstat(path, &st) < 0) {
-		l_free(path);
-
-		return NULL;
-	}
-
 	settings = l_settings_new();
 
 	if (!l_settings_load_from_file(settings, path)) {
-		l_free(path);
 		l_settings_free(settings);
-
-		return NULL;
+		settings = NULL;
 	}
 
 	l_free(path);
-
 	return settings;
 }
 
