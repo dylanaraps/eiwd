@@ -673,33 +673,13 @@ static struct l_dbus_message *network_connect_psk(struct network *network,
 					struct l_dbus_message *message)
 {
 	struct device *device = network->device;
-	const char *psk;
 
 	l_debug("");
 
-	if (network_settings_load(network)) {
-		psk = l_settings_get_value(network->settings, "Security",
-						"PreSharedKey");
-
-		if (psk) {
-			size_t len;
-
-			l_debug("psk: %s", psk);
-
-			l_free(network->psk);
-			network->psk = l_util_from_hexstring(psk, &len);
-
-			l_debug("len: %zd", len);
-
-			if (network->psk && len != 32) {
-				l_debug("Can't parse PSK");
-				l_free(network->psk);
-				network->psk = NULL;
-			}
-		}
-	} else {
+	if (network_settings_load(network))
+		network_load_psk(network);
+	else
 		network->settings = l_settings_new();
-	}
 
 	l_debug("ask_psk: %s", network->ask_psk ? "true" : "false");
 
