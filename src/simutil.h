@@ -20,8 +20,6 @@
  *
  */
 
-#include "eap.h"
-
 /*
  * EAP-SIM/EAP-AKA shared values
  */

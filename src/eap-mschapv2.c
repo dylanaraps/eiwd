@@ -26,6 +26,7 @@
 #include <ell/ell.h>
 
 #include "eap.h"
+#include "eap-private.h"
 #include "eap-mschapv2.h"
 
 #define MSCHAPV2_CHAL_LEN 16

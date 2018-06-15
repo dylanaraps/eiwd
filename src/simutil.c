@@ -25,6 +25,8 @@
 #include <errno.h>
 #include <ell/ell.h>
 
+#include "eap-private.h"
+
 #include "crypto.h"
 #include "simutil.h"
 

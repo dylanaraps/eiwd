@@ -31,6 +31,7 @@
 #include <ell/tls-private.h>
 
 #include "eap.h"
+#include "eap-private.h"
 
 /*
  * Protected EAP Protocol (PEAP): EAP type 25 as described in:

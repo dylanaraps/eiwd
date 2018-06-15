@@ -31,6 +31,7 @@
 
 #include "crypto.h"
 #include "eap.h"
+#include "eap-private.h"
 #include "wscutil.h"
 #include "util.h"
 #include "eap-wsc.h"

@@ -31,6 +31,7 @@
 #include <ell/tls-private.h>
 
 #include "eap.h"
+#include "eap-private.h"
 
 struct eap_ttls_state {
 	char *ca_cert;

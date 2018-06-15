@@ -57,18 +57,16 @@ typedef void (*eap_complete_func_t)(enum eap_result result, void *user_data);
 typedef void (*eap_event_func_t)(unsigned int event, const void *event_data,
 							void *user_data);
 
+bool eap_secret_info_match(const void *a, const void *b);
+void eap_secret_info_free(void *data);
+
 struct eap_state *eap_new(eap_tx_packet_func_t tx_packet,
 			eap_complete_func_t complete, void *user_data);
 void eap_free(struct eap_state *eap);
 
-bool eap_secret_info_match(const void *a, const void *b);
 void eap_append_secret(struct l_queue **out_missing, enum eap_secret_type type,
 			const char *id, const char *id2, const char *parameter);
-void eap_secret_info_free(void *data);
 
-int __eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
-				const char *prefix, bool set_key_material,
-				struct l_queue **missing);
 int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 			const char *prefix, bool set_key_material,
 			struct l_queue **out_missing);
@@ -85,102 +83,5 @@ size_t eap_get_mtu(struct eap_state *eap);
 
 void eap_rx_packet(struct eap_state *eap, const uint8_t *pkt, size_t len);
 
-void __eap_handle_request(struct eap_state *eap, uint16_t id,
-						const uint8_t *pkt, size_t len);
-
-void eap_discard_success_and_failure(struct eap_state *eap, bool discard);
-
 void eap_init(uint32_t default_mtu);
 void eap_exit(void);
-
-/* EAP method API */
-
-enum eap_type {
-	EAP_TYPE_IDENTITY	= 1,
-	EAP_TYPE_NOTIFICATION	= 2,
-	EAP_TYPE_NAK		= 3,
-	__EAP_TYPE_MIN_METHOD	= 4,
-	EAP_TYPE_MD5_CHALLENGE	= 4,
-	EAP_TYPE_GTC		= 6,
-	EAP_TYPE_TLS_EAP	= 13,
-	EAP_TYPE_SIM		= 18,
-	EAP_TYPE_TTLS		= 21,
-	EAP_TYPE_AKA		= 23,
-	EAP_TYPE_PEAP		= 25,
-	EAP_TYPE_EXTENSIONS	= 33,
-	EAP_TYPE_AKA_PRIME	= 50,
-	EAP_TYPE_MSCHAPV2	= 26,
-	EAP_TYPE_PWD		= 52,
-	EAP_TYPE_EXPANDED	= 254,
-};
-
-enum eap_code {
-	EAP_CODE_REQUEST	= 1,
-	EAP_CODE_RESPONSE	= 2,
-	EAP_CODE_SUCCESS	= 3,
-	EAP_CODE_FAILURE	= 4,
-};
-
-struct eap_method {
-	enum eap_type request_type;
-	uint8_t vendor_id[3];
-	uint32_t vendor_type;
-	bool exports_msk;
-	const char *name;
-
-	int (*check_settings)(struct l_settings *settings,
-				struct l_queue *secrets, const char *prefix,
-				struct l_queue **out_missing);
-
-	bool (*load_settings)(struct eap_state *eap,
-				struct l_settings *settings,
-				const char *prefix);
-
-	/* Reset the internal state back to initial conditions */
-	bool (*reset_state)(struct eap_state *eap);
-	void (*free)(struct eap_state *eap);
-
-	void (*handle_request)(struct eap_state *eap,
-				const uint8_t *pkt, size_t len);
-	void (*handle_retransmit)(struct eap_state *eap,
-				const uint8_t *pkt, size_t len);
-	const char *(*get_identity)(struct eap_state *eap);
-};
-
-struct eap_method_desc {
-	const char *name;
-	int (*init)(void);
-	void (*exit)(void);
-} __attribute__((aligned(8)));
-
-#define EAP_METHOD_BUILTIN(name, init, exit)				\
-	static struct eap_method_desc __eap_builtin_ ## name		\
-		__attribute__((used, section("__eap"), aligned(8))) = {	\
-			#name, init, exit				\
-		};							\
-
-int eap_register_method(struct eap_method *method);
-int eap_unregister_method(struct eap_method *method);
-
-void eap_set_data(struct eap_state *eap, void *data);
-void *eap_get_data(struct eap_state *eap);
-
-void eap_send_response(struct eap_state *eap,
-			enum eap_type request_type,
-			uint8_t *buf, size_t len);
-
-void eap_set_key_material(struct eap_state *eap,
-				const uint8_t *msk_data, size_t msk_len,
-				const uint8_t *emsk_data, size_t emsk_len,
-				const uint8_t *iv, size_t iv_len);
-
-void eap_start_complete_timeout(struct eap_state *eap);
-
-bool eap_method_is_success(struct eap_state *eap);
-void eap_method_success(struct eap_state *eap);
-void eap_method_error(struct eap_state *eap);
-void eap_method_event(struct eap_state *eap, unsigned int type,
-							const void *data);
-
-void eap_save_last_id(struct eap_state *eap, uint8_t *last_id);
-void eap_restore_last_id(struct eap_state *eap, uint8_t last_id);

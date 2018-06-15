@@ -29,6 +29,7 @@
 #include <ell/ell.h>
 
 #include "eap.h"
+#include "eap-private.h"
 
 struct eap_gtc_state {
 	char *secret;

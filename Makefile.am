@@ -90,7 +90,8 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/wscutil.h src/wscutil.c \
 					src/wsc.h src/wsc.c \
 					src/eap-wsc.h src/eap-wsc.c \
-					src/eap.h src/eap.c src/eap-md5.c \
+					src/eap.h src/eap.c src/eap-private.h \
+					src/eap-md5.c \
 					src/eap-tls.c src/eap-ttls.c \
 					src/eap-mschapv2.c src/eap-mschapv2.h \
 					src/backtrace.h src/backtrace.c \
@@ -153,7 +154,7 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					src/watchlist.h src/watchlist.c \
 					src/eapol.h src/eapol.c \
 					src/handshake.h src/handshake.c \
-					src/eap.h src/eap.c \
+					src/eap.h src/eap.c src/eap-private.h \
 					src/eap-tls.c src/eap-ttls.c
 monitor_iwmon_LDADD = ell/libell-internal.la
 endif

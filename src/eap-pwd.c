@@ -27,6 +27,7 @@
 #include <ell/ell.h>
 
 #include "eap.h"
+#include "eap-private.h"
 #include "util.h"
 #include "ecc.h"
 

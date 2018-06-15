@@ -30,6 +30,7 @@
 #include <ell/ell.h>
 
 #include "eap.h"
+#include "eap-private.h"
 
 static uint32_t default_mtu;
 struct l_queue *eap_methods;
