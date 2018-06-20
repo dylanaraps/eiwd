@@ -954,7 +954,8 @@ done:
 	netdev_connect_ok(netdev);
 }
 
-static struct l_genl_msg *netdev_build_cmd_set_station(struct netdev *netdev)
+static struct l_genl_msg *netdev_build_cmd_set_station(struct netdev *netdev,
+							const uint8_t *sta)
 {
 	struct l_genl_msg *msg;
 	struct nl80211_sta_flag_update flags;
@@ -965,8 +966,7 @@ static struct l_genl_msg *netdev_build_cmd_set_station(struct netdev *netdev)
 	msg = l_genl_msg_new_sized(NL80211_CMD_SET_STATION, 512);
 
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN,
-						netdev->handshake->aa);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, sta);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_FLAGS2,
 				sizeof(struct nl80211_sta_flag_update), &flags);
 
@@ -1025,6 +1025,56 @@ static struct l_genl_msg *netdev_build_cmd_new_key_group(struct netdev *netdev,
 	return msg;
 }
 
+static bool netdev_copy_tk(uint8_t *tk_buf, const uint8_t *tk,
+				uint32_t cipher, bool authenticator)
+{
+	switch (cipher) {
+	case CRYPTO_CIPHER_CCMP:
+		/*
+		 * 802.11-2016 12.8.3 Mapping PTK to CCMP keys:
+		 * "A STA shall use the temporal key as the CCMP key
+		 * for MPDUs between the two communicating STAs."
+		 */
+		memcpy(tk_buf, tk, 16);
+		break;
+	case CRYPTO_CIPHER_TKIP:
+		/*
+		 * 802.11-2016 12.8.1 Mapping PTK to TKIP keys:
+		 * "A STA shall use bits 0-127 of the temporal key as its
+		 * input to the TKIP Phase 1 and Phase 2 mixing functions.
+		 *
+		 * A STA shall use bits 128-191 of the temporal key as
+		 * the michael key for MSDUs from the Authenticator's STA
+		 * to the Supplicant's STA.
+		 *
+		 * A STA shall use bits 192-255 of the temporal key as
+		 * the michael key for MSDUs from the Supplicant's STA
+		 * to the Authenticator's STA."
+		 */
+		if (authenticator) {
+			memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_ENCR_KEY,
+					tk, 16);
+			memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_TX_MIC_KEY,
+					tk + 16, 8);
+			memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_RX_MIC_KEY,
+					tk + 24, 8);
+		} else {
+			memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_ENCR_KEY,
+					tk, 16);
+			memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_RX_MIC_KEY,
+					tk + 16, 8);
+			memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_TX_MIC_KEY,
+					tk + 24, 8);
+		}
+		break;
+	default:
+		l_error("Unexpected cipher: %x", cipher);
+		return false;
+	}
+
+	return true;
+}
+
 static void netdev_set_gtk(uint32_t ifindex, uint8_t key_index,
 				const uint8_t *gtk, uint8_t gtk_len,
 				const uint8_t *rsc, uint8_t rsc_len,
@@ -1045,36 +1095,7 @@ static void netdev_set_gtk(uint32_t ifindex, uint8_t key_index,
 		return;
 	}
 
-	switch (cipher) {
-	case CRYPTO_CIPHER_CCMP:
-		/*
-		 * 802.11-2012 11.7.4 Mapping GTK to CCMP keys:
-		 * "A STA shall use the temporal key as the CCMP key."
-		 */
-		memcpy(gtk_buf, gtk, 16);
-		break;
-	case CRYPTO_CIPHER_TKIP:
-		/*
-		 * 802.11-2012 11.7.2 Mapping GTK to TKIP keys:
-		 * "A STA shall use bits 0-127 of the temporal key as the
-		 * input to the TKIP Phase 1 and Phase 2 mixing functions.
-		 *
-		 * A STA shall use bits 128-191 of the temporal key as
-		 * the Michael key for MSDUs from the Authenticator's STA
-		 * to the Supplicant's STA.
-		 *
-		 * A STA shall use bits 192-255 of the temporal key as
-		 * the Michael key for MSDUs from the Supplicant's STA
-		 * to the Authenticator's STA."
-		 */
-		memcpy(gtk_buf + NL80211_TKIP_DATA_OFFSET_ENCR_KEY, gtk, 16);
-		memcpy(gtk_buf + NL80211_TKIP_DATA_OFFSET_RX_MIC_KEY,
-			gtk + 16, 8);
-		memcpy(gtk_buf + NL80211_TKIP_DATA_OFFSET_TX_MIC_KEY,
-			gtk + 24, 8);
-		break;
-	default:
-		l_error("Unexpected cipher: %x", cipher);
+	if (!netdev_copy_tk(gtk_buf, gtk, cipher, false)) {
 		netdev_setting_keys_failed(netdev,
 					MMPDU_REASON_CODE_INVALID_GROUP_CIPHER);
 		return;
@@ -1157,7 +1178,7 @@ static void netdev_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 	 * we're already operational, it will not hurt during re-keying
 	 * and is necessary after an FT.
 	 */
-	msg = netdev_build_cmd_set_station(netdev);
+	msg = netdev_build_cmd_set_station(netdev, netdev->handshake->aa);
 
 	netdev->set_station_cmd_id =
 		l_genl_family_send(nl80211, msg, netdev_set_station_cb,
@@ -1232,6 +1253,7 @@ static void netdev_set_tk(uint32_t ifindex, const uint8_t *aa,
 	uint8_t tk_buf[32];
 	struct netdev *netdev;
 	struct l_genl_msg *msg;
+	enum mmpdu_reason_code rc;
 
 	netdev = netdev_find(ifindex);
 	if (!netdev)
@@ -1243,64 +1265,29 @@ static void netdev_set_tk(uint32_t ifindex, const uint8_t *aa,
 		netdev->event_filter(netdev, NETDEV_EVENT_SETTING_KEYS,
 					netdev->user_data);
 
-	switch (cipher) {
-	case CRYPTO_CIPHER_CCMP:
-		/*
-		 * 802.11-2012 11.7.3 Mapping PTK to CCMP keys:
-		 * "A STA shall use the temporal key as the CCMP key
-		 * for MPDUs between the two communicating STAs."
-		 */
-		memcpy(tk_buf, tk, 16);
-		break;
-	case CRYPTO_CIPHER_TKIP:
-		/*
-		 * 802.11-2012 11.7.1 Mapping PTK to TKIP keys:
-		 * "A STA shall use bits 0-127 of the temporal key as its
-		 * input to the TKIP Phase 1 and Phase 2 mixing functions.
-		 *
-		 * A STA shall use bits 128-191 of the temporal key as
-		 * the Michael key for MSDUs from the Authenticator's STA
-		 * to the Supplicant's STA.
-		 *
-		 * A STA shall use bits 192-255 of the temporal key as
-		 * the Michael key for MSDUs from the Supplicant's STA
-		 * to the Authenticator's STA."
-		 */
-		memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_ENCR_KEY, tk, 16);
-		memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_RX_MIC_KEY,
-			tk + 16, 8);
-		memcpy(tk_buf + NL80211_TKIP_DATA_OFFSET_TX_MIC_KEY,
-			tk + 24, 8);
-		break;
-	default:
-		l_error("Unexpected cipher: %x", cipher);
-		netdev_setting_keys_failed(netdev,
-				MMPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER);
-		return;
-	}
+	rc = MMPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER;
+	if (!netdev_copy_tk(tk_buf, tk, cipher, false))
+		goto invalid_key;
 
-	msg = netdev_build_cmd_new_key_pairwise(netdev, cipher, aa,
-						tk_buf,
+	rc = MMPDU_REASON_CODE_UNSPECIFIED;
+	msg = netdev_build_cmd_new_key_pairwise(netdev, cipher, aa, tk_buf,
 						crypto_cipher_key_len(cipher));
-	netdev->pairwise_new_key_cmd_id =
-		l_genl_family_send(nl80211, msg, netdev_new_pairwise_key_cb,
-						netdev, NULL);
-	if (!netdev->pairwise_new_key_cmd_id) {
-		l_genl_msg_unref(msg);
-		goto error;
-	}
+	netdev->pairwise_new_key_cmd_id = l_genl_family_send(nl80211, msg,
+			netdev_new_pairwise_key_cb, netdev, NULL);
+	if (!netdev->pairwise_new_key_cmd_id)
+		goto send_failed;
 
 	msg = netdev_build_cmd_set_key_pairwise(netdev);
-
 	netdev->pairwise_set_key_cmd_id =
 		l_genl_family_send(nl80211, msg, netdev_set_pairwise_key_cb,
 						netdev, NULL);
 	if (netdev->pairwise_set_key_cmd_id > 0)
 		return;
 
+send_failed:
 	l_genl_msg_unref(msg);
-error:
-	netdev_setting_keys_failed(netdev, MMPDU_REASON_CODE_UNSPECIFIED);
+invalid_key:
+	netdev_setting_keys_failed(netdev, rc);
 }
 
 static void netdev_handshake_failed(uint32_t ifindex,
