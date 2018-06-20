@@ -48,7 +48,7 @@ struct eap_ttls_state {
 	size_t avp_received, avp_capacity;
 	bool phase1_completed;
 	bool completed;
-	struct eap_state *eap;
+	struct eap_state *phase2_eap;
 	uint8_t negotiated_version;
 };
 
@@ -83,10 +83,10 @@ static bool eap_ttls_reset_state(struct eap_state *eap)
 {
 	struct eap_ttls_state *ttls = eap_get_data(eap);
 
-	if (!ttls->eap)
+	if (!ttls->phase2_eap)
 		return false;
 
-	if (!eap_reset(ttls->eap))
+	if (!eap_reset(ttls->phase2_eap))
 		return false;
 
 	__eap_ttls_reset_state(ttls);
@@ -110,9 +110,9 @@ static void eap_ttls_free(struct eap_state *eap)
 		l_free(ttls->passphrase);
 	}
 
-	if (ttls->eap) {
-		eap_free(ttls->eap);
-		ttls->eap = NULL;
+	if (ttls->phase2_eap) {
+		eap_free(ttls->phase2_eap);
+		ttls->phase2_eap = NULL;
 	}
 
 	l_free(ttls);
@@ -189,11 +189,11 @@ static bool eap_ttls_handle_avp(struct eap_state *eap, struct eap_ttls_avp *avp)
 	switch (code) {
 	/* EAP-Message attribute, actually defined in RFC2869 5.13 */
 	case RADIUS_AVP_EAP_MESSAGE:
-		if (!ttls->eap)
+		if (!ttls->phase2_eap)
 			goto avp_err;
 
 		/* TODO: split if necessary */
-		eap_rx_packet(ttls->eap, data, data_len);
+		eap_rx_packet(ttls->phase2_eap, data, data_len);
 
 		break;
 
@@ -370,14 +370,14 @@ static void eap_ttls_ready_cb(const char *peer_identity, void *user_data)
 				NULL, 0);
 
 	/* Start the EAP negotiation */
-	if (!ttls->eap)
+	if (!ttls->phase2_eap)
 		goto err;
 
 	/*
 	 * Consume a fake Request/Identity packet so that the EAP instance
 	 * starts with its Response/Identity right away.
 	 */
-	eap_rx_packet(ttls->eap, packet, sizeof(packet));
+	eap_rx_packet(ttls->phase2_eap, packet, sizeof(packet));
 
 	return;
 err:
@@ -621,9 +621,9 @@ static void eap_ttls_handle_request(struct eap_state *eap,
 		l_tls_free(ttls->tls);
 		ttls->tls = NULL;
 
-		if (ttls->eap) {
-			eap_free(ttls->eap);
-			ttls->eap = NULL;
+		if (ttls->phase2_eap) {
+			eap_free(ttls->phase2_eap);
+			ttls->phase2_eap = NULL;
 		}
 	}
 
@@ -775,17 +775,17 @@ static bool eap_ttls_load_settings(struct eap_state *eap,
 			prefix);
 	ttls->passphrase = l_settings_get_string(settings, "Security", setting);
 
-	ttls->eap = eap_new(eap_ttls_eap_tx_packet,
+	ttls->phase2_eap = eap_new(eap_ttls_eap_tx_packet,
 				eap_ttls_eap_complete, eap);
-	if (!ttls->eap) {
+	if (!ttls->phase2_eap) {
 		l_error("Could not create the TTLS inner EAP instance");
 		goto err;
 	}
 
 	snprintf(setting, sizeof(setting), "%sTTLS-Phase2-", prefix);
 
-	if (!eap_load_settings(ttls->eap, settings, setting)) {
-		eap_free(ttls->eap);
+	if (!eap_load_settings(ttls->phase2_eap, settings, setting)) {
+		eap_free(ttls->phase2_eap);
 		goto err;
 	}
 
