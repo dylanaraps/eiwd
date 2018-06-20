@@ -325,23 +325,12 @@ static void eap_ttls_eap_complete(enum eap_result result, void *user_data)
 {
 	struct eap_state *eap = user_data;
 	struct eap_ttls_state *ttls = eap_get_data(eap);
-	uint8_t last_id;
 
-	eap_save_last_id(ttls->eap, &last_id);
-
-	/* Prepare for possible chained authentication */
-	/* We currently have no way to configure the new instance */
-	eap_free(ttls->eap);
-	ttls->eap = eap_new(eap_ttls_eap_tx_packet,
-				eap_ttls_eap_complete, eap);
-
-	if (!ttls->eap) {
-		ttls->completed = true;
-		return;
-	}
-
-	/* Preserve the last_id as mandated by 11.3 */
-	eap_restore_last_id(ttls->eap, last_id);
+	/*
+	 * TODO: We currently do not implement chaining per Section 11.3,
+	 * so simply set completed to true
+	 */
+	ttls->completed = true;
 }
 
 static void eap_ttls_ready_cb(const char *peer_identity, void *user_data)
@@ -381,14 +370,8 @@ static void eap_ttls_ready_cb(const char *peer_identity, void *user_data)
 				NULL, 0);
 
 	/* Start the EAP negotiation */
-	if (!ttls->eap) {
-		ttls->eap = eap_new(eap_ttls_eap_tx_packet,
-					eap_ttls_eap_complete, eap);
-		if (!ttls->eap) {
-			l_error("Could not create the TTLS inner EAP instance");
-			goto err;
-		}
-	}
+	if (!ttls->eap)
+		goto err;
 
 	/*
 	 * Consume a fake Request/Identity packet so that the EAP instance
