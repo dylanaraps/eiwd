@@ -86,6 +86,7 @@ struct handshake_state {
 	bool wpa_ie : 1;
 	bool have_pmk : 1;
 	bool mfp : 1;
+	bool have_anonce : 1;
 	uint8_t ssid[32];
 	size_t ssid_len;
 	uint8_t r0khid[48];
@@ -126,6 +127,7 @@ void handshake_state_set_kh_ids(struct handshake_state *s,
 				const uint8_t *r1khid);
 
 void handshake_state_new_snonce(struct handshake_state *s);
+void handshake_state_new_anonce(struct handshake_state *s);
 void handshake_state_set_anonce(struct handshake_state *s,
 				const uint8_t *anonce);
 

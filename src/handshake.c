@@ -238,6 +238,13 @@ void handshake_state_new_snonce(struct handshake_state *s)
 	s->have_snonce = true;
 }
 
+void handshake_state_new_anonce(struct handshake_state *s)
+{
+	get_nonce(s->anonce);
+
+	s->have_anonce = true;
+}
+
 void handshake_state_set_anonce(struct handshake_state *s,
 				const uint8_t *anonce)
 {
