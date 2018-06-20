@@ -3470,7 +3470,7 @@ int netdev_set_iftype(struct netdev *netdev, enum netdev_iftype type)
 		return -EIO;
 	}
 
-	netdev->type = type;
+	netdev->type = iftype;
 
 	return 0;
 }
