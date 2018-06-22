@@ -356,6 +356,9 @@ bool eapol_verify_ptk_2_of_4(const struct eapol_key *ek)
 	if (ek->wpa_key_id)
 		return false;
 
+	if (ek->request)
+		return false;
+
 	key_len = L_BE16_TO_CPU(ek->key_length);
 	if (key_len != 0)
 		return false;
@@ -437,6 +440,9 @@ bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek, bool is_wpa)
 		return false;
 
 	if (ek->wpa_key_id)
+		return false;
+
+	if (ek->request)
 		return false;
 
 	key_len = L_BE16_TO_CPU(ek->key_length);
@@ -656,11 +662,14 @@ struct eapol_sm {
 	void *user_data;
 	struct l_timeout *timeout;
 	struct l_timeout *eapol_start_timeout;
+	unsigned int frame_retry;
+	uint16_t listen_interval;
 	bool have_replay:1;
 	bool started:1;
 	bool use_eapol_start:1;
 	bool require_handshake:1;
 	bool eap_exchanged:1;
+	bool authenticator:1;
 	struct eap_state *eap;
 	struct eapol_frame *early_frame;
 	uint32_t watch_id;
@@ -719,6 +728,11 @@ void eapol_sm_set_protocol_version(struct eapol_sm *sm,
 				enum eapol_protocol_version protocol_version)
 {
 	sm->protocol_version = protocol_version;
+}
+
+void eapol_sm_set_listen_interval(struct eapol_sm *sm, uint16_t interval)
+{
+	sm->listen_interval = interval;
 }
 
 void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data)
@@ -816,6 +830,97 @@ static void send_eapol_start(struct l_timeout *timeout, void *user_data)
 	eapol_sm_write(sm, frame, false);
 }
 
+static void eapol_set_key_timeout(struct eapol_sm *sm,
+					l_timeout_notify_cb_t cb)
+{
+	/*
+	 * 802.11-2016 12.7.6.6: "The retransmit timeout value shall be
+	 * 100 ms for the first timeout, half the listen interval for the
+	 * second timeout, and the listen interval for subsequent timeouts.
+	 * If there is no listen interval or the listen interval is zero,
+	 * then 100 ms shall be used for all timeout values."
+	 */
+	unsigned int timeout_ms = 100;
+	unsigned int beacon_us = 100 * 1024;
+
+	sm->frame_retry++;
+
+	if (sm->frame_retry == 2 &&
+			sm->listen_interval != 0)
+		timeout_ms = sm->listen_interval * beacon_us / 2000;
+	else if (sm->frame_retry > 2 &&
+			sm->listen_interval != 0)
+		timeout_ms = sm->listen_interval * beacon_us / 1000;
+
+	if (sm->frame_retry > 1)
+		l_timeout_modify_ms(sm->timeout, timeout_ms);
+	else {
+		if (sm->timeout)
+			l_timeout_remove(sm->timeout);
+
+		sm->timeout = l_timeout_create_ms(timeout_ms, cb, sm,
+								NULL);
+	}
+}
+
+/* 802.11-2016 Section 12.7.6.2 */
+static void eapol_send_ptk_1_of_4(struct eapol_sm *sm)
+{
+	uint32_t ifindex = sm->handshake->ifindex;
+	const uint8_t *aa = sm->handshake->aa;
+	uint8_t frame_buf[512];
+	struct eapol_key *ek = (struct eapol_key *) frame_buf;
+	enum crypto_cipher cipher = ie_rsn_cipher_suite_to_cipher(
+				sm->handshake->pairwise_cipher);
+	uint8_t pmkid[16];
+
+	handshake_state_new_anonce(sm->handshake);
+
+	sm->handshake->ptk_complete = false;
+
+	sm->replay_counter++;
+
+	memset(ek, 0, sizeof(struct eapol_key));
+	ek->header.protocol_version = sm->protocol_version;
+	ek->header.packet_type = 0x3;
+	ek->descriptor_type = EAPOL_DESCRIPTOR_TYPE_80211;
+	/* Must be HMAC-SHA1-128 + AES when using CCMP with PSK or 8021X */
+	ek->key_descriptor_version = EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES;
+	ek->key_type = true;
+	ek->key_ack = true;
+	ek->key_length = L_CPU_TO_BE16(crypto_cipher_key_len(cipher));
+	ek->key_replay_counter = L_CPU_TO_BE64(sm->replay_counter);
+	memcpy(ek->key_nonce, sm->handshake->anonce, sizeof(ek->key_nonce));
+
+	/* Write the PMKID KDE into Key Data field unencrypted */
+	crypto_derive_pmkid(sm->handshake->pmk, sm->handshake->spa, aa,
+			pmkid, false);
+	eapol_key_data_append(ek, HANDSHAKE_KDE_PMKID, pmkid, 16);
+
+	ek->header.packet_len = L_CPU_TO_BE16(sizeof(struct eapol_key) +
+					L_BE16_TO_CPU(ek->key_data_len) - 4);
+
+	l_debug("STA: "MAC" retries=%u", MAC_STR(sm->handshake->spa),
+			sm->frame_retry);
+
+	__eapol_tx_packet(ifindex, sm->handshake->spa, ETH_P_PAE,
+				(struct eapol_frame *) ek, false);
+}
+
+static void eapol_ptk_1_of_4_retry(struct l_timeout *timeout, void *user_data)
+{
+	struct eapol_sm *sm = user_data;
+
+	if (sm->frame_retry >= 3) {
+		handshake_failed(sm, MMPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT);
+		return;
+	}
+
+	eapol_send_ptk_1_of_4(sm);
+
+	eapol_set_key_timeout(sm, eapol_ptk_1_of_4_retry);
+}
+
 static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 					const struct eapol_key *ek)
 {
@@ -827,6 +932,8 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 	const uint8_t *own_ie = sm->handshake->own_ie;
 	const uint8_t *pmkid;
 	struct ie_rsn_info rsn_info;
+
+	l_debug("ifindex=%u", sm->handshake->ifindex);
 
 	if (!eapol_verify_ptk_1_of_4(ek))
 		goto error_unspecified;
@@ -953,6 +1060,144 @@ error_unspecified:
 	handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
+#define EAPOL_PAIRWISE_UPDATE_COUNT 3
+
+/* 802.11-2016 Section 12.7.6.4 */
+static void eapol_send_ptk_3_of_4(struct eapol_sm *sm)
+{
+	uint32_t ifindex = sm->handshake->ifindex;
+	uint8_t frame_buf[512];
+	uint8_t key_data_buf[128];
+	struct eapol_key *ek = (struct eapol_key *) frame_buf;
+	size_t key_data_len;
+	enum crypto_cipher cipher = ie_rsn_cipher_suite_to_cipher(
+				sm->handshake->pairwise_cipher);
+	const struct crypto_ptk *ptk = (struct crypto_ptk *) sm->handshake->ptk;
+	struct ie_rsn_info rsn;
+
+	sm->replay_counter++;
+
+	memset(ek, 0, sizeof(struct eapol_key));
+	ek->header.protocol_version = sm->protocol_version;
+	ek->header.packet_type = 0x3;
+	ek->descriptor_type = EAPOL_DESCRIPTOR_TYPE_80211;
+	/* Must be HMAC-SHA1-128 + AES when using CCMP with PSK or 8021X */
+	ek->key_descriptor_version = EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES;
+	ek->key_type = true;
+	ek->install = true;
+	ek->key_ack = true;
+	ek->key_mic = true;
+	ek->secure = true;
+	ek->encrypted_key_data = true;
+	ek->key_length = L_CPU_TO_BE16(crypto_cipher_key_len(cipher));
+	ek->key_replay_counter = L_CPU_TO_BE64(sm->replay_counter);
+	memcpy(ek->key_nonce, sm->handshake->anonce, sizeof(ek->key_nonce));
+	/*
+	 * We don't currently handle group traffic, to support that we'd need
+	 * to provide the NL80211_ATTR_KEY_SEQ value from NL80211_CMD_GET_KEY
+	 * here.
+	 */
+	l_put_be64(1, ek->key_rsc);
+
+	/*
+	 * Just one RSNE in Key Data as we only set one cipher in ap->ciphers
+	 * currently.
+	 */
+
+	memset(&rsn, 0, sizeof(rsn));
+	rsn.akm_suites = IE_RSN_AKM_SUITE_PSK;
+	rsn.pairwise_ciphers = sm->handshake->pairwise_cipher;
+	rsn.group_cipher = IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC;
+
+	if (!ie_build_rsne(&rsn, key_data_buf))
+		return;
+
+	if (!eapol_encrypt_key_data(ptk->kek, key_data_buf,
+					2 + key_data_buf[1], ek))
+		return;
+
+	key_data_len = L_BE16_TO_CPU(ek->key_data_len);
+	ek->header.packet_len = L_CPU_TO_BE16(sizeof(struct eapol_key) +
+						key_data_len - 4);
+
+	if (!eapol_calculate_mic(ptk->kck, ek, ek->key_mic_data))
+		return;
+
+	l_debug("STA: "MAC" retries=%u", MAC_STR(sm->handshake->spa),
+			sm->frame_retry);
+
+	__eapol_tx_packet(ifindex, sm->handshake->spa, ETH_P_PAE,
+				(struct eapol_frame *) ek, false);
+}
+
+static void eapol_ptk_3_of_4_retry(struct l_timeout *timeout,
+						void *user_data)
+{
+	struct eapol_sm *sm = user_data;
+
+	if (sm->frame_retry >= EAPOL_PAIRWISE_UPDATE_COUNT) {
+		handshake_failed(sm, MMPDU_REASON_CODE_4WAY_HANDSHAKE_TIMEOUT);
+		return;
+	}
+
+	eapol_send_ptk_3_of_4(sm);
+
+	eapol_set_key_timeout(sm, eapol_ptk_3_of_4_retry);
+
+	l_debug("attempt %i", sm->frame_retry);
+}
+
+/* 802.11-2016 Section 12.7.6.3 */
+static void eapol_handle_ptk_2_of_4(struct eapol_sm *sm,
+					const struct eapol_key *ek)
+{
+	const uint8_t *rsne;
+	enum crypto_cipher cipher;
+	size_t ptk_size;
+	uint8_t ptk_buf[64];
+	struct crypto_ptk *ptk = (struct crypto_ptk *) ptk_buf;
+	const uint8_t *aa = sm->handshake->aa;
+
+	l_debug("ifindex=%u", sm->handshake->ifindex);
+
+	if (!eapol_verify_ptk_2_of_4(ek))
+		return;
+
+	if (L_BE64_TO_CPU(ek->key_replay_counter) != sm->replay_counter)
+		return;
+
+	cipher = ie_rsn_cipher_suite_to_cipher(sm->handshake->pairwise_cipher);
+	ptk_size = sizeof(struct crypto_ptk) + crypto_cipher_key_len(cipher);
+
+	if (!crypto_derive_pairwise_ptk(sm->handshake->pmk, sm->handshake->spa,
+					aa, sm->handshake->anonce,
+					ek->key_nonce, ptk, ptk_size, false))
+		return;
+
+	if (!eapol_verify_mic(ptk->kck, ek))
+		return;
+
+	/* Bitwise identical RSNE required */
+	rsne = eapol_find_rsne(ek->key_data,
+				L_BE16_TO_CPU(ek->key_data_len), NULL);
+	if (!rsne || rsne[1] != sm->handshake->own_ie[1] ||
+			memcmp(rsne + 2, sm->handshake->own_ie + 2, rsne[1])) {
+
+		handshake_failed(sm, MMPDU_REASON_CODE_IE_DIFFERENT);
+		return;
+	}
+
+	memcpy(sm->handshake->ptk, ptk_buf, ptk_size);
+	memcpy(sm->handshake->snonce, ek->key_nonce,
+			sizeof(sm->handshake->snonce));
+	sm->handshake->have_snonce = true;
+	sm->handshake->ptk_complete = true;
+
+	sm->frame_retry = 0;
+
+	eapol_ptk_3_of_4_retry(NULL, sm);
+}
+
 const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len,
 				const uint8_t **optional)
 {
@@ -1013,6 +1258,8 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 	const uint8_t *optional_rsne = NULL;
 	uint8_t gtk_key_index;
 	uint8_t igtk_key_index;
+
+	l_debug("ifindex=%u", sm->handshake->ifindex);
 
 	if (!eapol_verify_ptk_3_of_4(ek, sm->handshake->wpa_ie)) {
 		handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
@@ -1234,6 +1481,29 @@ retransmit:
 
 error_ie_different:
 	handshake_failed(sm, MMPDU_REASON_CODE_IE_DIFFERENT);
+}
+
+/* 802.11-2016 Section 12.7.6.5 */
+static void eapol_handle_ptk_4_of_4(struct eapol_sm *sm,
+					const struct eapol_key *ek)
+{
+	const struct crypto_ptk *ptk = (struct crypto_ptk *) sm->handshake->ptk;
+
+	l_debug("ifindex=%u", sm->handshake->ifindex);
+
+	if (!eapol_verify_ptk_4_of_4(ek, false))
+		return;
+
+	if (L_BE64_TO_CPU(ek->key_replay_counter) != sm->replay_counter)
+		return;
+
+	if (!eapol_verify_mic(ptk->kck, ek))
+		return;
+
+	l_timeout_remove(sm->timeout);
+	sm->timeout = NULL;
+
+	handshake_state_install_ptk(sm->handshake);
 }
 
 static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
@@ -1579,6 +1849,54 @@ void eapol_sm_set_require_handshake(struct eapol_sm *sm, bool enabled)
 		sm->use_eapol_start = false;
 }
 
+static void eapol_auth_key_handle(struct eapol_sm *sm,
+				const struct eapol_frame *frame)
+{
+	size_t frame_len = 4 + L_BE16_TO_CPU(frame->header.packet_len);
+	const struct eapol_key *ek = eapol_key_validate((const void *) frame,
+							frame_len);
+
+	if (!ek)
+		return;
+
+	/* Wrong direction */
+	if (ek->key_ack)
+		return;
+
+	if (ek->request)
+		return; /* Not supported */
+
+	if (!sm->handshake->have_anonce)
+		return; /* Not expecting an EAPoL-Key yet */
+
+	if (!sm->handshake->ptk_complete)
+		eapol_handle_ptk_2_of_4(sm, ek);
+	else
+		eapol_handle_ptk_4_of_4(sm, ek);
+}
+
+static void eapol_rx_auth_packet(uint16_t proto, const uint8_t *from,
+				const struct eapol_frame *frame,
+				void *user_data)
+{
+	struct eapol_sm *sm = user_data;
+
+	if (!sm->protocol_version)
+		sm->protocol_version = frame->header.protocol_version;
+
+	switch (frame->header.packet_type) {
+	case 3: /* EAPOL-Key */
+		eapol_auth_key_handle(sm, frame);
+		break;
+
+	default:
+		l_error("Authenticator received unknown packet type %i from %s",
+			frame->header.packet_type,
+			util_address_to_string(from));
+		return;
+	}
+}
+
 static void eapol_rx_packet(uint16_t proto, const uint8_t *from,
 				const struct eapol_frame *frame,
 				void *user_data)
@@ -1698,6 +2016,20 @@ void eapol_register(struct eapol_sm *sm)
 
 	sm->watch_id = eapol_frame_watch_add(sm->handshake->ifindex,
 						eapol_rx_packet, sm);
+}
+
+void eapol_register_authenticator(struct eapol_sm *sm)
+{
+	l_queue_push_head(state_machines, sm);
+
+	sm->watch_id = eapol_frame_watch_add(sm->handshake->ifindex,
+			eapol_rx_auth_packet, sm);
+
+	sm->started = true;
+	sm->authenticator = true;
+
+	/* kick off handshake */
+	eapol_ptk_1_of_4_retry(NULL, sm);
 }
 
 bool eapol_start(struct eapol_sm *sm)
