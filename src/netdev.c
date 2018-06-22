@@ -77,7 +77,6 @@ struct netdev {
 	struct eapol_sm *sm;
 	struct handshake_state *handshake;
 	uint32_t pairwise_new_key_cmd_id;
-	uint32_t pairwise_set_key_cmd_id;
 	uint32_t group_new_key_cmd_id;
 	uint32_t group_management_new_key_cmd_id;
 	uint32_t set_station_cmd_id;
@@ -476,11 +475,6 @@ static void netdev_connect_free(struct netdev *netdev)
 	if (netdev->pairwise_new_key_cmd_id) {
 		l_genl_family_cancel(nl80211, netdev->pairwise_new_key_cmd_id);
 		netdev->pairwise_new_key_cmd_id = 0;
-	}
-
-	if (netdev->pairwise_set_key_cmd_id) {
-		l_genl_family_cancel(nl80211, netdev->pairwise_set_key_cmd_id);
-		netdev->pairwise_set_key_cmd_id = 0;
 	}
 
 	if (netdev->group_new_key_cmd_id) {
@@ -900,22 +894,21 @@ static void netdev_setting_keys_failed(struct netdev *netdev,
 	struct l_genl_msg *msg;
 
 	/*
-	 * Something went wrong with our new_key, set_key, new_key,
-	 * set_station
+	 * Something went wrong with our sequence:
+	 * 1. new_key(ptk)
+	 * 2. new_key(gtk) [optional]
+	 * 3. new_key(igtk) [optional]
+	 * 4. set_station
 	 *
 	 * Cancel all pending commands, then de-authenticate
 	 */
 	l_genl_family_cancel(nl80211, netdev->pairwise_new_key_cmd_id);
 	netdev->pairwise_new_key_cmd_id = 0;
 
-	l_genl_family_cancel(nl80211, netdev->pairwise_set_key_cmd_id);
-	netdev->pairwise_set_key_cmd_id = 0;
-
 	l_genl_family_cancel(nl80211, netdev->group_new_key_cmd_id);
 	netdev->group_new_key_cmd_id = 0;
 
-	l_genl_family_cancel(nl80211,
-		netdev->group_management_new_key_cmd_id);
+	l_genl_family_cancel(nl80211, netdev->group_management_new_key_cmd_id);
 	netdev->group_management_new_key_cmd_id = 0;
 
 	l_genl_family_cancel(nl80211, netdev->set_station_cmd_id);
@@ -1161,15 +1154,15 @@ static void netdev_set_igtk(uint32_t ifindex, uint8_t key_index,
 	netdev_setting_keys_failed(netdev, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
-static void netdev_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
+static void netdev_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 {
 	struct netdev *netdev = data;
 
-	netdev->pairwise_set_key_cmd_id = 0;
+	netdev->pairwise_new_key_cmd_id = 0;
 
 	if (l_genl_msg_get_error(msg) < 0) {
-		l_error("Set Key for Pairwise Key failed for ifindex: %d",
-				netdev->index);
+		l_error("New Key for Pairwise Key failed for ifindex: %d",
+					netdev->index);
 		goto error;
 	}
 
@@ -1188,40 +1181,6 @@ static void netdev_set_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 
 	l_genl_msg_unref(msg);
 error:
-	netdev_setting_keys_failed(netdev, MMPDU_REASON_CODE_UNSPECIFIED);
-}
-
-static struct l_genl_msg *netdev_build_cmd_set_key_pairwise(
-							struct netdev *netdev)
-{
-	uint8_t key_id = 0;
-	struct l_genl_msg *msg;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_SET_KEY, 512);
-
-	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-
-	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_DEFAULT, 0, NULL);
-
-	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY_DEFAULT_TYPES);
-	l_genl_msg_append_attr(msg, NL80211_KEY_DEFAULT_TYPE_UNICAST, 0, NULL);
-	l_genl_msg_leave_nested(msg);
-
-	return msg;
-}
-
-static void netdev_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
-{
-	struct netdev *netdev = data;
-
-	netdev->pairwise_new_key_cmd_id = 0;
-
-	if (l_genl_msg_get_error(msg) >= 0)
-		return;
-
-	l_error("New Key for Pairwise Key failed for ifindex: %d",
-								netdev->index);
 	netdev_setting_keys_failed(netdev, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
@@ -1272,19 +1231,12 @@ static void netdev_set_tk(uint32_t ifindex, const uint8_t *aa,
 	rc = MMPDU_REASON_CODE_UNSPECIFIED;
 	msg = netdev_build_cmd_new_key_pairwise(netdev, cipher, aa, tk_buf,
 						crypto_cipher_key_len(cipher));
-	netdev->pairwise_new_key_cmd_id = l_genl_family_send(nl80211, msg,
-			netdev_new_pairwise_key_cb, netdev, NULL);
-	if (!netdev->pairwise_new_key_cmd_id)
-		goto send_failed;
-
-	msg = netdev_build_cmd_set_key_pairwise(netdev);
-	netdev->pairwise_set_key_cmd_id =
-		l_genl_family_send(nl80211, msg, netdev_set_pairwise_key_cb,
+	netdev->pairwise_new_key_cmd_id =
+		l_genl_family_send(nl80211, msg, netdev_new_pairwise_key_cb,
 						netdev, NULL);
-	if (netdev->pairwise_set_key_cmd_id > 0)
+	if (netdev->pairwise_new_key_cmd_id > 0)
 		return;
 
-send_failed:
 	l_genl_msg_unref(msg);
 invalid_key:
 	netdev_setting_keys_failed(netdev, rc);
