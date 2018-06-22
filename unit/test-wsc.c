@@ -42,6 +42,30 @@
 #include "src/ie.h"
 #include "src/handshake.h"
 
+struct test_handshake_state {
+	struct handshake_state super;
+};
+
+static void test_handshake_state_free(struct handshake_state *hs)
+{
+	struct test_handshake_state *ths =
+			container_of(hs, struct test_handshake_state, super);
+
+	l_free(ths);
+}
+
+static struct handshake_state *test_handshake_state_new(uint32_t ifindex)
+{
+	struct test_handshake_state *ths;
+
+	ths = l_new(struct test_handshake_state, 1);
+
+	ths->super.ifindex = ifindex;
+	ths->super.free = test_handshake_state_free;
+
+	return &ths->super;
+}
+
 static const unsigned char wsc_attrs1[] = {
 	0x10, 0x4a, 0x00, 0x01, 0x10, 0x10, 0x44, 0x00, 0x01, 0x02, 0x10, 0x41,
 	0x00, 0x01, 0x01, 0x10, 0x12, 0x00, 0x02, 0x00, 0x04, 0x10, 0x53, 0x00,
@@ -1963,7 +1987,7 @@ static void wsc_test_pbc_handshake(const void *data)
 	eap_init(1400);
 	eapol_init();
 
-	hs = handshake_state_new(1);
+	hs = test_handshake_state_new(1);
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
@@ -2071,7 +2095,7 @@ static void wsc_test_retransmission_no_fragmentation(const void *data)
 	eap_init(1400);
 	eapol_init();
 
-	hs = handshake_state_new(1);
+	hs = test_handshake_state_new(1);
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 

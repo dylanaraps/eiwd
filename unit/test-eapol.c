@@ -32,6 +32,7 @@
 #include <ell/tls-private.h>
 #include <ell/key-private.h>
 
+#include "src/util.h"
 #include "src/eapol.h"
 #include "src/crypto.h"
 #include "src/ie.h"
@@ -67,6 +68,31 @@ static size_t expected_gtk_step2_frame_size;
 static const uint8_t *aa;
 /* Supplicant Address */
 static const uint8_t *spa;
+
+struct test_handshake_state {
+	struct handshake_state super;
+	const uint8_t *tk;
+};
+
+static void test_handshake_state_free(struct handshake_state *hs)
+{
+	struct test_handshake_state *ths =
+			container_of(hs, struct test_handshake_state, super);
+
+	l_free(ths);
+}
+
+static struct handshake_state *test_handshake_state_new(uint32_t ifindex)
+{
+	struct test_handshake_state *ths;
+
+	ths = l_new(struct test_handshake_state, 1);
+
+	ths->super.ifindex = ifindex;
+	ths->super.free = test_handshake_state_free;
+
+	return &ths->super;
+}
 
 struct eapol_key_data {
 	const unsigned char *frame;
@@ -2129,7 +2155,7 @@ static void eapol_sm_test_ptk(const void *data)
 	expected_step4_frame = eapol_key_data_6;
 	expected_step4_frame_size = sizeof(eapol_key_data_6);
 
-	hs = handshake_state_new(1);
+	hs = test_handshake_state_new(1);
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
@@ -2193,7 +2219,7 @@ static void eapol_sm_test_igtk(const void *data)
 	expected_step4_frame = eapol_key_data_32;
 	expected_step4_frame_size = sizeof(eapol_key_data_32);
 
-	hs = handshake_state_new(1);
+	hs = test_handshake_state_new(1);
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
@@ -2260,7 +2286,7 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 	expected_gtk_step2_frame = eapol_key_data_12;
 	expected_gtk_step2_frame_size = sizeof(eapol_key_data_12);
 
-	hs = handshake_state_new(1);
+	hs = test_handshake_state_new(1);
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
@@ -2328,7 +2354,7 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 	expected_gtk_step2_frame = eapol_key_data_18;
 	expected_gtk_step2_frame_size = sizeof(eapol_key_data_18);
 
-	hs = handshake_state_new(1);
+	hs = test_handshake_state_new(1);
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
@@ -2395,7 +2421,7 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 	expected_gtk_step2_frame = eapol_key_data_24;
 	expected_gtk_step2_frame_size = sizeof(eapol_key_data_24);
 
-	hs = handshake_state_new(1);
+	hs = test_handshake_state_new(1);
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
@@ -2430,27 +2456,29 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 	eapol_exit();
 }
 
-static void verify_install_tk(uint32_t ifindex, const uint8_t *aa_addr,
-				const uint8_t *tk, uint32_t cipher,
-				void *user_data)
+static void verify_install_tk(struct handshake_state *hs,
+				const uint8_t *tk, uint32_t cipher)
 {
-	assert(ifindex == 1);
-	assert(!memcmp(aa_addr, aa, 6));
+	struct test_handshake_state *ths =
+			container_of(hs, struct test_handshake_state, super);
 
-	if (user_data) {
-		assert(!memcmp(tk, user_data, 32));
+	assert(hs->ifindex == 1);
+	assert(!memcmp(hs->aa, aa, 6));
+
+	if (ths->tk) {
+		assert(!memcmp(tk, ths->tk, 32));
 		assert(cipher == CRYPTO_CIPHER_TKIP);
 	}
 
 	verify_install_tk_called = true;
 }
 
-static void verify_install_gtk(uint32_t ifindex, uint8_t key_index,
+static void verify_install_gtk(struct handshake_state *hs, uint8_t key_index,
 				const uint8_t *gtk, uint8_t gtk_len,
 				const uint8_t *rsc, uint8_t rsc_len,
-				uint32_t cipher, void *user_data)
+				uint32_t cipher)
 {
-	assert(ifindex == 1);
+	assert(hs->ifindex == 1);
 	verify_install_gtk_called = true;
 }
 
@@ -2508,7 +2536,7 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 							strlen(ssid), psk);
 
 	eapol_init();
-	hs = handshake_state_new(1);
+	hs = test_handshake_state_new(1);
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
@@ -2847,6 +2875,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	static uint8_t sta_address[] = { 0x02, 0x00, 0x00, 0x00, 0x01, 0x00 };
 	bool r;
 	struct handshake_state *hs;
+	struct test_handshake_state *ths;
 	struct eapol_sm *sm;
 	struct l_settings *settings;
 	uint8_t tx_buf[2000];
@@ -2865,7 +2894,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	__handshake_set_get_nonce_func(test_nonce);
 	__eapol_set_deauthenticate_func(verify_deauthenticate);
 
-	hs = handshake_state_new(1);
+	hs = test_handshake_state_new(1);
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
@@ -3043,7 +3072,8 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__handshake_set_install_tk_func(verify_install_tk);
-	handshake_state_set_user_data(hs, ptk->tk);
+	ths = container_of(hs, struct test_handshake_state, super);
+	ths->tk = ptk->tk;
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
 				step3_buf, sizeof(eapol_key_data_15), false);
 	assert(verify_step4_called);
@@ -3230,7 +3260,7 @@ static void eapol_sm_test_eap_nak(const void *data)
 	__handshake_set_get_nonce_func(test_nonce);
 	__eapol_set_deauthenticate_func(verify_deauthenticate);
 
-	hs = handshake_state_new(1);
+	hs = test_handshake_state_new(1);
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
@@ -3327,7 +3357,7 @@ static void eapol_ft_handshake_test(const void *data)
 	expected_step4_frame = eapol_key_data_28;
 	expected_step4_frame_size = sizeof(eapol_key_data_28);
 
-	hs = handshake_state_new(1);
+	hs = test_handshake_state_new(1);
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
