@@ -944,6 +944,9 @@ static void netdev_setting_keys_failed(struct netdev_handshake_state *nhs,
 
 	netdev->result = NETDEV_RESULT_KEY_SETTING_FAILED;
 
+	if (netdev->type != NL80211_IFTYPE_STATION)
+		return;
+
 	msg = netdev_build_cmd_disconnect(netdev,
 						MMPDU_REASON_CODE_UNSPECIFIED);
 	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
@@ -1191,6 +1194,8 @@ static void netdev_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 {
 	struct netdev_handshake_state *nhs = data;
 	struct netdev *netdev = nhs->netdev;
+	const uint8_t *addr = (netdev->type == NL80211_IFTYPE_STATION) ?
+			nhs->super.aa : nhs->super.spa;
 
 	nhs->pairwise_new_key_cmd_id = 0;
 
@@ -1205,7 +1210,7 @@ static void netdev_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 	 * we're already operational, it will not hurt during re-keying
 	 * and is necessary after an FT.
 	 */
-	msg = netdev_build_cmd_set_station(netdev, netdev->handshake->aa);
+	msg = netdev_build_cmd_set_station(netdev, addr);
 
 	nhs->set_station_cmd_id =
 		l_genl_family_send(nl80211, msg, netdev_set_station_cb,
@@ -1248,6 +1253,8 @@ static void netdev_set_tk(struct handshake_state *hs,
 	struct netdev *netdev = nhs->netdev;
 	struct l_genl_msg *msg;
 	enum mmpdu_reason_code rc;
+	const uint8_t *addr = (netdev->type == NL80211_IFTYPE_STATION) ?
+			nhs->super.aa : nhs->super.spa;
 
 	l_debug("%d", netdev->index);
 
@@ -1256,7 +1263,7 @@ static void netdev_set_tk(struct handshake_state *hs,
 		goto invalid_key;
 
 	rc = MMPDU_REASON_CODE_UNSPECIFIED;
-	msg = netdev_build_cmd_new_key_pairwise(netdev, cipher, hs->aa, tk_buf,
+	msg = netdev_build_cmd_new_key_pairwise(netdev, cipher, addr, tk_buf,
 						crypto_cipher_key_len(cipher));
 	nhs->pairwise_new_key_cmd_id =
 		l_genl_family_send(nl80211, msg, netdev_new_pairwise_key_cb,
@@ -1286,6 +1293,10 @@ static void netdev_handshake_failed(uint32_t ifindex,
 	netdev->sm = NULL;
 
 	netdev->result = NETDEV_RESULT_HANDSHAKE_FAILED;
+
+	if (netdev->type != NL80211_IFTYPE_STATION)
+		return;
+
 	msg = netdev_build_cmd_disconnect(netdev, reason_code);
 	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
 						netdev_connect_failed,
@@ -1341,6 +1352,9 @@ static void netdev_set_rekey_offload(uint32_t ifindex,
 
 	netdev = netdev_find(ifindex);
 	if (!netdev)
+		return;
+
+	if (netdev->type != NL80211_IFTYPE_STATION)
 		return;
 
 	if (!netdev->rekey_offload_support)
