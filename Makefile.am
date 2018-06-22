@@ -259,7 +259,7 @@ unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/handshake.h src/handshake.c \
 				src/eap.h src/eap.c src/eap-private.h \
 				src/eap-tls.c src/eap-ttls.c \
-				src/eap-md5.c
+				src/eap-md5.c src/util.c
 unit_test_eapol_LDADD = ell/libell-internal.la
 
 unit_test_ssid_to_utf8_SOURCES = src/util.h src/util.c \
