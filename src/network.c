@@ -346,6 +346,9 @@ bool network_set_psk(struct network *network, const uint8_t *psk)
 	if (network->info->type != SECURITY_PSK)
 		return false;
 
+	if (!network_settings_load(network))
+		return false;
+
 	l_free(network->psk);
 	network->psk = l_memdup(psk, 32);
 	return true;
