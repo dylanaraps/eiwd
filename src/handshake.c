@@ -187,11 +187,6 @@ bool handshake_state_set_own_wpa(struct handshake_state *s,
 	return handshake_state_setup_own_ciphers(s, &info);
 }
 
-void handshake_state_set_user_data(struct handshake_state *s, void *user_data)
-{
-	s->user_data = user_data;
-}
-
 void handshake_state_set_ssid(struct handshake_state *s, const uint8_t *ssid,
 				size_t ssid_len)
 {
@@ -223,6 +218,14 @@ void handshake_state_set_kh_ids(struct handshake_state *s,
 	s->r0khid_len = r0khid_len;
 
 	memcpy(s->r1khid, r1khid, 6);
+}
+
+void handshake_state_set_event_func(struct handshake_state *s,
+					handshake_event_func_t func,
+					void *user_data)
+{
+	s->event_func = func;
+	s->user_data = user_data;
 }
 
 void handshake_state_new_snonce(struct handshake_state *s)
@@ -335,6 +338,8 @@ void handshake_state_install_ptk(struct handshake_state *s)
 	if (install_tk) {
 		uint32_t cipher = ie_rsn_cipher_suite_to_cipher(
 							s->pairwise_cipher);
+
+		handshake_event(s, HANDSHAKE_EVENT_SETTING_KEYS, NULL);
 
 		install_tk(s, ptk->tk, cipher);
 	}
@@ -621,4 +626,11 @@ bool handshake_decode_fte_key(struct handshake_state *s, const uint8_t *wrapped,
 			return false;
 
 	return true;
+}
+
+void handshake_event(struct handshake_state *hs,
+			enum handshake_event event, void *event_data)
+{
+	if (hs->event_func)
+		hs->event_func(hs, event, event_data, hs->user_data);
 }

@@ -42,6 +42,17 @@ enum handshake_kde {
 	HANDSHAKE_KDE_MULTIBAND_KEY_ID	= 0x000fac0c,
 };
 
+enum handshake_event {
+	HANDSHAKE_EVENT_STARTED,
+	HANDSHAKE_EVENT_SETTING_KEYS,
+	HANDSHAKE_EVENT_COMPLETE,
+	HANDSHAKE_EVENT_FAILED
+};
+
+typedef void (*handshake_event_func_t)(struct handshake_state *hs,
+					enum handshake_event event,
+					void *event_data, void *user_data);
+
 typedef bool (*handshake_get_nonce_func_t)(uint8_t nonce[]);
 typedef void (*handshake_install_tk_func_t)(struct handshake_state *hs,
 					const uint8_t *tk, uint32_t cipher);
@@ -96,6 +107,8 @@ struct handshake_state {
 	void *user_data;
 
 	void (*free)(struct handshake_state *s);
+
+	handshake_event_func_t event_func;
 };
 
 void handshake_state_free(struct handshake_state *s);
@@ -104,7 +117,6 @@ void handshake_state_set_supplicant_address(struct handshake_state *s,
 						const uint8_t *spa);
 void handshake_state_set_authenticator_address(struct handshake_state *s,
 						const uint8_t *aa);
-void handshake_state_set_user_data(struct handshake_state *s, void *user_data);
 void handshake_state_set_pmk(struct handshake_state *s, const uint8_t *pmk,
 				size_t pmk_len);
 void handshake_state_set_8021x_config(struct handshake_state *s,
@@ -127,6 +139,10 @@ void handshake_state_set_fte(struct handshake_state *s, const uint8_t *fte);
 void handshake_state_set_kh_ids(struct handshake_state *s,
 				const uint8_t *r0khid, size_t r0khid_len,
 				const uint8_t *r1khid);
+
+void handshake_state_set_event_func(struct handshake_state *s,
+					handshake_event_func_t func,
+					void *user_data);
 
 void handshake_state_new_snonce(struct handshake_state *s);
 void handshake_state_new_anonce(struct handshake_state *s);
@@ -164,3 +180,6 @@ const uint8_t *handshake_util_find_igtk_kde(const uint8_t *data,
 					size_t data_len, size_t *out_igtk_len);
 const uint8_t *handshake_util_find_pmkid_kde(const uint8_t *data,
 					size_t data_len);
+
+void handshake_event(struct handshake_state *hs, enum handshake_event event,
+		void *event_data);

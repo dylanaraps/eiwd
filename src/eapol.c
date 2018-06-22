@@ -740,6 +740,8 @@ static void eapol_sm_write(struct eapol_sm *sm, const struct eapol_frame *ef,
 
 static inline void handshake_failed(struct eapol_sm *sm, uint16_t reason_code)
 {
+	handshake_event(sm->handshake, HANDSHAKE_EVENT_FAILED, &reason_code);
+
 	if (deauthenticate)
 		deauthenticate(sm->handshake->ifindex,
 				sm->handshake->aa, sm->handshake->spa,
@@ -798,6 +800,8 @@ static void send_eapol_start(struct l_timeout *timeout, void *user_data)
 	struct eapol_sm *sm = user_data;
 	uint8_t buf[sizeof(struct eapol_frame)];
 	struct eapol_frame *frame = (struct eapol_frame *) buf;
+
+	handshake_event(sm->handshake, HANDSHAKE_EVENT_STARTED, NULL);
 
 	l_timeout_remove(sm->eapol_start_timeout);
 	sm->eapol_start_timeout = NULL;

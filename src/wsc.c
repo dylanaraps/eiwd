@@ -367,9 +367,6 @@ static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
 	case NETDEV_EVENT_AUTHENTICATING:
 	case NETDEV_EVENT_ASSOCIATING:
 		break;
-	case NETDEV_EVENT_4WAY_HANDSHAKE:
-		l_info("Running EAP-WSC");
-		break;
 	case NETDEV_EVENT_LOST_BEACON:
 		l_debug("Lost beacon");
 		break;

@@ -943,6 +943,7 @@ static void netdev_setting_keys_failed(struct netdev_handshake_state *nhs,
 	nhs->set_station_cmd_id = 0;
 
 	netdev->result = NETDEV_RESULT_KEY_SETTING_FAILED;
+
 	msg = netdev_build_cmd_disconnect(netdev,
 						MMPDU_REASON_CODE_UNSPECIFIED);
 	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
@@ -971,6 +972,8 @@ static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
 						MMPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}
+
+	handshake_event(&nhs->super, HANDSHAKE_EVENT_COMPLETE, NULL);
 
 done:
 	netdev_connect_ok(netdev);
@@ -1247,10 +1250,6 @@ static void netdev_set_tk(struct handshake_state *hs,
 	enum mmpdu_reason_code rc;
 
 	l_debug("%d", netdev->index);
-
-	if (netdev->event_filter)
-		netdev->event_filter(netdev, NETDEV_EVENT_SETTING_KEYS,
-					netdev->user_data);
 
 	rc = MMPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER;
 	if (!netdev_copy_tk(tk_buf, tk, cipher, false))
@@ -1599,14 +1598,8 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 		if (!eapol_start(netdev->sm))
 			goto error;
 
-		if (!netdev->in_ft) {
-			if (netdev->event_filter)
-				netdev->event_filter(netdev,
-						NETDEV_EVENT_4WAY_HANDSHAKE,
-						netdev->user_data);
-
+		if (!netdev->in_ft)
 			return;
-		}
 	}
 
 	if (netdev->in_ft) {

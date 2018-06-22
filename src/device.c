@@ -640,6 +640,34 @@ static enum ie_rsn_akm_suite device_select_akm_suite(struct network *network,
 	return 0;
 }
 
+static void device_handshake_event(struct handshake_state *hs,
+					enum handshake_event event,
+					void *event_data, void *user_data)
+{
+	struct device *device = user_data;
+	struct network *network = device->connected_network;
+
+	switch (event) {
+	case HANDSHAKE_EVENT_STARTED:
+		l_debug("Handshaking");
+		break;
+	case HANDSHAKE_EVENT_SETTING_KEYS:
+		l_debug("Setting keys");
+
+		/* If we got here, then our PSK works.  Save if required */
+		network_sync_psk(network);
+		break;
+	case HANDSHAKE_EVENT_COMPLETE:
+	case HANDSHAKE_EVENT_FAILED:
+		/*
+		 * currently we dont care about any other events. The
+		 * netdev_connect_cb will notify us when the connection is
+		 * complete.
+		 */
+		break;
+	}
+}
+
 static struct handshake_state *device_handshake_setup(struct device *device,
 						struct network *network,
 						struct scan_bss *bss)
@@ -650,6 +678,8 @@ static struct handshake_state *device_handshake_setup(struct device *device,
 	bool add_mde = false;
 
 	hs = netdev_handshake_state_new(device->netdev);
+
+	handshake_state_set_event_func(hs, device_handshake_event, device);
 
 	if (security == SECURITY_PSK || security == SECURITY_8021X) {
 		const struct l_settings *settings = iwd_get_config();
@@ -1579,12 +1609,10 @@ static void device_signal_agent_release(struct signal_agent *agent,
 	l_dbus_send(dbus_get_bus(), msg);
 }
 
-
 static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 					void *user_data)
 {
 	struct device *device = user_data;
-	struct network *network = device->connected_network;
 
 	switch (event) {
 	case NETDEV_EVENT_AUTHENTICATING:
@@ -1592,16 +1620,6 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 		break;
 	case NETDEV_EVENT_ASSOCIATING:
 		l_debug("Associating");
-		break;
-	case NETDEV_EVENT_4WAY_HANDSHAKE:
-		l_debug("Handshaking");
-		break;
-	case NETDEV_EVENT_SETTING_KEYS:
-		l_debug("Setting keys");
-
-		/* If we got here, then our PSK works.  Save if required */
-		network_sync_psk(network);
-
 		break;
 	case NETDEV_EVENT_LOST_BEACON:
 		device_lost_beacon(device);
