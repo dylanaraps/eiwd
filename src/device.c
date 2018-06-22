@@ -649,7 +649,7 @@ static struct handshake_state *device_handshake_setup(struct device *device,
 	struct handshake_state *hs;
 	bool add_mde = false;
 
-	hs = handshake_state_new(netdev_get_ifindex(device->netdev));
+	hs = netdev_handshake_state_new(device->netdev);
 
 	if (security == SECURITY_PSK || security == SECURITY_8021X) {
 		const struct l_settings *settings = iwd_get_config();

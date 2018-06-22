@@ -408,11 +408,10 @@ static void wsc_connect(struct wsc *wsc)
 	struct handshake_state *hs;
 	struct l_settings *settings = l_settings_new();
 	struct scan_bss *bss = wsc->target;
-	uint32_t ifindex = netdev_get_ifindex(device_get_netdev(wsc->device));
 
 	wsc->target = NULL;
 
-	hs = handshake_state_new(ifindex);
+	hs = netdev_handshake_state_new(device_get_netdev(wsc->device));
 
 	l_settings_set_string(settings, "Security", "EAP-Identity",
 					"WFA-SimpleConfig-Enrollee-1-0");

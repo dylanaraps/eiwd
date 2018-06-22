@@ -70,25 +70,19 @@ void __handshake_set_install_igtk_func(handshake_install_igtk_func_t func)
 	install_igtk = func;
 }
 
-struct handshake_state *handshake_state_new(uint32_t ifindex)
-{
-	struct handshake_state *s;
-
-	s = l_new(struct handshake_state, 1);
-
-	s->ifindex = ifindex;
-
-	return s;
-}
-
 void handshake_state_free(struct handshake_state *s)
 {
+	typeof(s->free) destroy = s->free;
+
 	l_free(s->ap_ie);
 	l_free(s->own_ie);
 	l_free(s->mde);
 	l_free(s->fte);
 
-	l_free(s);
+	memset(s, 0, sizeof(*s));
+
+	if (destroy)
+		destroy(s);
 }
 
 void handshake_state_set_supplicant_address(struct handshake_state *s,
@@ -342,7 +336,7 @@ void handshake_state_install_ptk(struct handshake_state *s)
 		uint32_t cipher = ie_rsn_cipher_suite_to_cipher(
 							s->pairwise_cipher);
 
-		install_tk(s->ifindex, s->aa, ptk->tk, cipher, s->user_data);
+		install_tk(s, ptk->tk, cipher);
 	}
 }
 
@@ -355,8 +349,8 @@ void handshake_state_install_gtk(struct handshake_state *s,
 		uint32_t cipher =
 			ie_rsn_cipher_suite_to_cipher(s->group_cipher);
 
-		install_gtk(s->ifindex, gtk_key_index, gtk, gtk_len,
-				rsc, rsc_len, cipher, s->user_data);
+		install_gtk(s, gtk_key_index, gtk, gtk_len,
+				rsc, rsc_len, cipher);
 	}
 }
 
@@ -370,8 +364,8 @@ void handshake_state_install_igtk(struct handshake_state *s,
 			ie_rsn_cipher_suite_to_cipher(
 						s->group_management_cipher);
 
-		install_igtk(s->ifindex, igtk_key_index, igtk, igtk_len,
-				ipn, 6, cipher, s->user_data);
+		install_igtk(s, igtk_key_index, igtk, igtk_len,
+				ipn, 6, cipher);
 	}
 }
 

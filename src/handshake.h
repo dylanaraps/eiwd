@@ -25,6 +25,8 @@
 #include <asm/byteorder.h>
 #include <linux/types.h>
 
+struct handshake_state;
+
 /* 802.11-2016 Table 12-6 in section 12.7.2 */
 enum handshake_kde {
 	HANDSHAKE_KDE_GTK		= 0x000fac01,
@@ -41,19 +43,18 @@ enum handshake_kde {
 };
 
 typedef bool (*handshake_get_nonce_func_t)(uint8_t nonce[]);
-typedef void (*handshake_install_tk_func_t)(uint32_t ifindex, const uint8_t *aa,
-					const uint8_t *tk, uint32_t cipher,
-					void *user_data);
-typedef void (*handshake_install_gtk_func_t)(uint32_t ifindex,
+typedef void (*handshake_install_tk_func_t)(struct handshake_state *hs,
+					const uint8_t *tk, uint32_t cipher);
+typedef void (*handshake_install_gtk_func_t)(struct handshake_state *hs,
 					uint8_t key_index,
 					const uint8_t *gtk, uint8_t gtk_len,
 					const uint8_t *rsc, uint8_t rsc_len,
-					uint32_t cipher, void *user_data);
-typedef void (*handshake_install_igtk_func_t)(uint32_t ifindex,
+					uint32_t cipher);
+typedef void (*handshake_install_igtk_func_t)(struct handshake_state *hs,
 					uint8_t key_index,
 					const uint8_t *igtk, uint8_t igtk_len,
 					const uint8_t *ipn, uint8_t ipn_len,
-					uint32_t cipher, void *user_data);
+					uint32_t cipher);
 
 void __handshake_set_get_nonce_func(handshake_get_nonce_func_t func);
 void __handshake_set_install_tk_func(handshake_install_tk_func_t func);
@@ -93,9 +94,10 @@ struct handshake_state {
 	size_t r0khid_len;
 	uint8_t r1khid[6];
 	void *user_data;
+
+	void (*free)(struct handshake_state *s);
 };
 
-struct handshake_state *handshake_state_new(uint32_t ifindex);
 void handshake_state_free(struct handshake_state *s);
 
 void handshake_state_set_supplicant_address(struct handshake_state *s,
