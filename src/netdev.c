@@ -1276,19 +1276,12 @@ invalid_key:
 	netdev_setting_keys_failed(nhs, rc);
 }
 
-static void netdev_handshake_failed(uint32_t ifindex,
-					const uint8_t *aa, const uint8_t *spa,
-					uint16_t reason_code, void *user_data)
+void netdev_handshake_failed(struct netdev *netdev, uint16_t reason_code)
 {
 	struct l_genl_msg *msg;
-	struct netdev *netdev;
-
-	netdev = netdev_find(ifindex);
-	if (!netdev)
-		return;
 
 	l_error("4-Way handshake failed for ifindex: %d, reason: %u",
-				ifindex, reason_code);
+				netdev->index, reason_code);
 
 	netdev->sm = NULL;
 
@@ -4140,7 +4133,6 @@ bool netdev_init(struct l_genl_family *in,
 	__handshake_set_install_gtk_func(netdev_set_gtk);
 	__handshake_set_install_igtk_func(netdev_set_igtk);
 
-	__eapol_set_deauthenticate_func(netdev_handshake_failed);
 	__eapol_set_rekey_offload_func(netdev_set_rekey_offload);
 	__eapol_set_tx_packet_func(netdev_control_port_frame);
 

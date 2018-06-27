@@ -657,8 +657,11 @@ static void device_handshake_event(struct handshake_state *hs,
 		/* If we got here, then our PSK works.  Save if required */
 		network_sync_psk(network);
 		break;
-	case HANDSHAKE_EVENT_COMPLETE:
 	case HANDSHAKE_EVENT_FAILED:
+		netdev_handshake_failed(device_get_netdev(device),
+				l_get_u16(event_data));
+		break;
+	case HANDSHAKE_EVENT_COMPLETE:
 		/*
 		 * currently we dont care about any other events. The
 		 * netdev_connect_cb will notify us when the connection is

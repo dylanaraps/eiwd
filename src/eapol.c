@@ -42,7 +42,6 @@ struct l_queue *preauths;
 struct watchlist frame_watches;
 static uint32_t eapol_4way_handshake_time = 2;
 
-eapol_deauthenticate_func_t deauthenticate = NULL;
 eapol_rekey_offload_func_t rekey_offload = NULL;
 
 eapol_tx_packet_func_t tx_packet = NULL;
@@ -755,11 +754,6 @@ static void eapol_sm_write(struct eapol_sm *sm, const struct eapol_frame *ef,
 static inline void handshake_failed(struct eapol_sm *sm, uint16_t reason_code)
 {
 	handshake_event(sm->handshake, HANDSHAKE_EVENT_FAILED, &reason_code);
-
-	if (deauthenticate)
-		deauthenticate(sm->handshake->ifindex,
-				sm->handshake->aa, sm->handshake->spa,
-				reason_code, sm->user_data);
 
 	eapol_sm_free(sm);
 }
@@ -1998,11 +1992,6 @@ void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func)
 void __eapol_set_tx_user_data(void *user_data)
 {
 	tx_user_data = user_data;
-}
-
-void __eapol_set_deauthenticate_func(eapol_deauthenticate_func_t func)
-{
-	deauthenticate = func;
 }
 
 void __eapol_set_rekey_offload_func(eapol_rekey_offload_func_t func)

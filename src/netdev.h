@@ -145,6 +145,8 @@ uint32_t netdev_frame_watch_add(struct netdev *netdev, uint16_t frame_type,
 				void *user_data);
 bool netdev_frame_watch_remove(struct netdev *netdev, uint32_t id);
 
+void netdev_handshake_failed(struct netdev *netdev, uint16_t reason_code);
+
 struct netdev *netdev_find(int ifindex);
 
 uint32_t netdev_watch_add(struct netdev *netdev, netdev_watch_func_t func,

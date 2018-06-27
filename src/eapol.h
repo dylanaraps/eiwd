@@ -120,10 +120,6 @@ typedef void (*eapol_rekey_offload_func_t)(uint32_t ifindex,
 typedef void (*eapol_sm_event_func_t)(unsigned int event,
 							const void *event_data,
 							void *user_data);
-typedef void (*eapol_deauthenticate_func_t)(uint32_t ifindex, const uint8_t *aa,
-						const uint8_t *spa,
-						uint16_t reason_code,
-						void *user_data);
 typedef void (*eapol_preauth_cb_t)(const uint8_t *pmk, void *user_data);
 typedef void (*eapol_preauth_destroy_func_t)(void *user_data);
 typedef void (*eapol_frame_watch_func_t)(uint16_t proto, const uint8_t *from,
@@ -183,7 +179,6 @@ void __eapol_tx_packet(uint32_t ifindex, const uint8_t *dst, uint16_t proto,
 void __eapol_set_tx_packet_func(eapol_tx_packet_func_t func);
 void __eapol_set_tx_user_data(void *user_data);
 
-void __eapol_set_deauthenticate_func(eapol_deauthenticate_func_t func);
 void __eapol_set_rekey_offload_func(eapol_rekey_offload_func_t func);
 void __eapol_update_replay_counter(uint32_t ifindex, const uint8_t *spa,
 				const uint8_t *aa, uint64_t replay_counter);
