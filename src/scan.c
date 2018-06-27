@@ -343,7 +343,7 @@ static uint32_t scan_common(uint32_t ifindex, bool passive,
 	if (l_queue_length(sc->requests) > 0)
 		goto done;
 
-	if (sc->state != SCAN_STATE_NOT_RUNNING)
+	if (sc->state != SCAN_STATE_NOT_RUNNING || sc->start_cmd_id)
 		goto done;
 
 	sc->start_cmd_id = scan_send_start(&sr->start_cmd, scan_triggered, sc);
