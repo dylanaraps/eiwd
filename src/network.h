@@ -79,3 +79,4 @@ bool network_info_add_known(const char *ssid, enum security security);
 bool network_info_forget_known(const char *ssid, enum security security);
 void network_info_foreach(network_info_foreach_func_t function,
 				void *user_data);
+bool network_info_has_hidden(void);

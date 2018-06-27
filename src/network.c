@@ -1244,3 +1244,8 @@ void network_info_foreach(network_info_foreach_func_t function,
 	for (entry = l_queue_get_entries(networks); entry; entry = entry->next)
 		function(entry->data, user_data);
 }
+
+bool network_info_has_hidden(void)
+{
+	return false;
+}
