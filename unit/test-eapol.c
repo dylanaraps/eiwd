@@ -2857,11 +2857,16 @@ static void eapol_sm_test_tls_test_disconnected(enum l_tls_alert_desc reason,
 	assert(false);
 }
 
-static void verify_deauthenticate(uint32_t ifindex, const uint8_t *aa,
-					const uint8_t *spa,
-					uint16_t reason_code, void *user_data)
+static void verify_handshake(struct handshake_state *hs,
+		enum handshake_event event, void *event_data, void *user_data)
 {
-	assert(false);
+	switch (event) {
+	case HANDSHAKE_EVENT_FAILED:
+		assert(false);
+		break;
+	default:
+		break;
+	}
 }
 
 static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
@@ -2892,7 +2897,6 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	eap_init(0);
 	eapol_init();
 	__handshake_set_get_nonce_func(test_nonce);
-	__eapol_set_deauthenticate_func(verify_deauthenticate);
 
 	hs = test_handshake_state_new(1);
 	sm = eapol_sm_new(hs);
@@ -2900,6 +2904,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 
 	handshake_state_set_authenticator_address(hs, ap_address);
 	handshake_state_set_supplicant_address(hs, sta_address);
+	handshake_state_set_event_func(hs, verify_handshake, NULL);
 	__eapol_set_tx_user_data(s);
 
 	r = handshake_state_set_own_wpa(hs,
@@ -3190,15 +3195,18 @@ static void eapol_sm_test_eap_ttls_md5(const void *data)
 	eapol_sm_test_tls(&s.tls, eapol_8021x_config);
 }
 
-static bool eap_nak_verify_deauthenticate_called;
+static bool eap_nak_verify_handshake_failed;
 
-static void eap_nak_verify_deauthenticate(uint32_t ifindex, const uint8_t *aa,
-						const uint8_t *spa,
-						uint16_t reason_code,
-						void *user_data)
+static void verify_handshake_event(struct handshake_state *hs,
+		enum handshake_event event, void *event_data, void *user_data)
 {
-	assert(!eap_nak_verify_deauthenticate_called);
-	eap_nak_verify_deauthenticate_called = true;
+	switch (event) {
+	case HANDSHAKE_EVENT_FAILED:
+		eap_nak_verify_handshake_failed = true;
+		break;
+	default:
+		break;
+	}
 }
 
 static const uint8_t eap_ttls_start_req[] = {
@@ -3258,7 +3266,6 @@ static void eapol_sm_test_eap_nak(const void *data)
 	eap_init(0);
 	eapol_init();
 	__handshake_set_get_nonce_func(test_nonce);
-	__eapol_set_deauthenticate_func(verify_deauthenticate);
 
 	hs = test_handshake_state_new(1);
 	sm = eapol_sm_new(hs);
@@ -3266,6 +3273,7 @@ static void eapol_sm_test_eap_nak(const void *data)
 
 	handshake_state_set_authenticator_address(hs, ap_address);
 	handshake_state_set_supplicant_address(hs, sta_address);
+	handshake_state_set_event_func(hs, verify_handshake_event, NULL);
 	__eapol_set_tx_user_data(&s);
 
 	r = handshake_state_set_own_wpa(hs,
@@ -3294,11 +3302,10 @@ static void eapol_sm_test_eap_nak(const void *data)
 				sizeof(eap_ttls_start_req), false);
 	assert(!s.pending_req);
 
-	eap_nak_verify_deauthenticate_called = false;
-	__eapol_set_deauthenticate_func(eap_nak_verify_deauthenticate);
+	eap_nak_verify_handshake_failed = false;
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE, eap_failure,
 				sizeof(eap_failure), false);
-	assert(eap_nak_verify_deauthenticate_called);
+	assert(eap_nak_verify_handshake_failed);
 
 	handshake_state_free(hs);
 	eapol_exit();

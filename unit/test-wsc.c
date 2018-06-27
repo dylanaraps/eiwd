@@ -1931,14 +1931,20 @@ struct verify_data {
 	verify.expected = e;				\
 	verify.expected_len = sizeof(e)
 
-static void verify_deauthenticate(uint32_t ifindex, const uint8_t *aa,
-				const uint8_t *spa, uint16_t reason_code,
-				void *user_data)
+static void verify_handshake_event(struct handshake_state *hs,
+		enum handshake_event event, void *event_data, void *user_data)
 {
 	struct verify_data *data = user_data;
 
-	assert(reason_code == MMPDU_REASON_CODE_IEEE8021X_FAILED);
-	data->eapol_failed = true;
+	switch (event) {
+	case HANDSHAKE_EVENT_FAILED:
+		assert(l_get_u16(event_data) ==
+				MMPDU_REASON_CODE_IEEE8021X_FAILED);
+		data->eapol_failed = true;
+		break;
+	default:
+		break;
+	}
 }
 
 static int verify_8021x(uint32_t ifindex,
@@ -1993,10 +1999,10 @@ static void wsc_test_pbc_handshake(const void *data)
 
 	handshake_state_set_authenticator_address(hs, ap_address);
 	handshake_state_set_supplicant_address(hs, sta_address);
+	handshake_state_set_event_func(hs, verify_handshake_event, &verify);
 
 	__eapol_set_tx_packet_func(verify_8021x);
 	__eapol_set_tx_user_data(&verify);
-	__eapol_set_deauthenticate_func(verify_deauthenticate);
 	eapol_sm_set_user_data(sm, &verify);
 	eapol_sm_set_event_func(sm, verify_credential);
 
@@ -2101,10 +2107,10 @@ static void wsc_test_retransmission_no_fragmentation(const void *data)
 
 	handshake_state_set_authenticator_address(hs, ap_address);
 	handshake_state_set_supplicant_address(hs, sta_address);
+	handshake_state_set_event_func(hs, verify_handshake_event, &verify);
 
 	__eapol_set_tx_packet_func(verify_8021x);
 	__eapol_set_tx_user_data(&verify);
-	__eapol_set_deauthenticate_func(verify_deauthenticate);
 	eapol_sm_set_user_data(sm, &verify);
 	eapol_sm_set_event_func(sm, verify_credential);
 
