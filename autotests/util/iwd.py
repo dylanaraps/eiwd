@@ -604,13 +604,15 @@ class PSKAgent(dbus.service.Object):
 
 
 class DeviceList(collections.Mapping):
-    def __init__(self, iwd, objects):
+    def __init__(self, iwd):
         self._dict = {}
 
         iwd._object_manager.connect_to_signal("InterfacesAdded",
-                self._interfaces_added_handler, IWD_DEVICE_INTERFACE)
+                                               self._interfaces_added_handler)
         iwd._object_manager.connect_to_signal("InterfacesRemoved",
-                self._interfaces_removed_handler, IWD_DEVICE_INTERFACE)
+                                               self._interfaces_removed_handler)
+
+        objects = iwd._object_manager.GetManagedObjects()
 
         for path in objects:
             for interface in objects[path]:
@@ -630,10 +632,12 @@ class DeviceList(collections.Mapping):
         self._dict.pop(key).remove()
 
     def _interfaces_added_handler(self, path, interfaces):
-        self._dict[path] = Device(path, interfaces[IWD_DEVICE_INTERFACE])
+        if IWD_DEVICE_INTERFACE in interfaces:
+            self._dict[path] = Device(path, interfaces[IWD_DEVICE_INTERFACE])
 
     def _interfaces_removed_handler(self, path, interfaces):
-        del _dict[path]
+        if IWD_DEVICE_INTERFACE in interfaces:
+            del self._dict[path]
 
 
 class IWD(AsyncOpAbstract):
@@ -684,15 +688,21 @@ class IWD(AsyncOpAbstract):
                 tries += 1
             time.sleep(0.1)
 
-        self._devices = DeviceList(self,
-                                       self._object_manager.GetManagedObjects())
+        self._devices = DeviceList(self)
 
     def __del__(self):
         if self._iwd_proc is None:
             return
 
+        self._object_manager_if = None
+        self._agent_manager_if = None
+        self._known_network_manager_if = None
+        self._devices = None
+
         self._iwd_proc.terminate()
         self._iwd_proc.wait()
+
+        self._iwd_proc = None
 
     @property
     def _object_manager(self):
@@ -766,17 +776,23 @@ class IWD(AsyncOpAbstract):
         assert not os.path.isabs(source)
         shutil.copy(source, IWD_STORAGE_DIR)
 
-    def list_devices(self, wait_to_appear = False):
+    def list_devices(self, wait_to_appear = False, max_wait = 15):
         if not wait_to_appear:
             return list(self._devices.values())
 
-        tries = 0
+        self._wait_timed_out = False
+        def wait_timeout_cb():
+            self._wait_timed_out = True
+            return False
+
+        timeout = GLib.timeout_add_seconds(max_wait, wait_timeout_cb)
+        context = mainloop.get_context()
         while len(self._devices) == 0:
-            if tries > 100:
+            context.iteration(may_block=True)
+            if self._wait_timed_out:
                 raise TimeoutError('IWD has no associated devices')
 
-            tries += 1
-            time.sleep(0.2)
+        GLib.source_remove(timeout)
 
         return list(self._devices.values())
 
