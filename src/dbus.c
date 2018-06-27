@@ -172,6 +172,13 @@ struct l_dbus_message *dbus_error_not_implemented(struct l_dbus_message *msg)
 					"Not implemented");
 }
 
+struct l_dbus_message *dbus_error_service_set_overlap(
+						struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".ServiceSetOverlap",
+					"Service set overlap");
+}
+
 void dbus_pending_reply(struct l_dbus_message **msg,
 				struct l_dbus_message *reply)
 {
