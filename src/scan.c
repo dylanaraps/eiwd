@@ -274,7 +274,7 @@ static void scan_freq_count(uint32_t freq, void *user_data)
 	*count += 1;
 }
 
-static struct l_genl_msg *scan_build_cmd(uint32_t ifindex, bool passive,
+static struct l_genl_msg *scan_build_cmd(struct scan_context *sc, bool passive,
 					const struct scan_parameters *params)
 {
 	struct l_genl_msg *msg;
@@ -288,7 +288,7 @@ static struct l_genl_msg *scan_build_cmd(uint32_t ifindex, bool passive,
 	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN,
 						64 + params->extra_ie_size +
 						4 * n_channels);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &sc->ifindex);
 
 	if (!passive) {
 		l_genl_msg_enter_nested(msg, NL80211_ATTR_SCAN_SSIDS);
@@ -336,7 +336,7 @@ static uint32_t scan_common(uint32_t ifindex, bool passive,
 	sr->passive = passive;
 	sr->id = ++next_scan_request_id;
 
-	sr->start_cmd = scan_build_cmd(ifindex, passive, params);
+	sr->start_cmd = scan_build_cmd(sc, passive, params);
 	if (!sr->start_cmd)
 		goto error;
 
@@ -501,7 +501,7 @@ static bool scan_periodic_send_start(struct scan_context *sc)
 	struct scan_parameters params = {};
 	struct l_genl_msg *msg;
 
-	msg = scan_build_cmd(sc->ifindex, true, &params);
+	msg = scan_build_cmd(sc, true, &params);
 	if (!msg)
 		return false;
 
