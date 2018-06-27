@@ -464,7 +464,7 @@ void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
 		l_error("Starting scheduled scan failed");
 }
 
-static void scan_periodic_done(struct l_genl_msg *msg, void *user_data)
+static void scan_periodic_triggered(struct l_genl_msg *msg, void *user_data)
 {
 	struct scan_context *sc = user_data;
 	int err;
@@ -505,7 +505,7 @@ static bool scan_periodic_send_start(struct scan_context *sc)
 	if (!msg)
 		return false;
 
-	sc->start_cmd_id = scan_send_start(&msg, scan_periodic_done, sc);
+	sc->start_cmd_id = scan_send_start(&msg, scan_periodic_triggered, sc);
 	if (!sc->start_cmd_id) {
 		l_genl_msg_unref(msg);
 		return false;
