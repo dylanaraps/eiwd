@@ -1759,7 +1759,6 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 						void *user_data)
 {
 	struct device *device = user_data;
-	uint32_t id;
 
 	l_debug("Scan called from DBus");
 
@@ -1773,19 +1772,29 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 	device->scan_pending = l_dbus_message_ref(message);
 
 	/*
-	 * If device is not connected to a BSS use a passive scan to
-	 * avoid advertising our address until we support address
-	 * randomization (on the devices that support it).
+	 * If we're not connected and no hidden networks are seen & configured,
+	 * use passive scanning to hide our MAC address
 	 */
-	if (!device->connected_bss)
-		id = scan_passive(device->index, device_scan_triggered,
-					new_scan_results, device, NULL);
-	else
-		id = scan_active(device->index, NULL, 0, device_scan_triggered,
-					new_scan_results, device, NULL);
+	if (!device->connected_bss &&
+			!(device->seen_hidden_networks &&
+						network_info_has_hidden())) {
+		if (!scan_passive(device->index, device_scan_triggered,
+						new_scan_results, device, NULL))
+			return dbus_error_failed(message);
+	} else {
+		struct scan_parameters params;
 
-	if (!id)
-		return dbus_error_failed(message);
+		memset(&params, 0, sizeof(params));
+
+		/* If we're connected, HW cannot randomize our MAC */
+		if (!device->connected_bss)
+			params.randomize_mac_addr_hint = true;
+
+		if (!scan_active_full(device->index, &params,
+					device_scan_triggered,
+					new_scan_results, device, NULL))
+			return dbus_error_failed(message);
+	}
 
 	return NULL;
 }
