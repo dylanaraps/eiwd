@@ -52,6 +52,7 @@ class NoAgentEx(dbus.DBusException): pass
 class NotConnectedEx(dbus.DBusException): pass
 class NotConfiguredEx(dbus.DBusException): pass
 class NotImplementedEx(dbus.DBusException): pass
+class ServiceSetOverlapEx(dbus.DBusException): pass
 class CanceledEx(dbus.DBusException):
     _dbus_error_name = 'net.connman.iwd.Error.Canceled'
 
@@ -70,6 +71,7 @@ _dbus_ex_to_py = {
     'NotConnected' :    NotConnectedEx,
     'NotConfigured' :   NotConfiguredEx,
     'NotImplemented' :  NotImplementedEx,
+    'ServiceSetOverlap' :  ServiceSetOverlapEx,
 }
 
 
@@ -364,6 +366,22 @@ class Device(IWDDBusAbstract):
         self._iface.StopAccessPoint(dbus_interface=self._iface_name,
                                     reply_handler=self._success,
                                     error_handler=self._failure)
+        self._wait_for_async_op()
+
+    def connect_hidden_network(self, name):
+        '''Connect to a hidden network
+           Possible exception: BusyEx
+                               FailedEx
+                               InvalidArgsEx
+                               NotConfiguredEx
+                               NotConnectedEx
+                               NotFoundEx
+                               ServiceSetOverlapEx
+        '''
+        self._iface.ConnectHiddenNetwork(name, dbus_interface=self._iface_name,
+                               reply_handler=self._success,
+                               error_handler=self._failure)
+
         self._wait_for_async_op()
 
     def __str__(self, prefix = ''):
