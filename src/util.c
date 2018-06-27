@@ -88,6 +88,22 @@ bool util_ssid_is_utf8(size_t len, const uint8_t *ssid)
 	return l_utf8_validate((const char *)ssid, len, NULL);
 }
 
+/*
+ * Checks whether this is a hidden SSID.  Two conditions are checked:
+ * 1. If the SSID is length 0
+ * 2. If the SSID length > 0 and all bytes are 0
+ *
+ * The length is not sanitized so the caller must have sanitized the arguments
+ * beforehand.
+ */
+bool util_ssid_is_hidden(size_t len, const uint8_t *ssid)
+{
+	if (!len)
+		return true;
+
+	return util_mem_is_zero(ssid, len);
+}
+
 const char *util_address_to_string(const uint8_t *addr)
 {
 	static char str[18];
