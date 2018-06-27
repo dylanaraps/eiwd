@@ -91,6 +91,7 @@ struct device {
 	bool signal_low : 1;
 	bool roam_no_orig_ap : 1;
 	bool ap_directed_roaming : 1;
+	bool seen_hidden_networks : 1;
 
 	uint32_t ap_roam_watch;
 };
@@ -264,6 +265,12 @@ static void process_bss(struct device *device, struct scan_bss *bss,
 			util_ssid_to_utf8(bss->ssid_len, bss->ssid),
 			bss->frequency, bss->rank, bss->signal_strength);
 
+	if (util_ssid_is_hidden(bss->ssid_len, bss->ssid)) {
+		l_warn("Ignoring BSS with hidden SSID");
+		device->seen_hidden_networks = true;
+		return;
+	}
+
 	if (!util_ssid_is_utf8(bss->ssid_len, bss->ssid)) {
 		l_warn("Ignoring BSS with non-UTF8 SSID");
 		return;
@@ -341,6 +348,8 @@ void device_set_scan_results(struct device *device, struct l_queue *bss_list)
 
 	device->old_bss_list = device->bss_list;
 	device->bss_list = bss_list;
+
+	device->seen_hidden_networks = false;
 
 	while ((network = l_queue_pop_head(device->networks_sorted)))
 		network_bss_list_clear(network);
