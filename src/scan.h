@@ -69,6 +69,7 @@ struct scan_parameters {
 	size_t extra_ie_size;
 	struct scan_freq_set *freqs;
 	bool flush : 1;
+	bool randomize_mac_addr_hint : 1;
 };
 
 uint32_t scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
