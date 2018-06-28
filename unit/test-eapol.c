@@ -2855,6 +2855,7 @@ static void eapol_sm_test_tls_test_ready(const char *peer_identity,
 static void eapol_sm_test_tls_test_disconnected(enum l_tls_alert_desc reason,
 						bool remote, void *user_data)
 {
+	l_info("Unexpected TLS alert: %d", reason);
 	assert(false);
 }
 
