@@ -167,9 +167,6 @@ static void ap_new_rsna(struct sta_state *sta)
 	 */
 }
 
-static void ap_error_deauth_sta(struct sta_state *sta,
-				enum mmpdu_reason_code reason);
-
 static void ap_drop_rsna(struct sta_state *sta)
 {
 	struct l_genl_msg *msg;
@@ -332,6 +329,52 @@ static uint32_t ap_send_mgmt_frame(struct ap_state *ap,
 	return id;
 }
 
+static struct l_genl_msg *ap_build_del_station(struct sta_state *sta,
+		enum mmpdu_reason_code reason, uint8_t subtype)
+{
+	struct l_genl_msg *msg;
+	uint32_t ifindex = device_get_ifindex(sta->ap->device);
+
+	sta->associated = false;
+	sta->rsna = false;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_DEL_STATION, 64);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MGMT_SUBTYPE, 1, &subtype);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason);
+
+	return msg;
+}
+
+static void ap_deauthenticate_sta(struct sta_state *sta,
+		enum mmpdu_reason_code reason)
+{
+	struct l_genl_msg *msg;
+
+	msg = ap_build_del_station(sta, reason,
+			MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION);
+
+	if (!l_genl_family_send(nl80211, msg, ap_del_sta_cb, NULL, NULL)) {
+		l_genl_msg_unref(msg);
+		l_error("Issuing DEL_STATION failed");
+	}
+}
+
+static void ap_disassociate_sta(struct sta_state *sta,
+		enum mmpdu_reason_code reason)
+{
+	struct l_genl_msg *msg;
+
+	msg = ap_build_del_station(sta, reason,
+			MPDU_MANAGEMENT_SUBTYPE_DISASSOCIATION);
+
+	if (!l_genl_family_send(nl80211, msg, ap_del_sta_cb, NULL, NULL)) {
+		l_genl_msg_unref(msg);
+		l_error("Issuing DEL_STATION failed");
+	}
+}
+
 static void ap_handshake_event(struct handshake_state *hs,
 		enum handshake_event event, void *event_data, void *user_data)
 {
@@ -342,60 +385,11 @@ static void ap_handshake_event(struct handshake_state *hs,
 		ap_new_rsna(sta);
 		break;
 	case HANDSHAKE_EVENT_FAILED:
-		ap_error_deauth_sta(sta, l_get_u16(event_data));
+		ap_deauthenticate_sta(sta, l_get_u16(event_data));
 		break;
 	default:
 		break;
 	}
-}
-
-static void ap_disassociate_sta(struct ap_state *ap, struct sta_state *sta)
-{
-	struct l_genl_msg *msg;
-	uint32_t ifindex = device_get_ifindex(ap->device);
-
-	sta->associated = false;
-	sta->rsna = false;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_DEL_STATION, 64);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_AID, 2, &sta->aid);
-
-	if (!l_genl_family_send(nl80211, msg, ap_del_sta_cb, NULL, NULL)) {
-		l_genl_msg_unref(msg);
-		l_error("Issuing DEL_STATION failed");
-	}
-}
-
-static void ap_error_deauth_sta(struct sta_state *sta,
-				enum mmpdu_reason_code reason)
-{
-	struct ap_state *ap = sta->ap;
-	const uint8_t *bssid = device_get_address(ap->device);
-	uint8_t mpdu_buf[128];
-	struct mmpdu_header *mpdu = (void *) mpdu_buf;
-	struct mmpdu_deauthentication *deauth;
-
-	memset(mpdu, 0, sizeof(*mpdu));
-	mpdu->fc.protocol_version = 0;
-	mpdu->fc.type = MPDU_TYPE_MANAGEMENT;
-	mpdu->fc.subtype = MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION;
-	memcpy(mpdu->address_1, sta->addr, 6);	/* DA */
-	memcpy(mpdu->address_2, bssid, 6);	/* SA */
-	memcpy(mpdu->address_3, bssid, 6);	/* BSSID */
-
-	deauth = (void *) mmpdu_body(mpdu);
-	deauth->reason_code = L_CPU_TO_LE16(reason);
-
-	ap_send_mgmt_frame(ap, mpdu, deauth->ies - mpdu_buf, false, NULL, NULL);
-
-	if (sta->associated)
-		ap_disassociate_sta(ap, sta);
-
-	l_queue_remove(ap->sta_states, sta);
-
-	ap_sta_free(sta);
 }
 
 static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
@@ -458,7 +452,7 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 	return;
 
 error:
-	ap_disassociate_sta(sta->ap, sta);
+	ap_disassociate_sta(sta, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
 static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
@@ -541,7 +535,7 @@ static void ap_success_assoc_resp_cb(struct l_genl_msg *msg, void *user_data)
 
 		/* If we were in State 3 or 4 go to back to State 2 */
 		if (sta->associated)
-			ap_disassociate_sta(ap, sta);
+			ap_disassociate_sta(sta, MMPDU_REASON_CODE_UNSPECIFIED);
 
 		return;
 	}
@@ -1003,7 +997,7 @@ static void ap_disassoc_cb(struct netdev *netdev,
 	if (!sta || !sta->associated)
 		return;
 
-	ap_disassociate_sta(ap, sta);
+	ap_disassociate_sta(sta, L_LE16_TO_CPU(disassoc->reason_code));
 }
 
 static void ap_auth_reply_cb(struct l_genl_msg *msg, void *user_data)
@@ -1137,8 +1131,7 @@ static void ap_deauth_cb(struct netdev *netdev, const struct mmpdu_header *hdr,
 	if (!sta)
 		return;
 
-	if (sta->associated)
-		ap_disassociate_sta(ap, sta);
+	ap_deauthenticate_sta(sta, L_LE16_TO_CPU(deauth->reason_code));
 
 	ap_sta_free(sta);
 }
