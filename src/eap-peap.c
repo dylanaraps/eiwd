@@ -532,7 +532,7 @@ static void eap_peap_tunnel_ready(const char *peer_identity, void *user_data)
 static void eap_peap_tunnel_disconnected(enum l_tls_alert_desc reason,
 						bool remote, void *user_data)
 {
-	l_info("PEAP TLS tunnel has disconnected");
+	l_info("PEAP TLS tunnel has disconnected with alert: %d", reason);
 }
 
 static bool eap_peap_tunnel_init(struct eap_state *eap)
