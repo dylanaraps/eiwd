@@ -30,6 +30,7 @@ IWD_KNOWN_NETWORKS_INTERFACE =  'net.connman.iwd.KnownNetworks'
 IWD_NETWORK_INTERFACE =         'net.connman.iwd.Network'
 IWD_WSC_INTERFACE =             'net.connman.iwd.WiFiSimpleConfiguration'
 IWD_SIGNAL_AGENT_INTERFACE =    'net.connman.iwd.SignalLevelAgent'
+IWD_AP_INTERFACE =              'net.connman.iwd.AccessPoint'
 
 IWD_AGENT_MANAGER_PATH =        '/'
 IWD_KNOWN_NETWORKS_PATH =       '/'
@@ -360,17 +361,16 @@ class Device(IWDDBusAbstract):
         self._wait_for_async_op()
 
     def start_ap(self, ssid, psk):
-        self._iface.StartAccessPoint(ssid, psk,
-                                     dbus_interface=self._iface_name,
-                                     reply_handler=self._success,
+        self._prop_proxy.Set(IWD_DEVICE_INTERFACE, 'Mode', 'ap')
+        self._ap_iface = dbus.Interface(self._bus.get_object(IWD_SERVICE,
+                                            self.device_path),
+                                            IWD_AP_INTERFACE)
+        self._ap_iface.Start(ssid, psk, reply_handler=self._success,
                                      error_handler=self._failure)
         self._wait_for_async_op()
 
     def stop_ap(self):
-        self._iface.StopAccessPoint(dbus_interface=self._iface_name,
-                                    reply_handler=self._success,
-                                    error_handler=self._failure)
-        self._wait_for_async_op()
+        self._prop_proxy.Set(IWD_DEVICE_INTERFACE, 'Mode', 'station')
 
     def connect_hidden_network(self, name):
         '''Connect to a hidden network
