@@ -1177,6 +1177,8 @@ void network_rank_update(struct network *network)
 bool network_info_add_known(const char *ssid, enum security security)
 {
 	struct network_info *network;
+	struct l_settings *settings;
+	bool is_hidden;
 	int err;
 
 	network = l_new(struct network_info, 1);
@@ -1191,6 +1193,13 @@ bool network_info_add_known(const char *ssid, enum security security)
 	}
 
 	network->is_known = true;
+
+	settings = storage_network_open(security_to_str(security), ssid);
+
+	if (l_settings_get_bool(settings, "Settings", "Hidden", &is_hidden))
+		network->is_hidden = is_hidden;
+
+	l_settings_free(settings);
 
 	l_queue_insert(networks, network, timespec_compare, NULL);
 

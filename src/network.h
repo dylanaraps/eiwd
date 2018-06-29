@@ -70,6 +70,7 @@ struct network_info {
 	struct timespec seen_time;	/* Time last seen */
 	int seen_count;			/* Ref count for network.info */
 	bool is_known:1;
+	bool is_hidden:1;
 };
 
 typedef void (*network_info_foreach_func_t)(const struct network_info *info,
