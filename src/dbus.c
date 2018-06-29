@@ -179,6 +179,19 @@ struct l_dbus_message *dbus_error_service_set_overlap(
 					"Service set overlap");
 }
 
+struct l_dbus_message *dbus_error_already_provisioned(
+						struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".AlreadyProvisioned",
+					"Already provisioned");
+}
+
+struct l_dbus_message *dbus_error_not_hidden(struct l_dbus_message *msg)
+{
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".NotHidden",
+					"Not hidden");
+}
+
 void dbus_pending_reply(struct l_dbus_message **msg,
 				struct l_dbus_message *reply)
 {

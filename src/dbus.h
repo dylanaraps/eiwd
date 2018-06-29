@@ -68,6 +68,9 @@ struct l_dbus_message *dbus_error_not_configured(struct l_dbus_message *msg);
 struct l_dbus_message *dbus_error_not_implemented(struct l_dbus_message *msg);
 struct l_dbus_message *dbus_error_service_set_overlap(
 						struct l_dbus_message *msg);
+struct l_dbus_message *dbus_error_already_provisioned(
+						struct l_dbus_message *msg);
+struct l_dbus_message *dbus_error_not_hidden(struct l_dbus_message *msg);
 
 bool dbus_init(bool enable_debug);
 bool dbus_exit(void);
