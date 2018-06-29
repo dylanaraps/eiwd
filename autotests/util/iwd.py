@@ -53,6 +53,8 @@ class NotConnectedEx(dbus.DBusException): pass
 class NotConfiguredEx(dbus.DBusException): pass
 class NotImplementedEx(dbus.DBusException): pass
 class ServiceSetOverlapEx(dbus.DBusException): pass
+class AlreadyProvisionedEx(dbus.DBusException): pass
+class NotHiddenEx(dbus.DBusException): pass
 class CanceledEx(dbus.DBusException):
     _dbus_error_name = 'net.connman.iwd.Error.Canceled'
 
@@ -72,6 +74,8 @@ _dbus_ex_to_py = {
     'NotConfigured' :   NotConfiguredEx,
     'NotImplemented' :  NotImplementedEx,
     'ServiceSetOverlap' :  ServiceSetOverlapEx,
+    'AlreadyProvisioned' : AlreadyProvisionedEx,
+    'NotHidden' :       NotHiddenEx,
 }
 
 
