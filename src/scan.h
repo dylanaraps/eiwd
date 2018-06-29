@@ -70,6 +70,7 @@ struct scan_parameters {
 	struct scan_freq_set *freqs;
 	bool flush : 1;
 	bool randomize_mac_addr_hint : 1;
+	const char *ssid;	/* Used for direct probe request */
 };
 
 uint32_t scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
