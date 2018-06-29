@@ -25,8 +25,14 @@ class Test(unittest.TestCase):
             wd.wait_for_object_condition(dev, condition)
 
         ordered_networks = dev.get_ordered_networks()
-        self.assertEqual(len(ordered_networks), 1)
-        ordered_network = ordered_networks[0]
+
+        ordered_network = None
+        for network in ordered_networks:
+            if network.name == 'TestAP1':
+                ordered_network = network
+                break
+
+        self.assertNotEqual(ordered_network, None)
         self.assertEqual(ordered_network.name, 'TestAP1')
         self.assertEqual(ordered_network.type, NetworkType.psk)
 
