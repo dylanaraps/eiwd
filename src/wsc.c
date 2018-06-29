@@ -477,7 +477,7 @@ static void wsc_check_can_connect(struct wsc *wsc, struct scan_bss *target)
 	l_debug("%p", wsc);
 
 	/*
-	 * For now we assign the targe pointer directly, since we should not
+	 * For now we assign the target pointer directly, since we should not
 	 * be triggering any more scans while disconnecting / connecting
 	 */
 	wsc->target = target;
