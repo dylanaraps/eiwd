@@ -589,7 +589,7 @@ static bool eap_peap_init_request_assembly(struct eap_state *eap,
 						uint8_t flags) {
 	struct eap_peap_state *peap = eap_get_data(eap);
 
-	if (peap->rx_pdu_buf || !(flags & PEAP_FLAG_M) || len < 4)
+	if (peap->rx_pdu_buf || len < 4)
 		return false;
 
 	peap->rx_pdu_buf_len = l_get_be32(pkt);
