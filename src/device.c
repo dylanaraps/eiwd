@@ -1212,11 +1212,15 @@ static void device_roam_scan(struct device *device,
 {
 	struct scan_parameters params = { .freqs = freq_set, .flush = true };
 
-	/* Use an active scan to save time */
+	if (device->connected_network)
+		/* Use direct probe request */
+		params.ssid = network_get_ssid(device->connected_network);
+
 	device->roam_scan_id = scan_active_full(device->index, &params,
 						device_roam_scan_triggered,
 						device_roam_scan_notify, device,
 						device_roam_scan_destroy);
+
 	if (!device->roam_scan_id)
 		device_roam_failed(device);
 }
