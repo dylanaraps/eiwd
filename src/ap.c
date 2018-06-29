@@ -43,12 +43,12 @@
 #include "src/eapol.h"
 #include "src/handshake.h"
 #include "src/ap.h"
+#include "src/dbus.h"
 
 struct ap_state {
 	struct device *device;
 	char *ssid;
 	char *psk;
-	ap_event_cb_t event_cb;
 	int channel;
 	unsigned int ciphers;
 	uint32_t beacon_interval;
@@ -60,6 +60,9 @@ struct ap_state {
 
 	uint16_t last_aid;
 	struct l_queue *sta_states;
+
+	struct l_dbus_message *pending;
+	bool started : 1;
 };
 
 struct sta_state {
@@ -79,8 +82,6 @@ struct sta_state {
 };
 
 static struct l_genl_family *nl80211 = NULL;
-
-static struct l_queue *ap_list = NULL;
 
 static void ap_sta_free(void *data)
 {
@@ -106,10 +107,13 @@ static void ap_frame_watch_remove(void *data, void *user_data)
 		netdev_frame_watch_remove(netdev, L_PTR_TO_UINT(data));
 }
 
-static void ap_free(void *data)
+static void ap_reset(struct ap_state *ap)
 {
-	struct ap_state *ap = data;
 	struct netdev *netdev = device_get_netdev(ap->device);
+
+	if (ap->pending)
+		dbus_pending_reply(&ap->pending,
+				dbus_error_aborted(ap->pending));
 
 	l_free(ap->ssid);
 	memset(ap->psk, 0, strlen(ap->psk));
@@ -127,6 +131,15 @@ static void ap_free(void *data)
 
 	if (ap->rates)
 		l_uintset_free(ap->rates);
+
+	ap->started = false;
+}
+
+static void ap_free(void *data)
+{
+	struct ap_state *ap = data;
+
+	ap_reset(ap);
 
 	l_free(ap);
 }
@@ -1136,15 +1149,6 @@ static void ap_deauth_cb(struct netdev *netdev, const struct mmpdu_header *hdr,
 	ap_sta_free(sta);
 }
 
-static void ap_stopped(struct ap_state *ap)
-{
-	ap->event_cb(ap->device, AP_EVENT_STOPPED);
-
-	ap_free(ap);
-
-	l_queue_remove(ap_list, ap);
-}
-
 static void ap_netdev_notify(struct netdev *netdev,
 				enum netdev_watch_event event, void *user_data)
 {
@@ -1152,7 +1156,7 @@ static void ap_netdev_notify(struct netdev *netdev,
 
 	switch (event) {
 	case NETDEV_WATCH_EVENT_DOWN:
-		ap_stopped(ap);
+		ap_reset(ap);
 		break;
 	default:
 		break;
@@ -1165,22 +1169,23 @@ static void ap_start_cb(struct l_genl_msg *msg, void *user_data)
 
 	ap->start_stop_cmd_id = 0;
 
+	if (!ap->pending)
+		return;
+
 	if (l_genl_msg_get_error(msg) < 0) {
 		l_error("START_AP failed: %i", l_genl_msg_get_error(msg));
 
-		ap_stopped(ap);
-	} else {
-		l_info("START_AP ok");
+		dbus_pending_reply(&ap->pending,
+				dbus_error_invalid_args(ap->pending));
+		ap_reset(ap);
 
-		ap->event_cb(ap->device, AP_EVENT_STARTED);
+		return;
 	}
-}
 
-static bool ap_match_device(const void *a, const void *b)
-{
-	const struct ap_state *ap = a;
+	dbus_pending_reply(&ap->pending,
+			l_dbus_message_new_method_return(ap->pending));
 
-	return ap->device == b;
+	ap->started = true;
 }
 
 static struct l_genl_msg *ap_build_cmd_start_ap(struct ap_state *ap)
@@ -1250,24 +1255,17 @@ static struct l_genl_msg *ap_build_cmd_start_ap(struct ap_state *ap)
 	return cmd;
 }
 
-int ap_start(struct device *device, const char *ssid, const char *psk,
-		ap_event_cb_t event_cb)
+static int ap_start(struct ap_state *ap, const char *ssid, const char *psk,
+		struct l_dbus_message *message)
 {
-	struct netdev *netdev = device_get_netdev(device);
-	struct wiphy *wiphy = device_get_wiphy(device);
-	struct ap_state *ap;
+	struct netdev *netdev = device_get_netdev(ap->device);
+	struct wiphy *wiphy = device_get_wiphy(ap->device);
 	struct l_genl_msg *cmd;
 	const struct l_queue_entry *entry;
 	uint32_t id;
 
-	if (l_queue_find(ap_list, ap_match_device, device))
-		return -EEXIST;
-
-	ap = l_new(struct ap_state, 1);
-	ap->device = device;
 	ap->ssid = l_strdup(ssid);
 	ap->psk = l_strdup(psk);
-	ap->event_cb = event_cb;
 	/* TODO: Start a Get Survey to decide the channel */
 	ap->channel = 6;
 	/* TODO: Add all ciphers supported by wiphy */
@@ -1333,15 +1331,12 @@ int ap_start(struct device *device, const char *ssid, const char *psk,
 
 	ap->netdev_watch_id = netdev_watch_add(netdev, ap_netdev_notify, ap);
 
-	if (!ap_list)
-		ap_list = l_queue_new();
-
-	l_queue_push_tail(ap_list, ap);
+	ap->pending = l_dbus_message_ref(message);
 
 	return 0;
 
 error:
-	ap_free(ap);
+	ap_reset(ap);
 
 	return -EIO;
 }
@@ -1352,12 +1347,21 @@ static void ap_stop_cb(struct l_genl_msg *msg, void *user_data)
 
 	ap->start_stop_cmd_id = 0;
 
-	if (l_genl_msg_get_error(msg) < 0)
-		l_error("STOP_AP failed: %i", l_genl_msg_get_error(msg));
-	else
-		l_info("STOP_AP ok");
+	if (!ap->pending)
+		goto end;
 
-	ap_stopped(ap);
+	if (l_genl_msg_get_error(msg) < 0) {
+		l_error("STOP_AP failed: %i", l_genl_msg_get_error(msg));
+		dbus_pending_reply(&ap->pending,
+				dbus_error_failed(ap->pending));
+		goto end;
+	}
+
+	dbus_pending_reply(&ap->pending,
+			l_dbus_message_new_method_return(ap->pending));
+
+end:
+	ap_reset(ap);
 }
 
 static struct l_genl_msg *ap_build_cmd_stop_ap(struct ap_state *ap)
@@ -1371,13 +1375,9 @@ static struct l_genl_msg *ap_build_cmd_stop_ap(struct ap_state *ap)
 	return cmd;
 }
 
-int ap_stop(struct device *device)
+static int ap_stop(struct ap_state *ap, struct l_dbus_message *message)
 {
 	struct l_genl_msg *cmd;
-	struct ap_state *ap = l_queue_find(ap_list, ap_match_device, device);
-
-	if (!ap)
-		return -ENODEV;
 
 	cmd = ap_build_cmd_stop_ap(ap);
 	if (!cmd)
@@ -1393,13 +1393,70 @@ int ap_stop(struct device *device)
 		return -EIO;
 	}
 
+	ap->pending = l_dbus_message_ref(message);
+
 	return 0;
 }
 
-void ap_init(struct l_genl_family *in)
+static struct l_dbus_message *ap_dbus_start(struct l_dbus *dbus,
+		struct l_dbus_message *message, void *user_data)
+{
+	struct ap_state *ap = user_data;
+	const char *ssid, *wpa2_psk;
+
+	if (ap->pending)
+		return dbus_error_busy(message);
+
+	if (ap->started)
+		return dbus_error_already_exists(message);
+
+	if (!l_dbus_message_get_arguments(message, "ss", &ssid, &wpa2_psk))
+		return dbus_error_invalid_args(message);
+
+	if (ap_start(ap, ssid, wpa2_psk, message) < 0)
+		return dbus_error_invalid_args(message);
+
+	return NULL;
+}
+
+static struct l_dbus_message *ap_dbus_stop(struct l_dbus *dbus,
+		struct l_dbus_message *message, void *user_data)
+{
+	struct ap_state *ap = user_data;
+
+	if (ap->pending)
+		return dbus_error_busy(message);
+
+	/* already stopped, no-op */
+	if (!ap->started)
+		return l_dbus_message_new_method_return(message);
+
+	if (ap_stop(ap, message) < 0)
+		return dbus_error_failed(message);
+
+	return NULL;
+}
+
+static void ap_setup_interface(struct l_dbus_interface *interface)
+{
+	l_dbus_interface_method(interface, "Start", 0, ap_dbus_start, "",
+			"ss", "ssid", "wpa2_psk");
+	l_dbus_interface_method(interface, "Stop", 0, ap_dbus_stop, "", "");
+}
+
+static void ap_destroy_interface(void *user_data)
+{
+	struct ap_state *ap = user_data;
+
+	ap_free(ap);
+}
+
+bool ap_init(struct l_genl_family *in)
 {
 	nl80211 = in;
 
+	return l_dbus_register_interface(dbus_get_bus(), IWD_AP_INTERFACE,
+			ap_setup_interface, ap_destroy_interface, false);
 	/*
 	 * TODO: Check wiphy supports AP mode, supported channels,
 	 * check wiphy's NL80211_ATTR_TX_FRAME_TYPES.
@@ -1408,5 +1465,24 @@ void ap_init(struct l_genl_family *in)
 
 void ap_exit(void)
 {
-	l_queue_destroy(ap_list, ap_free);
+	l_dbus_unregister_interface(dbus_get_bus(), IWD_AP_INTERFACE);
+}
+
+bool ap_add_interface(struct device *device)
+{
+	struct ap_state *ap;
+
+	/* just allocate/set device, Start method will complete setup */
+	ap = l_new(struct ap_state, 1);
+	ap->device = device;
+
+	/* setup ap dbus interface */
+	return l_dbus_object_add_interface(dbus_get_bus(),
+			device_get_path(device), IWD_AP_INTERFACE, ap);
+}
+
+bool ap_remove_interface(struct device *device)
+{
+	return l_dbus_object_remove_interface(dbus_get_bus(),
+			device_get_path(device), IWD_AP_INTERFACE);
 }

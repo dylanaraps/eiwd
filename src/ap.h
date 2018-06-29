@@ -29,9 +29,8 @@ struct device;
 
 typedef void (*ap_event_cb_t)(struct device *device, enum ap_event event_type);
 
-int ap_start(struct device *device, const char *ssid, const char *psk,
-		ap_event_cb_t event_cb);
-int ap_stop(struct device *device);
+bool ap_add_interface(struct device *device);
+bool ap_remove_interface(struct device *device);
 
-void ap_init(struct l_genl_family *in);
+bool ap_init(struct l_genl_family *in);
 void ap_exit(void);

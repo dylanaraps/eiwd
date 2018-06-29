@@ -476,6 +476,8 @@ static void wsc_check_can_connect(struct wsc *wsc, struct scan_bss *target)
 {
 	l_debug("%p", wsc);
 
+	if (device_get_mode(wsc->device) != DEVICE_MODE_STATION)
+		goto error;
 	/*
 	 * For now we assign the target pointer directly, since we should not
 	 * be triggering any more scans while disconnecting / connecting
@@ -501,7 +503,6 @@ static void wsc_check_can_connect(struct wsc *wsc, struct scan_bss *target)
 	case DEVICE_STATE_AUTOCONNECT:
 	case DEVICE_STATE_OFF:
 	case DEVICE_STATE_ROAMING:
-	case DEVICE_STATE_AP:
 		l_warn("wsc_check_can_connect: invalid device state");
 		break;
 	}
