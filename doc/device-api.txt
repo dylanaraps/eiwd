@@ -69,6 +69,8 @@ Methods		void Scan()
 					 net.connman.iwd.NotConnected
 					 net.connman.iwd.NotFound
 					 net.connman.iwd.ServiceSetOverlap
+					 net.connman.iwd.AlreadyProvisioned
+					 net.connman.iwd.NotHidden
 
 		void RegisterSignalLevelAgent(object path,
 						 array(int16) levels)
