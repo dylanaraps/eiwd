@@ -26,6 +26,7 @@
 
 #include <unistd.h>
 #include <stdio.h>
+#include <errno.h>
 
 #include <ell/ell.h>
 #include <ell/dbus-private.h>
@@ -190,6 +191,40 @@ struct l_dbus_message *dbus_error_not_hidden(struct l_dbus_message *msg)
 {
 	return l_dbus_message_new_error(msg, IWD_SERVICE ".NotHidden",
 					"Not hidden");
+}
+
+struct l_dbus_message *dbus_error_from_errno(int err,
+						struct l_dbus_message *msg)
+{
+	switch (err) {
+	case -EBUSY:
+		return dbus_error_busy(msg);
+	case -ECANCELED:
+		return dbus_error_aborted(msg);
+	case -ERFKILL:
+		return dbus_error_not_available(msg);
+	case -EINVAL:
+		return dbus_error_invalid_args(msg);
+	case -EBADMSG:
+		return dbus_error_invalid_format(msg);
+	case -EEXIST:
+		return dbus_error_already_exists(msg);
+	case -ENOENT:
+		return dbus_error_not_found(msg);
+	case -ENOTSUP:
+		return dbus_error_not_supported(msg);
+	/* TODO: no_agent */
+	case -ENOKEY:
+		return dbus_error_not_configured(msg);
+	case -ENOTCONN:
+		return dbus_error_not_connected(msg);
+	case -ENOSYS:
+		return dbus_error_not_implemented(msg);
+	default:
+		break;
+	}
+
+	return dbus_error_failed(msg);
 }
 
 void dbus_pending_reply(struct l_dbus_message **msg,
