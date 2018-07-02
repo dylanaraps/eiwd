@@ -61,7 +61,7 @@ class Test(unittest.TestCase):
     def test_connection_success(self):
         wd = IWD()
 
-        dev1, dev2 = wd.list_devices()
+        dev1, dev2 = wd.list_devices(2)
 
         self.client_connect(wd, dev1)
 

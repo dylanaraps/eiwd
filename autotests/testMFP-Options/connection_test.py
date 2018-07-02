@@ -65,7 +65,7 @@ class TestMFP(unittest.TestCase):
         psk_agent = PSKAgent( ['secret123', 'secret123', 'secret123'] )
         wd.register_psk_agent(psk_agent)
 
-        devices = wd.list_devices(True);
+        devices = wd.list_devices(1);
         self.assertIsNotNone(devices)
         device = devices[0]
 
