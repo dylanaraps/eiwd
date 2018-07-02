@@ -966,6 +966,8 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 
 		if (handshake_state_get_pmkid(sm->handshake, own_pmkid) &&
 				memcmp(pmkid, own_pmkid, 16)) {
+			l_debug("Authenticator sent a PMKID that didn't match");
+
 			/*
 			 * If the AP has a different PMKSA from ours and we
 			 * have means to create a new PMKSA through EAP then
@@ -974,7 +976,18 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 			if (sm->eap) {
 				send_eapol_start(NULL, sm);
 				return;
-			} else
+			}
+
+			/*
+			 * Some APs are known to send a PMKID KDE with all
+			 * zeros for the PMKID.  Likely we can still
+			 * successfully negotiate a handshake, so ignore this
+			 * for now and treat it as if the PMKID KDE was not
+			 * included
+			 */
+			if (util_mem_is_zero(pmkid, 16))
+				l_debug("PMKID is all zero, ignoring");
+			else
 				goto error_unspecified;
 		}
 	}
