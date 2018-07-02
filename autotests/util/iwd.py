@@ -798,7 +798,7 @@ class IWD(AsyncOpAbstract):
         assert not os.path.isabs(source)
         shutil.copy(source, IWD_STORAGE_DIR)
 
-    def list_devices(self, wait_to_appear = False, max_wait = 15):
+    def list_devices(self, wait_to_appear = 0, max_wait = 15):
         if not wait_to_appear:
             return list(self._devices.values())
 
@@ -809,7 +809,7 @@ class IWD(AsyncOpAbstract):
 
         timeout = GLib.timeout_add_seconds(max_wait, wait_timeout_cb)
         context = mainloop.get_context()
-        while len(self._devices) == 0:
+        while len(self._devices) < wait_to_appear:
             context.iteration(may_block=True)
             if self._wait_timed_out:
                 raise TimeoutError('IWD has no associated devices')
