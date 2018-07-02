@@ -79,6 +79,8 @@ struct network *device_network_find(struct device *device, const char *ssid,
 					enum security security);
 
 bool device_set_autoconnect(struct device *device, bool autoconnect);
+int __device_connect_network(struct device *device, struct network *network,
+				struct scan_bss *bss);
 void device_connect_network(struct device *device, struct network *network,
 				struct scan_bss *bss,
 				struct l_dbus_message *message);

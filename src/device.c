@@ -1693,33 +1693,26 @@ bool device_set_autoconnect(struct device *device, bool autoconnect)
 	return true;
 }
 
-void device_connect_network(struct device *device, struct network *network,
-				struct scan_bss *bss,
-				struct l_dbus_message *message)
+int __device_connect_network(struct device *device, struct network *network,
+				struct scan_bss *bss)
 {
 	struct l_dbus *dbus = dbus_get_bus();
 	struct handshake_state *hs;
+	int r;
+
+	if (device_is_busy(device))
+		return -EBUSY;
 
 	hs = device_handshake_setup(device, network, bss);
+	if (!hs)
+		return -ENOTSUP;
 
-	if (!hs) {
-		if (message)
-			l_dbus_send(dbus, dbus_error_not_supported(message));
-
-		return;
-	}
-
-	if (netdev_connect(device->netdev, bss, hs, device_netdev_event,
-					device_connect_cb, device) < 0) {
+	r = netdev_connect(device->netdev, bss, hs, device_netdev_event,
+					device_connect_cb, device);
+	if (r < 0) {
 		handshake_state_free(hs);
-
-		if (message)
-			l_dbus_send(dbus, dbus_error_failed(message));
-
-		return;
+		return r;
 	}
-
-	device->connect_pending = l_dbus_message_ref(message);
 
 	device->connected_bss = bss;
 	device->connected_network = network;
@@ -1730,6 +1723,24 @@ void device_connect_network(struct device *device, struct network *network,
 				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
 	l_dbus_property_changed(dbus, network_get_path(network),
 				IWD_NETWORK_INTERFACE, "Connected");
+
+	return 0;
+}
+
+void device_connect_network(struct device *device, struct network *network,
+				struct scan_bss *bss,
+				struct l_dbus_message *message)
+{
+	int err = __device_connect_network(device, network, bss);
+
+	if (err < 0) {
+		struct l_dbus *dbus = dbus_get_bus();
+
+		l_dbus_send(dbus, dbus_error_from_errno(err, message));
+		return;
+	}
+
+	device->connect_pending = l_dbus_message_ref(message);
 }
 
 static void device_scan_triggered(int err, void *user_data)
