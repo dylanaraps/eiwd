@@ -20,14 +20,7 @@
  *
  */
 
-enum ap_event {
-	AP_EVENT_STARTED,
-	AP_EVENT_STOPPED,
-};
-
 struct device;
-
-typedef void (*ap_event_cb_t)(struct device *device, enum ap_event event_type);
 
 bool ap_add_interface(struct device *device);
 bool ap_remove_interface(struct device *device);
