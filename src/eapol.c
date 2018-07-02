@@ -322,7 +322,6 @@ bool eapol_verify_ptk_1_of_4(const struct eapol_key *ek)
 	if (ek->wpa_key_id)
 		return false;
 
-	VERIFY_IS_ZERO(ek->eapol_key_iv);
 	VERIFY_IS_ZERO(ek->key_rsc);
 	VERIFY_IS_ZERO(ek->reserved);
 	VERIFY_IS_ZERO(ek->key_mic_data);
@@ -406,12 +405,6 @@ bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek, bool is_wpa)
 		return false;
 
 	VERIFY_IS_ZERO(ek->reserved);
-
-	/* 0 (Version 2) or random (Version 1) */
-	if (ek->key_descriptor_version ==
-			EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES)
-		L_WARN_ON(!util_mem_is_zero(ek->eapol_key_iv,
-						sizeof(ek->eapol_key_iv)));
 
 	return true;
 }
@@ -499,11 +492,6 @@ bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa)
 		return false;
 
 	VERIFY_IS_ZERO(ek->reserved);
-
-	/* 0 (Version 2) or random (Version 1) */
-	if (ek->key_descriptor_version ==
-			EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES)
-		VERIFY_IS_ZERO(ek->eapol_key_iv);
 
 	/*
 	 * WPA_80211_v3_1, Section 2.2.4:
