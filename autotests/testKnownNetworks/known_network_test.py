@@ -10,7 +10,7 @@ from iwd import IWD
 class Test(unittest.TestCase):
 
     def connect_to_new_network(self, wd):
-        devices = wd.list_devices();
+        devices = wd.list_devices(1);
         self.assertIsNotNone(devices)
         device = devices[0]
 
@@ -35,8 +35,7 @@ class Test(unittest.TestCase):
         condition = 'not obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
 
-    def test_list_removal_and_addition(self):
-        wd = IWD(start_iwd_daemon = True)
+    def list_removal_and_addition(self, wd):
 
         known_networks = wd.list_known_networks()
         self.assertEqual(len(known_networks), 3)
@@ -56,6 +55,17 @@ class Test(unittest.TestCase):
 
         known_networks = wd.list_known_networks()
         self.assertEqual(len(known_networks), 0)
+
+    def test_known_networks(self):
+        wd = IWD(True)
+
+        try:
+            self.list_removal_and_addition(wd)
+        except:
+            del wd
+            raise
+
+        del wd
 
     @classmethod
     def setUpClass(cls):
