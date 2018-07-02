@@ -384,6 +384,21 @@ static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
 	};
 }
 
+static void wsc_handshake_event(struct handshake_state *hs,
+		enum handshake_event event, void *event_data, void *user_data)
+{
+	struct wsc *wsc = user_data;
+
+	switch (event) {
+	case HANDSHAKE_EVENT_FAILED:
+		netdev_handshake_failed(device_get_netdev(wsc->device),
+				l_get_u16(event_data));
+		break;
+	default:
+		break;
+	}
+}
+
 static inline enum wsc_rf_band freq_to_rf_band(uint32_t freq)
 {
 	enum scan_band band;
@@ -443,6 +458,7 @@ static void wsc_connect(struct wsc *wsc)
 		}
 	}
 
+	handshake_state_set_event_func(hs, wsc_handshake_event, wsc);
 	handshake_state_set_8021x_config(hs, settings);
 	wsc->eap_settings = settings;
 
