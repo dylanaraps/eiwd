@@ -521,8 +521,7 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 			goto close_settings;
 	}
 
-	device_connect_network(network->device, network, bss, NULL);
-	return 0;
+	return __device_connect_network(network->device, network, bss);
 
 close_settings:
 	network_settings_close(network);
