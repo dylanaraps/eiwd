@@ -1253,6 +1253,11 @@ void network_info_foreach(network_info_foreach_func_t function,
 		function(entry->data, user_data);
 }
 
+const struct l_queue *network_info_get_known()
+{
+	return networks;
+}
+
 bool network_info_has_hidden(void)
 {
 	return false;
