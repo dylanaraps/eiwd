@@ -108,6 +108,7 @@ struct netdev {
 	bool connected : 1;
 	bool operational : 1;
 	bool rekey_offload_support : 1;
+	bool pae_over_nl80211 : 1;
 	bool in_ft : 1;
 	bool cur_rssi_low : 1;
 	bool use_4addr : 1;
@@ -2119,8 +2120,7 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 						bss->ssid_len, bss->ssid);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
 
-	if (wiphy_has_ext_feature(netdev->wiphy,
-				NL80211_EXT_FEATURE_CONTROL_PORT_OVER_NL80211))
+	if (netdev->pae_over_nl80211)
 		l_genl_msg_append_attr(msg,
 				NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
 				0, NULL);
@@ -3220,8 +3220,7 @@ static int netdev_control_port_frame(uint32_t ifindex,
 	frame_size = sizeof(struct eapol_header) +
 			L_BE16_TO_CPU(ef->header.packet_len);
 
-	if (!wiphy_has_ext_feature(netdev->wiphy,
-			NL80211_EXT_FEATURE_CONTROL_PORT_OVER_NL80211))
+	if (!netdev->pae_over_nl80211)
 		return netdev_control_port_write_pae(netdev, dest, proto,
 							ef, noencrypt);
 
@@ -3848,6 +3847,8 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	const uint8_t action_sa_query_resp_prefix[2] = { 0x08, 0x01 };
 	const uint8_t action_sa_query_req_prefix[2] = { 0x08, 0x00 };
 	struct l_io *pae_io = NULL;
+	const struct l_settings *settings = iwd_get_config();
+	bool pae_over_nl80211;
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
@@ -3925,10 +3926,21 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 		return;
 	}
 
+	if (!l_settings_get_bool(settings, "General",
+				"ControlPortOverNL80211", &pae_over_nl80211)) {
+		pae_over_nl80211 = false;
+		l_info("No ControlPortOverNL80211 setting, defaulting to %s",
+			pae_over_nl80211 ? "True" : "False");
+	}
+
 	if (!wiphy_has_ext_feature(wiphy,
 			NL80211_EXT_FEATURE_CONTROL_PORT_OVER_NL80211)) {
 		l_debug("No Control Port over NL80211 support for ifindex: %u,"
 				" using PAE socket", *ifindex);
+		pae_over_nl80211 = false;
+	}
+
+	if (!pae_over_nl80211) {
 		pae_io = pae_open(*ifindex);
 		if (!pae_io) {
 			l_error("Unable to open PAE interface");
@@ -3943,6 +3955,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
 	memcpy(netdev->name, ifname, ifname_len);
 	netdev->wiphy = wiphy;
+	netdev->pae_over_nl80211 = pae_over_nl80211;
 
 	if (pae_io) {
 		netdev->pae_io = pae_io;
