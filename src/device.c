@@ -1884,14 +1884,8 @@ static struct l_dbus_message *device_dbus_disconnect(struct l_dbus *dbus,
 	device_set_autoconnect(device, false);
 
 	result = device_disconnect(device);
-	if (result == -EBUSY)
-		return dbus_error_busy(message);
-
-	if (result == -ENOTCONN)
-		return dbus_error_not_connected(message);
-
 	if (result < 0)
-		return dbus_error_failed(message);
+		return dbus_error_from_errno(result, message);
 
 	device->disconnect_pending = l_dbus_message_ref(message);
 
