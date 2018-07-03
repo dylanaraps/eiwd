@@ -1883,6 +1883,10 @@ static struct l_dbus_message *device_dbus_disconnect(struct l_dbus *dbus,
 	 */
 	device_set_autoconnect(device, false);
 
+	if (device->state == DEVICE_STATE_AUTOCONNECT ||
+			device->state == DEVICE_STATE_DISCONNECTED)
+		return l_dbus_message_new_method_return(message);
+
 	result = device_disconnect(device);
 	if (result < 0)
 		return dbus_error_from_errno(result, message);
