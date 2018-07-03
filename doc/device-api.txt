@@ -146,3 +146,11 @@ Properties	string Name [readonly]
 		object Adapter [readonly]
 
 			The object path of the adapter the device belongs to.
+
+		string Mode [readwrite]
+
+			Use to set the device mode. Valid modes are "station"
+			and "ap". Setting the mode to "ap" will cause the
+			AccessPoint interface to appear on the bus. If the device
+			mode is switch back to "station" it will cause any
+			mode specific interfaces to disappear from the bus.
