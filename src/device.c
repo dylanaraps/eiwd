@@ -2065,6 +2065,8 @@ static struct l_dbus_message *device_set_mode_ap(struct device *device,
 			device->state != DEVICE_STATE_AUTOCONNECT)
 		return dbus_error_busy(message);
 
+	l_debug("");
+
 	periodic_scan_stop(device);
 
 	/* Drop all state we can related to client mode */
@@ -2105,6 +2107,8 @@ static struct l_dbus_message *device_set_mode_sta(struct device *device,
 	device->mode = DEVICE_MODE_STATION;
 
 	ap_remove_interface(device);
+
+	l_debug("");
 
 	return NULL;
 }
