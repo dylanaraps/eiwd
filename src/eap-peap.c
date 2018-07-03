@@ -592,6 +592,16 @@ static bool eap_peap_init_request_assembly(struct eap_state *eap,
 	if (peap->rx_pdu_buf || len < 4)
 		return false;
 
+	/*
+	 * Some of the PEAP server implementations brake the protocol and do not
+	 * set the M flag for the first packet during the fragmented
+	 * transmission. To stay compatible with such devices, we have relaxed
+	 * this requirement in iwd.
+	 */
+	if (!(flags & PEAP_FLAG_M))
+		l_warn("Server has failed to set the M flag in the first packet"
+					" of the fragmented transmission.");
+
 	peap->rx_pdu_buf_len = l_get_be32(pkt);
 
 	if (!peap->rx_pdu_buf_len || peap->rx_pdu_buf_len > PEAP_PDU_MAX_LEN) {
