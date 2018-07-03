@@ -912,6 +912,26 @@ static struct l_genl_msg *netdev_build_cmd_del_station(struct netdev *netdev,
 	return msg;
 }
 
+static void netdev_del_sta_cb(struct l_genl_msg *msg, void *user_data)
+{
+	if (l_genl_msg_get_error(msg) < 0)
+		l_error("DEL_STATION failed: %i", l_genl_msg_get_error(msg));
+}
+
+int netdev_del_station(struct netdev *netdev, const uint8_t *sta,
+			uint16_t reason_code, bool disassociate)
+{
+	struct l_genl_msg *msg;
+
+	msg = netdev_build_cmd_del_station(netdev, sta, reason_code,
+						disassociate);
+
+	if (!l_genl_family_send(nl80211, msg, netdev_del_sta_cb, NULL, NULL))
+		return -EIO;
+
+	return 0;
+}
+
 static void netdev_operstate_cb(bool success, void *user_data)
 {
 	struct netdev *netdev = user_data;

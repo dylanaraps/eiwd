@@ -128,6 +128,9 @@ int netdev_preauthenticate(struct netdev *netdev, struct scan_bss *target_bss,
 				netdev_preauthenticate_cb_t cb,
 				void *user_data);
 
+int netdev_del_station(struct netdev *netdev, const uint8_t *sta,
+		uint16_t reason_code, bool disassociate);
+
 int netdev_set_powered(struct netdev *netdev, bool powered,
 				netdev_set_powered_cb_t cb, void *user_data,
 				netdev_destroy_func_t destroy);
