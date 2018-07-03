@@ -566,6 +566,7 @@ static void device_reset_connection_state(struct device *device)
 		return;
 
 	if (device->state == DEVICE_STATE_CONNECTED ||
+			device->state == DEVICE_STATE_CONNECTING ||
 			device->state == DEVICE_STATE_ROAMING)
 		network_disconnected(network);
 
