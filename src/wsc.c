@@ -387,12 +387,9 @@ static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
 static void wsc_handshake_event(struct handshake_state *hs,
 		enum handshake_event event, void *event_data, void *user_data)
 {
-	struct wsc *wsc = user_data;
-
 	switch (event) {
 	case HANDSHAKE_EVENT_FAILED:
-		netdev_handshake_failed(device_get_netdev(wsc->device),
-				l_get_u16(event_data));
+		netdev_handshake_failed(hs, l_get_u16(event_data));
 		break;
 	default:
 		break;

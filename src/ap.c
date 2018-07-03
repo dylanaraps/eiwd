@@ -151,6 +151,16 @@ static bool ap_sta_match_addr(const void *a, const void *b)
 	return !memcmp(sta->addr, b, 6);
 }
 
+static void ap_remove_sta(struct sta_state *sta)
+{
+	if (!l_queue_remove(sta->ap->sta_states, sta)) {
+		l_error("tried to remove station that doesnt exist");
+		return;
+	}
+
+	ap_sta_free(sta);
+}
+
 static void ap_set_sta_cb(struct l_genl_msg *msg, void *user_data)
 {
 	if (l_genl_msg_get_error(msg) < 0)
@@ -398,8 +408,10 @@ static void ap_handshake_event(struct handshake_state *hs,
 		ap_new_rsna(sta);
 		break;
 	case HANDSHAKE_EVENT_FAILED:
-		ap_deauthenticate_sta(sta, l_get_u16(event_data));
-		break;
+		netdev_handshake_failed(hs, l_get_u16(event_data));
+		/* fall through */
+	case HANDSHAKE_EVENT_SETTING_KEYS_FAILED:
+		ap_remove_sta(sta);
 	default:
 		break;
 	}

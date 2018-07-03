@@ -893,6 +893,25 @@ static struct l_genl_msg *netdev_build_cmd_deauthenticate(struct netdev *netdev,
 	return msg;
 }
 
+static struct l_genl_msg *netdev_build_cmd_del_station(struct netdev *netdev,
+							const uint8_t *sta,
+							uint16_t reason_code,
+							bool disassociate)
+{
+	struct l_genl_msg *msg;
+	uint8_t subtype = disassociate ?
+			MPDU_MANAGEMENT_SUBTYPE_DISASSOCIATION :
+			MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_DEL_STATION, 64);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MGMT_SUBTYPE, 1, &subtype);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_REASON_CODE, 2, &reason_code);
+
+	return msg;
+}
+
 static void netdev_operstate_cb(bool success, void *user_data)
 {
 	struct netdev *netdev = user_data;
@@ -945,14 +964,21 @@ static void netdev_setting_keys_failed(struct netdev_handshake_state *nhs,
 
 	netdev->result = NETDEV_RESULT_KEY_SETTING_FAILED;
 
-	if (netdev->type != NL80211_IFTYPE_STATION)
-		return;
+	handshake_event(&nhs->super, HANDSHAKE_EVENT_SETTING_KEYS_FAILED, NULL);
 
-	msg = netdev_build_cmd_disconnect(netdev,
-						MMPDU_REASON_CODE_UNSPECIFIED);
-	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
+	switch (netdev->type) {
+	case NL80211_IFTYPE_STATION:
+		msg = netdev_build_cmd_disconnect(netdev, reason_code);
+		netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
 							netdev_connect_failed,
 							netdev, NULL);
+		break;
+	case NL80211_IFTYPE_AP:
+		msg = netdev_build_cmd_del_station(netdev, nhs->super.spa,
+				reason_code, false);
+		if (!l_genl_family_send(nl80211, msg, NULL, NULL, NULL))
+			l_error("error sending DEL_STATION");
+	}
 }
 
 static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
@@ -1277,8 +1303,11 @@ invalid_key:
 	netdev_setting_keys_failed(nhs, rc);
 }
 
-void netdev_handshake_failed(struct netdev *netdev, uint16_t reason_code)
+void netdev_handshake_failed(struct handshake_state *hs, uint16_t reason_code)
 {
+	struct netdev_handshake_state *nhs =
+			container_of(hs, struct netdev_handshake_state, super);
+	struct netdev *netdev = nhs->netdev;
 	struct l_genl_msg *msg;
 
 	l_error("4-Way handshake failed for ifindex: %d, reason: %u",
@@ -1288,13 +1317,19 @@ void netdev_handshake_failed(struct netdev *netdev, uint16_t reason_code)
 
 	netdev->result = NETDEV_RESULT_HANDSHAKE_FAILED;
 
-	if (netdev->type != NL80211_IFTYPE_STATION)
-		return;
-
-	msg = netdev_build_cmd_disconnect(netdev, reason_code);
-	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
-						netdev_connect_failed,
-						netdev, NULL);
+	switch (netdev->type) {
+	case NL80211_IFTYPE_STATION:
+		msg = netdev_build_cmd_disconnect(netdev, reason_code);
+		netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
+							netdev_connect_failed,
+							netdev, NULL);
+		break;
+	case NL80211_IFTYPE_AP:
+		msg = netdev_build_cmd_del_station(netdev, nhs->super.spa,
+				reason_code, false);
+		if (!l_genl_family_send(nl80211, msg, NULL, NULL, NULL))
+			l_error("error sending DEL_STATION");
+	}
 }
 
 static void hardware_rekey_cb(struct l_genl_msg *msg, void *data)

@@ -670,9 +670,9 @@ static void device_handshake_event(struct handshake_state *hs,
 		network_sync_psk(network);
 		break;
 	case HANDSHAKE_EVENT_FAILED:
-		netdev_handshake_failed(device_get_netdev(device),
-				l_get_u16(event_data));
+		netdev_handshake_failed(hs, l_get_u16(event_data));
 		break;
+	case HANDSHAKE_EVENT_SETTING_KEYS_FAILED:
 	case HANDSHAKE_EVENT_COMPLETE:
 		/*
 		 * currently we dont care about any other events. The
