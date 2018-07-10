@@ -311,6 +311,21 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 	if (params->flush && !ignore_flush_flag)
 		flags |= NL80211_SCAN_FLAG_FLUSH;
 
+	/*
+	 * TODO: Discovery of the hidden networks with randomization flag set
+	 * works with real hardware, but fails when used in simulated
+	 * environment with mac80211_hwsim. This needs to be investigated.
+	 *
+	 * if (params->randomize_mac_addr_hint &&
+	 *		wiphy_has_feature(sc->wiphy,
+	 *				  NL80211_FEATURE_SCAN_RANDOM_MAC_ADDR))
+	 *
+	 *	Randomizing 46 bits (locally administered 1 and multicast 0
+	 *	is assumed).
+	 *
+	 *	flags |= NL80211_SCAN_FLAG_RANDOM_ADDR;
+	*/
+
 	if (flags)
 		l_genl_msg_append_attr(msg, NL80211_ATTR_SCAN_FLAGS, 4, &flags);
 
