@@ -987,6 +987,43 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	}
 }
 
+void network_connect_new_hidden_network(struct network *network,
+						struct l_dbus_message *message)
+{
+	struct device *device = network->device;
+	struct scan_bss *bss;
+	struct l_dbus_message *error;
+
+	l_debug("");
+
+	bss = network_bss_select(network);
+	if (!bss) {
+		/* This should never happened for the hidden networks. */
+		error = dbus_error_not_supported(message);
+		goto reply_error;
+	}
+
+	switch (network_get_security(network)) {
+	case SECURITY_PSK:
+		error = network_connect_psk(network, bss, message);
+		break;
+	case SECURITY_NONE:
+		device_connect_network(device, network, bss, message);
+		return;
+	default:
+		error = dbus_error_not_supported(message);
+		break;
+	}
+
+	if (error)
+		goto reply_error;
+
+	return;
+
+reply_error:
+	dbus_pending_reply(&message, error);
+}
+
 static bool network_property_get_name(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
