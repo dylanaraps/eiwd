@@ -1306,3 +1306,28 @@ bool network_info_has_hidden(void)
 {
 	return num_known_hidden_networks ? true : false;
 }
+
+void network_info_set_hidden(struct network *network)
+{
+	if (network->info->is_hidden)
+		return;
+
+	network->info->is_hidden = true;
+	num_known_hidden_networks += 1;
+}
+
+bool network_info_is_hidden(struct network *network)
+{
+	return network->info->is_hidden;
+}
+
+const struct network_info *network_info_find(const char *ssid,
+						enum security security)
+{
+	struct network_info query;
+
+	query.type = security;
+	strcpy(query.ssid, ssid);
+
+	return l_queue_find(networks, network_info_match, &query);
+}

@@ -85,3 +85,7 @@ void network_info_foreach(network_info_foreach_func_t function,
 				void *user_data);
 const struct l_queue *network_info_get_known();
 bool network_info_has_hidden(void);
+void network_info_set_hidden(struct network *network);
+bool network_info_is_hidden(struct network *network);
+const struct network_info *network_info_find(const char *ssid,
+						enum security security);
