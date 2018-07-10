@@ -702,6 +702,33 @@ static enum cmd_status cmd_connect(const char *device_name, char *args)
 	return CMD_STATUS_OK;
 }
 
+static enum cmd_status cmd_connect_hidden_network(const char *device_name,
+								char *args)
+{
+	struct network_args *network_args;
+	const struct proxy_interface *proxy =
+					get_device_proxy_by_name(device_name);
+
+	if (!proxy)
+		return CMD_STATUS_INVALID_VALUE;
+
+	network_args = network_parse_args(args);
+
+	if (!network_args || !network_args->name) {
+		network_args_destroy(network_args);
+
+		return CMD_STATUS_INVALID_ARGS;
+	}
+
+	proxy_interface_method_call(proxy, "ConnectHiddenNetwork", "s",
+					check_errors_method_callback,
+					network_args->name);
+
+	network_args_destroy(network_args);
+
+	return CMD_STATUS_OK;
+}
+
 static char *get_networks_cmd_arg_completion(const char *text, int state)
 {
 	static int index;
@@ -749,6 +776,11 @@ static const struct command device_commands[] = {
 					cmd_connect,
 						"Connect to network", false,
 		connect_cmd_arg_completion },
+	{ "<wlan>", "create-hidden",
+				"<\"network name\">",
+					cmd_connect_hidden_network,
+						"Connect to hidden network",
+									false },
 	{ "<wlan>", "disconnect",
 				NULL,   cmd_disconnect, "Disconnect" },
 	{ }
