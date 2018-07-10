@@ -60,6 +60,7 @@ struct network {
 };
 
 static struct l_queue *networks = NULL;
+static size_t num_known_hidden_networks;
 
 static bool network_settings_load(struct network *network)
 {
@@ -255,6 +256,9 @@ bool network_rankmod(const struct network *network, double *rankmod)
 static void network_info_free(void *data)
 {
 	struct network_info *network = data;
+
+	if (network->is_hidden)
+		num_known_hidden_networks--;
 
 	l_free(network);
 }
@@ -1235,6 +1239,9 @@ bool network_info_add_known(const char *ssid, enum security security)
 	if (l_settings_get_bool(settings, "Settings", "Hidden", &is_hidden))
 		network->is_hidden = is_hidden;
 
+	if (network->is_hidden)
+		num_known_hidden_networks++;
+
 	l_settings_free(settings);
 
 	l_queue_insert(networks, network, timespec_compare, NULL);
@@ -1297,5 +1304,5 @@ const struct l_queue *network_info_get_known()
 
 bool network_info_has_hidden(void)
 {
-	return false;
+	return num_known_hidden_networks ? true : false;
 }
