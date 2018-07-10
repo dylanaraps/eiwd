@@ -247,7 +247,7 @@ static bool process_network(const void *key, void *data, void *user_data)
 	return true;
 }
 
-static void process_bss(struct device *device, struct scan_bss *bss,
+static bool process_bss(struct device *device, struct scan_bss *bss,
 			struct timespec *timestamp)
 {
 	struct network *network;
@@ -268,12 +268,12 @@ static void process_bss(struct device *device, struct scan_bss *bss,
 	if (util_ssid_is_hidden(bss->ssid_len, bss->ssid)) {
 		l_warn("Ignoring BSS with hidden SSID");
 		device->seen_hidden_networks = true;
-		return;
+		return false;
 	}
 
 	if (!util_ssid_is_utf8(bss->ssid_len, bss->ssid)) {
 		l_warn("Ignoring BSS with non-UTF8 SSID");
-		return;
+		return false;
 	}
 
 	memcpy(ssid, bss->ssid, bss->ssid_len);
@@ -283,7 +283,7 @@ static void process_bss(struct device *device, struct scan_bss *bss,
 	r = scan_bss_get_rsn_info(bss, &info);
 	if (r < 0) {
 		if (r != -ENOENT)
-			return;
+			return false;
 
 		security = security_determine(bss->capability, NULL);
 	} else
@@ -297,7 +297,7 @@ static void process_bss(struct device *device, struct scan_bss *bss,
 
 		if (!network_register(network, path)) {
 			network_remove(network, -EINVAL);
-			return;
+			return false;
 		}
 
 		l_hashmap_insert(device->networks,
@@ -312,11 +312,11 @@ static void process_bss(struct device *device, struct scan_bss *bss,
 	network_bss_add(network, bss);
 
 	if (device->state != DEVICE_STATE_AUTOCONNECT)
-		return;
+		return true;
 
 	/* See if network is autoconnectable (is a known network) */
 	if (!network_rankmod(network, &rankmod))
-		return;
+		return true;
 
 	entry = l_new(struct autoconnect_entry, 1);
 	entry->network = network;
@@ -324,6 +324,8 @@ static void process_bss(struct device *device, struct scan_bss *bss,
 	entry->rank = bss->rank * rankmod;
 	l_queue_insert(device->autoconnect_list, entry,
 				autoconnect_rank_compare, NULL);
+
+	return true;
 }
 
 static bool bss_match(const void *a, const void *b)
@@ -2113,6 +2115,156 @@ static struct l_dbus_message *device_set_mode_sta(struct device *device,
 	return NULL;
 }
 
+static bool device_network_is_known(const char *ssid, enum security security)
+{
+	const struct network_info *network_info =
+					network_info_find(ssid, security);
+
+	if (network_info && network_info->is_known)
+		return true;
+
+	return false;
+}
+
+static void device_hidden_network_scan_triggered(int err, void *user_data)
+{
+	struct device *device = user_data;
+
+	l_debug("");
+
+	if (!err)
+		return;
+
+	dbus_pending_reply(&device->connect_pending,
+				dbus_error_failed(device->connect_pending));
+}
+
+static bool device_hidden_network_scan_results(uint32_t wiphy_id,
+						uint32_t ifindex, int err,
+						struct l_queue *bss_list,
+						void *userdata)
+{
+	struct device *device = userdata;
+	struct network *network_psk;
+	struct network *network_open;
+	struct network *network;
+	const char *ssid;
+	uint8_t ssid_len;
+	struct l_dbus_message *reply;
+	struct timespec now;
+	struct scan_bss *bss;
+
+	l_debug("");
+
+	if (err) {
+		reply = dbus_error_failed(device->connect_pending);
+		goto bss_list_not_owned_error;
+	}
+
+	if (!l_dbus_message_get_arguments(device->connect_pending, "s",
+								&ssid)) {
+		reply = dbus_error_invalid_args(device->connect_pending);
+		goto bss_list_not_owned_error;
+	}
+
+	clock_gettime(CLOCK_REALTIME, &now);
+	ssid_len = strlen(ssid);
+
+	while ((bss = l_queue_pop_head(bss_list))) {
+		if (bss->ssid_len != ssid_len ||
+					memcmp(bss->ssid, ssid, ssid_len))
+			goto next;
+
+		if (process_bss(device, bss, &now)) {
+			l_queue_push_tail(device->bss_list, bss);
+
+			continue;
+		}
+
+next:
+		scan_bss_free(bss);
+	}
+
+	l_queue_destroy(bss_list, NULL);
+
+	network_psk = device_network_find(device, ssid, SECURITY_PSK);
+	network_open = device_network_find(device, ssid, SECURITY_NONE);
+
+	if (!network_psk && !network_open) {
+		reply = dbus_error_not_found(device->connect_pending);
+
+		goto bss_list_owned_error;
+	}
+
+	if (network_psk && network_open) {
+		reply = dbus_error_service_set_overlap(device->connect_pending);
+
+		goto bss_list_owned_error;
+	}
+
+	network = network_psk ? : network_open;
+
+	network_connect_new_hidden_network(network, device->connect_pending);
+
+	l_dbus_message_unref(device->connect_pending);
+
+	return true;
+
+bss_list_owned_error:
+	dbus_pending_reply(&device->connect_pending, reply);
+	return true;
+
+bss_list_not_owned_error:
+	dbus_pending_reply(&device->connect_pending, reply);
+	return false;
+}
+
+static struct l_dbus_message *device_connect_hidden_network(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct device *device = user_data;
+	const char *ssid;
+	struct scan_parameters params = {
+		.flush = true,
+		.randomize_mac_addr_hint = true,
+	};
+
+	l_debug("");
+
+	if (device->state == DEVICE_STATE_OFF)
+		return dbus_error_failed(message);
+
+	if (device->connect_pending || device_is_busy(device))
+		return dbus_error_busy(message);
+
+	if (!l_dbus_message_get_arguments(message, "s", &ssid))
+		return dbus_error_invalid_args(message);
+
+	if (strlen(ssid) > 32)
+		return dbus_error_invalid_args(message);
+
+	if (device_network_is_known(ssid, SECURITY_PSK) ||
+				device_network_is_known(ssid, SECURITY_NONE))
+		return dbus_error_already_provisioned(message);
+
+	if (device_network_find(device, ssid, SECURITY_PSK) ||
+			device_network_find(device, ssid, SECURITY_NONE))
+		return dbus_error_not_hidden(message);
+
+	params.ssid = ssid;
+
+	if (!scan_active_full(device->index, &params,
+				device_hidden_network_scan_triggered,
+				device_hidden_network_scan_results,
+				device, NULL))
+		return dbus_error_failed(message);
+
+	device->connect_pending = l_dbus_message_ref(message);
+
+	return NULL;
+}
+
 static bool device_property_get_name(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -2408,6 +2560,8 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "UnregisterSignalLevelAgent", 0,
 				device_signal_agent_unregister,
 				"", "o", "path");
+	l_dbus_interface_method(interface, "ConnectHiddenNetwork", 0,
+				device_connect_hidden_network, "", "s", "name");
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					device_property_get_name, NULL);
 	l_dbus_interface_property(interface, "Address", 0, "s",

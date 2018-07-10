@@ -1000,6 +1000,8 @@ void network_connect_new_hidden_network(struct network *network,
 
 	l_debug("");
 
+	network_info_set_hidden(network);
+
 	bss = network_bss_select(network);
 	if (!bss) {
 		/* This should never happened for the hidden networks. */
