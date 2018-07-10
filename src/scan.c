@@ -40,6 +40,7 @@
 #include "src/ie.h"
 #include "src/common.h"
 #include "src/network.h"
+#include "src/util.h"
 #include "src/scan.h"
 
 #define SCAN_MAX_INTERVAL 320
@@ -60,6 +61,9 @@ struct scan_periodic {
 	bool rearm:1;
 	bool retry:1;
 	bool triggered:1;
+	bool needs_active_scan:1;
+	bool passive:1; /* Active or Passive scan? */
+	struct l_queue *cmds;
 };
 
 struct scan_request {
@@ -154,6 +158,8 @@ static struct scan_context *scan_context_new(uint32_t ifindex)
 static void scan_context_free(struct scan_context *sc)
 {
 	l_debug("sc: %p", sc);
+
+	l_queue_destroy(sc->sp.cmds, (l_queue_destroy_func_t) l_genl_msg_unref);
 
 	l_queue_destroy(sc->requests, scan_request_free);
 
@@ -584,8 +590,9 @@ static void scan_periodic_triggered(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	sc->state = SCAN_STATE_PASSIVE;
-	l_debug("Periodic scan triggered for ifindex: %u", sc->ifindex);
+	sc->state = sc->sp.passive ? SCAN_STATE_PASSIVE : SCAN_STATE_ACTIVE;
+	l_debug("Periodic %s scan triggered for ifindex: %u", sc->sp.passive ?
+				"passive" : "active", sc->ifindex);
 
 	sc->sp.triggered = true;
 
@@ -595,16 +602,27 @@ static void scan_periodic_triggered(struct l_genl_msg *msg, void *user_data)
 
 static bool scan_periodic_send_start(struct scan_context *sc)
 {
+	struct l_genl_msg *cmd;
 	struct scan_parameters params = {};
-	struct l_genl_msg *msg;
 
-	msg = scan_build_cmd(sc, true, &params);
-	if (!msg)
+	if (sc->sp.needs_active_scan && network_info_has_hidden()) {
+		sc->sp.needs_active_scan = false;
+		sc->sp.passive = false;
+
+		params.randomize_mac_addr_hint = true;
+	} else {
+		sc->sp.passive = true;
+	}
+
+	scan_cmds_add(sc->sp.cmds, sc, sc->sp.passive, &params);
+
+	cmd = l_queue_pop_head(sc->sp.cmds);
+	if (!cmd)
 		return false;
 
-	sc->start_cmd_id = scan_send_start(&msg, scan_periodic_triggered, sc);
+	sc->start_cmd_id = scan_send_start(&cmd, scan_periodic_triggered, sc);
 	if (!sc->start_cmd_id) {
-		l_genl_msg_unref(msg);
+		l_genl_msg_unref(cmd);
 		return false;
 	}
 
@@ -635,6 +653,7 @@ void scan_periodic_start(uint32_t ifindex, scan_trigger_func_t trigger,
 	sc->sp.userdata = userdata;
 	sc->sp.retry = true;
 	sc->sp.rearm = false;
+	sc->sp.cmds = l_queue_new();
 
 	start_next_scan_request(sc);
 }
@@ -665,6 +684,10 @@ bool scan_periodic_stop(uint32_t ifindex)
 	sc->sp.userdata = NULL;
 	sc->sp.rearm = false;
 	sc->sp.retry = false;
+	sc->sp.needs_active_scan = false;
+
+	l_queue_destroy(sc->sp.cmds, (l_queue_destroy_func_t) l_genl_msg_unref);
+	sc->sp.cmds = NULL;
 
 	return true;
 }
@@ -1063,6 +1086,22 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 	l_queue_insert(results->bss_list, bss, scan_bss_rank_compare, NULL);
 }
 
+static void discover_hidden_network_bsses(struct scan_context *sc,
+						struct l_queue *bss_list)
+{
+	const struct l_queue_entry *bss_entry;
+
+	for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
+						bss_entry = bss_entry->next) {
+		struct scan_bss *bss = bss_entry->data;
+
+		if (!util_ssid_is_hidden(bss->ssid_len, bss->ssid))
+			continue;
+
+		sc->sp.needs_active_scan = true;
+	}
+}
+
 static void scan_finished(struct scan_context *sc, uint32_t wiphy,
 				int err, struct l_queue *bss_list)
 {
@@ -1080,7 +1119,7 @@ static void scan_finished(struct scan_context *sc, uint32_t wiphy,
 
 		scan_request_free(sr);
 		l_queue_pop_head(sc->requests);
-	} else if (sc->state == SCAN_STATE_PASSIVE && sc->sp.interval != 0) {
+	} else if (sc->sp.interval) {
 		/*
 		 * If we'd called sc.sp->trigger, we must call back now
 		 * independent of whether the scan was succesful or was
@@ -1094,6 +1133,9 @@ static void scan_finished(struct scan_context *sc, uint32_t wiphy,
 		}
 
 		sc->sp.triggered = false;
+
+		if (bss_list)
+			discover_hidden_network_bsses(sc, bss_list);
 	}
 
 	if (callback)
@@ -1182,6 +1224,23 @@ static bool scan_send_next_cmd(struct scan_context *sc)
 		 * The request is destroyed, return 'true' to stop further
 		 * processing.
 		 */
+		return true;
+	} else if (sc->sp.triggered) {
+		struct l_genl_msg *cmd = l_queue_pop_head(sc->sp.cmds);
+		if (!cmd)
+			return false;
+
+		sc->sp.triggered = false;
+
+		sc->start_cmd_id = scan_send_start(&cmd,
+						scan_periodic_triggered, sc);
+
+		if (!sc->start_cmd_id) {
+			l_genl_msg_unref(cmd);
+			l_queue_clear(sc->sp.cmds,
+				(l_queue_destroy_func_t) l_genl_msg_unref);
+		}
+
 		return true;
 	}
 
