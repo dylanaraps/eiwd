@@ -117,6 +117,17 @@ static void scan_request_free(void *data)
 	l_free(sr);
 }
 
+static void scan_request_trigger_failed(struct scan_request *sr, int err)
+{
+	if (sr->trigger)
+		sr->trigger(err, sr->userdata);
+
+	if (sr->destroy)
+		sr->destroy(sr->userdata);
+
+	scan_request_free(sr);
+}
+
 static struct scan_context *scan_context_new(uint32_t ifindex)
 {
 	struct netdev *netdev = netdev_find(ifindex);
@@ -220,14 +231,8 @@ static void scan_triggered(struct l_genl_msg *msg, void *userdata)
 		if (err == -EBUSY)
 			return;
 
-		if (sr->trigger)
-			sr->trigger(err, sr->userdata);
-
-		if (sr->destroy)
-			sr->destroy(sr->userdata);
-
 		l_queue_pop_head(sc->requests);
-		scan_request_free(sr);
+		scan_request_trigger_failed(sr, err);
 
 		l_error("Received error during CMD_TRIGGER_SCAN: %s (%d)",
 			strerror(-err), -err);
@@ -379,29 +384,19 @@ static void scan_cmds_add(struct l_queue *cmds, struct scan_context *sc,
 	l_queue_push_tail(cmds, cmd);
 }
 
-static bool scan_request_send_first_cmd(struct scan_context *sc,
-							struct scan_request *sr)
+static int scan_request_send_next(struct scan_context *sc,
+					struct scan_request *sr)
 {
 	struct l_genl_msg *cmd = l_queue_pop_head(sr->cmds);
 	if (!cmd)
-		goto error;
+		return -ENOMSG;
 
 	sc->start_cmd_id = scan_send_start(&cmd, scan_triggered, sc);
-
 	if (sc->start_cmd_id)
-		return true;
+		return 0;
 
 	l_genl_msg_unref(cmd);
-error:
-	if (sr->trigger)
-		sr->trigger(-EIO, sr->userdata);
-
-	if (sr->destroy)
-		sr->destroy(sr->userdata);
-
-	scan_request_free(sr);
-
-	return false;
+	return -EIO;
 }
 
 static uint32_t scan_common(uint32_t ifindex, bool passive,
@@ -436,9 +431,10 @@ static uint32_t scan_common(uint32_t ifindex, bool passive,
 	if (sc->state != SCAN_STATE_NOT_RUNNING || sc->start_cmd_id)
 		goto done;
 
-	if (scan_request_send_first_cmd(sc, sr))
+	if (!scan_request_send_next(sc, sr))
 		goto done;
 
+	scan_request_trigger_failed(sr, -EIO);
 	return 0;
 done:
 	l_queue_push_tail(sc->requests, sr);
@@ -693,10 +689,11 @@ static bool start_next_scan_request(struct scan_context *sc)
 	while (!l_queue_isempty(sc->requests)) {
 		sr = l_queue_peek_head(sc->requests);
 
-		if (scan_request_send_first_cmd(sc, sr))
+		if (!scan_request_send_next(sc, sr))
 			return true;
 
 		l_queue_pop_head(sc->requests);
+		scan_request_trigger_failed(sr, -EIO);
 	}
 
 	if (sc->sp.retry) {
@@ -1150,29 +1147,21 @@ static void scan_parse_new_scan_results(struct l_genl_msg *msg,
 static bool scan_send_next_cmd(struct scan_context *sc)
 {
 	struct scan_request *sr = l_queue_peek_head(sc->requests);
-	struct l_genl_msg *cmd;
+	int err;
 
 	if (sr && sr->triggered) {
-		cmd = l_queue_pop_head(sr->cmds);
-		if (!cmd)
-			return false;
-
 		sr->triggered = false;
 
-		sc->start_cmd_id = scan_send_start(&cmd, scan_triggered, sc);
-		if (sc->start_cmd_id)
+		err = scan_request_send_next(sc, sr);
+		if (!err)
 			return true;
 
-		l_genl_msg_unref(cmd);
-
-		if (sr->trigger)
-			sr->trigger(-EIO, sr->userdata);
-
-		if (sr->destroy)
-			sr->destroy(sr->userdata);
+		/* Nothing left in the scan_request queue, we're done */
+		if (err < 0 && err == -ENOMSG)
+			return false;
 
 		sr = l_queue_pop_head(sc->requests);
-		scan_request_free(sr);
+		scan_request_trigger_failed(sr, -EIO);
 
 		/*
 		 * The request is destroyed, return 'true' to stop further
