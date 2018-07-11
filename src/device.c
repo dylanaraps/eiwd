@@ -2150,21 +2150,24 @@ static bool device_hidden_network_scan_results(uint32_t wiphy_id,
 	struct network *network;
 	const char *ssid;
 	uint8_t ssid_len;
-	struct l_dbus_message *reply;
+	struct l_dbus_message *msg;
 	struct timespec now;
 	struct scan_bss *bss;
 
 	l_debug("");
 
+	msg = device->connect_pending;
+	device->connect_pending = NULL;
+
 	if (err) {
-		reply = dbus_error_failed(device->connect_pending);
-		goto bss_list_not_owned_error;
+		dbus_pending_reply(&msg, dbus_error_failed(msg));
+		return false;
 	}
 
 	if (!l_dbus_message_get_arguments(device->connect_pending, "s",
 								&ssid)) {
-		reply = dbus_error_invalid_args(device->connect_pending);
-		goto bss_list_not_owned_error;
+		dbus_pending_reply(&msg, dbus_error_invalid_args(msg));
+		return false;
 	}
 
 	clock_gettime(CLOCK_REALTIME, &now);
@@ -2191,32 +2194,21 @@ next:
 	network_open = device_network_find(device, ssid, SECURITY_NONE);
 
 	if (!network_psk && !network_open) {
-		reply = dbus_error_not_found(device->connect_pending);
-
-		goto bss_list_owned_error;
+		dbus_pending_reply(&msg, dbus_error_not_found(msg));
+		return true;
 	}
 
 	if (network_psk && network_open) {
-		reply = dbus_error_service_set_overlap(device->connect_pending);
-
-		goto bss_list_owned_error;
+		dbus_pending_reply(&msg, dbus_error_service_set_overlap(msg));
+		return true;
 	}
 
 	network = network_psk ? : network_open;
 
 	network_connect_new_hidden_network(network, device->connect_pending);
-
-	l_dbus_message_unref(device->connect_pending);
+	l_dbus_message_unref(msg);
 
 	return true;
-
-bss_list_owned_error:
-	dbus_pending_reply(&device->connect_pending, reply);
-	return true;
-
-bss_list_not_owned_error:
-	dbus_pending_reply(&device->connect_pending, reply);
-	return false;
 }
 
 static struct l_dbus_message *device_connect_hidden_network(struct l_dbus *dbus,
