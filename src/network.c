@@ -1009,6 +1009,9 @@ void network_connect_new_hidden_network(struct network *network,
 		goto reply_error;
 	}
 
+	network->settings = l_settings_new();
+	l_settings_set_bool(network->settings, "Settings", "Hidden", true);
+
 	switch (network_get_security(network)) {
 	case SECURITY_PSK:
 		error = network_connect_psk(network, bss, message);
