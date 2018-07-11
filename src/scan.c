@@ -108,18 +108,11 @@ static bool scan_request_match(const void *a, const void *b)
 	return sr->id == id;
 }
 
-static void scan_cmd_free(void *data)
-{
-	struct l_genl_msg *cmd = data;
-
-	l_genl_msg_unref(cmd);
-}
-
 static void scan_request_free(void *data)
 {
 	struct scan_request *sr = data;
 
-	l_queue_destroy(sr->cmds, scan_cmd_free);
+	l_queue_destroy(sr->cmds, (l_queue_destroy_func_t) l_genl_msg_unref);
 
 	l_free(sr);
 }
@@ -398,7 +391,7 @@ static bool scan_request_send_first_cmd(struct scan_context *sc,
 	if (sc->start_cmd_id)
 		return true;
 
-	scan_cmd_free(cmd);
+	l_genl_msg_unref(cmd);
 error:
 	if (sr->trigger)
 		sr->trigger(-EIO, sr->userdata);
@@ -1170,7 +1163,7 @@ static bool scan_send_next_cmd(struct scan_context *sc)
 		if (sc->start_cmd_id)
 			return true;
 
-		scan_cmd_free(cmd);
+		l_genl_msg_unref(cmd);
 
 		if (sr->trigger)
 			sr->trigger(-EIO, sr->userdata);
