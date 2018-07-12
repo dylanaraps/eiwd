@@ -310,6 +310,12 @@ Wireless daemon
 
 Client
 ======
+- Client command line mode.  iwctl should support a mode where commands can be
+  invoked on the command line instead of interactively.  This could be useful
+  in order to make iwctl easily used from shell scripts, etc.
+
+  Priority: High
+  Complexity: C1
 
 - Implement dbus-based command-line client for iwd using ell supporting at least
   the following: Scanning, Connect, Disconnect and agent functionality
