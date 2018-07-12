@@ -317,12 +317,6 @@ Client
   Priority: High
   Complexity: C1
 
-- Implement dbus-based command-line client for iwd using ell supporting at least
-  the following: Scanning, Connect, Disconnect and agent functionality
-
-  Priority: High
-  Complexity: C2
-
 
 test-runner
 ===========
