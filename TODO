@@ -127,23 +127,6 @@ Wireless monitor
   Priority: Medium
   Complexity: C1
 
-- Add support for writing PCAP files
-
-  The new -w <file> option should allow for writing PCAP files with the
-  Linux SLL link type.
-
-  When creating PCAP files using tcpdump a lot of extra information from
-  all netlink sockets are written.  This write support should only write
-  the information related to nl80211.  However parts from the generic
-  netlink control channel from resolving the nl80211 family name must
-  be included as well.
-
-  It might be also beneficial to include RTNL messages related to the
-  wireless network interfaces.  Currently these are all filtered out.
-
-  Priority: Medium
-  Complexity: C2
-
 - Print the 'group' of the decoded message
 
   Whenever an event / message is received, iwmon should print the genl
