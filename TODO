@@ -316,12 +316,3 @@ Client
 
   Priority: High
   Complexity: C1
-
-
-test-runner
-===========
-- Add a configuration flag into hw.conf to enable test-runner to start hwsim in
-  communication medium mode.
-
-  Priority: Low
-  Complexity: C1
