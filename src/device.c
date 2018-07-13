@@ -266,13 +266,13 @@ static bool process_bss(struct device *device, struct scan_bss *bss,
 			bss->frequency, bss->rank, bss->signal_strength);
 
 	if (util_ssid_is_hidden(bss->ssid_len, bss->ssid)) {
-		l_warn("Ignoring BSS with hidden SSID");
+		l_debug("Ignoring BSS with hidden SSID");
 		device->seen_hidden_networks = true;
 		return false;
 	}
 
 	if (!util_ssid_is_utf8(bss->ssid_len, bss->ssid)) {
-		l_warn("Ignoring BSS with non-UTF8 SSID");
+		l_debug("Ignoring BSS with non-UTF8 SSID");
 		return false;
 	}
 
