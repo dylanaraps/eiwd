@@ -56,11 +56,28 @@ Methods		void Scan()
 				Contains the type of the network.  Possible
 				types are "open", "psk", "8021x" (EAP)
 
-		void ConnectHiddenNetwork(string name)
+		void ConnectHiddenNetwork(string ssid)
 
-			Connect to the hidden network. Request the device
-			to connect to a hidden network implied by the name -
-			Network	SSID.
+			Tries to find and connect to a hidden network for the
+			first time.  Only hidden networks of type 'psk' and
+			'open' are supported.  WPA-Enterprise hidden networks
+			must be provisioned.
+
+			The ssid parameter is used to find the hidden network.
+			If no network with the given ssid is found, an
+			net.connman.iwd.NotFound error is returned.
+
+			In the unlikely case that both an open and pre-shared
+			key hidden network with the given ssid is found an
+			net.connman.iwd.ServiceSetOverlap error is returned.
+
+			Once the hidden network is found, the connection will
+			proceed as normal.  So the user agent will be asked
+			for a passphrase, etc.
+
+			This method should only be called once to provision
+			a hidden network.  For all future connections the
+			regular Network.Connect() API should be used.
 
 			Possible errors: net.connman.iwd.Busy
 					 net.connman.iwd.Failed
