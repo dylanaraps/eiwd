@@ -776,7 +776,7 @@ static const struct command device_commands[] = {
 					cmd_connect,
 						"Connect to network", false,
 		connect_cmd_arg_completion },
-	{ "<wlan>", "create-hidden",
+	{ "<wlan>", "connect-hidden",
 				"<\"network name\">",
 					cmd_connect_hidden_network,
 						"Connect to hidden network",
