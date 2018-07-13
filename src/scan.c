@@ -413,8 +413,10 @@ static int scan_request_send_next(struct scan_context *sc,
 		return -ENOMSG;
 
 	sc->start_cmd_id = scan_send_start(&cmd, scan_triggered, sc);
-	if (sc->start_cmd_id)
+	if (sc->start_cmd_id) {
+		sr->triggered = false;
 		return 0;
+	}
 
 	l_genl_msg_unref(cmd);
 	return -EIO;
@@ -1207,8 +1209,6 @@ static bool scan_send_next_cmd(struct scan_context *sc)
 	int err;
 
 	if (sr && sr->triggered) {
-		sr->triggered = false;
-
 		err = scan_request_send_next(sc, sr);
 		if (!err)
 			return true;
