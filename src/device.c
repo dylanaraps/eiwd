@@ -2164,8 +2164,7 @@ static bool device_hidden_network_scan_results(uint32_t wiphy_id,
 		return false;
 	}
 
-	if (!l_dbus_message_get_arguments(device->connect_pending, "s",
-								&ssid)) {
+	if (!l_dbus_message_get_arguments(msg, "s", &ssid)) {
 		dbus_pending_reply(&msg, dbus_error_invalid_args(msg));
 		return false;
 	}
@@ -2205,7 +2204,7 @@ next:
 
 	network = network_psk ? : network_open;
 
-	network_connect_new_hidden_network(network, device->connect_pending);
+	network_connect_new_hidden_network(network, msg);
 	l_dbus_message_unref(msg);
 
 	return true;
