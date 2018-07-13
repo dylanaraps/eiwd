@@ -1,5 +1,7 @@
 [Unit]
 Description=Wireless service
+Before=network.target
+Wants=network.target
 
 [Service]
 Type=dbus
