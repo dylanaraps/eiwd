@@ -1022,7 +1022,7 @@ static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
 
 	nhs->set_station_cmd_id = 0;
 
-	if (!netdev->connected)
+	if (netdev->type == NL80211_IFTYPE_STATION && !netdev->connected)
 		return;
 
 	err = l_genl_msg_get_error(msg);
@@ -1250,12 +1250,29 @@ static void netdev_set_igtk(struct handshake_state *hs, uint8_t key_index,
 	netdev_setting_keys_failed(nhs, MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
+static const uint8_t *netdev_choose_key_address(
+					struct netdev_handshake_state *nhs)
+{
+	switch (nhs->netdev->type) {
+	case NL80211_IFTYPE_STATION:
+		return nhs->super.aa;
+	case NL80211_IFTYPE_AP:
+		return nhs->super.spa;
+	case NL80211_IFTYPE_ADHOC:
+		if (!memcmp(nhs->netdev->addr, nhs->super.aa, 6))
+			return nhs->super.spa;
+		else
+			return nhs->super.aa;
+	default:
+		return NULL;
+	}
+}
+
 static void netdev_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 {
 	struct netdev_handshake_state *nhs = data;
 	struct netdev *netdev = nhs->netdev;
-	const uint8_t *addr = (netdev->type == NL80211_IFTYPE_STATION) ?
-			nhs->super.aa : nhs->super.spa;
+	const uint8_t *addr = netdev_choose_key_address(nhs);
 
 	nhs->pairwise_new_key_cmd_id = 0;
 
@@ -1313,8 +1330,18 @@ static void netdev_set_tk(struct handshake_state *hs,
 	struct netdev *netdev = nhs->netdev;
 	struct l_genl_msg *msg;
 	enum mmpdu_reason_code rc;
-	const uint8_t *addr = (netdev->type == NL80211_IFTYPE_STATION) ?
-			nhs->super.aa : nhs->super.spa;
+	const uint8_t *addr = netdev_choose_key_address(nhs);
+
+	/*
+	 * 802.11 Section 4.10.4.3:
+	 * Because in an IBSS there are two 4-way handshakes between
+	 * any two Supplicants and Authenticators, the pairwise key used
+	 * between any two STAs is from the 4-way handshake initiated
+	 * by the STA Authenticator with the higher MAC address...
+	 */
+	if (netdev->type == NL80211_IFTYPE_ADHOC &&
+			memcmp(nhs->super.aa, nhs->super.spa, 6) < 0)
+		return;
 
 	l_debug("%d", netdev->index);
 
