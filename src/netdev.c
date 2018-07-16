@@ -103,6 +103,8 @@ struct netdev {
 
 	struct watchlist frame_watches;
 
+	struct watchlist station_watches;
+
 	struct l_io *pae_io;  /* for drivers without EAPoL over NL80211 */
 
 	bool connected : 1;
@@ -589,6 +591,7 @@ static void netdev_free(void *data)
 	device_remove(netdev->device);
 	watchlist_destroy(&netdev->event_watches);
 	watchlist_destroy(&netdev->frame_watches);
+	watchlist_destroy(&netdev->station_watches);
 
 	l_io_destroy(netdev->pae_io);
 
@@ -2988,6 +2991,39 @@ static void netdev_unprot_disconnect_event(struct l_genl_msg *msg,
 			netdev_sa_query_timeout, netdev, NULL);
 }
 
+static void netdev_station_event(struct l_genl_msg *msg,
+					struct netdev *netdev, bool added)
+{
+	struct l_genl_attr attr;
+	uint16_t type;
+	uint16_t len;
+	const void *data;
+	const uint8_t *mac = NULL;
+
+	if (netdev_get_iftype(netdev) != NETDEV_IFTYPE_ADHOC)
+		return;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_MAC:
+			mac = data;
+			break;
+		}
+	}
+
+	if (!mac) {
+		l_error("%s station event did not include MAC attribute",
+				added ? "new" : "del");
+		return;
+	}
+
+	WATCHLIST_NOTIFY(&netdev->station_watches,
+			netdev_station_watch_func_t, netdev, mac, added);
+}
+
 static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = NULL;
@@ -3046,6 +3082,12 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 	case NL80211_CMD_UNPROT_DEAUTHENTICATE:
 	case NL80211_CMD_UNPROT_DISASSOCIATE:
 		netdev_unprot_disconnect_event(msg, netdev);
+		break;
+	case NL80211_CMD_NEW_STATION:
+		netdev_station_event(msg, netdev, true);
+		break;
+	case NL80211_CMD_DEL_STATION:
+		netdev_station_event(msg, netdev, false);
 		break;
 	}
 }
@@ -4044,6 +4086,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 
 	watchlist_init(&netdev->event_watches, NULL);
 	watchlist_init(&netdev->frame_watches, &netdev_frame_watch_ops);
+	watchlist_init(&netdev->station_watches, NULL);
 
 	l_queue_push_tail(netdev_list, netdev);
 
@@ -4171,6 +4214,17 @@ uint32_t netdev_watch_add(struct netdev *netdev, netdev_watch_func_t func,
 bool netdev_watch_remove(struct netdev *netdev, uint32_t id)
 {
 	return watchlist_remove(&netdev->event_watches, id);
+}
+
+uint32_t netdev_station_watch_add(struct netdev *netdev,
+			netdev_station_watch_func_t func, void *user_data)
+{
+	return watchlist_add(&netdev->station_watches, func, user_data, NULL);
+}
+
+bool netdev_station_watch_remove(struct netdev *netdev, uint32_t id)
+{
+	return watchlist_remove(&netdev->station_watches, id);
 }
 
 bool netdev_init(struct l_genl_family *in,

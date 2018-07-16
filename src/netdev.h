@@ -91,6 +91,9 @@ typedef void (*netdev_frame_watch_func_t)(struct netdev *netdev,
 					const struct mmpdu_header *frame,
 					const void *body, size_t body_len,
 					void *user_data);
+typedef void (*netdev_station_watch_func_t)(struct netdev *netdev,
+					const uint8_t *mac, bool added,
+					void *user_data);
 
 struct wiphy *netdev_get_wiphy(struct netdev *netdev);
 const uint8_t *netdev_get_address(struct netdev *netdev);
@@ -156,6 +159,11 @@ struct netdev *netdev_find(int ifindex);
 uint32_t netdev_watch_add(struct netdev *netdev, netdev_watch_func_t func,
 				void *user_data);
 bool netdev_watch_remove(struct netdev *netdev, uint32_t id);
+
+uint32_t netdev_station_watch_add(struct netdev *netdev,
+		netdev_station_watch_func_t func, void *user_data);
+
+bool netdev_station_watch_remove(struct netdev *netdev, uint32_t id);
 
 bool netdev_init(struct l_genl_family *in,
 				const char *whitelist, const char *blacklist);
