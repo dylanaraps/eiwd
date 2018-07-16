@@ -269,8 +269,18 @@ uint32_t netdev_get_ifindex(struct netdev *netdev)
 
 enum netdev_iftype netdev_get_iftype(struct netdev *netdev)
 {
-	return netdev->type == NL80211_IFTYPE_AP ?
-		NETDEV_IFTYPE_AP : NETDEV_IFTYPE_STATION;
+	switch (netdev->type) {
+	case NL80211_IFTYPE_STATION:
+		return NETDEV_IFTYPE_STATION;
+	case NL80211_IFTYPE_AP:
+		return NETDEV_IFTYPE_AP;
+	case NL80211_IFTYPE_ADHOC:
+		return NETDEV_IFTYPE_ADHOC;
+	default:
+		/* cant really do much here */
+		l_error("invalid iftype %u", netdev->type);
+		return NETDEV_IFTYPE_STATION;
+	}
 }
 
 const char *netdev_get_name(struct netdev *netdev)
@@ -3465,8 +3475,22 @@ static int netdev_cqm_rssi_update(struct netdev *netdev)
 int netdev_set_iftype(struct netdev *netdev, enum netdev_iftype type)
 {
 	struct l_genl_msg *msg;
-	uint32_t iftype = (type == NETDEV_IFTYPE_AP) ?
-		NL80211_IFTYPE_AP : NL80211_IFTYPE_STATION;
+	uint32_t iftype;
+
+	switch (type) {
+	case NETDEV_IFTYPE_AP:
+		iftype = NL80211_IFTYPE_AP;
+		break;
+	case NETDEV_IFTYPE_ADHOC:
+		iftype = NL80211_IFTYPE_ADHOC;
+		break;
+	case NETDEV_IFTYPE_STATION:
+		iftype = NL80211_IFTYPE_STATION;
+		break;
+	default:
+		l_error("unsupported iftype %u", type);
+		return -EINVAL;
+	}
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_SET_INTERFACE, 32);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);

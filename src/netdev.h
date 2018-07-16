@@ -58,6 +58,7 @@ enum netdev_watch_event {
 enum netdev_iftype {
 	NETDEV_IFTYPE_STATION,
 	NETDEV_IFTYPE_AP,
+	NETDEV_IFTYPE_ADHOC
 };
 
 typedef void (*netdev_command_func_t) (bool result, void *user_data);
