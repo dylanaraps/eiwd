@@ -70,6 +70,8 @@ typedef void (*netdev_event_func_t)(struct netdev *netdev,
 					void *user_data);
 typedef void (*netdev_disconnect_cb_t)(struct netdev *netdev, bool result,
 					void *user_data);
+typedef void (*netdev_adhoc_cb_t)(struct netdev *netdev, int result,
+					void *user_data);
 typedef void (*netdev_watch_func_t)(struct netdev *netdev,
 					enum netdev_watch_event event,
 					void *user_data);
@@ -134,6 +136,13 @@ int netdev_preauthenticate(struct netdev *netdev, struct scan_bss *target_bss,
 
 int netdev_del_station(struct netdev *netdev, const uint8_t *sta,
 		uint16_t reason_code, bool disassociate);
+
+int netdev_join_adhoc(struct netdev *netdev, const char *ssid,
+			struct iovec *extra_ie, size_t extra_ie_elems,
+			bool control_port, netdev_adhoc_cb_t cb,
+			void *user_data);
+int netdev_leave_adhoc(struct netdev *netdev, netdev_adhoc_cb_t cb,
+			void *user_data);
 
 int netdev_set_powered(struct netdev *netdev, bool powered,
 				netdev_set_powered_cb_t cb, void *user_data,
