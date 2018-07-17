@@ -47,6 +47,7 @@
 #include "src/ap.h"
 #include "src/plugin.h"
 #include "src/simauth.h"
+#include "src/adhoc.h"
 
 #include "src/backtrace.h"
 
@@ -448,6 +449,7 @@ int main(int argc, char *argv[])
 
 	__eapol_set_config(iwd_config);
 
+	adhoc_init();
 	eap_init(eap_mtu);
 	eapol_init();
 	network_init();
@@ -460,6 +462,7 @@ int main(int argc, char *argv[])
 	rfkill_exit();
 	known_networks_exit();
 	network_exit();
+	adhoc_exit();
 	eapol_exit();
 	eap_exit();
 	plugin_exit();
