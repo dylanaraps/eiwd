@@ -1,0 +1,41 @@
+Ad-Hoc hiearchy
+===============
+
+Service		net.connman.iwd
+Interface	net.connman.AdHoc [Experimental]
+Object path	/{phy0,phy1,...}/{1,2,...}
+
+Methods		void Start(string ssid, string psk)
+
+			Start or join an existing Ad-Hoc network called
+			'ssid' with a passphrase of 'psk'.
+
+			Possible errors:	net.connman.iwd.Busy
+						net.connman.iwd.Failed
+						net.connman.iwd.InvalidArgs
+						net.connman.iwd.AlreadyExists
+
+		void StartOpen(string ssid)
+
+			Start or join an existing open Ad-Hoc network called
+			'ssid'
+
+			Possible errors:	net.connman.iwd.Busy
+						net.connman.iwd.Failed
+						net.connman.iwd.InvalidArgs
+						net.connman.iwd.AlreadyExists
+
+		void Stop()
+
+			Leave an Ad-Hoc network. Note: Calling Stop() will
+			not bring down the Ad-Hoc interface. The device
+			mode must be switched to non-AdHoc mode.
+
+			Possible errors:	net.connman.iwd.Busy
+						net.connman.iwd.Failed
+						net.connman.iwd.InvalidArgs
+
+Properties	string[] ConnectedPeers [readonly]
+
+			List of peer MAC addresses that have successfully
+			connected to the Ad-Hoc network.
