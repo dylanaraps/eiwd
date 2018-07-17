@@ -82,6 +82,7 @@ struct sta_state {
 };
 
 static struct l_genl_family *nl80211 = NULL;
+static uint32_t device_watch;
 
 static void ap_sta_free(void *data)
 {
@@ -1421,8 +1422,45 @@ static void ap_destroy_interface(void *user_data)
 	ap_free(ap);
 }
 
+static void ap_add_interface(struct device *device)
+{
+	struct ap_state *ap;
+
+	/* just allocate/set device, Start method will complete setup */
+	ap = l_new(struct ap_state, 1);
+	ap->device = device;
+
+	/* setup ap dbus interface */
+	l_dbus_object_add_interface(dbus_get_bus(),
+			device_get_path(device), IWD_AP_INTERFACE, ap);
+}
+
+static void ap_remove_interface(struct device *device)
+{
+	l_dbus_object_remove_interface(dbus_get_bus(),
+			device_get_path(device), IWD_AP_INTERFACE);
+}
+
+static void ap_device_event(struct device *device, enum device_event event,
+								void *userdata)
+{
+	switch (event) {
+	case DEVICE_EVENT_MODE_CHANGED:
+		if (device_get_mode(device) == DEVICE_MODE_AP)
+			ap_add_interface(device);
+		else
+			ap_remove_interface(device);
+	default:
+		break;
+	}
+}
+
 bool ap_init(struct l_genl_family *in)
 {
+	device_watch = device_watch_add(ap_device_event, NULL, NULL);
+	if (!device_watch)
+		return false;
+
 	nl80211 = in;
 
 	return l_dbus_register_interface(dbus_get_bus(), IWD_AP_INTERFACE,
@@ -1435,24 +1473,7 @@ bool ap_init(struct l_genl_family *in)
 
 void ap_exit(void)
 {
+	device_watch_remove(device_watch);
+
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_AP_INTERFACE);
-}
-
-bool ap_add_interface(struct device *device)
-{
-	struct ap_state *ap;
-
-	/* just allocate/set device, Start method will complete setup */
-	ap = l_new(struct ap_state, 1);
-	ap->device = device;
-
-	/* setup ap dbus interface */
-	return l_dbus_object_add_interface(dbus_get_bus(),
-			device_get_path(device), IWD_AP_INTERFACE, ap);
-}
-
-bool ap_remove_interface(struct device *device)
-{
-	return l_dbus_object_remove_interface(dbus_get_bus(),
-			device_get_path(device), IWD_AP_INTERFACE);
 }

@@ -31,6 +31,7 @@ struct device;
 enum device_event {
 	DEVICE_EVENT_INSERTED,
 	DEVICE_EVENT_REMOVED,
+	DEVICE_EVENT_MODE_CHANGED,
 };
 
 enum device_state {

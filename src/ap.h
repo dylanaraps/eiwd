@@ -22,8 +22,5 @@
 
 struct device;
 
-bool ap_add_interface(struct device *device);
-bool ap_remove_interface(struct device *device);
-
 bool ap_init(struct l_genl_family *in);
 void ap_exit(void);

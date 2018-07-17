@@ -2081,78 +2081,6 @@ static void device_prepare_adhoc_ap_mode(struct device *device)
 	device->networks_sorted = l_queue_new();
 }
 
-static struct l_dbus_message *device_set_mode_adhoc(struct device *device,
-		struct l_dbus_message *message)
-{
-	if (device->mode == DEVICE_MODE_ADHOC)
-		return dbus_error_already_exists(message);
-
-	if (device->state != DEVICE_STATE_DISCONNECTED &&
-			device->state != DEVICE_STATE_AUTOCONNECT)
-		return dbus_error_busy(message);
-
-	l_debug("");
-
-	device_prepare_adhoc_ap_mode(device);
-
-	netdev_set_iftype(device->netdev, NETDEV_IFTYPE_ADHOC);
-
-	device->mode = DEVICE_MODE_ADHOC;
-
-	adhoc_add_interface(device);
-
-	return NULL;
-}
-
-static struct l_dbus_message *device_set_mode_ap(struct device *device,
-		struct l_dbus_message *message)
-{
-	if (device->mode == DEVICE_MODE_AP)
-		return dbus_error_already_exists(message);
-
-	if (device->state != DEVICE_STATE_DISCONNECTED &&
-			device->state != DEVICE_STATE_AUTOCONNECT)
-		return dbus_error_busy(message);
-
-	l_debug("");
-
-	device_prepare_adhoc_ap_mode(device);
-
-	netdev_set_iftype(device->netdev, NETDEV_IFTYPE_AP);
-
-	device->mode = DEVICE_MODE_AP;
-
-	ap_add_interface(device);
-
-	return NULL;
-}
-
-static struct l_dbus_message *device_set_mode_sta(struct device *device,
-		struct l_dbus_message *message)
-{
-	if (device->mode == DEVICE_MODE_STATION)
-		return dbus_error_already_exists(message);
-
-	switch (device->mode) {
-	case DEVICE_MODE_AP:
-		netdev_set_iftype(device->netdev, NETDEV_IFTYPE_STATION);
-		ap_remove_interface(device);
-		break;
-	case DEVICE_MODE_ADHOC:
-		netdev_set_iftype(device->netdev, NETDEV_IFTYPE_STATION);
-		adhoc_remove_interface(device);
-		break;
-	default:
-		return dbus_error_not_found(message);
-	}
-
-	device->mode = DEVICE_MODE_STATION;
-
-	l_debug("");
-
-	return NULL;
-}
-
 static bool device_network_is_known(const char *ssid, enum security security)
 {
 	const struct network_info *network_info =
@@ -2547,6 +2475,40 @@ static bool device_property_get_mode(struct l_dbus *dbus,
 	return true;
 }
 
+static struct l_dbus_message *device_change_mode(struct device *device,
+		struct l_dbus_message *message, enum device_mode mode)
+{
+	if (device->mode == mode)
+		return dbus_error_already_exists(message);
+
+	/* ensure correct connection state in AP/AdHoc mode */
+	if ((mode == DEVICE_MODE_AP || mode == DEVICE_MODE_ADHOC) &&
+			(device->state != DEVICE_STATE_DISCONNECTED &&
+			device->state != DEVICE_STATE_AUTOCONNECT))
+		return dbus_error_busy(message);
+
+	switch (mode) {
+	case DEVICE_MODE_AP:
+		device_prepare_adhoc_ap_mode(device);
+		netdev_set_iftype(device->netdev, NETDEV_IFTYPE_AP);
+		break;
+	case DEVICE_MODE_ADHOC:
+		device_prepare_adhoc_ap_mode(device);
+		netdev_set_iftype(device->netdev, NETDEV_IFTYPE_ADHOC);
+		break;
+	case DEVICE_MODE_STATION:
+		netdev_set_iftype(device->netdev, NETDEV_IFTYPE_STATION);
+		break;
+	}
+
+	device->mode = mode;
+
+	WATCHLIST_NOTIFY(&device_watches, device_watch_func_t, device,
+				DEVICE_EVENT_MODE_CHANGED);
+
+	return NULL;
+}
+
 static struct l_dbus_message *device_property_set_mode(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_iter *new_value,
@@ -2556,25 +2518,23 @@ static struct l_dbus_message *device_property_set_mode(struct l_dbus *dbus,
 	struct device *device = user_data;
 	struct l_dbus_message *reply;
 	const char* mode;
+	enum device_mode change;
 
 	if (!l_dbus_message_iter_get_variant(new_value, "s", &mode))
 		return dbus_error_invalid_args(message);
 
-	if (!strcmp(mode, "station")) {
-		reply = device_set_mode_sta(device, message);
-		if (reply)
-			return reply;
-	} else if (!strcmp(mode, "ap")) {
-		reply = device_set_mode_ap(device, message);
-		if (reply)
-			return reply;
-	} else if (!strcmp(mode, "ad-hoc")) {
-		reply = device_set_mode_adhoc(device, message);
-		if (reply)
-			return reply;
-	} else {
+	if (!strcmp(mode, "station"))
+		change = DEVICE_MODE_STATION;
+	else if (!strcmp(mode, "ap"))
+		change = DEVICE_MODE_AP;
+	else if (!strcmp(mode, "ad-hoc"))
+		change = DEVICE_MODE_ADHOC;
+	else
 		return dbus_error_invalid_args(message);
-	}
+
+	reply = device_change_mode(device, message, change);
+	if (reply)
+		return reply;
 
 	complete(dbus, message, NULL);
 

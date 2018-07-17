@@ -1069,6 +1069,20 @@ static void device_disappeared(struct device *device, void *userdata)
 					IWD_WSC_INTERFACE);
 }
 
+static void device_mode_changed(struct device *device, void *userdata)
+{
+	enum device_mode mode = device_get_mode(device);
+
+	switch (mode) {
+	case DEVICE_MODE_STATION:
+		device_appeared(device, userdata);
+		break;
+	default:
+		device_disappeared(device, userdata);
+		break;
+	}
+}
+
 static void device_event(struct device *device, enum device_event event,
 								void *userdata)
 {
@@ -1077,6 +1091,8 @@ static void device_event(struct device *device, enum device_event event,
 		return device_appeared(device, userdata);
 	case DEVICE_EVENT_REMOVED:
 		return device_disappeared(device, userdata);
+	case DEVICE_EVENT_MODE_CHANGED:
+		return device_mode_changed(device, userdata);
 	}
 }
 

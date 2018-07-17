@@ -22,8 +22,5 @@
 
 struct device;
 
-bool adhoc_add_interface(struct device *device);
-bool adhoc_remove_interface(struct device *device);
-
 bool adhoc_init(void);
 void adhoc_exit(void);
