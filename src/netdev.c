@@ -2331,6 +2331,9 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	struct eapol_sm *sm = NULL;
 	bool is_rsn = hs->own_ie != NULL;
 
+	if (netdev->type != NL80211_IFTYPE_STATION)
+		return -ENOTSUP;
+
 	if (netdev->connected)
 		return -EISCONN;
 
@@ -2359,6 +2362,9 @@ int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
 	void *ie;
 	size_t ie_len;
 	struct eapol_sm *sm;
+
+	if (netdev->type != NL80211_IFTYPE_STATION)
+		return -ENOTSUP;
 
 	if (netdev->connected)
 		return -EISCONN;
@@ -2399,6 +2405,9 @@ int netdev_disconnect(struct netdev *netdev,
 				netdev_disconnect_cb_t cb, void *user_data)
 {
 	struct l_genl_msg *disconnect;
+
+	if (netdev->type != NL80211_IFTYPE_STATION)
+		return -ENOTSUP;
 
 	if (!netdev->connected)
 		return -ENOTCONN;
