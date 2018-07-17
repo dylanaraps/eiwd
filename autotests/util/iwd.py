@@ -31,6 +31,7 @@ IWD_NETWORK_INTERFACE =         'net.connman.iwd.Network'
 IWD_WSC_INTERFACE =             'net.connman.iwd.WiFiSimpleConfiguration'
 IWD_SIGNAL_AGENT_INTERFACE =    'net.connman.iwd.SignalLevelAgent'
 IWD_AP_INTERFACE =              'net.connman.iwd.AccessPoint'
+IWD_ADHOC_INTERFACE =           'net.connman.iwd.AdHoc'
 
 IWD_AGENT_MANAGER_PATH =        '/'
 IWD_KNOWN_NETWORKS_PATH =       '/'
@@ -386,7 +387,77 @@ class Device(IWDDBusAbstract):
                                reply_handler=self._success,
                                error_handler=self._failure)
 
+    def start_adhoc(self, ssid, psk=None):
+        self._prop_proxy.Set(IWD_DEVICE_INTERFACE, 'Mode', 'ad-hoc')
+        self._adhoc_iface = dbus.Interface(self._bus.get_object(IWD_SERVICE,
+                                            self.device_path),
+                                            IWD_ADHOC_INTERFACE)
+        if not psk:
+            self._adhoc_iface.StartOpen(ssid, reply_handler=self._success,
+                                        error_handler=self._failure)
+        else:
+            self._adhoc_iface.Start(ssid, psk, reply_handler=self._success,
+                                        error_handler=self._failure)
         self._wait_for_async_op()
+
+    def stop_adhoc(self):
+        self._prop_proxy.Set(IWD_DEVICE_INTERFACE, 'Mode', 'station')
+
+    def adhoc_wait_for_disconnected(self, addr):
+        props = self._prop_proxy.GetAll(IWD_ADHOC_INTERFACE)
+        if props.get('ConnectedPeers', None):
+            if addr not in props['ConnectedPeers']:
+                return
+
+        self._adhoc_prop_found = False
+        self._adhoc_timed_out = False
+
+        def wait_timeout_cb():
+            self._adhoc_timed_out = True
+            return False
+
+        def adhoc_props_changed(iface, changed, invalid):
+            if changed.get('ConnectedPeers', None):
+                if addr not in changed['ConnectedPeers']:
+                    self._adhoc_prop_found = True
+
+        self._prop_proxy.connect_to_signal('PropertiesChanged',
+                                            adhoc_props_changed)
+
+        GLib.timeout_add(int(30 * 1000), wait_timeout_cb)
+        context = mainloop.get_context()
+        while not self._adhoc_prop_found:
+            context.iteration(may_block=True)
+            if self._adhoc_timed_out:
+                raise TimeoutError("Timed out waiting for peer %s" % addr)
+
+    def adhoc_wait_for_connected(self, addr):
+        props = self._prop_proxy.GetAll(IWD_ADHOC_INTERFACE)
+        if props.get('ConnectedPeers', None):
+            if addr in props['ConnectedPeers']:
+                return
+
+        self._adhoc_prop_found = False
+        self._adhoc_timed_out = False
+
+        def wait_timeout_cb():
+            self._adhoc_timed_out = True
+            return False
+
+        def adhoc_props_changed(iface, changed, invalid):
+            if changed.get('ConnectedPeers', None):
+                if addr in changed['ConnectedPeers']:
+                    self._adhoc_prop_found = True
+
+        self._prop_proxy.connect_to_signal('PropertiesChanged',
+                                            adhoc_props_changed)
+
+        GLib.timeout_add(int(15 * 1000), wait_timeout_cb)
+        context = mainloop.get_context()
+        while not self._adhoc_prop_found:
+            context.iteration(may_block=True)
+            if self._adhoc_timed_out:
+                raise TimeoutError("Timed out waiting for peer %s" % addr)
 
     def __str__(self, prefix = ''):
         return prefix + 'Device: ' + self.device_path + '\n'\
