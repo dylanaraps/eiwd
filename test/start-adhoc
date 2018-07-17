@@ -1,0 +1,26 @@
+#!/usr/bin/python3
+
+import dbus
+import sys
+
+if len(sys.argv) == 4:
+	open = False
+elif len(sys.argv) == 3:
+	open = True
+else:
+	print("Usage: %s <device> <ssid> [<passphrase>]" % (sys.argv[0]))
+	sys.exit(1)
+
+bus = dbus.SystemBus()
+device = dbus.Interface(bus.get_object("net.connman.iwd", sys.argv[1]),
+                        "org.freedesktop.DBus.Properties")
+
+device.Set('net.connman.iwd.Device', 'Mode', 'ad-hoc')
+
+adhoc_iface = dbus.Interface(bus.get_object("net.connman.iwd", sys.argv[1]),
+                                        'net.connman.iwd.AdHoc')
+
+if open:
+	adhoc_iface.StartOpen(sys.argv[2])
+else:
+	adhoc_iface.Start(sys.argv[2], sys.argv[3])
