@@ -45,7 +45,8 @@ enum device_state {
 
 enum device_mode {
 	DEVICE_MODE_STATION,
-	DEVICE_MODE_AP
+	DEVICE_MODE_AP,
+	DEVICE_MODE_ADHOC,
 };
 
 typedef void (*device_watch_func_t)(struct device *device,
