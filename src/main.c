@@ -458,10 +458,9 @@ int main(int argc, char *argv[])
 	rfkill_exit();
 	known_networks_exit();
 	network_exit();
-	adhoc_exit();
 	eapol_exit();
 	eap_exit();
-	plugin_exit();
+	adhoc_exit();
 
 	l_genl_family_unref(nl80211);
 
@@ -472,6 +471,7 @@ fail_device:
 	l_genl_unref(genl);
 
 fail_genl:
+	plugin_exit();
 	dbus_exit();
 
 done:
