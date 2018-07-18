@@ -88,7 +88,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/storage.h src/storage.c \
 					src/network.h src/network.c \
 					src/wscutil.h src/wscutil.c \
-					src/wsc.h src/wsc.c \
+					src/wsc.c \
 					src/eap-wsc.h src/eap-wsc.c \
 					src/eap.h src/eap.c src/eap-private.h \
 					src/eap-md5.c \

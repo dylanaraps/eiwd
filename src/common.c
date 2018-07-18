@@ -25,6 +25,7 @@
 #endif
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "src/iwd.h"

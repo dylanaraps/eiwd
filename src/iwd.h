@@ -37,3 +37,6 @@ void network_exit();
 
 void sim_auth_init(void);
 void sim_auth_exit(void);
+
+bool wsc_init(void);
+bool wsc_exit();

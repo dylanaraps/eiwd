@@ -41,7 +41,6 @@
 #include "src/eap.h"
 #include "src/eapol.h"
 #include "src/scan.h"
-#include "src/wsc.h"
 #include "src/knownnetworks.h"
 #include "src/rfkill.h"
 #include "src/ap.h"
@@ -155,9 +154,6 @@ static void nl80211_appeared(void *user_data)
 
 	if (!scan_init(nl80211))
 		l_error("Unable to init scan functionality");
-
-	if (!wsc_init(nl80211))
-		l_error("Unable to init WSC functionality");
 
 	ap_init(nl80211);
 }
@@ -444,6 +440,7 @@ int main(int argc, char *argv[])
 	__eapol_set_config(iwd_config);
 
 	adhoc_init();
+	wsc_init();
 	eap_init(eap_mtu);
 	eapol_init();
 	network_init();
@@ -460,6 +457,7 @@ int main(int argc, char *argv[])
 	network_exit();
 	eapol_exit();
 	eap_exit();
+	wsc_exit();
 	adhoc_exit();
 
 	l_genl_family_unref(nl80211);

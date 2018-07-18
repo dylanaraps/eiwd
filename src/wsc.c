@@ -36,7 +36,6 @@
 #include "src/ie.h"
 #include "src/wscutil.h"
 #include "src/util.h"
-#include "src/wsc.h"
 #include "src/handshake.h"
 #include "src/eap-wsc.h"
 #include "src/crypto.h"
@@ -47,7 +46,6 @@
 
 #define WALK_TIME 120
 
-static struct l_genl_family *nl80211 = NULL;
 static uint32_t device_watch = 0;
 
 struct wsc {
@@ -1096,7 +1094,7 @@ static void device_event(struct device *device, enum device_event event,
 	}
 }
 
-bool wsc_init(struct l_genl_family *in)
+bool wsc_init(void)
 {
 	if (!l_dbus_register_interface(dbus_get_bus(), IWD_WSC_INTERFACE,
 					setup_wsc_interface,
@@ -1104,10 +1102,11 @@ bool wsc_init(struct l_genl_family *in)
 		return false;
 
 	device_watch = device_watch_add(device_event, NULL, NULL);
-	if (!device_watch)
+	if (!device_watch) {
+		l_dbus_unregister_interface(dbus_get_bus(), IWD_WSC_INTERFACE);
 		return false;
+	}
 
-	nl80211 = in;
 	return true;
 }
 
@@ -1115,13 +1114,8 @@ bool wsc_exit()
 {
 	l_debug("");
 
-	if (!nl80211)
-		return false;
-
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_WSC_INTERFACE);
-
 	device_watch_remove(device_watch);
-	nl80211 = 0;
 
 	return true;
 }
