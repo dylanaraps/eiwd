@@ -147,7 +147,3 @@ int sim_auth_run_gsm(struct iwd_sim_auth *auth, const uint8_t *rands,
 		int num_rands, sim_auth_run_gsm_cb_t cb, void *data);
 
 void sim_auth_cancel_request(struct iwd_sim_auth *auth, int id);
-
-bool sim_auth_init(void);
-
-void sim_auth_exit(void);

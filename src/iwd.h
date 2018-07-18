@@ -34,3 +34,6 @@ void iwd_shutdown(void);
 
 void network_init();
 void network_exit();
+
+void sim_auth_init(void);
+void sim_auth_exit(void);

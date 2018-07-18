@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <ell/ell.h>
 
+#include "iwd.h"
 #include "watchlist.h"
 #include "simauth.h"
 
@@ -174,14 +175,9 @@ void sim_auth_cancel_request(struct iwd_sim_auth *auth, int id)
 		auth->driver->cancel_request(auth, id);
 }
 
-bool sim_auth_init(void)
+void sim_auth_init(void)
 {
 	auth_providers = l_queue_new();
-
-	if (!auth_providers)
-		return false;
-
-	return true;
 }
 
 void sim_auth_exit(void)
