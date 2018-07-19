@@ -447,6 +447,18 @@ static int ie_parse_akm_suite(const uint8_t *data,
 		case 9:
 			*out = IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256;
 			return 0;
+		case 10:
+			*out = IE_RSN_AKM_SUITE_AP_PEER_KEY_SHA256;
+			return 0;
+		case 11:
+			*out = IE_RSN_AKM_SUITE_8021X_SUITE_B_SHA256;
+			return 0;
+		case 12:
+			*out = IE_RSN_AKM_SUITE_8021X_SUITE_B_SHA384;
+			return 0;
+		case 13:
+			*out = IE_RSN_AKM_SUITE_FT_OVER_8021X_SHA384;
+			return 0;
 		default:
 			return -ENOENT;
 		}
@@ -779,6 +791,14 @@ static bool ie_build_rsn_akm_suite(uint8_t *data, enum ie_rsn_akm_suite suite)
 		RETURN_AKM(data, ieee_oui, 8);
 	case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
 		RETURN_AKM(data, ieee_oui, 9);
+	case IE_RSN_AKM_SUITE_AP_PEER_KEY_SHA256:
+		RETURN_AKM(data, ieee_oui, 10);
+	case IE_RSN_AKM_SUITE_8021X_SUITE_B_SHA256:
+		RETURN_AKM(data, ieee_oui, 11);
+	case IE_RSN_AKM_SUITE_8021X_SUITE_B_SHA384:
+		RETURN_AKM(data, ieee_oui, 12);
+	case IE_RSN_AKM_SUITE_FT_OVER_8021X_SHA384:
+		RETURN_AKM(data, ieee_oui, 13);
 	}
 
 	return false;
