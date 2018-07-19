@@ -117,8 +117,8 @@ static void ap_reset(struct ap_state *ap)
 				dbus_error_aborted(ap->pending));
 
 	l_free(ap->ssid);
-	memset(ap->psk, 0, strlen(ap->psk));
-	l_free(ap->psk);
+
+	memset(ap->pmk, 0, sizeof(ap->pmk));
 
 	l_queue_foreach(ap->frame_watch_ids, ap_frame_watch_remove, netdev);
 	l_queue_destroy(ap->frame_watch_ids, NULL);
@@ -1236,7 +1236,6 @@ static int ap_start(struct ap_state *ap, const char *ssid, const char *psk,
 	uint32_t id;
 
 	ap->ssid = l_strdup(ssid);
-	ap->psk = l_strdup(psk);
 	/* TODO: Start a Get Survey to decide the channel */
 	ap->channel = 6;
 	/* TODO: Add all ciphers supported by wiphy */
