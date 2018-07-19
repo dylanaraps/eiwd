@@ -408,7 +408,7 @@ static bool ie_parse_cipher_suite(const uint8_t *data,
 }
 
 /* 802.11, Section 8.4.2.27.2 */
-static bool ie_parse_akm_suite(const uint8_t *data,
+static int ie_parse_akm_suite(const uint8_t *data,
 					enum ie_rsn_akm_suite *out)
 {
 	/*
@@ -418,39 +418,41 @@ static bool ie_parse_akm_suite(const uint8_t *data,
 	if (!memcmp(data, ieee_oui, 3)) {
 		/* Suite type from Table 8-101 */
 		switch (data[3]) {
+		case 0:
+			return -EINVAL;
 		case 1:
 			*out = IE_RSN_AKM_SUITE_8021X;
-			return true;
+			return 0;
 		case 2:
 			*out = IE_RSN_AKM_SUITE_PSK;
-			return true;
+			return 0;
 		case 3:
 			*out = IE_RSN_AKM_SUITE_FT_OVER_8021X;
-			return true;
+			return 0;
 		case 4:
 			*out = IE_RSN_AKM_SUITE_FT_USING_PSK;
-			return true;
+			return 0;
 		case 5:
 			*out = IE_RSN_AKM_SUITE_8021X_SHA256;
-			return true;
+			return 0;
 		case 6:
 			*out = IE_RSN_AKM_SUITE_PSK_SHA256;
-			return true;
+			return 0;
 		case 7:
 			*out = IE_RSN_AKM_SUITE_TDLS;
-			return true;
+			return 0;
 		case 8:
 			*out = IE_RSN_AKM_SUITE_SAE_SHA256;
-			return true;
+			return 0;
 		case 9:
 			*out = IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256;
-			return true;
+			return 0;
 		default:
-			return false;
+			return -ENOENT;
 		}
 	}
 
-	return false;
+	return -ENOENT;
 }
 
 static bool ie_parse_group_cipher(const uint8_t *data,
@@ -612,11 +614,19 @@ int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 	/* Parse AKM Suite List field */
 	for (i = 0, info.akm_suites = 0; i < count; i++) {
 		enum ie_rsn_akm_suite suite;
+		int ret;
 
-		if (!ie_parse_akm_suite(data + i * 4, &suite))
-			return -ERANGE;
-
-		info.akm_suites |= suite;
+		ret = ie_parse_akm_suite(data + i * 4, &suite);
+		switch (ret) {
+		case 0:
+			info.akm_suites |= suite;
+			break;
+		case -ENOENT:
+			/* Skip unknown or vendor specific AKMs */
+			break;
+		default:
+			return -EBADMSG;
+		}
 	}
 
 	RSNE_ADVANCE(data, len, count * 4);
