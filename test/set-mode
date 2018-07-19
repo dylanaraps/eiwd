@@ -1,0 +1,18 @@
+#!/usr/bin/python3
+
+import dbus
+import sys
+
+if len(sys.argv) != 3:
+	print('Usage: %s <device> <mode>' % sys.argv[0])
+	exit(1)
+
+if sys.argv[2] not in ['station', 'ap', 'ad-hoc']:
+	print('<mode> must be station, ap or ad-hoc')
+	exit(1)
+
+bus = dbus.SystemBus()
+device = dbus.Interface(bus.get_object('net.connman.iwd', sys.argv[1]),
+                        'org.freedesktop.DBus.Properties')
+
+device.Set('net.connman.iwd.Device', 'Mode', sys.argv[2])
