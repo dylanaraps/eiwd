@@ -139,7 +139,7 @@ bool network_seen(struct network *network, struct timespec *when)
 	return true;
 }
 
-bool network_connected(struct network *network)
+void network_connected(struct network *network)
 {
 	int err;
 	const char *strtype;
@@ -148,8 +148,6 @@ bool network_connected(struct network *network)
 	l_queue_push_head(networks, network->info);
 
 	strtype = security_to_str(network_get_security(network));
-	if (!strtype)
-		return false;
 
 	err = storage_network_touch(strtype, network->info->ssid);
 	switch (err) {
@@ -169,17 +167,16 @@ bool network_connected(struct network *network)
 					network->settings);
 		break;
 	default:
-		return false;
+		l_error("Error %i touching network config", err);
+		break;
 	}
 
 	err = storage_network_get_mtime(strtype, network->info->ssid,
 					&network->info->connected_time);
 	if (err < 0)
-		return false;
+		l_error("Error %i reading network timestamp", err);
 
 	network->info->is_known = true;
-
-	return true;
 }
 
 void network_disconnected(struct network *network)
