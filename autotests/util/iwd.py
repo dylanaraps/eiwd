@@ -386,6 +386,7 @@ class Device(IWDDBusAbstract):
         self._iface.ConnectHiddenNetwork(name, dbus_interface=self._iface_name,
                                reply_handler=self._success,
                                error_handler=self._failure)
+        self._wait_for_async_op()
 
     def start_adhoc(self, ssid, psk=None):
         self._prop_proxy.Set(IWD_DEVICE_INTERFACE, 'Mode', 'ad-hoc')
