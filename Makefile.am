@@ -63,7 +63,8 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/dbus-client.h ell/dbus-client.c \
 			ell/net.h ell/net.c \
 			ell/dhcp.h ell/dhcp.c ell/dhcp-transport.c \
-			ell/dhcp-private.h ell/dhcp-lease.c
+			ell/dhcp-private.h ell/dhcp-lease.c \
+			ell/fswatch.h ell/fswatch.c
 
 ell_libell_internal_la_SOURCES = $(ell_sources)
 
