@@ -40,6 +40,7 @@
 #include "src/ie.h"
 #include "src/common.h"
 #include "src/network.h"
+#include "src/knownnetworks.h"
 #include "src/util.h"
 #include "src/scan.h"
 
@@ -338,15 +339,57 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 	return msg;
 }
 
+struct scan_cmds_add_data {
+	struct scan_context *sc;
+	const struct scan_parameters *params;
+	struct l_queue *cmds;
+	struct l_genl_msg **cmd;
+	uint8_t max_ssids_per_scan;
+	uint8_t num_ssids_can_append;
+};
+
+static bool scan_cmds_add_hidden(const struct network_info *network,
+					void *user_data)
+{
+	struct scan_cmds_add_data *data = user_data;
+
+	if (!network->is_hidden)
+		return true;
+
+	l_genl_msg_append_attr(*data->cmd, NL80211_ATTR_SSID,
+				strlen(network->ssid), network->ssid);
+	data->num_ssids_can_append--;
+
+	if (!data->num_ssids_can_append) {
+		l_genl_msg_leave_nested(*data->cmd);
+		l_queue_push_tail(data->cmds, *data->cmd);
+
+		data->num_ssids_can_append = data->max_ssids_per_scan;
+
+		/*
+		 * Create a consecutive scan trigger in the batch of scans.
+		 * The 'flush' flag is ignored, this allows to get the results
+		 * of all scans in the batch after the last scan is finished.
+		 */
+		*data->cmd = scan_build_cmd(data->sc, true, data->params);
+		l_genl_msg_enter_nested(*data->cmd, NL80211_ATTR_SCAN_SSIDS);
+	}
+
+	return true;
+}
+
 static void scan_cmds_add(struct l_queue *cmds, struct scan_context *sc,
 				bool passive,
 				const struct scan_parameters *params)
 {
-	const struct l_queue *networks;
 	struct l_genl_msg *cmd;
-	uint8_t max_ssids_per_scan;
-	uint8_t num_ssids_can_append;
-	const struct l_queue_entry *entry;
+	struct scan_cmds_add_data data = {
+		sc,
+		params,
+		cmds,
+		&cmd,
+		wiphy_get_max_num_ssids_per_scan(sc->wiphy),
+	};
 
 	cmd = scan_build_cmd(sc, false, params);
 
@@ -368,37 +411,8 @@ static void scan_cmds_add(struct l_queue *cmds, struct scan_context *sc,
 		return;
 	}
 
-	num_ssids_can_append = max_ssids_per_scan =
-				wiphy_get_max_num_ssids_per_scan(sc->wiphy);
-	networks = network_info_get_known();
-
-	for (entry = l_queue_get_entries((void *) networks); entry;
-							entry = entry->next) {
-		const struct network_info *network = entry->data;
-
-		if (!network->is_hidden)
-			continue;
-
-		l_genl_msg_append_attr(cmd, NL80211_ATTR_SSID,
-					strlen(network->ssid), network->ssid);
-		num_ssids_can_append--;
-
-		if (!num_ssids_can_append) {
-			l_genl_msg_leave_nested(cmd);
-			l_queue_push_tail(cmds, cmd);
-
-			num_ssids_can_append = max_ssids_per_scan;
-
-			/*
-			 * Create a consecutive scan trigger in the batch of
-			 * scans. The 'flush' flag is ignored, this allows to
-			 * get the results of all scans in the batch after the
-			 * last scan is finished.
-			 */
-			cmd = scan_build_cmd(sc, true, params);
-			l_genl_msg_enter_nested(cmd, NL80211_ATTR_SCAN_SSIDS);
-		}
-	}
+	data.num_ssids_can_append = data.max_ssids_per_scan;
+	known_networks_foreach(scan_cmds_add_hidden, &data);
 
 	l_genl_msg_append_attr(cmd, NL80211_ATTR_SSID, 0, NULL);
 	l_genl_msg_leave_nested(cmd);
@@ -607,7 +621,7 @@ static bool scan_periodic_send_start(struct scan_context *sc)
 	struct l_genl_msg *cmd;
 	struct scan_parameters params = {};
 
-	if (sc->sp.needs_active_scan && network_info_has_hidden()) {
+	if (sc->sp.needs_active_scan && known_networks_has_hidden()) {
 		sc->sp.needs_active_scan = false;
 		sc->sp.passive = false;
 

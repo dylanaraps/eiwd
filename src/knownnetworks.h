@@ -20,5 +20,18 @@
  *
  */
 
+enum security;
+struct network_info;
+
+typedef bool (*known_networks_foreach_func_t)(const struct network_info *info,
+						void *user_data);
+
+bool known_networks_foreach(known_networks_foreach_func_t function,
+				void *user_data);
+bool known_networks_has_hidden(void);
+struct network_info *known_networks_find(const char *ssid,
+						enum security security);
+void known_networks_connected(struct network_info *network);
+
 bool known_networks_init(void);
 void known_networks_exit(void);

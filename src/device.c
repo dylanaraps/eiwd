@@ -41,6 +41,7 @@
 #include "src/netdev.h"
 #include "src/dbus.h"
 #include "src/network.h"
+#include "src/knownnetworks.h"
 #include "src/device.h"
 #include "src/watchlist.h"
 #include "src/ap.h"
@@ -1798,7 +1799,7 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 	 */
 	if (!device->connected_bss &&
 			!(device->seen_hidden_networks &&
-						network_info_has_hidden())) {
+				known_networks_has_hidden())) {
 		if (!scan_passive(device->index, device_scan_triggered,
 						new_scan_results, device, NULL))
 			return dbus_error_failed(message);
@@ -2081,17 +2082,6 @@ static void device_prepare_adhoc_ap_mode(struct device *device)
 	device->networks_sorted = l_queue_new();
 }
 
-static bool device_network_is_known(const char *ssid, enum security security)
-{
-	const struct network_info *network_info =
-					network_info_find(ssid, security);
-
-	if (network_info && network_info->is_known)
-		return true;
-
-	return false;
-}
-
 static void device_hidden_network_scan_triggered(int err, void *user_data)
 {
 	struct device *device = user_data;
@@ -2201,8 +2191,8 @@ static struct l_dbus_message *device_connect_hidden_network(struct l_dbus *dbus,
 	if (strlen(ssid) > 32)
 		return dbus_error_invalid_args(message);
 
-	if (device_network_is_known(ssid, SECURITY_PSK) ||
-				device_network_is_known(ssid, SECURITY_NONE))
+	if (known_networks_find(ssid, SECURITY_PSK) ||
+			known_networks_find(ssid, SECURITY_NONE))
 		return dbus_error_already_provisioned(message);
 
 	if (device_network_find(device, ssid, SECURITY_PSK) ||

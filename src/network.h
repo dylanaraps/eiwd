@@ -23,6 +23,7 @@
 #include <stdbool.h>
 #include <time.h>
 
+enum security;
 struct device;
 struct network;
 struct scan_bss;
@@ -72,20 +73,9 @@ struct network_info {
 	struct timespec connected_time;	/* Time last connected */
 	struct timespec seen_time;	/* Time last seen */
 	int seen_count;			/* Ref count for network.info */
-	bool is_known:1;
 	bool is_hidden:1;
 };
 
-typedef void (*network_info_foreach_func_t)(const struct network_info *info,
-						void *user_data);
-
-bool network_info_add_known(const char *ssid, enum security security);
-bool network_info_forget_known(const char *ssid, enum security security);
-void network_info_foreach(network_info_foreach_func_t function,
-				void *user_data);
-const struct l_queue *network_info_get_known();
-bool network_info_has_hidden(void);
-void network_info_set_hidden(struct network *network);
-bool network_info_is_hidden(struct network *network);
-const struct network_info *network_info_find(const char *ssid,
-						enum security security);
+void network_info_forget_known(struct network_info *network);
+bool network_info_match(const void *a, const void *b);
+void network_info_free(void *data);

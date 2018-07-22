@@ -37,16 +37,134 @@
 #include "dbus.h"
 #include "knownnetworks.h"
 
-static void known_network_append_properties(
+static struct l_queue *known_networks;
+static size_t num_known_hidden_networks;
+
+static int timespec_compare(const void *a, const void *b, void *user_data)
+{
+	const struct network_info *ni_a = a;
+	const struct network_info *ni_b = b;
+	const struct timespec *tsa = &ni_a->connected_time;
+	const struct timespec *tsb = &ni_b->connected_time;
+
+	if (tsa->tv_sec > tsb->tv_sec)
+		return -1;
+
+	if (tsa->tv_sec < tsb->tv_sec)
+		return 1;
+
+	if (tsa->tv_nsec > tsb->tv_nsec)
+		return -1;
+
+	if (tsa->tv_nsec < tsb->tv_nsec)
+		return -1;
+
+	return 0;
+}
+
+static bool known_networks_add(const char *ssid, enum security security)
+{
+	struct network_info *network;
+	struct l_settings *settings;
+	bool is_hidden;
+	int err;
+
+	network = l_new(struct network_info, 1);
+	strcpy(network->ssid, ssid);
+	network->type = security;
+
+	err = storage_network_get_mtime(security_to_str(security), ssid,
+					&network->connected_time);
+	if (err < 0) {
+		l_free(network);
+		return false;
+	}
+
+	settings = storage_network_open(security_to_str(security), ssid);
+
+	if (l_settings_get_bool(settings, "Settings", "Hidden", &is_hidden))
+		network->is_hidden = is_hidden;
+
+	if (network->is_hidden)
+		num_known_hidden_networks++;
+
+	l_settings_free(settings);
+
+	l_queue_insert(known_networks, network, timespec_compare, NULL);
+
+	return true;
+}
+
+static bool known_networks_forget(const char *ssid, enum security security)
+{
+	struct network_info *network, search;
+
+	search.type = security;
+	strcpy(search.ssid, ssid);
+
+	network = l_queue_remove_if(known_networks, network_info_match, &search);
+	if (!network)
+		return false;
+
+	if (network->is_hidden)
+		num_known_hidden_networks--;
+
+	/*
+	 * network_info_forget_known will either re-add the network_info to
+	 * its seen networks lists or call network_info_free.
+	 */
+	network_info_forget_known(network);
+
+	return true;
+}
+
+bool known_networks_foreach(known_networks_foreach_func_t function,
+				void *user_data)
+{
+	const struct l_queue_entry *entry;
+
+	for (entry = l_queue_get_entries(known_networks); entry;
+			entry = entry->next)
+		if (!function(entry->data, user_data))
+			break;
+
+	return !entry;
+}
+
+bool known_networks_has_hidden(void)
+{
+	return num_known_hidden_networks ? true : false;
+}
+
+struct network_info *known_networks_find(const char *ssid,
+						enum security security)
+{
+	struct network_info query;
+
+	query.type = security;
+	strcpy(query.ssid, ssid);
+
+	return l_queue_find(known_networks, network_info_match, &query);
+}
+
+void known_networks_connected(struct network_info *network)
+{
+	bool is_new;
+
+	is_new = !l_queue_remove(known_networks, network);
+	l_queue_push_head(known_networks, network);
+
+	if (is_new && network->is_hidden)
+		num_known_hidden_networks++;
+}
+
+static bool known_network_append_properties(
 					const struct network_info *network,
 					void *user_data)
 {
 	struct l_dbus_message_builder *builder = user_data;
 	char datestr[64];
 	struct tm tm;
-
-	if (!network->is_known)
-		return;
 
 	l_dbus_message_builder_enter_array(builder, "{sv}");
 
@@ -71,6 +189,8 @@ static void known_network_append_properties(
 	}
 
 	l_dbus_message_builder_leave_array(builder);
+
+	return true;
 }
 
 static struct l_dbus_message *list_known_networks(struct l_dbus *dbus,
@@ -88,7 +208,7 @@ static struct l_dbus_message *list_known_networks(struct l_dbus *dbus,
 
 	l_dbus_message_builder_enter_array(builder, "a{sv}");
 
-	network_info_foreach(known_network_append_properties, builder);
+	known_networks_foreach(known_network_append_properties, builder);
 
 	l_dbus_message_builder_leave_array(builder);
 
@@ -115,7 +235,7 @@ static struct l_dbus_message *forget_network(struct l_dbus *dbus,
 	if (!security_from_str(strtype, &security))
 		return dbus_error_invalid_args(message);
 
-	if (!network_info_forget_known(ssid, security))
+	if (!known_networks_forget(ssid, security))
 		return dbus_error_failed(message);
 
 	storage_network_remove(strtype, ssid);
@@ -165,6 +285,8 @@ bool known_networks_init(void)
 		return false;
 	}
 
+	known_networks = l_queue_new();
+
 	while ((dirent = readdir(dir))) {
 		const char *ssid;
 		enum security security;
@@ -177,7 +299,7 @@ bool known_networks_init(void)
 		if (!ssid)
 			continue;
 
-		network_info_add_known(ssid, security);
+		known_networks_add(ssid, security);
 	}
 
 	closedir(dir);
@@ -188,6 +310,9 @@ bool known_networks_init(void)
 void known_networks_exit(void)
 {
 	struct l_dbus *dbus = dbus_get_bus();
+
+	l_queue_destroy(known_networks, network_info_free);
+	known_networks = NULL;
 
 	l_dbus_unregister_object(dbus, IWD_KNOWN_NETWORKS_PATH);
 	l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORKS_INTERFACE);
