@@ -48,7 +48,6 @@
 struct ap_state {
 	struct device *device;
 	char *ssid;
-	char *psk;
 	int channel;
 	unsigned int ciphers;
 	uint32_t beacon_interval;
