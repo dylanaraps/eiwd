@@ -152,7 +152,7 @@ static const char *get_name(const void *data)
 	return network->name;
 }
 
-static void set_name(void *data, struct l_dbus_message_iter *variant)
+static void update_name(void *data, struct l_dbus_message_iter *variant)
 {
 	struct network *network = data;
 	const char *value;
@@ -168,7 +168,7 @@ static void set_name(void *data, struct l_dbus_message_iter *variant)
 	network->name = l_strdup(value);
 }
 
-static void set_connected(void *data, struct l_dbus_message_iter *variant)
+static void update_connected(void *data, struct l_dbus_message_iter *variant)
 {
 	struct network *network = data;
 	bool value;
@@ -182,7 +182,7 @@ static void set_connected(void *data, struct l_dbus_message_iter *variant)
 	network->connected = value;
 }
 
-static void set_device(void *data, struct l_dbus_message_iter *variant)
+static void update_device(void *data, struct l_dbus_message_iter *variant)
 {
 	struct network *network = data;
 	const char *path;
@@ -196,7 +196,7 @@ static void set_device(void *data, struct l_dbus_message_iter *variant)
 	network->device = proxy_interface_find(IWD_DEVICE_INTERFACE, path);
 }
 
-static void set_type(void *data, struct l_dbus_message_iter *variant)
+static void update_type(void *data, struct l_dbus_message_iter *variant)
 {
 	struct network *network = data;
 	const char *value;
@@ -213,10 +213,10 @@ static void set_type(void *data, struct l_dbus_message_iter *variant)
 }
 
 static const struct proxy_interface_property network_properties[] = {
-	{ "Name",       "s", set_name, get_name },
-	{ "Connected",  "b", set_connected},
-	{ "Device",     "o", set_device},
-	{ "Type",       "s", set_type},
+	{ "Name",       "s", update_name, get_name },
+	{ "Connected",  "b", update_connected},
+	{ "Device",     "o", update_device},
+	{ "Type",       "s", update_type},
 	{ }
 };
 

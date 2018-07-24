@@ -80,7 +80,7 @@ static const char *get_name(const void *data)
 	return device->name;
 }
 
-static void set_name(void *data, struct l_dbus_message_iter *variant)
+static void update_name(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
 	const char *value;
@@ -103,7 +103,7 @@ static const char *get_mode(const void *data)
 	return device->mode;
 }
 
-static void set_mode(void *data, struct l_dbus_message_iter *variant)
+static void update_mode(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
 	const char *value;
@@ -126,7 +126,7 @@ static const char *get_address(const void *data)
 	return device->address;
 }
 
-static void set_address(void *data, struct l_dbus_message_iter *variant)
+static void update_address(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
 	const char *value;
@@ -149,7 +149,7 @@ static const char *get_state(const void *data)
 	return device->state;
 }
 
-static void set_state(void *data, struct l_dbus_message_iter *variant)
+static void update_state(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
 	const char *value;
@@ -165,7 +165,7 @@ static void set_state(void *data, struct l_dbus_message_iter *variant)
 	device->state = l_strdup(value);
 }
 
-static void set_connected_network(void *data,
+static void update_connected_network(void *data,
 					struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
@@ -188,7 +188,7 @@ static const char *get_powered_tostr(const void *data)
 	return device->powered ? "on" : "off";
 }
 
-static void set_powered(void *data, struct l_dbus_message_iter *variant)
+static void update_powered(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
 	bool value;
@@ -209,7 +209,7 @@ static const char *get_wds_tostr(const void *data)
 	return device->wds ? "on" : "off";
 }
 
-static void set_wds(void *data, struct l_dbus_message_iter *variant)
+static void update_wds(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
 	bool value;
@@ -230,7 +230,7 @@ static const char *get_scanning_tostr(const void *data)
 	return device->scanning ? "yes" : "no";
 }
 
-static void set_scanning(void *data, struct l_dbus_message_iter *variant)
+static void update_scanning(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
 	bool value;
@@ -244,7 +244,7 @@ static void set_scanning(void *data, struct l_dbus_message_iter *variant)
 	device->scanning = value;
 }
 
-static void set_adapter(void *data, struct l_dbus_message_iter *variant)
+static void update_adapter(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
 	const char *path;
@@ -259,16 +259,16 @@ static void set_adapter(void *data, struct l_dbus_message_iter *variant)
 }
 
 static const struct proxy_interface_property device_properties[] = {
-	{ "Name",     "s", set_name,     get_name },
-	{ "Mode",     "s", set_mode,     get_mode,          true },
-	{ "Powered",  "b", set_powered,  get_powered_tostr, true },
-	{ "Adapter",  "o", set_adapter },
-	{ "Address",  "s", set_address,  get_address },
-	{ "WDS",      "b", set_wds,      get_wds_tostr,     true },
-	{ "Scanning", "b", set_scanning, get_scanning_tostr },
-	{ "State",    "s", set_state,    get_state },
+	{ "Name",     "s", update_name,     get_name },
+	{ "Mode",     "s", update_mode,     get_mode,          true },
+	{ "Powered",  "b", update_powered,  get_powered_tostr, true },
+	{ "Adapter",  "o", update_adapter },
+	{ "Address",  "s", update_address,  get_address },
+	{ "WDS",      "b", update_wds,      get_wds_tostr,     true },
+	{ "Scanning", "b", update_scanning, get_scanning_tostr },
+	{ "State",    "s", update_state,    get_state },
 	{ "ConnectedNetwork",
-			"o", set_connected_network },
+			"o", update_connected_network },
 	{ }
 };
 

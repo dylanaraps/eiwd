@@ -107,7 +107,7 @@ static void known_networks_display(struct l_queue *known_networks)
 	display_table_footer();
 }
 
-static void set_name(void *data, struct l_dbus_message_iter *variant)
+static void update_name(void *data, struct l_dbus_message_iter *variant)
 {
 	struct known_network *network = data;
 	const char *value;
@@ -121,7 +121,7 @@ static void set_name(void *data, struct l_dbus_message_iter *variant)
 	network->name = l_strdup(value);
 }
 
-static void set_type(void *data, struct l_dbus_message_iter *variant)
+static void update_type(void *data, struct l_dbus_message_iter *variant)
 {
 	struct known_network *network = data;
 	const char *value;
@@ -135,7 +135,7 @@ static void set_type(void *data, struct l_dbus_message_iter *variant)
 	network->type = l_strdup(value);
 }
 
-static void set_last_connected(void *data, struct l_dbus_message_iter *variant)
+static void update_last_connected(void *data, struct l_dbus_message_iter *variant)
 {
 	struct known_network *network = data;
 	const char *value;
@@ -149,7 +149,7 @@ static void set_last_connected(void *data, struct l_dbus_message_iter *variant)
 	network->last_connected = l_strdup(value);
 }
 
-static void set_last_seen(void *data, struct l_dbus_message_iter *variant)
+static void update_last_seen(void *data, struct l_dbus_message_iter *variant)
 {
 	struct known_network *network = data;
 	const char *value;
@@ -164,10 +164,10 @@ static void set_last_seen(void *data, struct l_dbus_message_iter *variant)
 }
 
 static const struct proxy_interface_property known_network_properties[] = {
-	{ "Name",              "s", set_name           },
-	{ "Type",              "s", set_type           },
-	{ "LastConnectedTime", "s", set_last_connected },
-	{ "LastSeenTime",      "s", set_last_seen      },
+	{ "Name",              "s", update_name           },
+	{ "Type",              "s", update_type           },
+	{ "LastConnectedTime", "s", update_last_connected },
+	{ "LastSeenTime",      "s", update_last_seen      },
 	{ },
 };
 
@@ -183,10 +183,10 @@ static void populate_known_network(struct known_network *network,
 			if (strcmp(known_network_properties[i].name, name))
 				continue;
 
-			if (!known_network_properties[i].set)
+			if (!known_network_properties[i].update)
 				break;
 
-			known_network_properties[i].set(network, &variant);
+			known_network_properties[i].update(network, &variant);
 
 			break;
 		}

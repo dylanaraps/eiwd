@@ -44,7 +44,7 @@ static const char *get_name(const void *data)
 	return adapter->name;
 }
 
-static void set_name(void *data, struct l_dbus_message_iter *variant)
+static void update_name(void *data, struct l_dbus_message_iter *variant)
 {
 	struct adapter *adapter = data;
 	const char *value;
@@ -60,7 +60,7 @@ static void set_name(void *data, struct l_dbus_message_iter *variant)
 	adapter->name = l_strdup(value);
 }
 
-static void set_vendor(void *data, struct l_dbus_message_iter *variant)
+static void update_vendor(void *data, struct l_dbus_message_iter *variant)
 {
 	struct adapter *adapter = data;
 	const char *value;
@@ -76,7 +76,7 @@ static void set_vendor(void *data, struct l_dbus_message_iter *variant)
 	adapter->vendor = l_strdup(value);
 }
 
-static void set_model(void *data, struct l_dbus_message_iter *variant)
+static void update_model(void *data, struct l_dbus_message_iter *variant)
 {
 	struct adapter *adapter = data;
 	const char *value;
@@ -99,7 +99,7 @@ static const char *get_powered_tostr(const void *data)
 	return adapter->powered ? "on" : "off";
 }
 
-static void set_powered(void *data, struct l_dbus_message_iter *variant)
+static void update_powered(void *data, struct l_dbus_message_iter *variant)
 {
 	struct adapter *adapter = data;
 	bool value;
@@ -114,10 +114,10 @@ static void set_powered(void *data, struct l_dbus_message_iter *variant)
 }
 
 static const struct proxy_interface_property adapter_properties[] = {
-	{ "Name",     "s", set_name,     get_name },
-	{ "Powered",  "b", set_powered,  get_powered_tostr, true },
-	{ "Vendor",   "s", set_vendor },
-	{ "Model",    "s", set_model },
+	{ "Name",     "s", update_name,     get_name },
+	{ "Powered",  "b", update_powered,  get_powered_tostr, true },
+	{ "Vendor",   "s", update_vendor },
+	{ "Model",    "s", update_model },
 	{ }
 };
 
