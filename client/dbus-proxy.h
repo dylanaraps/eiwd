@@ -35,7 +35,7 @@ typedef bool (*proxy_property_match_func_t) (const void *a, const void *b);
 struct proxy_interface_property {
 	const char *name;
 	const char *type;
-	void (*set)(void *data, struct l_dbus_message_iter *variant);
+	void (*update)(void *data, struct l_dbus_message_iter *variant);
 	const char *(*tostr)(const void *data);
 	const bool is_read_write;
 };

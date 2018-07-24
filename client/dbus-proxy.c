@@ -97,7 +97,7 @@ static const void *proxy_interface_property_tostr(
 	return NULL;
 }
 
-static void proxy_interface_property_set(struct proxy_interface *proxy,
+static void proxy_interface_property_update(struct proxy_interface *proxy,
 					const char *name,
 					struct l_dbus_message_iter *variant)
 {
@@ -109,10 +109,10 @@ static void proxy_interface_property_set(struct proxy_interface *proxy,
 		if (strcmp(property_table[i].name, name))
 			continue;
 
-		if (!property_table[i].set)
+		if (!property_table[i].update)
 			return;
 
-		property_table[i].set(proxy->data, variant);
+		property_table[i].update(proxy->data, variant);
 
 		return;
 	}
@@ -129,13 +129,13 @@ static void interface_update_properties(struct proxy_interface *proxy,
 	struct l_dbus_message_iter variant;
 
 	while (l_dbus_message_iter_next_entry(changed, &name, &variant))
-		proxy_interface_property_set(proxy, name, &variant);
+		proxy_interface_property_update(proxy, name, &variant);
 
 	if (!invalidated)
 		return;
 
 	while (l_dbus_message_iter_next_entry(invalidated, &name))
-		proxy_interface_property_set(proxy, name, NULL);
+		proxy_interface_property_update(proxy, name, NULL);
 }
 
 char *proxy_property_str_completion(const struct proxy_interface_type *type,
