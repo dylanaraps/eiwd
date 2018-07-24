@@ -6,7 +6,6 @@ import sys
 sys.path.append('../util')
 import iwd
 from iwd import IWD
-from iwd import PSKAgent
 from iwd import NetworkType
 from hlrauc import AuthCenter
 from ofono import Ofono
