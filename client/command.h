@@ -49,6 +49,7 @@ struct command_family {
 	void (*set_default_entity)(const char *entity);
 };
 
+bool command_line_find_token(const char *token, uint8_t num_to_inspect);
 char **command_completion(const char *text, int start, int end);
 char *command_entity_arg_completion(const char *text, int state,
 					const struct command *command_list);

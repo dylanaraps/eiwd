@@ -130,6 +130,38 @@ static bool cmd_completion_cmd_has_arg(const char *cmd,
 	return status;
 }
 
+static bool find_next_token(int *i, const char *token, int token_len)
+{
+	char *line = rl_line_buffer;
+
+	while (*i && line[*i] == ' ')
+		(*i)--;
+
+	while (*i && line[*i] != ' ')
+		(*i)--;
+
+	return !strncmp(line + (line[*i] == ' ' ? *i + 1 : *i),
+							token, token_len);
+}
+
+bool command_line_find_token(const char *token, uint8_t num_to_inspect)
+{
+	int i = rl_point - 1;
+	int len = strlen(token);
+
+	if (!len)
+		return false;
+
+	while (i && num_to_inspect) {
+		if (find_next_token(&i, token, len))
+			return true;
+
+		num_to_inspect--;
+	}
+
+	return false;
+}
+
 static char **cmd_completion_match_entity_cmd(const char *cmd, const char *text,
 						const struct command *cmd_list)
 {
