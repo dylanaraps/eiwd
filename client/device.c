@@ -39,6 +39,7 @@ struct device {
 	char *address;
 	char *name;
 	char *state;
+	char *mode;
 	struct l_queue *ordered_networks;
 	const struct proxy_interface *adapter;
 	const struct proxy_interface *connected_network;
@@ -96,6 +97,29 @@ static void set_name(void *data, struct l_dbus_message_iter *variant)
 	}
 
 	device->name = l_strdup(value);
+}
+
+static const char *get_mode(const void *data)
+{
+	const struct device *device = data;
+
+	return device->mode;
+}
+
+static void set_mode(void *data, struct l_dbus_message_iter *variant)
+{
+	struct device *device = data;
+	const char *value;
+
+	l_free(device->mode);
+
+	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
+		device->mode = NULL;
+
+		return;
+	}
+
+	device->mode = l_strdup(value);
 }
 
 static const char *get_address(const void *data)
@@ -239,6 +263,7 @@ static void set_adapter(void *data, struct l_dbus_message_iter *variant)
 
 static const struct proxy_interface_property device_properties[] = {
 	{ "Name",     "s", set_name,     get_name },
+	{ "Mode",     "s", set_mode,     get_mode,          true },
 	{ "Powered",  "b", set_powered,  get_powered_tostr, true },
 	{ "Adapter",  "o", set_adapter },
 	{ "Address",  "s", set_address,  get_address },
@@ -396,6 +421,7 @@ static void device_destroy(void *data)
 	l_free(device->address);
 	l_free(device->name);
 	l_free(device->state);
+	l_free(device->mode);
 
 	l_queue_destroy(device->ordered_networks, ordered_networks_destroy);
 
