@@ -137,6 +137,7 @@ client_iwctl_SOURCES = client/main.c \
 			client/display.h client/display.c \
 			client/known-networks.c \
 			client/network.h client/network.c \
+			client/properties.h client/properties.c \
 			client/wsc.c
 client_iwctl_LDADD = ell/libell-internal.la -lreadline
 endif
@@ -296,7 +297,8 @@ unit_test_client_SOURCES = unit/test-client.c \
 				client/command.h client/command.c \
 				client/dbus-proxy.h client/dbus-proxy.c \
 				client/display.h client/display.c \
-				client/network.h client/network.c
+				client/network.h client/network.c \
+				client/properties.h client/properties.c
 unit_test_client_LDADD = ell/libell-internal.la -lreadline
 
 unit_test_ecc_SOURCES = unit/test-ecc.c src/ecc.c src/ecc.h
