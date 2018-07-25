@@ -38,6 +38,8 @@ struct proxy_interface_property {
 	void (*update)(void *data, struct l_dbus_message_iter *variant);
 	const char *(*tostr)(const void *data);
 	const bool is_read_write;
+	bool (*append)(struct l_dbus_message_builder *builder,
+							const char *value_str);
 };
 
 struct proxy_interface_type_ops {
@@ -56,6 +58,9 @@ struct proxy_interface_type {
 	const struct proxy_interface_property *properties;
 	const struct proxy_interface_type_ops *ops;
 };
+
+bool proxy_property_set(const struct proxy_interface *proxy, const char *name,
+			const char *value_str, l_dbus_message_func_t callback);
 
 struct proxy_interface *proxy_interface_find(const char *interface,
 							const char *path);

@@ -175,6 +175,74 @@ char *proxy_property_str_completion(const struct proxy_interface_type *type,
 	return NULL;
 }
 
+static const struct proxy_interface_property *proxy_property_find(
+				const struct proxy_interface_property *types,
+				const char *name)
+{
+	size_t i;
+
+	for (i = 0; types[i].name; i++) {
+		if (strcmp(types[i].name, name))
+			continue;
+
+		return &types[i];
+	}
+
+	return NULL;
+}
+
+bool proxy_property_set(const struct proxy_interface *proxy, const char *name,
+			const char *value_str, l_dbus_message_func_t callback)
+{
+	struct l_dbus_message_builder *builder;
+	struct l_dbus_message *msg;
+	const struct proxy_interface_property *property;
+
+	if (!proxy || !name)
+		return false;
+
+	property = proxy_property_find(proxy->type->properties, name);
+	if (!property)
+		return false;
+
+	if (!property->is_read_write)
+		return false;
+
+	if (!property->append)
+		return false;
+
+	msg = l_dbus_message_new_method_call(dbus, IWD_SERVICE, proxy->path,
+						L_DBUS_INTERFACE_PROPERTIES,
+						"Set");
+	if (!msg)
+		return false;
+
+
+	builder = l_dbus_message_builder_new(msg);
+	if (!builder) {
+		l_dbus_message_unref(msg);
+		return false;
+	}
+
+	l_dbus_message_builder_append_basic(builder, 's',
+							proxy->type->interface);
+	l_dbus_message_builder_append_basic(builder, 's', property->name);
+	l_dbus_message_builder_enter_variant(builder, property->type);
+
+	if (!property->append(builder, value_str)) {
+		l_dbus_message_unref(msg);
+		return false;
+	}
+
+	l_dbus_message_builder_leave_variant(builder);
+	l_dbus_message_builder_finalize(builder);
+	l_dbus_message_builder_destroy(builder);
+
+	l_dbus_send_with_reply(dbus, msg, callback, (void *) proxy, NULL);
+
+	return true;
+}
+
 bool dbus_message_has_error(struct l_dbus_message *message)
 {
 	const char *name;
