@@ -97,6 +97,12 @@ static void update_name(void *data, struct l_dbus_message_iter *variant)
 	device->name = l_strdup(value);
 }
 
+static const struct property_value_options device_mode_opts[] = {
+	{ "ap",      (void *) "ap" },
+	{ "station", (void *) "station" },
+	{ }
+};
+
 static const char *get_mode(const void *data)
 {
 	const struct device *device = data;
@@ -118,6 +124,13 @@ static void update_mode(void *data, struct l_dbus_message_iter *variant)
 	}
 
 	device->mode = l_strdup(value);
+}
+
+static bool builder_append_string_variant(
+					struct l_dbus_message_builder *builder,
+					const char *value_str)
+{
+	return l_dbus_message_builder_append_basic(builder, 's', value_str);
 }
 
 static const char *get_address(const void *data)
@@ -261,11 +274,16 @@ static void update_adapter(void *data, struct l_dbus_message_iter *variant)
 
 static const struct proxy_interface_property device_properties[] = {
 	{ "Name",     "s", update_name,     get_name },
-	{ "Mode",     "s", update_mode,     get_mode,          true },
-	{ "Powered",  "b", update_powered,  get_powered_tostr, true },
+	{ "Mode",     "s", update_mode,     get_mode,          true,
+		builder_append_string_variant, device_mode_opts },
+	{ "Powered",  "b", update_powered,  get_powered_tostr, true,
+		properties_builder_append_on_off_variant,
+		properties_on_off_opts },
 	{ "Adapter",  "o", update_adapter },
 	{ "Address",  "s", update_address,  get_address },
-	{ "WDS",      "b", update_wds,      get_wds_tostr,     true },
+	{ "WDS",      "b", update_wds,      get_wds_tostr,     true,
+		properties_builder_append_on_off_variant,
+		properties_on_off_opts },
 	{ "Scanning", "b", update_scanning, get_scanning_tostr },
 	{ "State",    "s", update_state,    get_state },
 	{ "ConnectedNetwork",
@@ -804,6 +822,11 @@ static char *connect_cmd_arg_completion(const char *text, int state)
 	return network_name_completion(device, text, state);
 }
 
+static char *set_property_cmd_arg_completion(const char *text, int state)
+{
+	return proxy_property_completion(device_properties, text, state);
+}
+
 static const struct command device_commands[] = {
 	{ NULL,     "list",     NULL,   cmd_list, "List devices",     true },
 	{ "<wlan>", "show",     NULL,   cmd_show, "Show device info", true },
@@ -816,7 +839,8 @@ static const struct command device_commands[] = {
 	{ "<wlan>", "set-property",
 				"<name> <value>",
 					cmd_set_property,
-						"Set property",       false },
+						"Set property",       false,
+		set_property_cmd_arg_completion },
 	{ "<wlan>", "connect",
 				"<\"network name\"> [security]",
 					cmd_connect,
