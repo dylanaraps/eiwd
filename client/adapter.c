@@ -29,6 +29,7 @@
 #include "command.h"
 #include "dbus-proxy.h"
 #include "display.h"
+#include "properties.h"
 
 struct adapter {
 	bool powered;
@@ -241,9 +242,37 @@ static enum cmd_status cmd_show(const char *adapter_name, char *args)
 	return CMD_STATUS_OK;
 }
 
+static void property_set_callback(struct l_dbus_message *message,
+								void *user_data)
+{
+	dbus_message_has_error(message);
+}
+
 static enum cmd_status cmd_set_property(const char *adapter_name, char *args)
 {
-	return CMD_STATUS_UNSUPPORTED;
+	char *name;
+	char *value_str;
+	const struct proxy_interface *proxy =
+					get_adapter_proxy_by_name(adapter_name);
+
+	if (!proxy)
+		return CMD_STATUS_INVALID_VALUE;
+
+	if (!properties_parse_args(args, &name, &value_str))
+		return CMD_STATUS_INVALID_ARGS;
+
+	if (!proxy_property_set(proxy, name, value_str,
+						property_set_callback)) {
+		l_free(name);
+		l_free(value_str);
+
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	l_free(name);
+	l_free(value_str);
+
+	return CMD_STATUS_OK;
 }
 
 static char *cmd_set_property_completion(const char *text, int state)
