@@ -30,6 +30,8 @@
 #include "agent-manager.h"
 #include "dbus-proxy.h"
 #include "display.h"
+#include "command.h"
+#include "properties.h"
 
 #define IWD_SERVICE		"net.connman.iwd"
 #define IWD_ROOT_PATH		"/"
@@ -171,6 +173,80 @@ char *proxy_property_str_completion(const struct proxy_interface_type *type,
 	l_queue_destroy(match, NULL);
 	match = NULL;
 	entry = NULL;
+
+	return NULL;
+}
+
+static char *proxy_property_completion_value_options(
+				const struct property_value_options *options,
+				const char *text, int state)
+{
+	static int index;
+	static int len;
+	const char *opt;
+
+	if (!state) {
+		index = 0;
+		len = strlen(text);
+	}
+
+	while ((opt = options[index++].value_str)) {
+		if (strncmp(opt, text, len))
+			continue;
+
+		return l_strdup(opt);
+	}
+
+	return NULL;
+}
+
+char *proxy_property_completion(
+			const struct proxy_interface_property *properties,
+			const char *text, int state)
+{
+	static size_t i;
+	static size_t j;
+	static size_t len;
+	static bool first_pass;
+	const char *name;
+
+	if (!state) {
+		j = 0;
+		first_pass = true;
+	}
+
+	while (first_pass && (name = properties[j].name)) {
+		if (!properties[j].is_read_write)
+			goto next;
+
+		if (!command_line_find_token(name, 2))
+			goto next;
+
+		if (!properties[j].options)
+			goto next;
+
+		return proxy_property_completion_value_options(
+					properties[j].options, text,
+					state);
+next:
+		j++;
+	}
+
+	if (first_pass) {
+		i = 0;
+		first_pass = false;
+		len = strlen(text);
+	}
+
+	while ((name = properties[i].name)) {
+		if (!properties[i++].is_read_write)
+			continue;
+
+		if (strncmp(name, text, len))
+			continue;
+
+		return l_strdup(name);
+	}
 
 	return NULL;
 }
