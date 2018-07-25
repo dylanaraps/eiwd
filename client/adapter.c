@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2017  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2017-2018  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -116,7 +116,9 @@ static void update_powered(void *data, struct l_dbus_message_iter *variant)
 
 static const struct proxy_interface_property adapter_properties[] = {
 	{ "Name",     "s", update_name,     get_name },
-	{ "Powered",  "b", update_powered,  get_powered_tostr, true },
+	{ "Powered",  "b", update_powered,  get_powered_tostr, true,
+		properties_builder_append_on_off_variant,
+		properties_on_off_opts },
 	{ "Vendor",   "s", update_vendor },
 	{ "Model",    "s", update_model },
 	{ }
@@ -275,28 +277,9 @@ static enum cmd_status cmd_set_property(const char *adapter_name, char *args)
 	return CMD_STATUS_OK;
 }
 
-static char *cmd_set_property_completion(const char *text, int state)
+static char *set_property_cmd_arg_completion(const char *text, int state)
 {
-	static size_t index;
-	static size_t len;
-	const char *prop;
-
-	if (!state) {
-		index = 0;
-		len = strlen(text);
-	}
-
-	while ((prop = adapter_properties[index].name)) {
-		if (!adapter_properties[index++].is_read_write)
-			continue;
-
-		if (strncmp(prop, text, len))
-			continue;
-
-		return l_strdup(prop);
-	}
-
-	return NULL;
+	return proxy_property_completion(adapter_properties, text, state);
 }
 
 static const struct command adapter_commands[] = {
@@ -307,7 +290,7 @@ static const struct command adapter_commands[] = {
 	{ "<phy>", "set-property", "<name> <value>",
 					cmd_set_property, "Set property",
 									false,
-						cmd_set_property_completion },
+		set_property_cmd_arg_completion },
 	{ }
 };
 
