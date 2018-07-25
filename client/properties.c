@@ -28,6 +28,24 @@
 
 #include "properties.h"
 
+bool properties_builder_append_on_off_variant(
+					struct l_dbus_message_builder *builder,
+					const char *value_str)
+{
+	if (!builder || !value_str)
+		return false;
+
+	if (!strcmp(value_str, "on"))
+		return l_dbus_message_builder_append_basic(builder, 'b',
+					&properties_on_off_opts[0].value);
+
+	if (!strcmp(value_str, "off"))
+		return l_dbus_message_builder_append_basic(builder, 'b',
+					&properties_on_off_opts[1].value);
+
+	return false;
+}
+
 bool properties_parse_args(char *args, char **name, char **value)
 {
 	char **arg_arr;
