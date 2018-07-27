@@ -34,63 +34,6 @@
 #include "client/network.h"
 #include "client/command.h"
 
-struct network_args_data {
-	const char *args;
-	const char *name;
-	const char *type;
-};
-
-static const struct network_args_data network_args_data_1[] = {
-	{ "" },
-	{ "\0" },
-	{ }
-};
-
-static const struct network_args_data network_args_data_2[] = {
-	{ "network psk", "network", "psk" },
-	{ "  network  psk", "network", "psk" },
-	{ "network  ", "network"},
-	{ "\" psk", "\"", "psk" },
-	{ "\"network psk", "\"network", "psk" },
-	{ "\"network name\"", "network name" },
-	{ "\"network \"name\"", "network \"name" },
-	{ "\"network \"psk", "network ", "psk"},
-	{ "\"network name\" psk", "network name", "psk" },
-	{ }
-};
-
-static void network_parse_no_args_test(const void *data)
-{
-	const struct network_args_data *validation_list = data;
-	size_t i;
-	struct network_args *network_args;
-
-	for (i = 0; validation_list[i].args; i++) {
-		network_args = network_parse_args(validation_list[i].args);
-		assert(!network_args);
-	}
-}
-
-static void network_parse_args_test(const void *data)
-{
-	const struct network_args_data *validation_list = data;
-	size_t i;
-	struct network_args *network_args;
-
-	for (i = 0; validation_list[i].args; i++) {
-		network_args = network_parse_args(validation_list[i].args);
-
-		assert(network_args);
-		assert(!strcmp(network_args->name, validation_list[i].name));
-
-		if (validation_list[i].type)
-			assert(!strcmp(network_args->type,
-						validation_list[i].type));
-
-		network_args_destroy(network_args);
-	}
-}
-
 struct command_line_data {
 	const char *command_line;
 	const char *token;
@@ -129,11 +72,6 @@ static void command_line_find_tokens_test(const void *data)
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
-
-	l_test_add("/Network/Parse no args",
-			network_parse_no_args_test, &network_args_data_1);
-	l_test_add("/Network/Parse args", network_parse_args_test,
-							&network_args_data_2);
 
 	l_test_add("/Command/Find tokens", command_line_find_tokens_test,
 							&command_line_data_1);
