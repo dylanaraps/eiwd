@@ -33,14 +33,16 @@
 
 static struct l_queue *command_families;
 
-static enum cmd_status cmd_version(const char *entity, char *arg)
+static enum cmd_status cmd_version(const char *entity,
+						char **argv, int argc)
 {
 	display("IWD version %s\n", VERSION);
 
 	return CMD_STATUS_OK;
 }
 
-static enum cmd_status cmd_quit(const char *entity, char *arg)
+static enum cmd_status cmd_quit(const char *entity,
+					char **argv, int argc)
 {
 	display_quit();
 
@@ -323,13 +325,14 @@ char *command_entity_arg_completion(const char *text, int state,
 }
 
 static void execute_cmd(const char *family, const char *entity,
-					const struct command *cmd, char *args)
+					const struct command *cmd,
+					char **argv, int argc)
 {
 	enum cmd_status status;
 
-	display_refresh_set_cmd(family, entity, cmd, args);
+	display_refresh_set_cmd(family, entity, cmd, argv, argc);
 
-	status = cmd->function(entity, args);
+	status = cmd->function(entity, argv, argc);
 
 	if (status != CMD_STATUS_OK)
 		goto error;
@@ -365,7 +368,8 @@ error:
 }
 
 static bool match_cmd(const char *family, const char *entity, const char *cmd,
-				char *args, const struct command *command_list)
+				char **argv, int argc,
+				const struct command *command_list)
 {
 	size_t i;
 
@@ -374,50 +378,40 @@ static bool match_cmd(const char *family, const char *entity, const char *cmd,
 			continue;
 
 		if (!command_list[i].function)
-			goto nomatch;
+			return false;
 
-		execute_cmd(family, entity, &command_list[i], args);
+		execute_cmd(family, entity, &command_list[i], argv, argc);
 
 		return true;
 	}
 
-nomatch:
 	return false;
 }
 
-static bool match_cmd_family(const char *cmd_family, char *arg)
+static bool match_cmd_family(char **argv, int argc)
 {
 	const struct l_queue_entry *entry;
-	const char *arg1;
-	const char *arg2;
+
+	if (argc < 2)
+		return false;
 
 	for (entry = l_queue_get_entries(command_families); entry;
 							entry = entry->next) {
 		const struct command_family *family = entry->data;
 
-		if (strcmp(family->name, cmd_family))
+		if (strcmp(family->name, argv[0]))
 			continue;
 
-		arg1 = strtok_r(NULL, " ", &arg);
-		if (!arg1)
-			goto nomatch;
-
-		if (match_cmd(family->name, NULL, arg1, arg,
-							family->command_list))
-			return true;
-
-		arg2 = strtok_r(NULL, " ", &arg);
-		if (!arg2)
-			goto nomatch;
-
-		if (!match_cmd(family->name, arg1, arg2, arg,
-							family->command_list))
-			goto nomatch;
-
-		return true;
+		if (argc >= 3)
+			return match_cmd(family->name, argv[1], argv[2],
+							argv + 3, argc - 3,
+							family->command_list);
+		else
+			return match_cmd(family->name, NULL, argv[1],
+							argv + 2, argc - 2,
+							family->command_list);
 	}
 
-nomatch:
 	return false;
 }
 
@@ -447,24 +441,20 @@ static void list_cmd_families(void)
 	}
 }
 
-void command_process_prompt(char *prompt)
+void command_process_prompt(char **argv, int argc)
 {
-	const char *cmd;
-	char *arg = NULL;
-
-	cmd = strtok_r(prompt, " ", &arg);
-	if (!cmd)
+	if (argc == 0)
 		return;
 
-	if (match_cmd_family(cmd, arg))
+	if (match_cmd_family(argv, argc))
 		return;
 
 	display_refresh_reset();
 
-	if (match_cmd(NULL, NULL, cmd, arg, command_list))
+	if (match_cmd(NULL, NULL, argv[0], argv + 1, argc - 1, command_list))
 		return;
 
-	if (strcmp(cmd, "help")) {
+	if (strcmp(argv[0], "help")) {
 		display("Invalid command\n");
 		return;
 	}

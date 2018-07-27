@@ -607,7 +607,8 @@ static const struct proxy_interface *get_device_proxy_by_name(
 	return proxy;
 }
 
-static enum cmd_status cmd_show(const char *device_name, char *args)
+static enum cmd_status cmd_show(const char *device_name,
+						char **argv, int argc)
 {
 	const struct proxy_interface *proxy =
 					get_device_proxy_by_name(device_name);
@@ -626,7 +627,8 @@ static void check_errors_method_callback(struct l_dbus_message *message,
 	dbus_message_has_error(message);
 }
 
-static enum cmd_status cmd_scan(const char *device_name, char *args)
+static enum cmd_status cmd_scan(const char *device_name,
+						char **argv, int argc)
 {
 	const struct proxy_interface *proxy =
 					get_device_proxy_by_name(device_name);
@@ -640,7 +642,8 @@ static enum cmd_status cmd_scan(const char *device_name, char *args)
 	return CMD_STATUS_OK;
 }
 
-static enum cmd_status cmd_disconnect(const char *device_name, char *args)
+static enum cmd_status cmd_disconnect(const char *device_name,
+						char **argv, int argc)
 {
 	const struct proxy_interface *proxy =
 					get_device_proxy_by_name(device_name);
@@ -654,7 +657,8 @@ static enum cmd_status cmd_disconnect(const char *device_name, char *args)
 	return CMD_STATUS_OK;
 }
 
-static enum cmd_status cmd_get_networks(const char *device_name, char *args)
+static enum cmd_status cmd_get_networks(const char *device_name,
+						char **argv, int argc)
 {
 	const struct proxy_interface *proxy =
 					get_device_proxy_by_name(device_name);
@@ -662,10 +666,10 @@ static enum cmd_status cmd_get_networks(const char *device_name, char *args)
 	if (!proxy)
 		return CMD_STATUS_INVALID_ARGS;
 
-	if (!args)
+	if (!argc)
 		goto proceed;
 
-	if (!strcmp(args, RSSI_DBMS))
+	if (!strcmp(argv[0], RSSI_DBMS))
 		display_signal_as_dbms = true;
 	else
 		display_signal_as_dbms = false;
@@ -677,7 +681,8 @@ proceed:
 	return CMD_STATUS_OK;
 }
 
-static enum cmd_status cmd_list(const char *device_name, char *args)
+static enum cmd_status cmd_list(const char *device_name,
+						char **argv, int argc)
 {
 	display_table_header("Devices", MARGIN "%-*s%-*s%-*s%-*s", 20, "Name",
 				20, "Address", 15, "State", 10, "Adapter");
@@ -689,36 +694,29 @@ static enum cmd_status cmd_list(const char *device_name, char *args)
 	return CMD_STATUS_OK;
 }
 
-static enum cmd_status cmd_set_property(const char *device_name, char *args)
+static enum cmd_status cmd_set_property(const char *device_name,
+						char **argv, int argc)
 {
-	char *name;
-	char *value_str;
 	const struct proxy_interface *proxy =
 					get_device_proxy_by_name(device_name);
 
 	if (!proxy)
 		return CMD_STATUS_INVALID_VALUE;
 
-	if (!properties_parse_args(args, &name, &value_str))
+	if (argc != 2)
 		return CMD_STATUS_INVALID_ARGS;
 
-	if (!proxy_property_set(proxy, name, value_str,
-						check_errors_method_callback)) {
-		l_free(name);
-		l_free(value_str);
-
+	if (!proxy_property_set(proxy, argv[0], argv[1],
+						check_errors_method_callback))
 		return CMD_STATUS_INVALID_VALUE;
-	}
-
-	l_free(name);
-	l_free(value_str);
 
 	return CMD_STATUS_OK;
 }
 
-static enum cmd_status cmd_connect(const char *device_name, char *args)
+static enum cmd_status cmd_connect(const char *device_name,
+						char **argv, int argc)
 {
-	struct network_args *network_args;
+	struct network_args network_args;
 	struct l_queue *match;
 	const struct proxy_interface *network_proxy;
 	const struct proxy_interface *device_proxy =
@@ -727,68 +725,53 @@ static enum cmd_status cmd_connect(const char *device_name, char *args)
 	if (!device_proxy)
 		return CMD_STATUS_INVALID_VALUE;
 
-	network_args = network_parse_args(args);
-
-	if (!network_args || !network_args->name) {
-		network_args_destroy(network_args);
-
+	if (argc < 1)
 		return CMD_STATUS_INVALID_ARGS;
-	}
 
-	match = network_match_by_device_and_args(device_proxy, network_args);
+	network_args.name = argv[0];
+	if (argc >= 2)
+		network_args.type = argv[1];
 
+	match = network_match_by_device_and_args(device_proxy, &network_args);
 	if (!match) {
-		display("Invalid network name '%s'\n", network_args->name);
-		network_args_destroy(network_args);
-
+		display("Invalid network name '%s'\n", network_args.name);
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
 	if (l_queue_length(match) > 1) {
-		if (!network_args->type) {
+		if (!network_args.type) {
 			display("Provided network name is ambiguous. "
 				"Please specify security type.\n");
 		}
 
 		l_queue_destroy(match, NULL);
-		network_args_destroy(network_args);
 
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
 	network_proxy = l_queue_pop_head(match);
-
 	l_queue_destroy(match, NULL);
-	network_args_destroy(network_args);
-
 	network_connect(network_proxy);
 
 	return CMD_STATUS_OK;
 }
 
 static enum cmd_status cmd_connect_hidden_network(const char *device_name,
-								char *args)
+							char **argv,
+							int argc)
 {
-	struct network_args *network_args;
 	const struct proxy_interface *proxy =
 					get_device_proxy_by_name(device_name);
 
 	if (!proxy)
 		return CMD_STATUS_INVALID_VALUE;
 
-	network_args = network_parse_args(args);
-
-	if (!network_args || !network_args->name) {
-		network_args_destroy(network_args);
-
+	if (argc != 1)
 		return CMD_STATUS_INVALID_ARGS;
-	}
 
 	proxy_interface_method_call(proxy, "ConnectHiddenNetwork", "s",
 					check_errors_method_callback,
-					network_args->name);
-
-	network_args_destroy(network_args);
+					argv[0]);
 
 	return CMD_STATUS_OK;
 }

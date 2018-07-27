@@ -45,25 +45,3 @@ bool properties_builder_append_on_off_variant(
 
 	return false;
 }
-
-bool properties_parse_args(char *args, char **name, char **value)
-{
-	char **arg_arr;
-
-	if (!args)
-		return false;
-
-	arg_arr = l_strsplit(args, ' ');
-
-	if (!arg_arr || !arg_arr[0] || !arg_arr[1]) {
-		l_strfreev(arg_arr);
-		return false;
-	}
-
-	*name = l_strdup(arg_arr[0]);
-	*value = l_strdup(arg_arr[1]);
-
-	l_strfreev(arg_arr);
-
-	return true;
-}

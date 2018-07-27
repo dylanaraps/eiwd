@@ -34,5 +34,3 @@ static const struct property_value_options properties_on_off_opts[] = {
 bool properties_builder_append_on_off_variant(
 					struct l_dbus_message_builder *builder,
 					const char *value_str);
-
-bool properties_parse_args(char *args, char **name, char **value);

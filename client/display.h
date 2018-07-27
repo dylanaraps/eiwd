@@ -42,7 +42,8 @@ void display_command_line(const char *command_family,
 void display_refresh_timeout_set(void);
 void display_refresh_reset(void);
 void display_refresh_set_cmd(const char *family, const char *entity,
-					const struct command *cmd, char *args);
+					const struct command *cmd,
+					char **argv, int argc);
 
 void display_enable_cmd_prompt(void);
 void display_disable_cmd_prompt(void);

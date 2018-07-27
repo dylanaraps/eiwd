@@ -21,15 +21,12 @@
  */
 
 struct network_args {
-	char *name;
-	char *type;
+	const char *name;
+	const char *type;
 };
 
 bool network_is_connected(const char *path);
 void network_connect(const struct proxy_interface *proxy);
-
-struct network_args *network_parse_args(const char *args);
-void network_args_destroy(struct network_args *network_args);
 
 char *network_name_completion(const struct proxy_interface *device,
 						const char *text, int state);

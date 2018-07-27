@@ -244,7 +244,7 @@ static struct proxy_interface_type known_networks_interface_type = {
 	.ops = &known_networks_ops,
 };
 
-static enum cmd_status cmd_list(const char *entity, char *args)
+static enum cmd_status cmd_list(const char *entity, char **args, int argc)
 {
 	struct proxy_interface *proxy =
 		proxy_interface_find(IWD_KNOWN_NETWORKS_INTREFACE,
@@ -259,9 +259,8 @@ static enum cmd_status cmd_list(const char *entity, char *args)
 	return CMD_STATUS_OK;
 }
 
-static enum cmd_status cmd_forget(const char *entity, char *args)
+static enum cmd_status cmd_forget(const char *entity, char **argv, int argc)
 {
-	struct network_args *network_args;
 	const struct l_queue_entry *entry;
 	struct known_network *network = NULL;
 	struct known_network *net;
@@ -274,13 +273,8 @@ static enum cmd_status cmd_forget(const char *entity, char *args)
 	if (!proxy)
 		return CMD_STATUS_FAILED;
 
-	network_args = network_parse_args(args);
-
-	if (!network_args || !network_args->name) {
-		network_args_destroy(network_args);
-
+	if (argc < 1)
 		return CMD_STATUS_INVALID_ARGS;
-	}
 
 	known_networks = proxy_interface_get_data(proxy);
 	match = NULL;
@@ -289,7 +283,7 @@ static enum cmd_status cmd_forget(const char *entity, char *args)
 							entry = entry->next) {
 		net = entry->data;
 
-		if (strcmp(net->name, network_args->name))
+		if (strcmp(net->name, argv[0]))
 			continue;
 
 		if (!match)
@@ -299,20 +293,16 @@ static enum cmd_status cmd_forget(const char *entity, char *args)
 	}
 
 	if (!match) {
-		display("Invalid network name '%s'\n", network_args->name);
-		network_args_destroy(network_args);
-
+		display("Invalid network name '%s'\n", argv[0]);
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
 	if (l_queue_length(match) > 1) {
-		if (!network_args->type) {
+		if (argc < 2) {
 			display("Provided network name is ambiguous. "
 				"Please specify security type.\n");
 
 			l_queue_destroy(match, NULL);
-			network_args_destroy(network_args);
-
 			return CMD_STATUS_INVALID_VALUE;
 		}
 
@@ -320,7 +310,7 @@ static enum cmd_status cmd_forget(const char *entity, char *args)
 							entry = entry->next) {
 			net = entry->data;
 
-			if (!strcmp(net->type, network_args->type)) {
+			if (!strcmp(net->type, argv[1])) {
 				network = net;
 				break;
 			}
@@ -330,11 +320,9 @@ static enum cmd_status cmd_forget(const char *entity, char *args)
 	}
 
 	l_queue_destroy(match, NULL);
-	network_args_destroy(network_args);
 
 	if (!network) {
 		display("No network with specified parameters was found\n");
-
 		return CMD_STATUS_INVALID_VALUE;
 	}
 

@@ -34,7 +34,8 @@ struct command {
 	const char *entity;
 	const char *cmd;
 	const char *arg;
-	enum cmd_status (*function)(const char *entity, char *arg);
+	enum cmd_status (*function)(const char *entity,
+						char **argv, int argc);
 	const char *desc;
 	const bool refreshable;
 	command_completion_func_t completion;
@@ -54,7 +55,7 @@ char **command_completion(const char *text, int start, int end);
 char *command_entity_arg_completion(const char *text, int state,
 					const struct command *command_list);
 
-void command_process_prompt(char *prompt);
+void command_process_prompt(char **argv, int argc);
 
 void command_family_register(const struct command_family *family);
 void command_family_unregister(const struct command_family *family);

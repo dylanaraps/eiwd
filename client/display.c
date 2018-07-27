@@ -47,7 +47,8 @@ static struct display_refresh {
 	char *family;
 	char *entity;
 	const struct command *cmd;
-	char *args;
+	char **argv;
+	int argc;
 	size_t undo_lines;
 	struct l_queue *redo_entries;
 	bool recording;
@@ -135,8 +136,9 @@ void display_refresh_reset(void)
 
 	display_refresh.cmd = NULL;
 
-	l_free(display_refresh.args);
-	display_refresh.args = NULL;
+	l_strfreev(display_refresh.argv);
+	display_refresh.argv = NULL;
+	display_refresh.argc = 0;
 
 	display_refresh.undo_lines = 0;
 	display_refresh.recording = false;
@@ -145,8 +147,11 @@ void display_refresh_reset(void)
 }
 
 void display_refresh_set_cmd(const char *family, const char *entity,
-				const struct command *cmd, char *args)
+				const struct command *cmd,
+				char **argv, int argc)
 {
+	int i;
+
 	if (cmd->refreshable) {
 		l_free(display_refresh.family);
 		display_refresh.family = l_strdup(family);
@@ -156,8 +161,12 @@ void display_refresh_set_cmd(const char *family, const char *entity,
 
 		display_refresh.cmd = cmd;
 
-		l_free(display_refresh.args);
-		display_refresh.args = l_strdup(args);
+		l_strfreev(display_refresh.argv);
+		display_refresh.argc = argc;
+
+		display_refresh.argv = l_new(char *, argc + 1);
+		for (i = 0; i < argc; i++)
+			display_refresh.argv[i] = argv[i];
 
 		l_queue_clear(display_refresh.redo_entries, l_free);
 
@@ -168,8 +177,16 @@ void display_refresh_set_cmd(const char *family, const char *entity,
 	}
 
 	if (display_refresh.family && !strcmp(display_refresh.family, family)) {
-		char *prompt =
-			l_strdup_printf(IWD_PROMPT"%s%s%s %s %s\n",
+		struct l_string *buf = l_string_new(128);
+		L_AUTO_FREE_VAR(char *, args);
+		char *prompt;
+
+		for (i = 0; i < argc; i++)
+			l_string_append_printf(buf, "'%s' ", argv[i]);
+
+		args = l_string_unwrap(buf);
+
+		prompt = l_strdup_printf(IWD_PROMPT"%s%s%s %s %s\n",
 					family ? : "",
 					entity ? " " : "", entity ? : "",
 					cmd->cmd ? : "", args ? : "");
@@ -196,7 +213,8 @@ static void timeout_callback(struct l_timeout *timeout, void *user_data)
 
 	display_refresh.recording = false;
 	display_refresh.cmd->function(display_refresh.entity,
-							display_refresh.args);
+						display_refresh.argv,
+						display_refresh.argc);
 }
 
 void display_refresh_timeout_set(void)
@@ -408,6 +426,9 @@ static void reset_masked_input(void)
 
 static void readline_callback(char *prompt)
 {
+	char **argv;
+	int argc;
+
 	HIST_ENTRY *previous_prompt;
 
 	if (!prompt) {
@@ -432,7 +453,13 @@ static void readline_callback(char *prompt)
 		add_history(prompt);
 	}
 
-	command_process_prompt(prompt);
+	argv = l_parse_args(prompt, &argc);
+	if (!argv) {
+		display("Invalid command\n");
+		goto done;
+	}
+
+	command_process_prompt(argv, argc);
 
 done:
 	l_free(prompt);

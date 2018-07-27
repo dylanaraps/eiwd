@@ -219,7 +219,8 @@ static const struct proxy_interface *get_adapter_proxy_by_name(
 	return proxy;
 }
 
-static enum cmd_status cmd_list(const char *adapter_name, char *args)
+static enum cmd_status cmd_list(const char *adapter_name,
+						char **argv, int argc)
 {
 	display_table_header("Adapters", MARGIN "%-*s%-*s%-*s%-*s", 19, "Name",
 				10, "Powered", 20, "Vendor", 20, "Model");
@@ -231,7 +232,8 @@ static enum cmd_status cmd_list(const char *adapter_name, char *args)
 	return CMD_STATUS_OK;
 }
 
-static enum cmd_status cmd_show(const char *adapter_name, char *args)
+static enum cmd_status cmd_show(const char *adapter_name,
+						char **argv, int argc)
 {
 	const struct proxy_interface *proxy =
 					get_adapter_proxy_by_name(adapter_name);
@@ -250,29 +252,21 @@ static void property_set_callback(struct l_dbus_message *message,
 	dbus_message_has_error(message);
 }
 
-static enum cmd_status cmd_set_property(const char *adapter_name, char *args)
+static enum cmd_status cmd_set_property(const char *adapter_name,
+						char **argv, int argc)
 {
-	char *name;
-	char *value_str;
 	const struct proxy_interface *proxy =
 					get_adapter_proxy_by_name(adapter_name);
 
 	if (!proxy)
 		return CMD_STATUS_INVALID_VALUE;
 
-	if (!properties_parse_args(args, &name, &value_str))
+	if (argc != 2)
 		return CMD_STATUS_INVALID_ARGS;
 
-	if (!proxy_property_set(proxy, name, value_str,
-						property_set_callback)) {
-		l_free(name);
-		l_free(value_str);
-
+	if (!proxy_property_set(proxy, argv[0], argv[1],
+						property_set_callback))
 		return CMD_STATUS_INVALID_VALUE;
-	}
-
-	l_free(name);
-	l_free(value_str);
 
 	return CMD_STATUS_OK;
 }
