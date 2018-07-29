@@ -1,0 +1,305 @@
+/*
+ *
+ *  Wireless daemon for Linux
+ *
+ *  Copyright (C) 2018  Intel Corporation. All rights reserved.
+ *
+ *  This library is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU Lesser General Public
+ *  License as published by the Free Software Foundation; either
+ *  version 2.1 of the License, or (at your option) any later version.
+ *
+ *  This library is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *  Lesser General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this library; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ *
+ */
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
+#include <ell/ell.h>
+
+#include "command.h"
+#include "dbus-proxy.h"
+#include "device.h"
+#include "display.h"
+
+struct ap {
+	bool started;
+	const struct proxy_interface *device;
+};
+
+static void *ap_create(void)
+{
+	return l_new(struct ap, 1);
+}
+
+static void ap_destroy(void *data)
+{
+	struct ap *ap = data;
+
+	ap->device = NULL;
+
+	l_free(ap);
+}
+
+static bool ap_bind_interface(const struct proxy_interface *proxy,
+				const struct proxy_interface *dependency)
+{
+	const char *interface = proxy_interface_get_interface(dependency);
+
+	if (!strcmp(interface, IWD_DEVICE_INTERFACE)) {
+		struct ap *ap = proxy_interface_get_data(proxy);
+
+		ap->device = dependency;
+
+		return true;
+	}
+
+	return false;
+}
+
+static bool ap_unbind_interface(const struct proxy_interface *proxy,
+				const struct proxy_interface *dependency)
+{
+	const char *interface = proxy_interface_get_interface(dependency);
+
+	if (!strcmp(interface, IWD_DEVICE_INTERFACE)) {
+		struct ap *ap = proxy_interface_get_data(proxy);
+
+		ap->device = NULL;
+
+		return true;
+	}
+
+	return false;
+}
+
+static const struct proxy_interface_type_ops ap_ops = {
+	.create = ap_create,
+	.destroy = ap_destroy,
+	.bind_interface = ap_bind_interface,
+	.unbind_interface = ap_unbind_interface,
+};
+
+static const char *get_started_tostr(const void *data)
+{
+	const struct ap *ap = data;
+
+	return ap->started ? "yes" : "no";
+}
+
+static void update_started(void *data, struct l_dbus_message_iter *variant)
+{
+	struct ap *ap = data;
+	bool value;
+
+	if (!l_dbus_message_iter_get_variant(variant, "b", &value)) {
+		ap->started = false;
+
+		return;
+	}
+
+	ap->started = value;
+}
+
+static const struct proxy_interface_property ap_properties[] = {
+	{ "Started",  "b", update_started,  get_started_tostr },
+	{ }
+};
+
+static struct proxy_interface_type ap_interface_type = {
+	.interface = IWD_ACCESS_POINT_INTERFACE,
+	.properties = ap_properties,
+	.ops = &ap_ops,
+};
+
+static void check_errors_method_callback(struct l_dbus_message *message,
+								void *user_data)
+{
+	dbus_message_has_error(message);
+}
+
+static bool match_by_device(const void *a, const void *b)
+{
+	const struct ap *ap = a;
+
+	return ap->device ? true : false;
+}
+
+static void display_ap_inline(const char *margin, const void *data)
+{
+	const struct ap *ap = data;
+
+	if (ap->device && proxy_interface_get_identity_str(ap->device))
+		display("%s%-*s%-*s\n", margin,
+			20, proxy_interface_get_identity_str(ap->device),
+			8, get_started_tostr(ap));
+}
+
+static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
+{
+	const struct l_queue_entry *entry;
+	struct l_queue *match =
+		proxy_interface_find_all(IWD_ACCESS_POINT_INTERFACE,
+						match_by_device, NULL);
+
+	display_table_header("Devices in Access Point Mode", MARGIN "%-*s%-*s",
+				20, "Name",
+				8, "Started");
+
+	if (!match) {
+		display("No devices in access point mode available.\n");
+		display_table_footer();
+
+		return CMD_STATUS_OK;
+	}
+
+	for (entry = l_queue_get_entries(match); entry; entry = entry->next) {
+		const struct ap *ap = proxy_interface_get_data(entry->data);
+
+		display_ap_inline(MARGIN, ap);
+	}
+
+	display_table_footer();
+
+	l_queue_destroy(match, NULL);
+
+	return CMD_STATUS_OK;
+}
+
+static enum cmd_status cmd_start(const char *device_name, char **argv, int argc)
+{
+	const struct proxy_interface *proxy = device_ap_get(device_name);
+
+	if (!proxy) {
+		display("Invalid device name '%s'\n", device_name);
+
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	if (argc < 2)
+		return CMD_STATUS_INVALID_ARGS;
+
+	if (strlen(argv[0]) > 32) {
+		display("Network name cannot exceed 32 characters.\n");
+
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	if (strlen(argv[1]) < 8) {
+		display("Passphrase cannot be shorted than 8 characters.\n");
+
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	proxy_interface_method_call(proxy, "Start", "ss",
+						check_errors_method_callback,
+						argv[0], argv[1]);
+
+	return CMD_STATUS_OK;
+}
+
+static enum cmd_status cmd_stop(const char *device_name, char **argv, int argc)
+{
+	const struct proxy_interface *proxy = device_ap_get(device_name);
+
+	if (!proxy) {
+		display("Invalid device name '%s'\n", device_name);
+
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	proxy_interface_method_call(proxy, "Stop", "",
+						check_errors_method_callback);
+
+	return CMD_STATUS_OK;
+}
+
+static const struct command ap_commands[] = {
+	{ NULL, "list", NULL, cmd_list, "List access point devices", true },
+	{ "<wlan>", "start", "<\"network name\"> <passphrase>", cmd_start,
+		"Start an access point\n\t\t\t\t\t\t    called \"network "
+		"name\" with\n\t\t\t\t\t\t    a passphrase" },
+	{ "<wlan>", "stop", NULL,   cmd_stop, "Stop a started access\n"
+		"\t\t\t\t\t\t    point" },
+	{ }
+};
+
+static char *family_arg_completion(const char *text, int state)
+{
+	static bool first_pass;
+	static size_t index;
+	static size_t len;
+	const char *cmd;
+
+	if (!state) {
+		index = 0;
+		len = strlen(text);
+		first_pass = true;
+	}
+
+	while ((cmd = ap_commands[index].cmd)) {
+		if (ap_commands[index++].entity)
+			continue;
+
+		if (!strncmp(cmd, text, len))
+			return l_strdup(cmd);
+	}
+
+	if (first_pass) {
+		state = 0;
+		first_pass = false;
+	}
+
+	return device_ap_family_arg_completion(text, state);
+}
+
+static char *entity_arg_completion(const char *text, int state)
+{
+	return command_entity_arg_completion(text, state, ap_commands);
+}
+
+static struct command_family ap_command_family = {
+	.caption = "Access Point",
+	.name = "ap",
+	.command_list = ap_commands,
+	.family_arg_completion = family_arg_completion,
+	.entity_arg_completion = entity_arg_completion,
+};
+
+static int ap_command_family_init(void)
+{
+	command_family_register(&ap_command_family);
+
+	return 0;
+}
+
+static void ap_command_family_exit(void)
+{
+	command_family_unregister(&ap_command_family);
+}
+
+COMMAND_FAMILY(ap_command_family, ap_command_family_init,
+							ap_command_family_exit)
+
+static int ap_interface_init(void)
+{
+	proxy_interface_type_register(&ap_interface_type);
+
+	return 0;
+}
+
+static void ap_interface_exit(void)
+{
+	proxy_interface_type_unregister(&ap_interface_type);
+}
+
+INTERFACE_TYPE(ap_interface_type, ap_interface_init, ap_interface_exit)

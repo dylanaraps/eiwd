@@ -131,6 +131,7 @@ client_iwctl_SOURCES = client/main.c \
 			client/adapter.c \
 			client/agent.h client/agent.c \
 			client/agent-manager.h client/agent-manager.c \
+			client/ap.c \
 			client/command.h client/command.c \
 			client/dbus-proxy.h client/dbus-proxy.c \
 			client/device.h client/device.c \
