@@ -133,6 +133,9 @@ static void ap_reset(struct ap_state *ap)
 		l_uintset_free(ap->rates);
 
 	ap->started = false;
+
+	l_dbus_property_changed(dbus_get_bus(), device_get_path(ap->device),
+						IWD_AP_INTERFACE, "Started");
 }
 
 static void ap_free(void *data)
@@ -1156,6 +1159,9 @@ static void ap_start_cb(struct l_genl_msg *msg, void *user_data)
 			l_dbus_message_new_method_return(ap->pending));
 
 	ap->started = true;
+
+	l_dbus_property_changed(dbus_get_bus(), device_get_path(ap->device),
+						IWD_AP_INTERFACE, "Started");
 }
 
 static struct l_genl_msg *ap_build_cmd_start_ap(struct ap_state *ap)
@@ -1406,11 +1412,27 @@ static struct l_dbus_message *ap_dbus_stop(struct l_dbus *dbus,
 	return NULL;
 }
 
+static bool ap_dbus_property_get_started(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct ap_state *ap = user_data;
+	bool started = ap->started;
+
+	l_dbus_message_builder_append_basic(builder, 'b', &started);
+
+	return true;
+}
+
 static void ap_setup_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Start", 0, ap_dbus_start, "",
 			"ss", "ssid", "wpa2_psk");
 	l_dbus_interface_method(interface, "Stop", 0, ap_dbus_stop, "", "");
+
+	l_dbus_interface_property(interface, "Started", 0, "b",
+					ap_dbus_property_get_started, NULL);
 }
 
 static void ap_destroy_interface(void *user_data)
