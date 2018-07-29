@@ -45,6 +45,7 @@ struct device {
 	const struct proxy_interface *adapter;
 	const struct proxy_interface *connected_network;
 	const struct proxy_interface *wsc;
+	const struct proxy_interface *ap;
 };
 
 static struct proxy_interface *default_device;
@@ -459,6 +460,12 @@ static bool device_bind_interface(const struct proxy_interface *proxy,
 		device->wsc = dependency;
 
 		return true;
+	} else if (!strcmp(interface, IWD_ACCESS_POINT_INTERFACE)) {
+		struct device *device = proxy_interface_get_data(proxy);
+
+		device->ap = dependency;
+
+		return true;
 	}
 
 	return false;
@@ -473,6 +480,12 @@ static bool device_unbind_interface(const struct proxy_interface *proxy,
 		struct device *device = proxy_interface_get_data(proxy);
 
 		device->wsc = NULL;
+
+		return true;
+	} else if (!strcmp(interface, IWD_ACCESS_POINT_INTERFACE)) {
+		struct device *device = proxy_interface_get_data(proxy);
+
+		device->ap = NULL;
 
 		return true;
 	}
@@ -542,6 +555,13 @@ static bool match_by_partial_name_and_wsc(const void *a, const void *b)
 	const struct device *device = a;
 
 	return match_by_partial_name(a, b) && device->wsc ? true : false;
+}
+
+static bool match_by_partial_name_and_ap(const void *a, const void *b)
+{
+	const struct device *device = a;
+
+	return match_by_partial_name(a, b) && device->ap ? true : false;
 }
 
 static bool match_all(const void *a, const void *b)
@@ -857,6 +877,27 @@ char *device_wsc_family_arg_completion(const char *text, int state)
 {
 	return proxy_property_str_completion(&device_interface_type,
 						match_by_partial_name_and_wsc,
+						"Name", text, state);
+}
+
+const struct proxy_interface *device_ap_get(const char *device_name)
+{
+	const struct device *device;
+	const struct proxy_interface *proxy =
+					get_device_proxy_by_name(device_name);
+
+	if (!proxy)
+		return NULL;
+
+	device = proxy_interface_get_data(proxy);
+
+	return device->ap;
+}
+
+char *device_ap_family_arg_completion(const char *text, int state)
+{
+	return proxy_property_str_completion(&device_interface_type,
+						match_by_partial_name_and_ap,
 						"Name", text, state);
 }
 
