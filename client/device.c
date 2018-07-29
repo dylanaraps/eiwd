@@ -46,6 +46,7 @@ struct device {
 	const struct proxy_interface *connected_network;
 	const struct proxy_interface *wsc;
 	const struct proxy_interface *ap;
+	const struct proxy_interface *ad_hoc;
 };
 
 static struct proxy_interface *default_device;
@@ -99,6 +100,7 @@ static void update_name(void *data, struct l_dbus_message_iter *variant)
 }
 
 static const struct property_value_options device_mode_opts[] = {
+	{ "ad-hoc",  (void *) "ad-hoc" },
 	{ "ap",      (void *) "ap" },
 	{ "station", (void *) "station" },
 	{ }
@@ -466,6 +468,12 @@ static bool device_bind_interface(const struct proxy_interface *proxy,
 		device->ap = dependency;
 
 		return true;
+	} else if (!strcmp(interface, IWD_AD_HOC_INTERFACE)) {
+		struct device *device = proxy_interface_get_data(proxy);
+
+		device->ad_hoc = dependency;
+
+		return true;
 	}
 
 	return false;
@@ -486,6 +494,12 @@ static bool device_unbind_interface(const struct proxy_interface *proxy,
 		struct device *device = proxy_interface_get_data(proxy);
 
 		device->ap = NULL;
+
+		return true;
+	} else if (!strcmp(interface, IWD_AD_HOC_INTERFACE)) {
+		struct device *device = proxy_interface_get_data(proxy);
+
+		device->ad_hoc = NULL;
 
 		return true;
 	}
@@ -562,6 +576,13 @@ static bool match_by_partial_name_and_ap(const void *a, const void *b)
 	const struct device *device = a;
 
 	return match_by_partial_name(a, b) && device->ap ? true : false;
+}
+
+static bool match_by_partial_name_and_ad_hoc(const void *a, const void *b)
+{
+	const struct device *device = a;
+
+	return match_by_partial_name(a, b) && device->ad_hoc ? true : false;
 }
 
 static bool match_all(const void *a, const void *b)
@@ -899,6 +920,27 @@ char *device_ap_family_arg_completion(const char *text, int state)
 	return proxy_property_str_completion(&device_interface_type,
 						match_by_partial_name_and_ap,
 						"Name", text, state);
+}
+
+const struct proxy_interface *device_ad_hoc_get(const char *device_name)
+{
+	const struct device *device;
+	const struct proxy_interface *proxy =
+					get_device_proxy_by_name(device_name);
+
+	if (!proxy)
+		return NULL;
+
+	device = proxy_interface_get_data(proxy);
+
+	return device->ad_hoc;
+}
+
+char *device_ad_hoc_family_arg_completion(const char *text, int state)
+{
+	return proxy_property_str_completion(&device_interface_type,
+					match_by_partial_name_and_ad_hoc,
+					"Name", text, state);
 }
 
 static char *family_arg_completion(const char *text, int state)
