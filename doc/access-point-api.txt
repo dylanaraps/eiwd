@@ -24,3 +24,7 @@ Methods		void Start(string ssid, string psk)
 			Possible errors:	net.connman.iwd.Busy
 						net.connman.iwd.Failed
 						net.connman.iwd.InvalidArgs
+
+Properties	boolean Started [readonly]
+
+			Reflects whether an access point has been started.

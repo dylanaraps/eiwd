@@ -39,3 +39,8 @@ Properties	string[] ConnectedPeers [readonly]
 
 			List of peer MAC addresses that have successfully
 			connected to the Ad-Hoc network.
+
+		boolean Started [readonly]
+
+			Reflects whether an Ad-Hoc network has been started or
+			joined.
