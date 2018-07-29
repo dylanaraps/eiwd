@@ -26,6 +26,8 @@ struct proxy_interface;
 struct property_value_options;
 
 #define IWD_ADAPTER_INTERFACE          "net.connman.iwd.Adapter"
+#define IWD_ACCESS_POINT_INTERFACE     "net.connman.iwd.AccessPoint"
+#define IWD_AD_HOC_INTERFACE           "net.connman.iwd.AdHoc"
 #define IWD_DEVICE_INTERFACE           "net.connman.iwd.Device"
 #define IWD_KNOWN_NETWORKS_INTREFACE   "net.connman.iwd.KnownNetworks"
 #define IWD_NETWORK_INTERFACE          "net.connman.iwd.Network"
