@@ -116,6 +116,9 @@ static void adhoc_reset(struct adhoc_state *adhoc)
 	l_queue_destroy(adhoc->sta_states, adhoc_sta_free);
 
 	adhoc->started = false;
+
+	l_dbus_property_changed(dbus_get_bus(), device_get_path(adhoc->device),
+						IWD_ADHOC_INTERFACE, "Started");
 }
 
 static void adhoc_set_rsn_info(struct adhoc_state *adhoc,
@@ -349,6 +352,9 @@ static void adhoc_join_cb(struct netdev *netdev, int result, void *user_data)
 	dbus_pending_reply(&adhoc->pending, reply);
 
 	adhoc->started = true;
+
+	l_dbus_property_changed(dbus_get_bus(), device_get_path(adhoc->device),
+						IWD_ADHOC_INTERFACE, "Started");
 }
 
 static struct l_dbus_message *adhoc_dbus_start(struct l_dbus *dbus,
@@ -500,6 +506,19 @@ static bool adhoc_property_get_peers(struct l_dbus *dbus,
 	return true;
 }
 
+static bool adhoc_property_get_started(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct adhoc_state *adhoc = user_data;
+	bool started = adhoc->started;
+
+	l_dbus_message_builder_append_basic(builder, 'b', &started);
+
+	return true;
+}
+
 static void adhoc_setup_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Start", 0, adhoc_dbus_start, "",
@@ -509,6 +528,8 @@ static void adhoc_setup_interface(struct l_dbus_interface *interface)
 					adhoc_dbus_start_open, "", "s", "ssid");
 	l_dbus_interface_property(interface, "ConnectedPeers", 0, "as",
 					adhoc_property_get_peers, NULL);
+	l_dbus_interface_property(interface, "Started", 0, "b",
+					adhoc_property_get_started, NULL);
 }
 
 static void adhoc_destroy_interface(void *user_data)
