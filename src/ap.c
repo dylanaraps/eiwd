@@ -93,8 +93,11 @@ static void ap_sta_free(void *data)
 	if (sta->assoc_resp_cmd_id)
 		l_genl_family_cancel(nl80211, sta->assoc_resp_cmd_id);
 
-	eapol_sm_free(sta->sm);
-	handshake_state_free(sta->hs);
+	if (sta->sm)
+		eapol_sm_free(sta->sm);
+
+	if (sta->hs)
+		handshake_state_free(sta->hs);
 
 	l_free(sta);
 }
