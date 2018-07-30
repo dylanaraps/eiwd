@@ -292,8 +292,8 @@ static void network_info_put(struct network_info *network)
 	if (!networks)
 		return;
 
-	l_queue_remove(networks, network);
-	network_info_free(network);
+	if (l_queue_remove(networks, network))
+		network_info_free(network);
 }
 
 struct network *network_create(struct device *device, const char *ssid,
