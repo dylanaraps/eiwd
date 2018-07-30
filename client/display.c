@@ -461,6 +461,7 @@ static void readline_callback(char *prompt)
 
 	command_process_prompt(argv, argc);
 
+	l_strfreev(argv);
 done:
 	l_free(prompt);
 }
