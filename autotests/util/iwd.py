@@ -9,6 +9,7 @@ import os
 import threading
 import time
 import collections
+import datetime
 
 from abc import ABCMeta, abstractmethod
 from enum import Enum
@@ -26,7 +27,7 @@ IWD_WIPHY_INTERFACE =           'net.connman.iwd.Adapter'
 IWD_AGENT_INTERFACE =           'net.connman.iwd.Agent'
 IWD_AGENT_MANAGER_INTERFACE =   'net.connman.iwd.AgentManager'
 IWD_DEVICE_INTERFACE =          'net.connman.iwd.Device'
-IWD_KNOWN_NETWORKS_INTERFACE =  'net.connman.iwd.KnownNetworks'
+IWD_KNOWN_NETWORK_INTERFACE =   'net.connman.iwd.KnownNetwork'
 IWD_NETWORK_INTERFACE =         'net.connman.iwd.Network'
 IWD_WSC_INTERFACE =             'net.connman.iwd.WiFiSimpleConfiguration'
 IWD_SIGNAL_AGENT_INTERFACE =    'net.connman.iwd.SignalLevelAgent'
@@ -34,7 +35,6 @@ IWD_AP_INTERFACE =              'net.connman.iwd.AccessPoint'
 IWD_ADHOC_INTERFACE =           'net.connman.iwd.AdHoc'
 
 IWD_AGENT_MANAGER_PATH =        '/'
-IWD_KNOWN_NETWORKS_PATH =       '/'
 IWD_TOP_LEVEL_PATH =            '/'
 
 
@@ -519,54 +519,51 @@ class Network(IWDDBusAbstract):
                 + prefix + '\tConnected:\t' + str(self.connected)
 
 
-class KnownNetwork():
-    '''Class represents a known network object.'''
+class KnownNetwork(IWDDBusAbstract):
+    '''Class represents a known network object: net.connman.iwd.KnownNetwork'''
+    _iface_name = IWD_KNOWN_NETWORK_INTERFACE
+
+    def forget(self):
+        '''
+        Removes information saved by IWD about this network
+        causing it to be treated as if IWD had never connected
+        to it before.
+        '''
+        self._iface.Forget(dbus_interface=self._iface_name,
+                               reply_handler=self._success,
+                               error_handler=self._failure)
+        self._wait_for_async_op()
 
     @property
     def name(self):
         '''Contains the Name (SSID) of the network.'''
-        return self._name
+        return self._properties['Name']
 
     @property
     def type(self):
         '''Contains the type of the network.'''
-        return self._type
+        return NetworkType(self._properties['Type'])
 
     @property
     def last_connected_time(self):
         '''
         Contains the last time this network has been connected to.
-        The time is given as a string in ISO 8601 format. If the network
-        is known, but has never been successfully connected to,
-        this attribute is set to None.
+        If the network is known, but has never been successfully
+        connected to, this attribute is set to None.
 
-        @rtype: string
+        @rtype: datetime
         '''
-        return self._last_connected_time
+        if 'LastConnectedTime' not in self._properties:
+            return None
 
-    @property
-    def last_seen_time(self):
-        '''
-        Contains the last time this network has been seen in scan results.
-
-        @rtype: string
-        '''
-        return self._last_seen_time
-
-    def __init__(self, n_n_object):
-        self._name = n_n_object['Name']
-        self._type = NetworkType.from_string(n_n_object['Type'])
-        self._last_connected_time = n_n_object.get('LastConnectedTime')
-        self._last_seen_time = n_n_object.get('LastSeenTime')
+        val = self._properties['LastConnectedTime']
+        return datetime.datetime.strptime(val, "%Y-%m-%dT%H:%M:%SZ")
 
     def __str__(self, prefix = ''):
         return prefix + 'Known Network:\n' \
                 + prefix + '\tName:\t' + self.name + '\n' \
                 + prefix + '\tType:\t' + str(self.type) + '\n' \
-                + prefix + '\tLast connected:\t' + self.last_connected_time + \
-                                                                         '\n' \
-                + prefix + '\tLast seen:\t' + self.last_seen_time
-
+                + prefix + '\tLast connected:\t' + str(self.last_connected_time)
 
 class OrderedNetwork(object):
     '''Represents a network found in the scan'''
@@ -740,7 +737,6 @@ class IWD(AsyncOpAbstract):
 
     _object_manager_if = None
     _agent_manager_if = None
-    _known_network_manager_if = None
     _iwd_proc = None
     _devices = None
 
@@ -790,7 +786,7 @@ class IWD(AsyncOpAbstract):
 
         self._object_manager_if = None
         self._agent_manager_if = None
-        self._known_network_manager_if = None
+        self._known_networks = None
         self._devices = None
 
         self._iwd_proc.terminate()
@@ -815,15 +811,6 @@ class IWD(AsyncOpAbstract):
                                                     IWD_AGENT_MANAGER_PATH),
                                IWD_AGENT_MANAGER_INTERFACE)
         return self._agent_manager_if
-
-    @property
-    def _known_network_manager(self):
-        if self._known_network_manager_if is None:
-            _known_network_manager_if =\
-                dbus.Interface(self._bus.get_object(IWD_SERVICE,
-                                                    IWD_KNOWN_NETWORKS_PATH),
-                                IWD_KNOWN_NETWORKS_INTERFACE)
-        return _known_network_manager_if
 
     def wait_for_object_condition(self, obj, condition_str, max_wait = 15):
         self._wait_timed_out = False
@@ -891,25 +878,17 @@ class IWD(AsyncOpAbstract):
         return list(self._devices.values())
 
     def list_known_networks(self):
-        '''Returns a list of KnownNetwork objects.'''
+        '''Returns the list of KnownNetwork objects.'''
+        objects = self._object_manager.GetManagedObjects()
         known_network_list = []
 
-        for n_n_object in self._known_network_manager.ListKnownNetworks():
-            known_network = KnownNetwork(n_n_object)
-            known_network_list.append(known_network)
+        for path in objects:
+            for interface in objects[path]:
+                if interface == IWD_KNOWN_NETWORK_INTERFACE:
+                    known_network_list.append(
+                            KnownNetwork(path, objects[path][interface]))
 
         return known_network_list
-
-    def forget_known_network(self, known_network):
-        '''Removes the network from the 'known networks' list and
-           removes any associated meta-data.  If the network is
-           currently connected, then it is automatically disconnected'''
-        self._known_network_manager.ForgetNetwork(
-                                    known_network.name, str(known_network.type),
-                                    dbus_interface=IWD_KNOWN_NETWORKS_INTERFACE,
-                                    reply_handler=self._success,
-                                    error_handler=self._failure)
-        self._wait_for_async_op()
 
     def register_psk_agent(self, psk_agent):
         self._agent_manager.RegisterAgent(

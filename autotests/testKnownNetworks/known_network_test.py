@@ -40,7 +40,7 @@ class Test(unittest.TestCase):
         known_networks = wd.list_known_networks()
         self.assertEqual(len(known_networks), 3)
 
-        wd.forget_known_network(known_networks[0])
+        known_networks[0].forget()
 
         known_networks = wd.list_known_networks()
         self.assertEqual(len(known_networks), 2)
@@ -51,7 +51,7 @@ class Test(unittest.TestCase):
         self.assertEqual(len(known_networks), 3)
 
         for net in known_networks:
-            wd.forget_known_network(net)
+            net.forget()
 
         known_networks = wd.list_known_networks()
         self.assertEqual(len(known_networks), 0)
