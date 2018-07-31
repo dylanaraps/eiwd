@@ -34,24 +34,12 @@
 #include "display.h"
 #include "network.h"
 
-#define IWD_KNOWN_NETWORKS_PATH	"/"
-
 struct known_network {
+	char *identity;
 	char *name;
 	char *type;
 	char *last_connected;
 };
-
-static void known_network_destroy(void *data)
-{
-	struct known_network *network = data;
-
-	l_free(network->last_connected);
-	l_free(network->name);
-	l_free(network->type);
-
-	l_free(network);
-}
 
 static const char *format_iso8601(const char *time_str, const char *format)
 {
@@ -71,34 +59,6 @@ static const char *format_iso8601(const char *time_str, const char *format)
 	strftime(buf, sizeof(buf), format, localtime(&time));
 
 	return buf;
-}
-
-static void known_networks_display(struct l_queue *known_networks)
-{
-	const struct l_queue_entry *entry;
-
-	display_table_header("Known Networks", " %-*s%-*s%-*s",
-					32, "Name", 11, "Security",
-					19, "Last connected");
-
-	if (!l_queue_length(known_networks))
-		display(MARGIN "No known networks\n");
-
-	for (entry = l_queue_get_entries(known_networks); entry;
-							entry = entry->next) {
-		struct known_network *network = entry->data;
-		char *last_connected =
-			l_strdup(format_iso8601(network->last_connected,
-							"%b %e, %l:%M %p"));
-
-		display(" %-*s%-*s%-*s"
-			"\n", 32, network->name, 11, network->type,
-			19, last_connected ? : "-");
-
-		l_free(last_connected);
-	}
-
-	display_table_footer();
 }
 
 static void update_name(void *data, struct l_dbus_message_iter *variant)
@@ -156,163 +116,130 @@ static const struct proxy_interface_property known_network_properties[] = {
 	{ },
 };
 
-static void populate_known_network(struct known_network *network,
-				struct l_dbus_message_iter *network_iter)
+static void *known_network_create(void)
 {
-	const char *name;
-	size_t i;
-	struct l_dbus_message_iter variant;
-
-	while (l_dbus_message_iter_next_entry(network_iter, &name, &variant)) {
-		for (i = 0; known_network_properties[i].name; i++) {
-			if (strcmp(known_network_properties[i].name, name))
-				continue;
-
-			if (!known_network_properties[i].update)
-				break;
-
-			known_network_properties[i].update(network, &variant);
-
-			break;
-		}
-	}
+	return l_new(struct known_network, 1);
 }
 
-static void list_networks_callback(struct l_dbus_message *message, void *proxy)
+static void known_network_destroy(void *data)
 {
-	struct l_queue *known_networks = proxy_interface_get_data(proxy);
-	struct l_dbus_message_iter network_iter;
-	struct l_dbus_message_iter iter;
+	struct known_network *network = data;
 
-	if (dbus_message_has_error(message))
-		return;
+	l_free(network->last_connected);
+	l_free(network->name);
+	l_free(network->type);
+	l_free(network->identity);
 
-	if (!l_dbus_message_get_arguments(message, "aa{sv}", &iter)) {
-		l_error("Failed to parse 'list known networks' callback "
-								"message");
-
-		return;
-	}
-
-	l_queue_clear(known_networks, known_network_destroy);
-
-	while (l_dbus_message_iter_next_entry(&iter, &network_iter)) {
-		struct known_network *network = l_new(struct known_network, 1);
-
-		populate_known_network(network, &network_iter);
-
-		l_queue_push_tail(known_networks, network);
-	}
-
-	known_networks_display(known_networks);
+	l_free(network);
 }
 
-static void *known_networks_create(void)
+static void known_network_display_inline(const char *margin, const void *data)
 {
-	return l_queue_new();
+	const struct known_network *network = data;
+	char *last_connected =
+		l_strdup(format_iso8601(network->last_connected,
+						"%b %e, %l:%M %p"));
+
+	display("%s%-*s%-*s%-*s\n",
+		margin, 32, network->name, 11, network->type,
+		19, last_connected ? : "-");
+
+	l_free(last_connected);
 }
 
-static void known_networks_destroy(void *data)
+static const char *known_network_identity(void *data)
 {
-	struct l_queue *networks = data;
+	struct known_network *network = data;
 
-	l_queue_destroy(networks, known_network_destroy);
+	if (!network->identity)
+		network->identity =
+			l_strdup_printf("%s %s", network->name, network->type);
+
+	return network->identity;
 }
 
-static const struct proxy_interface_type_ops known_networks_ops = {
-	.create = known_networks_create,
-	.destroy = known_networks_destroy,
+static const struct proxy_interface_type_ops known_network_ops = {
+	.create = known_network_create,
+	.destroy = known_network_destroy,
+	.display = known_network_display_inline,
+	.identity = known_network_identity,
 };
 
-static struct proxy_interface_type known_networks_interface_type = {
-	.interface = IWD_KNOWN_NETWORKS_INTREFACE,
-	.ops = &known_networks_ops,
+static struct proxy_interface_type known_network_interface_type = {
+	.interface = IWD_KNOWN_NETWORK_INTREFACE,
+	.properties = known_network_properties,
+	.ops = &known_network_ops,
 };
+
+static bool known_network_match(const void *a, const void *b)
+{
+	const struct known_network *network = a;
+	const struct network_args *args = b;
+
+	if (strcmp(network->name, args->name))
+		return false;
+
+	if (args->type && strcmp(network->type, args->type))
+		return false;
+
+	return true;
+}
+
+static void check_errors_method_callback(struct l_dbus_message *message,
+								void *user_data)
+{
+	dbus_message_has_error(message);
+}
 
 static enum cmd_status cmd_list(const char *entity, char **args, int argc)
 {
-	struct proxy_interface *proxy =
-		proxy_interface_find(IWD_KNOWN_NETWORKS_INTREFACE,
-						IWD_KNOWN_NETWORKS_PATH);
+	display_table_header("Known Networks", MARGIN, "%-*s%-*s%-*s",
+					32, "Name", 11, "Security",
+					19, "Last connected");
 
-	if (!proxy)
-		return CMD_STATUS_FAILED;
+	proxy_interface_display_list(known_network_interface_type.interface);
 
-	proxy_interface_method_call(proxy, "ListKnownNetworks", "",
-						list_networks_callback);
+	display_table_footer();
 
 	return CMD_STATUS_OK;
 }
 
 static enum cmd_status cmd_forget(const char *entity, char **argv, int argc)
 {
-	const struct l_queue_entry *entry;
-	struct known_network *network = NULL;
-	struct known_network *net;
-	struct l_queue *known_networks;
+	struct network_args network_args;
 	struct l_queue *match;
-	struct proxy_interface *proxy =
-		proxy_interface_find(IWD_KNOWN_NETWORKS_INTREFACE,
-						IWD_KNOWN_NETWORKS_PATH);
-
-	if (!proxy)
-		return CMD_STATUS_FAILED;
+	const struct proxy_interface *known_network_proxy;
 
 	if (argc < 1)
 		return CMD_STATUS_INVALID_ARGS;
 
-	known_networks = proxy_interface_get_data(proxy);
-	match = NULL;
+	network_args.name = argv[0];
+	network_args.type = argc >= 2 ? argv[1] : NULL;
 
-	for (entry = l_queue_get_entries(known_networks); entry;
-							entry = entry->next) {
-		net = entry->data;
-
-		if (strcmp(net->name, argv[0]))
-			continue;
-
-		if (!match)
-			match = l_queue_new();
-
-		l_queue_push_tail(match, net);
-	}
+	match = proxy_interface_find_all(known_network_interface_type.interface,
+						known_network_match,
+						&network_args);
 
 	if (!match) {
-		display("Invalid network name '%s'\n", argv[0]);
-		return CMD_STATUS_INVALID_VALUE;
-	}
-
-	if (l_queue_length(match) > 1) {
-		if (argc < 2) {
-			display("Provided network name is ambiguous. "
-				"Please specify security type.\n");
-
-			l_queue_destroy(match, NULL);
-			return CMD_STATUS_INVALID_VALUE;
-		}
-
-		for (entry = l_queue_get_entries(match); entry;
-							entry = entry->next) {
-			net = entry->data;
-
-			if (!strcmp(net->type, argv[1])) {
-				network = net;
-				break;
-			}
-		}
-	} else {
-		network = l_queue_pop_head(match);
-	}
-
-	l_queue_destroy(match, NULL);
-
-	if (!network) {
 		display("No network with specified parameters was found\n");
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
-	proxy_interface_method_call(proxy, "ForgetNetwork", "ss", NULL,
-						network->name, network->type);
+	if (l_queue_length(match) > 1) {
+		if (!network_args.type) {
+			display("Provided network name is ambiguous. "
+				"Please specify security type.\n");
+		}
+
+		l_queue_destroy(match, NULL);
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	known_network_proxy = l_queue_pop_head(match);
+	l_queue_destroy(match, NULL);
+
+	proxy_interface_method_call(known_network_proxy, "Forget", "",
+					check_errors_method_callback);
 
 	return CMD_STATUS_OK;
 }
@@ -371,17 +298,17 @@ COMMAND_FAMILY(known_networks_command_family,
 		known_networks_command_family_init,
 		known_networks_command_family_exit)
 
-static int known_networks_interface_init(void)
+static int known_network_interface_init(void)
 {
-	proxy_interface_type_register(&known_networks_interface_type);
+	proxy_interface_type_register(&known_network_interface_type);
 
 	return 0;
 }
 
-static void known_networks_interface_exit(void)
+static void known_network_interface_exit(void)
 {
-	proxy_interface_type_unregister(&known_networks_interface_type);
+	proxy_interface_type_unregister(&known_network_interface_type);
 }
 
-INTERFACE_TYPE(known_networks_interface_type, known_networks_interface_init,
-						known_networks_interface_exit)
+INTERFACE_TYPE(known_network_interface_type, known_network_interface_init,
+						known_network_interface_exit)

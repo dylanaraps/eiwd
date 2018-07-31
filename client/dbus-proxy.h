@@ -29,7 +29,7 @@ struct property_value_options;
 #define IWD_ACCESS_POINT_INTERFACE     "net.connman.iwd.AccessPoint"
 #define IWD_AD_HOC_INTERFACE           "net.connman.iwd.AdHoc"
 #define IWD_DEVICE_INTERFACE           "net.connman.iwd.Device"
-#define IWD_KNOWN_NETWORKS_INTREFACE   "net.connman.iwd.KnownNetworks"
+#define IWD_KNOWN_NETWORK_INTREFACE    "net.connman.iwd.KnownNetwork"
 #define IWD_NETWORK_INTERFACE          "net.connman.iwd.Network"
 #define IWD_WSC_INTERFACE              "net.connman.iwd.WiFiSimpleConfiguration"
 
