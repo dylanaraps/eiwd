@@ -367,20 +367,38 @@ error:
 	}
 }
 
-static bool match_cmd(const char *family, const char *entity, const char *cmd,
+static bool match_cmd(const char *family, const char *param,
 				char **argv, int argc,
 				const struct command *command_list)
 {
 	size_t i;
 
 	for (i = 0; command_list[i].cmd; i++) {
+		const char *entity;
+		const char *cmd;
+		int offset;
+
+		if  (command_list[i].entity) {
+			if (argc < 1)
+				continue;
+
+			entity = param;
+			cmd = argv[0];
+			offset = 1;
+		} else {
+			entity = NULL;
+			cmd = param;
+			offset = 0;
+		}
+
 		if (strcmp(command_list[i].cmd, cmd))
 			continue;
 
 		if (!command_list[i].function)
 			return false;
 
-		execute_cmd(family, entity, &command_list[i], argv, argc);
+		execute_cmd(family, entity, &command_list[i],
+				argv + offset, argc - offset);
 
 		return true;
 	}
@@ -402,14 +420,8 @@ static bool match_cmd_family(char **argv, int argc)
 		if (strcmp(family->name, argv[0]))
 			continue;
 
-		if (argc >= 3)
-			return match_cmd(family->name, argv[1], argv[2],
-							argv + 3, argc - 3,
-							family->command_list);
-		else
-			return match_cmd(family->name, NULL, argv[1],
-							argv + 2, argc - 2,
-							family->command_list);
+		return match_cmd(family->name, argv[1], argv + 2, argc - 2,
+					family->command_list);
 	}
 
 	return false;
@@ -451,7 +463,7 @@ void command_process_prompt(char **argv, int argc)
 
 	display_refresh_reset();
 
-	if (match_cmd(NULL, NULL, argv[0], argv + 1, argc - 1, command_list))
+	if (match_cmd(NULL, argv[0], argv + 1, argc - 1, command_list))
 		return;
 
 	if (strcmp(argv[0], "help")) {
