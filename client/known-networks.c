@@ -39,7 +39,6 @@
 struct known_network {
 	char *name;
 	char *type;
-	char *last_seen;
 	char *last_connected;
 };
 
@@ -48,7 +47,6 @@ static void known_network_destroy(void *data)
 	struct known_network *network = data;
 
 	l_free(network->last_connected);
-	l_free(network->last_seen);
 	l_free(network->name);
 	l_free(network->type);
 
@@ -79,9 +77,9 @@ static void known_networks_display(struct l_queue *known_networks)
 {
 	const struct l_queue_entry *entry;
 
-	display_table_header("Known Networks", " %-*s%-*s%-*s%-*s",
+	display_table_header("Known Networks", " %-*s%-*s%-*s",
 					32, "Name", 11, "Security",
-					19, "Last connected", 17, "Last seen");
+					19, "Last connected");
 
 	if (!l_queue_length(known_networks))
 		display(MARGIN "No known networks\n");
@@ -92,16 +90,12 @@ static void known_networks_display(struct l_queue *known_networks)
 		char *last_connected =
 			l_strdup(format_iso8601(network->last_connected,
 							"%b %e, %l:%M %p"));
-		char *last_seen =
-			l_strdup(format_iso8601(network->last_seen,
-							"%b %e, %l:%M %p"));
 
-		display(" %-*s%-*s%-*s%-*s"
+		display(" %-*s%-*s%-*s"
 			"\n", 32, network->name, 11, network->type,
-			19, last_connected ? : "-", 17, last_seen ? : "-");
+			19, last_connected ? : "-");
 
 		l_free(last_connected);
-		l_free(last_seen);
 	}
 
 	display_table_footer();
@@ -149,25 +143,10 @@ static void update_last_connected(void *data, struct l_dbus_message_iter *varian
 	network->last_connected = l_strdup(value);
 }
 
-static void update_last_seen(void *data, struct l_dbus_message_iter *variant)
-{
-	struct known_network *network = data;
-	const char *value;
-
-	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
-		network->last_seen = NULL;
-
-		return;
-	}
-
-	network->last_seen = l_strdup(value);
-}
-
 static const struct proxy_interface_property known_network_properties[] = {
 	{ "Name",              "s", update_name           },
 	{ "Type",              "s", update_type           },
 	{ "LastConnectedTime", "s", update_last_connected },
-	{ "LastSeenTime",      "s", update_last_seen      },
 	{ },
 };
 
