@@ -179,10 +179,6 @@ void known_networks_connected(struct network_info *network)
 					"LastConnectedTime");
 }
 
-static void setup_known_networks_interface(struct l_dbus_interface *interface)
-{
-}
-
 static struct l_dbus_message *known_network_forget(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -275,23 +271,6 @@ bool known_networks_init(void)
 	DIR *dir;
 	struct dirent *dirent;
 
-	if (!l_dbus_register_interface(dbus, IWD_KNOWN_NETWORKS_INTERFACE,
-						setup_known_networks_interface,
-						NULL, false)) {
-		l_info("Unable to register %s interface",
-				IWD_KNOWN_NETWORKS_INTERFACE);
-		return false;
-	}
-
-	if (!l_dbus_object_add_interface(dbus, IWD_KNOWN_NETWORKS_PATH,
-						IWD_KNOWN_NETWORKS_INTERFACE,
-						NULL)) {
-		l_info("Unable to register the Known Networks object on '%s'",
-				IWD_KNOWN_NETWORKS_PATH);
-		l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORKS_INTERFACE);
-		return false;
-	}
-
 	if (!l_dbus_register_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE,
 						setup_known_network_interface,
 						NULL, false)) {
@@ -303,8 +282,6 @@ bool known_networks_init(void)
 	dir = opendir(STORAGEDIR);
 	if (!dir) {
 		l_info("Unable to open %s: %s", STORAGEDIR, strerror(errno));
-		l_dbus_unregister_object(dbus, IWD_KNOWN_NETWORKS_PATH);
-		l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORKS_INTERFACE);
 		l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE);
 		return false;
 	}
@@ -338,7 +315,5 @@ void known_networks_exit(void)
 	l_queue_destroy(known_networks, network_info_free);
 	known_networks = NULL;
 
-	l_dbus_unregister_object(dbus, IWD_KNOWN_NETWORKS_PATH);
-	l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORKS_INTERFACE);
 	l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE);
 }
