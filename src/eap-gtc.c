@@ -77,13 +77,32 @@ static int eap_gtc_check_settings(struct l_settings *settings,
 					struct l_queue **out_missing)
 {
 	char setting[64];
+	char setting2[64];
+	L_AUTO_FREE_VAR(char *, identity);
+	const struct eap_secret_info *secret;
 
-	snprintf(setting, sizeof(setting), "%sGTC-Secret", prefix);
+	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
+	identity = l_settings_get_string(settings, "Security", setting);
 
-	if (!l_settings_get_value(settings, "Security", setting)) {
-		l_error("Property %s is missing", setting);
-		return -ENOENT;
+	snprintf(setting2, sizeof(setting2), "%sGTC-Secret", prefix);
+
+	/* no identity setting found */
+	if (!identity) {
+		secret = l_queue_find(secrets, eap_secret_info_match, setting);
+
+		/* no secret found either */
+		if (!secret)
+			eap_append_secret(out_missing, EAP_SECRET_REMOTE_USER_PASSWORD,
+					setting, setting2, NULL);
+
+		return 0;
 	}
+
+	secret = l_queue_find(secrets, eap_secret_info_match, setting2);
+	/* identity found, but secret missing */
+	if (!secret)
+		eap_append_secret(out_missing, EAP_SECRET_REMOTE_PASSWORD,
+					setting2, NULL, identity);
 
 	return 0;
 }
