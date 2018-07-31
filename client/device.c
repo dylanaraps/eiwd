@@ -770,8 +770,7 @@ static enum cmd_status cmd_connect(const char *device_name,
 		return CMD_STATUS_INVALID_ARGS;
 
 	network_args.name = argv[0];
-	if (argc >= 2)
-		network_args.type = argv[1];
+	network_args.type = argc >= 2 ? argv[1] : NULL;
 
 	match = network_match_by_device_and_args(device_proxy, &network_args);
 	if (!match) {
