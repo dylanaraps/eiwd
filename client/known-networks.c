@@ -106,6 +106,8 @@ static void update_name(void *data, struct l_dbus_message_iter *variant)
 	struct known_network *network = data;
 	const char *value;
 
+	l_free(network->name);
+
 	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
 		network->name = NULL;
 
@@ -120,6 +122,8 @@ static void update_type(void *data, struct l_dbus_message_iter *variant)
 	struct known_network *network = data;
 	const char *value;
 
+	l_free(network->type);
+
 	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
 		network->type = NULL;
 
@@ -133,6 +137,8 @@ static void update_last_connected(void *data, struct l_dbus_message_iter *varian
 {
 	struct known_network *network = data;
 	const char *value;
+
+	l_free(network->last_connected);
 
 	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
 		network->last_connected = NULL;
