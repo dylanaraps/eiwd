@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <errno.h>
+#include <stdio.h>
 
 #include <ell/ell.h>
 
@@ -62,6 +63,39 @@ static int timespec_compare(const void *a, const void *b, void *user_data)
 	return 0;
 }
 
+static const char *iwd_known_network_get_path(
+					const struct network_info *network)
+{
+	static char path[256];
+	unsigned int pos = 0, i;
+
+	path[pos++] = '/';
+
+	for (i = 0; network->ssid[i] && pos < sizeof(path); i++)
+		pos += snprintf(path + pos, sizeof(path) - pos, "%02x",
+				network->ssid[i]);
+
+	snprintf(path + pos, sizeof(path) - pos, "_%s",
+			security_to_str(network->type));
+
+	return path;
+}
+
+static void known_network_register_dbus(struct network_info *network)
+{
+	const char *path = iwd_known_network_get_path(network);
+
+	if (!l_dbus_object_add_interface(dbus_get_bus(), path,
+					IWD_KNOWN_NETWORK_INTERFACE, network))
+		l_info("Unable to register %s interface",
+						IWD_KNOWN_NETWORK_INTERFACE);
+
+	if (!l_dbus_object_add_interface(dbus_get_bus(), path,
+					L_DBUS_INTERFACE_PROPERTIES, network))
+		l_info("Unable to register %s interface",
+						L_DBUS_INTERFACE_PROPERTIES);
+}
+
 static bool known_networks_add(const char *ssid, enum security security)
 {
 	struct network_info *network;
@@ -92,6 +126,8 @@ static bool known_networks_add(const char *ssid, enum security security)
 
 	l_queue_insert(known_networks, network, timespec_compare, NULL);
 
+	known_network_register_dbus(network);
+
 	return true;
 }
 
@@ -108,6 +144,9 @@ static bool known_networks_forget(const char *ssid, enum security security)
 
 	if (network->is_hidden)
 		num_known_hidden_networks--;
+
+	l_dbus_unregister_object(dbus_get_bus(),
+					iwd_known_network_get_path(network));
 
 	/*
 	 * network_info_forget_known will either re-add the network_info to
@@ -156,58 +195,14 @@ void known_networks_connected(struct network_info *network)
 
 	if (is_new && network->is_hidden)
 		num_known_hidden_networks++;
-}
 
-static bool known_network_append_properties(
-					const struct network_info *network,
-					void *user_data)
-{
-	struct l_dbus_message_builder *builder = user_data;
-	char datestr[64];
-	struct tm tm;
-
-	l_dbus_message_builder_enter_array(builder, "{sv}");
-
-	dbus_dict_append_string(builder, "Name", network->ssid);
-	dbus_dict_append_string(builder, "Type",
-				security_to_str(network->type));
-
-	if (network->connected_time.tv_sec != 0) {
-		gmtime_r(&network->connected_time.tv_sec, &tm);
-
-		if (strftime(datestr, sizeof(datestr), "%FT%TZ", &tm))
-			dbus_dict_append_string(builder, "LastConnectedTime",
-						datestr);
-	}
-
-	l_dbus_message_builder_leave_array(builder);
-
-	return true;
-}
-
-static struct l_dbus_message *list_known_networks(struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data)
-{
-	struct l_dbus_message *reply;
-	struct l_dbus_message_builder *builder;
-
-	if (!l_dbus_message_get_arguments(message, ""))
-		return dbus_error_invalid_args(message);
-
-	reply = l_dbus_message_new_method_return(message);
-	builder = l_dbus_message_builder_new(reply);
-
-	l_dbus_message_builder_enter_array(builder, "a{sv}");
-
-	known_networks_foreach(known_network_append_properties, builder);
-
-	l_dbus_message_builder_leave_array(builder);
-
-	l_dbus_message_builder_finalize(builder);
-	l_dbus_message_builder_destroy(builder);
-
-	return reply;
+	if (is_new)
+		known_network_register_dbus(network);
+	else
+		l_dbus_property_changed(dbus_get_bus(),
+					iwd_known_network_get_path(network),
+					IWD_KNOWN_NETWORK_INTERFACE,
+					"LastConnectedTime");
 }
 
 static struct l_dbus_message *forget_network(struct l_dbus *dbus,
@@ -240,10 +235,66 @@ static struct l_dbus_message *forget_network(struct l_dbus *dbus,
 
 static void setup_known_networks_interface(struct l_dbus_interface *interface)
 {
-	l_dbus_interface_method(interface, "ListKnownNetworks", 0,
-				list_known_networks, "aa{sv}", "", "networks");
 	l_dbus_interface_method(interface, "ForgetNetwork", 0,
 				forget_network, "", "ss", "name", "type");
+}
+
+static bool known_network_property_get_name(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct network_info *network = user_data;
+
+	l_dbus_message_builder_append_basic(builder, 's', network->ssid);
+
+	return true;
+}
+
+static bool known_network_property_get_type(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct network_info *network = user_data;
+
+	l_dbus_message_builder_append_basic(builder, 's',
+						security_to_str(network->type));
+
+	return true;
+}
+
+static bool known_network_property_get_last_connected(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct network_info *network = user_data;
+	char datestr[64];
+	struct tm tm;
+
+	if (network->connected_time.tv_sec == 0)
+		return false;
+
+	gmtime_r(&network->connected_time.tv_sec, &tm);
+
+	if (!strftime(datestr, sizeof(datestr), "%FT%TZ", &tm))
+		return false;
+
+	l_dbus_message_builder_append_basic(builder, 's', datestr);
+
+	return true;
+}
+
+static void setup_known_network_interface(struct l_dbus_interface *interface)
+{
+	l_dbus_interface_property(interface, "Name", 0, "s",
+					known_network_property_get_name, NULL);
+	l_dbus_interface_property(interface, "Type", 0, "s",
+					known_network_property_get_type, NULL);
+	l_dbus_interface_property(interface, "LastConnectedTime", 0, "s",
+				known_network_property_get_last_connected,
+				NULL);
 }
 
 bool known_networks_init(void)
@@ -269,11 +320,20 @@ bool known_networks_init(void)
 		return false;
 	}
 
+	if (!l_dbus_register_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE,
+						setup_known_network_interface,
+						NULL, false)) {
+		l_info("Unable to register %s interface",
+				IWD_KNOWN_NETWORK_INTERFACE);
+		return false;
+	}
+
 	dir = opendir(STORAGEDIR);
 	if (!dir) {
 		l_info("Unable to open %s: %s", STORAGEDIR, strerror(errno));
 		l_dbus_unregister_object(dbus, IWD_KNOWN_NETWORKS_PATH);
 		l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORKS_INTERFACE);
+		l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE);
 		return false;
 	}
 
@@ -308,4 +368,5 @@ void known_networks_exit(void)
 
 	l_dbus_unregister_object(dbus, IWD_KNOWN_NETWORKS_PATH);
 	l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORKS_INTERFACE);
+	l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE);
 }
