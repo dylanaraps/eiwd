@@ -131,32 +131,6 @@ static bool known_networks_add(const char *ssid, enum security security)
 	return true;
 }
 
-static bool known_networks_forget(const char *ssid, enum security security)
-{
-	struct network_info *network, search;
-
-	search.type = security;
-	strcpy(search.ssid, ssid);
-
-	network = l_queue_remove_if(known_networks, network_info_match, &search);
-	if (!network)
-		return false;
-
-	if (network->is_hidden)
-		num_known_hidden_networks--;
-
-	l_dbus_unregister_object(dbus_get_bus(),
-					iwd_known_network_get_path(network));
-
-	/*
-	 * network_info_forget_known will either re-add the network_info to
-	 * its seen networks lists or call network_info_free.
-	 */
-	network_info_forget_known(network);
-
-	return true;
-}
-
 bool known_networks_foreach(known_networks_foreach_func_t function,
 				void *user_data)
 {
@@ -205,38 +179,33 @@ void known_networks_connected(struct network_info *network)
 					"LastConnectedTime");
 }
 
-static struct l_dbus_message *forget_network(struct l_dbus *dbus,
+static void setup_known_networks_interface(struct l_dbus_interface *interface)
+{
+}
+
+static struct l_dbus_message *known_network_forget(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
 {
+	struct network_info *network = user_data;
 	struct l_dbus_message *reply;
-	const char *ssid, *strtype;
-	enum security security;
 
-	if (!l_dbus_message_get_arguments(message, "ss", &ssid, &strtype))
-		return dbus_error_invalid_args(message);
+	if (network->is_hidden)
+		num_known_hidden_networks--;
 
-	if (strlen(ssid) > 32)
-		return dbus_error_invalid_args(message);
+	l_queue_remove(known_networks, network);
+	l_dbus_unregister_object(dbus, iwd_known_network_get_path(network));
 
-	if (!security_from_str(strtype, &security))
-		return dbus_error_invalid_args(message);
-
-	if (!known_networks_forget(ssid, security))
-		return dbus_error_failed(message);
-
-	storage_network_remove(strtype, ssid);
+	/*
+	 * network_info_forget_known will either re-add the network_info to
+	 * its seen networks lists or call network_info_free.
+	 */
+	network_info_forget_known(network);
 
 	reply = l_dbus_message_new_method_return(message);
 	l_dbus_message_set_arguments(reply, "");
 
 	return reply;
-}
-
-static void setup_known_networks_interface(struct l_dbus_interface *interface)
-{
-	l_dbus_interface_method(interface, "ForgetNetwork", 0,
-				forget_network, "", "ss", "name", "type");
 }
 
 static bool known_network_property_get_name(struct l_dbus *dbus,
@@ -288,6 +257,9 @@ static bool known_network_property_get_last_connected(struct l_dbus *dbus,
 
 static void setup_known_network_interface(struct l_dbus_interface *interface)
 {
+	l_dbus_interface_method(interface, "Forget", 0,
+				known_network_forget, "", "");
+
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					known_network_property_get_name, NULL);
 	l_dbus_interface_property(interface, "Type", 0, "s",
