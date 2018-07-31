@@ -1,0 +1,30 @@
+KnownNetwork hierarchy
+======================
+
+Service		net.connman.iwd
+Interface	net.connman.iwd.KnownNetwork [Experimental]
+Object path	/Xxx
+
+Methods		void Forget()
+
+			Removes the network from the 'known networks' list and
+			removes any associated configuration data.  If the
+			network is currently connected, then it is immediately
+			disconnected.
+
+Properties	string Name [readonly]
+
+			Contains the Name (SSID) of the network
+
+		string Type [readonly]
+
+			Contains the type of the network.  Possible
+			types are "open", "psk", "8021x" (EAP)
+
+		string LastConnectedTime [readonly, optional]
+
+			Contains the last time this network has been
+			successfully connected to.  The time is given as a
+			ISO 8601-formatted string.  If the network is known
+			but has never been successfully connected to,
+			this property is not visible.
