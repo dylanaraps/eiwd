@@ -308,9 +308,6 @@ static bool process_bss(struct device *device, struct scan_bss *bss,
 			network_get_ssid(network), security_to_str(security));
 	}
 
-	if (network_bss_list_isempty(network))
-		network_seen(network, timestamp);
-
 	network_bss_add(network, bss);
 
 	if (device->state != DEVICE_STATE_AUTOCONNECT)
@@ -1178,8 +1175,6 @@ next:
 		goto fail_free_bss;
 
 	clock_gettime(CLOCK_REALTIME, &now);
-
-	network_seen(network, &now);
 
 	/* See if we have anywhere to roam to */
 	if (!best_bss || bss_match(best_bss, device->connected_bss))

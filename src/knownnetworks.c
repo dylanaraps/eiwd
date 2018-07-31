@@ -180,14 +180,6 @@ static bool known_network_append_properties(
 						datestr);
 	}
 
-	if (network->seen_time.tv_sec != 0) {
-		gmtime_r(&network->seen_time.tv_sec, &tm);
-
-		if (strftime(datestr, sizeof(datestr), "%FT%TZ", &tm))
-			dbus_dict_append_string(builder, "LastSeenTime",
-						datestr);
-	}
-
 	l_dbus_message_builder_leave_array(builder);
 
 	return true;

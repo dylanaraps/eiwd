@@ -109,19 +109,6 @@ static bool network_info_ptr_match(const void *a, const void *b)
 	return a == b;
 }
 
-bool network_seen(struct network *network, struct timespec *when)
-{
-	/*
-	 * Update the last seen time.  Note this is not preserved across
-	 * the network going out of range and back, or program restarts.
-	 * It may be desirable for it to be preserved in some way but
-	 * without too frequent filesystem writes.
-	 */
-	memcpy(&network->info->seen_time, when, sizeof(struct timespec));
-
-	return true;
-}
-
 void network_connected(struct network *network)
 {
 	int err;
