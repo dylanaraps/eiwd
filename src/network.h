@@ -70,7 +70,6 @@ struct network_info {
 	char ssid[33];
 	enum security type;
 	struct timespec connected_time;	/* Time last connected */
-	struct timespec seen_time;	/* Time last seen */
 	int seen_count;			/* Ref count for network.info */
 	bool is_hidden:1;
 };
