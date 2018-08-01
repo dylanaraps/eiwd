@@ -446,10 +446,8 @@ static void readline_callback(char *prompt)
 	if (!strlen(prompt))
 		goto done;
 
-	previous_prompt = current_history();
-	if (!previous_prompt ||
-			(previous_prompt &&
-				strcmp(previous_prompt->line, prompt))) {
+	previous_prompt = history_get(history_base + history_length - 1);
+	if (!previous_prompt || strcmp(previous_prompt->line, prompt)) {
 		add_history(prompt);
 	}
 
