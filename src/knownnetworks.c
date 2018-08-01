@@ -107,14 +107,14 @@ static bool known_networks_add(const char *ssid, enum security security)
 	strcpy(network->ssid, ssid);
 	network->type = security;
 
-	err = storage_network_get_mtime(security_to_str(security), ssid,
+	err = storage_network_get_mtime(security, ssid,
 					&network->connected_time);
 	if (err < 0) {
 		l_free(network);
 		return false;
 	}
 
-	settings = storage_network_open(security_to_str(security), ssid);
+	settings = storage_network_open(security, ssid);
 
 	if (l_settings_get_bool(settings, "Settings", "Hidden", &is_hidden))
 		network->is_hidden = is_hidden;

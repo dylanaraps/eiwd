@@ -170,7 +170,7 @@ static void wsc_store_credentials(struct wsc *wsc)
 			l_free(hex);
 		}
 
-		storage_network_sync(security_to_str(security), ssid, settings);
+		storage_network_sync(security, ssid, settings);
 		l_settings_free(settings);
 
 		/*

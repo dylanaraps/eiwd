@@ -34,10 +34,10 @@ ssize_t write_file(const void *buffer, size_t len, const char *path_fmt, ...)
 const char *storage_network_ssid_from_path(const char *path,
 							enum security *type);
 
-struct l_settings *storage_network_open(const char *type, const char *ssid);
-int storage_network_touch(const char *type, const char *ssid);
-int storage_network_get_mtime(const char *type, const char *ssid,
+struct l_settings *storage_network_open(enum security type, const char *ssid);
+int storage_network_touch(enum security type, const char *ssid);
+int storage_network_get_mtime(enum security type, const char *ssid,
 				struct timespec *mtim);
-void storage_network_sync(const char *type, const char *ssid,
+void storage_network_sync(enum security type, const char *ssid,
 				struct l_settings *settings);
-int storage_network_remove(const char *type, const char *ssid);
+int storage_network_remove(enum security type, const char *ssid);

@@ -64,16 +64,11 @@ static struct l_queue *networks;
 
 static bool network_settings_load(struct network *network)
 {
-	const char *strtype;
-
 	if (network->settings)
 		return true;
 
-	strtype = security_to_str(network_get_security(network));
-	if (!strtype)
-		return false;
-
-	network->settings = storage_network_open(strtype, network->info->ssid);
+	network->settings = storage_network_open(network_get_security(network),
+							network->info->ssid);
 
 	return network->settings != NULL;
 }
@@ -112,11 +107,9 @@ static bool network_info_ptr_match(const void *a, const void *b)
 void network_connected(struct network *network)
 {
 	int err;
-	const char *strtype;
 
-	strtype = security_to_str(network_get_security(network));
-
-	err = storage_network_touch(strtype, network->info->ssid);
+	err = storage_network_touch(network_get_security(network),
+					network->info->ssid);
 	switch (err) {
 	case 0:
 		break;
@@ -130,7 +123,8 @@ void network_connected(struct network *network)
 		 */
 		network->settings = l_settings_new();
 
-		storage_network_sync(strtype, network->info->ssid,
+		storage_network_sync(network_get_security(network),
+					network->info->ssid,
 					network->settings);
 		break;
 	default:
@@ -138,7 +132,8 @@ void network_connected(struct network *network)
 		break;
 	}
 
-	err = storage_network_get_mtime(strtype, network->info->ssid,
+	err = storage_network_get_mtime(network_get_security(network),
+					network->info->ssid,
 					&network->info->connected_time);
 	if (err < 0)
 		l_error("Error %i reading network timestamp", err);
@@ -434,7 +429,8 @@ void network_sync_psk(struct network *network)
 	l_settings_set_value(network->settings, "Security",
 						"PreSharedKey", hex);
 	l_free(hex);
-	storage_network_sync("psk", network->info->ssid, network->settings);
+	storage_network_sync(SECURITY_PSK, network->info->ssid,
+				network->settings);
 }
 
 int network_autoconnect(struct network *network, struct scan_bss *bss)
