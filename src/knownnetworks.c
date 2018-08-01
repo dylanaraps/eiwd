@@ -191,6 +191,7 @@ static struct l_dbus_message *known_network_forget(struct l_dbus *dbus,
 
 	l_queue_remove(known_networks, network);
 	l_dbus_unregister_object(dbus, iwd_known_network_get_path(network));
+	storage_network_remove(network->type, network->ssid);
 
 	/*
 	 * network_info_forget_known will either re-add the network_info to
