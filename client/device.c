@@ -41,7 +41,6 @@ struct device {
 	char *name;
 	char *state;
 	char *mode;
-	struct l_queue *ordered_networks;
 	const struct proxy_interface *adapter;
 	const struct proxy_interface *connected_network;
 	const struct proxy_interface *wsc;
@@ -389,7 +388,6 @@ static void ordered_networks_display(struct l_queue *ordered_networks)
 static void ordered_networks_callback(struct l_dbus_message *message,
 								void *proxy)
 {
-	struct device *device = proxy_interface_get_data(proxy);
 	struct l_queue *networks = NULL;
 	struct ordered_network network;
 	struct l_dbus_message_iter iter;
@@ -402,8 +400,6 @@ static void ordered_networks_callback(struct l_dbus_message *message,
 
 		return;
 	}
-
-	l_queue_destroy(device->ordered_networks, ordered_networks_destroy);
 
 	while (l_dbus_message_iter_next_entry(&iter,
 						&network.network_path,
@@ -423,9 +419,9 @@ static void ordered_networks_callback(struct l_dbus_message *message,
 		l_queue_push_tail(networks, net);
 	}
 
-	device->ordered_networks = networks;
-
 	ordered_networks_display(networks);
+
+	l_queue_destroy(networks, ordered_networks_destroy);
 }
 
 static void *device_create(void)
@@ -441,8 +437,6 @@ static void device_destroy(void *data)
 	l_free(device->name);
 	l_free(device->state);
 	l_free(device->mode);
-
-	l_queue_destroy(device->ordered_networks, ordered_networks_destroy);
 
 	device->adapter = NULL;
 	device->connected_network = NULL;
