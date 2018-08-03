@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2017  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2017-2018  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -32,6 +32,12 @@
 #include "display.h"
 
 static struct l_queue *command_families;
+static int exit_status;
+static bool interactive_mode;
+static struct command_noninteractive {
+	char **argv;
+	int argc;
+} command_noninteractive;
 
 static enum cmd_status cmd_version(const char *entity,
 						char **argv, int argc)
@@ -337,6 +343,15 @@ static void execute_cmd(const char *family, const char *entity,
 	if (status != CMD_STATUS_TRIGGERED && status != CMD_STATUS_DONE)
 		goto error;
 
+	if (status == CMD_STATUS_DONE && !interactive_mode) {
+		l_main_quit();
+
+		return;
+	}
+
+	if (!interactive_mode)
+		return;
+
 	if (cmd->refreshable)
 		display_refresh_timeout_set();
 
@@ -359,12 +374,19 @@ error:
 		break;
 
 	case CMD_STATUS_FAILED:
-		l_main_quit();
-		break;
+		goto failure;
 
 	default:
 		l_error("Unknown command status.");
 	}
+
+	if (interactive_mode)
+		return;
+
+failure:
+	exit_status = EXIT_FAILURE;
+
+	l_main_quit();
 }
 
 static bool match_cmd(const char *family, const char *param,
@@ -453,6 +475,29 @@ static void list_cmd_families(void)
 	}
 }
 
+static bool command_match_misc_commands(char **argv, int argc)
+{
+	if (match_cmd(NULL, argv[0], argv + 1, argc - 1, misc_commands))
+		return true;
+
+	if (strcmp(argv[0], "help"))
+		return false;
+
+	display_table_header("Available commands", MARGIN "%-*s%-*s",
+					50, "Commands", 28, "Description");
+
+	list_cmd_families();
+
+	if (!interactive_mode)
+		return true;
+
+	display("\nMiscellaneous:\n");
+
+	list_commands(NULL, misc_commands);
+
+	return true;
+}
+
 void command_process_prompt(char **argv, int argc)
 {
 	if (argc == 0)
@@ -461,24 +506,43 @@ void command_process_prompt(char **argv, int argc)
 	if (match_cmd_family(argv, argc))
 		return;
 
-	display_refresh_reset();
-
-	if (match_cmd(NULL, argv[0], argv + 1, argc - 1, misc_commands))
-		return;
-
-	if (strcmp(argv[0], "help")) {
-		display("Invalid command\n");
+	if (!interactive_mode) {
+		display_error("Invalid command\n");
+		exit_status = EXIT_FAILURE;
+		l_main_quit();
 		return;
 	}
 
-	display_table_header("Available commands", MARGIN "%-*s%-*s",
-					50, "Commands", 28, "Description");
+	display_refresh_reset();
 
-	list_cmd_families();
+	if (command_match_misc_commands(argv, argc))
+		return;
 
-	display("\nMiscellaneous:\n");
+	display_error("Invalid command\n");
+}
 
-	list_commands(NULL, misc_commands);
+void command_noninteractive_trigger(void)
+{
+	if (!command_noninteractive.argc)
+		return;
+
+	command_process_prompt(command_noninteractive.argv,
+						command_noninteractive.argc);
+}
+
+bool command_is_interactive_mode(void)
+{
+	return interactive_mode;
+}
+
+void command_set_exit_status(int status)
+{
+	exit_status = status;
+}
+
+int command_get_exit_status(void)
+{
+	return exit_status;
 }
 
 void command_family_register(const struct command_family *family)
@@ -494,7 +558,7 @@ void command_family_unregister(const struct command_family *family)
 extern struct command_family_desc __start___command[];
 extern struct command_family_desc __stop___command[];
 
-void command_init(void)
+bool command_init(char **argv, int argc)
 {
 	struct command_family_desc *desc;
 
@@ -506,6 +570,16 @@ void command_init(void)
 
 		desc->init();
 	}
+
+	if (argc < 2) {
+		interactive_mode = true;
+		return true;
+	}
+
+	command_noninteractive.argv = argv + 1;
+	command_noninteractive.argc = argc - 1;
+
+	return false;
 }
 
 void command_exit(void)

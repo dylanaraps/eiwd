@@ -58,6 +58,11 @@ char *command_entity_arg_completion(const char *text, int state,
 
 void command_process_prompt(char **argv, int argc);
 
+void command_noninteractive_trigger(void);
+bool command_is_interactive_mode(void);
+int command_get_exit_status(void);
+void command_set_exit_status(int status);
+
 void command_family_register(const struct command_family *family);
 void command_family_unregister(const struct command_family *family);
 
@@ -73,5 +78,5 @@ struct command_family_desc {
 			#name, init, exit				\
 		};							\
 
-void command_init(void);
+bool command_init(char **argv, int argc);
 void command_exit(void);
