@@ -306,6 +306,7 @@ bool proxy_property_set(const struct proxy_interface *proxy, const char *name,
 	l_dbus_message_builder_enter_variant(builder, property->type);
 
 	if (!property->append(builder, value_str)) {
+		l_dbus_message_builder_destroy(builder);
 		l_dbus_message_unref(msg);
 		return false;
 	}
