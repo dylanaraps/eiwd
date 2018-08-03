@@ -51,7 +51,7 @@ static enum cmd_status cmd_quit(const char *entity,
 	return CMD_STATUS_DONE;
 }
 
-static const struct command command_list[] = {
+static const struct command misc_commands[] = {
 	{ NULL, "version", NULL, cmd_version, "Display version" },
 	{ NULL, "quit",    NULL, cmd_quit,    "Quit program" },
 	{ NULL, "exit",    NULL, cmd_quit },
@@ -83,7 +83,7 @@ static char *cmd_generator(const char *text, int state)
 		return l_strdup(family->name);
 	}
 
-	while ((cmd = command_list[index].cmd)) {
+	while ((cmd = misc_commands[index].cmd)) {
 		index++;
 
 		if (strncmp(cmd, text, len))
@@ -463,7 +463,7 @@ void command_process_prompt(char **argv, int argc)
 
 	display_refresh_reset();
 
-	if (match_cmd(NULL, argv[0], argv + 1, argc - 1, command_list))
+	if (match_cmd(NULL, argv[0], argv + 1, argc - 1, misc_commands))
 		return;
 
 	if (strcmp(argv[0], "help")) {
@@ -478,7 +478,7 @@ void command_process_prompt(char **argv, int argc)
 
 	display("\nMiscellaneous:\n");
 
-	list_commands(NULL, command_list);
+	list_commands(NULL, misc_commands);
 }
 
 void command_family_register(const struct command_family *family)
