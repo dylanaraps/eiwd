@@ -38,8 +38,8 @@
 
 static struct l_signal *resize_signal;
 static struct l_io *io;
-static char dashed_line[LINE_LEN];
-static char empty_line[LINE_LEN];
+static char dashed_line[LINE_LEN] = { [0 ... LINE_LEN - 2] = '-' };
+static char empty_line[LINE_LEN] = { [0 ... LINE_LEN - 2] = ' ' };
 static struct l_timeout *refresh_timeout;
 static struct saved_input *agent_saved_input;
 
@@ -591,9 +591,6 @@ static void signal_handler(struct l_signal *signal, uint32_t signo,
 void display_init(void)
 {
 	sigset_t mask;
-
-	memset(&dashed_line, '-', sizeof(dashed_line) - 1);
-	memset(&empty_line, ' ', sizeof(empty_line) - 1);
 
 	display_refresh.redo_entries = l_queue_new();
 
