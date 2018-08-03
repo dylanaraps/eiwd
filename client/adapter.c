@@ -77,6 +77,13 @@ static void update_vendor(void *data, struct l_dbus_message_iter *variant)
 	adapter->vendor = l_strdup(value);
 }
 
+static const char *get_vendor(const void *data)
+{
+	const struct adapter *adapter = data;
+
+	return adapter->vendor;
+}
+
 static void update_model(void *data, struct l_dbus_message_iter *variant)
 {
 	struct adapter *adapter = data;
@@ -91,6 +98,13 @@ static void update_model(void *data, struct l_dbus_message_iter *variant)
 	}
 
 	adapter->model = l_strdup(value);
+}
+
+static const char *get_model(const void *data)
+{
+	const struct adapter *adapter = data;
+
+	return adapter->model;
 }
 
 static const char *get_powered_tostr(const void *data)
@@ -119,8 +133,8 @@ static const struct proxy_interface_property adapter_properties[] = {
 	{ "Powered",  "b", update_powered,  get_powered_tostr, true,
 		properties_builder_append_on_off_variant,
 		properties_on_off_opts },
-	{ "Vendor",   "s", update_vendor },
-	{ "Model",    "s", update_model },
+	{ "Vendor",   "s", update_vendor,   get_vendor },
+	{ "Model",    "s", update_model,    get_model },
 	{ }
 };
 
@@ -129,7 +143,7 @@ static void display_adapter(const struct proxy_interface *proxy)
 	const struct adapter *adapter = proxy_interface_get_data(proxy);
 	char *caption = l_strdup_printf("%s: %s", "Adapter", adapter->name);
 
-	proxy_properties_display(proxy, caption, MARGIN, 17, 47);
+	proxy_properties_display(proxy, caption, MARGIN, 17, 50);
 
 	l_free(caption);
 
@@ -140,7 +154,7 @@ static void display_adapter_inline(const char *margin, const void *data)
 {
 	const struct adapter *adapter = data;
 
-	display("%s%-*s%-*s%-*s%-*s\n", margin,
+	display("%s%-*s%-*s%-.*s%-.*s\n", margin,
 		19, adapter->name ? : "-", 10, get_powered_tostr(adapter),
 		20, adapter->vendor ? : "-", 20, adapter->model ? : "-");
 }
