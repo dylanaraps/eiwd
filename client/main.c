@@ -24,6 +24,7 @@
 #include <config.h>
 #endif
 
+#include <errno.h>
 #include <ell/ell.h>
 
 #include "command.h"
@@ -47,6 +48,7 @@ int main(int argc, char *argv[])
 	int exit_status;
 	struct l_signal *signal;
 	sigset_t mask;
+	bool interactive;
 
 	if (!l_main_init())
 		return EXIT_FAILURE;
@@ -59,16 +61,21 @@ int main(int argc, char *argv[])
 
 	l_log_set_stderr();
 
-	command_init();
-	display_init();
+	interactive = command_init(argv, argc);
+
+	if (interactive)
+		display_init();
+
 	dbus_proxy_init();
 
 	l_main_run();
 
-	exit_status = EXIT_SUCCESS;
-
 	dbus_proxy_exit();
-	display_exit();
+
+	if (interactive)
+		display_exit();
+
+	exit_status = command_get_exit_status();
 	command_exit();
 
 	l_signal_remove(signal);
