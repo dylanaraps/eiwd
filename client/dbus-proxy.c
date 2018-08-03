@@ -70,7 +70,7 @@ void proxy_properties_display(const struct proxy_interface *proxy,
 		if (!properties[i].tostr)
 			continue;
 
-		display("%s%*s  %-*s%-*s\n", margin,
+		display("%s%*s  %-*s%-.*s\n", margin,
 			8, properties[i].is_read_write ?
 				COLOR_BOLDGRAY "       *" COLOR_OFF : "",
 			name_column_width, properties[i].name,
