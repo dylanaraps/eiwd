@@ -201,7 +201,7 @@ static enum cmd_status cmd_list(const char *entity, char **args, int argc)
 
 	display_table_footer();
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_DONE;
 }
 
 static enum cmd_status cmd_forget(const char *entity, char **argv, int argc)
@@ -241,7 +241,7 @@ static enum cmd_status cmd_forget(const char *entity, char **argv, int argc)
 	proxy_interface_method_call(known_network_proxy, "Forget", "",
 					check_errors_method_callback);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static const struct command known_networks_commands[] = {

@@ -653,7 +653,7 @@ static enum cmd_status cmd_show(const char *device_name,
 
 	display_device(proxy);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_DONE;
 }
 
 static void check_errors_method_callback(struct l_dbus_message *message,
@@ -674,7 +674,7 @@ static enum cmd_status cmd_scan(const char *device_name,
 	proxy_interface_method_call(proxy, "Scan", "",
 						check_errors_method_callback);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static enum cmd_status cmd_disconnect(const char *device_name,
@@ -689,7 +689,7 @@ static enum cmd_status cmd_disconnect(const char *device_name,
 	proxy_interface_method_call(proxy, "Disconnect", "",
 						check_errors_method_callback);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static enum cmd_status cmd_get_networks(const char *device_name,
@@ -713,7 +713,7 @@ proceed:
 	proxy_interface_method_call(proxy, "GetOrderedNetworks", "",
 					ordered_networks_callback);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static enum cmd_status cmd_list(const char *device_name,
@@ -726,7 +726,7 @@ static enum cmd_status cmd_list(const char *device_name,
 
 	display_table_footer();
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_DONE;
 }
 
 static enum cmd_status cmd_set_property(const char *device_name,
@@ -745,7 +745,7 @@ static enum cmd_status cmd_set_property(const char *device_name,
 						check_errors_method_callback))
 		return CMD_STATUS_INVALID_VALUE;
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static enum cmd_status cmd_connect(const char *device_name,
@@ -787,7 +787,7 @@ static enum cmd_status cmd_connect(const char *device_name,
 	l_queue_destroy(match, NULL);
 	network_connect(network_proxy);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static enum cmd_status cmd_connect_hidden_network(const char *device_name,
@@ -807,7 +807,7 @@ static enum cmd_status cmd_connect_hidden_network(const char *device_name,
 					check_errors_method_callback,
 					argv[0]);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static char *get_networks_cmd_arg_completion(const char *text, int state)

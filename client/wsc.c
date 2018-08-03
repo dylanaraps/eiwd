@@ -152,7 +152,7 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 		display("No WSC-capable devices available\n");
 		display_table_footer();
 
-		return CMD_STATUS_OK;
+		return CMD_STATUS_DONE;
 	}
 
 	for (entry = l_queue_get_entries(match); entry; entry = entry->next) {
@@ -165,7 +165,7 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 
 	l_queue_destroy(match, NULL);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_DONE;
 }
 
 static enum cmd_status cmd_push_button(const char *device_name,
@@ -182,7 +182,7 @@ static enum cmd_status cmd_push_button(const char *device_name,
 	proxy_interface_method_call(proxy, "PushButton", "",
 						check_errors_method_callback);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static enum cmd_status cmd_start_user_pin(const char *device_name,
@@ -202,7 +202,7 @@ static enum cmd_status cmd_start_user_pin(const char *device_name,
 	proxy_interface_method_call(proxy, "StartPin", "s",
 					check_errors_method_callback, argv[0]);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static enum cmd_status cmd_start_pin(const char *device_name,
@@ -219,7 +219,7 @@ static enum cmd_status cmd_start_pin(const char *device_name,
 	proxy_interface_method_call(proxy, "GeneratePin", "",
 							generate_pin_callback);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static enum cmd_status cmd_cancel(const char *device_name,
@@ -236,7 +236,7 @@ static enum cmd_status cmd_cancel(const char *device_name,
 	proxy_interface_method_call(proxy, "Cancel", "",
 						check_errors_method_callback);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static const struct command wsc_commands[] = {

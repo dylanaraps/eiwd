@@ -158,7 +158,7 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 		display("No devices in Ad-Hoc mode available.\n");
 		display_table_footer();
 
-		return CMD_STATUS_OK;
+		return CMD_STATUS_DONE;
 	}
 
 	for (entry = l_queue_get_entries(match); entry; entry = entry->next) {
@@ -172,7 +172,7 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 
 	l_queue_destroy(match, NULL);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_DONE;
 }
 
 static enum cmd_status cmd_start(const char *device_name, char **argv, int argc)
@@ -204,7 +204,7 @@ static enum cmd_status cmd_start(const char *device_name, char **argv, int argc)
 						check_errors_method_callback,
 						argv[0], argv[1]);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static enum cmd_status cmd_start_open(const char *device_name,
@@ -231,7 +231,7 @@ static enum cmd_status cmd_start_open(const char *device_name,
 						check_errors_method_callback,
 						argv[0]);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static enum cmd_status cmd_stop(const char *device_name, char **argv, int argc)
@@ -247,7 +247,7 @@ static enum cmd_status cmd_stop(const char *device_name, char **argv, int argc)
 	proxy_interface_method_call(proxy, "Stop", "",
 						check_errors_method_callback);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static const struct command ad_hoc_commands[] = {

@@ -38,7 +38,7 @@ static enum cmd_status cmd_version(const char *entity,
 {
 	display("IWD version %s\n", VERSION);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_DONE;
 }
 
 static enum cmd_status cmd_quit(const char *entity,
@@ -48,7 +48,7 @@ static enum cmd_status cmd_quit(const char *entity,
 
 	l_main_quit();
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_DONE;
 }
 
 static const struct command command_list[] = {
@@ -334,7 +334,7 @@ static void execute_cmd(const char *family, const char *entity,
 
 	status = cmd->function(entity, argv, argc);
 
-	if (status != CMD_STATUS_OK)
+	if (status != CMD_STATUS_TRIGGERED && status != CMD_STATUS_DONE)
 		goto error;
 
 	if (cmd->refreshable)

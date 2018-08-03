@@ -243,7 +243,7 @@ static enum cmd_status cmd_list(const char *adapter_name,
 
 	display_table_footer();
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_DONE;
 }
 
 static enum cmd_status cmd_show(const char *adapter_name,
@@ -257,7 +257,7 @@ static enum cmd_status cmd_show(const char *adapter_name,
 
 	display_adapter(proxy);
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_DONE;
 }
 
 static void property_set_callback(struct l_dbus_message *message,
@@ -282,7 +282,7 @@ static enum cmd_status cmd_set_property(const char *adapter_name,
 						property_set_callback))
 		return CMD_STATUS_INVALID_VALUE;
 
-	return CMD_STATUS_OK;
+	return CMD_STATUS_TRIGGERED;
 }
 
 static char *set_property_cmd_arg_completion(const char *text, int state)
