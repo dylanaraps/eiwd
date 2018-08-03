@@ -267,12 +267,36 @@ static const struct proxy_interface_property *proxy_property_find(
 	return NULL;
 }
 
+struct proxy_callback_data {
+	l_dbus_message_func_t callback;
+	void *user_data;
+};
+
+static void proxy_callback(struct l_dbus_message *message, void *user_data)
+{
+	struct proxy_callback_data *callback_data = user_data;
+	const char *name;
+	const char *text;
+
+	if (callback_data->callback)
+		callback_data->callback(message, callback_data->user_data);
+
+	if (command_is_interactive_mode())
+		return;
+
+	if (l_dbus_message_get_error(message, &name, &text))
+		command_set_exit_status(EXIT_FAILURE);
+
+	l_main_quit();
+}
+
 bool proxy_property_set(const struct proxy_interface *proxy, const char *name,
 			const char *value_str, l_dbus_message_func_t callback)
 {
 	struct l_dbus_message_builder *builder;
 	struct l_dbus_message *msg;
 	const struct proxy_interface_property *property;
+	struct proxy_callback_data *callback_data;
 
 	if (!proxy || !name)
 		return false;
@@ -315,7 +339,12 @@ bool proxy_property_set(const struct proxy_interface *proxy, const char *name,
 	l_dbus_message_builder_finalize(builder);
 	l_dbus_message_builder_destroy(builder);
 
-	l_dbus_send_with_reply(dbus, msg, callback, (void *) proxy, NULL);
+	callback_data = l_new(struct proxy_callback_data, 1);
+	callback_data->callback = callback;
+	callback_data->user_data = (void *) proxy;
+
+	l_dbus_send_with_reply(dbus, msg, proxy_callback, callback_data,
+									l_free);
 
 	return true;
 }
@@ -614,6 +643,7 @@ bool proxy_interface_method_call(const struct proxy_interface *proxy,
 					const char *name, const char *signature,
 					l_dbus_message_func_t callback, ...)
 {
+	struct proxy_callback_data *callback_data;
 	struct l_dbus_message *call;
 	va_list args;
 
@@ -627,7 +657,12 @@ bool proxy_interface_method_call(const struct proxy_interface *proxy,
 	l_dbus_message_set_arguments_valist(call, signature, args);
 	va_end(args);
 
-	l_dbus_send_with_reply(dbus, call, callback, (void *) proxy, NULL);
+	callback_data = l_new(struct proxy_callback_data, 1);
+	callback_data->callback = callback;
+	callback_data->user_data = (void *) proxy;
+
+	l_dbus_send_with_reply(dbus, call, proxy_callback, callback_data,
+									l_free);
 
 	return true;
 }
@@ -720,6 +755,9 @@ static void get_managed_objects_callback(struct l_dbus_message *message,
 	if (dbus_message_has_error(message)) {
 		l_error("Failed to retrieve IWD dbus objects, quitting...\n");
 
+		if (!command_is_interactive_mode())
+			command_set_exit_status(EXIT_FAILURE);
+
 		l_main_quit();
 
 		return;
@@ -729,6 +767,12 @@ static void get_managed_objects_callback(struct l_dbus_message *message,
 
 	while (l_dbus_message_iter_next_entry(&objects, &path, &object))
 		proxy_interface_create(path, &object);
+
+	if (!command_is_interactive_mode()) {
+		command_noninteractive_trigger();
+
+		return;
+	}
 
 	if (!agent_manager_register_agent()) {
 		l_main_quit();
@@ -741,6 +785,9 @@ static void get_managed_objects_callback(struct l_dbus_message *message,
 
 static void service_appeared_callback(struct l_dbus *dbus, void *user_data)
 {
+	if (!command_is_interactive_mode())
+		goto get_objects;
+
 	l_dbus_add_signal_watch(dbus, IWD_SERVICE, IWD_ROOT_PATH,
 					L_DBUS_INTERFACE_OBJECT_MANAGER,
 					"InterfacesAdded", L_DBUS_MATCH_NONE,
@@ -755,7 +802,7 @@ static void service_appeared_callback(struct l_dbus *dbus, void *user_data)
 					L_DBUS_INTERFACE_PROPERTIES,
 					"PropertiesChanged", L_DBUS_MATCH_NONE,
 					properties_changed_callback, NULL);
-
+get_objects:
 	l_dbus_method_call(dbus, IWD_SERVICE, IWD_ROOT_PATH,
 					L_DBUS_INTERFACE_OBJECT_MANAGER,
 					"GetManagedObjects", NULL,
@@ -766,6 +813,11 @@ static void service_appeared_callback(struct l_dbus *dbus, void *user_data)
 static void service_disappeared_callback(struct l_dbus *dbus,
 							void *user_data)
 {
+	if (!command_is_interactive_mode()) {
+		command_set_exit_status(EXIT_FAILURE);
+		l_main_quit();
+	}
+
 	l_queue_clear(proxy_interfaces, proxy_interface_destroy);
 
 	display_disable_cmd_prompt();
@@ -773,6 +825,9 @@ static void service_disappeared_callback(struct l_dbus *dbus,
 
 static void dbus_disconnect_callback(void *user_data)
 {
+	if (!command_is_interactive_mode())
+		return;
+
 	display("D-Bus disconnected, quitting...\n");
 
 	l_main_quit();
@@ -833,7 +888,8 @@ bool dbus_proxy_exit(void)
 {
 	struct interface_type_desc *desc;
 
-	agent_manager_unregister_agent();
+	if (command_is_interactive_mode())
+		agent_manager_unregister_agent();
 
 	for (desc = __start___interface; desc < __stop___interface; desc++) {
 		if (!desc->exit)
