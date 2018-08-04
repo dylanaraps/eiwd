@@ -486,7 +486,7 @@ static void eap_ttls_handle_request(struct eap_state *eap,
 
 	if (!ttls->rx_pkt_buf && (flags & EAP_TTLS_FLAG_M)) {
 		if (!(flags & EAP_TTLS_FLAG_L)) {
-			l_error("EAP-TTLS requst 1st fragment with no length");
+			l_error("EAP-TTLS request 1st fragment with no length");
 
 			goto err;
 		}

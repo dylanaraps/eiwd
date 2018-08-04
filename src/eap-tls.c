@@ -253,7 +253,7 @@ static void eap_tls_handle_request(struct eap_state *eap,
 
 	if (!tls->rx_pkt_buf && (flags & EAP_TLS_FLAG_M)) {
 		if (!(flags & EAP_TLS_FLAG_L)) {
-			l_error("EAP-TLS requst 1st fragment with no length");
+			l_error("EAP-TLS request 1st fragment with no length");
 
 			goto err;
 		}

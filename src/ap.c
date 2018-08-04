@@ -169,7 +169,7 @@ static bool ap_sta_match_addr(const void *a, const void *b)
 static void ap_remove_sta(struct sta_state *sta)
 {
 	if (!l_queue_remove(sta->ap->sta_states, sta)) {
-		l_error("tried to remove station that doesnt exist");
+		l_error("tried to remove station that doesn't exist");
 		return;
 	}
 
@@ -541,7 +541,7 @@ static void ap_fail_assoc_resp_cb(struct l_genl_msg *msg, void *user_data)
 		l_error("AP (Re)Association Response with an error status not "
 			"sent or not ACKed: %i", l_genl_msg_get_error(msg));
 	else
-		l_info("AP (Re)Association Response with an errror status "
+		l_info("AP (Re)Association Response with an error status "
 			"delivered OK");
 }
 
