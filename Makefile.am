@@ -122,6 +122,9 @@ src_iwd_DEPENDENCIES += src/iwd.service
 
 systemd_unitdir = @SYSTEMD_UNITDIR@
 systemd_unit_DATA = src/iwd.service
+
+dbus_busdir = @DBUS_BUSDIR@
+dbus_bus_DATA = src/net.connman.iwd.service
 endif
 
 if CLIENT
@@ -314,7 +317,7 @@ if BUILD_DOCS
 dist_man_MANS = $(manual_pages)
 endif
 
-EXTRA_DIST = src/genbuiltin src/iwd.service.in \
+EXTRA_DIST = src/genbuiltin src/iwd.service.in src/net.connman.iwd.service \
 			doc/main.conf $(manual_pages:.1=.txt)
 
 AM_CFLAGS = -fvisibility=hidden

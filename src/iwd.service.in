@@ -2,8 +2,11 @@
 Description=Wireless service
 
 [Service]
+Type=dbus
+BusName=net.connman.iwd
 ExecStart=@libexecdir@/iwd
 LimitNPROC=1
 
 [Install]
 WantedBy=multi-user.target
+Alias=dbus-net.connman.iwd.service
