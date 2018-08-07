@@ -24,7 +24,8 @@ enum ecc_test_type {
 	TEST_INV,
 	TEST_EXP,
 	TEST_POINT_ADD,
-	TEST_SCALAR_MULT
+	TEST_SCALAR_MULT,
+	TEST_LEGENDRE,
 };
 
 struct ecc_test_data {
@@ -32,8 +33,13 @@ struct ecc_test_data {
 	/* basic math arguments/result */
 	char *a;
 	char *b;
+	char *qr;
+	char *qnr;
+	char *r;
+	bool is_residue;
 	char *mod;
 	char *result;
+	int lres;
 	/* point operations */
 	char *scalar;
 	char *ax, *ay;
@@ -103,6 +109,53 @@ struct ecc_test_data exp_test = {
 
 };
 
+struct ecc_test_data legendre_test1 = {
+	.type = TEST_LEGENDRE,
+	.a = "b59c0c366aa89ba229f857190497261d5a0a7a0a774caa72aef041ff00092447",
+	.mod = "ffffffff00000001000000000000000000000000ffffffffffffffffffffffff",
+	.lres = -1
+};
+
+struct ecc_test_data legendre_test2 = {
+	.type = TEST_LEGENDRE,
+	.a = "1214f9607d348c998b3fba332d884d65945561fd007ff56d8bf603148d74d2e4",
+	.mod = "ffffffff000000010000000000000000"
+			"00000000ffffffffffffffffffffffff",
+	.lres = 1
+};
+
+struct ecc_test_data legendre_test3 = {
+	.type = TEST_LEGENDRE,
+	.a = "282d751c898bfc593b1d21b6812df48e3ec811f40349b30b7294575c47b871d8",
+	.mod = "ffffffff000000010000000000000000"
+			"00000000ffffffffffffffffffffffff",
+	.lres = 1
+};
+
+struct ecc_test_data legendre_test4 = {
+	.type = TEST_LEGENDRE,
+	.a = "0694ccde1db3d02faa26856678bd9358ecc0d82791405eb3892a8b4f07f1e5d6",
+	.mod = "ffffffff000000010000000000000000"
+			"00000000ffffffffffffffffffffffff",
+	.lres = -1
+};
+
+struct ecc_test_data legendre_test5 = {
+	.type = TEST_LEGENDRE,
+	.a = "92247f96df65a6d04af0c57318e999fd493c42864d156f7e5bba75c964f3c6b0",
+	.mod = "ffffffff000000010000000000000000"
+			"00000000ffffffffffffffffffffffff",
+	.lres = 1
+};
+
+struct ecc_test_data legendre_test6 = {
+	.type = TEST_LEGENDRE,
+	.a = "084f7eb6ed8021d095787fd401b0f19b13937dc23f7c84dfe69bb9a204bb3768",
+	.mod = "ffffffff000000010000000000000000"
+			"00000000ffffffffffffffffffffffff",
+	.lres = -1
+};
+
 struct ecc_test_data point_add_test = {
 	.type = TEST_POINT_ADD,
 	.ax = "d36b6768a3279fbe23a5bf5cc19b13354"
@@ -142,6 +195,7 @@ static void run_test(const void *arg)
 			scalar[NUM_ECC_DIGITS], result[NUM_ECC_DIGITS],
 			check[NUM_ECC_DIGITS];
 	struct ecc_point point1, point2, point_ret;
+	int lres;
 
 	memset(result, 0, sizeof(result));
 
@@ -201,6 +255,9 @@ static void run_test(const void *arg)
 	case TEST_EXP:
 		vli_mod_exp(result, a, b, mod);
 		break;
+	case TEST_LEGENDRE:
+		lres = vli_legendre(a, mod);
+		break;
 	case TEST_POINT_ADD:
 		assert(ecc_valid_point(&point1) == true);
 		assert(ecc_valid_point(&point2) == true);
@@ -221,7 +278,7 @@ static void run_test(const void *arg)
 		HEX2BUF(data->result, check);
 		ecc_native2be(check);
 		assert(memcmp(result, check, 32) == 0);
-	} else {
+	} else if (data->type <= TEST_SCALAR_MULT) {
 		uint64_t checkx[NUM_ECC_DIGITS];
 		uint64_t checky[NUM_ECC_DIGITS];
 
@@ -234,6 +291,8 @@ static void run_test(const void *arg)
 		assert(memcmp(checky, point_ret.y, 32) == 0);
 		assert(ecc_valid_point(&point_ret) == true);
 
+	} else if (data->type == TEST_LEGENDRE) {
+		assert(data->lres == lres);
 	}
 }
 
@@ -249,6 +308,12 @@ int main(int argc, char *argv[])
 	l_test_add("ECC exp test", run_test, &exp_test);
 	l_test_add("ECC point add test", run_test, &point_add_test);
 	l_test_add("ECC point mult test", run_test, &point_mult_test);
+	l_test_add("ECC legendre", run_test, &legendre_test1);
+	l_test_add("ECC legendre", run_test, &legendre_test2);
+	l_test_add("ECC legendre", run_test, &legendre_test3);
+	l_test_add("ECC legendre", run_test, &legendre_test4);
+	l_test_add("ECC legendre", run_test, &legendre_test5);
+	l_test_add("ECC legendre", run_test, &legendre_test6);
 
 	return l_test_run();
 }
