@@ -11,4 +11,3 @@ LimitNPROC=1
 
 [Install]
 WantedBy=multi-user.target
-Alias=dbus-net.connman.iwd.service
