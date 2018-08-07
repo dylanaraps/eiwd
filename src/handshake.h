@@ -102,6 +102,7 @@ struct handshake_state {
 	bool have_anonce : 1;
 	uint8_t ssid[32];
 	size_t ssid_len;
+	char *passphrase;
 	uint8_t r0khid[48];
 	size_t r0khid_len;
 	uint8_t r1khid[6];
@@ -144,6 +145,8 @@ void handshake_state_set_kh_ids(struct handshake_state *s,
 void handshake_state_set_event_func(struct handshake_state *s,
 					handshake_event_func_t func,
 					void *user_data);
+void handshake_state_set_passphrase(struct handshake_state *s,
+					const char *passphrase);
 
 void handshake_state_new_snonce(struct handshake_state *s);
 void handshake_state_new_anonce(struct handshake_state *s);

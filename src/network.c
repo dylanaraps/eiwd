@@ -51,6 +51,7 @@ struct network {
 	struct device *device;
 	struct network_info *info;
 	unsigned char *psk;
+	char *passphrase;
 	unsigned int agent_request;
 	struct l_queue *bss_list;
 	struct l_settings *settings;
@@ -80,6 +81,9 @@ static void network_settings_close(struct network *network)
 
 	l_free(network->psk);
 	network->psk = NULL;
+
+	l_free(network->passphrase);
+	network->passphrase = NULL;
 
 	l_settings_free(network->settings);
 	network->settings = NULL;
@@ -315,6 +319,11 @@ enum security network_get_security(const struct network *network)
 const uint8_t *network_get_psk(const struct network *network)
 {
 	return network->psk;
+}
+
+const char *network_get_passphrase(const struct network *network)
+{
+	return network->passphrase;
 }
 
 struct l_queue *network_get_secrets(const struct network *network)
@@ -625,6 +634,8 @@ static void passphrase_callback(enum agent_result result,
 
 	l_free(network->psk);
 	network->psk = l_malloc(32);
+	l_free(network->passphrase);
+	network->passphrase = l_strdup(passphrase);
 
 	if (crypto_psk_from_passphrase(passphrase,
 					(uint8_t *) network->info->ssid,
