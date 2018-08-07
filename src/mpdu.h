@@ -60,7 +60,7 @@ enum mmpdu_authentication_algorithm_number {
 };
 
 /*
- * 802.11-2012, Section 8.4.1.7:
+ * 802.11-2016, Section 9.4.1.7:
  */
 enum mmpdu_reason_code {
 	MMPDU_REASON_CODE_UNSPECIFIED = 1,
