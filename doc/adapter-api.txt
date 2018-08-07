@@ -21,3 +21,16 @@ Properties	boolean Powered [readwrite]
 		string Vendor [readonly, optional]
 
 			Contains the vendor name of the adapter, if available.
+
+		array{string} SupportedModes [readonly]
+
+			Contains the supported modes for this adapter's
+			devices.  The modes can be one of the following
+			values:
+				'ad-hoc'
+				'station'
+				'ap'
+
+			These modes can be used to set a particular
+			device's Mode property.  See Device.Mode documentation
+			for additional details.
