@@ -387,9 +387,21 @@ void handshake_state_override_pairwise_cipher(struct handshake_state *s,
 	s->pairwise_cipher = pairwise;
 }
 
+void handshake_state_set_pmkid(struct handshake_state *s, const uint8_t *pmkid)
+{
+	memcpy(s->pmkid, pmkid, 16);
+	s->have_pmkid = true;
+}
+
 bool handshake_state_get_pmkid(struct handshake_state *s, uint8_t *out_pmkid)
 {
 	bool use_sha256;
+
+	/* SAE exports pmkid */
+	if (s->have_pmkid) {
+		memcpy(out_pmkid, s->pmkid, 16);
+		return true;
+	}
 
 	if (!s->have_pmk)
 		return false;
