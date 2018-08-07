@@ -900,3 +900,39 @@ bool ecc_compute_y(uint64_t *y, uint64_t *x)
 
 	return true;
 }
+
+void ecc_compute_y_sqr(uint64_t *y_sqr, uint64_t *x)
+{
+	uint64_t sum[NUM_ECC_DIGITS] = { 0 };
+	uint64_t tmp[NUM_ECC_DIGITS] = { 0 };
+	uint64_t _3[NUM_ECC_DIGITS] = { 3ull }; /* -a = 3 */
+
+	vli_mod_square_fast(sum, x);
+	vli_mod_mult_fast(sum, sum, x); /* x^3 */
+	vli_mod_mult_fast(tmp, _3, x);
+	vli_mod_sub(sum, sum, tmp, curve_p); /* x^3 - ax */
+	vli_mod_add(sum, sum, curve_b, curve_p); /* x^3 - ax + b */
+
+	memcpy(y_sqr, sum, 32);
+}
+
+int vli_legendre(uint64_t *val, const uint64_t *p)
+{
+	uint64_t tmp[NUM_ECC_DIGITS];
+	uint64_t exp[NUM_ECC_DIGITS];
+	uint64_t _1[NUM_ECC_DIGITS] = { 1ull };
+	uint64_t _0[NUM_ECC_DIGITS] = { 0 };
+
+	/* check that val ^ ((p - 1) / 2) == [1, 0 or -1] */
+
+	vli_sub(exp, p, _1);
+	vli_rshift1(exp);
+	vli_mod_exp(tmp, val, exp, p);
+
+	if (vli_cmp(tmp, _1) == 0)
+		return 1;
+	else if (vli_cmp(tmp, _0) == 0)
+		return 0;
+	else
+		return -1;
+}

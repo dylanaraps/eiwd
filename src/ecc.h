@@ -87,3 +87,7 @@ void vli_mod_exp(uint64_t *result, uint64_t *base, uint64_t *exp,
 int vli_cmp(const uint64_t *left, const uint64_t *right);
 
 unsigned int vli_num_bits(const uint64_t *vli);
+
+int vli_legendre(uint64_t *val, const uint64_t *p);
+
+void ecc_compute_y_sqr(uint64_t *y_sqr, uint64_t *x);
