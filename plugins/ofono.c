@@ -646,16 +646,10 @@ static void parse_modem(const char *path, struct l_dbus_message_iter *props)
 	l_debug("modem found: %s", path);
 
 	if (l_queue_find(modems, match_modem_by_path, path)) {
-		/*
-		 * TODO: This can be removed once its found why sometimes two
-		 * modem added callbacks happen. It is very infrequent but
-		 * has been seen to happen.
-		 */
+		/* should never happen */
 		l_error("modem %s already found", path);
-#ifdef HAVE_EXECINFO_H
-		__iwd_backtrace_print(2);
-#endif
-		exit(1);
+
+		return;
 	}
 
 	modem = l_new(struct ofono_modem, 1);
