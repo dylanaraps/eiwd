@@ -30,9 +30,12 @@
 
 #include <ell/ell.h>
 #include <ell/dbus-private.h>
-#include "src/dbus.h"
+
+#include "linux/nl80211.h"
+
 #include "src/agent.h"
 #include "src/iwd.h"
+#include "src/dbus.h"
 
 struct l_dbus *g_dbus = 0;
 
@@ -41,6 +44,22 @@ static void do_debug(const char *str, void *user_data)
 	const char *prefix = user_data;
 
 	l_info("%s%s", prefix, str);
+}
+
+const char *dbus_iftype_to_string(uint32_t iftype)
+{
+	switch (iftype) {
+	case NL80211_IFTYPE_ADHOC:
+		return "ad-hoc";
+	case NL80211_IFTYPE_STATION:
+		return "station";
+	case NL80211_IFTYPE_AP:
+		return "ap";
+	default:
+		break;
+	}
+
+	return NULL;
 }
 
 struct l_dbus_message *dbus_error_busy(struct l_dbus_message *msg)

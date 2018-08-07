@@ -44,6 +44,8 @@ struct l_dbus *dbus_get_bus(void);
 void dbus_pending_reply(struct l_dbus_message **msg,
 				struct l_dbus_message *reply);
 
+const char *dbus_iftype_to_string(unsigned int iftype);
+
 struct l_dbus_message *dbus_error_busy(struct l_dbus_message *msg);
 struct l_dbus_message *dbus_error_failed(struct l_dbus_message *msg);
 struct l_dbus_message *dbus_error_aborted(struct l_dbus_message *msg);
