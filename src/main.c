@@ -405,8 +405,6 @@ int main(int argc, char *argv[])
 		goto done;
 	}
 
-	plugin_init(plugins, noplugins);
-
 	genl = l_genl_new_default();
 	if (!genl) {
 		l_error("Failed to open generic netlink socket");
@@ -447,10 +445,12 @@ int main(int argc, char *argv[])
 	known_networks_init();
 	rfkill_init();
 	sim_auth_init();
+	plugin_init(plugins, noplugins);
 
 	exit_status = EXIT_SUCCESS;
 	l_main_run();
 
+	plugin_exit();
 	sim_auth_exit();
 	rfkill_exit();
 	known_networks_exit();
@@ -469,7 +469,6 @@ fail_device:
 	l_genl_unref(genl);
 
 fail_genl:
-	plugin_exit();
 	dbus_exit();
 
 done:
