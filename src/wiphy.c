@@ -905,6 +905,26 @@ static bool wiphy_property_get_name(struct l_dbus *dbus,
 	return true;
 }
 
+static bool wiphy_property_get_supported_modes(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct wiphy *wiphy = user_data;
+	unsigned int j = 0;
+	char **iftypes = wiphy_get_supported_iftypes(wiphy);
+
+	l_dbus_message_builder_enter_array(builder, "s");
+
+	while (iftypes[j])
+		l_dbus_message_builder_append_basic(builder, 's', iftypes[j++]);
+
+	l_dbus_message_builder_leave_array(builder);
+	l_strfreev(iftypes);
+
+	return true;
+}
+
 static void setup_wiphy_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_property(interface, "Powered", 0, "b",
@@ -916,6 +936,9 @@ static void setup_wiphy_interface(struct l_dbus_interface *interface)
 					wiphy_property_get_vendor, NULL);
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					wiphy_property_get_name, NULL);
+	l_dbus_interface_property(interface, "SupportedModes", 0, "as",
+					wiphy_property_get_supported_modes,
+					NULL);
 }
 
 bool wiphy_init(struct l_genl_family *in, const char *whitelist,
