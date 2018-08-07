@@ -166,8 +166,15 @@ Properties	string Name [readonly]
 
 		string Mode [readwrite]
 
-			Use to set the device mode. Valid modes are "station"
-			and "ap". Setting the mode to "ap" will cause the
-			AccessPoint interface to appear on the bus. If the device
-			mode is switch back to "station" it will cause any
-			mode specific interfaces to disappear from the bus.
+			Use to set the device mode. The following device modes
+			are valid:
+				'ad-hoc'
+				'station'
+				'ap'
+
+			When the device mode is changed, the interfaces
+			available for that device might also change.  For
+			example, setting the mode to 'ap' will cause the
+			AccessPoint interface to appear.  If the device mode
+			is switched back to another mode, then 'AccessPoint'
+			interface will no longer be available.
