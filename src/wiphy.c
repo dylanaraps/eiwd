@@ -59,6 +59,7 @@ struct wiphy {
 	bool support_scheduled_scan:1;
 	bool support_rekey_offload:1;
 	bool support_adhoc_rsn:1;
+	uint16_t supported_iftypes;
 	uint16_t supported_ciphers;
 	struct scan_freq_set *supported_freqs;
 	char *model_str;
@@ -207,6 +208,31 @@ bool wiphy_supports_adhoc_rsn(struct wiphy *wiphy)
 	return wiphy->support_adhoc_rsn;
 }
 
+static char **wiphy_get_supported_iftypes(struct wiphy *wiphy)
+{
+	char **ret = l_new(char *,
+			__builtin_popcount(wiphy->supported_iftypes) + 1);
+	unsigned int i;
+	unsigned int j;
+
+	for (j = 0, i = 0; i < sizeof(wiphy->supported_iftypes) * 8; i++) {
+		if (!(wiphy->supported_iftypes & (1 << i)))
+			continue;
+
+		ret[j++] = l_strdup(dbus_iftype_to_string(i + 1));
+	}
+
+	return ret;
+}
+
+bool wiphy_supports_iftype(struct wiphy *wiphy, uint32_t iftype)
+{
+	if (iftype > sizeof(wiphy->supported_iftypes) * 8)
+		return false;
+
+	return wiphy->supported_iftypes & (1 << (iftype - 1));
+}
+
 static void wiphy_print_basic_info(struct wiphy *wiphy)
 {
 	uint32_t bands;
@@ -245,6 +271,16 @@ static void wiphy_print_basic_info(struct wiphy *wiphy)
 			len += sprintf(buf + len, " BIP");
 
 		l_info("%s", buf);
+	}
+
+	if (wiphy->supported_iftypes) {
+		char **iftypes = wiphy_get_supported_iftypes(wiphy);
+		char *joined = l_strjoinv(iftypes, ' ');
+
+		l_info("\tSupported iftypes: %s", joined);
+
+		l_free(joined);
+		l_strfreev(iftypes);
 	}
 }
 
@@ -352,6 +388,26 @@ static void parse_supported_bands(struct wiphy *wiphy,
 	}
 }
 
+static void parse_supported_iftypes(struct wiphy *wiphy,
+						struct l_genl_attr *attr)
+{
+	uint16_t type, len;
+	const void *data;
+
+	while (l_genl_attr_next(attr, &type, &len, &data)) {
+		/*
+		 * NL80211_IFTYPE_UNSPECIFIED can be ignored, so we start
+		 * at the first bit
+		 */
+		if (type > sizeof(wiphy->supported_iftypes) * 8) {
+			l_warn("unsupported iftype: %u", type);
+			continue;
+		}
+
+		wiphy->supported_iftypes |= 1 << (type - 1);
+	}
+}
+
 static void wiphy_parse_attributes(struct wiphy *wiphy,
 					struct l_genl_attr *attr)
 {
@@ -396,6 +452,10 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 			break;
 		case NL80211_ATTR_SUPPORT_IBSS_RSN:
 			wiphy->support_adhoc_rsn = true;
+			break;
+		case NL80211_ATTR_SUPPORTED_IFTYPES:
+			if (l_genl_attr_recurse(attr, &nested))
+				parse_supported_iftypes(wiphy, &nested);
 			break;
 		}
 	}
