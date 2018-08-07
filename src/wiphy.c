@@ -58,6 +58,7 @@ struct wiphy {
 	uint8_t max_num_ssids_per_scan;
 	bool support_scheduled_scan:1;
 	bool support_rekey_offload:1;
+	bool support_adhoc_rsn:1;
 	uint16_t supported_ciphers;
 	struct scan_freq_set *supported_freqs;
 	char *model_str;
@@ -199,6 +200,11 @@ bool wiphy_has_ext_feature(struct wiphy *wiphy, uint32_t feature)
 uint8_t wiphy_get_max_num_ssids_per_scan(struct wiphy *wiphy)
 {
 	return wiphy->max_num_ssids_per_scan;
+}
+
+bool wiphy_supports_adhoc_rsn(struct wiphy *wiphy)
+{
+	return wiphy->support_adhoc_rsn;
 }
 
 static void wiphy_print_basic_info(struct wiphy *wiphy)
@@ -387,6 +393,9 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 			else
 				wiphy->max_num_ssids_per_scan =
 							*((uint8_t *) data);
+			break;
+		case NL80211_ATTR_SUPPORT_IBSS_RSN:
+			wiphy->support_adhoc_rsn = true;
 			break;
 		}
 	}
