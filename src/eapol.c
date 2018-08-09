@@ -64,8 +64,8 @@ uint32_t next_frame_watch_id;
  *
  * The input struct eapol_key *frame should have a zero-d MIC field
  */
-bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
-				uint8_t *mic)
+bool eapol_calculate_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
+				const struct eapol_key *frame, uint8_t *mic)
 {
 	size_t frame_len = sizeof(struct eapol_key);
 
@@ -78,12 +78,20 @@ bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
 		return hmac_sha1(kck, 16, frame, frame_len, mic, 16);
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
 		return cmac_aes(kck, 16, frame, frame_len, mic, 16);
+	case EAPOL_KEY_DESCRIPTOR_VERSION_AKM_DEFINED:
+		switch (akm) {
+		case IE_RSN_AKM_SUITE_SAE_SHA256:
+			return cmac_aes(kck, 16, frame, frame_len, mic, 16);
+		default:
+			return false;
+		}
 	default:
 		return false;
 	}
 }
 
-bool eapol_verify_mic(const uint8_t *kck, const struct eapol_key *frame)
+bool eapol_verify_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
+			const struct eapol_key *frame)
 {
 	size_t frame_len = sizeof(struct eapol_key);
 	uint8_t mic[16];
@@ -112,6 +120,16 @@ bool eapol_verify_mic(const uint8_t *kck, const struct eapol_key *frame)
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
 		checksum = l_checksum_new_cmac_aes(kck, 16);
 		break;
+	case EAPOL_KEY_DESCRIPTOR_VERSION_AKM_DEFINED:
+		switch (akm) {
+		case IE_RSN_AKM_SUITE_SAE_SHA256:
+			checksum = l_checksum_new_cmac_aes(kck, 16);
+			break;
+		default:
+			return false;
+		}
+
+		break;
 	default:
 		return false;
 	}
@@ -129,7 +147,7 @@ bool eapol_verify_mic(const uint8_t *kck, const struct eapol_key *frame)
 	return false;
 }
 
-uint8_t *eapol_decrypt_key_data(const uint8_t *kek,
+uint8_t *eapol_decrypt_key_data(enum ie_rsn_akm_suite akm, const uint8_t *kek,
 				const struct eapol_key *frame,
 				size_t *decrypted_size)
 {
@@ -142,6 +160,17 @@ uint8_t *eapol_decrypt_key_data(const uint8_t *kek,
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4:
 		expected_len = key_data_len;
 		break;
+	case EAPOL_KEY_DESCRIPTOR_VERSION_AKM_DEFINED:
+		/*
+		 * TODO: for now, only SAE is supported under the AKM_DEFINED
+		 * key descriptor version. Once 8021x suites are added for this
+		 * type this will need to be expanded to handle the AKM types in
+		 * its own switch.
+		 */
+		if (akm != IE_RSN_AKM_SUITE_SAE_SHA256)
+			return NULL;
+
+		/* Fall through */
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
 		if (key_data_len < 24 || key_data_len % 8)
@@ -174,6 +203,7 @@ uint8_t *eapol_decrypt_key_data(const uint8_t *kek,
 	}
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
+	case EAPOL_KEY_DESCRIPTOR_VERSION_AKM_DEFINED:
 		if (!aes_unwrap(kek, key_data, key_data_len, buf))
 			goto error;
 
@@ -277,6 +307,7 @@ const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len)
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4:
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
+	case EAPOL_KEY_DESCRIPTOR_VERSION_AKM_DEFINED:
 		break;
 	default:
 		return NULL;
@@ -1033,7 +1064,8 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 
 	ptk = handshake_state_get_ptk(sm->handshake);
 
-	if (!eapol_calculate_mic(ptk->kck, step2, mic)) {
+	if (!eapol_calculate_mic(sm->handshake->akm_suite, ptk->kck,
+			step2, mic)) {
 		l_info("MIC calculation failed. "
 			"Ensure Kernel Crypto is available.");
 		l_free(step2);
@@ -1115,7 +1147,8 @@ static void eapol_send_ptk_3_of_4(struct eapol_sm *sm)
 	ek->header.packet_len = L_CPU_TO_BE16(sizeof(struct eapol_key) +
 						key_data_len - 4);
 
-	if (!eapol_calculate_mic(ptk->kck, ek, ek->key_mic_data))
+	if (!eapol_calculate_mic(sm->handshake->akm_suite, ptk->kck, ek,
+			ek->key_mic_data))
 		return;
 
 	l_debug("STA: "MAC" retries=%u", MAC_STR(sm->handshake->spa),
@@ -1169,7 +1202,7 @@ static void eapol_handle_ptk_2_of_4(struct eapol_sm *sm,
 					ek->key_nonce, ptk, ptk_size, false))
 		return;
 
-	if (!eapol_verify_mic(ptk->kck, ek))
+	if (!eapol_verify_mic(sm->handshake->akm_suite, ptk->kck, ek))
 		return;
 
 	/* Bitwise identical RSNE required */
@@ -1444,7 +1477,8 @@ retransmit:
 
 	ptk = handshake_state_get_ptk(sm->handshake);
 
-	if (!eapol_calculate_mic(ptk->kck, step4, mic)) {
+	if (!eapol_calculate_mic(sm->handshake->akm_suite, ptk->kck,
+			step4, mic)) {
 		l_free(step4);
 		handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 		return;
@@ -1492,7 +1526,7 @@ static void eapol_handle_ptk_4_of_4(struct eapol_sm *sm,
 	if (L_BE64_TO_CPU(ek->key_replay_counter) != sm->replay_counter)
 		return;
 
-	if (!eapol_verify_mic(ptk->kck, ek))
+	if (!eapol_verify_mic(sm->handshake->akm_suite, ptk->kck, ek))
 		return;
 
 	l_timeout_remove(sm->timeout);
@@ -1580,7 +1614,8 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 
 	ptk = handshake_state_get_ptk(sm->handshake);
 
-	if (!eapol_calculate_mic(ptk->kck, step2, mic)) {
+	if (!eapol_calculate_mic(sm->handshake->akm_suite, ptk->kck,
+			step2, mic)) {
 		l_free(step2);
 		handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 		return;
@@ -1680,7 +1715,7 @@ static void eapol_key_handle(struct eapol_sm *sm,
 		if (!sm->handshake->have_snonce)
 			return;
 
-		if (!eapol_verify_mic(ptk->kck, ek))
+		if (!eapol_verify_mic(sm->handshake->akm_suite, ptk->kck, ek))
 			return;
 	}
 
@@ -1690,8 +1725,9 @@ static void eapol_key_handle(struct eapol_sm *sm,
 		if (!sm->handshake->have_snonce)
 			return;
 
-		decrypted_key_data = eapol_decrypt_key_data(ptk->kek, ek,
-						&key_data_len);
+		decrypted_key_data = eapol_decrypt_key_data(
+					sm->handshake->akm_suite, ptk->kek,
+					ek, &key_data_len);
 		if (!decrypted_key_data)
 			return;
 	} else

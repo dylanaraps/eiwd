@@ -42,6 +42,7 @@ enum eapol_descriptor_type {
 };
 
 enum eapol_key_descriptor_version {
+	EAPOL_KEY_DESCRIPTOR_VERSION_AKM_DEFINED	= 0,
 	EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4	= 1,
 	EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES	= 2,
 	EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES	= 3,
@@ -51,6 +52,7 @@ struct eapol_sm;
 struct handshake_state;
 struct preauth_sm;
 enum handshake_kde;
+enum ie_rsn_akm_suite;
 
 struct eapol_header {
 	uint8_t protocol_version;
@@ -126,11 +128,12 @@ typedef void (*eapol_frame_watch_func_t)(uint16_t proto, const uint8_t *from,
 						const struct eapol_frame *frame,
 						void *user_data);
 
-bool eapol_calculate_mic(const uint8_t *kck, const struct eapol_key *frame,
-				uint8_t *mic);
-bool eapol_verify_mic(const uint8_t *kck, const struct eapol_key *frame);
+bool eapol_calculate_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
+				const struct eapol_key *frame, uint8_t *mic);
+bool eapol_verify_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
+			const struct eapol_key *frame);
 
-uint8_t *eapol_decrypt_key_data(const uint8_t *kek,
+uint8_t *eapol_decrypt_key_data(enum ie_rsn_akm_suite akm, const uint8_t *kek,
 				const struct eapol_key *frame,
 				size_t *decrypted_size);
 bool eapol_encrypt_key_data(const uint8_t *kek, uint8_t *key_data,
