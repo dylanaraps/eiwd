@@ -460,6 +460,31 @@ class Device(IWDDBusAbstract):
             if self._adhoc_timed_out:
                 raise TimeoutError("Timed out waiting for peer %s" % addr)
 
+    def wait_for_connected(self):
+        if str(self.state) == "connected":
+            return
+
+        self._connected_success = False
+        self._connected_timed_out = False
+
+        def wait_timeout_cb():
+            self._connected_timed_out = True
+            return False
+
+        def connected_prop_changed(iface, changed, invalid):
+            if changed.get('State', None):
+                if changed['State'] == 'connected':
+                    self._connected_success = True
+
+        self._prop_proxy.connect_to_signal('PropertiesChanged',
+                                            connected_prop_changed)
+        GLib.timeout_add(int(15 * 1000), wait_timeout_cb)
+        context = mainloop.get_context()
+        while not self._connected_success:
+            context.iteration(may_block=True)
+            if self._connected_timed_out:
+                raise TimeoutError("Timed out waiting for connected")
+
     def __str__(self, prefix = ''):
         return prefix + 'Device: ' + self.device_path + '\n'\
                + prefix + '\tName:\t\t' + self.name + '\n'\
@@ -492,7 +517,7 @@ class Network(IWDDBusAbstract):
         '''
         return bool(self._properties['Connected'])
 
-    def connect(self):
+    def connect(self, wait=True):
         '''
             Connect to the network. Request the device implied by the object
             path to connect to specified network.
@@ -511,7 +536,8 @@ class Network(IWDDBusAbstract):
                             reply_handler=self._success,
                             error_handler=self._failure)
 
-        self._wait_for_async_op()
+        if wait:
+            self._wait_for_async_op()
 
     def __str__(self, prefix = ''):
         return prefix + 'Network:\n' \
