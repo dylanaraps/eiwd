@@ -100,12 +100,16 @@ static int eap_gtc_check_settings(struct l_settings *settings,
 		return 0;
 	}
 
-	secret = l_queue_find(secrets, eap_secret_info_match, setting2);
 	/* identity found, but secret missing */
-	if (!secret)
-		eap_append_secret(out_missing, EAP_SECRET_REMOTE_PASSWORD,
-					setting2, NULL, identity,
-					EAP_CACHE_NEVER);
+	if (!l_settings_get_value(settings, "Security", setting2)) {
+		secret = l_queue_find(secrets, eap_secret_info_match, setting2);
+
+		if (!secret)
+			eap_append_secret(out_missing,
+						EAP_SECRET_REMOTE_PASSWORD,
+						setting2, NULL, identity,
+						EAP_CACHE_NEVER);
+	}
 
 	return 0;
 }
