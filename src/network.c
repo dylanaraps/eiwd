@@ -1213,6 +1213,26 @@ void network_rank_update(struct network *network)
 	network->rank = rank;
 }
 
+struct network_info *network_info_add_known(const char *ssid,
+						enum security security)
+{
+	struct network_info *network;
+	struct network_info search;
+
+	strcpy(search.ssid, ssid);
+	search.type = security;
+
+	network = l_queue_remove_if(networks, network_info_match, &search);
+	if (network)
+		return network;
+
+	network = l_new(struct network_info, 1);
+	strcpy(network->ssid, ssid);
+	network->type = security;
+
+	return network;
+}
+
 static void network_info_check_device(struct device *device, void *user_data)
 {
 	struct network_info *info = user_data;

@@ -25,9 +25,11 @@
 #endif
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include <ell/ell.h>
 
@@ -40,6 +42,7 @@
 
 static struct l_queue *known_networks;
 static size_t num_known_hidden_networks;
+static struct l_fswatch *storage_dir_watch;
 
 static int timespec_compare(const void *a, const void *b, void *user_data)
 {
@@ -96,25 +99,38 @@ static void known_network_register_dbus(struct network_info *network)
 						L_DBUS_INTERFACE_PROPERTIES);
 }
 
-static bool known_networks_add(const char *ssid, enum security security)
+static void known_network_update(struct network_info *orig_network,
+					const char *ssid,
+					enum security security,
+					struct l_settings *settings,
+					struct timespec *connected_time)
 {
 	struct network_info *network;
-	struct l_settings *settings;
 	bool is_hidden;
-	int err;
 
-	network = l_new(struct network_info, 1);
-	strcpy(network->ssid, ssid);
-	network->type = security;
+	if (orig_network)
+		network = orig_network;
+	else
+		network = network_info_add_known(ssid, security);
 
-	err = storage_network_get_mtime(security, ssid,
-					&network->connected_time);
-	if (err < 0) {
-		l_free(network);
-		return false;
+	if (timespec_compare(&network->connected_time, connected_time, NULL) &&
+			orig_network) {
+		l_dbus_property_changed(dbus_get_bus(),
+					iwd_known_network_get_path(network),
+					IWD_KNOWN_NETWORK_INTERFACE,
+					"LastConnectedTime");
+
+		l_queue_remove(known_networks, network);
+		l_queue_insert(known_networks, network, timespec_compare, NULL);
 	}
 
-	settings = storage_network_open(security, ssid);
+	memcpy(&network->connected_time, connected_time,
+		sizeof(struct timespec));
+
+	if (network->is_hidden && orig_network)
+		num_known_hidden_networks--;
+
+	network->is_hidden = false;
 
 	if (l_settings_get_bool(settings, "Settings", "Hidden", &is_hidden))
 		network->is_hidden = is_hidden;
@@ -122,13 +138,12 @@ static bool known_networks_add(const char *ssid, enum security security)
 	if (network->is_hidden)
 		num_known_hidden_networks++;
 
-	l_settings_free(settings);
+	if (orig_network)
+		return;
 
 	l_queue_insert(known_networks, network, timespec_compare, NULL);
 
 	known_network_register_dbus(network);
-
-	return true;
 }
 
 bool known_networks_foreach(known_networks_foreach_func_t function,
@@ -237,6 +252,88 @@ static void setup_known_network_interface(struct l_dbus_interface *interface)
 				NULL);
 }
 
+static void known_network_removed(struct network_info *network)
+{
+	if (network->is_hidden)
+		num_known_hidden_networks--;
+
+	l_queue_remove(known_networks, network);
+	l_dbus_unregister_object(dbus_get_bus(),
+					iwd_known_network_get_path(network));
+
+	/*
+	 * network_info_forget_known will either re-add the network_info to
+	 * its seen networks lists or call network_info_free.
+	 */
+	network_info_forget_known(network);
+}
+
+static void known_networks_watch_cb(struct l_fswatch *watch,
+					const char *filename,
+					enum l_fswatch_event event,
+					void *user_data)
+{
+	const char *ssid;
+	L_AUTO_FREE_VAR(char *, full_path) = NULL;
+	enum security security;
+	struct network_info *network_before;
+	struct l_settings *settings;
+	struct timespec connected_time;
+
+	/*
+	 * Ignore notifications for the actual directory, we can't do
+	 * anything about some of them anyway.  Only react to
+	 * notifications for files in the storage directory.
+	 */
+	if (!filename)
+		return;
+
+	ssid = storage_network_ssid_from_path(filename, &security);
+	if (!ssid)
+		return;
+
+	network_before = known_networks_find(ssid, security);
+
+	full_path = storage_get_network_file_path(security, ssid);
+
+	switch (event) {
+	case L_FSWATCH_EVENT_DELETE:
+		if (network_before)
+			known_network_removed(network_before);
+
+		break;
+
+	case L_FSWATCH_EVENT_MOVE:
+	case L_FSWATCH_EVENT_MODIFY:
+	case L_FSWATCH_EVENT_ATTRIB:
+	case L_FSWATCH_EVENT_CREATE:
+		/*
+		 * Any of the four operations may result in the removal
+		 * of the network (file moved out, not readable or
+		 * invalid) or the creation of a new network (file
+		 * created, permissions granted, syntax fixed, etc.)
+		 * so we always need to re-read the file.
+		 */
+		settings = storage_network_open(security, ssid);
+
+		if (settings && storage_network_get_mtime(security, ssid,
+						&connected_time) == 0)
+			known_network_update(network_before, ssid, security,
+						settings, &connected_time);
+		else {
+			if (network_before)
+				known_network_removed(network_before);
+		}
+
+		l_settings_free(settings);
+	}
+}
+
+static void known_networks_watch_destroy(void *user_data)
+{
+	storage_dir_watch = NULL;
+}
+
 bool known_networks_init(void)
 {
 	struct l_dbus *dbus = dbus_get_bus();
@@ -263,6 +360,8 @@ bool known_networks_init(void)
 	while ((dirent = readdir(dir))) {
 		const char *ssid;
 		enum security security;
+		struct l_settings *settings;
+		struct timespec connected_time;
 
 		if (dirent->d_type != DT_REG && dirent->d_type != DT_LNK)
 			continue;
@@ -272,10 +371,21 @@ bool known_networks_init(void)
 		if (!ssid)
 			continue;
 
-		known_networks_add(ssid, security);
+		settings = storage_network_open(security, ssid);
+
+		if (settings && storage_network_get_mtime(security, ssid,
+							&connected_time) == 0)
+			known_network_update(NULL, ssid, security, settings,
+						&connected_time);
+
+		l_settings_free(settings);
 	}
 
 	closedir(dir);
+
+	storage_dir_watch = l_fswatch_new(STORAGEDIR, known_networks_watch_cb,
+						NULL,
+						known_networks_watch_destroy);
 
 	return true;
 }
