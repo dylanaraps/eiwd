@@ -169,7 +169,7 @@ error_create_dirs:
 	return r;
 }
 
-static char *get_network_file_path(enum security type, const char *ssid)
+char *storage_get_network_file_path(enum security type, const char *ssid)
 {
 	char *path;
 	const char *c;
@@ -260,7 +260,7 @@ struct l_settings *storage_network_open(enum security type, const char *ssid)
 	if (ssid == NULL)
 		return NULL;
 
-	path = get_network_file_path(type, ssid);
+	path = storage_get_network_file_path(type, ssid);
 	settings = l_settings_new();
 
 	if (!l_settings_load_from_file(settings, path)) {
@@ -280,7 +280,7 @@ int storage_network_touch(enum security type, const char *ssid)
 	if (ssid == NULL)
 		return -EINVAL;
 
-	path = get_network_file_path(type, ssid);
+	path = storage_get_network_file_path(type, ssid);
 	ret = utimensat(0, path, NULL, 0);
 	l_free(path);
 
@@ -300,7 +300,7 @@ int storage_network_get_mtime(enum security type, const char *ssid,
 	if (ssid == NULL)
 		return -EINVAL;
 
-	path = get_network_file_path(type, ssid);
+	path = storage_get_network_file_path(type, ssid);
 	ret = stat(path, &sb);
 	l_free(path);
 
@@ -323,7 +323,7 @@ void storage_network_sync(enum security type, const char *ssid,
 	size_t length = 0;
 	char *path;
 
-	path = get_network_file_path(type, ssid);
+	path = storage_get_network_file_path(type, ssid);
 	data = l_settings_to_data(settings, &length);
 	write_file(data, length, "%s", path);
 	l_free(data);
@@ -335,7 +335,7 @@ int storage_network_remove(enum security type, const char *ssid)
 	char *path;
 	int ret;
 
-	path = get_network_file_path(type, ssid);
+	path = storage_get_network_file_path(type, ssid);
 	ret = unlink(path);
 	l_free(path);
 

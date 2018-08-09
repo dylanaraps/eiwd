@@ -33,6 +33,7 @@ ssize_t write_file(const void *buffer, size_t len, const char *path_fmt, ...)
 
 const char *storage_network_ssid_from_path(const char *path,
 							enum security *type);
+char *storage_get_network_file_path(enum security type, const char *ssid);
 
 struct l_settings *storage_network_open(enum security type, const char *ssid);
 int storage_network_touch(enum security type, const char *ssid);
