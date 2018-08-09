@@ -1787,17 +1787,17 @@ static struct l_genl_msg *netdev_build_cmd_associate_common(
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, hs->ssid_len, hs->ssid);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SOCKET_OWNER, 0, NULL);
 
-	if (netdev->pae_over_nl80211)
-		l_genl_msg_append_attr(msg,
-				NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
-				0, NULL);
-
 	if (is_rsn) {
 		uint32_t nl_cipher;
 		uint32_t nl_akm;
 		uint32_t wpa_version;
 
 		l_genl_msg_append_attr(msg, NL80211_ATTR_CONTROL_PORT, 0, NULL);
+
+		if (netdev->pae_over_nl80211)
+			l_genl_msg_append_attr(msg,
+					NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
+					0, NULL);
 
 		if (hs->pairwise_cipher == IE_RSN_CIPHER_SUITE_CCMP)
 			nl_cipher = CRYPTO_CIPHER_CCMP;
@@ -2256,11 +2256,6 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 						bss->ssid_len, bss->ssid);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
 
-	if (netdev->pae_over_nl80211)
-		l_genl_msg_append_attr(msg,
-				NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
-				0, NULL);
-
 	if (prev_bssid)
 		l_genl_msg_append_attr(msg, NL80211_ATTR_PREV_BSSID, ETH_ALEN,
 						prev_bssid);
@@ -2311,6 +2306,11 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 						4, &wpa_version);
 
 		l_genl_msg_append_attr(msg, NL80211_ATTR_CONTROL_PORT, 0, NULL);
+
+		if (netdev->pae_over_nl80211)
+			l_genl_msg_append_attr(msg,
+					NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
+					0, NULL);
 
 		iov[iov_elems].iov_base = (void *) hs->own_ie;
 		iov[iov_elems].iov_len = hs->own_ie[1] + 2;
@@ -2566,13 +2566,14 @@ int netdev_join_adhoc(struct netdev *netdev, const char *ssid,
 	l_genl_msg_append_attrv(cmd, NL80211_ATTR_IE, extra_ie, extra_ie_elems);
 	l_genl_msg_append_attr(cmd, NL80211_ATTR_SOCKET_OWNER, 0, NULL);
 
-	if (control_port)
+	if (control_port) {
 		l_genl_msg_append_attr(cmd, NL80211_ATTR_CONTROL_PORT, 0, NULL);
 
-	if (netdev->pae_over_nl80211)
-		l_genl_msg_append_attr(cmd,
-				NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
-				0, NULL);
+		if (netdev->pae_over_nl80211)
+			l_genl_msg_append_attr(cmd,
+					NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
+					0, NULL);
+	}
 
 	netdev->join_adhoc_cmd_id = l_genl_family_send(nl80211, cmd,
 			netdev_join_adhoc_cb, netdev, NULL);
