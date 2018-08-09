@@ -639,6 +639,9 @@ static enum ie_rsn_akm_suite device_select_akm_suite(struct network *network,
 		if (info->akm_suites & IE_RSN_AKM_SUITE_8021X)
 			return IE_RSN_AKM_SUITE_8021X;
 	} else if (security == SECURITY_PSK) {
+		if (info->akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256)
+			return IE_RSN_AKM_SUITE_SAE_SHA256;
+
 		if ((info->akm_suites & IE_RSN_AKM_SUITE_FT_USING_PSK) &&
 				bss->rsne && bss->mde_present)
 			return IE_RSN_AKM_SUITE_FT_USING_PSK;
