@@ -738,7 +738,8 @@ static int eap_pwd_check_settings(struct l_settings *settings,
 		if (!secret) {
 			eap_append_secret(out_missing,
 					EAP_SECRET_REMOTE_USER_PASSWORD,
-					setting, setting2, NULL);
+					setting, setting2, NULL,
+					EAP_CACHE_TEMPORARY);
 		}
 
 		return 0;
@@ -749,7 +750,8 @@ static int eap_pwd_check_settings(struct l_settings *settings,
 		if (!secret) {
 			eap_append_secret(out_missing,
 					EAP_SECRET_REMOTE_PASSWORD,
-					setting2, NULL, identity);
+					setting2, NULL, identity,
+					EAP_CACHE_TEMPORARY);
 		}
 	}
 

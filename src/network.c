@@ -108,6 +108,13 @@ static bool network_info_ptr_match(const void *a, const void *b)
 	return a == b;
 }
 
+static bool network_secret_check_cacheable(void *data, void *user_data)
+{
+	struct eap_secret_info *secret = data;
+
+	return secret->cache_policy == EAP_CACHE_NEVER;
+}
+
 void network_connected(struct network *network)
 {
 	int err;
@@ -141,6 +148,9 @@ void network_connected(struct network *network)
 					&network->info->connected_time);
 	if (err < 0)
 		l_error("Error %i reading network timestamp", err);
+
+	l_queue_foreach_remove(network->secrets,
+				network_secret_check_cacheable, network);
 
 	/*
 	 * If this is the first ever connection to this network, we move the

@@ -92,8 +92,10 @@ static int eap_gtc_check_settings(struct l_settings *settings,
 
 		/* no secret found either */
 		if (!secret)
-			eap_append_secret(out_missing, EAP_SECRET_REMOTE_USER_PASSWORD,
-					setting, setting2, NULL);
+			eap_append_secret(out_missing,
+						EAP_SECRET_REMOTE_USER_PASSWORD,
+						setting, setting2, NULL,
+						EAP_CACHE_NEVER);
 
 		return 0;
 	}
@@ -102,7 +104,8 @@ static int eap_gtc_check_settings(struct l_settings *settings,
 	/* identity found, but secret missing */
 	if (!secret)
 		eap_append_secret(out_missing, EAP_SECRET_REMOTE_PASSWORD,
-					setting2, NULL, identity);
+					setting2, NULL, identity,
+					EAP_CACHE_NEVER);
 
 	return 0;
 }

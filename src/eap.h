@@ -39,12 +39,18 @@ enum eap_secret_type {
 	EAP_SECRET_REMOTE_USER_PASSWORD,
 };
 
+enum eap_secret_cache_policy {
+	EAP_CACHE_NEVER,
+	EAP_CACHE_TEMPORARY,
+};
+
 struct eap_secret_info {
 	char *id;
 	char *id2;
 	enum eap_secret_type type;
 	char *parameter;
 	char *value;
+	enum eap_secret_cache_policy cache_policy;
 };
 
 typedef void (*eap_tx_packet_func_t)(const uint8_t *eap_data, size_t len,
@@ -65,7 +71,8 @@ struct eap_state *eap_new(eap_tx_packet_func_t tx_packet,
 void eap_free(struct eap_state *eap);
 
 void eap_append_secret(struct l_queue **out_missing, enum eap_secret_type type,
-			const char *id, const char *id2, const char *parameter);
+			const char *id, const char *id2, const char *parameter,
+			enum eap_secret_cache_policy cache_policy);
 
 int eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 			const char *prefix, bool set_key_material,

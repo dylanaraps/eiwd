@@ -378,7 +378,8 @@ bool eap_secret_info_match(const void *a, const void *b)
 }
 
 void eap_append_secret(struct l_queue **out_missing, enum eap_secret_type type,
-			const char *id, const char *id2, const char *parameter)
+			const char *id, const char *id2, const char *parameter,
+			enum eap_secret_cache_policy cache_policy)
 {
 	struct eap_secret_info *info;
 
@@ -390,6 +391,7 @@ void eap_append_secret(struct l_queue **out_missing, enum eap_secret_type type,
 	info->id2 = l_strdup(id2);
 	info->type = type;
 	info->parameter = l_strdup(parameter);
+	info->cache_policy = cache_policy;
 	l_queue_push_tail(*out_missing, info);
 }
 
