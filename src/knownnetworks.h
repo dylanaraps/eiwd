@@ -31,7 +31,6 @@ bool known_networks_foreach(known_networks_foreach_func_t function,
 bool known_networks_has_hidden(void);
 struct network_info *known_networks_find(const char *ssid,
 						enum security security);
-void known_networks_connected(struct network_info *network);
 
 bool known_networks_init(void);
 void known_networks_exit(void);

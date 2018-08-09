@@ -119,6 +119,10 @@ void network_connected(struct network *network)
 {
 	int err;
 
+	/*
+	 * This triggers an update to network->info->connected_time and
+	 * other possible actions in knownnetworks.c.
+	 */
 	err = storage_network_touch(network_get_security(network),
 					network->info->ssid);
 	switch (err) {
@@ -143,24 +147,8 @@ void network_connected(struct network *network)
 		break;
 	}
 
-	err = storage_network_get_mtime(network_get_security(network),
-					network->info->ssid,
-					&network->info->connected_time);
-	if (err < 0)
-		l_error("Error %i reading network timestamp", err);
-
 	l_queue_foreach_remove(network->secrets,
 				network_secret_check_cacheable, network);
-
-	/*
-	 * If this is the first ever connection to this network, we move the
-	 * network_info to the Known Networks list.  Otherwise this only has
-	 * the effect of updating the connected time on the Known Network
-	 * and moving it to the top of the list for network_find_rank_index's
-	 * purposes.
-	 */
-	l_queue_remove(networks, network->info);
-	known_networks_connected(network->info);
 }
 
 void network_disconnected(struct network *network)
@@ -1000,9 +988,9 @@ void network_connect_new_hidden_network(struct network *network,
 	l_debug("");
 
 	/*
-	 * This is not a Known Network.  If connection succeeds,
-	 * known_networks_connected() is going to be called and will save
-	 * this network as hidden and update the hidden networks count.
+	 * This is not a Known Network.  If connection succeeds, either
+	 * network_sync_psk or network_connected will save this network
+	 * as hidden and trigger an update to the hidden networks count.
 	 */
 	network->info->is_hidden = true;
 

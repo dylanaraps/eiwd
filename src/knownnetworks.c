@@ -160,25 +160,6 @@ struct network_info *known_networks_find(const char *ssid,
 	return l_queue_find(known_networks, network_info_match, &query);
 }
 
-void known_networks_connected(struct network_info *network)
-{
-	bool is_new;
-
-	is_new = !l_queue_remove(known_networks, network);
-	l_queue_push_head(known_networks, network);
-
-	if (is_new && network->is_hidden)
-		num_known_hidden_networks++;
-
-	if (is_new)
-		known_network_register_dbus(network);
-	else
-		l_dbus_property_changed(dbus_get_bus(),
-					iwd_known_network_get_path(network),
-					IWD_KNOWN_NETWORK_INTERFACE,
-					"LastConnectedTime");
-}
-
 static struct l_dbus_message *known_network_forget(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -186,18 +167,8 @@ static struct l_dbus_message *known_network_forget(struct l_dbus *dbus,
 	struct network_info *network = user_data;
 	struct l_dbus_message *reply;
 
-	if (network->is_hidden)
-		num_known_hidden_networks--;
-
-	l_queue_remove(known_networks, network);
-	l_dbus_unregister_object(dbus, iwd_known_network_get_path(network));
+	/* Other actions taken care of by the filesystem watch callback */
 	storage_network_remove(network->type, network->ssid);
-
-	/*
-	 * network_info_forget_known will either re-add the network_info to
-	 * its seen networks lists or call network_info_free.
-	 */
-	network_info_forget_known(network);
 
 	reply = l_dbus_message_new_method_return(message);
 	l_dbus_message_set_arguments(reply, "");
