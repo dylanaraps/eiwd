@@ -1738,36 +1738,66 @@ error:
 	netdev_connect_failed(NULL, netdev);
 }
 
-/*
- * Build an FT Reassociation Request frame according to 12.5.2 / 12.5.4:
- * RSN or non-RSN Over-the-air FT Protocol, and with the IE contents
- * according to 12.8.4: FT authentication sequence: contents of third message.
- */
-static struct l_genl_msg *netdev_build_cmd_ft_reassociate(struct netdev *netdev,
-						uint32_t frequency,
-						const uint8_t *prev_bssid)
+static unsigned int ie_rsn_akm_suite_to_nl80211(enum ie_rsn_akm_suite akm)
 {
-	struct l_genl_msg *msg;
-	struct iovec iov[3];
-	int iov_elems = 0;
-	struct handshake_state *hs = netdev_get_handshake(netdev);
+	switch (akm) {
+	case IE_RSN_AKM_SUITE_8021X:
+		return CRYPTO_AKM_8021X;
+	case IE_RSN_AKM_SUITE_PSK:
+		return CRYPTO_AKM_PSK;
+	case IE_RSN_AKM_SUITE_FT_OVER_8021X:
+		return CRYPTO_AKM_FT_OVER_8021X;
+	case IE_RSN_AKM_SUITE_FT_USING_PSK:
+		return CRYPTO_AKM_FT_USING_PSK;
+	case IE_RSN_AKM_SUITE_8021X_SHA256:
+		return CRYPTO_AKM_8021X_SHA256;
+	case IE_RSN_AKM_SUITE_PSK_SHA256:
+		return CRYPTO_AKM_PSK_SHA256;
+	case IE_RSN_AKM_SUITE_TDLS:
+		return CRYPTO_AKM_TDLS;
+	case IE_RSN_AKM_SUITE_SAE_SHA256:
+		return CRYPTO_AKM_SAE_SHA256;
+	case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
+		return CRYPTO_AKM_FT_OVER_SAE_SHA256;
+	case IE_RSN_AKM_SUITE_AP_PEER_KEY_SHA256:
+		return CRYPTO_AKM_AP_PEER_KEY_SHA256;
+	case IE_RSN_AKM_SUITE_8021X_SUITE_B_SHA256:
+		return CRYPTO_AKM_8021X_SUITE_B_SHA256;
+	case IE_RSN_AKM_SUITE_8021X_SUITE_B_SHA384:
+		return CRYPTO_AKM_8021X_SUITE_B_SHA384;
+	case IE_RSN_AKM_SUITE_FT_OVER_8021X_SHA384:
+		return CRYPTO_AKM_FT_OVER_8021X_SHA384;
+	}
+
+	return 0;
+}
+
+static struct l_genl_msg *netdev_build_cmd_associate_common(
+							struct netdev *netdev)
+{
+	struct handshake_state *hs = netdev->handshake;
 	bool is_rsn = hs->own_ie != NULL;
-	uint8_t *rsne = NULL;
+	struct l_genl_msg *msg;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_ASSOCIATE, 600);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &frequency);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4,
+							&netdev->frequency);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, hs->aa);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_PREV_BSSID, ETH_ALEN,
-				prev_bssid);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, hs->ssid_len, hs->ssid);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SOCKET_OWNER, 0, NULL);
+
+	if (netdev->pae_over_nl80211)
+		l_genl_msg_append_attr(msg,
+				NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
+				0, NULL);
 
 	if (is_rsn) {
 		uint32_t nl_cipher;
 		uint32_t nl_akm;
 		uint32_t wpa_version;
-		struct ie_rsn_info rsn_info;
+
+		l_genl_msg_append_attr(msg, NL80211_ATTR_CONTROL_PORT, 0, NULL);
 
 		if (hs->pairwise_cipher == IE_RSN_CIPHER_SUITE_CCMP)
 			nl_cipher = CRYPTO_CIPHER_CCMP;
@@ -1791,19 +1821,45 @@ static struct l_genl_msg *netdev_build_cmd_ft_reassociate(struct netdev *netdev,
 								4, &use_mfp);
 		}
 
-		if (hs->akm_suite == IE_RSN_AKM_SUITE_FT_OVER_8021X)
-			nl_akm = CRYPTO_AKM_FT_OVER_8021X;
-		else
-			nl_akm = CRYPTO_AKM_FT_USING_PSK;
-
-		l_genl_msg_append_attr(msg, NL80211_ATTR_AKM_SUITES,
+		nl_akm = ie_rsn_akm_suite_to_nl80211(hs->akm_suite);
+		if (nl_akm)
+			l_genl_msg_append_attr(msg, NL80211_ATTR_AKM_SUITES,
 							4, &nl_akm);
 
-		wpa_version = NL80211_WPA_VERSION_2;
+		if (hs->wpa_ie)
+			wpa_version = NL80211_WPA_VERSION_1;
+		else
+			wpa_version = NL80211_WPA_VERSION_2;
+
 		l_genl_msg_append_attr(msg, NL80211_ATTR_WPA_VERSIONS,
 						4, &wpa_version);
+	}
 
-		l_genl_msg_append_attr(msg, NL80211_ATTR_CONTROL_PORT, 0, NULL);
+	return msg;
+}
+
+/*
+ * Build an FT Reassociation Request frame according to 12.5.2 / 12.5.4:
+ * RSN or non-RSN Over-the-air FT Protocol, and with the IE contents
+ * according to 12.8.4: FT authentication sequence: contents of third message.
+ */
+static struct l_genl_msg *netdev_build_cmd_ft_reassociate(
+							struct netdev *netdev)
+{
+	struct l_genl_msg *msg;
+	struct iovec iov[3];
+	int iov_elems = 0;
+	struct handshake_state *hs = netdev_get_handshake(netdev);
+	bool is_rsn = hs->own_ie != NULL;
+	uint8_t *rsne = NULL;
+
+	msg = netdev_build_cmd_associate_common(netdev);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_PREV_BSSID, ETH_ALEN,
+				netdev->prev_bssid);
+
+	if (is_rsn) {
+		struct ie_rsn_info rsn_info;
 
 		/*
 		 * Rebuild the RSNE to include the PMKR1Name and append
@@ -2111,9 +2167,7 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 	} else if (fte)
 		goto ft_error;
 
-	cmd_associate = netdev_build_cmd_ft_reassociate(netdev,
-							netdev->frequency,
-							netdev->prev_bssid);
+	cmd_associate = netdev_build_cmd_ft_reassociate(netdev);
 	if (!cmd_associate)
 		goto ft_error;
 
@@ -2150,40 +2204,6 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 							struct netdev *netdev)
 {
 	l_debug("");
-}
-
-static unsigned int ie_rsn_akm_suite_to_nl80211(enum ie_rsn_akm_suite akm)
-{
-	switch (akm) {
-	case IE_RSN_AKM_SUITE_8021X:
-		return CRYPTO_AKM_8021X;
-	case IE_RSN_AKM_SUITE_PSK:
-		return CRYPTO_AKM_PSK;
-	case IE_RSN_AKM_SUITE_FT_OVER_8021X:
-		return CRYPTO_AKM_FT_OVER_8021X;
-	case IE_RSN_AKM_SUITE_FT_USING_PSK:
-		return CRYPTO_AKM_FT_USING_PSK;
-	case IE_RSN_AKM_SUITE_8021X_SHA256:
-		return CRYPTO_AKM_8021X_SHA256;
-	case IE_RSN_AKM_SUITE_PSK_SHA256:
-		return CRYPTO_AKM_PSK_SHA256;
-	case IE_RSN_AKM_SUITE_TDLS:
-		return CRYPTO_AKM_TDLS;
-	case IE_RSN_AKM_SUITE_SAE_SHA256:
-		return CRYPTO_AKM_SAE_SHA256;
-	case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
-		return CRYPTO_AKM_FT_OVER_SAE_SHA256;
-	case IE_RSN_AKM_SUITE_AP_PEER_KEY_SHA256:
-		return CRYPTO_AKM_AP_PEER_KEY_SHA256;
-	case IE_RSN_AKM_SUITE_8021X_SUITE_B_SHA256:
-		return CRYPTO_AKM_8021X_SUITE_B_SHA256;
-	case IE_RSN_AKM_SUITE_8021X_SUITE_B_SHA384:
-		return CRYPTO_AKM_8021X_SUITE_B_SHA384;
-	case IE_RSN_AKM_SUITE_FT_OVER_8021X_SHA384:
-		return CRYPTO_AKM_FT_OVER_8021X_SHA384;
-	}
-
-	return 0;
 }
 
 static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
