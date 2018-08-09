@@ -40,7 +40,9 @@ class Test(unittest.TestCase):
         known_networks = wd.list_known_networks()
         self.assertEqual(len(known_networks), 3)
 
-        known_networks[0].forget()
+        for network in known_networks:
+            if network.name == 'ssidTKIP':
+                network.forget()
 
         known_networks = wd.list_known_networks()
         self.assertEqual(len(known_networks), 2)
@@ -49,6 +51,18 @@ class Test(unittest.TestCase):
 
         known_networks = wd.list_known_networks()
         self.assertEqual(len(known_networks), 3)
+
+        IWD.copy_to_storage('known_networks/ssidPSK.psk')
+        condition = 'len(obj.list_known_networks()) == 4'
+        wd.wait_for_object_condition(wd, condition, 1)
+
+        expected = ['ssidNew', 'ssidOpen', 'ssidPSK', 'ssidEAP-TLS']
+        self.assertEqual({n.name for n in wd.list_known_networks()},
+                         set(expected))
+
+        IWD.remove_from_storage('ssidPSK.psk')
+        condition = 'len(obj.list_known_networks()) == 3'
+        wd.wait_for_object_condition(wd, condition, 1)
 
         for net in known_networks:
             net.forget()

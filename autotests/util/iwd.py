@@ -537,7 +537,7 @@ class KnownNetwork(IWDDBusAbstract):
     @property
     def name(self):
         '''Contains the Name (SSID) of the network.'''
-        return self._properties['Name']
+        return str(self._properties['Name'])
 
     @property
     def type(self):
@@ -856,6 +856,10 @@ class IWD(AsyncOpAbstract):
 
         assert not os.path.isabs(source)
         shutil.copy(source, IWD_STORAGE_DIR)
+
+    @staticmethod
+    def remove_from_storage(file_name):
+        os.system('rm -rf ' + IWD_STORAGE_DIR + '/\'' + file_name + '\'')
 
     def list_devices(self, wait_to_appear = 0, max_wait = 15):
         if not wait_to_appear:
