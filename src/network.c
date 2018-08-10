@@ -434,15 +434,22 @@ void network_sync_psk(struct network *network)
 
 	network->update_psk = false;
 
-	fs_settings = storage_network_open(SECURITY_PSK, network->info->ssid);
 	hex = l_util_hexstring(network->psk, 32);
 	l_settings_set_value(network->settings, "Security",
 						"PreSharedKey", hex);
-	l_settings_set_value(fs_settings, "Security", "PreSharedKey", hex);
-	l_free(hex);
 
-	storage_network_sync(SECURITY_PSK, network->info->ssid, fs_settings);
-	l_settings_free(fs_settings);
+	fs_settings = storage_network_open(SECURITY_PSK, network->info->ssid);
+	if (fs_settings) {
+		l_settings_set_value(fs_settings, "Security",
+						"PreSharedKey", hex);
+		storage_network_sync(SECURITY_PSK, network->info->ssid,
+					fs_settings);
+		l_settings_free(fs_settings);
+	} else
+		storage_network_sync(SECURITY_PSK, network->info->ssid,
+					network->settings);
+
+	l_free(hex);
 }
 
 int network_autoconnect(struct network *network, struct scan_bss *bss)
