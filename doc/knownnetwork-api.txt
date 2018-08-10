@@ -21,6 +21,15 @@ Properties	string Name [readonly]
 			Contains the type of the network.  Possible
 			types are "open", "psk", "8021x" (EAP)
 
+		bool Hidden [readonly]
+
+			True if this is a hidden network.  The existence of
+			an object with this property set to True -- either
+			preprovisioned or created after a successful
+			net.connman.iwd.Device.ConnectHiddenNetwork() --
+			enables IWD to scan for and show this network in
+			the scan results.
+
 		string LastConnectedTime [readonly, optional]
 
 			Contains the last time this network has been
