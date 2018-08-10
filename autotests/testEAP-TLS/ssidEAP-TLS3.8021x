@@ -4,3 +4,6 @@ EAP-TLS-CACert=/tmp/certs/cert-ca.pem
 EAP-TLS-ClientCert=/tmp/certs/cert-client.pem
 EAP-TLS-ClientKey=/tmp/certs/cert-client-key-v2-des-ede3.pem
 EAP-Identity=abc@example.com
+
+[Settings]
+Autoconnect=False

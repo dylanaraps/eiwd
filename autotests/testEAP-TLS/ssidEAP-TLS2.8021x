@@ -5,3 +5,6 @@ EAP-TLS-ClientCert=/tmp/certs/cert-client.pem
 EAP-TLS-ClientKey=/tmp/certs/cert-client-key-md5-des.pem
 EAP-TLS-ClientKeyPassphrase=abc
 EAP-Identity=abc@example.com
+
+[Settings]
+Autoconnect=False
