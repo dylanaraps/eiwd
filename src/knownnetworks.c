@@ -319,19 +319,14 @@ static void known_networks_watch_cb(struct l_fswatch *watch,
 
 	switch (event) {
 	case L_FSWATCH_EVENT_DELETE:
-		if (network_before)
-			known_network_removed(network_before);
-
-		break;
-
 	case L_FSWATCH_EVENT_MOVE:
 	case L_FSWATCH_EVENT_MODIFY:
 	case L_FSWATCH_EVENT_ATTRIB:
 	case L_FSWATCH_EVENT_CREATE:
 		/*
-		 * Any of the four operations may result in the removal
-		 * of the network (file moved out, not readable or
-		 * invalid) or the creation of a new network (file
+		 * For now treat all the operations the same.  E.g. they may
+		 * result in the removal of the network (file moved out, not
+		 * readable or invalid) or the creation of a new network (file
 		 * created, permissions granted, syntax fixed, etc.)
 		 * so we always need to re-read the file.
 		 */
