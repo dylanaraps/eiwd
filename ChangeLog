@@ -1,3 +1,7 @@
+ver 0.6:
+	Fix issue with syncing the PSK on first connection.
+	Fix issue with unnecessary known object removal events.
+
 ver 0.5:
 	Fix issue with EAPoL handling and Ad-Hoc networks.
 	Add support for using agent with EAP-GTC methods.
