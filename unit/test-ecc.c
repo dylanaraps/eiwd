@@ -195,7 +195,6 @@ static void run_test(const void *arg)
 			scalar[NUM_ECC_DIGITS], result[NUM_ECC_DIGITS],
 			check[NUM_ECC_DIGITS];
 	struct ecc_point point1, point2, point_ret;
-	int lres;
 
 	memset(result, 0, sizeof(result));
 
@@ -256,8 +255,11 @@ static void run_test(const void *arg)
 		vli_mod_exp(result, a, b, mod);
 		break;
 	case TEST_LEGENDRE:
-		lres = vli_legendre(a, mod);
+	{
+		int lres = vli_legendre(a, mod);
+		assert(data->lres == lres);
 		break;
+	}
 	case TEST_POINT_ADD:
 		assert(ecc_valid_point(&point1) == true);
 		assert(ecc_valid_point(&point2) == true);
@@ -290,9 +292,6 @@ static void run_test(const void *arg)
 		assert(memcmp(checkx, point_ret.x, 32) == 0);
 		assert(memcmp(checky, point_ret.y, 32) == 0);
 		assert(ecc_valid_point(&point_ret) == true);
-
-	} else if (data->type == TEST_LEGENDRE) {
-		assert(data->lres == lres);
 	}
 }
 
