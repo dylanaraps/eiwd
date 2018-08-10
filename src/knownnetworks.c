@@ -106,7 +106,7 @@ static void known_network_update(struct network_info *orig_network,
 					struct timespec *connected_time)
 {
 	struct network_info *network;
-	bool is_hidden;
+	bool is_hidden = false;
 
 	if (orig_network)
 		network = orig_network;
@@ -127,13 +127,18 @@ static void known_network_update(struct network_info *orig_network,
 	memcpy(&network->connected_time, connected_time,
 		sizeof(struct timespec));
 
+	l_settings_get_bool(settings, "Settings", "Hidden", &is_hidden);
+
 	if (network->is_hidden && orig_network)
 		num_known_hidden_networks--;
 
-	network->is_hidden = false;
+	if (network->is_hidden != is_hidden && orig_network)
+		l_dbus_property_changed(dbus_get_bus(),
+					iwd_known_network_get_path(network),
+					IWD_KNOWN_NETWORK_INTERFACE,
+					"Hidden");
 
-	if (l_settings_get_bool(settings, "Settings", "Hidden", &is_hidden))
-		network->is_hidden = is_hidden;
+	network->is_hidden = is_hidden;
 
 	if (network->is_hidden)
 		num_known_hidden_networks++;
@@ -216,6 +221,19 @@ static bool known_network_property_get_type(struct l_dbus *dbus,
 	return true;
 }
 
+static bool known_network_property_get_hidden(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct network_info *network = user_data;
+	bool is_hidden = network->is_hidden;
+
+	l_dbus_message_builder_append_basic(builder, 'b', &is_hidden);
+
+	return true;
+}
+
 static bool known_network_property_get_last_connected(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -247,6 +265,9 @@ static void setup_known_network_interface(struct l_dbus_interface *interface)
 					known_network_property_get_name, NULL);
 	l_dbus_interface_property(interface, "Type", 0, "s",
 					known_network_property_get_type, NULL);
+	l_dbus_interface_property(interface, "Hidden", 0, "b",
+					known_network_property_get_hidden,
+					NULL);
 	l_dbus_interface_property(interface, "LastConnectedTime", 0, "s",
 				known_network_property_get_last_connected,
 				NULL);
