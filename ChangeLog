@@ -1,3 +1,11 @@
+ver 0.5:
+	Fix issue with EAPoL handling and Ad-Hoc networks.
+	Add support for using agent with EAP-GTC methods.
+	Add support for improved Known Networks management.
+	Add support for Simultaneous Authentication of Equals.
+	Add support for exposing supported modes of operation.
+	Add support for D-Bus auto-activation via systemd.
+
 ver 0.4:
 	Fix issue with handling all zero PMKID.
 	Fix issue with handling PEAP servers and M bit requirement.
