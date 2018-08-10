@@ -27,6 +27,7 @@
 #define _GNU_SOURCE
 #include <string.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -141,7 +142,6 @@ ssize_t write_file(const void *buffer, size_t len,
 		goto error_mkostemps;
 
 	r = TFR(write(fd, buffer, len));
-
 	TFR(close(fd));
 
 	if (r != (ssize_t) len) {
@@ -153,15 +153,15 @@ ssize_t write_file(const void *buffer, size_t len,
 	 * Now that the file contents are written, rename to the real
 	 * file name; this way we are uniquely sure that the whole
 	 * thing is there.
+	 * conserve @r's value from 'write'
 	 */
-	unlink(path);
 
-	/* conserve @r's value from 'write' */
-	if (link(tmp_path, path) == -1)
+	if (rename(tmp_path, path) == -1)
 		r = -1;
 
 error_write:
-	unlink(tmp_path);
+	if (r < 0)
+		unlink(tmp_path);
 error_mkostemps:
 error_create_dirs:
 	l_free(tmp_path);
