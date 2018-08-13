@@ -779,10 +779,15 @@ static struct handshake_state *device_handshake_setup(struct device *device,
 			handshake_state_set_own_wpa(hs, rsne_buf);
 		}
 
-		if (security == SECURITY_PSK)
-			handshake_state_set_pmk(hs, network_get_psk(network),
-						32);
-		else
+		if (security == SECURITY_PSK) {
+			/* SAE will generate/set the PMK */
+			if (info.akm_suites == IE_RSN_AKM_SUITE_SAE_SHA256)
+				handshake_state_set_passphrase(hs,
+					network_get_passphrase(network));
+			else
+				handshake_state_set_pmk(hs,
+						network_get_psk(network), 32);
+		} else
 			handshake_state_set_8021x_config(hs,
 						network_get_settings(network));
 
