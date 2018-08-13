@@ -111,6 +111,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/eap-pwd.c \
 					src/ecc.h src/ecc.c \
 					src/adhoc.h src/adhoc.c \
+					src/sae.h src/sae.c \
 					$(builtin_sources)
 
 src_iwd_LDADD = ell/libell-internal.la -ldl
