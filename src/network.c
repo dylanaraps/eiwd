@@ -421,6 +421,10 @@ static int network_load_psk(struct network *network)
 		return -EINVAL;
 	}
 
+	l_free(network->passphrase);
+	network->passphrase = l_settings_get_string(network->settings,
+						"Security", "Passphrase");
+
 	return 0;
 }
 
@@ -438,10 +442,20 @@ void network_sync_psk(struct network *network)
 	l_settings_set_value(network->settings, "Security",
 						"PreSharedKey", hex);
 
+	if (network->passphrase)
+		l_settings_set_string(network->settings, "Security",
+							"Passphrase",
+							network->passphrase);
+
 	fs_settings = storage_network_open(SECURITY_PSK, network->info->ssid);
 	if (fs_settings) {
 		l_settings_set_value(fs_settings, "Security",
 						"PreSharedKey", hex);
+		if (network->passphrase)
+			l_settings_set_string(fs_settings, "Security",
+							"Passphrase",
+							network->passphrase);
+
 		storage_network_sync(SECURITY_PSK, network->info->ssid,
 					fs_settings);
 		l_settings_free(fs_settings);
@@ -475,6 +489,9 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 		return -ENOTSUP;
 	}
 
+	if (!network_settings_load(network))
+		return -ENOKEY;
+
 	if (is_rsn) {
 		struct ie_rsn_info rsn;
 
@@ -484,12 +501,17 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 		if (!wiphy_select_cipher(wiphy, rsn.pairwise_ciphers) ||
 				!wiphy_select_cipher(wiphy, rsn.group_cipher)) {
 			l_debug("Cipher mis-match");
-			return -ENETUNREACH;
+			ret = -ENETUNREACH;
+			goto close_settings;
+		}
+
+		if (rsn.akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256 &&
+				!l_settings_has_key(network->settings,
+						"Security", "Passphrase")) {
+			ret = -ENOKEY;
+			goto close_settings;
 		}
 	}
-
-	if (!network_settings_load(network))
-		return -ENOKEY;
 
 	/* If no entry, default to Autoconnectable=True */
 	if (!l_settings_get_bool(network->settings, "Settings",
@@ -673,6 +695,19 @@ err:
 	network_settings_close(network);
 }
 
+static bool bss_is_sae(struct scan_bss *bss)
+{
+	struct ie_rsn_info rsn;
+
+	memset(&rsn, 0, sizeof(rsn));
+	scan_bss_get_rsn_info(bss, &rsn);
+
+	if (rsn.akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256)
+		return true;
+
+	return false;
+}
+
 static struct l_dbus_message *network_connect_psk(struct network *network,
 					struct scan_bss *bss,
 					struct l_dbus_message *message)
@@ -688,7 +723,14 @@ static struct l_dbus_message *network_connect_psk(struct network *network,
 
 	l_debug("ask_psk: %s", network->ask_psk ? "true" : "false");
 
-	if (network->ask_psk || !network->psk) {
+	/*
+	 * A legacy psk file may only contain the PreSharedKey entry. For SAE
+	 * networks the raw Passphrase is required. So in this case where
+	 * the psk is found but no passphrase, we ask the agent. In this case
+	 * the psk file will be re-written to contain the raw passphrase.
+	 */
+	if (network->ask_psk || !network->psk ||
+			(!network->passphrase && bss_is_sae(bss))) {
 		network->ask_psk = false;
 
 		network->agent_request =
