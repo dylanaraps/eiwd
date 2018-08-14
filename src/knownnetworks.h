@@ -32,5 +32,7 @@ bool known_networks_has_hidden(void);
 struct network_info *known_networks_find(const char *ssid,
 						enum security security);
 
+const char *known_network_get_path(const struct network_info *network);
+
 bool known_networks_init(void);
 void known_networks_exit(void);

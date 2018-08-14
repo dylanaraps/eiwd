@@ -66,8 +66,7 @@ static int timespec_compare(const void *a, const void *b, void *user_data)
 	return 0;
 }
 
-static const char *iwd_known_network_get_path(
-					const struct network_info *network)
+const char *known_network_get_path(const struct network_info *network)
 {
 	static char path[256];
 	unsigned int pos = 0, i;
@@ -86,7 +85,7 @@ static const char *iwd_known_network_get_path(
 
 static void known_network_register_dbus(struct network_info *network)
 {
-	const char *path = iwd_known_network_get_path(network);
+	const char *path = known_network_get_path(network);
 
 	if (!l_dbus_object_add_interface(dbus_get_bus(), path,
 					IWD_KNOWN_NETWORK_INTERFACE, network))
@@ -116,7 +115,7 @@ static void known_network_update(struct network_info *orig_network,
 	if (timespec_compare(&network->connected_time, connected_time, NULL) &&
 			orig_network) {
 		l_dbus_property_changed(dbus_get_bus(),
-					iwd_known_network_get_path(network),
+					known_network_get_path(network),
 					IWD_KNOWN_NETWORK_INTERFACE,
 					"LastConnectedTime");
 
@@ -134,7 +133,7 @@ static void known_network_update(struct network_info *orig_network,
 
 	if (network->is_hidden != is_hidden && orig_network)
 		l_dbus_property_changed(dbus_get_bus(),
-					iwd_known_network_get_path(network),
+					known_network_get_path(network),
 					IWD_KNOWN_NETWORK_INTERFACE,
 					"Hidden");
 
@@ -280,7 +279,7 @@ static void known_network_removed(struct network_info *network)
 
 	l_queue_remove(known_networks, network);
 	l_dbus_unregister_object(dbus_get_bus(),
-					iwd_known_network_get_path(network));
+					known_network_get_path(network));
 
 	/*
 	 * network_info_forget_known will either re-add the network_info to
