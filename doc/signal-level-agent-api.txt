@@ -13,7 +13,7 @@ Methods		void Release(object device)
 			agent, because when this method gets called it has
 			already been unregistered.
 
-		string SignalLevelChanged(object device, uint8 level)
+		string Changed(object device, uint8 level)
 
 			This method gets called when the signal strength
 			measurement for the device's connected network
