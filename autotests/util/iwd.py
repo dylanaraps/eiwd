@@ -198,7 +198,7 @@ class SignalAgent(dbus.service.Object):
 
     @dbus.service.method(IWD_SIGNAL_AGENT_INTERFACE,
                          in_signature='oy', out_signature='')
-    def SignalLevelChanged(self, path, level):
+    def Changed(self, path, level):
         self.handle_new_level(str(path), int(level))
 
     @abstractmethod
