@@ -41,7 +41,6 @@
 #include "src/eap.h"
 #include "src/eapol.h"
 #include "src/scan.h"
-#include "src/knownnetworks.h"
 #include "src/rfkill.h"
 #include "src/ap.h"
 #include "src/plugin.h"

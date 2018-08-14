@@ -40,3 +40,6 @@ void sim_auth_exit(void);
 
 bool wsc_init(void);
 bool wsc_exit();
+
+bool known_networks_init(void);
+void known_networks_exit(void);
