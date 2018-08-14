@@ -314,3 +314,11 @@ Wireless daemon
 
   Priority: Medium
   Complexity: C2
+
+- DPP Support
+
+  Device Provisioning Protocol is a new specification from WiFi Alliance.
+  This allows devices to be provisioned, typically via a QR code.
+
+  Priority: Low
+  Complexity: C8
