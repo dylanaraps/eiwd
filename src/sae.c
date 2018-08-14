@@ -468,8 +468,6 @@ static void sae_send_confirm(struct sae_sm *sm)
 	memcpy(ptr, confirm, 32);
 	ptr += 32;
 
-	sm->sc++;
-
 	sm->state = SAE_STATE_CONFIRMED;
 
 	sm->tx(sm->handshake->aa, body, 38, sm->user_data);
