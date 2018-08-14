@@ -37,3 +37,10 @@ Properties	string Name [readonly]
 
 			Contains the type of the network.  Possible
 			types are "open", "psk", "8021x" (EAP)
+
+		object KnownNetwork [readonly, optional]
+
+			Contains the path of the KnownNetwork object
+			corresponding to this Network.  If the network
+			is not provisioned or has not been connected to
+			before, the property is ommitted.
