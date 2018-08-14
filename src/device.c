@@ -1608,7 +1608,7 @@ static void device_signal_agent_notify(struct signal_agent *agent,
 	msg = l_dbus_message_new_method_call(dbus_get_bus(),
 						agent->owner, agent->path,
 						IWD_SIGNAL_AGENT_INTERFACE,
-						"SignalLevelChanged");
+						"Changed");
 	l_dbus_message_set_arguments(msg, "oy", device_path, value);
 	l_dbus_message_set_no_reply(msg, true);
 
