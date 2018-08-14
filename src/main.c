@@ -35,7 +35,6 @@
 
 #include "src/iwd.h"
 #include "src/netdev.h"
-#include "src/device.h"
 #include "src/wiphy.h"
 #include "src/dbus.h"
 #include "src/eap.h"

@@ -90,6 +90,3 @@ int device_disconnect(struct device *device);
 
 struct device *device_create(struct wiphy *wiphy, struct netdev *netdev);
 void device_remove(struct device *device);
-
-bool device_init(void);
-bool device_exit(void);

@@ -2757,7 +2757,7 @@ bool device_init(void)
 	return true;
 }
 
-bool device_exit(void)
+void device_exit(void)
 {
 	if (!l_queue_isempty(device_list))
 		l_warn("device_list isn't empty!");
@@ -2768,6 +2768,4 @@ bool device_exit(void)
 	watchlist_destroy(&device_watches);
 
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_DEVICE_INTERFACE);
-
-	return true;
 }
