@@ -33,7 +33,7 @@ Properties	string Name [readonly]
 
 			The object path of the device the network belongs to.
 
-		string Type
+		string Type [readonly]
 
 			Contains the type of the network.  Possible
 			types are "open", "psk", "8021x" (EAP)
