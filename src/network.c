@@ -1131,6 +1131,22 @@ static bool network_property_get_type(struct l_dbus *dbus,
 	return true;
 }
 
+static bool network_property_get_known_network(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct network *network = user_data;
+
+	if (!network->info->is_known)
+		return false;
+
+	l_dbus_message_builder_append_basic(builder, 'o',
+					known_network_get_path(network->info));
+
+	return true;
+}
+
 static void setup_network_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Connect", 0,
@@ -1149,6 +1165,9 @@ static void setup_network_interface(struct l_dbus_interface *interface)
 
 	l_dbus_interface_property(interface, "Type", 0, "s",
 					network_property_get_type, NULL);
+
+	l_dbus_interface_property(interface, "KnownNetwork", 0, "o",
+				network_property_get_known_network, NULL);
 }
 
 bool network_register(struct network *network, const char *path)
@@ -1267,6 +1286,21 @@ void network_rank_update(struct network *network)
 	network->rank = rank;
 }
 
+static void emit_known_network_changed(struct device *device, void *user_data)
+{
+	struct network_info *info = user_data;
+	struct network *network;
+
+	network = device_network_find(device, info->ssid, info->type);
+	if (!network)
+		return;
+
+	l_dbus_property_changed(dbus_get_bus(),
+				network_get_path(network),
+				IWD_NETWORK_INTERFACE,
+				"KnownNetwork");
+}
+
 struct network_info *network_info_add_known(const char *ssid,
 						enum security security)
 {
@@ -1277,17 +1311,22 @@ struct network_info *network_info_add_known(const char *ssid,
 	search.type = security;
 
 	network = l_queue_remove_if(networks, network_info_match, &search);
-	if (network)
+	if (network) {
+		/* Promote network to is_known */
+		network->is_known = true;
+		__iwd_device_foreach(emit_known_network_changed, network);
 		return network;
+	}
 
 	network = l_new(struct network_info, 1);
 	strcpy(network->ssid, ssid);
 	network->type = security;
+	network->is_known = true;
 
 	return network;
 }
 
-static void network_info_check_device(struct device *device, void *user_data)
+static void disconnect_no_longer_known(struct device *device, void *user_data)
 {
 	struct network_info *info = user_data;
 	struct network *network;
@@ -1300,7 +1339,10 @@ static void network_info_check_device(struct device *device, void *user_data)
 
 void network_info_forget_known(struct network_info *network)
 {
-	__iwd_device_foreach(network_info_check_device, network);
+	network->is_known = false;
+
+	__iwd_device_foreach(emit_known_network_changed, network);
+	__iwd_device_foreach(disconnect_no_longer_known, network);
 
 	/*
 	 * Network is no longer a Known Network, see if we still need to
