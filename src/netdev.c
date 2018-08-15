@@ -1279,7 +1279,7 @@ static const uint8_t *netdev_choose_key_address(
 	case NL80211_IFTYPE_AP:
 		return nhs->super.spa;
 	case NL80211_IFTYPE_ADHOC:
-		if (!memcmp(nhs->netdev->addr, nhs->super.aa, 6))
+		if (nhs->super.authenticator)
 			return nhs->super.spa;
 		else
 			return nhs->super.aa;

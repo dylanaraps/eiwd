@@ -424,6 +424,7 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 	handshake_state_set_pmk(sta->hs, ap->pmk, 32);
 	handshake_state_set_authenticator_address(sta->hs, own_addr);
 	handshake_state_set_supplicant_address(sta->hs, sta->addr);
+	handshake_state_set_authenticator(sta->hs, true);
 
 	sta->sm = eapol_sm_new(sta->hs);
 	if (!sta->sm) {
@@ -435,7 +436,7 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 	eapol_sm_set_listen_interval(sta->sm, sta->listen_interval);
 	eapol_sm_set_protocol_version(sta->sm, EAPOL_PROTOCOL_VERSION_2004);
 
-	eapol_register_authenticator(sta->sm);
+	eapol_register(sta->sm);
 
 	return;
 

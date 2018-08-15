@@ -224,6 +224,7 @@ static struct eapol_sm *adhoc_new_sm(struct sta_state *sta, bool authenticator)
 	if (authenticator) {
 		handshake_state_set_authenticator_address(hs, own_addr);
 		handshake_state_set_supplicant_address(hs, sta->addr);
+		handshake_state_set_authenticator(hs, true);
 	} else {
 		handshake_state_set_authenticator_address(hs, sta->addr);
 		handshake_state_set_supplicant_address(hs, own_addr);
@@ -299,7 +300,7 @@ static void adhoc_new_station(struct adhoc_state *adhoc, const uint8_t *mac)
 	}
 
 	eapol_register(sta->sm);
-	eapol_register_authenticator(sta->sm_a);
+	eapol_register(sta->sm_a);
 
 	eapol_start(sta->sm);
 
