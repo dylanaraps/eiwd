@@ -61,6 +61,8 @@ struct sae_sm {
 	uint16_t sc;
 	/* received value of the send-confirm counter */
 	uint16_t rc;
+	/* remote peer */
+	uint8_t peer[6];
 
 	sae_tx_packet_func_t tx;
 	sae_complete_func_t complete;
@@ -238,7 +240,7 @@ static void sae_reject_authentication(struct sae_sm *sm, uint16_t reason)
 		ptr += 2;
 	}
 
-	sm->tx(sm->handshake->aa, reject, ptr - reject, sm->user_data);
+	sm->tx(sm->peer, reject, ptr - reject, sm->user_data);
 
 	sae_authentication_failed(sm, reason);
 }
@@ -470,7 +472,7 @@ static void sae_send_confirm(struct sae_sm *sm)
 
 	sm->state = SAE_STATE_CONFIRMED;
 
-	sm->tx(sm->handshake->aa, body, 38, sm->user_data);
+	sm->tx(sm->peer, body, 38, sm->user_data);
 }
 
 static void sae_process_commit(struct sae_sm *sm, const uint8_t *from,
@@ -664,7 +666,7 @@ static void sae_send_commit(struct sae_sm *sm, bool retry)
 
 	sm->state = SAE_STATE_COMMITTED;
 
-	sm->tx(hs->aa, commit, len, sm->user_data);
+	sm->tx(sm->peer, commit, len, sm->user_data);
 }
 
 void sae_timeout(struct sae_sm *sm)
@@ -981,6 +983,11 @@ reject:
 
 void sae_start(struct sae_sm *sm)
 {
+	if (sm->handshake->authenticator)
+		memcpy(sm->peer, sm->handshake->spa, 6);
+	else
+		memcpy(sm->peer, sm->handshake->aa, 6);
+
 	sae_send_commit(sm, false);
 }
 
