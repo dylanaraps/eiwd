@@ -98,6 +98,11 @@ void handshake_state_set_authenticator_address(struct handshake_state *s,
 	memcpy(s->aa, aa, sizeof(s->aa));
 }
 
+void handshake_state_set_authenticator(struct handshake_state *s, bool auth)
+{
+	s->authenticator = auth;
+}
+
 void handshake_state_set_pmk(struct handshake_state *s, const uint8_t *pmk,
 				size_t pmk_len)
 {

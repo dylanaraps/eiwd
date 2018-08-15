@@ -102,6 +102,7 @@ struct handshake_state {
 	bool mfp : 1;
 	bool have_anonce : 1;
 	bool have_pmkid : 1;
+	bool authenticator : 1;
 	uint8_t ssid[32];
 	size_t ssid_len;
 	char *passphrase;
@@ -121,6 +122,7 @@ void handshake_state_set_supplicant_address(struct handshake_state *s,
 						const uint8_t *spa);
 void handshake_state_set_authenticator_address(struct handshake_state *s,
 						const uint8_t *aa);
+void handshake_state_set_authenticator(struct handshake_state *s, bool auth);
 void handshake_state_set_pmk(struct handshake_state *s, const uint8_t *pmk,
 				size_t pmk_len);
 void handshake_state_set_8021x_config(struct handshake_state *s,
