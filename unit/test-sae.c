@@ -266,7 +266,7 @@ static void test_early_confirm(const void *arg)
 	struct sae_sm *sm = test_initialize(td);
 
 	uint8_t frame[38];
-	uint8_t first_commit[100];
+	uint8_t first_commit[102];
 
 	/* save the initial commit */
 	memcpy(first_commit, td->tx_packet, td->tx_packet_len);
