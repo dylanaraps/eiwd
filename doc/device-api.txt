@@ -5,120 +5,6 @@ Service		net.connman.iwd
 Interface	net.connman.iwd.Device [Experimental]
 Object path	/{phy0,phy1,...}/{1,2,...}
 
-Methods		void Scan()
-
-			Schedule a network scan.
-
-			Possible errors: net.connman.iwd.Busy
-					 net.connman.iwd.Failed
-
-		void Disconnect()
-
-			Disconnect from the network
-
-			Possible errors: net.connman.iwd.Busy
-					 net.connman.iwd.Failed
-					 net.connman.iwd.NotConnected
-
-		array(osns) GetOrderedNetworks()
-
-			Return the list of networks found in the most recent
-			scan, sorted by their user interface importance
-			score as calculated by iwd.  If the device is
-			currently connected to a network, that network is
-			always first on the list, followed by any known
-			networks that have been used at least once before,
-			followed by any other known networks and any other
-			detected networks as the last group.  Within these
-			groups the maximum relative signal-strength is the
-			main sorting factor.
-
-			Every record returned contains a 4-tuple of the
-			following values.
-
-			object Object
-
-				net.connman.iwd.Network object representing
-				the network.
-
-			string Name
-
-				Contains the Name (SSID) of the network
-
-			int16 SignalStrength
-
-				Network's maximum signal strength expressed
-				in 100 * dBm.  The value is the range of 0
-				(strongest signal) to -10000 (weakest signal)
-
-			string Type
-
-				Contains the type of the network.  Possible
-				types are "open", "psk", "8021x" (EAP)
-
-		void ConnectHiddenNetwork(string ssid)
-
-			Tries to find and connect to a hidden network for the
-			first time.  Only hidden networks of type 'psk' and
-			'open' are supported.  WPA-Enterprise hidden networks
-			must be provisioned.
-
-			The ssid parameter is used to find the hidden network.
-			If no network with the given ssid is found, an
-			net.connman.iwd.NotFound error is returned.
-
-			In the unlikely case that both an open and pre-shared
-			key hidden network with the given ssid is found an
-			net.connman.iwd.ServiceSetOverlap error is returned.
-
-			Once the hidden network is found, the connection will
-			proceed as normal.  So the user agent will be asked
-			for a passphrase, etc.
-
-			This method should only be called once to provision
-			a hidden network.  For all future connections the
-			regular Network.Connect() API should be used.
-
-			Possible errors: net.connman.iwd.Busy
-					 net.connman.iwd.Failed
-					 net.connman.iwd.InvalidArgs
-					 net.connman.iwd.NotConfigured
-					 net.connman.iwd.NotConnected
-					 net.connman.iwd.NotFound
-					 net.connman.iwd.ServiceSetOverlap
-					 net.connman.iwd.AlreadyProvisioned
-					 net.connman.iwd.NotHidden
-
-		void RegisterSignalLevelAgent(object path,
-						 array(int16) levels)
-
-			Register the agent object to receive signal strength
-			level change notifications on the
-			net.connman.iwd.SignalLevelAgent interface, see
-			signal-level-agent-api.txt.  The "levels"
-			parameters decides the thresholds in dBm that will
-			generate a call to the agent's Changed
-			method whenever current RSSI crosses any of the
-			values.  The values must be passed in descending
-			order.  The number and distance between requested
-			threshold values is a compromise between resolution
-			and the frequency of system wakeups and
-			context-switches that are going to be occuring to
-			update the client's signal meter.  Only one agent
-			can be registered at any time.
-
-			Possible Errors: [service].Error.InvalidArguments
-					 [service].Error.Failed
-					 [service].Error.AlreadyExists
-					 [service].Error.NotSupported
-
-		void UnregisterSignalLevelAgent(object path)
-
-			Unregister an existing agent.
-
-			Possible Errors: [service].Error.InvalidArguments
-					 [service].Error.NotFound
-
 Properties	string Name [readonly]
 
 			Device's interface name
@@ -127,19 +13,6 @@ Properties	string Name [readonly]
 
 			Interface's hardware address in the XX:XX:XX:XX:XX:XX
 			format
-
-		string State [readonly]
-
-			Reflects the general network connection state.  One of:
-
-			"connected", "disconnected", "connecting",
-			"disconnecting", "roaming"
-
-		object ConnectedNetwork [readonly, optional]
-
-			net.connman.iwd.Network object representing the
-			network the device is currently connected to or to
-			which a connection is in progress.
 
 		boolean Powered [readwrite]
 
@@ -153,12 +26,6 @@ Properties	string Name [readonly]
 			format for the 802.11 packet header. If false, the
 			classic format is used. When activated, the interface
 			can be added to a Layer2 bridge to create a WDS.
-
-		boolean Scanning [readonly]
-
-			Reflects whether the device is currently scanning
-			for networks.  net.connman.iwd.Network objects are
-			updated when this property goes from true to false.
 
 		object Adapter [readonly]
 
