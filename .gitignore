@@ -42,6 +42,7 @@ unit/test-eapol
 unit/test-ssid-to-utf8
 unit/test-ssid-security
 unit/test-wsc
+unit/test-sae
 unit/test-eap-mschapv2
 unit/test-eap-sim
 unit/test-client
