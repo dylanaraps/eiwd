@@ -4439,7 +4439,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	rtmmsg->ifi_index = *ifindex;
 
 	l_netlink_send(rtnl, RTM_GETLINK, 0, rtmmsg, bufsize,
-					netdev_getlink_cb, netdev, NULL);
+					netdev_getlink_cb, NULL, NULL);
 
 	l_free(rtmmsg);
 
