@@ -2666,7 +2666,7 @@ int netdev_join_adhoc(struct netdev *netdev, const char *ssid,
 			void *user_data)
 {
 	struct l_genl_msg *cmd;
-	uint32_t ifindex = device_get_ifindex(netdev->device);
+	uint32_t ifindex = netdev->index;
 	uint32_t ch_freq = scan_channel_to_freq(6, SCAN_BAND_2_4_GHZ);
 	uint32_t ch_type = NL80211_CHAN_HT20;
 
