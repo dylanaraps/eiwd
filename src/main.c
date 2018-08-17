@@ -161,7 +161,6 @@ static void nl80211_vanished(void *user_data)
 	l_debug("Lost nl80211 interface");
 
 	ap_exit();
-	wsc_exit();
 	scan_exit();
 	netdev_exit();
 	wiphy_exit();
