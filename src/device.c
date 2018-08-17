@@ -2276,6 +2276,18 @@ struct set_generic_cb_data {
 	l_dbus_property_complete_cb_t complete;
 };
 
+static void set_generic_destroy(void *user_data)
+{
+	struct set_generic_cb_data *cb_data = user_data;
+
+	/* Message hasn't been replied to, generate an Aborted error */
+	if (cb_data->message)
+		cb_data->complete(cb_data->dbus, cb_data->message,
+					dbus_error_aborted(cb_data->message));
+
+	l_free(cb_data);
+}
+
 static void set_powered_cb(struct netdev *netdev, int result, void *user_data)
 {
 	struct set_generic_cb_data *cb_data = user_data;
@@ -2285,6 +2297,7 @@ static void set_powered_cb(struct netdev *netdev, int result, void *user_data)
 		reply = dbus_error_failed(cb_data->message);
 
 	cb_data->complete(cb_data->dbus, cb_data->message, reply);
+	cb_data->message = NULL;
 }
 
 static struct l_dbus_message *device_property_set_powered(struct l_dbus *dbus,
@@ -2314,7 +2327,7 @@ static struct l_dbus_message *device_property_set_powered(struct l_dbus *dbus,
 	cb_data->complete = complete;
 
 	r = netdev_set_powered(device->netdev, powered, set_powered_cb,
-					cb_data, l_free);
+					cb_data, set_generic_destroy);
 	if (r < 0) {
 		l_free(cb_data);
 		return dbus_error_from_errno(r, message);
@@ -2345,6 +2358,7 @@ static void set_4addr_cb(struct netdev *netdev, int result, void *user_data)
 		reply = dbus_error_failed(cb_data->message);
 
 	cb_data->complete(cb_data->dbus, cb_data->message, reply);
+	cb_data->message = NULL;
 
 	l_dbus_property_changed(cb_data->dbus, device_get_path(cb_data->device),
 				IWD_DEVICE_INTERFACE, "WDS");
@@ -2375,8 +2389,8 @@ static struct l_dbus_message *device_property_set_4addr(struct l_dbus *dbus,
 	cb_data->message = message;
 	cb_data->complete = complete;
 
-	if (netdev_set_4addr(device->netdev, use_4addr, set_4addr_cb, cb_data,
-				l_free) < 0)
+	if (netdev_set_4addr(device->netdev, use_4addr, set_4addr_cb,
+				cb_data, set_generic_destroy) < 0)
 		return dbus_error_failed(message);
 
 	return NULL;
