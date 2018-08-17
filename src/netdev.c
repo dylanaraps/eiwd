@@ -211,17 +211,6 @@ struct wiphy *netdev_get_wiphy(struct netdev *netdev)
 	return netdev->wiphy;
 }
 
-static void netlink_result(int error, uint16_t type, const void *data,
-			uint32_t len, void *user_data)
-{
-	struct cb_data *cb_data = user_data;
-
-	if (!cb_data)
-		return;
-
-	cb_data->callback(error < 0 ? false : true, cb_data->user_data);
-}
-
 static size_t rta_add_u8(void *rta_buf, unsigned short type, uint8_t value)
 {
 	struct rtattr *rta = rta_buf;
@@ -233,14 +222,16 @@ static size_t rta_add_u8(void *rta_buf, unsigned short type, uint8_t value)
 	return RTA_SPACE(sizeof(uint8_t));
 }
 
-static void netdev_set_linkmode_and_operstate(uint32_t ifindex,
-				uint8_t linkmode, uint8_t operstate,
-				netdev_command_func_t callback, void *user_data)
+static uint32_t rtnl_set_linkmode_and_operstate(int ifindex,
+					uint8_t linkmode, uint8_t operstate,
+					l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy)
 {
 	struct ifinfomsg *rtmmsg;
 	void *rta_buf;
 	size_t bufsize;
-	struct cb_data *cb_data = NULL;
+	uint32_t id;
 
 	bufsize = NLMSG_ALIGN(sizeof(struct ifinfomsg)) +
 		RTA_SPACE(sizeof(uint8_t)) + RTA_SPACE(sizeof(uint8_t));
@@ -256,17 +247,12 @@ static void netdev_set_linkmode_and_operstate(uint32_t ifindex,
 	rta_buf += rta_add_u8(rta_buf, IFLA_LINKMODE, linkmode);
 	rta_buf += rta_add_u8(rta_buf, IFLA_OPERSTATE, operstate);
 
-	if (callback) {
-		cb_data = l_new(struct cb_data, 1);
-		cb_data->callback = callback;
-		cb_data->user_data = user_data;
-	}
-
-	l_netlink_send(rtnl, RTM_SETLINK, 0, rtmmsg,
+	id = l_netlink_send(rtnl, RTM_SETLINK, 0, rtmmsg,
 					rta_buf - (void *) rtmmsg,
-					netlink_result, cb_data, l_free);
-
+					cb, user_data, destroy);
 	l_free(rtmmsg);
+
+	return id;
 }
 
 const uint8_t *netdev_get_address(struct netdev *netdev)
@@ -491,13 +477,6 @@ static void netdev_rssi_polling_update(struct netdev *netdev)
 			netdev->rssi_poll_cmd_id = 0;
 		}
 	}
-}
-
-static void netdev_linkmode_dormant_cb(bool success, void *user_data)
-{
-	struct netdev *netdev = user_data;
-
-	l_debug("netdev: %d, success: %d", netdev->index, success);
 }
 
 static void netdev_preauth_destroy(void *data)
@@ -979,18 +958,22 @@ int netdev_del_station(struct netdev *netdev, const uint8_t *sta,
 	return 0;
 }
 
-static void netdev_operstate_cb(bool success, void *user_data)
+static void netdev_operstate_cb(int error, uint16_t type,
+					const void *data,
+					uint32_t len, void *user_data)
 {
-	struct netdev *netdev = user_data;
+	if (!error)
+		return;
 
-	l_debug("netdev: %d, success: %d", netdev->index, success);
+	l_debug("netdev: %u, error: %s", L_PTR_TO_UINT(user_data),
+							strerror(-error));
 }
 
 static void netdev_connect_ok(struct netdev *netdev)
 {
-	netdev_set_linkmode_and_operstate(netdev->index, IF_LINK_MODE_DORMANT,
-						IF_OPER_UP, netdev_operstate_cb,
-						netdev);
+	rtnl_set_linkmode_and_operstate(netdev->index, IF_LINK_MODE_DORMANT,
+					IF_OPER_UP, netdev_operstate_cb,
+					L_UINT_TO_PTR(netdev->index), NULL);
 
 	netdev->operational = true;
 
@@ -4066,10 +4049,9 @@ static void netdev_initial_up_cb(int error, uint16_t type, const void *data,
 			return;
 	}
 
-	netdev_set_linkmode_and_operstate(netdev->index, IF_LINK_MODE_DORMANT,
-						IF_OPER_DOWN,
-						netdev_linkmode_dormant_cb,
-						netdev);
+	rtnl_set_linkmode_and_operstate(netdev->index, IF_LINK_MODE_DORMANT,
+					IF_OPER_DOWN, netdev_operstate_cb,
+					L_UINT_TO_PTR(netdev->index), NULL);
 
 	/*
 	 * we don't know the initial status of the 4addr property on this
