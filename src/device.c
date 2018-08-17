@@ -2296,6 +2296,7 @@ static struct l_dbus_message *device_property_set_powered(struct l_dbus *dbus,
 	struct device *device = user_data;
 	bool powered;
 	struct set_generic_cb_data *cb_data;
+	int r;
 
 	if (!l_dbus_message_iter_get_variant(new_value, "b", &powered))
 		return dbus_error_invalid_args(message);
@@ -2312,8 +2313,12 @@ static struct l_dbus_message *device_property_set_powered(struct l_dbus *dbus,
 	cb_data->message = message;
 	cb_data->complete = complete;
 
-	netdev_set_powered(device->netdev, powered, set_powered_cb, cb_data,
-				l_free);
+	r = netdev_set_powered(device->netdev, powered, set_powered_cb,
+					cb_data, l_free);
+	if (r < 0) {
+		l_free(cb_data);
+		return dbus_error_from_errno(r, message);
+	}
 
 	return NULL;
 }
