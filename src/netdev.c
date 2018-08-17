@@ -104,6 +104,11 @@ struct netdev {
 	struct l_timeout *rssi_poll_timeout;
 	uint32_t rssi_poll_cmd_id;
 
+	uint32_t set_powered_cmd_id;
+	netdev_set_powered_cb_t set_powered_cb;
+	void *set_powered_user_data;
+	netdev_destroy_func_t set_powered_destroy;
+
 	struct watchlist event_watches;
 
 	struct watchlist frame_watches;
@@ -305,45 +310,39 @@ struct handshake_state *netdev_get_handshake(struct netdev *netdev)
 	return netdev->handshake;
 }
 
-struct set_powered_cb_data {
-	struct netdev *netdev;
-	netdev_set_powered_cb_t callback;
-	void *user_data;
-	l_netlink_destroy_func_t destroy;
-};
-
 static void netdev_set_powered_result(int error, uint16_t type,
 					const void *data,
 					uint32_t len, void *user_data)
 {
-	struct set_powered_cb_data *cb_data = user_data;
+	struct netdev *netdev = user_data;
 
-	if (!cb_data)
-		return;
+	if (netdev->set_powered_cb)
+		netdev->set_powered_cb(netdev, error,
+						netdev->set_powered_user_data);
 
-	cb_data->callback(cb_data->netdev, error, cb_data->user_data);
+	netdev->set_powered_cb = NULL;
 }
 
 static void netdev_set_powered_destroy(void *user_data)
 {
-	struct set_powered_cb_data *cb_data = user_data;
+	struct netdev *netdev = user_data;
 
-	if (!cb_data)
-		return;
+	netdev->set_powered_cmd_id = 0;
 
-	if (cb_data->destroy)
-		cb_data->destroy(cb_data->user_data);
+	if (netdev->set_powered_destroy)
+		netdev->set_powered_destroy(netdev->set_powered_user_data);
 
-	l_free(cb_data);
+	netdev->set_powered_destroy = NULL;
+	netdev->set_powered_user_data = NULL;
 }
 
-int netdev_set_powered(struct netdev *netdev, bool powered,
-			netdev_set_powered_cb_t callback, void *user_data,
-			netdev_destroy_func_t destroy)
+static uint32_t rtnl_set_powered(int ifindex, bool powered,
+				l_netlink_command_func_t cb, void *user_data,
+				l_netlink_destroy_func_t destroy)
 {
 	struct ifinfomsg *rtmmsg;
 	size_t bufsize;
-	struct set_powered_cb_data *cb_data = NULL;
+	uint32_t id;
 
 	bufsize = NLMSG_ALIGN(sizeof(struct ifinfomsg));
 
@@ -351,24 +350,34 @@ int netdev_set_powered(struct netdev *netdev, bool powered,
 	memset(rtmmsg, 0, bufsize);
 
 	rtmmsg->ifi_family = AF_UNSPEC;
-	rtmmsg->ifi_index = netdev->index;
-	rtmmsg->ifi_change = 0xffffffff;
-	rtmmsg->ifi_flags = powered ? (netdev->ifi_flags | IFF_UP) :
-		(netdev->ifi_flags & ~IFF_UP);
+	rtmmsg->ifi_index = ifindex;
+	rtmmsg->ifi_change = IFF_UP;
+	rtmmsg->ifi_flags = powered ? IFF_UP : 0;
 
-	if (callback) {
-		cb_data = l_new(struct set_powered_cb_data, 1);
-		cb_data->netdev = netdev;
-		cb_data->callback = callback;
-		cb_data->user_data = user_data;
-		cb_data->destroy = destroy;
-	}
-
-	l_netlink_send(rtnl, RTM_SETLINK, 0, rtmmsg, bufsize,
-			netdev_set_powered_result, cb_data,
-			netdev_set_powered_destroy);
+	id = l_netlink_send(rtnl, RTM_SETLINK, 0, rtmmsg, bufsize,
+					cb, user_data, destroy);
 
 	l_free(rtmmsg);
+	return id;
+}
+
+int netdev_set_powered(struct netdev *netdev, bool powered,
+			netdev_set_powered_cb_t callback, void *user_data,
+			netdev_destroy_func_t destroy)
+{
+	if (netdev->set_powered_cmd_id)
+		return -EBUSY;
+
+	netdev->set_powered_cmd_id =
+		rtnl_set_powered(netdev->index, powered,
+					netdev_set_powered_result, netdev,
+					netdev_set_powered_destroy);
+	if (!netdev->set_powered_cmd_id)
+		return -EIO;
+
+	netdev->set_powered_cb = callback;
+	netdev->set_powered_user_data = user_data;
+	netdev->set_powered_destroy = destroy;
 
 	return 0;
 }
@@ -608,6 +617,11 @@ static void netdev_free(void *data)
 		netdev->leave_adhoc_cmd_id = 0;
 	}
 
+	if (netdev->set_powered_cmd_id) {
+		l_netlink_cancel(rtnl, netdev->set_powered_cmd_id);
+		netdev->set_powered_cmd_id = 0;
+	}
+
 	device_remove(netdev->device);
 	watchlist_destroy(&netdev->event_watches);
 	watchlist_destroy(&netdev->frame_watches);
@@ -626,7 +640,7 @@ static void netdev_shutdown_one(void *data, void *user_data)
 		netdev_set_iftype(netdev, NETDEV_IFTYPE_STATION);
 
 	if (netdev_get_is_up(netdev))
-		netdev_set_powered(netdev, false, NULL, NULL, NULL);
+		rtnl_set_powered(netdev->index, false, NULL, NULL, NULL);
 }
 
 static bool netdev_match(const void *a, const void *b)
@@ -4037,14 +4051,18 @@ static void netdev_dellink_notify(const struct ifinfomsg *ifi, int bytes)
 	netdev_free(netdev);
 }
 
-static void netdev_initial_up_cb(struct netdev *netdev, int result,
-					void *user_data)
+static void netdev_initial_up_cb(int error, uint16_t type, const void *data,
+					uint32_t len, void *user_data)
 {
-	if (result != 0) {
-		l_error("Error bringing interface %i up: %s", netdev->index,
-			strerror(-result));
+	struct netdev *netdev = user_data;
 
-		if (result != -ERFKILL)
+	netdev->set_powered_cmd_id = 0;
+
+	if (error != 0) {
+		l_error("Error bringing interface %i up: %s", netdev->index,
+			strerror(-error));
+
+		if (error != -ERFKILL)
 			return;
 	}
 
@@ -4064,18 +4082,22 @@ static void netdev_initial_up_cb(struct netdev *netdev, int result,
 	netdev->device = device_create(netdev->wiphy, netdev);
 }
 
-static void netdev_initial_down_cb(struct netdev *netdev, int result,
-					void *user_data)
+static void netdev_initial_down_cb(int error, uint16_t type, const void *data,
+					uint32_t len, void *user_data)
 {
-	if (result != 0) {
-		l_error("Error taking interface %i down: %s", netdev->index,
-			strerror(-result));
+	struct netdev *netdev = user_data;
 
+	if (error != 0) {
+		l_error("Error taking interface %i down: %s", netdev->index,
+			strerror(-error));
+
+		netdev->set_powered_cmd_id = 0;
 		return;
 	}
 
-	netdev_set_powered(netdev, true, netdev_initial_up_cb,
-				NULL, NULL);
+	netdev->set_powered_cmd_id =
+		rtnl_set_powered(netdev->index, true, netdev_initial_up_cb,
+					netdev, NULL);
 }
 
 static void netdev_getlink_cb(int error, uint16_t type, const void *data,
@@ -4084,6 +4106,8 @@ static void netdev_getlink_cb(int error, uint16_t type, const void *data,
 	const struct ifinfomsg *ifi = data;
 	unsigned int bytes;
 	struct netdev *netdev;
+	l_netlink_command_func_t cb;
+	bool powered;
 
 	if (error != 0 || ifi->ifi_type != ARPHRD_ETHER ||
 			type != RTM_NEWLINK) {
@@ -4104,11 +4128,11 @@ static void netdev_getlink_cb(int error, uint16_t type, const void *data,
 	 * If the interface is UP, reset it to ensure a clean state,
 	 * otherwise just bring it UP.
 	 */
-	if (netdev_get_is_up(netdev)) {
-		netdev_set_powered(netdev, false, netdev_initial_down_cb,
-					NULL, NULL);
-	} else
-		netdev_initial_down_cb(netdev, 0, NULL);
+	powered = netdev_get_is_up(netdev);
+	cb = powered ? netdev_initial_down_cb : netdev_initial_up_cb;
+
+	netdev->set_powered_cmd_id =
+		rtnl_set_powered(ifi->ifi_index, !powered, cb, netdev, NULL);
 }
 
 static bool netdev_is_managed(const char *ifname)
