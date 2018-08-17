@@ -296,6 +296,11 @@ struct handshake_state *netdev_get_handshake(struct netdev *netdev)
 	return netdev->handshake;
 }
 
+struct device *netdev_get_device(struct netdev *netdev)
+{
+	return netdev->device;
+}
+
 static void netdev_set_powered_result(int error, uint16_t type,
 					const void *data,
 					uint32_t len, void *user_data)
