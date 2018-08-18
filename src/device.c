@@ -2591,11 +2591,13 @@ static void device_netdev_notify(struct netdev *netdev,
 
 	switch (event) {
 	case NETDEV_WATCH_EVENT_UP:
-		device->autoconnect = true;
-		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
-
 		l_dbus_property_changed(dbus, device_get_path(device),
 					IWD_DEVICE_INTERFACE, "Powered");
+
+		if (device->autoconnect)
+			device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
+		else
+			device_enter_state(device, DEVICE_STATE_DISCONNECTED);
 		break;
 	case NETDEV_WATCH_EVENT_DOWN:
 		device_enter_state(device, DEVICE_STATE_OFF);
