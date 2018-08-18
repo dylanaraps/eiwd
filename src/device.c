@@ -1589,7 +1589,6 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 
 	network_connected(device->connected_network);
 	device_enter_state(device, DEVICE_STATE_CONNECTED);
-	device->autoconnect = true;
 }
 
 static void device_signal_agent_notify(struct signal_agent *agent,
@@ -1737,6 +1736,7 @@ void device_connect_network(struct device *device, struct network *network,
 	}
 
 	device->connect_pending = l_dbus_message_ref(message);
+	device->autoconnect = true;
 }
 
 static void device_scan_triggered(int err, void *user_data)
