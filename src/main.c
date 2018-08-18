@@ -34,7 +34,6 @@
 #include "linux/nl80211.h"
 
 #include "src/iwd.h"
-#include "src/netdev.h"
 #include "src/wiphy.h"
 #include "src/dbus.h"
 #include "src/eap.h"
@@ -147,8 +146,7 @@ static void nl80211_appeared(void *user_data)
 	if (!wiphy_init(nl80211, phys, nophys))
 		l_error("Unable to init wiphy functionality");
 
-	if (!netdev_init(nl80211, interfaces, nointerfaces))
-		l_error("Unable to init netdev functionality");
+	netdev_set_nl80211(nl80211);
 
 	if (!scan_init(nl80211))
 		l_error("Unable to init scan functionality");
@@ -162,7 +160,6 @@ static void nl80211_vanished(void *user_data)
 
 	ap_exit();
 	scan_exit();
-	netdev_exit();
 	wiphy_exit();
 }
 
@@ -430,6 +427,9 @@ int main(int argc, char *argv[])
 	eapol_init();
 	rfkill_init();
 
+	if (!netdev_init(interfaces, nointerfaces))
+		goto fail_netdev;
+
 	if (!device_init())
 		goto fail_device;
 
@@ -451,6 +451,8 @@ int main(int argc, char *argv[])
 	adhoc_exit();
 	device_exit();
 fail_device:
+	netdev_exit();
+fail_netdev:
 	rfkill_exit();
 	eapol_exit();
 	eap_exit();

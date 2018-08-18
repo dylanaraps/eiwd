@@ -175,8 +175,3 @@ uint32_t netdev_station_watch_add(struct netdev *netdev,
 		netdev_station_watch_func_t func, void *user_data);
 
 bool netdev_station_watch_remove(struct netdev *netdev, uint32_t id);
-
-bool netdev_init(struct l_genl_family *in,
-				const char *whitelist, const char *blacklist);
-bool netdev_exit(void);
-void netdev_shutdown(void);

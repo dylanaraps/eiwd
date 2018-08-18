@@ -4552,12 +4552,8 @@ bool netdev_station_watch_remove(struct netdev *netdev, uint32_t id)
 	return watchlist_remove(&netdev->station_watches, id);
 }
 
-bool netdev_init(struct l_genl_family *in,
-				const char *whitelist, const char *blacklist)
+bool netdev_init(const char *whitelist, const char *blacklist)
 {
-	struct l_genl_msg *msg;
-	struct l_genl *genl = l_genl_family_get_genl(in);
-
 	if (rtnl)
 		return false;
 
@@ -4581,6 +4577,27 @@ bool netdev_init(struct l_genl_family *in,
 
 	netdev_list = l_queue_new();
 
+	__handshake_set_install_tk_func(netdev_set_tk);
+	__handshake_set_install_gtk_func(netdev_set_gtk);
+	__handshake_set_install_igtk_func(netdev_set_igtk);
+
+	__eapol_set_rekey_offload_func(netdev_set_rekey_offload);
+	__eapol_set_tx_packet_func(netdev_control_port_frame);
+
+	if (whitelist)
+		whitelist_filter = l_strsplit(whitelist, ',');
+
+	if (blacklist)
+		blacklist_filter = l_strsplit(blacklist, ',');
+
+	return true;
+}
+
+void netdev_set_nl80211(struct l_genl_family *in)
+{
+	struct l_genl_msg *msg;
+	struct l_genl *genl = l_genl_family_get_genl(in);
+
 	nl80211 = in;
 
 	if (!l_genl_family_register(nl80211, "config", netdev_config_notify,
@@ -4599,27 +4616,12 @@ bool netdev_init(struct l_genl_family *in,
 	if (!l_genl_set_unicast_handler(genl, netdev_unicast_notify,
 								NULL, NULL))
 		l_error("Registering for unicast notification failed");
-
-	__handshake_set_install_tk_func(netdev_set_tk);
-	__handshake_set_install_gtk_func(netdev_set_gtk);
-	__handshake_set_install_igtk_func(netdev_set_igtk);
-
-	__eapol_set_rekey_offload_func(netdev_set_rekey_offload);
-	__eapol_set_tx_packet_func(netdev_control_port_frame);
-
-	if (whitelist)
-		whitelist_filter = l_strsplit(whitelist, ',');
-
-	if (blacklist)
-		blacklist_filter = l_strsplit(blacklist, ',');
-
-	return true;
 }
 
-bool netdev_exit(void)
+void netdev_exit(void)
 {
 	if (!rtnl)
-		return false;
+		return;
 
 	l_strfreev(whitelist_filter);
 	l_strfreev(blacklist_filter);
@@ -4629,8 +4631,6 @@ bool netdev_exit(void)
 	l_debug("Closing route netlink socket");
 	l_netlink_destroy(rtnl);
 	rtnl = NULL;
-
-	return true;
 }
 
 void netdev_shutdown(void)
