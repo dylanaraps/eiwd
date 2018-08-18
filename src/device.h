@@ -56,10 +56,6 @@ typedef void (*device_watch_func_t)(struct device *device,
 typedef void (*device_state_watch_func_t)(enum device_state, void *userdata);
 typedef void (*device_destroy_func_t)(void *userdata);
 
-uint32_t device_watch_add(device_watch_func_t func,
-				void *userdata, device_destroy_func_t destroy);
-bool device_watch_remove(uint32_t id);
-
 struct network *device_get_connected_network(struct device *device);
 const char *device_get_path(struct device *device);
 bool device_is_busy(struct device *device);

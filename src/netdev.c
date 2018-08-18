@@ -109,8 +109,6 @@ struct netdev {
 	void *set_powered_user_data;
 	netdev_destroy_func_t set_powered_destroy;
 
-	struct watchlist event_watches;
-
 	struct watchlist frame_watches;
 
 	struct watchlist station_watches;
@@ -150,6 +148,7 @@ static struct l_genl_family *nl80211;
 static struct l_queue *netdev_list;
 static char **whitelist_filter;
 static char **blacklist_filter;
+static struct watchlist netdev_watches;
 
 static void do_debug(const char *str, void *user_data)
 {
@@ -606,8 +605,10 @@ static void netdev_free(void *data)
 		netdev->set_powered_cmd_id = 0;
 	}
 
+	WATCHLIST_NOTIFY(&netdev_watches, netdev_watch_func_t,
+				netdev, NETDEV_WATCH_EVENT_DEL);
 	device_remove(netdev->device);
-	watchlist_destroy(&netdev->event_watches);
+
 	watchlist_destroy(&netdev->frame_watches);
 	watchlist_destroy(&netdev->station_watches);
 
@@ -4009,16 +4010,16 @@ static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 	new_up = netdev_get_is_up(netdev);
 
 	if (old_up != new_up)
-		WATCHLIST_NOTIFY(&netdev->event_watches, netdev_watch_func_t,
+		WATCHLIST_NOTIFY(&netdev_watches, netdev_watch_func_t,
 				netdev, new_up ? NETDEV_WATCH_EVENT_UP :
 						NETDEV_WATCH_EVENT_DOWN);
 
 	if (strcmp(old_name, netdev->name))
-		WATCHLIST_NOTIFY(&netdev->event_watches, netdev_watch_func_t,
+		WATCHLIST_NOTIFY(&netdev_watches, netdev_watch_func_t,
 				netdev, NETDEV_WATCH_EVENT_NAME_CHANGE);
 
 	if (memcmp(old_addr, netdev->addr, ETH_ALEN))
-		WATCHLIST_NOTIFY(&netdev->event_watches, netdev_watch_func_t,
+		WATCHLIST_NOTIFY(&netdev_watches, netdev_watch_func_t,
 				netdev, NETDEV_WATCH_EVENT_ADDRESS_CHANGE);
 }
 
@@ -4067,6 +4068,8 @@ static void netdev_initial_up_cb(int error, uint16_t type, const void *data,
 	l_debug("Interface %i initialized", netdev->index);
 
 	netdev->device = device_create(netdev->wiphy, netdev);
+	WATCHLIST_NOTIFY(&netdev_watches, netdev_watch_func_t,
+				netdev, NETDEV_WATCH_EVENT_NEW);
 }
 
 static void netdev_initial_down_cb(int error, uint16_t type, const void *data,
@@ -4409,7 +4412,6 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 							netdev_pae_destroy);
 	}
 
-	watchlist_init(&netdev->event_watches, NULL);
 	watchlist_init(&netdev->frame_watches, &netdev_frame_watch_ops);
 	watchlist_init(&netdev->station_watches, NULL);
 
@@ -4530,17 +4532,6 @@ static void netdev_link_notify(uint16_t type, const void *data, uint32_t len,
 	}
 }
 
-uint32_t netdev_watch_add(struct netdev *netdev, netdev_watch_func_t func,
-				void *user_data)
-{
-	return watchlist_add(&netdev->event_watches, func, user_data, NULL);
-}
-
-bool netdev_watch_remove(struct netdev *netdev, uint32_t id)
-{
-	return watchlist_remove(&netdev->event_watches, id);
-}
-
 uint32_t netdev_station_watch_add(struct netdev *netdev,
 			netdev_station_watch_func_t func, void *user_data)
 {
@@ -4550,6 +4541,17 @@ uint32_t netdev_station_watch_add(struct netdev *netdev,
 bool netdev_station_watch_remove(struct netdev *netdev, uint32_t id)
 {
 	return watchlist_remove(&netdev->station_watches, id);
+}
+
+uint32_t netdev_watch_add(netdev_watch_func_t func,
+				void *user_data, netdev_destroy_func_t destroy)
+{
+	return watchlist_add(&netdev_watches, func, user_data, destroy);
+}
+
+bool netdev_watch_remove(uint32_t id)
+{
+	return watchlist_remove(&netdev_watches, id);
 }
 
 bool netdev_init(const char *whitelist, const char *blacklist)
@@ -4575,6 +4577,7 @@ bool netdev_init(const char *whitelist, const char *blacklist)
 		return false;
 	}
 
+	watchlist_init(&netdev_watches, NULL);
 	netdev_list = l_queue_new();
 
 	__handshake_set_install_tk_func(netdev_set_tk);
@@ -4626,6 +4629,7 @@ void netdev_exit(void)
 	l_strfreev(whitelist_filter);
 	l_strfreev(blacklist_filter);
 
+	watchlist_destroy(&netdev_watches);
 	nl80211 = NULL;
 
 	l_debug("Closing route netlink socket");

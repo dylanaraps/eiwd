@@ -55,7 +55,6 @@ struct ap_state {
 	uint8_t pmk[32];
 	struct l_queue *frame_watch_ids;
 	uint32_t start_stop_cmd_id;
-	uint32_t netdev_watch_id;
 
 	uint16_t last_aid;
 	struct l_queue *sta_states;
@@ -81,7 +80,7 @@ struct sta_state {
 };
 
 static struct l_genl_family *nl80211 = NULL;
-static uint32_t device_watch;
+static uint32_t netdev_watch;
 
 static void ap_sta_free(void *data)
 {
@@ -127,8 +126,6 @@ static void ap_reset(struct ap_state *ap)
 
 	if (ap->start_stop_cmd_id)
 		l_genl_family_cancel(nl80211, ap->start_stop_cmd_id);
-
-	netdev_watch_remove(netdev, ap->netdev_watch_id);
 
 	l_queue_destroy(ap->sta_states, ap_sta_free);
 
@@ -1126,20 +1123,6 @@ static void ap_deauth_cb(struct netdev *netdev, const struct mmpdu_header *hdr,
 	ap_sta_free(sta);
 }
 
-static void ap_netdev_notify(struct netdev *netdev,
-				enum netdev_watch_event event, void *user_data)
-{
-	struct ap_state *ap = user_data;
-
-	switch (event) {
-	case NETDEV_WATCH_EVENT_DOWN:
-		ap_reset(ap);
-		break;
-	default:
-		break;
-	}
-}
-
 static void ap_start_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct ap_state *ap = user_data;
@@ -1308,8 +1291,6 @@ static int ap_start(struct ap_state *ap, const char *ssid, const char *psk,
 		goto error;
 	}
 
-	ap->netdev_watch_id = netdev_watch_add(netdev, ap_netdev_notify, ap);
-
 	ap->pending = l_dbus_message_ref(message);
 
 	return 0;
@@ -1465,15 +1446,24 @@ static void ap_remove_interface(struct device *device)
 			device_get_path(device), IWD_AP_INTERFACE);
 }
 
-static void ap_device_event(struct device *device, enum device_event event,
-								void *userdata)
+static void ap_netdev_watch(struct netdev *netdev,
+				enum netdev_watch_event event, void *userdata)
 {
+	struct device *device = netdev_get_device(netdev);
+
+	if (!device)
+		return;
+
 	switch (event) {
-	case DEVICE_EVENT_MODE_CHANGED:
-		if (device_get_mode(device) == DEVICE_MODE_AP)
+	case NETDEV_WATCH_EVENT_UP:
+	case NETDEV_WATCH_EVENT_NEW:
+		if (netdev_get_iftype(netdev) == NETDEV_IFTYPE_AP)
 			ap_add_interface(device);
-		else
-			ap_remove_interface(device);
+		break;
+	case NETDEV_WATCH_EVENT_DOWN:
+	case NETDEV_WATCH_EVENT_DEL:
+		ap_remove_interface(device);
+		break;
 	default:
 		break;
 	}
@@ -1481,10 +1471,7 @@ static void ap_device_event(struct device *device, enum device_event event,
 
 bool ap_init(struct l_genl_family *in)
 {
-	device_watch = device_watch_add(ap_device_event, NULL, NULL);
-	if (!device_watch)
-		return false;
-
+	netdev_watch = netdev_watch_add(ap_netdev_watch, NULL, NULL);
 	nl80211 = in;
 
 	return l_dbus_register_interface(dbus_get_bus(), IWD_AP_INTERFACE,
@@ -1497,7 +1484,6 @@ bool ap_init(struct l_genl_family *in)
 
 void ap_exit(void)
 {
-	device_watch_remove(device_watch);
-
+	netdev_watch_remove(netdev_watch);
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_AP_INTERFACE);
 }

@@ -46,7 +46,7 @@
 
 #define WALK_TIME 120
 
-static uint32_t device_watch = 0;
+static uint32_t netdev_watch = 0;
 
 struct wsc {
 	struct device *device;
@@ -1043,7 +1043,7 @@ static void wsc_free(void *userdata)
 	l_free(wsc);
 }
 
-static void device_appeared(struct device *device, void *userdata)
+static void wsc_add_interface(struct device *device)
 {
 	struct l_dbus *dbus = dbus_get_bus();
 	struct wsc *wsc;
@@ -1059,7 +1059,7 @@ static void device_appeared(struct device *device, void *userdata)
 	}
 }
 
-static void device_disappeared(struct device *device, void *userdata)
+static void wsc_remove_interface(struct device *device)
 {
 	struct l_dbus *dbus = dbus_get_bus();
 
@@ -1067,55 +1067,44 @@ static void device_disappeared(struct device *device, void *userdata)
 					IWD_WSC_INTERFACE);
 }
 
-static void device_mode_changed(struct device *device, void *userdata)
+static void wsc_netdev_watch(struct netdev *netdev,
+				enum netdev_watch_event event, void *userdata)
 {
-	enum device_mode mode = device_get_mode(device);
+	struct device *device = netdev_get_device(netdev);
 
-	switch (mode) {
-	case DEVICE_MODE_STATION:
-		device_appeared(device, userdata);
+	if (!device)
+		return;
+
+	switch (event) {
+	case NETDEV_WATCH_EVENT_UP:
+	case NETDEV_WATCH_EVENT_NEW:
+		if (netdev_get_iftype(netdev) == NETDEV_IFTYPE_STATION)
+			wsc_add_interface(device);
+		break;
+	case NETDEV_WATCH_EVENT_DOWN:
+	case NETDEV_WATCH_EVENT_DEL:
+		wsc_remove_interface(device);
 		break;
 	default:
-		device_disappeared(device, userdata);
 		break;
-	}
-}
-
-static void device_event(struct device *device, enum device_event event,
-								void *userdata)
-{
-	switch (event) {
-	case DEVICE_EVENT_INSERTED:
-		return device_appeared(device, userdata);
-	case DEVICE_EVENT_REMOVED:
-		return device_disappeared(device, userdata);
-	case DEVICE_EVENT_MODE_CHANGED:
-		return device_mode_changed(device, userdata);
 	}
 }
 
 bool wsc_init(void)
 {
-	if (!l_dbus_register_interface(dbus_get_bus(), IWD_WSC_INTERFACE,
+	l_debug("");
+	netdev_watch = netdev_watch_add(wsc_netdev_watch, NULL, NULL);
+	l_dbus_register_interface(dbus_get_bus(), IWD_WSC_INTERFACE,
 					setup_wsc_interface,
-					wsc_free, false))
-		return false;
-
-	device_watch = device_watch_add(device_event, NULL, NULL);
-	if (!device_watch) {
-		l_dbus_unregister_interface(dbus_get_bus(), IWD_WSC_INTERFACE);
-		return false;
-	}
-
+					wsc_free, false);
 	return true;
 }
 
 bool wsc_exit()
 {
 	l_debug("");
-
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_WSC_INTERFACE);
-	device_watch_remove(device_watch);
+	netdev_watch_remove(netdev_watch);
 
 	return true;
 }

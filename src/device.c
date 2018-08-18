@@ -74,7 +74,6 @@ struct device {
 	struct l_queue *autoconnect_list;
 	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
-	uint32_t netdev_watch_id;
 	struct watchlist state_watches;
 	struct timespec roam_min_time;
 	struct l_timeout *roam_trigger_timeout;
@@ -106,24 +105,13 @@ struct signal_agent {
 	unsigned int disconnect_watch;
 };
 
-static struct watchlist device_watches;
 static struct l_queue *device_list;
+static uint32_t netdev_watch;
 
 static void device_roam_timeout_rearm(struct device *device, int seconds);
 
 static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 					void *user_data);
-
-uint32_t device_watch_add(device_watch_func_t func,
-				void *userdata, device_destroy_func_t destroy)
-{
-	return watchlist_add(&device_watches, func, userdata, destroy);
-}
-
-bool device_watch_remove(uint32_t id)
-{
-	return watchlist_remove(&device_watches, id);
-}
 
 void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
 {
@@ -2515,9 +2503,6 @@ static struct l_dbus_message *device_change_mode(struct device *device,
 
 	device->mode = mode;
 
-	WATCHLIST_NOTIFY(&device_watches, device_watch_func_t, device,
-				DEVICE_EVENT_MODE_CHANGED);
-
 	return NULL;
 }
 
@@ -2598,16 +2583,16 @@ static void device_netdev_notify(struct netdev *netdev,
 					enum netdev_watch_event event,
 					void *user_data)
 {
-	struct device *device = user_data;
+	struct device *device = netdev_get_device(netdev);
 	struct l_dbus *dbus = dbus_get_bus();
+
+	if (!device)
+		return;
 
 	switch (event) {
 	case NETDEV_WATCH_EVENT_UP:
 		device->autoconnect = true;
 		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
-
-		WATCHLIST_NOTIFY(&device_watches, device_watch_func_t,
-						device, DEVICE_EVENT_INSERTED);
 
 		l_dbus_property_changed(dbus, device_get_path(device),
 					IWD_DEVICE_INTERFACE, "Powered");
@@ -2637,9 +2622,6 @@ static void device_netdev_notify(struct netdev *netdev,
 		l_queue_destroy(device->networks_sorted, NULL);
 		device->networks_sorted = l_queue_new();
 
-		WATCHLIST_NOTIFY(&device_watches, device_watch_func_t,
-						device, DEVICE_EVENT_REMOVED);
-
 		l_dbus_property_changed(dbus, device_get_path(device),
 					IWD_DEVICE_INTERFACE, "Powered");
 		break;
@@ -2650,6 +2632,8 @@ static void device_netdev_notify(struct netdev *netdev,
 	case NETDEV_WATCH_EVENT_ADDRESS_CHANGE:
 		l_dbus_property_changed(dbus, device_get_path(device),
 					IWD_DEVICE_INTERFACE, "Address");
+		break;
+	default:
 		break;
 	}
 }
@@ -2687,21 +2671,15 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 
 	scan_ifindex_add(device->index);
 
-	netdev_set_iftype(device->netdev, NETDEV_IFTYPE_STATION);
-
-	device_netdev_notify(netdev, netdev_get_is_up(netdev) ?
-						NETDEV_WATCH_EVENT_UP :
-						NETDEV_WATCH_EVENT_DOWN,
-						device);
-	device->netdev_watch_id =
-		netdev_watch_add(netdev, device_netdev_notify, device);
-
 	/*
 	 * register for AP roam transition watch
 	 */
 	device->ap_roam_watch = netdev_frame_watch_add(netdev, 0x00d0,
 			action_ap_roam_prefix, sizeof(action_ap_roam_prefix),
 			device_ap_roam_frame_event, device);
+
+	if (netdev_get_is_up(netdev))
+		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 
 	return device;
 }
@@ -2727,9 +2705,6 @@ static void device_free(void *user)
 		signal_agent_free(device->signal_agent);
 	}
 
-	if (device->state != DEVICE_STATE_OFF)
-		WATCHLIST_NOTIFY(&device_watches, device_watch_func_t,
-						device, DEVICE_EVENT_REMOVED);
 
 	watchlist_destroy(&device->state_watches);
 
@@ -2742,8 +2717,6 @@ static void device_free(void *user)
 	l_queue_destroy(device->bss_list, bss_free);
 	l_queue_destroy(device->old_bss_list, bss_free);
 	l_queue_destroy(device->autoconnect_list, l_free);
-
-	netdev_watch_remove(device->netdev, device->netdev_watch_id);
 
 	l_timeout_remove(device->roam_trigger_timeout);
 
@@ -2770,7 +2743,7 @@ bool device_init(void)
 					NULL, false))
 		return false;
 
-	watchlist_init(&device_watches, NULL);
+	netdev_watch = netdev_watch_add(device_netdev_notify, NULL, NULL);
 	device_list = l_queue_new();
 
 	return true;
@@ -2783,8 +2756,7 @@ void device_exit(void)
 
 	l_queue_destroy(device_list, device_free);
 	device_list = NULL;
-
-	watchlist_destroy(&device_watches);
+	netdev_watch_remove(netdev_watch);
 
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_DEVICE_INTERFACE);
 }

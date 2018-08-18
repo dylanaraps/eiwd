@@ -50,6 +50,8 @@ enum netdev_event {
 };
 
 enum netdev_watch_event {
+	NETDEV_WATCH_EVENT_NEW,
+	NETDEV_WATCH_EVENT_DEL,
 	NETDEV_WATCH_EVENT_UP,
 	NETDEV_WATCH_EVENT_DOWN,
 	NETDEV_WATCH_EVENT_NAME_CHANGE,
@@ -167,9 +169,9 @@ void netdev_handshake_failed(struct handshake_state *hs, uint16_t reason_code);
 
 struct netdev *netdev_find(int ifindex);
 
-uint32_t netdev_watch_add(struct netdev *netdev, netdev_watch_func_t func,
-				void *user_data);
-bool netdev_watch_remove(struct netdev *netdev, uint32_t id);
+uint32_t netdev_watch_add(netdev_watch_func_t func,
+				void *user_data, netdev_destroy_func_t destroy);
+bool netdev_watch_remove(uint32_t id);
 
 uint32_t netdev_station_watch_add(struct netdev *netdev,
 		netdev_station_watch_func_t func, void *user_data);

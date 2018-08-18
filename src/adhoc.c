@@ -62,7 +62,7 @@ struct sta_state {
 	bool authenticated : 1;
 };
 
-static uint32_t device_watch;
+static uint32_t netdev_watch;
 
 static void adhoc_sta_free(void *data)
 {
@@ -180,20 +180,6 @@ static void adhoc_handshake_event(struct handshake_state *hs,
 	}
 }
 
-static void adhoc_netdev_notify(struct netdev *netdev,
-				enum netdev_watch_event event, void *user_data)
-{
-	struct adhoc_state *ap = user_data;
-
-	switch (event) {
-	case NETDEV_WATCH_EVENT_DOWN:
-		adhoc_reset(ap);
-		break;
-	default:
-		break;
-	}
-}
-
 static struct eapol_sm *adhoc_new_sm(struct sta_state *sta, bool authenticator)
 {
 	struct netdev *netdev = device_get_netdev(sta->adhoc->device);
@@ -250,10 +236,6 @@ static struct eapol_sm *adhoc_new_sm(struct sta_state *sta, bool authenticator)
 static void adhoc_free(struct adhoc_state *adhoc)
 {
 	adhoc_reset(adhoc);
-
-	netdev_watch_remove(device_get_netdev(adhoc->device),
-			adhoc->netdev_watch_id);
-
 	l_free(adhoc);
 }
 
@@ -542,7 +524,6 @@ static void adhoc_destroy_interface(void *user_data)
 	adhoc_free(adhoc);
 }
 
-
 static void adhoc_add_interface(struct device *device)
 {
 	struct adhoc_state *adhoc;
@@ -550,9 +531,6 @@ static void adhoc_add_interface(struct device *device)
 	/* just allocate/set device, Start method will complete setup */
 	adhoc = l_new(struct adhoc_state, 1);
 	adhoc->device = device;
-
-	adhoc->netdev_watch_id = netdev_watch_add(device_get_netdev(device),
-			adhoc_netdev_notify, adhoc);
 
 	/* setup ap dbus interface */
 	l_dbus_object_add_interface(dbus_get_bus(),
@@ -565,15 +543,24 @@ static void adhoc_remove_interface(struct device *device)
 			device_get_path(device), IWD_ADHOC_INTERFACE);
 }
 
-static void ap_device_event(struct device *device, enum device_event event,
-								void *userdata)
+static void adhoc_netdev_watch(struct netdev *netdev,
+				enum netdev_watch_event event, void *userdata)
 {
+	struct device *device = netdev_get_device(netdev);
+
+	if (!device)
+		return;
+
 	switch (event) {
-	case DEVICE_EVENT_MODE_CHANGED:
-		if (device_get_mode(device) == DEVICE_MODE_ADHOC)
+	case NETDEV_WATCH_EVENT_UP:
+	case NETDEV_WATCH_EVENT_NEW:
+		if (netdev_get_iftype(netdev) == NETDEV_IFTYPE_ADHOC)
 			adhoc_add_interface(device);
-		else
-			adhoc_remove_interface(device);
+		break;
+	case NETDEV_WATCH_EVENT_DOWN:
+	case NETDEV_WATCH_EVENT_DEL:
+		adhoc_remove_interface(device);
+		break;
 	default:
 		break;
 	}
@@ -581,17 +568,14 @@ static void ap_device_event(struct device *device, enum device_event event,
 
 bool adhoc_init(void)
 {
-	device_watch = device_watch_add(ap_device_event, NULL, NULL);
-	if (!device_watch)
-		return false;
-
-	return l_dbus_register_interface(dbus_get_bus(), IWD_ADHOC_INTERFACE,
+	netdev_watch = netdev_watch_add(adhoc_netdev_watch, NULL, NULL);
+	l_dbus_register_interface(dbus_get_bus(), IWD_ADHOC_INTERFACE,
 			adhoc_setup_interface, adhoc_destroy_interface, false);
+	return true;
 }
 
 void adhoc_exit(void)
 {
-	device_watch_remove(device_watch);
-
+	netdev_watch_remove(netdev_watch);
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_ADHOC_INTERFACE);
 }
