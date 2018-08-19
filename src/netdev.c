@@ -83,7 +83,7 @@ struct netdev {
 	netdev_connect_cb_t connect_cb;
 	netdev_disconnect_cb_t disconnect_cb;
 	netdev_neighbor_report_cb_t neighbor_report_cb;
-	netdev_adhoc_cb_t adhoc_cb;
+	netdev_command_cb_t adhoc_cb;
 	void *user_data;
 	struct eapol_sm *sm;
 	struct sae_sm *sae_sm;
@@ -105,7 +105,7 @@ struct netdev {
 	uint32_t rssi_poll_cmd_id;
 
 	uint32_t set_powered_cmd_id;
-	netdev_set_powered_cb_t set_powered_cb;
+	netdev_command_cb_t set_powered_cb;
 	void *set_powered_user_data;
 	netdev_destroy_func_t set_powered_destroy;
 
@@ -199,11 +199,6 @@ struct handshake_state *netdev_handshake_state_new(struct netdev *netdev)
 
 	return &nhs->super;
 }
-
-struct cb_data {
-	netdev_command_func_t callback;
-	void *user_data;
-};
 
 struct wiphy *netdev_get_wiphy(struct netdev *netdev)
 {
@@ -352,7 +347,7 @@ static uint32_t rtnl_set_powered(int ifindex, bool powered,
 }
 
 int netdev_set_powered(struct netdev *netdev, bool powered,
-			netdev_set_powered_cb_t callback, void *user_data,
+			netdev_command_cb_t callback, void *user_data,
 			netdev_destroy_func_t destroy)
 {
 	if (netdev->set_powered_cmd_id)
@@ -2668,7 +2663,7 @@ static void netdev_join_adhoc_cb(struct l_genl_msg *msg, void *user_data)
 
 int netdev_join_adhoc(struct netdev *netdev, const char *ssid,
 			struct iovec *extra_ie, size_t extra_ie_elems,
-			bool control_port, netdev_adhoc_cb_t cb,
+			bool control_port, netdev_command_cb_t cb,
 			void *user_data)
 {
 	struct l_genl_msg *cmd;
@@ -2732,7 +2727,7 @@ static void netdev_leave_adhoc_cb(struct l_genl_msg *msg, void *user_data)
 	netdev->adhoc_cb = NULL;
 }
 
-int netdev_leave_adhoc(struct netdev *netdev, netdev_adhoc_cb_t cb,
+int netdev_leave_adhoc(struct netdev *netdev, netdev_command_cb_t cb,
 			void *user_data)
 {
 	struct l_genl_msg *cmd;
@@ -3895,7 +3890,7 @@ static void netdev_bridge_port_event(const struct ifinfomsg *ifi, int bytes,
 struct set_4addr_cb_data {
 	struct netdev *netdev;
 	bool value;
-	netdev_set_4addr_cb_t callback;
+	netdev_command_cb_t callback;
 	void *user_data;
 	netdev_destroy_func_t destroy;
 };
@@ -3929,7 +3924,7 @@ static void netdev_set_4addr_destroy(void *user_data)
 }
 
 int netdev_set_4addr(struct netdev *netdev, bool use_4addr,
-			netdev_set_4addr_cb_t cb, void *user_data,
+			netdev_command_cb_t cb, void *user_data,
 			netdev_destroy_func_t destroy)
 {
 	struct set_4addr_cb_data *cb_data = NULL;
