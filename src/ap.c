@@ -46,7 +46,7 @@
 #include "src/dbus.h"
 
 struct ap_state {
-	struct device *device;
+	struct netdev *netdev;
 	char *ssid;
 	int channel;
 	unsigned int ciphers;
@@ -111,7 +111,7 @@ static void ap_frame_watch_remove(void *data, void *user_data)
 
 static void ap_reset(struct ap_state *ap)
 {
-	struct netdev *netdev = device_get_netdev(ap->device);
+	struct netdev *netdev = ap->netdev;
 
 	if (ap->pending)
 		dbus_pending_reply(&ap->pending,
@@ -134,7 +134,7 @@ static void ap_reset(struct ap_state *ap)
 
 	ap->started = false;
 
-	l_dbus_property_changed(dbus_get_bus(), device_get_path(ap->device),
+	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(ap->netdev),
 						IWD_AP_INTERFACE, "Started");
 }
 
@@ -150,8 +150,7 @@ static void ap_free(void *data)
 static void ap_del_station(struct sta_state *sta, uint16_t reason,
 				bool disassociate)
 {
-	netdev_del_station(device_get_netdev(sta->ap->device), sta->addr,
-				reason, disassociate);
+	netdev_del_station(sta->ap->netdev, sta->addr, reason, disassociate);
 	sta->associated = false;
 	sta->rsna = false;
 }
@@ -199,7 +198,7 @@ static void ap_new_rsna(struct sta_state *sta)
 static void ap_drop_rsna(struct sta_state *sta)
 {
 	struct l_genl_msg *msg;
-	uint32_t ifindex = device_get_ifindex(sta->ap->device);
+	uint32_t ifindex = netdev_get_ifindex(sta->ap->netdev);
 	struct nl80211_sta_flag_update flags = {
 		.mask = (1 << NL80211_STA_FLAG_AUTHORIZED) |
 			(1 << NL80211_STA_FLAG_MFP),
@@ -256,7 +255,7 @@ static size_t ap_build_beacon_pr_head(struct ap_state *ap,
 	struct mmpdu_header *mpdu = (void *) out_buf;
 	unsigned int len;
 	uint16_t capability = IE_BSS_CAP_ESS | IE_BSS_CAP_PRIVACY;
-	const uint8_t *bssid = device_get_address(ap->device);
+	const uint8_t *bssid = netdev_get_address(ap->netdev);
 	uint32_t minr, maxr, count, r;
 	uint8_t *rates;
 	struct ie_tlv_builder builder;
@@ -337,7 +336,7 @@ static uint32_t ap_send_mgmt_frame(struct ap_state *ap,
 					void *user_data)
 {
 	struct l_genl_msg *msg;
-	uint32_t ifindex = device_get_ifindex(ap->device);
+	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
 	uint32_t id;
 	uint32_t ch_freq = scan_channel_to_freq(ap->channel, SCAN_BAND_2_4_GHZ);
 
@@ -381,7 +380,7 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct sta_state *sta = user_data;
 	struct ap_state *ap = sta->ap;
-	struct netdev *netdev = device_get_netdev(sta->ap->device);
+	struct netdev *netdev = sta->ap->netdev;
 	const uint8_t *own_addr = netdev_get_address(netdev);
 	struct scan_bss bss;
 	struct ie_rsn_info rsn;
@@ -444,7 +443,7 @@ error:
 static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
 {
 	struct l_genl_msg *msg;
-	uint32_t ifindex = device_get_ifindex(ap->device);
+	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
 	/*
 	 * This should hopefully work both with and without
 	 * NL80211_FEATURE_FULL_AP_CLIENT_STATE.
@@ -548,7 +547,7 @@ static uint32_t ap_assoc_resp(struct ap_state *ap, struct sta_state *sta,
 				enum mmpdu_reason_code status_code,
 				bool reassoc, l_genl_msg_func_t callback)
 {
-	const uint8_t *addr = device_get_address(ap->device);
+	const uint8_t *addr = netdev_get_address(ap->netdev);
 	uint8_t mpdu_buf[128];
 	struct mmpdu_header *mpdu = (void *) mpdu_buf;
 	struct mmpdu_association_response *resp;
@@ -784,7 +783,7 @@ static void ap_assoc_req_cb(struct netdev *netdev,
 	struct sta_state *sta;
 	const uint8_t *from = hdr->address_2;
 	const struct mmpdu_association_request *req = body;
-	const uint8_t *bssid = device_get_address(ap->device);
+	const uint8_t *bssid = netdev_get_address(ap->netdev);
 	struct ie_tlv_iter iter;
 
 	l_info("AP Association Request from %s", util_address_to_string(from));
@@ -818,7 +817,7 @@ static void ap_reassoc_req_cb(struct netdev *netdev,
 	struct sta_state *sta;
 	const uint8_t *from = hdr->address_2;
 	const struct mmpdu_reassociation_request *req = body;
-	const uint8_t *bssid = device_get_address(ap->device);
+	const uint8_t *bssid = netdev_get_address(ap->netdev);
 	struct ie_tlv_iter iter;
 	int err;
 
@@ -875,7 +874,7 @@ static void ap_probe_req_cb(struct netdev *netdev,
 	size_t ssid_len = 0, ssid_list_len = 0, len;
 	int dsss_channel = -1;
 	struct ie_tlv_iter iter;
-	const uint8_t *bssid = device_get_address(ap->device);
+	const uint8_t *bssid = netdev_get_address(ap->netdev);
 	bool match = false;
 	uint8_t resp[512];
 
@@ -964,7 +963,7 @@ static void ap_disassoc_cb(struct netdev *netdev,
 	struct ap_state *ap = user_data;
 	struct sta_state *sta;
 	const struct mmpdu_disassociation *disassoc = body;
-	const uint8_t *bssid = device_get_address(ap->device);
+	const uint8_t *bssid = netdev_get_address(ap->netdev);
 
 	l_info("AP Disassociation from %s, reason %i",
 		util_address_to_string(hdr->address_2),
@@ -999,7 +998,7 @@ static void ap_auth_reply_cb(struct l_genl_msg *msg, void *user_data)
 static void ap_auth_reply(struct ap_state *ap, const uint8_t *dest,
 				enum mmpdu_reason_code status_code)
 {
-	const uint8_t *addr = device_get_address(ap->device);
+	const uint8_t *addr = netdev_get_address(ap->netdev);
 	uint8_t mpdu_buf[64];
 	struct mmpdu_header *mpdu = (struct mmpdu_header *) mpdu_buf;
 	struct mmpdu_authentication *auth;
@@ -1034,7 +1033,7 @@ static void ap_auth_cb(struct netdev *netdev, const struct mmpdu_header *hdr,
 	struct ap_state *ap = user_data;
 	const struct mmpdu_authentication *auth = body;
 	const uint8_t *from = hdr->address_2;
-	const uint8_t *bssid = device_get_address(ap->device);
+	const uint8_t *bssid = netdev_get_address(ap->netdev);
 	struct sta_state *sta;
 
 	l_info("AP Authentication from %s", util_address_to_string(from));
@@ -1103,7 +1102,7 @@ static void ap_deauth_cb(struct netdev *netdev, const struct mmpdu_header *hdr,
 	struct ap_state *ap = user_data;
 	struct sta_state *sta;
 	const struct mmpdu_deauthentication *deauth = body;
-	const uint8_t *bssid = device_get_address(ap->device);
+	const uint8_t *bssid = netdev_get_address(ap->netdev);
 
 	l_info("AP Deauthentication from %s, reason %i",
 		util_address_to_string(hdr->address_2),
@@ -1147,7 +1146,7 @@ static void ap_start_cb(struct l_genl_msg *msg, void *user_data)
 
 	ap->started = true;
 
-	l_dbus_property_changed(dbus_get_bus(), device_get_path(ap->device),
+	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(ap->netdev),
 						IWD_AP_INTERFACE, "Started");
 }
 
@@ -1159,8 +1158,8 @@ static struct l_genl_msg *ap_build_cmd_start_ap(struct ap_state *ap)
 	size_t head_len, tail_len;
 
 	uint32_t dtim_period = 3;
-	uint32_t ifindex = device_get_ifindex(ap->device);
-	struct wiphy *wiphy = device_get_wiphy(ap->device);
+	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
+	struct wiphy *wiphy = netdev_get_wiphy(ap->netdev);
 	uint32_t hidden_ssid = NL80211_HIDDEN_SSID_NOT_IN_USE;
 	uint32_t nl_ciphers = ie_rsn_cipher_suite_to_cipher(ap->ciphers);
 	uint32_t nl_akm = CRYPTO_AKM_PSK;
@@ -1221,8 +1220,8 @@ static struct l_genl_msg *ap_build_cmd_start_ap(struct ap_state *ap)
 static int ap_start(struct ap_state *ap, const char *ssid, const char *psk,
 		struct l_dbus_message *message)
 {
-	struct netdev *netdev = device_get_netdev(ap->device);
-	struct wiphy *wiphy = device_get_wiphy(ap->device);
+	struct netdev *netdev = ap->netdev;
+	struct wiphy *wiphy = netdev_get_wiphy(netdev);
 	struct l_genl_msg *cmd;
 	const struct l_queue_entry *entry;
 	uint32_t id;
@@ -1327,7 +1326,7 @@ end:
 static struct l_genl_msg *ap_build_cmd_stop_ap(struct ap_state *ap)
 {
 	struct l_genl_msg *cmd;
-	uint32_t ifindex = device_get_ifindex(ap->device);
+	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
 
 	cmd = l_genl_msg_new_sized(NL80211_CMD_STOP_AP, 16);
 	l_genl_msg_append_attr(cmd, NL80211_ATTR_IFINDEX, 4, &ifindex);
@@ -1427,23 +1426,23 @@ static void ap_destroy_interface(void *user_data)
 	ap_free(ap);
 }
 
-static void ap_add_interface(struct device *device)
+static void ap_add_interface(struct netdev *netdev)
 {
 	struct ap_state *ap;
 
 	/* just allocate/set device, Start method will complete setup */
 	ap = l_new(struct ap_state, 1);
-	ap->device = device;
+	ap->netdev = netdev;
 
 	/* setup ap dbus interface */
 	l_dbus_object_add_interface(dbus_get_bus(),
-			device_get_path(device), IWD_AP_INTERFACE, ap);
+			netdev_get_path(netdev), IWD_AP_INTERFACE, ap);
 }
 
-static void ap_remove_interface(struct device *device)
+static void ap_remove_interface(struct netdev *netdev)
 {
 	l_dbus_object_remove_interface(dbus_get_bus(),
-			device_get_path(device), IWD_AP_INTERFACE);
+			netdev_get_path(netdev), IWD_AP_INTERFACE);
 }
 
 static void ap_netdev_watch(struct netdev *netdev,
@@ -1458,11 +1457,11 @@ static void ap_netdev_watch(struct netdev *netdev,
 	case NETDEV_WATCH_EVENT_UP:
 	case NETDEV_WATCH_EVENT_NEW:
 		if (netdev_get_iftype(netdev) == NETDEV_IFTYPE_AP)
-			ap_add_interface(device);
+			ap_add_interface(netdev);
 		break;
 	case NETDEV_WATCH_EVENT_DOWN:
 	case NETDEV_WATCH_EVENT_DEL:
-		ap_remove_interface(device);
+		ap_remove_interface(netdev);
 		break;
 	default:
 		break;
