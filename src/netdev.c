@@ -616,9 +616,6 @@ static void netdev_shutdown_one(void *data, void *user_data)
 {
 	struct netdev *netdev = data;
 
-	if (netdev_get_iftype(netdev) == NETDEV_IFTYPE_AP)
-		netdev_set_iftype(netdev, NETDEV_IFTYPE_STATION);
-
 	if (netdev_get_is_up(netdev))
 		rtnl_set_powered(netdev->index, false, NULL, NULL, NULL);
 }
