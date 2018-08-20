@@ -40,7 +40,7 @@
 #include "src/dbus.h"
 
 struct adhoc_state {
-	struct device *device;
+	struct netdev *netdev;
 	char *ssid;
 	uint8_t pmk[32];
 	struct l_queue *sta_states;
@@ -97,7 +97,7 @@ static void adhoc_remove_sta(struct sta_state *sta)
 	/* signal station has been removed */
 	if (sta->authenticated) {
 		l_dbus_property_changed(dbus_get_bus(),
-				device_get_path(sta->adhoc->device),
+				netdev_get_path(sta->adhoc->netdev),
 				IWD_ADHOC_INTERFACE, "ConnectedPeers");
 	}
 
@@ -112,24 +112,24 @@ static void adhoc_reset(struct adhoc_state *adhoc)
 
 	l_free(adhoc->ssid);
 
-	netdev_station_watch_remove(device_get_netdev(adhoc->device),
-			adhoc->sta_watch_id);
+	netdev_station_watch_remove(adhoc->netdev, adhoc->sta_watch_id);
 
 	l_queue_destroy(adhoc->sta_states, adhoc_sta_free);
 
 	adhoc->started = false;
 
-	l_dbus_property_changed(dbus_get_bus(), device_get_path(adhoc->device),
+	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(adhoc->netdev),
 						IWD_ADHOC_INTERFACE, "Started");
 }
 
 static void adhoc_set_rsn_info(struct adhoc_state *adhoc,
-		struct ie_rsn_info *rsn)
+						struct ie_rsn_info *rsn)
 {
+	struct wiphy *wiphy = netdev_get_wiphy(adhoc->netdev);
+
 	memset(rsn, 0, sizeof(*rsn));
 	rsn->akm_suites = IE_RSN_AKM_SUITE_PSK;
-	rsn->pairwise_ciphers = wiphy_select_cipher(
-			device_get_wiphy(adhoc->device), 0xffff);
+	rsn->pairwise_ciphers = wiphy_select_cipher(wiphy, 0xffff);
 	rsn->group_cipher = IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC;
 }
 
@@ -171,7 +171,7 @@ static void adhoc_handshake_event(struct handshake_state *hs,
 				!sta->authenticated) {
 			sta->authenticated = true;
 			l_dbus_property_changed(dbus_get_bus(),
-					device_get_path(adhoc->device),
+					netdev_get_path(adhoc->netdev),
 					IWD_ADHOC_INTERFACE, "ConnectedPeers");
 		}
 		break;
@@ -182,8 +182,8 @@ static void adhoc_handshake_event(struct handshake_state *hs,
 
 static struct eapol_sm *adhoc_new_sm(struct sta_state *sta, bool authenticator)
 {
-	struct netdev *netdev = device_get_netdev(sta->adhoc->device);
 	struct adhoc_state *adhoc = sta->adhoc;
+	struct netdev *netdev = adhoc->netdev;
 	const uint8_t *own_addr = netdev_get_address(netdev);
 	struct ie_rsn_info rsn;
 	uint8_t bss_rsne[24];
@@ -264,7 +264,7 @@ static void adhoc_new_station(struct adhoc_state *adhoc, const uint8_t *mac)
 	if (sta->adhoc->open) {
 		sta->authenticated = true;
 		l_dbus_property_changed(dbus_get_bus(),
-					device_get_path(adhoc->device),
+					netdev_get_path(adhoc->netdev),
 					IWD_ADHOC_INTERFACE, "ConnectedPeers");
 		return;
 	}
@@ -338,7 +338,7 @@ static void adhoc_join_cb(struct netdev *netdev, int result, void *user_data)
 
 	adhoc->started = true;
 
-	l_dbus_property_changed(dbus_get_bus(), device_get_path(adhoc->device),
+	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(adhoc->netdev),
 						IWD_ADHOC_INTERFACE, "Started");
 }
 
@@ -347,8 +347,7 @@ static struct l_dbus_message *adhoc_dbus_start(struct l_dbus *dbus,
 						void *user_data)
 {
 	struct adhoc_state *adhoc = user_data;
-	struct device *device = adhoc->device;
-	struct netdev *netdev = device_get_netdev(device);
+	struct netdev *netdev = adhoc->netdev;
 	struct wiphy *wiphy = netdev_get_wiphy(netdev);
 	const char *ssid, *wpa2_psk;
 	struct ie_rsn_info rsn;
@@ -389,8 +388,7 @@ static struct l_dbus_message *adhoc_dbus_start_open(struct l_dbus *dbus,
 				struct l_dbus_message *message, void *user_data)
 {
 	struct adhoc_state *adhoc = user_data;
-	struct device *device = adhoc->device;
-	struct netdev *netdev = device_get_netdev(device);
+	struct netdev *netdev = adhoc->netdev;
 	const char *ssid;
 	struct iovec rsn_ie;
 	uint8_t ie_elems[10];
@@ -451,8 +449,7 @@ static struct l_dbus_message *adhoc_dbus_stop(struct l_dbus *dbus,
 	if (!adhoc->started)
 		return l_dbus_message_new_method_return(message);
 
-	if (!netdev_leave_adhoc(device_get_netdev(adhoc->device),
-						adhoc_leave_cb, adhoc))
+	if (!netdev_leave_adhoc(adhoc->netdev, adhoc_leave_cb, adhoc))
 		return dbus_error_failed(message);
 
 	return NULL;
@@ -524,23 +521,23 @@ static void adhoc_destroy_interface(void *user_data)
 	adhoc_free(adhoc);
 }
 
-static void adhoc_add_interface(struct device *device)
+static void adhoc_add_interface(struct netdev *netdev)
 {
 	struct adhoc_state *adhoc;
 
 	/* just allocate/set device, Start method will complete setup */
 	adhoc = l_new(struct adhoc_state, 1);
-	adhoc->device = device;
+	adhoc->netdev = netdev;
 
 	/* setup ap dbus interface */
 	l_dbus_object_add_interface(dbus_get_bus(),
-			device_get_path(device), IWD_ADHOC_INTERFACE, adhoc);
+			netdev_get_path(netdev), IWD_ADHOC_INTERFACE, adhoc);
 }
 
-static void adhoc_remove_interface(struct device *device)
+static void adhoc_remove_interface(struct netdev *netdev)
 {
 	l_dbus_object_remove_interface(dbus_get_bus(),
-			device_get_path(device), IWD_ADHOC_INTERFACE);
+			netdev_get_path(netdev), IWD_ADHOC_INTERFACE);
 }
 
 static void adhoc_netdev_watch(struct netdev *netdev,
@@ -555,11 +552,11 @@ static void adhoc_netdev_watch(struct netdev *netdev,
 	case NETDEV_WATCH_EVENT_UP:
 	case NETDEV_WATCH_EVENT_NEW:
 		if (netdev_get_iftype(netdev) == NETDEV_IFTYPE_ADHOC)
-			adhoc_add_interface(device);
+			adhoc_add_interface(netdev);
 		break;
 	case NETDEV_WATCH_EVENT_DOWN:
 	case NETDEV_WATCH_EVENT_DEL:
-		adhoc_remove_interface(device);
+		adhoc_remove_interface(netdev);
 		break;
 	default:
 		break;
