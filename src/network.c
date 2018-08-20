@@ -103,11 +103,6 @@ bool network_info_match(const void *a, const void *b)
 	return true;
 }
 
-static bool network_info_ptr_match(const void *a, const void *b)
-{
-	return a == b;
-}
-
 static bool network_secret_check_cacheable(void *data, void *user_data)
 {
 	struct eap_secret_info *secret = data;
@@ -273,11 +268,11 @@ static void network_info_put(struct network_info *network)
 	if (--network->seen_count)
 		return;
 
-	if (!networks)
+	if (!networks || network->is_known)
 		return;
 
-	if (l_queue_remove(networks, network))
-		network_info_free(network);
+	l_queue_remove(networks, network);
+	network_info_free(network);
 }
 
 struct network *network_create(struct device *device, const char *ssid,
@@ -1276,9 +1271,7 @@ void network_rank_update(struct network *network)
 			n = L_ARRAY_SIZE(rankmod_table) - 1;
 
 		rank = rankmod_table[n] * best_bss->rank + USHRT_MAX;
-	} else if (!l_queue_find(networks, network_info_ptr_match,
-					network->info))
-		/* Is a known network */
+	} else if (network->info->is_known)
 		rank = best_bss->rank;
 	else
 		rank = (int) best_bss->rank - USHRT_MAX; /* Negative rank */
