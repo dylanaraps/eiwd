@@ -3886,6 +3886,10 @@ static void netdev_set_iftype_cb(struct l_genl_msg *msg, void *user_data)
 
 	netdev->type = req->pending_type;
 
+	/* Set RSSI threshold for CQM notifications */
+	if (netdev->type == NL80211_IFTYPE_STATION)
+		netdev_cqm_rssi_update(netdev);
+
 	/* If the netdev was down originally, we're done */
 	if (!req->bring_up)
 		goto done;
@@ -4576,7 +4580,8 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 				netdev_sa_query_req_frame_event, NULL);
 
 	/* Set RSSI threshold for CQM notifications */
-	netdev_cqm_rssi_update(netdev);
+	if (netdev->type == NL80211_IFTYPE_STATION)
+		netdev_cqm_rssi_update(netdev);
 }
 
 static void netdev_get_interface_callback(struct l_genl_msg *msg,
