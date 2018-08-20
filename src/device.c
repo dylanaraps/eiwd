@@ -396,7 +396,8 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 	if (err)
 		return false;
 
-	if (device->mode == DEVICE_MODE_AP)
+	/* TODO: Remove when Device/Station split is done */
+	if (netdev_get_iftype(device->netdev) != NETDEV_IFTYPE_STATION)
 		return false;
 
 	device_set_scan_results(device, bss_list);
@@ -1778,8 +1779,11 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 	if (device->scan_pending)
 		return dbus_error_busy(message);
 
-	if (device->state == DEVICE_STATE_OFF ||
-			device->mode != DEVICE_MODE_STATION)
+	/* TODO: Remove when Device/Station split is done */
+	if (netdev_get_iftype(device->netdev) != NETDEV_IFTYPE_STATION)
+		return dbus_error_not_available(message);
+
+	if (device->state == DEVICE_STATE_OFF)
 		return dbus_error_failed(message);
 
 	device->scan_pending = l_dbus_message_ref(message);
@@ -2405,10 +2409,11 @@ static bool device_property_get_state(struct l_dbus *dbus,
 	struct device *device = user_data;
 	const char *statestr = "unknown";
 
-	/* special case for AP mode */
-	if (device->mode == DEVICE_MODE_AP) {
+	/* TODO: Remove when Device/Station split is done */
+	if (netdev_get_iftype(device->netdev) != NETDEV_IFTYPE_STATION) {
+		uint32_t iftype = netdev_get_iftype(device->netdev);
 		l_dbus_message_builder_append_basic(builder, 's',
-				"accesspoint");
+						dbus_iftype_to_string(iftype));
 		return true;
 	}
 
@@ -2456,19 +2461,11 @@ static bool device_property_get_mode(struct l_dbus *dbus,
 					void *user_data)
 {
 	struct device *device = user_data;
-	const char *modestr = "unknown";
+	uint32_t iftype = netdev_get_iftype(device->netdev);
+	const char *modestr = dbus_iftype_to_string(iftype);
 
-	switch (device->mode) {
-	case DEVICE_MODE_STATION:
-		modestr = "station";
-		break;
-	case DEVICE_MODE_AP:
-		modestr = "ap";
-		break;
-	case DEVICE_MODE_ADHOC:
-		modestr = "ad-hoc";
-		break;
-	}
+	if (modestr == NULL)
+		modestr = "unknown";
 
 	l_dbus_message_builder_append_basic(builder, 's', modestr);
 
