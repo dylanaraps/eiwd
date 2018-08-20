@@ -409,6 +409,8 @@ void known_networks_exit(void)
 {
 	struct l_dbus *dbus = dbus_get_bus();
 
+	l_fswatch_destroy(storage_dir_watch);
+
 	l_queue_destroy(known_networks, network_info_free);
 	known_networks = NULL;
 
