@@ -47,14 +47,6 @@
 #include "src/ap.h"
 #include "src/adhoc.h"
 
-struct device_watchlist_item {
-	uint32_t id;
-	device_watch_func_t added;
-	device_watch_func_t removed;
-	void *userdata;
-	device_destroy_func_t destroy;
-};
-
 struct autoconnect_entry {
 	uint16_t rank;
 	struct network *network;

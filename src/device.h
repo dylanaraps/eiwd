@@ -28,12 +28,6 @@ struct wiphy;
 struct netdev;
 struct device;
 
-enum device_event {
-	DEVICE_EVENT_INSERTED,
-	DEVICE_EVENT_REMOVED,
-	DEVICE_EVENT_MODE_CHANGED,
-};
-
 enum device_state {
 	DEVICE_STATE_OFF = 0,		/* Interface down */
 	DEVICE_STATE_DISCONNECTED,	/* Disconnected, no auto-connect */
@@ -44,9 +38,6 @@ enum device_state {
 	DEVICE_STATE_ROAMING
 };
 
-typedef void (*device_watch_func_t)(struct device *device,
-					enum device_event event,
-					void *userdata);
 typedef void (*device_state_watch_func_t)(enum device_state, void *userdata);
 typedef void (*device_destroy_func_t)(void *userdata);
 
