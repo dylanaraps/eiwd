@@ -2455,6 +2455,10 @@ static void set_mode_cb(struct netdev *netdev, int result, void *user_data)
 
 	l_dbus_property_changed(cb_data->dbus, device_get_path(cb_data->device),
 				IWD_DEVICE_INTERFACE, "Mode");
+
+	/* TODO: Special case, remove when Device/Station split is made */
+	l_dbus_property_changed(cb_data->dbus, device_get_path(cb_data->device),
+				IWD_DEVICE_INTERFACE, "State");
 }
 
 static struct l_dbus_message *device_property_set_mode(struct l_dbus *dbus,
