@@ -429,11 +429,6 @@ struct netdev *device_get_netdev(struct device *device)
 	return device->netdev;
 }
 
-uint32_t device_get_ifindex(struct device *device)
-{
-	return device->index;
-}
-
 enum device_state device_get_state(struct device *device)
 {
 	return device->state;
