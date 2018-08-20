@@ -424,11 +424,6 @@ struct wiphy *device_get_wiphy(struct device *device)
 	return device->wiphy;
 }
 
-struct netdev *device_get_netdev(struct device *device)
-{
-	return device->netdev;
-}
-
 enum device_state device_get_state(struct device *device)
 {
 	return device->state;

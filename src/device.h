@@ -45,7 +45,6 @@ struct network *device_get_connected_network(struct device *device);
 const char *device_get_path(struct device *device);
 bool device_is_busy(struct device *device);
 struct wiphy *device_get_wiphy(struct device *device);
-struct netdev *device_get_netdev(struct device *device);
 enum device_state device_get_state(struct device *device);
 
 uint32_t device_add_state_watch(struct device *device,
