@@ -44,12 +44,6 @@ enum device_state {
 	DEVICE_STATE_ROAMING
 };
 
-enum device_mode {
-	DEVICE_MODE_STATION,
-	DEVICE_MODE_AP,
-	DEVICE_MODE_ADHOC,
-};
-
 typedef void (*device_watch_func_t)(struct device *device,
 					enum device_event event,
 					void *userdata);
@@ -64,7 +58,6 @@ struct netdev *device_get_netdev(struct device *device);
 uint32_t device_get_ifindex(struct device *device);
 const uint8_t *device_get_address(struct device *device);
 enum device_state device_get_state(struct device *device);
-enum device_mode device_get_mode(struct device *device);
 
 uint32_t device_add_state_watch(struct device *device,
 					device_state_watch_func_t func,

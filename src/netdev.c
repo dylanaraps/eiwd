@@ -92,6 +92,7 @@ struct netdev {
 	uint32_t disconnect_cmd_id;
 	uint32_t join_adhoc_cmd_id;
 	uint32_t leave_adhoc_cmd_id;
+	uint32_t set_interface_cmd_id;
 	enum netdev_result result;
 	struct l_timeout *neighbor_report_timeout;
 	struct l_timeout *sa_query_timeout;
@@ -3823,10 +3824,126 @@ static int netdev_cqm_rssi_update(struct netdev *netdev)
 	return 0;
 }
 
-int netdev_set_iftype(struct netdev *netdev, enum netdev_iftype type)
+static struct l_genl_msg *netdev_build_cmd_set_interface(struct netdev *netdev,
+							uint32_t iftype)
 {
+	struct l_genl_msg *msg =
+		l_genl_msg_new_sized(NL80211_CMD_SET_INTERFACE, 32);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFTYPE, 4, &iftype);
+
+	return msg;
+}
+
+struct netdev_set_iftype_request {
+	netdev_command_cb_t cb;
+	void *user_data;
+	netdev_destroy_func_t destroy;
+	uint32_t pending_type;
+	uint32_t ref;
+	struct netdev *netdev;
+	bool bring_up;
+};
+
+static void netdev_set_iftype_request_destroy(void *user_data)
+{
+	struct netdev_set_iftype_request *req = user_data;
+	struct netdev *netdev = req->netdev;
+
+	req->ref--;
+	if (req->ref)
+		return;
+
+	netdev->set_powered_cmd_id = 0;
+	netdev->set_interface_cmd_id = 0;
+
+	if (req->destroy)
+		req->destroy(req->user_data);
+
+	l_free(req);
+}
+
+static void netdev_set_iftype_up_cb(int error, uint16_t type,
+					const void *data,
+					uint32_t len, void *user_data)
+{
+	struct netdev_set_iftype_request *req = user_data;
+	struct netdev *netdev = req->netdev;
+
+	if (req->cb)
+		req->cb(netdev, error, req->user_data);
+}
+
+static void netdev_set_iftype_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev_set_iftype_request *req = user_data;
+	struct netdev *netdev = req->netdev;
+	int error = l_genl_msg_get_error(msg);
+
+	if (error != 0)
+		goto done;
+
+	netdev->type = req->pending_type;
+
+	/* If the netdev was down originally, we're done */
+	if (!req->bring_up)
+		goto done;
+
+	netdev->set_powered_cmd_id =
+			rtnl_set_powered(netdev->index, true,
+					netdev_set_iftype_up_cb, req,
+					netdev_set_iftype_request_destroy);
+	if (!netdev->set_powered_cmd_id) {
+		error = -EIO;
+		goto done;
+	}
+
+	req->ref++;
+	netdev->set_interface_cmd_id = 0;
+	return;
+
+done:
+	if (req->cb)
+		req->cb(netdev, error, req->user_data);
+}
+
+static void netdev_set_iftype_down_cb(int error, uint16_t type,
+					const void *data,
+					uint32_t len, void *user_data)
+{
+	struct netdev_set_iftype_request *req = user_data;
+	struct netdev *netdev = req->netdev;
 	struct l_genl_msg *msg;
+
+	if (error != 0)
+		goto error;
+
+	msg = netdev_build_cmd_set_interface(netdev, req->pending_type);
+	netdev->set_interface_cmd_id =
+		l_genl_family_send(nl80211, msg, netdev_set_iftype_cb, req,
+					netdev_set_iftype_request_destroy);
+	if (!netdev->set_interface_cmd_id) {
+		l_genl_msg_unref(msg);
+		error = -EIO;
+		goto error;
+	}
+
+	req->ref++;
+	netdev->set_powered_cmd_id = 0;
+	return;
+
+error:
+	if (req->cb)
+		req->cb(netdev, error, req->user_data);
+}
+
+int netdev_set_iftype(struct netdev *netdev, enum netdev_iftype type,
+			netdev_command_cb_t cb, void *user_data,
+			netdev_destroy_func_t destroy)
+{
 	uint32_t iftype;
+	struct netdev_set_iftype_request *req;
 
 	switch (type) {
 	case NETDEV_IFTYPE_AP:
@@ -3843,21 +3960,42 @@ int netdev_set_iftype(struct netdev *netdev, enum netdev_iftype type)
 		return -EINVAL;
 	}
 
-	msg = l_genl_msg_new_sized(NL80211_CMD_SET_INTERFACE, 32);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFTYPE, 4, &iftype);
+	if (netdev->set_powered_cmd_id ||
+			netdev->set_interface_cmd_id)
+		return -EBUSY;
 
-	if (!l_genl_family_send(nl80211, msg, NULL, NULL, NULL)) {
-		l_error("CMD_SET_INTERFACE failed");
+	req = l_new(struct netdev_set_iftype_request, 1);
+	req->cb = cb;
+	req->user_data = user_data;
+	req->destroy = destroy;
+	req->pending_type = iftype;
+	req->netdev = netdev;
+	req->ref = 1;
+	req->bring_up = netdev_get_is_up(netdev);
+
+	if (!req->bring_up) {
+		struct l_genl_msg *msg =
+			netdev_build_cmd_set_interface(netdev, iftype);
+
+		netdev->set_interface_cmd_id =
+			l_genl_family_send(nl80211, msg,
+					netdev_set_iftype_cb, req,
+					netdev_set_iftype_request_destroy);
+		if (netdev->set_interface_cmd_id)
+			return 0;
 
 		l_genl_msg_unref(msg);
-
-		return -EIO;
+	} else {
+		netdev->set_powered_cmd_id =
+			rtnl_set_powered(netdev->index, false,
+					netdev_set_iftype_down_cb, req,
+					netdev_set_iftype_request_destroy);
+		if (netdev->set_powered_cmd_id)
+			return 0;
 	}
 
-	netdev->type = iftype;
-
-	return 0;
+	l_free(req);
+	return -EIO;
 }
 
 static void netdev_bridge_port_event(const struct ifinfomsg *ifi, int bytes,
