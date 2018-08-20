@@ -25,6 +25,7 @@
 #endif
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <linux/rtnetlink.h>
 #include <net/if_arp.h>
 #include <linux/if.h>
@@ -294,6 +295,15 @@ struct handshake_state *netdev_get_handshake(struct netdev *netdev)
 struct device *netdev_get_device(struct netdev *netdev)
 {
 	return netdev->device;
+}
+
+const char *netdev_get_path(struct netdev *netdev)
+{
+	static char path[26];
+
+	snprintf(path, sizeof(path), "%s/%u", wiphy_get_path(netdev->wiphy),
+			netdev->index);
+	return path;
 }
 
 static void netdev_set_powered_result(int error, uint16_t type,
