@@ -47,7 +47,6 @@ bool device_is_busy(struct device *device);
 struct wiphy *device_get_wiphy(struct device *device);
 struct netdev *device_get_netdev(struct device *device);
 uint32_t device_get_ifindex(struct device *device);
-const uint8_t *device_get_address(struct device *device);
 enum device_state device_get_state(struct device *device);
 
 uint32_t device_add_state_watch(struct device *device,

@@ -434,11 +434,6 @@ uint32_t device_get_ifindex(struct device *device)
 	return device->index;
 }
 
-const uint8_t *device_get_address(struct device *device)
-{
-	return netdev_get_address(device->netdev);
-}
-
 enum device_state device_get_state(struct device *device)
 {
 	return device->state;
