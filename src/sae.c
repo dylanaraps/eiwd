@@ -711,7 +711,7 @@ static void sae_process_anti_clogging(struct sae_sm *sm, const uint8_t *ptr,
 	 * It is suggested that an Anti-Clogging Token not exceed 256 octets
 	 */
 	if (len > 256) {
-		l_error("anti-clogging token size %ld too large, 256 max", len);
+		l_error("anti-clogging token size %zu too large, 256 max", len);
 		return;
 	}
 
