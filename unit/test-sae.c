@@ -105,17 +105,17 @@ static int test_tx_func(const uint8_t *dest, const uint8_t *frame, size_t len,
 
 	assert(!memcmp(dest, aa, 6));
 
-	if (len <= 6 && l_get_u16(frame + 2) != 0) {
+	if (len <= 6 && l_get_le16(frame + 2) != 0) {
 		td->tx_reject_occurred = true;
 		return 0;
 	}
 
-	trans = l_get_u16(frame);	/* transaction */
+	trans = l_get_le16(frame);	/* transaction */
 
 	switch (trans) {
 	case 1:
-		assert(l_get_u16(frame + 2) == 0);	/* status */
-		assert(l_get_u16(frame + 4) == 19);	/* group */
+		assert(l_get_le16(frame + 2) == 0);	/* status */
+		assert(l_get_le16(frame + 4) == 19);	/* group */
 
 		if (len > 102) {
 			/* clogging token */
@@ -129,7 +129,7 @@ static int test_tx_func(const uint8_t *dest, const uint8_t *frame, size_t len,
 
 		return 0;
 	case 2:
-		assert(l_get_u16(frame + 2) == 0);
+		assert(l_get_le16(frame + 2) == 0);
 		assert(len == 38);
 
 		td->confirm_success = true;
@@ -194,17 +194,23 @@ static void test_confirm_timeout(const void *arg)
 {
 	struct test_data *td = l_new(struct test_data, 1);
 	struct sae_sm *sm = test_initialize(td);
+	uint8_t commit[102];
 	int i;
 
-	sae_rx_packet(sm, aa, aa_commit, sizeof(aa_commit));
+	l_put_le16(1, commit);
+	l_put_le16(0, commit + 2);
+	l_put_le16(19, commit + 4);
+	memset(commit + 6, 0xde, 96);
+
+	sae_rx_packet(sm, aa, commit, sizeof(commit));
 
 	assert(td->confirm_success);
 
-	assert(l_get_u16(td->tx_packet + 4) == 1);
+	assert(l_get_le16(td->tx_packet + 4) == 1);
 
 	for (i = 1; i < 5; i++) {
 		sae_timeout(sm);
-		assert(l_get_u16(td->tx_packet + 4) == i + 1);
+		assert(l_get_le16(td->tx_packet + 4) == i + 1);
 	}
 
 	sae_timeout(sm);
@@ -244,9 +250,9 @@ static void test_clogging(const void *arg)
 	struct test_data *td = l_new(struct test_data, 1);
 	struct sae_sm *sm = test_initialize(td);
 
-	l_put_u16(1, frame);
-	l_put_u16(MMPDU_REASON_CODE_ANTI_CLOGGING_TOKEN_REQ, frame + 2);
-	l_put_u16(19, frame + 4);
+	l_put_le16(1, frame);
+	l_put_le16(MMPDU_REASON_CODE_ANTI_CLOGGING_TOKEN_REQ, frame + 2);
+	l_put_le16(19, frame + 4);
 	memcpy(frame + 6, td->test_clogging_token, 32);
 
 	td->test_anti_clogging = true;
