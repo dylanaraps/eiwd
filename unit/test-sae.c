@@ -551,6 +551,11 @@ int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
 
+	if (!l_getrandom_is_supported()) {
+		l_info("l_getrandom not supported, skipping...");
+		goto done;
+	}
+
 	l_test_add("SAE commit timeout", test_commit_timeout, NULL);
 	l_test_add("SAE confirm timeout", test_confirm_timeout, NULL);
 	l_test_add("SAE anti-clogging", test_clogging, NULL);
@@ -563,5 +568,6 @@ int main(int argc, char *argv[])
 	l_test_add("SAE confirm after accept", test_confirm_after_accept, NULL);
 	l_test_add("SAE end-to-end", test_end_to_end, NULL);
 
+done:
 	return l_test_run();
 }
