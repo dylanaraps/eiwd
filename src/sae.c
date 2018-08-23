@@ -404,13 +404,13 @@ old_commit:
 	ecc_native2be(element.y);
 
 	/* transaction */
-	l_put_u16(1, ptr);
+	l_put_le16(1, ptr);
 	ptr += 2;
 	/* status success */
-	l_put_u16(0, ptr);
+	l_put_le16(0, ptr);
 	ptr += 2;
 	/* group */
-	l_put_u16(19, ptr);
+	l_put_le16(19, ptr);
 	ptr += 2;
 
 	if (sm->token) {
@@ -461,11 +461,11 @@ static void sae_send_confirm(struct sae_sm *sm)
 	ecc_be2native(sm->p_element.x);
 	ecc_be2native(sm->p_element.y);
 
-	l_put_u16(2, ptr);
+	l_put_le16(2, ptr);
 	ptr += 2;
-	l_put_u16(0, ptr);
+	l_put_le16(0, ptr);
 	ptr += 2;
-	l_put_u16(sm->sc, ptr);
+	l_put_le16(sm->sc, ptr);
 	ptr += 2;
 	memcpy(ptr, confirm, 32);
 	ptr += 32;
@@ -498,7 +498,7 @@ static void sae_process_commit(struct sae_sm *sm, const uint8_t *from,
 		goto reject;
 	}
 
-	group = l_get_u16(ptr);
+	group = l_get_le16(ptr);
 	ptr += 2;
 
 	if (group != 19) {
@@ -590,7 +590,7 @@ reject:
 static bool sae_verify_confirm(struct sae_sm *sm, const uint8_t *frame)
 {
 	uint8_t check[32];
-	uint16_t rc = l_get_u16(frame);
+	uint16_t rc = l_get_le16(frame);
 
 	ecc_native2be(sm->scalar);
 	ecc_native2be(sm->element.x);
@@ -744,7 +744,7 @@ static bool sae_verify_nothing(struct sae_sm *sm, uint16_t transaction,
 	}
 
 	/* reject with unsupported group */
-	if (l_get_u16(frame) != 19) {
+	if (l_get_le16(frame) != 19) {
 		sae_reject_authentication(sm,
 				MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP);
 		return false;
@@ -789,11 +789,11 @@ static bool sae_verify_committed(struct sae_sm *sm, uint16_t transaction,
 		return false;
 	case MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP:
 		l_error("AP requested unsupported FCC group %d",
-				l_get_u16(frame));
+				l_get_le16(frame));
 
 		goto reject_unsupp_group;
 	case 0:
-		if (l_get_u16(frame) != 19) {
+		if (l_get_le16(frame) != 19) {
 			if (sm->sync > SAE_SYNC_MAX) {
 				sae_authentication_failed(sm,
 						MMPDU_REASON_CODE_UNSPECIFIED);
@@ -847,7 +847,7 @@ static bool sae_verify_confirmed(struct sae_sm *sm, uint16_t trans,
 	}
 
 	/* frame shall be silently discarded */
-	if (l_get_u16(frame) != 19)
+	if (l_get_le16(frame) != 19)
 		return false;
 
 	/*
@@ -883,7 +883,7 @@ static bool sae_verify_accepted(struct sae_sm *sm, uint16_t trans,
 		return false;
 	}
 
-	sc = l_get_u16(frame);
+	sc = l_get_le16(frame);
 
 	/*
 	 * ... the value of send-confirm shall be checked. If the value is not
@@ -952,9 +952,9 @@ void sae_rx_packet(struct sae_sm *sm, const uint8_t *from, const uint8_t *frame,
 		goto reject;
 	}
 
-	transaction = l_get_u16(ptr);
+	transaction = l_get_le16(ptr);
 	ptr += 2;
-	status = l_get_u16(ptr);
+	status = l_get_le16(ptr);
 	ptr += 2;
 
 	/* AP rejected authentication */
