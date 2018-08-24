@@ -229,7 +229,12 @@ static void ap_drop_rsna(struct sta_state *sta)
 		l_error("Issuing DEL_KEY failed");
 	}
 
-	handshake_state_free(sta->hs);
+	if (sta->sm)
+		eapol_sm_free(sta->sm);
+
+	if (sta->hs)
+		handshake_state_free(sta->hs);
+
 	sta->hs = NULL;
 	sta->sm = NULL;
 }
@@ -370,6 +375,7 @@ static void ap_handshake_event(struct handshake_state *hs,
 		netdev_handshake_failed(hs, l_get_u16(event_data));
 		/* fall through */
 	case HANDSHAKE_EVENT_SETTING_KEYS_FAILED:
+		sta->sm = NULL;
 		ap_remove_sta(sta);
 	default:
 		break;
@@ -425,6 +431,7 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 	sta->sm = eapol_sm_new(sta->hs);
 	if (!sta->sm) {
 		handshake_state_free(sta->hs);
+		sta->hs = NULL;
 		l_error("could not create sm object");
 		goto error;
 	}
