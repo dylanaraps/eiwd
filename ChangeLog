@@ -1,3 +1,12 @@
+ver 0.7:
+	Fix issue with hard coded peer address and SAE networks.
+	Fix issue with raw passphrase requirement and SAE networks.
+	Fix issue with differentiating authenticator and supplicant.
+	Fix issue with timestamps comparison of known networks.
+	Fix issue with handling cancellation of power callbacks.
+	Fix issue with honoring auto-connect setting on power up.
+	Fix issue with crash during operstate callbacks.
+
 ver 0.6:
 	Fix issue with syncing the PSK on first connection.
 	Fix issue with unnecessary known object removal events.
