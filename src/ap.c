@@ -153,6 +153,15 @@ static void ap_del_station(struct sta_state *sta, uint16_t reason,
 	netdev_del_station(sta->ap->netdev, sta->addr, reason, disassociate);
 	sta->associated = false;
 	sta->rsna = false;
+
+	if (sta->sm)
+		eapol_sm_free(sta->sm);
+
+	if (sta->hs)
+		handshake_state_free(sta->hs);
+
+	sta->hs = NULL;
+	sta->sm = NULL;
 }
 
 static bool ap_sta_match_addr(const void *a, const void *b)
