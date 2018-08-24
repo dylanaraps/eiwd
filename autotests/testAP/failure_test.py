@@ -69,34 +69,37 @@ class Test(unittest.TestCase):
         wd = IWD()
 
         dev1, dev2 = wd.list_devices(2)
+        dev1.disconnect()
+        dev2.disconnect()
 
         self.client_connect(wd, dev1)
 
         dev1.start_ap('TestAP2', 'Password2')
 
-        condition = 'not obj.scanning'
-        wd.wait_for_object_condition(dev2, condition)
-        dev2.scan()
-        condition = 'obj.scanning'
-        wd.wait_for_object_condition(dev2, condition)
-        condition = 'not obj.scanning'
-        wd.wait_for_object_condition(dev2, condition)
+        try:
+            condition = 'not obj.scanning'
+            wd.wait_for_object_condition(dev2, condition)
+            dev2.scan()
+            condition = 'obj.scanning'
+            wd.wait_for_object_condition(dev2, condition)
+            condition = 'not obj.scanning'
+            wd.wait_for_object_condition(dev2, condition)
 
-        ordered_networks = dev2.get_ordered_networks()
-        self.assertEqual(len(ordered_networks), 2)
-        networks = { n.name: n for n in ordered_networks }
-        self.assertEqual(networks['TestAP1'].type, NetworkType.psk)
-        self.assertEqual(networks['TestAP2'].type, NetworkType.psk)
+            ordered_networks = dev2.get_ordered_networks()
+            self.assertEqual(len(ordered_networks), 2)
+            networks = { n.name: n for n in ordered_networks }
+            self.assertEqual(networks['TestAP1'].type, NetworkType.psk)
+            self.assertEqual(networks['TestAP2'].type, NetworkType.psk)
 
-        psk_agent = PSKAgent('InvalidPassword')
-        wd.register_psk_agent(psk_agent)
+            psk_agent = PSKAgent('InvalidPassword')
+            wd.register_psk_agent(psk_agent)
 
-        with self.assertRaises(iwd.FailedEx):
-            networks['TestAP2'].network_object.connect()
+            with self.assertRaises(iwd.FailedEx):
+                networks['TestAP2'].network_object.connect()
 
-        wd.unregister_psk_agent(psk_agent)
-
-        dev1.stop_ap()
+            wd.unregister_psk_agent(psk_agent)
+        finally:
+            dev1.stop_ap()
 
         # Finally test dev1 can go to client mode and connect again
         self.client_connect(wd, dev1)

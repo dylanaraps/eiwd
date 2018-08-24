@@ -62,53 +62,56 @@ class Test(unittest.TestCase):
         wd = IWD()
 
         dev1, dev2 = wd.list_devices(2)
+        dev1.disconnect()
+        dev2.disconnect()
 
         self.client_connect(wd, dev1)
 
         dev1.start_ap('TestAP2', 'Password2')
 
-        condition = 'not obj.scanning'
-        wd.wait_for_object_condition(dev2, condition)
-        dev2.scan()
-        condition = 'obj.scanning'
-        wd.wait_for_object_condition(dev2, condition)
-        condition = 'not obj.scanning'
-        wd.wait_for_object_condition(dev2, condition)
-
-        ordered_networks = dev2.get_ordered_networks()
-        self.assertEqual(len(ordered_networks), 2)
-        networks = { n.name: n for n in ordered_networks }
-        self.assertEqual(networks['TestAP1'].type, NetworkType.psk)
-        self.assertEqual(networks['TestAP2'].type, NetworkType.psk)
-
-        psk_agent = PSKAgent('Password2')
-        wd.register_psk_agent(psk_agent)
-
         try:
-            dev2.disconnect()
-            condition = 'not obj.connected'
+            condition = 'not obj.scanning'
             wd.wait_for_object_condition(dev2, condition)
-        except:
-            pass
+            dev2.scan()
+            condition = 'obj.scanning'
+            wd.wait_for_object_condition(dev2, condition)
+            condition = 'not obj.scanning'
+            wd.wait_for_object_condition(dev2, condition)
 
-        networks['TestAP2'].network_object.connect()
+            ordered_networks = dev2.get_ordered_networks()
+            self.assertEqual(len(ordered_networks), 2)
+            networks = { n.name: n for n in ordered_networks }
+            self.assertEqual(networks['TestAP1'].type, NetworkType.psk)
+            self.assertEqual(networks['TestAP2'].type, NetworkType.psk)
 
-        condition = 'obj.connected'
-        wd.wait_for_object_condition(networks['TestAP2'].network_object,
-                                     condition)
+            psk_agent = PSKAgent('Password2')
+            wd.register_psk_agent(psk_agent)
 
-        testutil.test_iface_operstate(dev2.name)
-        testutil.test_ifaces_connected(dev1.name, dev2.name)
+            try:
+                dev2.disconnect()
+                condition = 'not obj.connected'
+                wd.wait_for_object_condition(dev2, condition)
+            except:
+                pass
 
-        wd.unregister_psk_agent(psk_agent)
+            networks['TestAP2'].network_object.connect()
 
-        dev2.disconnect()
+            condition = 'obj.connected'
+            wd.wait_for_object_condition(networks['TestAP2'].network_object,
+                                         condition)
 
-        condition = 'not obj.connected'
-        wd.wait_for_object_condition(networks['TestAP2'].network_object,
-                                     condition)
+            testutil.test_iface_operstate(dev2.name)
+            testutil.test_ifaces_connected(dev1.name, dev2.name)
 
-        dev1.stop_ap()
+            wd.unregister_psk_agent(psk_agent)
+
+            dev2.disconnect()
+
+            condition = 'not obj.connected'
+            wd.wait_for_object_condition(networks['TestAP2'].network_object,
+                                         condition)
+        finally:
+            dev1.stop_ap()
 
         # Finally test dev1 can go to client mode and connect again
         self.client_connect(wd, dev1)
