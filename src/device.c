@@ -72,8 +72,6 @@ struct device {
 	uint32_t roam_scan_id;
 	uint8_t preauth_bssid[ETH_ALEN];
 	struct signal_agent *signal_agent;
-	struct l_dbus_message *start_ap_pending;
-	struct l_dbus_message *stop_ap_pending;
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
