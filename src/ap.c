@@ -74,7 +74,6 @@ struct sta_state {
 	uint32_t assoc_resp_cmd_id;
 	struct ap_state *ap;
 	uint8_t *assoc_rsne;
-	size_t assoc_rsne_len;
 	struct eapol_sm *sm;
 	struct handshake_state *hs;
 };
@@ -413,25 +412,16 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 	/*
 	 * TODO: This assumes the length that ap_set_rsn_info() requires. If
 	 * ap_set_rsn_info() changes then this will need to be updated.
-	 * Alternatively, sta->assoc_rsne could be used instead, but not
-	 * how it sits currently. sta->assoc_rsne only includes the actual RSN
-	 * data, not the IE type or length in the header.
 	 */
 	ie_build_rsne(&rsn, bss_rsne);
-
-	if (memcmp(bss_rsne + 2, sta->assoc_rsne, sta->assoc_rsne_len)) {
-		l_error("RSNE from association does not match");
-		goto error;
-	}
 
 	/* this handshake setup assumes PSK network */
 	sta->hs = netdev_handshake_state_new(netdev);
 
 	handshake_state_set_event_func(sta->hs, ap_handshake_event, sta);
 	handshake_state_set_ssid(sta->hs, (void *)ap->ssid, strlen(ap->ssid));
-	/* ap_rsn/own_rsn can be set equal since the check above matched */
 	handshake_state_set_ap_rsn(sta->hs, bss_rsne);
-	handshake_state_set_own_rsn(sta->hs, bss_rsne);
+	handshake_state_set_own_rsn(sta->hs, sta->assoc_rsne);
 	handshake_state_set_pmk(sta->hs, ap->pmk, 32);
 	handshake_state_set_authenticator_address(sta->hs, own_addr);
 	handshake_state_set_supplicant_address(sta->hs, sta->addr);
@@ -662,7 +652,7 @@ static void ap_assoc_reassoc(struct sta_state *sta, bool reassoc,
 	struct ap_state *ap = sta->ap;
 	const char *ssid = NULL;
 	const uint8_t *rsn = NULL;
-	size_t ssid_len = 0, rsn_len = 0;
+	size_t ssid_len = 0;
 	struct l_uintset *rates = NULL;
 	struct ie_rsn_info rsn_info;
 	int err;
@@ -697,8 +687,7 @@ static void ap_assoc_reassoc(struct sta_state *sta, bool reassoc,
 				goto bad_frame;
 			}
 
-			rsn = (const uint8_t *) ie_tlv_iter_get_data(ies);
-			rsn_len = ie_tlv_iter_get_length(ies);
+			rsn = (const uint8_t *) ie_tlv_iter_get_data(ies) - 2;
 			break;
 		}
 
@@ -749,8 +738,7 @@ static void ap_assoc_reassoc(struct sta_state *sta, bool reassoc,
 	if (sta->assoc_rsne)
 		l_free(sta->assoc_rsne);
 
-	sta->assoc_rsne = l_memdup(rsn, rsn_len);
-	sta->assoc_rsne_len = rsn_len;
+	sta->assoc_rsne = l_memdup(rsn, rsn[1] + 2);
 
 	/* 802.11-2016 11.3.5.3 j) */
 	if (sta->rsna)

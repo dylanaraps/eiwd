@@ -1204,7 +1204,10 @@ static void eapol_handle_ptk_2_of_4(struct eapol_sm *sm,
 	if (!eapol_verify_mic(sm->handshake->akm_suite, ptk->kck, ek))
 		return;
 
-	/* Bitwise identical RSNE required */
+	/*
+	 * 12.7.6.3 b) 2) "the Authenticator checks that the RSNE bitwise
+	 * matches that from the (Re)Association Request frame.
+	 */
 	rsne = eapol_find_rsne(ek->key_data,
 				L_BE16_TO_CPU(ek->key_data_len), NULL);
 	if (!rsne || rsne[1] != sm->handshake->own_ie[1] ||
