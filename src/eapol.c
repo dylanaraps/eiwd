@@ -941,7 +941,7 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 	uint8_t mic[16];
 	uint8_t *ies;
 	size_t ies_len;
-	const uint8_t *own_ie = sm->handshake->own_ie;
+	const uint8_t *own_ie = sm->handshake->supplicant_ie;
 	const uint8_t *pmkid;
 	struct ie_rsn_info rsn_info;
 
@@ -1210,8 +1210,9 @@ static void eapol_handle_ptk_2_of_4(struct eapol_sm *sm,
 	 */
 	rsne = eapol_find_rsne(ek->key_data,
 				L_BE16_TO_CPU(ek->key_data_len), NULL);
-	if (!rsne || rsne[1] != sm->handshake->own_ie[1] ||
-			memcmp(rsne + 2, sm->handshake->own_ie + 2, rsne[1])) {
+	if (!rsne || rsne[1] != sm->handshake->supplicant_ie[1] ||
+			memcmp(rsne + 2, sm->handshake->supplicant_ie + 2,
+				rsne[1])) {
 
 		handshake_failed(sm, MMPDU_REASON_CODE_IE_DIFFERENT);
 		return;
@@ -1323,7 +1324,7 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 	if (!rsne)
 		goto error_ie_different;
 
-	if (!handshake_util_ap_ie_matches(rsne, sm->handshake->ap_ie,
+	if (!handshake_util_ap_ie_matches(rsne, sm->handshake->authenticator_ie,
 						sm->handshake->wpa_ie))
 		goto error_ie_different;
 

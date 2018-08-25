@@ -203,8 +203,8 @@ static struct eapol_sm *adhoc_new_sm(struct sta_state *sta, bool authenticator)
 	handshake_state_set_event_func(hs, adhoc_handshake_event, sta);
 	handshake_state_set_ssid(hs, (void *)adhoc->ssid, strlen(adhoc->ssid));
 	/* we dont have the connecting peer rsn info, so just set ap == own */
-	handshake_state_set_ap_rsn(hs, bss_rsne);
-	handshake_state_set_own_rsn(hs, bss_rsne);
+	handshake_state_set_authenticator_rsn(hs, bss_rsne);
+	handshake_state_set_supplicant_rsn(hs, bss_rsne);
 	handshake_state_set_pmk(hs, adhoc->pmk, 32);
 
 	if (authenticator) {

@@ -77,8 +77,8 @@ struct handshake_state {
 	uint32_t ifindex;
 	uint8_t spa[6];
 	uint8_t aa[6];
-	uint8_t *ap_ie;
-	uint8_t *own_ie;
+	uint8_t *authenticator_ie;
+	uint8_t *supplicant_ie;
 	uint8_t *mde;
 	uint8_t *fte;
 	enum ie_rsn_cipher_suite pairwise_cipher;
@@ -128,13 +128,13 @@ void handshake_state_set_pmk(struct handshake_state *s, const uint8_t *pmk,
 void handshake_state_set_8021x_config(struct handshake_state *s,
 					struct l_settings *settings);
 struct l_settings *handshake_state_get_8021x_config(struct handshake_state *s);
-void handshake_state_set_ap_rsn(struct handshake_state *s,
+bool handshake_state_set_supplicant_rsn(struct handshake_state *s,
 					const uint8_t *rsn_ie);
-bool handshake_state_set_own_rsn(struct handshake_state *s,
+bool handshake_state_set_authenticator_rsn(struct handshake_state *s,
 					const uint8_t *rsn_ie);
-void handshake_state_set_ap_wpa(struct handshake_state *s,
+bool handshake_state_set_supplicant_wpa(struct handshake_state *s,
 					const uint8_t *wpa_ie);
-bool handshake_state_set_own_wpa(struct handshake_state *s,
+bool handshake_state_set_authenticator_wpa(struct handshake_state *s,
 					const uint8_t *wpa_ie);
 void handshake_state_set_ssid(struct handshake_state *s,
 					const uint8_t *ssid, size_t ssid_len);

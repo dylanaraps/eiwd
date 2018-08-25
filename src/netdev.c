@@ -1492,7 +1492,7 @@ static bool netdev_handle_associate_resp_ies(struct handshake_state *hs,
 					const uint8_t *fte, bool transition)
 {
 	const uint8_t *sent_mde = hs->mde;
-	bool is_rsn = hs->own_ie != NULL;
+	bool is_rsn = hs->supplicant_ie != NULL;
 
 	/*
 	 * During a transition in an RSN, check for an RSNE containing the
@@ -1521,7 +1521,8 @@ static bool netdev_handle_associate_resp_ies(struct handshake_state *hs,
 				memcmp(msg4_rsne.pmkids, hs->pmk_r1_name, 16))
 			return false;
 
-		if (!handshake_util_ap_ie_matches(rsne, hs->ap_ie, false))
+		if (!handshake_util_ap_ie_matches(rsne, hs->authenticator_ie,
+							false))
 			return false;
 	} else {
 		if (rsne)
@@ -1732,7 +1733,7 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 	}
 
 	if (netdev->in_ft) {
-		bool is_rsn = netdev->handshake->own_ie != NULL;
+		bool is_rsn = netdev->handshake->supplicant_ie != NULL;
 
 		netdev->in_ft = false;
 
@@ -1789,7 +1790,7 @@ static struct l_genl_msg *netdev_build_cmd_associate_common(
 							struct netdev *netdev)
 {
 	struct handshake_state *hs = netdev->handshake;
-	bool is_rsn = hs->own_ie != NULL;
+	bool is_rsn = hs->supplicant_ie != NULL;
 	struct l_genl_msg *msg;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_ASSOCIATE, 600);
@@ -1863,7 +1864,7 @@ static struct l_genl_msg *netdev_build_cmd_ft_reassociate(
 	struct iovec iov[3];
 	int iov_elems = 0;
 	struct handshake_state *hs = netdev_get_handshake(netdev);
-	bool is_rsn = hs->own_ie != NULL;
+	bool is_rsn = hs->supplicant_ie != NULL;
 	uint8_t *rsne = NULL;
 
 	msg = netdev_build_cmd_associate_common(netdev);
@@ -1885,7 +1886,8 @@ static struct l_genl_msg *netdev_build_cmd_ft_reassociate(
 		 * — All other fields shall be as specified in 8.4.2.27
 		 *   and 11.5.3."
 		 */
-		if (ie_parse_rsne_from_data(hs->own_ie, hs->own_ie[1] + 2,
+		if (ie_parse_rsne_from_data(hs->supplicant_ie,
+						hs->supplicant_ie[1] + 2,
 						&rsn_info) < 0)
 			goto error;
 
@@ -2033,7 +2035,7 @@ static void netdev_ft_process(struct netdev *netdev, const uint8_t *frame,
 		}
 	}
 
-	is_rsn = hs->own_ie != NULL;
+	is_rsn = hs->supplicant_ie != NULL;
 
 	/*
 	 * In an RSN, check for an RSNE containing the PMK-R0-Name and
@@ -2062,7 +2064,8 @@ static void netdev_ft_process(struct netdev *netdev, const uint8_t *frame,
 				memcmp(msg2_rsne.pmkids, hs->pmk_r0_name, 16))
 			goto ft_error;
 
-		if (!handshake_util_ap_ie_matches(rsne, hs->ap_ie, false))
+		if (!handshake_util_ap_ie_matches(rsne, hs->authenticator_ie,
+							false))
 			goto ft_error;
 	} else if (rsne)
 		goto ft_error;
@@ -2300,8 +2303,8 @@ static void netdev_sae_complete(uint16_t status, void *user_data)
 	msg = netdev_build_cmd_associate_common(netdev);
 
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IE,
-					netdev->handshake->own_ie[1] + 2,
-					netdev->handshake->own_ie);
+					netdev->handshake->supplicant_ie[1] + 2,
+					netdev->handshake->supplicant_ie);
 
 	/* netdev_cmd_connect_cb can be reused */
 	netdev->connect_cmd_id = l_genl_family_send(nl80211, msg,
@@ -2369,7 +2372,7 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 	struct l_genl_msg *msg;
 	struct iovec iov[2];
 	int iov_elems = 0;
-	bool is_rsn = hs->own_ie != NULL;
+	bool is_rsn = hs->supplicant_ie != NULL;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_CONNECT, 512);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
@@ -2436,8 +2439,8 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 					NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
 					0, NULL);
 
-		iov[iov_elems].iov_base = (void *) hs->own_ie;
-		iov[iov_elems].iov_len = hs->own_ie[1] + 2;
+		iov[iov_elems].iov_base = (void *) hs->supplicant_ie;
+		iov[iov_elems].iov_len = hs->supplicant_ie[1] + 2;
 		iov_elems += 1;
 	}
 
@@ -2499,7 +2502,7 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 {
 	struct l_genl_msg *cmd_connect = NULL;
 	struct eapol_sm *sm = NULL;
-	bool is_rsn = hs->own_ie != NULL;
+	bool is_rsn = hs->supplicant_ie != NULL;
 
 	if (netdev->type != NL80211_IFTYPE_STATION)
 		return -ENOTSUP;
@@ -2624,7 +2627,7 @@ int netdev_reassociate(struct netdev *netdev, struct scan_bss *target_bss,
 	struct netdev_handshake_state;
 	struct handshake_state *old_hs;
 	struct eapol_sm *sm = NULL, *old_sm;
-	bool is_rsn = hs->own_ie != NULL;
+	bool is_rsn = hs->supplicant_ie != NULL;
 	int err;
 
 	cmd_connect = netdev_build_cmd_connect(netdev, target_bss, hs,
@@ -2780,7 +2783,7 @@ static struct l_genl_msg *netdev_build_cmd_ft_authenticate(
 	struct l_genl_msg *msg;
 	struct iovec iov[3];
 	int iov_elems = 0;
-	bool is_rsn = hs->own_ie != NULL;
+	bool is_rsn = hs->supplicant_ie != NULL;
 	uint8_t mde[5];
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
@@ -2807,7 +2810,8 @@ static struct l_genl_msg *netdev_build_cmd_ft_authenticate(
 		 * — All other fields shall be as specified in 8.4.2.27
 		 *   and 11.5.3."
 		 */
-		if (ie_parse_rsne_from_data(hs->own_ie, hs->own_ie[1] + 2,
+		if (ie_parse_rsne_from_data(hs->supplicant_ie,
+						hs->supplicant_ie[1] + 2,
 						&rsn_info) < 0)
 			goto error;
 
@@ -2928,7 +2932,8 @@ int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 	memcpy(netdev->prev_bssid, netdev->handshake->aa, ETH_ALEN);
 	handshake_state_set_authenticator_address(netdev->handshake,
 							target_bss->addr);
-	handshake_state_set_ap_rsn(netdev->handshake, target_bss->rsne);
+	handshake_state_set_authenticator_rsn(netdev->handshake,
+							target_bss->rsne);
 	memcpy(netdev->handshake->mde + 2, target_bss->mde, 3);
 
 	if (netdev->sm) {

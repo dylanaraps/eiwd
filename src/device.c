@@ -728,12 +728,12 @@ static struct handshake_state *device_handshake_setup(struct device *device,
 		/* RSN takes priority */
 		if (bss->rsne) {
 			ie_build_rsne(&info, rsne_buf);
-			handshake_state_set_ap_rsn(hs, bss->rsne);
-			handshake_state_set_own_rsn(hs, rsne_buf);
+			handshake_state_set_authenticator_rsn(hs, bss->rsne);
+			handshake_state_set_supplicant_rsn(hs, rsne_buf);
 		} else {
 			ie_build_wpa(&info, rsne_buf);
-			handshake_state_set_ap_wpa(hs, bss->wpa);
-			handshake_state_set_own_wpa(hs, rsne_buf);
+			handshake_state_set_authenticator_wpa(hs, bss->wpa);
+			handshake_state_set_supplicant_wpa(hs, rsne_buf);
 		}
 
 		if (security == SECURITY_PSK) {
@@ -918,12 +918,13 @@ static void device_preauthenticate_cb(struct netdev *netdev,
 
 		/*
 		 * Rebuild the RSNE to include the negotiated PMKID.  Note
-		 * own_ie can't be a WPA IE here, including because the
-		 * WPA IE doesn't have a capabilities field and
+		 * supplicant_ie can't be a WPA IE here, including because
+		 * the WPA IE doesn't have a capabilities field and
 		 * target_rsne->preauthentication would have been false in
 		 * device_transition_start.
 		 */
-		ie_parse_rsne_from_data(new_hs->own_ie, new_hs->own_ie[1] + 2,
+		ie_parse_rsne_from_data(new_hs->supplicant_ie,
+					new_hs->supplicant_ie[1] + 2,
 					&rsn_info);
 
 		handshake_state_get_pmkid(new_hs, pmkid);
@@ -932,7 +933,7 @@ static void device_preauthenticate_cb(struct netdev *netdev,
 		rsn_info.pmkids = pmkid;
 
 		ie_build_rsne(&rsn_info, rsne_buf);
-		handshake_state_set_own_rsn(new_hs, rsne_buf);
+		handshake_state_set_supplicant_rsn(new_hs, rsne_buf);
 	}
 
 	device_transition_reassociate(device, bss, new_hs);

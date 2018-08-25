@@ -420,12 +420,12 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 
 	handshake_state_set_event_func(sta->hs, ap_handshake_event, sta);
 	handshake_state_set_ssid(sta->hs, (void *)ap->ssid, strlen(ap->ssid));
-	handshake_state_set_ap_rsn(sta->hs, bss_rsne);
-	handshake_state_set_own_rsn(sta->hs, sta->assoc_rsne);
+	handshake_state_set_authenticator(sta->hs, true);
+	handshake_state_set_authenticator_rsn(sta->hs, bss_rsne);
+	handshake_state_set_supplicant_rsn(sta->hs, sta->assoc_rsne);
 	handshake_state_set_pmk(sta->hs, ap->pmk, 32);
 	handshake_state_set_authenticator_address(sta->hs, own_addr);
 	handshake_state_set_supplicant_address(sta->hs, sta->addr);
-	handshake_state_set_authenticator(sta->hs, true);
 
 	sta->sm = eapol_sm_new(sta->hs);
 	if (!sta->sm) {

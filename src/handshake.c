@@ -74,8 +74,8 @@ void handshake_state_free(struct handshake_state *s)
 {
 	typeof(s->free) destroy = s->free;
 
-	l_free(s->ap_ie);
-	l_free(s->own_ie);
+	l_free(s->authenticator_ie);
+	l_free(s->supplicant_ie);
 	l_free(s->mde);
 	l_free(s->fte);
 	l_free(s->passphrase);
@@ -121,28 +121,6 @@ struct l_settings *handshake_state_get_8021x_config(struct handshake_state *s)
 	return s->settings_8021x;
 }
 
-static void handshake_state_set_ap_ie(struct handshake_state *s,
-					const uint8_t *ie, bool is_wpa)
-{
-	l_free(s->ap_ie);
-	s->ap_ie = l_memdup(ie, ie[1] + 2u);
-	s->wpa_ie = is_wpa;
-}
-
-static void handshake_state_set_own_ie(struct handshake_state *s,
-					const uint8_t *ie, bool is_wpa)
-{
-	l_free(s->own_ie);
-	s->own_ie = l_memdup(ie, ie[1] + 2u);
-	s->wpa_ie = is_wpa;
-}
-
-void handshake_state_set_ap_rsn(struct handshake_state *s,
-				const uint8_t *rsn_ie)
-{
-	handshake_state_set_ap_ie(s, rsn_ie, false);
-}
-
 static bool handshake_state_setup_own_ciphers(struct handshake_state *s,
 						const struct ie_rsn_info *info)
 {
@@ -161,36 +139,74 @@ static bool handshake_state_setup_own_ciphers(struct handshake_state *s,
 	return true;
 }
 
-bool handshake_state_set_own_rsn(struct handshake_state *s,
+static bool handshake_state_set_authenticator_ie(struct handshake_state *s,
+						const uint8_t *ie, bool is_wpa)
+{
+	struct ie_rsn_info info;
+
+	l_free(s->authenticator_ie);
+	s->authenticator_ie = l_memdup(ie, ie[1] + 2u);
+	s->wpa_ie = is_wpa;
+
+	if (!s->authenticator)
+		return true;
+
+	if (is_wpa) {
+		if (ie_parse_wpa_from_data(ie, ie[1] + 2, &info) < 0)
+			return false;
+	} else {
+		if (ie_parse_rsne_from_data(ie, ie[1] + 2, &info) < 0)
+			return false;
+	}
+
+	return handshake_state_setup_own_ciphers(s, &info);
+}
+
+static bool handshake_state_set_supplicant_ie(struct handshake_state *s,
+						const uint8_t *ie, bool is_wpa)
+{
+	struct ie_rsn_info info;
+
+	l_free(s->supplicant_ie);
+	s->supplicant_ie = l_memdup(ie, ie[1] + 2u);
+	s->wpa_ie = is_wpa;
+
+	if (s->authenticator)
+		return true;
+
+	if (is_wpa) {
+		if (ie_parse_wpa_from_data(ie, ie[1] + 2, &info) < 0)
+			return false;
+	} else {
+		if (ie_parse_rsne_from_data(ie, ie[1] + 2, &info) < 0)
+			return false;
+	}
+
+	return handshake_state_setup_own_ciphers(s, &info);
+}
+
+bool handshake_state_set_authenticator_rsn(struct handshake_state *s,
+						const uint8_t *rsn_ie)
+{
+	return handshake_state_set_authenticator_ie(s, rsn_ie, false);
+}
+
+bool handshake_state_set_supplicant_rsn(struct handshake_state *s,
 					const uint8_t *rsn_ie)
 {
-	struct ie_rsn_info info;
-
-	handshake_state_set_own_ie(s, rsn_ie, false);
-
-	if (ie_parse_rsne_from_data(rsn_ie, rsn_ie[1] + 2, &info) < 0)
-		return false;
-
-	return handshake_state_setup_own_ciphers(s, &info);
+	return handshake_state_set_supplicant_ie(s, rsn_ie, false);
 }
 
-void handshake_state_set_ap_wpa(struct handshake_state *s,
+bool handshake_state_set_authenticator_wpa(struct handshake_state *s,
 				const uint8_t *wpa_ie)
 {
-	handshake_state_set_ap_ie(s, wpa_ie, true);
+	return handshake_state_set_authenticator_ie(s, wpa_ie, true);
 }
 
-bool handshake_state_set_own_wpa(struct handshake_state *s,
+bool handshake_state_set_supplicant_wpa(struct handshake_state *s,
 					const uint8_t *wpa_ie)
 {
-	struct ie_rsn_info info;
-
-	handshake_state_set_own_ie(s, wpa_ie, true);
-
-	if (ie_parse_wpa_from_data(wpa_ie, wpa_ie[1] + 2, &info) < 0)
-		return false;
-
-	return handshake_state_setup_own_ciphers(s, &info);
+	return handshake_state_set_supplicant_ie(s, wpa_ie, true);
 }
 
 void handshake_state_set_ssid(struct handshake_state *s, const uint8_t *ssid,
