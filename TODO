@@ -331,3 +331,16 @@ Wireless daemon
 
   Priority: Low
   Complexity: C8
+
+- iwctl should register the agent even in non-interactive mode
+
+  When iwctl is started in non-interactive mode it currently does not register
+  the agent.  This can lead to a .NoAgent error being reported when issuing
+  commands through iwctl in this mode.  This behavior is generally okay for PSK
+  networks that only require the agent on the first connection.  For 802.1x
+  networks the Agent can be used to obtain username/password/passphrase details
+  and thus used much more often.  Make sure that iwctl supports this possibility
+  even in non-interactive mode.
+
+  Priority: High
+  Complexity: C1
