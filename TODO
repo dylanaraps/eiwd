@@ -344,3 +344,13 @@ Wireless daemon
 
   Priority: High
   Complexity: C1
+
+- Implement GTK & corresponding group cipher suite options for AP / Adhoc.
+
+  Right now both AP & Ad-Hoc modes use "Group addressed traffic not allowed"
+  cipher suite.  This can confuse other implementations.  Instead implement
+  a basic GTK support where a randomly or pseudo-randomly generated GTK is
+  used and no GTK Rekey is implemented.
+
+  Priority: Medium
+  Complexity: C2
