@@ -24,6 +24,7 @@
 
 struct l_genl_family;
 struct device;
+struct station;
 
 typedef void (*iwd_device_foreach_func)(struct device *, void *data);
 
@@ -52,3 +53,6 @@ void known_networks_exit(void);
 
 bool device_init(void);
 void device_exit(void);
+
+bool station_init(void);
+void station_exit(void);

@@ -434,6 +434,7 @@ int main(int argc, char *argv[])
 		goto fail_device;
 
 	adhoc_init();
+	station_init();
 	wsc_init();
 	network_init();
 	known_networks_init();
@@ -448,6 +449,7 @@ int main(int argc, char *argv[])
 	known_networks_exit();
 	network_exit();
 	wsc_exit();
+	station_exit();
 	adhoc_exit();
 	device_exit();
 fail_device:
