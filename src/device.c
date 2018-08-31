@@ -225,8 +225,7 @@ static bool process_network(const void *key, void *data, void *user_data)
 	return true;
 }
 
-static bool process_bss(struct device *device, struct scan_bss *bss,
-			struct timespec *timestamp)
+static bool process_bss(struct device *device, struct scan_bss *bss)
 {
 	struct network *network;
 	struct ie_rsn_info info;
@@ -319,9 +318,6 @@ void device_set_scan_results(struct device *device, struct l_queue *bss_list)
 {
 	struct network *network;
 	const struct l_queue_entry *bss_entry;
-	struct timespec now;
-
-	clock_gettime(CLOCK_REALTIME, &now);
 
 	device->old_bss_list = device->bss_list;
 	device->bss_list = bss_list;
@@ -338,7 +334,7 @@ void device_set_scan_results(struct device *device, struct l_queue *bss_list)
 				bss_entry = bss_entry->next) {
 		struct scan_bss *bss = bss_entry->data;
 
-		process_bss(device, bss, &now);
+		process_bss(device, bss);
 	}
 
 	if (device->connected_bss) {
@@ -1054,7 +1050,6 @@ static bool device_roam_scan_notify(uint32_t wiphy_id, uint32_t ifindex,
 	static const double RANK_FT_FACTOR = 1.3;
 	uint16_t mdid;
 	enum security orig_security, security;
-	struct timespec now;
 	bool seen = false;
 
 	if (err) {
@@ -1139,8 +1134,6 @@ next:
 
 	if (!seen)
 		goto fail_free_bss;
-
-	clock_gettime(CLOCK_REALTIME, &now);
 
 	/* See if we have anywhere to roam to */
 	if (!best_bss || bss_match(best_bss, device->connected_bss))
@@ -2048,7 +2041,6 @@ static bool device_hidden_network_scan_results(uint32_t wiphy_id,
 	const char *ssid;
 	uint8_t ssid_len;
 	struct l_dbus_message *msg;
-	struct timespec now;
 	struct scan_bss *bss;
 
 	l_debug("");
@@ -2066,7 +2058,6 @@ static bool device_hidden_network_scan_results(uint32_t wiphy_id,
 		return false;
 	}
 
-	clock_gettime(CLOCK_REALTIME, &now);
 	ssid_len = strlen(ssid);
 
 	while ((bss = l_queue_pop_head(bss_list))) {
@@ -2074,7 +2065,7 @@ static bool device_hidden_network_scan_results(uint32_t wiphy_id,
 					memcmp(bss->ssid, ssid, ssid_len))
 			goto next;
 
-		if (process_bss(device, bss, &now)) {
+		if (process_bss(device, bss)) {
 			l_queue_push_tail(device->bss_list, bss);
 
 			continue;
