@@ -24,11 +24,20 @@
 
 struct wiphy;
 struct netdev;
+enum security;
+struct scan_bss;
+struct network;
 
 struct station {
+	struct network *connected_network;
+
 	struct wiphy *wiphy;
 	struct netdev *netdev;
 };
+
+struct handshake_state *station_handshake_setup(struct station *station,
+						struct network *network,
+						struct scan_bss *bss);
 
 struct station *station_create(struct wiphy *wiphy, struct netdev *netdev);
 void station_free(struct station *station);

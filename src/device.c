@@ -46,6 +46,7 @@
 #include "src/watchlist.h"
 #include "src/ap.h"
 #include "src/adhoc.h"
+#include "src/station.h"
 
 struct autoconnect_entry {
 	uint16_t rank;
@@ -75,6 +76,7 @@ struct device {
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
+	struct station *station;
 
 	bool scanning : 1;
 	bool autoconnect : 1;
@@ -513,6 +515,7 @@ static void device_enter_state(struct device *device, enum device_state state)
 
 static void device_reset_connection_state(struct device *device)
 {
+	struct station *station = device->station;
 	struct network *network = device->connected_network;
 	struct l_dbus *dbus = dbus_get_bus();
 
@@ -535,6 +538,7 @@ static void device_reset_connection_state(struct device *device)
 
 	device->connected_bss = NULL;
 	device->connected_network = NULL;
+	station->connected_network = NULL;
 
 	l_dbus_property_changed(dbus, device_get_path(device),
 				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
@@ -568,209 +572,6 @@ static void device_disconnect_event(struct device *device)
 	}
 
 	device_disassociated(device);
-}
-
-static enum ie_rsn_akm_suite device_select_akm_suite(struct network *network,
-						struct scan_bss *bss,
-						struct ie_rsn_info *info)
-{
-	enum security security = network_get_security(network);
-
-	/*
-	 * If FT is available, use FT authentication to keep the door open
-	 * for fast transitions.  Otherwise use SHA256 version if present.
-	 */
-
-	if (security == SECURITY_8021X) {
-		if ((info->akm_suites & IE_RSN_AKM_SUITE_FT_OVER_8021X) &&
-				bss->rsne && bss->mde_present)
-			return IE_RSN_AKM_SUITE_FT_OVER_8021X;
-
-		if (info->akm_suites & IE_RSN_AKM_SUITE_8021X_SHA256)
-			return IE_RSN_AKM_SUITE_8021X_SHA256;
-
-		if (info->akm_suites & IE_RSN_AKM_SUITE_8021X)
-			return IE_RSN_AKM_SUITE_8021X;
-	} else if (security == SECURITY_PSK) {
-		if (info->akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256)
-			return IE_RSN_AKM_SUITE_SAE_SHA256;
-
-		if ((info->akm_suites & IE_RSN_AKM_SUITE_FT_USING_PSK) &&
-				bss->rsne && bss->mde_present)
-			return IE_RSN_AKM_SUITE_FT_USING_PSK;
-
-		if (info->akm_suites & IE_RSN_AKM_SUITE_PSK_SHA256)
-			return IE_RSN_AKM_SUITE_PSK_SHA256;
-
-		if (info->akm_suites & IE_RSN_AKM_SUITE_PSK)
-			return IE_RSN_AKM_SUITE_PSK;
-	}
-
-	return 0;
-}
-
-static void device_handshake_event(struct handshake_state *hs,
-					enum handshake_event event,
-					void *event_data, void *user_data)
-{
-	struct device *device = user_data;
-	struct network *network = device->connected_network;
-
-	switch (event) {
-	case HANDSHAKE_EVENT_STARTED:
-		l_debug("Handshaking");
-		break;
-	case HANDSHAKE_EVENT_SETTING_KEYS:
-		l_debug("Setting keys");
-
-		/* If we got here, then our PSK works.  Save if required */
-		network_sync_psk(network);
-		break;
-	case HANDSHAKE_EVENT_FAILED:
-		netdev_handshake_failed(hs, l_get_u16(event_data));
-		break;
-	case HANDSHAKE_EVENT_SETTING_KEYS_FAILED:
-	case HANDSHAKE_EVENT_COMPLETE:
-		/*
-		 * currently we dont care about any other events. The
-		 * netdev_connect_cb will notify us when the connection is
-		 * complete.
-		 */
-		break;
-	}
-}
-
-static struct handshake_state *device_handshake_setup(struct device *device,
-						struct network *network,
-						struct scan_bss *bss)
-{
-	enum security security = network_get_security(network);
-	struct wiphy *wiphy = device->wiphy;
-	struct handshake_state *hs;
-	bool add_mde = false;
-
-	hs = netdev_handshake_state_new(device->netdev);
-
-	handshake_state_set_event_func(hs, device_handshake_event, device);
-
-	if (security == SECURITY_PSK || security == SECURITY_8021X) {
-		const struct l_settings *settings = iwd_get_config();
-		struct ie_rsn_info bss_info;
-		uint8_t rsne_buf[256];
-		struct ie_rsn_info info;
-		const char *ssid;
-		uint32_t mfp_setting;
-
-		memset(&info, 0, sizeof(info));
-
-		memset(&bss_info, 0, sizeof(bss_info));
-		scan_bss_get_rsn_info(bss, &bss_info);
-
-		info.akm_suites = device_select_akm_suite(network, bss,
-								&bss_info);
-
-		if (!info.akm_suites)
-			goto not_supported;
-
-		info.pairwise_ciphers = wiphy_select_cipher(wiphy,
-						bss_info.pairwise_ciphers);
-		info.group_cipher = wiphy_select_cipher(wiphy,
-						bss_info.group_cipher);
-
-		if (!info.pairwise_ciphers || !info.group_cipher)
-			goto not_supported;
-
-		if (!l_settings_get_uint(settings, "General",
-				"ManagementFrameProtection", &mfp_setting))
-			mfp_setting = 1;
-
-		if (mfp_setting > 2) {
-			l_error("Invalid MFP value, using default of 1");
-			mfp_setting = 1;
-		}
-
-		switch (mfp_setting) {
-		case 0:
-			break;
-		case 1:
-			info.group_management_cipher =
-				wiphy_select_cipher(wiphy,
-					bss_info.group_management_cipher);
-			info.mfpc = info.group_management_cipher != 0;
-			break;
-		case 2:
-			info.group_management_cipher =
-				wiphy_select_cipher(wiphy,
-					bss_info.group_management_cipher);
-
-			/*
-			 * MFP required on our side, but AP doesn't support MFP
-			 * or cipher mismatch
-			 */
-			if (info.group_management_cipher == 0)
-				goto not_supported;
-
-			info.mfpc = true;
-			info.mfpr = true;
-			break;
-		}
-
-		if (bss_info.mfpr && !info.mfpc)
-			goto not_supported;
-
-		ssid = network_get_ssid(network);
-		handshake_state_set_ssid(hs, (void *) ssid, strlen(ssid));
-
-		/* RSN takes priority */
-		if (bss->rsne) {
-			ie_build_rsne(&info, rsne_buf);
-			handshake_state_set_authenticator_rsn(hs, bss->rsne);
-			handshake_state_set_supplicant_rsn(hs, rsne_buf);
-		} else {
-			ie_build_wpa(&info, rsne_buf);
-			handshake_state_set_authenticator_wpa(hs, bss->wpa);
-			handshake_state_set_supplicant_wpa(hs, rsne_buf);
-		}
-
-		if (security == SECURITY_PSK) {
-			/* SAE will generate/set the PMK */
-			if (info.akm_suites == IE_RSN_AKM_SUITE_SAE_SHA256)
-				handshake_state_set_passphrase(hs,
-					network_get_passphrase(network));
-			else
-				handshake_state_set_pmk(hs,
-						network_get_psk(network), 32);
-		} else
-			handshake_state_set_8021x_config(hs,
-						network_get_settings(network));
-
-		if (info.akm_suites & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
-					IE_RSN_AKM_SUITE_FT_USING_PSK |
-					IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256))
-			add_mde = true;
-	}
-
-	if (security == SECURITY_NONE)
-		/* Perform FT association if available */
-		add_mde = bss->mde_present;
-
-	if (add_mde) {
-		uint8_t mde[5];
-
-		/* The MDE advertised by the BSS must be passed verbatim */
-		mde[0] = IE_TYPE_MOBILITY_DOMAIN;
-		mde[1] = 3;
-		memcpy(mde + 2, bss->mde, 3);
-
-		handshake_state_set_mde(hs, mde);
-	}
-
-	return hs;
-
-not_supported:
-	handshake_state_free(hs);
-
-	return NULL;
 }
 
 static void device_roam_failed(struct device *device)
@@ -876,6 +677,8 @@ static void device_preauthenticate_cb(struct netdev *netdev,
 					const uint8_t *pmk, void *user_data)
 {
 	struct device *device = user_data;
+	struct station *station = device->station;
+	struct network *connected = device_get_connected_network(device);
 	struct scan_bss *bss;
 	struct handshake_state *new_hs;
 
@@ -893,7 +696,7 @@ static void device_preauthenticate_cb(struct netdev *netdev,
 		return;
 	}
 
-	new_hs = device_handshake_setup(device, device->connected_network, bss);
+	new_hs = station_handshake_setup(station, connected, bss);
 	if (!new_hs) {
 		l_error("device_handshake_setup failed");
 
@@ -938,11 +741,12 @@ static void device_preauthenticate_cb(struct netdev *netdev,
 static void device_transition_start(struct device *device, struct scan_bss *bss)
 {
 	struct handshake_state *hs = netdev_get_handshake(device->netdev);
+	struct network *connected = device_get_connected_network(device);
+	enum security security = network_get_security(connected);
+	struct station *station = device->station;
 	uint16_t mdid;
 	struct handshake_state *new_hs;
 	struct ie_rsn_info cur_rsne, target_rsne;
-	enum security security =
-		network_get_security(device->connected_network);
 
 	l_debug("%d, target %s", device->index,
 			util_address_to_string(bss->addr));
@@ -1011,7 +815,7 @@ static void device_transition_start(struct device *device, struct scan_bss *bss)
 			return;
 	}
 
-	new_hs = device_handshake_setup(device, device->connected_network, bss);
+	new_hs = station_handshake_setup(station, connected, bss);
 	if (!new_hs) {
 		l_error("device_handshake_setup failed in reassociation");
 
@@ -1655,13 +1459,14 @@ int __device_connect_network(struct device *device, struct network *network,
 				struct scan_bss *bss)
 {
 	struct l_dbus *dbus = dbus_get_bus();
+	struct station *station = device->station;
 	struct handshake_state *hs;
 	int r;
 
 	if (device_is_busy(device))
 		return -EBUSY;
 
-	hs = device_handshake_setup(device, network, bss);
+	hs = station_handshake_setup(station, network, bss);
 	if (!hs)
 		return -ENOTSUP;
 
@@ -1674,6 +1479,7 @@ int __device_connect_network(struct device *device, struct network *network,
 
 	device->connected_bss = bss;
 	device->connected_network = network;
+	station->connected_network = network;
 
 	device_enter_state(device, DEVICE_STATE_CONNECTING);
 
@@ -2538,12 +2344,19 @@ static void device_netdev_notify(struct netdev *netdev,
 		if (netdev_get_iftype(device->netdev) != NETDEV_IFTYPE_STATION)
 			return;
 
+		device->station = station_create(device->wiphy, device->netdev);
+
 		if (device->autoconnect)
 			device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
 		else
 			device_enter_state(device, DEVICE_STATE_DISCONNECTED);
 		break;
 	case NETDEV_WATCH_EVENT_DOWN:
+		if (device->station) {
+			station_free(device->station);
+			device->station = NULL;
+		}
+
 		device_enter_state(device, DEVICE_STATE_OFF);
 
 		if (device->scan_pending)
@@ -2625,8 +2438,10 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 			device_ap_roam_frame_event, device);
 
 	if (netdev_get_is_up(netdev) &&
-			netdev_get_iftype(netdev) == NETDEV_IFTYPE_STATION)
+			netdev_get_iftype(netdev) == NETDEV_IFTYPE_STATION) {
+		device->station = station_create(device->wiphy, device->netdev);
 		device_enter_state(device, DEVICE_STATE_AUTOCONNECT);
+	}
 
 	return device;
 }
