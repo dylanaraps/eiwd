@@ -72,35 +72,6 @@ struct sae_sm {
 static uint64_t curve_p[NUM_ECC_DIGITS] = CURVE_P_32;
 static uint64_t curve_n[NUM_ECC_DIGITS] = CURVE_N_32;
 
-static bool H(const uint8_t *key, size_t key_len, uint8_t num_args,
-		uint8_t *out, ...)
-{
-	struct l_checksum *hmac;
-	struct iovec iov[num_args];
-	va_list va;
-	int i;
-	int ret;
-
-	va_start(va, out);
-
-	hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, key, key_len);
-	if (!hmac)
-		return false;
-
-	for (i = 0; i < num_args; i++) {
-		iov[i].iov_base = va_arg(va, void *);
-		iov[i].iov_len = va_arg(va, size_t);
-	}
-
-	if (!l_checksum_updatev(hmac, iov, num_args))
-		return false;
-
-	ret = l_checksum_get_digest(hmac, out, 32);
-	l_checksum_free(hmac);
-
-	return (ret == 32);
-}
-
 /* calculate random quadratic residue */
 static void sae_get_qr(uint64_t *qr)
 {
@@ -166,7 +137,7 @@ static bool sae_pwd_seed(const uint8_t *addr1, const uint8_t *addr2,
 		memcpy(key + 6, addr1, 6);
 	}
 
-	return H(key, 12, 2, out, base, base_len, &counter, 1);
+	return hkdf_256(key, 12, 2, out, base, base_len, &counter, 1);
 }
 
 static bool sae_pwd_value(uint8_t *pwd_seed, uint64_t *pwd_value)

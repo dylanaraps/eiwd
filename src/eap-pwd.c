@@ -28,6 +28,7 @@
 
 #include "eap.h"
 #include "eap-private.h"
+#include "crypto.h"
 #include "util.h"
 #include "ecc.h"
 
@@ -81,35 +82,6 @@ struct eap_pwd_handle {
 };
 
 static uint64_t curve_p[NUM_ECC_DIGITS] = CURVE_P_32;
-
-static bool H(uint8_t num_args, uint8_t *out, ...)
-{
-	struct l_checksum *hmac;
-	struct iovec iov[num_args];
-	uint8_t k[32] = { 0 };
-	va_list va;
-	int i;
-	int ret;
-
-	va_start(va, out);
-
-	hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, k, 32);
-	if (!hmac)
-		return false;
-
-	for (i = 0; i < num_args; i++) {
-		iov[i].iov_base = va_arg(va, void *);
-		iov[i].iov_len = va_arg(va, size_t);
-	}
-
-	if (!l_checksum_updatev(hmac, iov, num_args))
-		return false;
-
-	ret = l_checksum_get_digest(hmac, out, 32);
-	l_checksum_free(hmac);
-
-	return (ret == 32);
-}
 
 /* RFC 5931, Section 2.5 - Key Derivation Function */
 static bool kdf(uint8_t *key, size_t key_len, const char *label,
@@ -310,9 +282,10 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 
 	while (counter < 20) {
 		/* pwd-seed = H(token|peer-ID|server-ID|password|counter) */
-		H(5, pwd_seed, &token, 4, pwd->identity, strlen(pwd->identity),
-				pkt + 9, len - 9, pwd->password,
-				strlen(pwd->password), &counter, 1);
+		hkdf_256(NULL, 0, 5, pwd_seed, &token, 4, pwd->identity,
+				strlen(pwd->identity), pkt + 9, len - 9,
+				pwd->password, strlen(pwd->password),
+				&counter, 1);
 
 		/*
 		 * pwd-value = KDF(pwd-seed, "EAP-pwd Hunting And Pecking",
@@ -519,15 +492,15 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 	 * compute Confirm_P = H(kp | Element_P | Scalar_P |
 	 *                       Element_S | Scalar_S | Ciphersuite)
 	 */
-	H(8, confirm_p, kp.x, ECC_BYTES, pwd->element_p.x, ECC_BYTES,
-			pwd->element_p.y, ECC_BYTES, pwd->scalar_p,
+	hkdf_256(NULL, 0, 8, confirm_p, kp.x, ECC_BYTES, pwd->element_p.x,
+			ECC_BYTES, pwd->element_p.y, ECC_BYTES, pwd->scalar_p,
 			ECC_BYTES, pwd->element_s.x, ECC_BYTES,
 			pwd->element_s.y, ECC_BYTES, pwd->scalar_s,
 			ECC_BYTES, &pwd->ciphersuite, 4);
 
-	H(8, expected_confirm_s, kp.x, ECC_BYTES, pwd->element_s.x,
-			ECC_BYTES, pwd->element_s.y, ECC_BYTES,
-			pwd->scalar_s, ECC_BYTES, pwd->element_p.x,
+	hkdf_256(NULL, 0, 8, expected_confirm_s, kp.x, ECC_BYTES,
+			pwd->element_s.x, ECC_BYTES, pwd->element_s.y,
+			ECC_BYTES, pwd->scalar_s, ECC_BYTES, pwd->element_p.x,
 			ECC_BYTES, pwd->element_p.y, ECC_BYTES,
 			pwd->scalar_p, ECC_BYTES, &pwd->ciphersuite, 4);
 
@@ -542,7 +515,7 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 	pos += 32;
 
 	/* derive MK = H(kp | Confirm_P | Confirm_S ) */
-	H(3, mk, kp.x, ECC_BYTES, confirm_p, ECC_BYTES,
+	hkdf_256(NULL, 0, 3, mk, kp.x, ECC_BYTES, confirm_p, ECC_BYTES,
 			confirm_s, ECC_BYTES);
 
 	eap_pwd_send_response(eap, resp, pos - resp);
@@ -550,8 +523,8 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 	eap_method_success(eap);
 
 	session_id[0] = 52;
-	H(3, session_id + 1, &pwd->ciphersuite, 4, pwd->scalar_p, ECC_BYTES,
-			pwd->scalar_s, ECC_BYTES);
+	hkdf_256(NULL, 0, 3, session_id + 1, &pwd->ciphersuite, 4,
+			pwd->scalar_p, ECC_BYTES, pwd->scalar_s, ECC_BYTES);
 	kdf(mk, 32, (const char *) session_id, 33, msk_emsk, 128);
 	eap_set_key_material(eap, msk_emsk, 64, msk_emsk + 64, 64, NULL, 0);
 

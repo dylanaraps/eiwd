@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2013-2014  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2013-2018  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -404,6 +404,46 @@ bool kdf_sha256(const void *key, size_t key_len,
 	l_checksum_free(hmac);
 
 	return true;
+}
+
+/*
+ * Defined in RFC 5869 - HMAC-based Extract-and-Expand Key Derivation Function
+ *
+ * Null key equates to a zero key (makes calls in EAP-PWD more convenient)
+ */
+bool hkdf_256(const uint8_t *key, size_t key_len, uint8_t num_args,
+			uint8_t *out, ...)
+{
+	struct l_checksum *hmac;
+	struct iovec iov[num_args];
+	const uint8_t zero_key[32] = { 0 };
+	const uint8_t *k = key ? key : zero_key;
+	size_t k_len = key ? key_len : 32;
+	va_list va;
+	int i;
+	int ret;
+
+	hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, k, k_len);
+	if (!hmac)
+		return false;
+
+	va_start(va, out);
+
+	for (i = 0; i < num_args; i++) {
+		iov[i].iov_base = va_arg(va, void *);
+		iov[i].iov_len = va_arg(va, size_t);
+	}
+
+	if (!l_checksum_updatev(hmac, iov, num_args)) {
+		va_end(va);
+		return false;
+	}
+
+	ret = l_checksum_get_digest(hmac, out, 32);
+	l_checksum_free(hmac);
+
+	va_end(va);
+	return (ret == 32);
 }
 
 /*
