@@ -73,6 +73,18 @@ struct scan_parameters {
 	const char *ssid;	/* Used for direct probe request */
 };
 
+static inline int scan_bss_addr_cmp(const struct scan_bss *a1,
+					const struct scan_bss *a2)
+{
+        return memcmp(a1->addr, a2->addr, sizeof(a1->addr));
+}
+
+static inline bool scan_bss_addr_eq(const struct scan_bss *a1,
+					const struct scan_bss *a2)
+{
+        return !memcmp(a1->addr, a2->addr, sizeof(a1->addr));
+}
+
 uint32_t scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
 			scan_notify_func_t notify, void *userdata,
 			scan_destroy_func_t destroy);
