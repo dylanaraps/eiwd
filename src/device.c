@@ -321,7 +321,8 @@ static bool bss_match(const void *a, const void *b)
  * Used when scan results were obtained; either from passive scan running
  * inside device.c or active scans running in other state machines, e.g. wsc.c
  */
-void device_set_scan_results(struct device *device, struct l_queue *bss_list)
+void device_set_scan_results(struct device *device, struct l_queue *bss_list,
+					bool add_to_autoconnect)
 {
 	struct network *network;
 	const struct l_queue_entry *bss_entry;
@@ -342,13 +343,8 @@ void device_set_scan_results(struct device *device, struct l_queue *bss_list)
 		struct scan_bss *bss = bss_entry->data;
 		struct network *network = add_seen_bss(device, bss);
 
-		if (!network)
-			continue;
-
-		if (device->state != DEVICE_STATE_AUTOCONNECT)
-			continue;
-
-		add_autoconnect_bss(device, network, bss);
+		if (network && add_to_autoconnect)
+			add_autoconnect_bss(device, network, bss);
 	}
 
 	if (device->connected_bss) {
@@ -374,9 +370,6 @@ void device_set_scan_results(struct device *device, struct l_queue *bss_list)
 
 	l_queue_destroy(device->old_bss_list, bss_free);
 	device->old_bss_list = NULL;
-
-	if (device->state == DEVICE_STATE_AUTOCONNECT)
-		device_autoconnect_next(device);
 }
 
 static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
@@ -384,6 +377,7 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 {
 	struct device *device = userdata;
 	struct l_dbus *dbus = dbus_get_bus();
+	bool autoconnect = device->state == DEVICE_STATE_AUTOCONNECT;
 
 	if (device->scanning) {
 		device->scanning = false;
@@ -398,7 +392,10 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 	if (netdev_get_iftype(device->netdev) != NETDEV_IFTYPE_STATION)
 		return false;
 
-	device_set_scan_results(device, bss_list);
+	device_set_scan_results(device, bss_list, autoconnect);
+
+	if (autoconnect)
+		device_autoconnect_next(device);
 
 	return true;
 }

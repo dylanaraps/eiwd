@@ -666,7 +666,7 @@ static bool push_button_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 	}
 
 	wsc_cancel_scan(wsc);
-	device_set_scan_results(wsc->device, bss_list);
+	device_set_scan_results(wsc->device, bss_list, false);
 
 	l_debug("Found AP to connect to: %s",
 			util_address_to_string(target->addr));
@@ -813,7 +813,7 @@ static bool pin_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 	}
 
 	wsc_cancel_scan(wsc);
-	device_set_scan_results(wsc->device, bss_list);
+	device_set_scan_results(wsc->device, bss_list, false);
 
 	l_debug("Found AP to connect to: %s",
 			util_address_to_string(target->addr));
