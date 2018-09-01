@@ -29,17 +29,32 @@ struct scan_bss;
 struct network;
 
 struct station {
+	struct scan_bss *connected_bss;
 	struct network *connected_network;
 	struct l_queue *autoconnect_list;
+	struct l_queue *bss_list;
+	struct l_hashmap *networks;
+	struct l_queue *networks_sorted;
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
+
+	bool seen_hidden_networks : 1;
 };
 
 void station_autoconnect_next(struct station *station);
 void station_add_autoconnect_bss(struct station *station,
 					struct network *network,
 					struct scan_bss *bss);
+
+struct network *station_network_find(struct station *station, const char *ssid,
+					enum security security);
+
+struct network *station_add_seen_bss(struct station *station,
+						struct scan_bss *bss);
+
+void station_set_scan_results(struct station *station, struct l_queue *bss_list,
+				bool add_to_autoconnect);
 
 struct handshake_state *station_handshake_setup(struct station *station,
 						struct network *network,

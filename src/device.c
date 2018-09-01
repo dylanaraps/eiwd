@@ -51,11 +51,7 @@
 struct device {
 	uint32_t index;
 	enum device_state state;
-	struct l_queue *bss_list;
-	struct l_queue *old_bss_list;
 	struct l_dbus_message *scan_pending;
-	struct l_hashmap *networks;
-	struct l_queue *networks_sorted;
 	struct scan_bss *connected_bss;
 	struct network *connected_network;
 	struct l_dbus_message *connect_pending;
@@ -77,7 +73,6 @@ struct device {
 	bool signal_low : 1;
 	bool roam_no_orig_ap : 1;
 	bool ap_directed_roaming : 1;
-	bool seen_hidden_networks : 1;
 
 	uint32_t ap_roam_watch;
 };
@@ -108,25 +103,6 @@ void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
 	}
 }
 
-static const char *iwd_network_get_path(struct device *device,
-					const char *ssid,
-					enum security security)
-{
-	static char path[256];
-	unsigned int pos, i;
-
-	pos = snprintf(path, sizeof(path), "%s/", device_get_path(device));
-
-	for (i = 0; ssid[i] && pos < sizeof(path); i++)
-		pos += snprintf(path + pos, sizeof(path) - pos, "%02x",
-								ssid[i]);
-
-	snprintf(path + pos, sizeof(path) - pos, "_%s",
-				security_to_str(security));
-
-	return path;
-}
-
 static const char *device_state_to_string(enum device_state state)
 {
 	switch (state) {
@@ -149,173 +125,10 @@ static const char *device_state_to_string(enum device_state state)
 	return "invalid";
 }
 
-static void bss_free(void *data)
-{
-	struct scan_bss *bss = data;
-	const char *addr;
-
-	addr = util_address_to_string(bss->addr);
-	l_debug("Freeing BSS %s", addr);
-
-	scan_bss_free(bss);
-}
-
-static void network_free(void *data)
-{
-	struct network *network = data;
-
-	network_remove(network, -ESHUTDOWN);
-}
-
-static bool process_network(const void *key, void *data, void *user_data)
-{
-	struct network *network = data;
-	struct device *device = user_data;
-
-	if (!network_bss_list_isempty(network)) {
-		/* Build the network list ordered by rank */
-		network_rank_update(network);
-
-		l_queue_insert(device->networks_sorted, network,
-				network_rank_compare, NULL);
-
-		return false;
-	}
-
-	/* Drop networks that have no more BSSs in range */
-	l_debug("No remaining BSSs for SSID: %s -- Removing network",
-			network_get_ssid(network));
-	network_remove(network, -ERANGE);
-
-	return true;
-}
-
-/*
- * Returns the network object the BSS was added to or NULL if ignored.
- */
-static struct network *add_seen_bss(struct device *device, struct scan_bss *bss)
-{
-	struct network *network;
-	struct ie_rsn_info info;
-	int r;
-	enum security security;
-	const char *path;
-	char ssid[33];
-
-	l_debug("Found BSS '%s' with SSID: %s, freq: %u, rank: %u, "
-			"strength: %i",
-			util_address_to_string(bss->addr),
-			util_ssid_to_utf8(bss->ssid_len, bss->ssid),
-			bss->frequency, bss->rank, bss->signal_strength);
-
-	if (util_ssid_is_hidden(bss->ssid_len, bss->ssid)) {
-		l_debug("Ignoring BSS with hidden SSID");
-		device->seen_hidden_networks = true;
-		return NULL;
-	}
-
-	if (!util_ssid_is_utf8(bss->ssid_len, bss->ssid)) {
-		l_debug("Ignoring BSS with non-UTF8 SSID");
-		return NULL;
-	}
-
-	memcpy(ssid, bss->ssid, bss->ssid_len);
-	ssid[bss->ssid_len] = '\0';
-
-	memset(&info, 0, sizeof(info));
-	r = scan_bss_get_rsn_info(bss, &info);
-	if (r < 0) {
-		if (r != -ENOENT)
-			return NULL;
-
-		security = security_determine(bss->capability, NULL);
-	} else
-		security = security_determine(bss->capability, &info);
-
-	path = iwd_network_get_path(device, ssid, security);
-
-	network = l_hashmap_lookup(device->networks, path);
-	if (!network) {
-		network = network_create(device, ssid, security);
-
-		if (!network_register(network, path)) {
-			network_remove(network, -EINVAL);
-			return NULL;
-		}
-
-		l_hashmap_insert(device->networks,
-					network_get_path(network), network);
-		l_debug("Added new Network \"%s\" security %s",
-			network_get_ssid(network), security_to_str(security));
-	}
-
-	network_bss_add(network, bss);
-
-	return network;
-}
-
-static bool bss_match(const void *a, const void *b)
-{
-	const struct scan_bss *bss_a = a;
-	const struct scan_bss *bss_b = b;
-
-	return !memcmp(bss_a->addr, bss_b->addr, sizeof(bss_a->addr));
-}
-
-/*
- * Used when scan results were obtained; either from passive scan running
- * inside device.c or active scans running in other state machines, e.g. wsc.c
- */
 void device_set_scan_results(struct device *device, struct l_queue *bss_list,
 					bool add_to_autoconnect)
 {
-	struct network *network;
-	const struct l_queue_entry *bss_entry;
-
-	device->old_bss_list = device->bss_list;
-	device->bss_list = bss_list;
-
-	device->seen_hidden_networks = false;
-
-	while ((network = l_queue_pop_head(device->networks_sorted)))
-		network_bss_list_clear(network);
-
-	l_queue_destroy(device->station->autoconnect_list, l_free);
-	device->station->autoconnect_list = l_queue_new();
-
-	for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
-				bss_entry = bss_entry->next) {
-		struct scan_bss *bss = bss_entry->data;
-		struct network *network = add_seen_bss(device, bss);
-
-		if (network && add_to_autoconnect)
-			station_add_autoconnect_bss(device->station,
-								network, bss);
-	}
-
-	if (device->connected_bss) {
-		struct scan_bss *bss;
-
-		bss = l_queue_find(device->bss_list, bss_match,
-						device->connected_bss);
-
-		if (!bss) {
-			l_warn("Connected BSS not in scan results!");
-			device->connected_bss->rank = 0;
-			l_queue_push_tail(device->bss_list,
-						device->connected_bss);
-			network_bss_add(device->connected_network,
-						device->connected_bss);
-			l_queue_remove(device->old_bss_list,
-						device->connected_bss);
-		} else
-			device->connected_bss = bss;
-	}
-
-	l_hashmap_foreach_remove(device->networks, process_network, device);
-
-	l_queue_destroy(device->old_bss_list, bss_free);
-	device->old_bss_list = NULL;
+	station_set_scan_results(device->station, bss_list, add_to_autoconnect);
 }
 
 static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
@@ -419,9 +232,7 @@ bool device_remove_state_watch(struct device *device, uint32_t id)
 struct network *device_network_find(struct device *device, const char *ssid,
 					enum security security)
 {
-	const char *path = iwd_network_get_path(device, ssid, security);
-
-	return l_hashmap_lookup(device->networks, path);
+	return station_network_find(device->station, ssid, security);
 }
 
 static void device_enter_state(struct device *device, enum device_state state)
@@ -492,6 +303,7 @@ static void device_reset_connection_state(struct device *device)
 		scan_cancel(device->index, device->roam_scan_id);
 
 	device->connected_bss = NULL;
+	station->connected_bss = NULL;
 	device->connected_network = NULL;
 	station->connected_network = NULL;
 
@@ -605,6 +417,8 @@ static void device_transition_reassociate(struct device *device,
 						struct scan_bss *bss,
 						struct handshake_state *new_hs)
 {
+	struct station *station = device->station;
+
 	if (netdev_reassociate(device->netdev, bss, device->connected_bss,
 				new_hs, device_netdev_event,
 				device_reassociate_cb, device) < 0) {
@@ -615,6 +429,7 @@ static void device_transition_reassociate(struct device *device,
 	}
 
 	device->connected_bss = bss;
+	station->connected_bss = bss;
 	device->preparing_roam = false;
 	device_enter_state(device, DEVICE_STATE_ROAMING);
 }
@@ -642,7 +457,7 @@ static void device_preauthenticate_cb(struct netdev *netdev,
 	if (!device->preparing_roam || result == NETDEV_RESULT_ABORTED)
 		return;
 
-	bss = l_queue_find(device->bss_list, bss_match_bssid,
+	bss = l_queue_find(device->station->bss_list, bss_match_bssid,
 				device->preauth_bssid);
 	if (!bss) {
 		l_error("Roam target BSS not found");
@@ -732,6 +547,7 @@ static void device_transition_start(struct device *device, struct scan_bss *bss)
 		}
 
 		device->connected_bss = bss;
+		station->connected_bss = bss;
 		device->preparing_roam = false;
 		device_enter_state(device, DEVICE_STATE_ROAMING);
 
@@ -895,7 +711,7 @@ next:
 		goto fail_free_bss;
 
 	/* See if we have anywhere to roam to */
-	if (!best_bss || bss_match(best_bss, device->connected_bss))
+	if (!best_bss || scan_bss_addr_eq(best_bss, device->connected_bss))
 		goto fail_free_bss;
 
 	bss = network_bss_find_by_addr(network, best_bss->addr);
@@ -904,7 +720,7 @@ next:
 		best_bss = bss;
 	} else {
 		network_bss_add(network, best_bss);
-		l_queue_push_tail(device->bss_list, best_bss);
+		l_queue_push_tail(device->station->bss_list, best_bss);
 	}
 
 	device_transition_start(device, best_bss);
@@ -1433,6 +1249,7 @@ int __device_connect_network(struct device *device, struct network *network,
 	}
 
 	device->connected_bss = bss;
+	station->connected_bss = bss;
 	device->connected_network = network;
 	station->connected_network = network;
 
@@ -1516,7 +1333,7 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 	 * use passive scanning to hide our MAC address
 	 */
 	if (!device->connected_bss &&
-			!(device->seen_hidden_networks &&
+			!(device->station->seen_hidden_networks &&
 				known_networks_has_hidden())) {
 		if (!scan_passive(device->index, device_scan_triggered,
 						new_scan_results, device, NULL))
@@ -1625,6 +1442,7 @@ static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
 	struct device *device = user_data;
 	struct l_dbus_message *reply;
 	struct l_dbus_message_builder *builder;
+	struct l_queue *sorted = device->station->networks_sorted;
 	const struct l_queue_entry *entry;
 
 	reply = l_dbus_message_new_method_return(message);
@@ -1632,8 +1450,7 @@ static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
 
 	l_dbus_message_builder_enter_array(builder, "(osns)");
 
-	for (entry = l_queue_get_entries(device->networks_sorted); entry;
-				entry = entry->next) {
+	for (entry = l_queue_get_entries(sorted); entry; entry = entry->next) {
 		const struct network *network = entry->data;
 		enum security security = network_get_security(network);
 		int16_t signal_strength = network_get_signal_strength(network);
@@ -1736,15 +1553,6 @@ static struct l_dbus_message *device_signal_agent_register(struct l_dbus *dbus,
 	return l_dbus_message_new_method_return(message);
 }
 
-static bool device_remove_network(const void *key, void *data, void *user_data)
-{
-	struct network *network = data;
-
-	network_remove(network, -ESHUTDOWN);
-
-	return true;
-}
-
 static struct l_dbus_message *device_signal_agent_unregister(
 						struct l_dbus *dbus,
 						struct l_dbus_message *message,
@@ -1826,8 +1634,8 @@ static bool device_hidden_network_scan_results(uint32_t wiphy_id,
 					memcmp(bss->ssid, ssid, ssid_len))
 			goto next;
 
-		if (add_seen_bss(device, bss)) {
-			l_queue_push_tail(device->bss_list, bss);
+		if (station_add_seen_bss(device->station, bss)) {
+			l_queue_push_tail(device->station->bss_list, bss);
 
 			continue;
 		}
@@ -2324,15 +2132,6 @@ static void device_netdev_notify(struct netdev *netdev,
 
 		device_reset_connection_state(device);
 
-		l_hashmap_foreach_remove(device->networks,
-						device_remove_network, device);
-
-		l_queue_destroy(device->bss_list, bss_free);
-		device->bss_list = l_queue_new();
-
-		l_queue_destroy(device->networks_sorted, NULL);
-		device->networks_sorted = l_queue_new();
-
 		l_dbus_property_changed(dbus, device_get_path(device),
 					IWD_DEVICE_INTERFACE, "Powered");
 		break;
@@ -2357,13 +2156,7 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	const uint8_t action_ap_roam_prefix[2] = { 0x0a, 0x07 };
 
 	device = l_new(struct device, 1);
-	device->bss_list = l_queue_new();
-	device->networks = l_hashmap_new();
 	watchlist_init(&device->state_watches, NULL);
-	l_hashmap_set_hash_function(device->networks, l_str_hash);
-	l_hashmap_set_compare_function(device->networks,
-				(l_hashmap_compare_func_t) strcmp);
-	device->networks_sorted = l_queue_new();
 	device->index = ifindex;
 	device->wiphy = wiphy;
 	device->netdev = netdev;
@@ -2424,12 +2217,6 @@ static void device_free(void *user)
 
 	dbus = dbus_get_bus();
 	l_dbus_unregister_object(dbus, device_get_path(device));
-
-	l_queue_destroy(device->networks_sorted, NULL);
-	l_hashmap_destroy(device->networks, network_free);
-
-	l_queue_destroy(device->bss_list, bss_free);
-	l_queue_destroy(device->old_bss_list, bss_free);
 
 	l_timeout_remove(device->roam_trigger_timeout);
 
