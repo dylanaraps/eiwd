@@ -227,15 +227,34 @@ static bool process_network(const void *key, void *data, void *user_data)
 	return true;
 }
 
-static bool process_bss(struct device *device, struct scan_bss *bss)
+static void add_autoconnect_bss(struct device *device, struct network *network,
+					struct scan_bss *bss)
+{
+	double rankmod;
+	struct autoconnect_entry *entry;
+
+	/* See if network is autoconnectable (is a known network) */
+	if (!network_rankmod(network, &rankmod))
+		return;
+
+	entry = l_new(struct autoconnect_entry, 1);
+	entry->network = network;
+	entry->bss = bss;
+	entry->rank = bss->rank * rankmod;
+	l_queue_insert(device->autoconnect_list, entry,
+				autoconnect_rank_compare, NULL);
+}
+
+/*
+ * Returns the network object the BSS was added to or NULL if ignored.
+ */
+static struct network *add_seen_bss(struct device *device, struct scan_bss *bss)
 {
 	struct network *network;
 	struct ie_rsn_info info;
 	int r;
 	enum security security;
 	const char *path;
-	double rankmod;
-	struct autoconnect_entry *entry;
 	char ssid[33];
 
 	l_debug("Found BSS '%s' with SSID: %s, freq: %u, rank: %u, "
@@ -247,12 +266,12 @@ static bool process_bss(struct device *device, struct scan_bss *bss)
 	if (util_ssid_is_hidden(bss->ssid_len, bss->ssid)) {
 		l_debug("Ignoring BSS with hidden SSID");
 		device->seen_hidden_networks = true;
-		return false;
+		return NULL;
 	}
 
 	if (!util_ssid_is_utf8(bss->ssid_len, bss->ssid)) {
 		l_debug("Ignoring BSS with non-UTF8 SSID");
-		return false;
+		return NULL;
 	}
 
 	memcpy(ssid, bss->ssid, bss->ssid_len);
@@ -262,7 +281,7 @@ static bool process_bss(struct device *device, struct scan_bss *bss)
 	r = scan_bss_get_rsn_info(bss, &info);
 	if (r < 0) {
 		if (r != -ENOENT)
-			return false;
+			return NULL;
 
 		security = security_determine(bss->capability, NULL);
 	} else
@@ -276,7 +295,7 @@ static bool process_bss(struct device *device, struct scan_bss *bss)
 
 		if (!network_register(network, path)) {
 			network_remove(network, -EINVAL);
-			return false;
+			return NULL;
 		}
 
 		l_hashmap_insert(device->networks,
@@ -287,21 +306,7 @@ static bool process_bss(struct device *device, struct scan_bss *bss)
 
 	network_bss_add(network, bss);
 
-	if (device->state != DEVICE_STATE_AUTOCONNECT)
-		return true;
-
-	/* See if network is autoconnectable (is a known network) */
-	if (!network_rankmod(network, &rankmod))
-		return true;
-
-	entry = l_new(struct autoconnect_entry, 1);
-	entry->network = network;
-	entry->bss = bss;
-	entry->rank = bss->rank * rankmod;
-	l_queue_insert(device->autoconnect_list, entry,
-				autoconnect_rank_compare, NULL);
-
-	return true;
+	return network;
 }
 
 static bool bss_match(const void *a, const void *b)
@@ -335,8 +340,15 @@ void device_set_scan_results(struct device *device, struct l_queue *bss_list)
 	for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
 				bss_entry = bss_entry->next) {
 		struct scan_bss *bss = bss_entry->data;
+		struct network *network = add_seen_bss(device, bss);
 
-		process_bss(device, bss);
+		if (!network)
+			continue;
+
+		if (device->state != DEVICE_STATE_AUTOCONNECT)
+			continue;
+
+		add_autoconnect_bss(device, network, bss);
 	}
 
 	if (device->connected_bss) {
@@ -1871,7 +1883,7 @@ static bool device_hidden_network_scan_results(uint32_t wiphy_id,
 					memcmp(bss->ssid, ssid, ssid_len))
 			goto next;
 
-		if (process_bss(device, bss)) {
+		if (add_seen_bss(device, bss)) {
 			l_queue_push_tail(device->bss_list, bss);
 
 			continue;
