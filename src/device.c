@@ -48,12 +48,6 @@
 #include "src/adhoc.h"
 #include "src/station.h"
 
-struct autoconnect_entry {
-	uint16_t rank;
-	struct network *network;
-	struct scan_bss *bss;
-};
-
 struct device {
 	uint32_t index;
 	enum device_state state;
@@ -64,7 +58,6 @@ struct device {
 	struct l_queue *networks_sorted;
 	struct scan_bss *connected_bss;
 	struct network *connected_network;
-	struct l_queue *autoconnect_list;
 	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
 	struct watchlist state_watches;
@@ -156,28 +149,6 @@ static const char *device_state_to_string(enum device_state state)
 	return "invalid";
 }
 
-static void device_autoconnect_next(struct device *device)
-{
-	struct autoconnect_entry *entry;
-	int r;
-
-	while ((entry = l_queue_pop_head(device->autoconnect_list))) {
-		l_debug("Considering autoconnecting to BSS '%s' with SSID: %s,"
-			" freq: %u, rank: %u, strength: %i",
-			util_address_to_string(entry->bss->addr),
-			network_get_ssid(entry->network),
-			entry->bss->frequency, entry->rank,
-			entry->bss->signal_strength);
-
-		/* TODO: Blacklist the network from auto-connect */
-		r = network_autoconnect(entry->network, entry->bss);
-		l_free(entry);
-
-		if (!r)
-			return;
-	}
-}
-
 static void bss_free(void *data)
 {
 	struct scan_bss *bss = data;
@@ -194,14 +165,6 @@ static void network_free(void *data)
 	struct network *network = data;
 
 	network_remove(network, -ESHUTDOWN);
-}
-
-static int autoconnect_rank_compare(const void *a, const void *b, void *user)
-{
-	const struct autoconnect_entry *new_ae = a;
-	const struct autoconnect_entry *ae = b;
-
-	return ae->rank - new_ae->rank;
 }
 
 static bool process_network(const void *key, void *data, void *user_data)
@@ -225,24 +188,6 @@ static bool process_network(const void *key, void *data, void *user_data)
 	network_remove(network, -ERANGE);
 
 	return true;
-}
-
-static void add_autoconnect_bss(struct device *device, struct network *network,
-					struct scan_bss *bss)
-{
-	double rankmod;
-	struct autoconnect_entry *entry;
-
-	/* See if network is autoconnectable (is a known network) */
-	if (!network_rankmod(network, &rankmod))
-		return;
-
-	entry = l_new(struct autoconnect_entry, 1);
-	entry->network = network;
-	entry->bss = bss;
-	entry->rank = bss->rank * rankmod;
-	l_queue_insert(device->autoconnect_list, entry,
-				autoconnect_rank_compare, NULL);
 }
 
 /*
@@ -335,8 +280,8 @@ void device_set_scan_results(struct device *device, struct l_queue *bss_list,
 	while ((network = l_queue_pop_head(device->networks_sorted)))
 		network_bss_list_clear(network);
 
-	l_queue_destroy(device->autoconnect_list, l_free);
-	device->autoconnect_list = l_queue_new();
+	l_queue_destroy(device->station->autoconnect_list, l_free);
+	device->station->autoconnect_list = l_queue_new();
 
 	for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
 				bss_entry = bss_entry->next) {
@@ -344,7 +289,8 @@ void device_set_scan_results(struct device *device, struct l_queue *bss_list,
 		struct network *network = add_seen_bss(device, bss);
 
 		if (network && add_to_autoconnect)
-			add_autoconnect_bss(device, network, bss);
+			station_add_autoconnect_bss(device->station,
+								network, bss);
 	}
 
 	if (device->connected_bss) {
@@ -395,7 +341,7 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 	device_set_scan_results(device, bss_list, autoconnect);
 
 	if (autoconnect)
-		device_autoconnect_next(device);
+		station_autoconnect_next(device->station);
 
 	return true;
 }
@@ -2381,9 +2327,6 @@ static void device_netdev_notify(struct netdev *netdev,
 		l_hashmap_foreach_remove(device->networks,
 						device_remove_network, device);
 
-		l_queue_destroy(device->autoconnect_list, l_free);
-		device->autoconnect_list = l_queue_new();
-
 		l_queue_destroy(device->bss_list, bss_free);
 		device->bss_list = l_queue_new();
 
@@ -2487,7 +2430,6 @@ static void device_free(void *user)
 
 	l_queue_destroy(device->bss_list, bss_free);
 	l_queue_destroy(device->old_bss_list, bss_free);
-	l_queue_destroy(device->autoconnect_list, l_free);
 
 	l_timeout_remove(device->roam_trigger_timeout);
 

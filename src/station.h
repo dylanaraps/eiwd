@@ -30,10 +30,16 @@ struct network;
 
 struct station {
 	struct network *connected_network;
+	struct l_queue *autoconnect_list;
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
 };
+
+void station_autoconnect_next(struct station *station);
+void station_add_autoconnect_bss(struct station *station,
+					struct network *network,
+					struct scan_bss *bss);
 
 struct handshake_state *station_handshake_setup(struct station *station,
 						struct network *network,

@@ -41,6 +41,61 @@
 
 static struct l_queue *station_list;
 
+struct autoconnect_entry {
+	uint16_t rank;
+	struct network *network;
+	struct scan_bss *bss;
+};
+
+void station_autoconnect_next(struct station *station)
+{
+	struct autoconnect_entry *entry;
+	int r;
+
+	while ((entry = l_queue_pop_head(station->autoconnect_list))) {
+		l_debug("Considering autoconnecting to BSS '%s' with SSID: %s,"
+			" freq: %u, rank: %u, strength: %i",
+			util_address_to_string(entry->bss->addr),
+			network_get_ssid(entry->network),
+			entry->bss->frequency, entry->rank,
+			entry->bss->signal_strength);
+
+		/* TODO: Blacklist the network from auto-connect */
+		r = network_autoconnect(entry->network, entry->bss);
+		l_free(entry);
+
+		if (!r)
+			return;
+	}
+}
+
+static int autoconnect_rank_compare(const void *a, const void *b, void *user)
+{
+	const struct autoconnect_entry *new_ae = a;
+	const struct autoconnect_entry *ae = b;
+
+	return ae->rank - new_ae->rank;
+}
+
+void station_add_autoconnect_bss(struct station *station,
+					struct network *network,
+					struct scan_bss *bss)
+{
+	double rankmod;
+	struct autoconnect_entry *entry;
+
+	/* See if network is autoconnectable (is a known network) */
+	if (!network_rankmod(network, &rankmod))
+		return;
+
+	entry = l_new(struct autoconnect_entry, 1);
+	entry->network = network;
+	entry->bss = bss;
+	entry->rank = bss->rank * rankmod;
+	l_queue_insert(station->autoconnect_list, entry,
+				autoconnect_rank_compare, NULL);
+}
+
 static enum ie_rsn_akm_suite select_akm_suite(struct network *network,
 						struct scan_bss *bss,
 						struct ie_rsn_info *info)
@@ -263,6 +318,8 @@ void station_free(struct station *station)
 
 	if (!l_queue_remove(station_list, station))
 		return;
+
+	l_queue_destroy(station->autoconnect_list, l_free);
 
 	l_free(station);
 }
