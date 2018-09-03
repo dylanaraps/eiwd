@@ -60,5 +60,6 @@ struct handshake_state *station_handshake_setup(struct station *station,
 						struct network *network,
 						struct scan_bss *bss);
 
+struct station *station_find(uint32_t ifindex);
 struct station *station_create(struct wiphy *wiphy, struct netdev *netdev);
 void station_free(struct station *station);

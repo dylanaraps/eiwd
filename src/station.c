@@ -496,6 +496,21 @@ not_supported:
 	return NULL;
 }
 
+struct station *station_find(uint32_t ifindex)
+{
+	const struct l_queue_entry *entry;
+
+	for (entry = l_queue_get_entries(station_list); entry;
+				entry = entry->next) {
+		struct station *station = entry->data;
+
+		if (netdev_get_ifindex(station->netdev) == ifindex)
+			return station;
+	}
+
+	return NULL;
+}
+
 struct station *station_create(struct wiphy *wiphy, struct netdev *netdev)
 {
 	struct station *station;
