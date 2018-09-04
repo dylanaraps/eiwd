@@ -31,7 +31,6 @@ struct device;
 struct network *device_get_connected_network(struct device *device);
 const char *device_get_path(struct device *device);
 bool device_is_busy(struct device *device);
-struct wiphy *device_get_wiphy(struct device *device);
 
 void device_disassociated(struct device *device);
 void device_transition_start(struct device *device, struct scan_bss *bss);

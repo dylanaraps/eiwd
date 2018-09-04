@@ -40,15 +40,18 @@
 #include "src/scan.h"
 #include "src/dbus.h"
 #include "src/agent.h"
+#include "src/netdev.h"
 #include "src/device.h"
 #include "src/wiphy.h"
+#include "src/watchlist.h"
+#include "src/station.h"
 #include "src/eap.h"
 #include "src/knownnetworks.h"
 #include "src/network.h"
 
 struct network {
 	char *object_path;
-	struct device *device;
+	struct station *station;
 	struct network_info *info;
 	unsigned char *psk;
 	char *passphrase;
@@ -275,13 +278,13 @@ static void network_info_put(struct network_info *network)
 	network_info_free(network);
 }
 
-struct network *network_create(struct device *device, const char *ssid,
+struct network *network_create(struct station *station, const char *ssid,
 				enum security security)
 {
 	struct network *network;
 
 	network = l_new(struct network, 1);
-	network->device = device;
+	network->station = station;
 	network->info = network_info_get(ssid, security);
 
 	network->bss_list = l_queue_new();
@@ -458,7 +461,10 @@ void network_sync_psk(struct network *network)
 
 int network_autoconnect(struct network *network, struct scan_bss *bss)
 {
-	struct wiphy *wiphy = device_get_wiphy(network->device);
+	struct station *station = network->station;
+	struct wiphy *wiphy = station_get_wiphy(station);
+	struct netdev *netdev = station_get_netdev(station);
+	struct device *device = netdev_get_device(netdev);
 	bool is_autoconnectable;
 	bool is_rsn;
 	int ret;
@@ -534,7 +540,7 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 			goto close_settings;
 	}
 
-	return __device_connect_network(network->device, network, bss);
+	return __device_connect_network(device, network, bss);
 
 close_settings:
 	network_settings_close(network);
@@ -593,7 +599,7 @@ struct scan_bss *network_bss_find_by_addr(struct network *network,
 struct scan_bss *network_bss_select(struct network *network)
 {
 	struct l_queue *bss_list = network->bss_list;
-	struct wiphy *wiphy = device_get_wiphy(network->device);
+	struct wiphy *wiphy = station_get_wiphy(network->station);
 	const struct l_queue_entry *bss_entry;
 
 	switch (network_get_security(network)) {
@@ -628,6 +634,9 @@ static void passphrase_callback(enum agent_result result,
 				void *user_data)
 {
 	struct network *network = user_data;
+	struct station *station = network->station;
+	struct netdev *netdev = station_get_netdev(station);
+	struct device *device = netdev_get_device(netdev);
 	struct scan_bss *bss;
 
 	l_debug("result %d", result);
@@ -677,7 +686,7 @@ static void passphrase_callback(enum agent_result result,
 	 */
 	network->update_psk = true;
 
-	device_connect_network(network->device, network, bss, message);
+	device_connect_network(device, network, bss, message);
 	l_dbus_message_unref(message);
 	return;
 
@@ -702,7 +711,9 @@ static struct l_dbus_message *network_connect_psk(struct network *network,
 					struct scan_bss *bss,
 					struct l_dbus_message *message)
 {
-	struct device *device = network->device;
+	struct station *station = network->station;
+	struct netdev *netdev = station_get_netdev(station);
+	struct device *device = netdev_get_device(netdev);
 
 	l_debug("");
 
@@ -930,6 +941,9 @@ static struct l_dbus_message *network_connect_8021x(struct network *network,
 						struct scan_bss *bss,
 						struct l_dbus_message *message)
 {
+	struct station *station = network->station;
+	struct netdev *netdev = station_get_netdev(station);
+	struct device *device = netdev_get_device(netdev);
 	int r;
 	struct l_queue *missing_secrets = NULL;
 	struct l_dbus_message *reply;
@@ -962,7 +976,7 @@ static struct l_dbus_message *network_connect_8021x(struct network *network,
 			goto error;
 		}
 
-		device_connect_network(network->device, network, bss, message);
+		device_connect_network(device, network, bss, message);
 
 		return NULL;
 	}
@@ -987,7 +1001,9 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 						void *user_data)
 {
 	struct network *network = user_data;
-	struct device *device = network->device;
+	struct station *station = network->station;
+	struct netdev *netdev = station_get_netdev(station);
+	struct device *device = netdev_get_device(netdev);
 	struct scan_bss *bss;
 
 	l_debug("");
@@ -1025,7 +1041,9 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 void network_connect_new_hidden_network(struct network *network,
 						struct l_dbus_message *message)
 {
-	struct device *device = network->device;
+	struct station *station = network->station;
+	struct netdev *netdev = station_get_netdev(station);
+	struct device *device = netdev_get_device(netdev);
 	struct scan_bss *bss;
 	struct l_dbus_message *error;
 
@@ -1086,9 +1104,10 @@ static bool network_property_is_connected(struct l_dbus *dbus,
 					void *user_data)
 {
 	struct network *network = user_data;
+	struct station *station = network->station;
 	bool connected;
 
-	connected = device_get_connected_network(network->device) == network;
+	connected = station_get_connected_network(station) == network;
 	l_dbus_message_builder_append_basic(builder, 'b', &connected);
 	return true;
 }
@@ -1099,9 +1118,11 @@ static bool network_property_get_device(struct l_dbus *dbus,
 					void *user_data)
 {
 	struct network *network = user_data;
+	struct station *station = network->station;
+	struct netdev *netdev = station_get_netdev(station);
 
 	l_dbus_message_builder_append_basic(builder, 'o',
-					device_get_path(network->device));
+						netdev_get_path(netdev));
 
 	return true;
 }

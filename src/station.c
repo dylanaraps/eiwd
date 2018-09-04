@@ -193,7 +193,6 @@ struct network *station_network_find(struct station *station, const char *ssid,
 struct network *station_add_seen_bss(struct station *station,
 						struct scan_bss *bss)
 {
-	struct device *device = netdev_get_device(station->netdev);
 	struct network *network;
 	struct ie_rsn_info info;
 	int r;
@@ -235,7 +234,7 @@ struct network *station_add_seen_bss(struct station *station,
 
 	network = l_hashmap_lookup(station->networks, path);
 	if (!network) {
-		network = network_create(device, ssid, security);
+		network = network_create(station, ssid, security);
 
 		if (!network_register(network, path)) {
 			network_remove(network, -EINVAL);

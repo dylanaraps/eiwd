@@ -156,11 +156,6 @@ bool device_is_busy(struct device *device)
 	return false;
 }
 
-struct wiphy *device_get_wiphy(struct device *device)
-{
-	return device->wiphy;
-}
-
 static void periodic_scan_trigger(int err, void *user_data)
 {
 	struct device *device = user_data;
