@@ -49,7 +49,6 @@
 
 struct device {
 	uint32_t index;
-	struct l_dbus_message *scan_pending;
 	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
 	uint8_t preauth_bssid[ETH_ALEN];
@@ -60,7 +59,6 @@ struct device {
 	struct station *station;
 
 	bool powered : 1;
-	bool scanning : 1;
 	bool autoconnect : 1;
 
 	uint32_t ap_roam_watch;
@@ -77,36 +75,6 @@ static uint32_t netdev_watch;
 static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 					void *user_data);
 
-static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
-				struct l_queue *bss_list, void *userdata)
-{
-	struct device *device = userdata;
-	struct station *station = device->station;
-	struct l_dbus *dbus = dbus_get_bus();
-	bool autoconnect;
-
-	if (device->scanning) {
-		device->scanning = false;
-		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
-					IWD_DEVICE_INTERFACE, "Scanning");
-	}
-
-	if (err)
-		return false;
-
-	/* TODO: Remove when Device/Station split is done */
-	if (netdev_get_iftype(device->netdev) != NETDEV_IFTYPE_STATION)
-		return false;
-
-	autoconnect = station_get_state(station) == STATION_STATE_AUTOCONNECT;
-	station_set_scan_results(station, bss_list, autoconnect);
-
-	if (autoconnect)
-		station_autoconnect_next(station);
-
-	return true;
-}
-
 /* TODO: Remove when Station/Device is split */
 static bool device_is_busy(struct device *device)
 {
@@ -114,29 +82,6 @@ static bool device_is_busy(struct device *device)
 		return false;
 
 	return station_is_busy(device->station);
-}
-
-static void periodic_scan_trigger(int err, void *user_data)
-{
-	struct device *device = user_data;
-	struct l_dbus *dbus = dbus_get_bus();
-
-	device->scanning = true;
-	l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
-				IWD_DEVICE_INTERFACE, "Scanning");
-}
-
-static void periodic_scan_stop(struct device *device)
-{
-	struct l_dbus *dbus = dbus_get_bus();
-
-	scan_periodic_stop(device->index);
-
-	if (device->scanning) {
-		device->scanning = false;
-		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
-					IWD_DEVICE_INTERFACE, "Scanning");
-	}
 }
 
 static void device_enter_state(struct device *device, enum station_state state)
@@ -148,25 +93,6 @@ static void device_enter_state(struct device *device, enum station_state state)
 	l_debug("Old State: %s, new state: %s",
 			station_state_to_string(station->state),
 			station_state_to_string(state));
-
-	switch (state) {
-	case STATION_STATE_AUTOCONNECT:
-		scan_periodic_start(device->index, periodic_scan_trigger,
-					new_scan_results, device);
-		break;
-	case STATION_STATE_DISCONNECTED:
-		periodic_scan_stop(device);
-		break;
-	case STATION_STATE_CONNECTED:
-		periodic_scan_stop(device);
-		break;
-	case STATION_STATE_CONNECTING:
-		break;
-	case STATION_STATE_DISCONNECTING:
-		break;
-	case STATION_STATE_ROAMING:
-		break;
-	}
 
 	disconnected = station->state <= STATION_STATE_AUTOCONNECT;
 
@@ -640,45 +566,12 @@ void device_connect_network(struct device *device, struct network *network,
 	device->autoconnect = true;
 }
 
-static void device_scan_triggered(int err, void *user_data)
-{
-	struct device *device = user_data;
-	struct l_dbus_message *reply;
-	struct l_dbus *dbus = dbus_get_bus();
-
-	l_debug("device_scan_triggered: %i", err);
-
-	if (!device->scan_pending)
-		return;
-
-	if (err < 0) {
-		dbus_pending_reply(&device->scan_pending,
-				dbus_error_failed(device->scan_pending));
-		return;
-	}
-
-	l_debug("Scan triggered for %s", netdev_get_name(device->netdev));
-
-	device->scanning = true;
-	l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
-				IWD_DEVICE_INTERFACE, "Scanning");
-
-	reply = l_dbus_message_new_method_return(device->scan_pending);
-	l_dbus_message_set_arguments(reply, "");
-	dbus_pending_reply(&device->scan_pending, reply);
-}
-
 static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
 {
 	struct device *device = user_data;
 	struct station *station = device->station;
-
-	l_debug("Scan called from DBus");
-
-	if (device->scan_pending)
-		return dbus_error_busy(message);
 
 	/* TODO: Remove when Device/Station split is done */
 	if (netdev_get_iftype(device->netdev) != NETDEV_IFTYPE_STATION)
@@ -687,34 +580,7 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 	if (!device->powered)
 		return dbus_error_failed(message);
 
-	device->scan_pending = l_dbus_message_ref(message);
-
-	/*
-	 * If we're not connected and no hidden networks are seen & configured,
-	 * use passive scanning to hide our MAC address
-	 */
-	if (!station->connected_bss &&
-			!(device->station->seen_hidden_networks &&
-				known_networks_has_hidden())) {
-		if (!scan_passive(device->index, device_scan_triggered,
-						new_scan_results, device, NULL))
-			return dbus_error_failed(message);
-	} else {
-		struct scan_parameters params;
-
-		memset(&params, 0, sizeof(params));
-
-		/* If we're connected, HW cannot randomize our MAC */
-		if (!station->connected_bss)
-			params.randomize_mac_addr_hint = true;
-
-		if (!scan_active_full(device->index, &params,
-					device_scan_triggered,
-					new_scan_results, device, NULL))
-			return dbus_error_failed(message);
-	}
-
-	return NULL;
+	return station_dbus_scan(dbus, message, station);
 }
 
 static void device_disconnect_cb(struct netdev *netdev, bool success,
@@ -1269,7 +1135,8 @@ static bool device_property_get_scanning(struct l_dbus *dbus,
 					void *user_data)
 {
 	struct device *device = user_data;
-	bool scanning = device->scanning;
+	struct station *station = device->station;
+	bool scanning = station->scanning;
 
 	l_dbus_message_builder_append_basic(builder, 'b', &scanning);
 
@@ -1484,11 +1351,6 @@ static void device_netdev_notify(struct netdev *netdev,
 		}
 
 		device->powered = false;
-		periodic_scan_stop(device);
-
-		if (device->scan_pending)
-			dbus_pending_reply(&device->scan_pending,
-				dbus_error_aborted(device->scan_pending));
 
 		if (device->connect_pending)
 			dbus_pending_reply(&device->connect_pending,
@@ -1559,10 +1421,6 @@ void device_remove(struct device *device)
 	struct l_dbus *dbus;
 
 	l_debug("");
-
-	if (device->scan_pending)
-		dbus_pending_reply(&device->scan_pending,
-				dbus_error_aborted(device->scan_pending));
 
 	if (device->connect_pending)
 		dbus_pending_reply(&device->connect_pending,

@@ -51,6 +51,7 @@ struct station {
 	struct l_queue *bss_list;
 	struct l_hashmap *networks;
 	struct l_queue *networks_sorted;
+	struct l_dbus_message *scan_pending;
 
 	/* Roaming related members */
 	struct timespec roam_min_time;
@@ -65,17 +66,13 @@ struct station {
 	bool signal_low : 1;
 	bool roam_no_orig_ap : 1;
 	bool ap_directed_roaming : 1;
+	bool scanning : 1;
 };
 
 struct wiphy *station_get_wiphy(struct station *station);
 struct netdev *station_get_netdev(struct station *station);
 struct network *station_get_connected_network(struct station *station);
 bool station_is_busy(struct station *station);
-
-void station_autoconnect_next(struct station *station);
-void station_add_autoconnect_bss(struct station *station,
-					struct network *network,
-					struct scan_bss *bss);
 
 struct network *station_network_find(struct station *station, const char *ssid,
 					enum security security);
@@ -110,9 +107,11 @@ void station_ap_directed_roam(struct station *station,
 void station_low_rssi(struct station *station);
 void station_ok_rssi(struct station *station);
 
+struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data);
+
 struct station *station_find(uint32_t ifindex);
-
-
 void station_foreach(station_foreach_func_t func, void *user_data);
 struct station *station_create(struct wiphy *wiphy, struct netdev *netdev);
 void station_free(struct station *station);

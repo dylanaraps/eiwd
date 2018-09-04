@@ -38,8 +38,10 @@
 #include "src/watchlist.h"
 #include "src/scan.h"
 #include "src/netdev.h"
+#include "src/dbus.h"
 #include "src/wiphy.h"
 #include "src/network.h"
+#include "src/knownnetworks.h"
 #include "src/ie.h"
 #include "src/handshake.h"
 #include "src/station.h"
@@ -76,7 +78,7 @@ struct autoconnect_entry {
 	struct scan_bss *bss;
 };
 
-void station_autoconnect_next(struct station *station)
+static void station_autoconnect_next(struct station *station)
 {
 	struct autoconnect_entry *entry;
 	int r;
@@ -106,7 +108,7 @@ static int autoconnect_rank_compare(const void *a, const void *b, void *user)
 	return ae->rank - new_ae->rank;
 }
 
-void station_add_autoconnect_bss(struct station *station,
+static void station_add_autoconnect_bss(struct station *station,
 					struct network *network,
 					struct scan_bss *bss)
 {
@@ -525,6 +527,55 @@ not_supported:
 	return NULL;
 }
 
+static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
+				struct l_queue *bss_list, void *userdata)
+{
+	struct station *station = userdata;
+	struct l_dbus *dbus = dbus_get_bus();
+	bool autoconnect;
+
+	if (station->scanning) {
+		station->scanning = false;
+		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
+					IWD_DEVICE_INTERFACE, "Scanning");
+	}
+
+	if (err)
+		return false;
+
+	autoconnect = station_get_state(station) == STATION_STATE_AUTOCONNECT;
+	station_set_scan_results(station, bss_list, autoconnect);
+
+	if (autoconnect)
+		station_autoconnect_next(station);
+
+	return true;
+}
+
+static void periodic_scan_trigger(int err, void *user_data)
+{
+	struct station *station = user_data;
+	struct l_dbus *dbus = dbus_get_bus();
+
+	station->scanning = true;
+	l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
+				IWD_DEVICE_INTERFACE, "Scanning");
+}
+
+static void periodic_scan_stop(struct station *station)
+{
+	struct l_dbus *dbus = dbus_get_bus();
+	uint32_t index = netdev_get_ifindex(station->netdev);
+
+	scan_periodic_stop(index);
+
+	if (station->scanning) {
+		station->scanning = false;
+		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
+					IWD_DEVICE_INTERFACE, "Scanning");
+	}
+}
+
 const char *station_state_to_string(enum station_state state)
 {
 	switch (state) {
@@ -547,6 +598,23 @@ const char *station_state_to_string(enum station_state state)
 
 void station_enter_state(struct station *station, enum station_state state)
 {
+	uint32_t index = netdev_get_ifindex(station->netdev);
+
+	switch (state) {
+	case STATION_STATE_AUTOCONNECT:
+		scan_periodic_start(index, periodic_scan_trigger,
+					new_scan_results, station);
+		break;
+	case STATION_STATE_DISCONNECTED:
+	case STATION_STATE_CONNECTED:
+	case STATION_STATE_CONNECTING:
+		periodic_scan_stop(station);
+		break;
+	case STATION_STATE_DISCONNECTING:
+	case STATION_STATE_ROAMING:
+		break;
+	}
+
 	station->state = state;
 
 	WATCHLIST_NOTIFY(&station->state_watches,
@@ -1135,6 +1203,73 @@ void station_ok_rssi(struct station *station)
 	station->signal_low = false;
 }
 
+static void station_dbus_scan_triggered(int err, void *user_data)
+{
+	struct station *station = user_data;
+	struct l_dbus_message *reply;
+	struct l_dbus *dbus = dbus_get_bus();
+
+	l_debug("station_scan_triggered: %i", err);
+
+	if (err < 0) {
+		reply = dbus_error_from_errno(err, station->scan_pending);
+		dbus_pending_reply(&station->scan_pending, reply);
+		return;
+	}
+
+	l_debug("Scan triggered for %s", netdev_get_name(station->netdev));
+
+	reply = l_dbus_message_new_method_return(station->scan_pending);
+	l_dbus_message_set_arguments(reply, "");
+	dbus_pending_reply(&station->scan_pending, reply);
+
+	station->scanning = true;
+	l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
+				IWD_DEVICE_INTERFACE, "Scanning");
+}
+
+struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct station *station = user_data;
+	uint32_t index = netdev_get_ifindex(station->netdev);
+
+	l_debug("Scan called from DBus");
+
+	if (station->scan_pending)
+		return dbus_error_busy(message);
+
+	station->scan_pending = l_dbus_message_ref(message);
+
+	/*
+	 * If we're not connected and no hidden networks are seen & configured,
+	 * use passive scanning to hide our MAC address
+	 */
+	if (!station->connected_bss &&
+			!(station->seen_hidden_networks &&
+				known_networks_has_hidden())) {
+		if (!scan_passive(index, station_dbus_scan_triggered,
+					new_scan_results, station, NULL))
+			return dbus_error_failed(message);
+	} else {
+		struct scan_parameters params;
+
+		memset(&params, 0, sizeof(params));
+
+		/* If we're connected, HW cannot randomize our MAC */
+		if (!station->connected_bss)
+			params.randomize_mac_addr_hint = true;
+
+		if (!scan_active_full(index, &params,
+					station_dbus_scan_triggered,
+					new_scan_results, station, NULL))
+			return dbus_error_failed(message);
+	}
+
+	return NULL;
+}
+
 void station_foreach(station_foreach_func_t func, void *user_data)
 {
 	const struct l_queue_entry *entry;
@@ -1190,6 +1325,12 @@ void station_free(struct station *station)
 
 	if (!l_queue_remove(station_list, station))
 		return;
+
+	periodic_scan_stop(station);
+
+	if (station->scan_pending)
+		dbus_pending_reply(&station->scan_pending,
+			dbus_error_aborted(station->scan_pending));
 
 	l_timeout_remove(station->roam_trigger_timeout);
 
