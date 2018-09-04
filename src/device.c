@@ -26,7 +26,6 @@
 
 #include <stdio.h>
 #include <errno.h>
-#include <time.h>
 #include <linux/if_ether.h>
 
 #include <ell/ell.h>
@@ -55,9 +54,6 @@ struct device {
 	struct network *connected_network;
 	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
-	struct timespec roam_min_time;
-	struct l_timeout *roam_trigger_timeout;
-	uint32_t roam_scan_id;
 	uint8_t preauth_bssid[ETH_ALEN];
 	struct signal_agent *signal_agent;
 
@@ -68,10 +64,6 @@ struct device {
 	bool powered : 1;
 	bool scanning : 1;
 	bool autoconnect : 1;
-	bool preparing_roam : 1;
-	bool signal_low : 1;
-	bool roam_no_orig_ap : 1;
-	bool ap_directed_roaming : 1;
 
 	uint32_t ap_roam_watch;
 };
@@ -84,8 +76,6 @@ struct signal_agent {
 
 static struct l_queue *device_list;
 static uint32_t netdev_watch;
-
-static void device_roam_timeout_rearm(struct device *device, int seconds);
 
 static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 					void *user_data);
@@ -255,14 +245,7 @@ static void device_reset_connection_state(struct device *device)
 			station->state == STATION_STATE_ROAMING)
 		network_disconnected(network);
 
-	l_timeout_remove(device->roam_trigger_timeout);
-	device->roam_trigger_timeout = NULL;
-	device->preparing_roam = false;
-	device->signal_low = false;
-	device->roam_min_time.tv_sec = 0;
-
-	if (device->roam_scan_id)
-		scan_cancel(device->index, device->roam_scan_id);
+	station_roam_state_clear(station);
 
 	device->connected_bss = NULL;
 	station->connected_bss = NULL;
@@ -275,7 +258,7 @@ static void device_reset_connection_state(struct device *device)
 				IWD_NETWORK_INTERFACE, "Connected");
 }
 
-static void device_disassociated(struct device *device)
+void device_disassociated(struct device *device)
 {
 	l_debug("%d", device->index);
 
@@ -303,30 +286,6 @@ static void device_disconnect_event(struct device *device)
 	device_disassociated(device);
 }
 
-static void device_roam_failed(struct device *device)
-{
-	struct station *station = device->station;
-
-	/*
-	 * If we're still connected to the old BSS, only clear preparing_roam
-	 * and reattempt in 60 seconds if signal level is still low at that
-	 * time.  Otherwise (we'd already started negotiating with the
-	 * transition target, preparing_roam is false, state is roaming) we
-	 * are now disconnected.
-	 */
-
-	l_debug("%d", device->index);
-
-	device->preparing_roam = false;
-	device->roam_no_orig_ap = false;
-	device->ap_directed_roaming = false;
-
-	if (station->state == STATION_STATE_ROAMING)
-		device_disassociated(device);
-	else if (device->signal_low)
-		device_roam_timeout_rearm(device, 60);
-}
-
 static void device_reassociate_cb(struct netdev *netdev,
 					enum netdev_result result,
 					void *user_data)
@@ -340,17 +299,10 @@ static void device_reassociate_cb(struct netdev *netdev,
 		return;
 
 	if (result == NETDEV_RESULT_OK) {
-		/*
-		 * New signal high/low notification should occur on the next
-		 * beacon from new AP.
-		 */
-		device->signal_low = false;
-		device->roam_min_time.tv_sec = 0;
-		device->roam_no_orig_ap = false;
-
+		station_roamed(station);
 		device_enter_state(device, STATION_STATE_CONNECTED);
 	} else
-		device_roam_failed(device);
+		station_roam_failed(station);
 }
 
 static void device_fast_transition_cb(struct netdev *netdev,
@@ -366,17 +318,10 @@ static void device_fast_transition_cb(struct netdev *netdev,
 		return;
 
 	if (result == NETDEV_RESULT_OK) {
-		/*
-		 * New signal high/low notification should occur on the next
-		 * beacon from new AP.
-		 */
-		device->signal_low = false;
-		device->roam_min_time.tv_sec = 0;
-		device->roam_no_orig_ap = false;
-
+		station_roamed(station);
 		device_enter_state(device, STATION_STATE_CONNECTED);
 	} else
-		device_roam_failed(device);
+		station_roam_failed(station);
 }
 
 static void device_transition_reassociate(struct device *device,
@@ -389,14 +334,13 @@ static void device_transition_reassociate(struct device *device,
 				new_hs, device_netdev_event,
 				device_reassociate_cb, device) < 0) {
 		handshake_state_free(new_hs);
-
-		device_roam_failed(device);
+		station_roam_failed(station);
 		return;
 	}
 
 	device->connected_bss = bss;
 	station->connected_bss = bss;
-	device->preparing_roam = false;
+	station->preparing_roam = false;
 	device_enter_state(device, STATION_STATE_ROAMING);
 }
 
@@ -420,15 +364,14 @@ static void device_preauthenticate_cb(struct netdev *netdev,
 
 	l_debug("%d, result: %d", device->index, result);
 
-	if (!device->preparing_roam || result == NETDEV_RESULT_ABORTED)
+	if (!station->preparing_roam || result == NETDEV_RESULT_ABORTED)
 		return;
 
 	bss = l_queue_find(device->station->bss_list, bss_match_bssid,
 				device->preauth_bssid);
 	if (!bss) {
 		l_error("Roam target BSS not found");
-
-		device_roam_failed(device);
+		station_roam_failed(station);
 		return;
 	}
 
@@ -436,7 +379,7 @@ static void device_preauthenticate_cb(struct netdev *netdev,
 	if (!new_hs) {
 		l_error("device_handshake_setup failed");
 
-		device_roam_failed(device);
+		station_roam_failed(station);
 		return;
 	}
 
@@ -474,7 +417,7 @@ static void device_preauthenticate_cb(struct netdev *netdev,
 	device_transition_reassociate(device, bss, new_hs);
 }
 
-static void device_transition_start(struct device *device, struct scan_bss *bss)
+void device_transition_start(struct device *device, struct scan_bss *bss)
 {
 	struct handshake_state *hs = netdev_get_handshake(device->netdev);
 	struct network *connected = device_get_connected_network(device);
@@ -488,7 +431,7 @@ static void device_transition_start(struct device *device, struct scan_bss *bss)
 			util_address_to_string(bss->addr));
 
 	/* Reset AP roam flag, at this point the roaming behaves the same */
-	device->ap_directed_roaming = false;
+	station->ap_directed_roaming = false;
 
 	if (hs->mde)
 		ie_parse_mobility_domain_from_data(hs->mde, hs->mde[1] + 2,
@@ -508,13 +451,13 @@ static void device_transition_start(struct device *device, struct scan_bss *bss)
 		 */
 		if (netdev_fast_transition(device->netdev, bss,
 					device_fast_transition_cb) < 0) {
-			device_roam_failed(device);
+			station_roam_failed(station);
 			return;
 		}
 
 		device->connected_bss = bss;
 		station->connected_bss = bss;
-		device->preparing_roam = false;
+		station->preparing_roam = false;
 		device_enter_state(device, STATION_STATE_ROAMING);
 
 		return;
@@ -530,7 +473,7 @@ static void device_transition_start(struct device *device, struct scan_bss *bss)
 	 * the current association."
 	 */
 	if (security == SECURITY_8021X &&
-			!device->roam_no_orig_ap &&
+			!station->roam_no_orig_ap &&
 			scan_bss_get_rsn_info(device->connected_bss,
 						&cur_rsne) >= 0 &&
 			scan_bss_get_rsn_info(bss, &target_rsne) >= 0 &&
@@ -555,401 +498,12 @@ static void device_transition_start(struct device *device, struct scan_bss *bss)
 	new_hs = station_handshake_setup(station, connected, bss);
 	if (!new_hs) {
 		l_error("device_handshake_setup failed in reassociation");
-
-		device_roam_failed(device);
+		station_roam_failed(station);
 		return;
 	}
 
 	device_transition_reassociate(device, bss, new_hs);
 }
-
-static void device_roam_scan_triggered(int err, void *user_data)
-{
-	struct device *device = user_data;
-
-	if (err) {
-		device_roam_failed(device);
-		return;
-	}
-
-	/*
-	 * Do not update the Scanning property as we won't be updating the
-	 * list of networks.
-	 */
-}
-
-static bool device_roam_scan_notify(uint32_t wiphy_id, uint32_t ifindex,
-					int err, struct l_queue *bss_list,
-					void *userdata)
-{
-	struct device *device = userdata;
-	struct network *network = device->connected_network;
-	struct handshake_state *hs = netdev_get_handshake(device->netdev);
-	struct scan_bss *bss;
-	struct scan_bss *best_bss = NULL;
-	double best_bss_rank = 0.0;
-	static const double RANK_FT_FACTOR = 1.3;
-	uint16_t mdid;
-	enum security orig_security, security;
-	bool seen = false;
-
-	if (err) {
-		device_roam_failed(device);
-
-		return false;
-	}
-
-	/*
-	 * Do not call device_set_scan_results because this may have been
-	 * a partial scan.  We could at most update the current networks' BSS
-	 * list in its device->networks entry.
-	 */
-
-	orig_security = network_get_security(network);
-
-	if (hs->mde)
-		ie_parse_mobility_domain_from_data(hs->mde, hs->mde[1] + 2,
-							&mdid, NULL, NULL);
-
-	/*
-	 * BSSes in the bss_list come already ranked with their initial
-	 * association preference rank value.  We only need to add preference
-	 * for BSSes that are within the FT Mobility Domain so as to favor
-	 * Fast Roaming, if it is supported.
-	 */
-
-	while ((bss = l_queue_pop_head(bss_list))) {
-		double rank;
-		struct ie_rsn_info info;
-		int r;
-
-		/* Skip the BSS we are connected to if doing an AP roam */
-		if (device->ap_directed_roaming && !memcmp(bss->addr,
-				device->connected_bss->addr, 6))
-			goto next;
-
-		/* Skip result if it is not part of the ESS */
-
-		if (bss->ssid_len != hs->ssid_len ||
-				memcmp(bss->ssid, hs->ssid, hs->ssid_len))
-			goto next;
-
-		memset(&info, 0, sizeof(info));
-		r = scan_bss_get_rsn_info(bss, &info);
-		if (r < 0) {
-			if (r != -ENOENT)
-				goto next;
-
-			security = security_determine(bss->capability, NULL);
-		} else
-			security = security_determine(bss->capability, &info);
-
-		if (security != orig_security)
-			goto next;
-
-		seen = true;
-
-		if (!wiphy_can_connect(device->wiphy, bss))
-			goto next;
-
-		rank = bss->rank;
-
-		if (hs->mde && bss->mde_present && l_get_le16(bss->mde) == mdid)
-			rank *= RANK_FT_FACTOR;
-
-		if (rank > best_bss_rank) {
-			if (best_bss)
-				scan_bss_free(best_bss);
-
-			best_bss = bss;
-			best_bss_rank = rank;
-
-			continue;
-		}
-
-next:
-		scan_bss_free(bss);
-	}
-
-	l_queue_destroy(bss_list, NULL);
-
-	if (!seen)
-		goto fail_free_bss;
-
-	/* See if we have anywhere to roam to */
-	if (!best_bss || scan_bss_addr_eq(best_bss, device->connected_bss))
-		goto fail_free_bss;
-
-	bss = network_bss_find_by_addr(network, best_bss->addr);
-	if (bss) {
-		scan_bss_free(best_bss);
-		best_bss = bss;
-	} else {
-		network_bss_add(network, best_bss);
-		l_queue_push_tail(device->station->bss_list, best_bss);
-	}
-
-	device_transition_start(device, best_bss);
-
-	return true;
-
-fail_free_bss:
-	if (best_bss)
-		scan_bss_free(best_bss);
-
-	device_roam_failed(device);
-
-	return true;
-}
-
-static void device_roam_scan_destroy(void *userdata)
-{
-	struct device *device = userdata;
-
-	device->roam_scan_id = 0;
-}
-
-static void device_roam_scan(struct device *device,
-				struct scan_freq_set *freq_set)
-{
-	struct scan_parameters params = { .freqs = freq_set, .flush = true };
-
-	if (device->connected_network)
-		/* Use direct probe request */
-		params.ssid = network_get_ssid(device->connected_network);
-
-	device->roam_scan_id = scan_active_full(device->index, &params,
-						device_roam_scan_triggered,
-						device_roam_scan_notify, device,
-						device_roam_scan_destroy);
-
-	if (!device->roam_scan_id)
-		device_roam_failed(device);
-}
-
-static uint32_t device_freq_from_neighbor_report(const uint8_t *country,
-		struct ie_neighbor_report_info *info, enum scan_band *out_band)
-{
-	enum scan_band band;
-	uint32_t freq;
-
-	if (info->oper_class == 0) {
-		/*
-		 * Some Cisco APs report all operating class values as 0
-		 * in the Neighbor Report Responses.  Work around this by
-		 * using the most likely operating class for the channel
-		 * number as the 2.4GHz and 5GHz bands happen to mostly
-		 * use channels in two disjoint ranges.
-		 */
-		if (info->channel_num >= 1 && info->channel_num <= 14)
-			band = SCAN_BAND_2_4_GHZ;
-		else if (info->channel_num >= 36 && info->channel_num <= 169)
-			band = SCAN_BAND_5_GHZ;
-		else {
-			l_debug("Ignored: 0 oper class with an unusual "
-				"channel number");
-
-			return 0;
-		}
-	} else {
-		band = scan_oper_class_to_band(country, info->oper_class);
-		if (!band) {
-			l_debug("Ignored: unsupported oper class");
-
-			return 0;
-		}
-	}
-
-	freq = scan_channel_to_freq(info->channel_num, band);
-	if (!freq) {
-		l_debug("Ignored: unsupported channel");
-
-		return 0;
-	}
-
-	if (out_band)
-		*out_band = band;
-
-	return freq;
-}
-
-static void device_neighbor_report_cb(struct netdev *netdev, int err,
-					const uint8_t *reports,
-					size_t reports_len, void *user_data)
-{
-	struct device *device = user_data;
-	struct ie_tlv_iter iter;
-	int count_md = 0, count_no_md = 0;
-	struct scan_freq_set *freq_set_md, *freq_set_no_md;
-	uint32_t current_freq = 0;
-	struct handshake_state *hs = netdev_get_handshake(device->netdev);
-
-	/*
-	 * Check if we're still attempting to roam -- if dbus Disconnect
-	 * had been called in the meantime we just abort the attempt.
-	 */
-	if (!device->preparing_roam || err == -ENODEV)
-		return;
-
-	if (!reports || err) {
-		/* Have to do a full scan */
-		device_roam_scan(device, NULL);
-
-		return;
-	}
-
-	freq_set_md = scan_freq_set_new();
-	freq_set_no_md = scan_freq_set_new();
-
-	ie_tlv_iter_init(&iter, reports, reports_len);
-
-	/* First see if any of the reports contain the MD bit set */
-	while (ie_tlv_iter_next(&iter)) {
-		struct ie_neighbor_report_info info;
-		uint32_t freq;
-		enum scan_band band;
-		const uint8_t *cc = NULL;
-
-		if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_NEIGHBOR_REPORT)
-			continue;
-
-		if (ie_parse_neighbor_report(&iter, &info) < 0)
-			continue;
-
-		l_debug("Neighbor report received for %s: ch %i "
-				"(oper class %i), %s",
-				util_address_to_string(info.addr),
-				(int) info.channel_num, (int) info.oper_class,
-				info.md ? "MD set" : "MD not set");
-
-		if (device->connected_bss->cc_present)
-			cc = device->connected_bss->cc;
-
-		freq = device_freq_from_neighbor_report(cc, &info, &band);
-		if (!freq)
-			continue;
-
-		/* Skip if the band is not supported */
-		if (!(band & wiphy_get_supported_bands(device->wiphy)))
-			continue;
-
-		if (!memcmp(info.addr, device->connected_bss->addr, ETH_ALEN)) {
-			/*
-			 * If this report is for the current AP, don't add
-			 * it to any of the lists yet.  We will need to scan
-			 * its channel because it may still be the best ranked
-			 * or the only visible AP.
-			 */
-			current_freq = freq;
-
-			continue;
-		}
-
-		/* Add the frequency to one of the lists */
-		if (info.md && hs->mde) {
-			scan_freq_set_add(freq_set_md, freq);
-
-			count_md += 1;
-		} else {
-			scan_freq_set_add(freq_set_no_md, freq);
-
-			count_no_md += 1;
-		}
-	}
-
-	if (!current_freq)
-		current_freq = device->connected_bss->frequency;
-
-	/*
-	 * If there are neighbor reports with the MD bit set then the bit
-	 * is probably valid so scan only the frequencies of the neighbors
-	 * with that bit set, which will allow us to use Fast Transition.
-	 * Some APs, such as those based on hostapd do not set the MD bit
-	 * even if the neighbor is within the MD.
-	 *
-	 * In any case we only select the frequencies here and will check
-	 * the IEs in the scan results as the authoritative information
-	 * on whether we can use Fast Transition, and rank BSSes based on
-	 * that.
-	 *
-	 * TODO: possibly save the neighbors from outside the MD and if
-	 * none of the ones in the MD end up working, try a non-FT
-	 * transition to those neighbors.  We should be using a
-	 * blacklisting mechanism (for both initial connection and
-	 * transitions) so that cound_md would not count the
-	 * BSSes already used and when it goes down to 0 we'd
-	 * automatically fall back to the non-FT candidates and then to
-	 * full scan.
-	 */
-	if (count_md) {
-		scan_freq_set_add(freq_set_md, current_freq);
-
-		device_roam_scan(device, freq_set_md);
-	} else if (count_no_md) {
-		scan_freq_set_add(freq_set_no_md, current_freq);
-
-		device_roam_scan(device, freq_set_no_md);
-	} else
-		device_roam_scan(device, NULL);
-
-	scan_freq_set_free(freq_set_md);
-	scan_freq_set_free(freq_set_no_md);
-}
-
-static void device_roam_trigger_cb(struct l_timeout *timeout, void *user_data)
-{
-	struct device *device = user_data;
-
-	l_debug("%d", device->index);
-
-	l_timeout_remove(device->roam_trigger_timeout);
-	device->roam_trigger_timeout = NULL;
-
-	device->preparing_roam = true;
-
-	/*
-	 * If current BSS supports Neighbor Reports, narrow the scan down
-	 * to channels occupied by known neighbors in the ESS.  This isn't
-	 * 100% reliable as the neighbor lists are not required to be
-	 * complete or current.  It is likely still better than doing a
-	 * full scan.  10.11.10.1: "A neighbor report may not be exhaustive
-	 * either by choice, or due to the fact that there may be neighbor
-	 * APs not known to the AP."
-	 */
-	if (device->connected_bss->cap_rm_neighbor_report &&
-			!device->roam_no_orig_ap)
-		if (netdev_neighbor_report_req(device->netdev,
-						device_neighbor_report_cb) == 0)
-			return;
-
-	/* Otherwise do a full scan for target BSS candidates */
-	device_roam_scan(device, NULL);
-}
-
-static void device_roam_timeout_rearm(struct device *device, int seconds)
-{
-	struct timespec now, min_timeout;
-
-	clock_gettime(CLOCK_MONOTONIC, &now);
-
-	min_timeout = now;
-	min_timeout.tv_sec += seconds;
-
-	if (device->roam_min_time.tv_sec < min_timeout.tv_sec ||
-			(device->roam_min_time.tv_sec == min_timeout.tv_sec &&
-			 device->roam_min_time.tv_nsec < min_timeout.tv_nsec))
-		device->roam_min_time = min_timeout;
-
-	seconds = device->roam_min_time.tv_sec - now.tv_sec +
-		(device->roam_min_time.tv_nsec > now.tv_nsec ? 1 : 0);
-
-	device->roam_trigger_timeout =
-		l_timeout_create(seconds, device_roam_trigger_cb, device, NULL);
-}
-
-#define WNM_REQUEST_MODE_PREFERRED_CANDIDATE_LIST	(1 << 0)
-#define WNM_REQUEST_MODE_TERMINATION_IMMINENT		(1 << 3)
-#define WNM_REQUEST_MODE_ESS_DISASSOCIATION_IMMINENT	(1 << 4)
 
 static void device_ap_roam_frame_event(struct netdev *netdev,
 		const struct mmpdu_header *hdr,
@@ -958,104 +512,8 @@ static void device_ap_roam_frame_event(struct netdev *netdev,
 {
 	struct device *device = user_data;
 	struct station *station = device->station;
-	uint32_t pos = 0;
-	uint8_t req_mode;
-	uint16_t dtimer;
-	uint8_t valid_interval;
 
-	if (device->preparing_roam || station->state == STATION_STATE_ROAMING)
-		return;
-
-	if (body_len < 7)
-		goto format_error;
-
-	/*
-	 * First two bytes are checked by the frame watch (WNM category and
-	 * WNM action). The third is the dialog token which is not relevant
-	 * because we did not send a BSS transition query -- so skip these
-	 * first three bytes.
-	 */
-	pos += 3;
-
-	req_mode = l_get_u8(body + pos);
-	pos++;
-
-	/*
-	 * TODO: Disassociation timer and validity interval are currently not
-	 * used since the BSS transition request is being handled immediately.
-	 */
-	dtimer = l_get_le16(body + pos);
-	pos += 2;
-	valid_interval = l_get_u8(body + pos);
-	pos++;
-
-	l_debug("BSS transition received from AP: Disassociation Time: %u, "
-			"Validity interval: %u", dtimer, valid_interval);
-
-	/* check req_mode for optional values */
-	if (req_mode & WNM_REQUEST_MODE_TERMINATION_IMMINENT) {
-		if (pos + 12 > body_len)
-			goto format_error;
-
-		pos += 12;
-	}
-
-	if (req_mode & WNM_REQUEST_MODE_ESS_DISASSOCIATION_IMMINENT ) {
-		uint8_t url_len;
-
-		if (pos + 1 > body_len)
-			goto format_error;
-
-		url_len = l_get_u8(body + pos);
-		pos++;
-
-		if (pos + url_len > body_len)
-			goto format_error;
-
-		pos += url_len;
-	}
-
-	device->ap_directed_roaming = true;
-	device->preparing_roam = true;
-
-	l_timeout_remove(device->roam_trigger_timeout);
-	device->roam_trigger_timeout = NULL;
-
-	if (req_mode & WNM_REQUEST_MODE_PREFERRED_CANDIDATE_LIST)
-		device_neighbor_report_cb(device->netdev, 0, body + pos,
-				body_len - pos, device);
-	else
-		device_roam_scan(device, NULL);
-
-	return;
-
-format_error:
-	l_debug("bad AP roam frame formatting");
-}
-
-static void device_lost_beacon(struct device *device)
-{
-	struct station *station = device->station;
-
-	l_debug("%d", device->index);
-
-	if (station->state != STATION_STATE_ROAMING &&
-			station->state != STATION_STATE_CONNECTED)
-		return;
-
-	/*
-	 * Tell the roam mechanism to not bother requesting Neighbor Reports,
-	 * preauthenticating or performing other over-the-DS type of
-	 * authentication to target AP, even while device->connected_bss is
-	 * still non-NULL.  The current connection is in a serious condition
-	 * and we might wasting our time with those mechanisms.
-	 */
-	device->roam_no_orig_ap = true;
-
-	if (device->preparing_roam || station->state == STATION_STATE_ROAMING)
-		return;
-
-	device_roam_trigger_cb(NULL, device);
+	station_ap_directed_roam(station, hdr, body, body_len);
 }
 
 static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
@@ -1143,32 +601,17 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 		l_debug("Associating");
 		break;
 	case NETDEV_EVENT_LOST_BEACON:
-		device_lost_beacon(device);
+		station_lost_beacon(station);
 		break;
 	case NETDEV_EVENT_DISCONNECT_BY_AP:
 	case NETDEV_EVENT_DISCONNECT_BY_SME:
 		device_disconnect_event(device);
 		break;
 	case NETDEV_EVENT_RSSI_THRESHOLD_LOW:
-		if (device->signal_low)
-			break;
-
-		device->signal_low = true;
-
-		if (device->preparing_roam ||
-				station->state == STATION_STATE_ROAMING)
-			break;
-
-		/* Set a 5-second initial timeout */
-		device_roam_timeout_rearm(device, 5);
-
+		station_low_rssi(station);
 		break;
 	case NETDEV_EVENT_RSSI_THRESHOLD_HIGH:
-		l_timeout_remove(device->roam_trigger_timeout);
-		device->roam_trigger_timeout = NULL;
-
-		device->signal_low = false;
-
+		station_ok_rssi(station);
 		break;
 	case NETDEV_EVENT_RSSI_LEVEL_NOTIFY:
 		if (device->signal_agent)
@@ -2184,8 +1627,6 @@ static void device_free(void *user)
 
 	dbus = dbus_get_bus();
 	l_dbus_unregister_object(dbus, device_get_path(device));
-
-	l_timeout_remove(device->roam_trigger_timeout);
 
 	scan_ifindex_remove(device->index);
 

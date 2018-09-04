@@ -26,12 +26,15 @@
 
 #include <stdio.h>
 #include <errno.h>
+#include <time.h>
+#include <linux/if_ether.h>
 
 #include <ell/ell.h>
 
 #include "src/util.h"
 #include "src/iwd.h"
 #include "src/common.h"
+#include "src/device.h"
 #include "src/watchlist.h"
 #include "src/scan.h"
 #include "src/netdev.h"
@@ -543,6 +546,570 @@ bool station_remove_state_watch(struct station *station, uint32_t id)
 	return watchlist_remove(&station->state_watches, id);
 }
 
+void station_roam_state_clear(struct station *station)
+{
+	l_timeout_remove(station->roam_trigger_timeout);
+	station->roam_trigger_timeout = NULL;
+	station->preparing_roam = false;
+	station->signal_low = false;
+	station->roam_min_time.tv_sec = 0;
+
+	if (station->roam_scan_id)
+		scan_cancel(netdev_get_ifindex(station->netdev),
+						station->roam_scan_id);
+}
+
+static void station_roam_timeout_rearm(struct station *station, int seconds);
+
+void station_roamed(struct station *station)
+{
+	/*
+	 * New signal high/low notification should occur on the next
+	 * beacon from new AP.
+	 */
+	station->signal_low = false;
+	station->roam_min_time.tv_sec = 0;
+	station->roam_no_orig_ap = false;
+}
+
+void station_roam_failed(struct station *station)
+{
+	struct device *device = netdev_get_device(station->netdev);
+	/*
+	 * If we're still connected to the old BSS, only clear preparing_roam
+	 * and reattempt in 60 seconds if signal level is still low at that
+	 * time.  Otherwise (we'd already started negotiating with the
+	 * transition target, preparing_roam is false, state is roaming) we
+	 * are now disconnected.
+	 */
+
+	l_debug("%d", netdev_get_ifindex(station->netdev));
+
+	station->preparing_roam = false;
+	station->roam_no_orig_ap = false;
+	station->ap_directed_roaming = false;
+
+	if (station->state == STATION_STATE_ROAMING)
+		device_disassociated(device);
+	else if (station->signal_low)
+		station_roam_timeout_rearm(station, 60);
+}
+
+static void station_roam_scan_triggered(int err, void *user_data)
+{
+	struct station *station = user_data;
+
+	if (err) {
+		station_roam_failed(station);
+		return;
+	}
+
+	/*
+	 * Do not update the Scanning property as we won't be updating the
+	 * list of networks.
+	 */
+}
+
+static bool station_roam_scan_notify(uint32_t wiphy_id, uint32_t ifindex,
+					int err, struct l_queue *bss_list,
+					void *userdata)
+{
+	struct station *station = userdata;
+	struct device *device = netdev_get_device(station->netdev);
+	struct network *network = station->connected_network;
+	struct handshake_state *hs = netdev_get_handshake(station->netdev);
+	struct scan_bss *bss;
+	struct scan_bss *best_bss = NULL;
+	double best_bss_rank = 0.0;
+	static const double RANK_FT_FACTOR = 1.3;
+	uint16_t mdid;
+	enum security orig_security, security;
+	bool seen = false;
+
+	if (err) {
+		station_roam_failed(station);
+		return false;
+	}
+
+	/*
+	 * Do not call station_set_scan_results because this may have been
+	 * a partial scan.  We could at most update the current networks' BSS
+	 * list in its station->networks entry.
+	 */
+
+	orig_security = network_get_security(network);
+
+	if (hs->mde)
+		ie_parse_mobility_domain_from_data(hs->mde, hs->mde[1] + 2,
+							&mdid, NULL, NULL);
+
+	/*
+	 * BSSes in the bss_list come already ranked with their initial
+	 * association preference rank value.  We only need to add preference
+	 * for BSSes that are within the FT Mobility Domain so as to favor
+	 * Fast Roaming, if it is supported.
+	 */
+
+	while ((bss = l_queue_pop_head(bss_list))) {
+		double rank;
+		struct ie_rsn_info info;
+		int r;
+
+		/* Skip the BSS we are connected to if doing an AP roam */
+		if (station->ap_directed_roaming && !memcmp(bss->addr,
+				station->connected_bss->addr, 6))
+			goto next;
+
+		/* Skip result if it is not part of the ESS */
+
+		if (bss->ssid_len != hs->ssid_len ||
+				memcmp(bss->ssid, hs->ssid, hs->ssid_len))
+			goto next;
+
+		memset(&info, 0, sizeof(info));
+		r = scan_bss_get_rsn_info(bss, &info);
+		if (r < 0) {
+			if (r != -ENOENT)
+				goto next;
+
+			security = security_determine(bss->capability, NULL);
+		} else
+			security = security_determine(bss->capability, &info);
+
+		if (security != orig_security)
+			goto next;
+
+		seen = true;
+
+		if (!wiphy_can_connect(station->wiphy, bss))
+			goto next;
+
+		rank = bss->rank;
+
+		if (hs->mde && bss->mde_present && l_get_le16(bss->mde) == mdid)
+			rank *= RANK_FT_FACTOR;
+
+		if (rank > best_bss_rank) {
+			if (best_bss)
+				scan_bss_free(best_bss);
+
+			best_bss = bss;
+			best_bss_rank = rank;
+
+			continue;
+		}
+
+next:
+		scan_bss_free(bss);
+	}
+
+	l_queue_destroy(bss_list, NULL);
+
+	if (!seen)
+		goto fail_free_bss;
+
+	/* See if we have anywhere to roam to */
+	if (!best_bss || scan_bss_addr_eq(best_bss, station->connected_bss))
+		goto fail_free_bss;
+
+	bss = network_bss_find_by_addr(network, best_bss->addr);
+	if (bss) {
+		scan_bss_free(best_bss);
+		best_bss = bss;
+	} else {
+		network_bss_add(network, best_bss);
+		l_queue_push_tail(station->bss_list, best_bss);
+	}
+
+	device_transition_start(device, best_bss);
+
+	return true;
+
+fail_free_bss:
+	if (best_bss)
+		scan_bss_free(best_bss);
+
+	station_roam_failed(station);
+
+	return true;
+}
+
+static void station_roam_scan_destroy(void *userdata)
+{
+	struct station *station = userdata;
+
+	station->roam_scan_id = 0;
+}
+
+static void station_roam_scan(struct station *station,
+				struct scan_freq_set *freq_set)
+{
+	struct scan_parameters params = { .freqs = freq_set, .flush = true };
+
+	if (station->connected_network)
+		/* Use direct probe request */
+		params.ssid = network_get_ssid(station->connected_network);
+
+	station->roam_scan_id =
+		scan_active_full(netdev_get_ifindex(station->netdev), &params,
+					station_roam_scan_triggered,
+					station_roam_scan_notify, station,
+					station_roam_scan_destroy);
+
+	if (!station->roam_scan_id)
+		station_roam_failed(station);
+}
+
+static uint32_t station_freq_from_neighbor_report(const uint8_t *country,
+		struct ie_neighbor_report_info *info, enum scan_band *out_band)
+{
+	enum scan_band band;
+	uint32_t freq;
+
+	if (info->oper_class == 0) {
+		/*
+		 * Some Cisco APs report all operating class values as 0
+		 * in the Neighbor Report Responses.  Work around this by
+		 * using the most likely operating class for the channel
+		 * number as the 2.4GHz and 5GHz bands happen to mostly
+		 * use channels in two disjoint ranges.
+		 */
+		if (info->channel_num >= 1 && info->channel_num <= 14)
+			band = SCAN_BAND_2_4_GHZ;
+		else if (info->channel_num >= 36 && info->channel_num <= 169)
+			band = SCAN_BAND_5_GHZ;
+		else {
+			l_debug("Ignored: 0 oper class with an unusual "
+				"channel number");
+
+			return 0;
+		}
+	} else {
+		band = scan_oper_class_to_band(country, info->oper_class);
+		if (!band) {
+			l_debug("Ignored: unsupported oper class");
+
+			return 0;
+		}
+	}
+
+	freq = scan_channel_to_freq(info->channel_num, band);
+	if (!freq) {
+		l_debug("Ignored: unsupported channel");
+
+		return 0;
+	}
+
+	if (out_band)
+		*out_band = band;
+
+	return freq;
+}
+
+static void station_neighbor_report_cb(struct netdev *netdev, int err,
+					const uint8_t *reports,
+					size_t reports_len, void *user_data)
+{
+	struct station *station = user_data;
+	struct ie_tlv_iter iter;
+	int count_md = 0, count_no_md = 0;
+	struct scan_freq_set *freq_set_md, *freq_set_no_md;
+	uint32_t current_freq = 0;
+	struct handshake_state *hs = netdev_get_handshake(station->netdev);
+
+	/*
+	 * Check if we're still attempting to roam -- if dbus Disconnect
+	 * had been called in the meantime we just abort the attempt.
+	 */
+	if (!station->preparing_roam || err == -ENODEV)
+		return;
+
+	if (!reports || err) {
+		/* Have to do a full scan */
+		station_roam_scan(station, NULL);
+
+		return;
+	}
+
+	freq_set_md = scan_freq_set_new();
+	freq_set_no_md = scan_freq_set_new();
+
+	ie_tlv_iter_init(&iter, reports, reports_len);
+
+	/* First see if any of the reports contain the MD bit set */
+	while (ie_tlv_iter_next(&iter)) {
+		struct ie_neighbor_report_info info;
+		uint32_t freq;
+		enum scan_band band;
+		const uint8_t *cc = NULL;
+
+		if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_NEIGHBOR_REPORT)
+			continue;
+
+		if (ie_parse_neighbor_report(&iter, &info) < 0)
+			continue;
+
+		l_debug("Neighbor report received for %s: ch %i "
+				"(oper class %i), %s",
+				util_address_to_string(info.addr),
+				(int) info.channel_num, (int) info.oper_class,
+				info.md ? "MD set" : "MD not set");
+
+		if (station->connected_bss->cc_present)
+			cc = station->connected_bss->cc;
+
+		freq = station_freq_from_neighbor_report(cc, &info, &band);
+		if (!freq)
+			continue;
+
+		/* Skip if the band is not supported */
+		if (!(band & wiphy_get_supported_bands(station->wiphy)))
+			continue;
+
+		if (!memcmp(info.addr,
+				station->connected_bss->addr, ETH_ALEN)) {
+			/*
+			 * If this report is for the current AP, don't add
+			 * it to any of the lists yet.  We will need to scan
+			 * its channel because it may still be the best ranked
+			 * or the only visible AP.
+			 */
+			current_freq = freq;
+
+			continue;
+		}
+
+		/* Add the frequency to one of the lists */
+		if (info.md && hs->mde) {
+			scan_freq_set_add(freq_set_md, freq);
+
+			count_md += 1;
+		} else {
+			scan_freq_set_add(freq_set_no_md, freq);
+
+			count_no_md += 1;
+		}
+	}
+
+	if (!current_freq)
+		current_freq = station->connected_bss->frequency;
+
+	/*
+	 * If there are neighbor reports with the MD bit set then the bit
+	 * is probably valid so scan only the frequencies of the neighbors
+	 * with that bit set, which will allow us to use Fast Transition.
+	 * Some APs, such as those based on hostapd do not set the MD bit
+	 * even if the neighbor is within the MD.
+	 *
+	 * In any case we only select the frequencies here and will check
+	 * the IEs in the scan results as the authoritative information
+	 * on whether we can use Fast Transition, and rank BSSes based on
+	 * that.
+	 *
+	 * TODO: possibly save the neighbors from outside the MD and if
+	 * none of the ones in the MD end up working, try a non-FT
+	 * transition to those neighbors.  We should be using a
+	 * blacklisting mechanism (for both initial connection and
+	 * transitions) so that cound_md would not count the
+	 * BSSes already used and when it goes down to 0 we'd
+	 * automatically fall back to the non-FT candidates and then to
+	 * full scan.
+	 */
+	if (count_md) {
+		scan_freq_set_add(freq_set_md, current_freq);
+
+		station_roam_scan(station, freq_set_md);
+	} else if (count_no_md) {
+		scan_freq_set_add(freq_set_no_md, current_freq);
+
+		station_roam_scan(station, freq_set_no_md);
+	} else
+		station_roam_scan(station, NULL);
+
+	scan_freq_set_free(freq_set_md);
+	scan_freq_set_free(freq_set_no_md);
+}
+
+static void station_roam_trigger_cb(struct l_timeout *timeout, void *user_data)
+{
+	struct station *station = user_data;
+
+	l_debug("%d", netdev_get_ifindex(station->netdev));
+
+	l_timeout_remove(station->roam_trigger_timeout);
+	station->roam_trigger_timeout = NULL;
+	station->preparing_roam = true;
+
+	/*
+	 * If current BSS supports Neighbor Reports, narrow the scan down
+	 * to channels occupied by known neighbors in the ESS.  This isn't
+	 * 100% reliable as the neighbor lists are not required to be
+	 * complete or current.  It is likely still better than doing a
+	 * full scan.  10.11.10.1: "A neighbor report may not be exhaustive
+	 * either by choice, or due to the fact that there may be neighbor
+	 * APs not known to the AP."
+	 */
+	if (station->connected_bss->cap_rm_neighbor_report &&
+			!station->roam_no_orig_ap)
+		if (!netdev_neighbor_report_req(station->netdev,
+						station_neighbor_report_cb))
+			return;
+
+	/* Otherwise do a full scan for target BSS candidates */
+	station_roam_scan(station, NULL);
+}
+
+static void station_roam_timeout_rearm(struct station *station, int seconds)
+{
+	struct timespec now, min_timeout;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+
+	min_timeout = now;
+	min_timeout.tv_sec += seconds;
+
+	if (station->roam_min_time.tv_sec < min_timeout.tv_sec ||
+			(station->roam_min_time.tv_sec == min_timeout.tv_sec &&
+			 station->roam_min_time.tv_nsec < min_timeout.tv_nsec))
+		station->roam_min_time = min_timeout;
+
+	seconds = station->roam_min_time.tv_sec - now.tv_sec +
+		(station->roam_min_time.tv_nsec > now.tv_nsec ? 1 : 0);
+
+	station->roam_trigger_timeout =
+		l_timeout_create(seconds, station_roam_trigger_cb,
+								station, NULL);
+}
+
+void station_lost_beacon(struct station *station)
+{
+	l_debug("%d", netdev_get_ifindex(station->netdev));
+
+	if (station->state != STATION_STATE_ROAMING &&
+			station->state != STATION_STATE_CONNECTED)
+		return;
+
+	/*
+	 * Tell the roam mechanism to not bother requesting Neighbor Reports,
+	 * preauthenticating or performing other over-the-DS type of
+	 * authentication to target AP, even while station->connected_bss is
+	 * still non-NULL.  The current connection is in a serious condition
+	 * and we might wasting our time with those mechanisms.
+	 */
+	station->roam_no_orig_ap = true;
+
+	if (station->preparing_roam || station->state == STATION_STATE_ROAMING)
+		return;
+
+	station_roam_trigger_cb(NULL, station);
+}
+
+#define WNM_REQUEST_MODE_PREFERRED_CANDIDATE_LIST	(1 << 0)
+#define WNM_REQUEST_MODE_TERMINATION_IMMINENT		(1 << 3)
+#define WNM_REQUEST_MODE_ESS_DISASSOCIATION_IMMINENT	(1 << 4)
+
+void station_ap_directed_roam(struct station *station,
+				const struct mmpdu_header *hdr,
+				const void *body, size_t body_len)
+{
+	uint32_t pos = 0;
+	uint8_t req_mode;
+	uint16_t dtimer;
+	uint8_t valid_interval;
+
+	if (station->preparing_roam || station->state == STATION_STATE_ROAMING)
+		return;
+
+	if (body_len < 7)
+		goto format_error;
+
+	/*
+	 * First two bytes are checked by the frame watch (WNM category and
+	 * WNM action). The third is the dialog token which is not relevant
+	 * because we did not send a BSS transition query -- so skip these
+	 * first three bytes.
+	 */
+	pos += 3;
+
+	req_mode = l_get_u8(body + pos);
+	pos++;
+
+	/*
+	 * TODO: Disassociation timer and validity interval are currently not
+	 * used since the BSS transition request is being handled immediately.
+	 */
+	dtimer = l_get_le16(body + pos);
+	pos += 2;
+	valid_interval = l_get_u8(body + pos);
+	pos++;
+
+	l_debug("BSS transition received from AP: Disassociation Time: %u, "
+			"Validity interval: %u", dtimer, valid_interval);
+
+	/* check req_mode for optional values */
+	if (req_mode & WNM_REQUEST_MODE_TERMINATION_IMMINENT) {
+		if (pos + 12 > body_len)
+			goto format_error;
+
+		pos += 12;
+	}
+
+	if (req_mode & WNM_REQUEST_MODE_ESS_DISASSOCIATION_IMMINENT ) {
+		uint8_t url_len;
+
+		if (pos + 1 > body_len)
+			goto format_error;
+
+		url_len = l_get_u8(body + pos);
+		pos++;
+
+		if (pos + url_len > body_len)
+			goto format_error;
+
+		pos += url_len;
+	}
+
+	station->ap_directed_roaming = true;
+	station->preparing_roam = true;
+
+	l_timeout_remove(station->roam_trigger_timeout);
+	station->roam_trigger_timeout = NULL;
+
+	if (req_mode & WNM_REQUEST_MODE_PREFERRED_CANDIDATE_LIST)
+		station_neighbor_report_cb(station->netdev, 0, body + pos,
+				body_len - pos,station);
+	else
+		station_roam_scan(station, NULL);
+
+	return;
+
+format_error:
+	l_debug("bad AP roam frame formatting");
+}
+
+void station_low_rssi(struct station *station)
+{
+	if (station->signal_low)
+		return;
+
+	station->signal_low = true;
+
+	if (station->preparing_roam ||
+			station->state == STATION_STATE_ROAMING)
+		return;
+
+	/* Set a 5-second initial timeout */
+	station_roam_timeout_rearm(station, 5);
+}
+
+void station_ok_rssi(struct station *station)
+{
+	l_timeout_remove(station->roam_trigger_timeout);
+	station->roam_trigger_timeout = NULL;
+
+	station->signal_low = false;
+}
+
 struct station *station_find(uint32_t ifindex)
 {
 	const struct l_queue_entry *entry;
@@ -586,6 +1153,8 @@ void station_free(struct station *station)
 
 	if (!l_queue_remove(station_list, station))
 		return;
+
+	l_timeout_remove(station->roam_trigger_timeout);
 
 	l_queue_destroy(station->networks_sorted, NULL);
 	l_hashmap_destroy(station->networks, network_free);

@@ -33,6 +33,8 @@ const char *device_get_path(struct device *device);
 bool device_is_busy(struct device *device);
 struct wiphy *device_get_wiphy(struct device *device);
 
+void device_disassociated(struct device *device);
+void device_transition_start(struct device *device, struct scan_bss *bss);
 void device_set_scan_results(struct device *device, struct l_queue *bss_list,
 				bool add_to_autoconnect);
 struct network *device_network_find(struct device *device, const char *ssid,

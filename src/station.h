@@ -50,10 +50,19 @@ struct station {
 	struct l_hashmap *networks;
 	struct l_queue *networks_sorted;
 
+	/* Roaming related members */
+	struct timespec roam_min_time;
+	struct l_timeout *roam_trigger_timeout;
+	uint32_t roam_scan_id;
+
 	struct wiphy *wiphy;
 	struct netdev *netdev;
 
 	bool seen_hidden_networks : 1;
+	bool preparing_roam : 1;
+	bool signal_low : 1;
+	bool roam_no_orig_ap : 1;
+	bool ap_directed_roaming : 1;
 };
 
 void station_autoconnect_next(struct station *station);
@@ -82,6 +91,17 @@ uint32_t station_add_state_watch(struct station *station,
 					void *user_data,
 					station_destroy_func_t destroy);
 bool station_remove_state_watch(struct station *station, uint32_t id);
+
+void station_roam_state_clear(struct station *station);
+void station_roam_failed(struct station *station);
+void station_roamed(struct station *station);
+void station_lost_beacon(struct station *station);
+void station_ap_directed_roam(struct station *station,
+				const struct mmpdu_header *hdr,
+				const void *body, size_t body_len);
+
+void station_low_rssi(struct station *station);
+void station_ok_rssi(struct station *station);
 
 struct station *station_find(uint32_t ifindex);
 struct station *station_create(struct wiphy *wiphy, struct netdev *netdev);
