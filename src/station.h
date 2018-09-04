@@ -99,7 +99,6 @@ bool station_remove_state_watch(struct station *station, uint32_t id);
 
 bool station_set_autoconnect(struct station *station, bool autoconnect);
 
-void station_roam_state_clear(struct station *station);
 void station_roam_failed(struct station *station);
 void station_roamed(struct station *station);
 void station_lost_beacon(struct station *station);
@@ -109,6 +108,8 @@ void station_ap_directed_roam(struct station *station,
 
 void station_low_rssi(struct station *station);
 void station_ok_rssi(struct station *station);
+
+void station_reset_connection_state(struct station *station);
 
 struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 						struct l_dbus_message *message,

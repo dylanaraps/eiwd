@@ -83,38 +83,13 @@ static bool device_is_busy(struct device *device)
 	return station_is_busy(device->station);
 }
 
-static void device_reset_connection_state(struct device *device)
-{
-	struct station *station = device->station;
-	struct network *network = station->connected_network;
-	struct l_dbus *dbus = dbus_get_bus();
-
-	if (!network)
-		return;
-
-	if (station->state == STATION_STATE_CONNECTED ||
-			station->state == STATION_STATE_CONNECTING ||
-			station->state == STATION_STATE_ROAMING)
-		network_disconnected(network);
-
-	station_roam_state_clear(station);
-
-	station->connected_bss = NULL;
-	station->connected_network = NULL;
-
-	l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
-				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
-	l_dbus_property_changed(dbus, network_get_path(network),
-				IWD_NETWORK_INTERFACE, "Connected");
-}
-
 void device_disassociated(struct device *device)
 {
 	struct station *station = device->station;
 
 	l_debug("%d", device->index);
 
-	device_reset_connection_state(device);
+	station_reset_connection_state(station);
 
 	station_enter_state(station, STATION_STATE_DISCONNECTED);
 
@@ -593,7 +568,7 @@ int device_disconnect(struct device *device)
 	 * connected so we may as well indicate now that we're no longer
 	 * connected.
 	 */
-	device_reset_connection_state(device);
+	station_reset_connection_state(station);
 
 	station_enter_state(station, STATION_STATE_DISCONNECTING);
 
@@ -1314,8 +1289,6 @@ static void device_netdev_notify(struct netdev *netdev,
 		if (device->connect_pending)
 			dbus_pending_reply(&device->connect_pending,
 				dbus_error_aborted(device->connect_pending));
-
-		device_reset_connection_state(device);
 
 		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
 					IWD_DEVICE_INTERFACE, "Powered");

@@ -668,7 +668,7 @@ bool station_set_autoconnect(struct station *station, bool autoconnect)
 	return true;
 }
 
-void station_roam_state_clear(struct station *station)
+static void station_roam_state_clear(struct station *station)
 {
 	l_timeout_remove(station->roam_trigger_timeout);
 	station->roam_trigger_timeout = NULL;
@@ -1230,6 +1230,30 @@ void station_ok_rssi(struct station *station)
 	station->roam_trigger_timeout = NULL;
 
 	station->signal_low = false;
+}
+
+void station_reset_connection_state(struct station *station)
+{
+	struct network *network = station->connected_network;
+	struct l_dbus *dbus = dbus_get_bus();
+
+	if (!network)
+		return;
+
+	if (station->state == STATION_STATE_CONNECTED ||
+			station->state == STATION_STATE_CONNECTING ||
+			station->state == STATION_STATE_ROAMING)
+		network_disconnected(network);
+
+	station_roam_state_clear(station);
+
+	station->connected_bss = NULL;
+	station->connected_network = NULL;
+
+	l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
+				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
+	l_dbus_property_changed(dbus, network_get_path(network),
+				IWD_NETWORK_INTERFACE, "Connected");
 }
 
 static void station_dbus_scan_triggered(int err, void *user_data)
