@@ -56,6 +56,11 @@ struct netdev *station_get_netdev(struct station *station)
 	return station->netdev;
 }
 
+struct network *station_get_connected_network(struct station *station)
+{
+	return station->connected_network;
+}
+
 struct autoconnect_entry {
 	uint16_t rank;
 	struct network *network;
