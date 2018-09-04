@@ -599,6 +599,19 @@ const char *station_state_to_string(enum station_state state)
 void station_enter_state(struct station *station, enum station_state state)
 {
 	uint32_t index = netdev_get_ifindex(station->netdev);
+	struct l_dbus *dbus = dbus_get_bus();
+	bool disconnected;
+
+	l_debug("Old State: %s, new state: %s",
+			station_state_to_string(station->state),
+			station_state_to_string(state));
+
+	disconnected = station->state <= STATION_STATE_AUTOCONNECT;
+
+	if ((disconnected && state > STATION_STATE_AUTOCONNECT) ||
+			(!disconnected && state != station->state))
+		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
+					IWD_DEVICE_INTERFACE, "State");
 
 	switch (state) {
 	case STATION_STATE_AUTOCONNECT:
@@ -637,6 +650,22 @@ uint32_t station_add_state_watch(struct station *station,
 bool station_remove_state_watch(struct station *station, uint32_t id)
 {
 	return watchlist_remove(&station->state_watches, id);
+}
+
+bool station_set_autoconnect(struct station *station, bool autoconnect)
+{
+	if (station->autoconnect == autoconnect)
+		return true;
+
+	station->autoconnect = autoconnect;
+
+	if (station->state == STATION_STATE_DISCONNECTED && autoconnect)
+		station_enter_state(station, STATION_STATE_AUTOCONNECT);
+
+	if (station->state == STATION_STATE_AUTOCONNECT && !autoconnect)
+		station_enter_state(station, STATION_STATE_DISCONNECTED);
+
+	return true;
 }
 
 void station_roam_state_clear(struct station *station)
@@ -1315,6 +1344,8 @@ struct station *station_create(struct wiphy *wiphy, struct netdev *netdev)
 	station->netdev = netdev;
 
 	l_queue_push_head(station_list, station);
+
+	station_set_autoconnect(station, true);
 
 	return station;
 }

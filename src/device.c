@@ -59,7 +59,6 @@ struct device {
 	struct station *station;
 
 	bool powered : 1;
-	bool autoconnect : 1;
 
 	uint32_t ap_roam_watch;
 };
@@ -82,26 +81,6 @@ static bool device_is_busy(struct device *device)
 		return false;
 
 	return station_is_busy(device->station);
-}
-
-static void device_enter_state(struct device *device, enum station_state state)
-{
-	struct station *station = device->station;
-	struct l_dbus *dbus = dbus_get_bus();
-	bool disconnected;
-
-	l_debug("Old State: %s, new state: %s",
-			station_state_to_string(station->state),
-			station_state_to_string(state));
-
-	disconnected = station->state <= STATION_STATE_AUTOCONNECT;
-
-	if ((disconnected && state > STATION_STATE_AUTOCONNECT) ||
-			(!disconnected && state != station->state))
-		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
-					IWD_DEVICE_INTERFACE, "State");
-
-	station_enter_state(station, state);
 }
 
 static void device_reset_connection_state(struct device *device)
@@ -131,14 +110,16 @@ static void device_reset_connection_state(struct device *device)
 
 void device_disassociated(struct device *device)
 {
+	struct station *station = device->station;
+
 	l_debug("%d", device->index);
 
 	device_reset_connection_state(device);
 
-	device_enter_state(device, STATION_STATE_DISCONNECTED);
+	station_enter_state(station, STATION_STATE_DISCONNECTED);
 
-	if (device->autoconnect)
-		device_enter_state(device, STATION_STATE_AUTOCONNECT);
+	if (station->autoconnect)
+		station_enter_state(station, STATION_STATE_AUTOCONNECT);
 }
 
 static void device_disconnect_event(struct device *device)
@@ -173,7 +154,7 @@ static void device_reassociate_cb(struct netdev *netdev,
 
 	if (result == NETDEV_RESULT_OK) {
 		station_roamed(station);
-		device_enter_state(device, STATION_STATE_CONNECTED);
+		station_enter_state(station, STATION_STATE_CONNECTED);
 	} else
 		station_roam_failed(station);
 }
@@ -192,7 +173,7 @@ static void device_fast_transition_cb(struct netdev *netdev,
 
 	if (result == NETDEV_RESULT_OK) {
 		station_roamed(station);
-		device_enter_state(device, STATION_STATE_CONNECTED);
+		station_enter_state(station, STATION_STATE_CONNECTED);
 	} else
 		station_roam_failed(station);
 }
@@ -213,7 +194,7 @@ static void device_transition_reassociate(struct device *device,
 
 	station->connected_bss = bss;
 	station->preparing_roam = false;
-	device_enter_state(device, STATION_STATE_ROAMING);
+	station_enter_state(station, STATION_STATE_ROAMING);
 }
 
 static bool bss_match_bssid(const void *a, const void *b)
@@ -329,7 +310,7 @@ void device_transition_start(struct device *device, struct scan_bss *bss)
 
 		station->connected_bss = bss;
 		station->preparing_roam = false;
-		device_enter_state(device, STATION_STATE_ROAMING);
+		station_enter_state(station, STATION_STATE_ROAMING);
 
 		return;
 	}
@@ -425,7 +406,7 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 	}
 
 	network_connected(station->connected_network);
-	device_enter_state(device, STATION_STATE_CONNECTED);
+	station_enter_state(station, STATION_STATE_CONNECTED);
 }
 
 static void device_signal_agent_notify(struct signal_agent *agent,
@@ -495,24 +476,6 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 	};
 }
 
-bool device_set_autoconnect(struct device *device, bool autoconnect)
-{
-	struct station *station = device->station;
-
-	if (device->autoconnect == autoconnect)
-		return true;
-
-	device->autoconnect = autoconnect;
-
-	if (station->state == STATION_STATE_DISCONNECTED && autoconnect)
-		device_enter_state(device, STATION_STATE_AUTOCONNECT);
-
-	if (station->state == STATION_STATE_AUTOCONNECT && !autoconnect)
-		device_enter_state(device, STATION_STATE_DISCONNECTED);
-
-	return true;
-}
-
 int __device_connect_network(struct device *device, struct network *network,
 				struct scan_bss *bss)
 {
@@ -539,7 +502,7 @@ int __device_connect_network(struct device *device, struct network *network,
 	station->connected_bss = bss;
 	station->connected_network = network;
 
-	device_enter_state(device, STATION_STATE_CONNECTING);
+	station_enter_state(station, STATION_STATE_CONNECTING);
 
 	l_dbus_property_changed(dbus, netdev_get_path(netdev),
 				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
@@ -563,7 +526,7 @@ void device_connect_network(struct device *device, struct network *network,
 	}
 
 	device->connect_pending = l_dbus_message_ref(message);
-	device->autoconnect = true;
+	device->station->autoconnect = true;
 }
 
 static struct l_dbus_message *device_scan(struct l_dbus *dbus,
@@ -587,6 +550,7 @@ static void device_disconnect_cb(struct netdev *netdev, bool success,
 					void *user_data)
 {
 	struct device *device = user_data;
+	struct station *station = device->station;
 
 	l_debug("%d, success: %d", device->index, success);
 
@@ -605,10 +569,10 @@ static void device_disconnect_cb(struct netdev *netdev, bool success,
 
 	}
 
-	device_enter_state(device, STATION_STATE_DISCONNECTED);
+	station_enter_state(station, STATION_STATE_DISCONNECTED);
 
-	if (device->autoconnect)
-		device_enter_state(device, STATION_STATE_AUTOCONNECT);
+	if (station->autoconnect)
+		station_enter_state(station, STATION_STATE_AUTOCONNECT);
 }
 
 int device_disconnect(struct device *device)
@@ -631,7 +595,7 @@ int device_disconnect(struct device *device)
 	 */
 	device_reset_connection_state(device);
 
-	device_enter_state(device, STATION_STATE_DISCONNECTING);
+	station_enter_state(station, STATION_STATE_DISCONNECTING);
 
 	return 0;
 }
@@ -650,7 +614,7 @@ static struct l_dbus_message *device_dbus_disconnect(struct l_dbus *dbus,
 	 * Disconnect was triggered by the user, don't autoconnect. Wait for
 	 * the user's explicit instructions to scan and connect to the network
 	 */
-	device_set_autoconnect(device, false);
+	station_set_autoconnect(station, false);
 
 	if (station->state == STATION_STATE_AUTOCONNECT ||
 			station->state == STATION_STATE_DISCONNECTED)
@@ -1338,11 +1302,6 @@ static void device_netdev_notify(struct netdev *netdev,
 			return;
 
 		device->station = station_create(device->wiphy, device->netdev);
-
-		if (device->autoconnect)
-			device_enter_state(device, STATION_STATE_AUTOCONNECT);
-		else
-			device_enter_state(device, STATION_STATE_DISCONNECTED);
 		break;
 	case NETDEV_WATCH_EVENT_DOWN:
 		if (device->station) {
@@ -1385,7 +1344,6 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	device->index = ifindex;
 	device->wiphy = wiphy;
 	device->netdev = netdev;
-	device->autoconnect = true;
 
 	if (!l_dbus_object_add_interface(dbus, netdev_get_path(device->netdev),
 					IWD_DEVICE_INTERFACE, device))
@@ -1408,10 +1366,8 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	device->powered = netdev_get_is_up(netdev);
 
 	if (device->powered &&
-			netdev_get_iftype(netdev) == NETDEV_IFTYPE_STATION) {
+			netdev_get_iftype(netdev) == NETDEV_IFTYPE_STATION)
 		device->station = station_create(device->wiphy, device->netdev);
-		device_enter_state(device, STATION_STATE_AUTOCONNECT);
-	}
 
 	return device;
 }

@@ -67,6 +67,7 @@ struct station {
 	bool roam_no_orig_ap : 1;
 	bool ap_directed_roaming : 1;
 	bool scanning : 1;
+	bool autoconnect : 1;
 };
 
 struct wiphy *station_get_wiphy(struct station *station);
@@ -95,6 +96,8 @@ uint32_t station_add_state_watch(struct station *station,
 					void *user_data,
 					station_destroy_func_t destroy);
 bool station_remove_state_watch(struct station *station, uint32_t id);
+
+bool station_set_autoconnect(struct station *station, bool autoconnect);
 
 void station_roam_state_clear(struct station *station);
 void station_roam_failed(struct station *station);

@@ -147,7 +147,7 @@ static void wsc_try_credentials(struct wsc *wsc)
 
 	dbus_pending_reply(&wsc->pending,
 					wsc_error_not_reachable(wsc->pending));
-	device_set_autoconnect(device, true);
+	station_set_autoconnect(wsc->station, true);
 done:
 	memset(wsc->creds, 0, sizeof(wsc->creds));
 	wsc->n_creds = 0;
@@ -192,7 +192,6 @@ static void wsc_disconnect_cb(struct netdev *netdev, bool success,
 							void *user_data)
 {
 	struct wsc *wsc = user_data;
-	struct device *device = netdev_get_device(wsc->netdev);
 	struct l_dbus_message *reply;
 
 	l_debug("%p, success: %d", wsc, success);
@@ -203,14 +202,13 @@ static void wsc_disconnect_cb(struct netdev *netdev, bool success,
 	l_dbus_message_set_arguments(reply, "");
 	dbus_pending_reply(&wsc->pending_cancel, reply);
 
-	device_set_autoconnect(device, true);
+	station_set_autoconnect(wsc->station, true);
 }
 
 static void wsc_connect_cb(struct netdev *netdev, enum netdev_result result,
 					void *user_data)
 {
 	struct wsc *wsc = user_data;
-	struct device *device = netdev_get_device(wsc->netdev);
 
 	l_debug("%d, result: %d", netdev_get_ifindex(wsc->netdev), result);
 
@@ -240,7 +238,7 @@ static void wsc_connect_cb(struct netdev *netdev, enum netdev_result result,
 		break;
 	}
 
-	device_set_autoconnect(device, true);
+	station_set_autoconnect(wsc->station, true);
 }
 
 static void wsc_credential_obtained(struct wsc *wsc,
@@ -499,7 +497,7 @@ static void wsc_check_can_connect(struct wsc *wsc, struct scan_bss *target)
 	 * be triggering any more scans while disconnecting / connecting
 	 */
 	wsc->target = target;
-	device_set_autoconnect(device, false);
+	station_set_autoconnect(wsc->station, false);
 
 	switch (station_get_state(wsc->station)) {
 	case STATION_STATE_DISCONNECTED:

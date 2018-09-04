@@ -31,7 +31,6 @@ struct device;
 void device_disassociated(struct device *device);
 void device_transition_start(struct device *device, struct scan_bss *bss);
 
-bool device_set_autoconnect(struct device *device, bool autoconnect);
 int __device_connect_network(struct device *device, struct network *network,
 				struct scan_bss *bss);
 void device_connect_network(struct device *device, struct network *network,
