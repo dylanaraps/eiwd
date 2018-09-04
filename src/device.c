@@ -105,7 +105,7 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 
 	if (device->scanning) {
 		device->scanning = false;
-		l_dbus_property_changed(dbus, device_get_path(device),
+		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
 					IWD_DEVICE_INTERFACE, "Scanning");
 	}
 
@@ -131,15 +131,6 @@ struct network *device_get_connected_network(struct device *device)
 	return device->station->connected_network;
 }
 
-const char *device_get_path(struct device *device)
-{
-	static char path[26];
-
-	snprintf(path, sizeof(path), "%s/%u", wiphy_get_path(device->wiphy),
-			device->index);
-	return path;
-}
-
 /* TODO: Remove when Station/Device is split */
 bool device_is_busy(struct device *device)
 {
@@ -162,7 +153,7 @@ static void periodic_scan_trigger(int err, void *user_data)
 	struct l_dbus *dbus = dbus_get_bus();
 
 	device->scanning = true;
-	l_dbus_property_changed(dbus, device_get_path(device),
+	l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
 				IWD_DEVICE_INTERFACE, "Scanning");
 }
 
@@ -174,7 +165,7 @@ static void periodic_scan_stop(struct device *device)
 
 	if (device->scanning) {
 		device->scanning = false;
-		l_dbus_property_changed(dbus, device_get_path(device),
+		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
 					IWD_DEVICE_INTERFACE, "Scanning");
 	}
 }
@@ -218,7 +209,7 @@ static void device_enter_state(struct device *device, enum station_state state)
 
 	if ((disconnected && state > STATION_STATE_AUTOCONNECT) ||
 			(!disconnected && state != station->state))
-		l_dbus_property_changed(dbus, device_get_path(device),
+		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
 					IWD_DEVICE_INTERFACE, "State");
 
 	station_enter_state(station, state);
@@ -243,7 +234,7 @@ static void device_reset_connection_state(struct device *device)
 	station->connected_bss = NULL;
 	station->connected_network = NULL;
 
-	l_dbus_property_changed(dbus, device_get_path(device),
+	l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
 				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
 	l_dbus_property_changed(dbus, network_get_path(network),
 				IWD_NETWORK_INTERFACE, "Connected");
@@ -608,8 +599,8 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 	case NETDEV_EVENT_RSSI_LEVEL_NOTIFY:
 		if (device->signal_agent)
 			device_signal_agent_notify(device->signal_agent,
-					device_get_path(device),
-					netdev_get_rssi_level(device->netdev));
+					netdev_get_path(netdev),
+					netdev_get_rssi_level(netdev));
 
 		break;
 	};
@@ -638,6 +629,7 @@ int __device_connect_network(struct device *device, struct network *network,
 {
 	struct l_dbus *dbus = dbus_get_bus();
 	struct station *station = device->station;
+	struct netdev *netdev = station->netdev;
 	struct handshake_state *hs;
 	int r;
 
@@ -660,7 +652,7 @@ int __device_connect_network(struct device *device, struct network *network,
 
 	device_enter_state(device, STATION_STATE_CONNECTING);
 
-	l_dbus_property_changed(dbus, device_get_path(device),
+	l_dbus_property_changed(dbus, netdev_get_path(netdev),
 				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
 	l_dbus_property_changed(dbus, network_get_path(network),
 				IWD_NETWORK_INTERFACE, "Connected");
@@ -705,7 +697,7 @@ static void device_scan_triggered(int err, void *user_data)
 	l_debug("Scan triggered for %s", netdev_get_name(device->netdev));
 
 	device->scanning = true;
-	l_dbus_property_changed(dbus, device_get_path(device),
+	l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
 				IWD_DEVICE_INTERFACE, "Scanning");
 
 	reply = l_dbus_message_new_method_return(device->scan_pending);
@@ -1269,7 +1261,8 @@ static void set_4addr_cb(struct netdev *netdev, int result, void *user_data)
 	cb_data->complete(cb_data->dbus, cb_data->message, reply);
 	cb_data->message = NULL;
 
-	l_dbus_property_changed(cb_data->dbus, device_get_path(cb_data->device),
+	l_dbus_property_changed(cb_data->dbus,
+				netdev_get_path(cb_data->device->netdev),
 				IWD_DEVICE_INTERFACE, "WDS");
 }
 
@@ -1391,11 +1384,13 @@ static void set_mode_cb(struct netdev *netdev, int result, void *user_data)
 	cb_data->complete(cb_data->dbus, cb_data->message, reply);
 	cb_data->message = NULL;
 
-	l_dbus_property_changed(cb_data->dbus, device_get_path(cb_data->device),
+	l_dbus_property_changed(cb_data->dbus,
+				netdev_get_path(cb_data->device->netdev),
 				IWD_DEVICE_INTERFACE, "Mode");
 
 	/* TODO: Special case, remove when Device/Station split is made */
-	l_dbus_property_changed(cb_data->dbus, device_get_path(cb_data->device),
+	l_dbus_property_changed(cb_data->dbus,
+				netdev_get_path(cb_data->device->netdev),
 				IWD_DEVICE_INTERFACE, "State");
 }
 
@@ -1503,7 +1498,7 @@ static void device_netdev_notify(struct netdev *netdev,
 	switch (event) {
 	case NETDEV_WATCH_EVENT_UP:
 		device->powered = true;
-		l_dbus_property_changed(dbus, device_get_path(device),
+		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
 					IWD_DEVICE_INTERFACE, "Powered");
 
 		/* TODO: Remove when Device/Station split is done */
@@ -1536,15 +1531,15 @@ static void device_netdev_notify(struct netdev *netdev,
 
 		device_reset_connection_state(device);
 
-		l_dbus_property_changed(dbus, device_get_path(device),
+		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
 					IWD_DEVICE_INTERFACE, "Powered");
 		break;
 	case NETDEV_WATCH_EVENT_NAME_CHANGE:
-		l_dbus_property_changed(dbus, device_get_path(device),
+		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
 					IWD_DEVICE_INTERFACE, "Name");
 		break;
 	case NETDEV_WATCH_EVENT_ADDRESS_CHANGE:
-		l_dbus_property_changed(dbus, device_get_path(device),
+		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
 					IWD_DEVICE_INTERFACE, "Address");
 		break;
 	default:
@@ -1567,11 +1562,11 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 
 	l_queue_push_head(device_list, device);
 
-	if (!l_dbus_object_add_interface(dbus, device_get_path(device),
+	if (!l_dbus_object_add_interface(dbus, netdev_get_path(device->netdev),
 					IWD_DEVICE_INTERFACE, device))
 		l_info("Unable to register %s interface", IWD_DEVICE_INTERFACE);
 
-	if (!l_dbus_object_add_interface(dbus, device_get_path(device),
+	if (!l_dbus_object_add_interface(dbus, netdev_get_path(device->netdev),
 					L_DBUS_INTERFACE_PROPERTIES, device))
 		l_info("Unable to register %s interface",
 				L_DBUS_INTERFACE_PROPERTIES);
@@ -1613,13 +1608,13 @@ static void device_free(void *user)
 
 	if (device->signal_agent) {
 		device_signal_agent_release(device->signal_agent,
-						device_get_path(device));
+					netdev_get_path(device->netdev));
 		signal_agent_free(device->signal_agent);
 	}
 
 
 	dbus = dbus_get_bus();
-	l_dbus_unregister_object(dbus, device_get_path(device));
+	l_dbus_unregister_object(dbus, netdev_get_path(device->netdev));
 
 	scan_ifindex_remove(device->index);
 
