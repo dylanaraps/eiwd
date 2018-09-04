@@ -51,7 +51,6 @@ struct device {
 	uint32_t index;
 	struct l_dbus_message *scan_pending;
 	struct scan_bss *connected_bss;
-	struct network *connected_network;
 	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
 	uint8_t preauth_bssid[ETH_ALEN];
@@ -130,7 +129,7 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 
 struct network *device_get_connected_network(struct device *device)
 {
-	return device->connected_network;
+	return device->station->connected_network;
 }
 
 const char *device_get_path(struct device *device)
@@ -234,7 +233,7 @@ static void device_enter_state(struct device *device, enum station_state state)
 static void device_reset_connection_state(struct device *device)
 {
 	struct station *station = device->station;
-	struct network *network = device->connected_network;
+	struct network *network = station->connected_network;
 	struct l_dbus *dbus = dbus_get_bus();
 
 	if (!network)
@@ -249,7 +248,6 @@ static void device_reset_connection_state(struct device *device)
 
 	device->connected_bss = NULL;
 	station->connected_bss = NULL;
-	device->connected_network = NULL;
 	station->connected_network = NULL;
 
 	l_dbus_property_changed(dbus, device_get_path(device),
@@ -272,10 +270,12 @@ void device_disassociated(struct device *device)
 
 static void device_disconnect_event(struct device *device)
 {
+	struct station *station = device->station;
+
 	l_debug("%d", device->index);
 
 	if (device->connect_pending) {
-		struct network *network = device->connected_network;
+		struct network *network = station->connected_network;
 
 		dbus_pending_reply(&device->connect_pending,
 				dbus_error_failed(device->connect_pending));
@@ -358,7 +358,7 @@ static void device_preauthenticate_cb(struct netdev *netdev,
 {
 	struct device *device = user_data;
 	struct station *station = device->station;
-	struct network *connected = device_get_connected_network(device);
+	struct network *connected = station->connected_network;
 	struct scan_bss *bss;
 	struct handshake_state *new_hs;
 
@@ -419,10 +419,10 @@ static void device_preauthenticate_cb(struct netdev *netdev,
 
 void device_transition_start(struct device *device, struct scan_bss *bss)
 {
-	struct handshake_state *hs = netdev_get_handshake(device->netdev);
-	struct network *connected = device_get_connected_network(device);
-	enum security security = network_get_security(connected);
 	struct station *station = device->station;
+	struct handshake_state *hs = netdev_get_handshake(device->netdev);
+	struct network *connected = station->connected_network;
+	enum security security = network_get_security(connected);
 	uint16_t mdid;
 	struct handshake_state *new_hs;
 	struct ie_rsn_info cur_rsne, target_rsne;
@@ -520,6 +520,7 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 					void *user_data)
 {
 	struct device *device = user_data;
+	struct station *station = device->station;
 
 	l_debug("%d, result: %d", device->index, result);
 
@@ -545,14 +546,14 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 
 	if (result != NETDEV_RESULT_OK) {
 		if (result != NETDEV_RESULT_ABORTED) {
-			network_connect_failed(device->connected_network);
+			network_connect_failed(station->connected_network);
 			device_disassociated(device);
 		}
 
 		return;
 	}
 
-	network_connected(device->connected_network);
+	network_connected(station->connected_network);
 	device_enter_state(device, STATION_STATE_CONNECTED);
 }
 
@@ -665,7 +666,6 @@ int __device_connect_network(struct device *device, struct network *network,
 
 	device->connected_bss = bss;
 	station->connected_bss = bss;
-	device->connected_network = network;
 	station->connected_network = network;
 
 	device_enter_state(device, STATION_STATE_CONNECTING);
@@ -1163,11 +1163,13 @@ static bool device_property_get_connected_network(struct l_dbus *dbus,
 					void *user_data)
 {
 	struct device *device = user_data;
-	if (!device->connected_network)
+	struct station *station = device->station;
+
+	if (!station->connected_network)
 		return false;
 
 	l_dbus_message_builder_append_basic(builder, 'o',
-				network_get_path(device->connected_network));
+				network_get_path(station->connected_network));
 
 	return true;
 }
