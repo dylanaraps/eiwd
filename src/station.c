@@ -61,6 +61,15 @@ struct network *station_get_connected_network(struct station *station)
 	return station->connected_network;
 }
 
+bool station_is_busy(struct station *station)
+{
+	if (station->state != STATION_STATE_DISCONNECTED &&
+			station->state != STATION_STATE_AUTOCONNECT)
+		return true;
+
+	return false;
+}
+
 struct autoconnect_entry {
 	uint16_t rank;
 	struct network *network;
