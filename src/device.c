@@ -72,7 +72,6 @@ struct signal_agent {
 	unsigned int disconnect_watch;
 };
 
-static struct l_queue *device_list;
 static uint32_t netdev_watch;
 
 static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
@@ -1526,8 +1525,6 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	device->netdev = netdev;
 	device->autoconnect = true;
 
-	l_queue_push_head(device_list, device);
-
 	if (!l_dbus_object_add_interface(dbus, netdev_get_path(device->netdev),
 					IWD_DEVICE_INTERFACE, device))
 		l_info("Unable to register %s interface", IWD_DEVICE_INTERFACE);
@@ -1557,9 +1554,8 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	return device;
 }
 
-static void device_free(void *user)
+void device_remove(struct device *device)
 {
-	struct device *device = user;
 	struct l_dbus *dbus;
 
 	l_debug("");
@@ -1589,14 +1585,6 @@ static void device_free(void *user)
 	l_free(device);
 }
 
-void device_remove(struct device *device)
-{
-	if (!l_queue_remove(device_list, device))
-		return;
-
-	device_free(device);
-}
-
 bool device_init(void)
 {
 	if (!l_dbus_register_interface(dbus_get_bus(),
@@ -1606,18 +1594,12 @@ bool device_init(void)
 		return false;
 
 	netdev_watch = netdev_watch_add(device_netdev_notify, NULL, NULL);
-	device_list = l_queue_new();
 
 	return true;
 }
 
 void device_exit(void)
 {
-	if (!l_queue_isempty(device_list))
-		l_warn("device_list isn't empty!");
-
-	l_queue_destroy(device_list, device_free);
-	device_list = NULL;
 	netdev_watch_remove(netdev_watch);
 
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_DEVICE_INTERFACE);
