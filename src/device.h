@@ -22,7 +22,6 @@
 
 #include <stdbool.h>
 
-enum security;
 struct scan_bss;
 struct wiphy;
 struct netdev;
@@ -35,8 +34,6 @@ void device_disassociated(struct device *device);
 void device_transition_start(struct device *device, struct scan_bss *bss);
 void device_set_scan_results(struct device *device, struct l_queue *bss_list,
 				bool add_to_autoconnect);
-struct network *device_network_find(struct device *device, const char *ssid,
-					enum security security);
 
 bool device_set_autoconnect(struct device *device, bool autoconnect);
 int __device_connect_network(struct device *device, struct network *network,

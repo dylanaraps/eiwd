@@ -120,7 +120,7 @@ static void wsc_try_credentials(struct wsc *wsc)
 	struct scan_bss *bss;
 
 	for (i = 0; i < wsc->n_creds; i++) {
-		network = device_network_find(device,
+		network = station_network_find(wsc->station,
 						wsc->creds[i].ssid,
 						wsc->creds[i].security);
 		if (!network)

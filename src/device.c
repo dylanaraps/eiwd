@@ -158,12 +158,6 @@ static void periodic_scan_stop(struct device *device)
 	}
 }
 
-struct network *device_network_find(struct device *device, const char *ssid,
-					enum security security)
-{
-	return station_network_find(device->station, ssid, security);
-}
-
 static void device_enter_state(struct device *device, enum station_state state)
 {
 	struct station *station = device->station;
@@ -993,6 +987,7 @@ static bool device_hidden_network_scan_results(uint32_t wiphy_id,
 						void *userdata)
 {
 	struct device *device = userdata;
+	struct station *station = device->station;
 	struct network *network_psk;
 	struct network *network_open;
 	struct network *network;
@@ -1035,8 +1030,8 @@ next:
 
 	l_queue_destroy(bss_list, NULL);
 
-	network_psk = device_network_find(device, ssid, SECURITY_PSK);
-	network_open = device_network_find(device, ssid, SECURITY_NONE);
+	network_psk = station_network_find(station, ssid, SECURITY_PSK);
+	network_open = station_network_find(station, ssid, SECURITY_NONE);
 
 	if (!network_psk && !network_open) {
 		dbus_pending_reply(&msg, dbus_error_not_found(msg));
@@ -1061,6 +1056,7 @@ static struct l_dbus_message *device_connect_hidden_network(struct l_dbus *dbus,
 						void *user_data)
 {
 	struct device *device = user_data;
+	struct station *station = device->station;
 	const char *ssid;
 	struct scan_parameters params = {
 		.flush = true,
@@ -1085,8 +1081,8 @@ static struct l_dbus_message *device_connect_hidden_network(struct l_dbus *dbus,
 			known_networks_find(ssid, SECURITY_NONE))
 		return dbus_error_already_provisioned(message);
 
-	if (device_network_find(device, ssid, SECURITY_PSK) ||
-			device_network_find(device, ssid, SECURITY_NONE))
+	if (station_network_find(station, ssid, SECURITY_PSK) ||
+			station_network_find(station, ssid, SECURITY_NONE))
 		return dbus_error_not_hidden(message);
 
 	params.ssid = ssid;
