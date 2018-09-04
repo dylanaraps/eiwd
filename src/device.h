@@ -28,8 +28,6 @@ struct netdev;
 struct network;
 struct device;
 
-bool device_is_busy(struct device *device);
-
 void device_disassociated(struct device *device);
 void device_transition_start(struct device *device, struct scan_bss *bss);
 void device_set_scan_results(struct device *device, struct l_queue *bss_list,

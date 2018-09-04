@@ -115,19 +115,12 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 }
 
 /* TODO: Remove when Station/Device is split */
-bool device_is_busy(struct device *device)
+static bool device_is_busy(struct device *device)
 {
-	enum station_state state;
-
 	if (!device->powered || !device->station)
 		return false;
 
-	state = station_get_state(device->station);
-	if (state != STATION_STATE_DISCONNECTED &&
-			state != STATION_STATE_AUTOCONNECT)
-		return true;
-
-	return false;
+	return station_is_busy(device->station);
 }
 
 static void periodic_scan_trigger(int err, void *user_data)
