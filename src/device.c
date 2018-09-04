@@ -78,16 +78,11 @@ static uint32_t netdev_watch;
 static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 					void *user_data);
 
-void device_set_scan_results(struct device *device, struct l_queue *bss_list,
-					bool add_to_autoconnect)
-{
-	station_set_scan_results(device->station, bss_list, add_to_autoconnect);
-}
-
 static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 				struct l_queue *bss_list, void *userdata)
 {
 	struct device *device = userdata;
+	struct station *station = device->station;
 	struct l_dbus *dbus = dbus_get_bus();
 	bool autoconnect;
 
@@ -104,12 +99,11 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 	if (netdev_get_iftype(device->netdev) != NETDEV_IFTYPE_STATION)
 		return false;
 
-	autoconnect = station_get_state(device->station) ==
-						STATION_STATE_AUTOCONNECT;
-	device_set_scan_results(device, bss_list, autoconnect);
+	autoconnect = station_get_state(station) == STATION_STATE_AUTOCONNECT;
+	station_set_scan_results(station, bss_list, autoconnect);
 
 	if (autoconnect)
-		station_autoconnect_next(device->station);
+		station_autoconnect_next(station);
 
 	return true;
 }

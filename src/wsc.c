@@ -570,7 +570,6 @@ static bool push_button_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 					void *userdata)
 {
 	struct wsc *wsc = userdata;
-	struct device *device = netdev_get_device(wsc->netdev);
 	struct scan_bss *bss_2g;
 	struct scan_bss *bss_5g;
 	struct scan_bss *target;
@@ -673,7 +672,7 @@ static bool push_button_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 	}
 
 	wsc_cancel_scan(wsc);
-	device_set_scan_results(device, bss_list, false);
+	station_set_scan_results(wsc->station, bss_list, false);
 
 	l_debug("Found AP to connect to: %s",
 			util_address_to_string(target->addr));
@@ -730,7 +729,6 @@ static bool pin_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 	static const uint8_t wildcard_address[] =
 					{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 	struct wsc *wsc = userdata;
-	struct device *device = netdev_get_device(wsc->netdev);
 	struct scan_bss *target = NULL;
 	const struct l_queue_entry *bss_entry;
 	struct wsc_probe_response probe_response;
@@ -821,7 +819,7 @@ static bool pin_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 	}
 
 	wsc_cancel_scan(wsc);
-	device_set_scan_results(device, bss_list, false);
+	station_set_scan_results(wsc->station, bss_list, false);
 
 	l_debug("Found AP to connect to: %s",
 			util_address_to_string(target->addr));
