@@ -50,7 +50,6 @@
 struct device {
 	uint32_t index;
 	struct l_dbus_message *scan_pending;
-	struct scan_bss *connected_bss;
 	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
 	uint8_t preauth_bssid[ETH_ALEN];
@@ -246,7 +245,6 @@ static void device_reset_connection_state(struct device *device)
 
 	station_roam_state_clear(station);
 
-	device->connected_bss = NULL;
 	station->connected_bss = NULL;
 	station->connected_network = NULL;
 
@@ -330,7 +328,7 @@ static void device_transition_reassociate(struct device *device,
 {
 	struct station *station = device->station;
 
-	if (netdev_reassociate(device->netdev, bss, device->connected_bss,
+	if (netdev_reassociate(device->netdev, bss, station->connected_bss,
 				new_hs, device_netdev_event,
 				device_reassociate_cb, device) < 0) {
 		handshake_state_free(new_hs);
@@ -338,7 +336,6 @@ static void device_transition_reassociate(struct device *device,
 		return;
 	}
 
-	device->connected_bss = bss;
 	station->connected_bss = bss;
 	station->preparing_roam = false;
 	device_enter_state(device, STATION_STATE_ROAMING);
@@ -455,7 +452,6 @@ void device_transition_start(struct device *device, struct scan_bss *bss)
 			return;
 		}
 
-		device->connected_bss = bss;
 		station->connected_bss = bss;
 		station->preparing_roam = false;
 		device_enter_state(device, STATION_STATE_ROAMING);
@@ -474,7 +470,7 @@ void device_transition_start(struct device *device, struct scan_bss *bss)
 	 */
 	if (security == SECURITY_8021X &&
 			!station->roam_no_orig_ap &&
-			scan_bss_get_rsn_info(device->connected_bss,
+			scan_bss_get_rsn_info(station->connected_bss,
 						&cur_rsne) >= 0 &&
 			scan_bss_get_rsn_info(bss, &target_rsne) >= 0 &&
 			cur_rsne.preauthentication &&
@@ -664,7 +660,6 @@ int __device_connect_network(struct device *device, struct network *network,
 		return r;
 	}
 
-	device->connected_bss = bss;
 	station->connected_bss = bss;
 	station->connected_network = network;
 
@@ -728,6 +723,7 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 						void *user_data)
 {
 	struct device *device = user_data;
+	struct station *station = device->station;
 
 	l_debug("Scan called from DBus");
 
@@ -747,7 +743,7 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 	 * If we're not connected and no hidden networks are seen & configured,
 	 * use passive scanning to hide our MAC address
 	 */
-	if (!device->connected_bss &&
+	if (!station->connected_bss &&
 			!(device->station->seen_hidden_networks &&
 				known_networks_has_hidden())) {
 		if (!scan_passive(device->index, device_scan_triggered,
@@ -759,7 +755,7 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 		memset(&params, 0, sizeof(params));
 
 		/* If we're connected, HW cannot randomize our MAC */
-		if (!device->connected_bss)
+		if (!station->connected_bss)
 			params.randomize_mac_addr_hint = true;
 
 		if (!scan_active_full(device->index, &params,
