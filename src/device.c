@@ -114,11 +114,6 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 	return true;
 }
 
-struct network *device_get_connected_network(struct device *device)
-{
-	return device->station->connected_network;
-}
-
 /* TODO: Remove when Station/Device is split */
 bool device_is_busy(struct device *device)
 {

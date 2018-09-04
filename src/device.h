@@ -25,9 +25,9 @@
 struct scan_bss;
 struct wiphy;
 struct netdev;
+struct network;
 struct device;
 
-struct network *device_get_connected_network(struct device *device);
 bool device_is_busy(struct device *device);
 
 void device_disassociated(struct device *device);
