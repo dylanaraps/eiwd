@@ -1126,6 +1126,18 @@ void station_ok_rssi(struct station *station)
 	station->signal_low = false;
 }
 
+void station_foreach(station_foreach_func_t func, void *user_data)
+{
+	const struct l_queue_entry *entry;
+
+	for (entry = l_queue_get_entries(station_list); entry;
+					entry = entry->next) {
+		struct station *station = entry->data;
+
+		func(station, user_data);
+	}
+}
+
 struct station *station_find(uint32_t ifindex)
 {
 	const struct l_queue_entry *entry;

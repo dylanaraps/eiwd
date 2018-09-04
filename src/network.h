@@ -25,6 +25,7 @@
 
 enum security;
 struct device;
+struct station;
 struct network;
 struct scan_bss;
 

@@ -1291,12 +1291,12 @@ void network_rank_update(struct network *network, bool connected)
 	network->rank = rank;
 }
 
-static void emit_known_network_changed(struct device *device, void *user_data)
+static void emit_known_network_changed(struct station *station, void *user_data)
 {
 	struct network_info *info = user_data;
 	struct network *network;
 
-	network = device_network_find(device, info->ssid, info->type);
+	network = station_network_find(station, info->ssid, info->type);
 	if (!network)
 		return;
 
@@ -1319,7 +1319,7 @@ struct network_info *network_info_add_known(const char *ssid,
 	if (network) {
 		/* Promote network to is_known */
 		network->is_known = true;
-		__iwd_device_foreach(emit_known_network_changed, network);
+		station_foreach(emit_known_network_changed, network);
 		return network;
 	}
 
@@ -1331,12 +1331,13 @@ struct network_info *network_info_add_known(const char *ssid,
 	return network;
 }
 
-static void disconnect_no_longer_known(struct device *device, void *user_data)
+static void disconnect_no_longer_known(struct station *station, void *user_data)
 {
 	struct network_info *info = user_data;
+	struct device *device = netdev_get_device(station_get_netdev(station));
 	struct network *network;
 
-	network = device_get_connected_network(device);
+	network = station_get_connected_network(station);
 
 	if (network && network->info == info)
 		device_disconnect(device);
@@ -1346,8 +1347,8 @@ void network_info_forget_known(struct network_info *network)
 {
 	network->is_known = false;
 
-	__iwd_device_foreach(emit_known_network_changed, network);
-	__iwd_device_foreach(disconnect_no_longer_known, network);
+	station_foreach(emit_known_network_changed, network);
+	station_foreach(disconnect_no_longer_known, network);
 
 	/*
 	 * Network is no longer a Known Network, see if we still need to

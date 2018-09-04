@@ -24,6 +24,7 @@
 
 struct wiphy;
 struct netdev;
+struct station;
 enum security;
 struct scan_bss;
 struct network;
@@ -37,6 +38,7 @@ enum station_state {
 	STATION_STATE_ROAMING
 };
 
+typedef void (*station_foreach_func_t)(struct station *, void *data);
 typedef void (*station_state_watch_func_t)(enum station_state, void *userdata);
 typedef void (*station_destroy_func_t)(void *userdata);
 
@@ -108,5 +110,8 @@ void station_low_rssi(struct station *station);
 void station_ok_rssi(struct station *station);
 
 struct station *station_find(uint32_t ifindex);
+
+
+void station_foreach(station_foreach_func_t func, void *user_data);
 struct station *station_create(struct wiphy *wiphy, struct netdev *netdev);
 void station_free(struct station *station);

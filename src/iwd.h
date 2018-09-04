@@ -23,12 +23,6 @@
 #define uninitialized_var(x) x = x
 
 struct l_genl_family;
-struct device;
-struct station;
-
-typedef void (*iwd_device_foreach_func)(struct device *, void *data);
-
-void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data);
 
 const struct l_settings *iwd_get_config(void);
 

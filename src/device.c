@@ -78,18 +78,6 @@ static uint32_t netdev_watch;
 static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 					void *user_data);
 
-void __iwd_device_foreach(iwd_device_foreach_func func, void *user_data)
-{
-	const struct l_queue_entry *device_entry;
-
-	for (device_entry = l_queue_get_entries(device_list); device_entry;
-					device_entry = device_entry->next) {
-		struct device *device = device_entry->data;
-
-		func(device, user_data);
-	}
-}
-
 void device_set_scan_results(struct device *device, struct l_queue *bss_list,
 					bool add_to_autoconnect)
 {
