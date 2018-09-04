@@ -294,11 +294,6 @@ const char *network_get_ssid(const struct network *network)
 	return network->info->ssid;
 }
 
-struct device *network_get_device(const struct network *network)
-{
-	return network->device;
-}
-
 const char *network_get_path(const struct network *network)
 {
 	return network->object_path;

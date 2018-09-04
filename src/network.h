@@ -36,7 +36,6 @@ struct network *network_create(struct device *device, const char *ssid,
 				enum security security);
 
 const char *network_get_ssid(const struct network *network);
-struct device *network_get_device(const struct network *network);
 const char *network_get_path(const struct network *network);
 enum security network_get_security(const struct network *network);
 const uint8_t *network_get_psk(const struct network *network);
