@@ -30,8 +30,10 @@
 
 #include "src/dbus.h"
 #include "src/netdev.h"
+#include "src/watchlist.h"
 #include "src/device.h"
 #include "src/wiphy.h"
+#include "src/station.h"
 #include "src/scan.h"
 #include "src/ie.h"
 #include "src/wscutil.h"
@@ -50,7 +52,7 @@ static uint32_t netdev_watch = 0;
 
 struct wsc {
 	struct netdev *netdev;
-	struct device *device;	/* TODO: Should be Station */
+	struct station *station;
 	struct l_dbus_message *pending;
 	struct l_dbus_message *pending_cancel;
 	uint8_t *wsc_ies;
@@ -58,7 +60,7 @@ struct wsc {
 	struct l_timeout *walk_timer;
 	uint32_t scan_id;
 	struct scan_bss *target;
-	uint32_t device_state_watch;
+	uint32_t station_state_watch;
 	struct {
 		char ssid[33];
 		enum security security;
@@ -112,12 +114,13 @@ static struct l_dbus_message *wsc_error_time_expired(struct l_dbus_message *msg)
 }
 static void wsc_try_credentials(struct wsc *wsc)
 {
+	struct device *device = netdev_get_device(wsc->netdev);
 	unsigned int i;
 	struct network *network;
 	struct scan_bss *bss;
 
 	for (i = 0; i < wsc->n_creds; i++) {
-		network = device_network_find(wsc->device,
+		network = device_network_find(device,
 						wsc->creds[i].ssid,
 						wsc->creds[i].security);
 		if (!network)
@@ -135,7 +138,7 @@ static void wsc_try_credentials(struct wsc *wsc)
 				!network_set_psk(network, wsc->creds[i].psk))
 			continue;
 
-		device_connect_network(wsc->device, network, bss, wsc->pending);
+		device_connect_network(device, network, bss, wsc->pending);
 		l_dbus_message_unref(wsc->pending);
 		wsc->pending = NULL;
 
@@ -144,7 +147,7 @@ static void wsc_try_credentials(struct wsc *wsc)
 
 	dbus_pending_reply(&wsc->pending,
 					wsc_error_not_reachable(wsc->pending));
-	device_set_autoconnect(wsc->device, true);
+	device_set_autoconnect(device, true);
 done:
 	memset(wsc->creds, 0, sizeof(wsc->creds));
 	wsc->n_creds = 0;
@@ -189,6 +192,7 @@ static void wsc_disconnect_cb(struct netdev *netdev, bool success,
 							void *user_data)
 {
 	struct wsc *wsc = user_data;
+	struct device *device = netdev_get_device(wsc->netdev);
 	struct l_dbus_message *reply;
 
 	l_debug("%p, success: %d", wsc, success);
@@ -199,13 +203,14 @@ static void wsc_disconnect_cb(struct netdev *netdev, bool success,
 	l_dbus_message_set_arguments(reply, "");
 	dbus_pending_reply(&wsc->pending_cancel, reply);
 
-	device_set_autoconnect(wsc->device, true);
+	device_set_autoconnect(device, true);
 }
 
 static void wsc_connect_cb(struct netdev *netdev, enum netdev_result result,
 					void *user_data)
 {
 	struct wsc *wsc = user_data;
+	struct device *device = netdev_get_device(wsc->netdev);
 
 	l_debug("%d, result: %d", netdev_get_ifindex(wsc->netdev), result);
 
@@ -235,7 +240,7 @@ static void wsc_connect_cb(struct netdev *netdev, enum netdev_result result,
 		break;
 	}
 
-	device_set_autoconnect(wsc->device, true);
+	device_set_autoconnect(device, true);
 }
 
 static void wsc_credential_obtained(struct wsc *wsc,
@@ -469,23 +474,24 @@ static void wsc_connect(struct wsc *wsc)
 	wsc->wsc_association = true;
 }
 
-static void device_state_watch(enum device_state state, void *userdata)
+static void station_state_watch(enum station_state state, void *userdata)
 {
 	struct wsc *wsc = userdata;
 
-	if (state != DEVICE_STATE_DISCONNECTED)
+	if (state != STATION_STATE_DISCONNECTED)
 		return;
 
 	l_debug("%p", wsc);
 
-	device_remove_state_watch(wsc->device, wsc->device_state_watch);
-	wsc->device_state_watch = 0;
+	station_remove_state_watch(wsc->station, wsc->station_state_watch);
+	wsc->station_state_watch = 0;
 
 	wsc_connect(wsc);
 }
 
 static void wsc_check_can_connect(struct wsc *wsc, struct scan_bss *target)
 {
+	struct device *device = netdev_get_device(wsc->netdev);
 	l_debug("%p", wsc);
 
 	/*
@@ -493,27 +499,27 @@ static void wsc_check_can_connect(struct wsc *wsc, struct scan_bss *target)
 	 * be triggering any more scans while disconnecting / connecting
 	 */
 	wsc->target = target;
-	device_set_autoconnect(wsc->device, false);
+	device_set_autoconnect(device, false);
 
-	switch (device_get_state(wsc->device)) {
-	case DEVICE_STATE_DISCONNECTED:
+	switch (station_get_state(wsc->station)) {
+	case STATION_STATE_DISCONNECTED:
 		wsc_connect(wsc);
 		return;
-	case DEVICE_STATE_CONNECTING:
-	case DEVICE_STATE_CONNECTED:
-		if (device_disconnect(wsc->device) < 0)
+	case STATION_STATE_CONNECTING:
+	case STATION_STATE_CONNECTED:
+		if (device_disconnect(device) < 0)
 			goto error;
 
 		/* fall through */
-	case DEVICE_STATE_DISCONNECTING:
-		wsc->device_state_watch =
-			device_add_state_watch(wsc->device, device_state_watch,
-							wsc, NULL);
+	case STATION_STATE_DISCONNECTING:
+		wsc->station_state_watch =
+			station_add_state_watch(wsc->station,
+						station_state_watch,
+						wsc, NULL);
 		return;
-	case DEVICE_STATE_AUTOCONNECT:
-	case DEVICE_STATE_OFF:
-	case DEVICE_STATE_ROAMING:
-		l_warn("wsc_check_can_connect: invalid device state");
+	case STATION_STATE_AUTOCONNECT:
+	case STATION_STATE_ROAMING:
+		l_warn("wsc_check_can_connect: invalid station state");
 		break;
 	}
 error:
@@ -564,6 +570,7 @@ static bool push_button_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 					void *userdata)
 {
 	struct wsc *wsc = userdata;
+	struct device *device = netdev_get_device(wsc->netdev);
 	struct scan_bss *bss_2g;
 	struct scan_bss *bss_5g;
 	struct scan_bss *target;
@@ -666,7 +673,7 @@ static bool push_button_scan_results(uint32_t wiphy_id, uint32_t ifindex,
 	}
 
 	wsc_cancel_scan(wsc);
-	device_set_scan_results(wsc->device, bss_list, false);
+	device_set_scan_results(device, bss_list, false);
 
 	l_debug("Found AP to connect to: %s",
 			util_address_to_string(target->addr));
@@ -723,6 +730,7 @@ static bool pin_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 	static const uint8_t wildcard_address[] =
 					{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 	struct wsc *wsc = userdata;
+	struct device *device = netdev_get_device(wsc->netdev);
 	struct scan_bss *target = NULL;
 	const struct l_queue_entry *bss_entry;
 	struct wsc_probe_response probe_response;
@@ -813,7 +821,7 @@ static bool pin_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 	}
 
 	wsc_cancel_scan(wsc);
-	device_set_scan_results(wsc->device, bss_list, false);
+	device_set_scan_results(device, bss_list, false);
 
 	l_debug("Found AP to connect to: %s",
 			util_address_to_string(target->addr));
@@ -897,6 +905,10 @@ static struct l_dbus_message *wsc_push_button(struct l_dbus *dbus,
 	if (wsc->pending)
 		return dbus_error_busy(message);
 
+	wsc->station = station_find(netdev_get_ifindex(wsc->netdev));
+	if (!wsc->station)
+		return dbus_error_not_available(message);
+
 	if (!wsc_initiate_scan(wsc, WSC_DEVICE_PASSWORD_ID_PUSH_BUTTON,
 				push_button_scan_results))
 		return dbus_error_failed(message);
@@ -942,6 +954,10 @@ static struct l_dbus_message *wsc_start_pin(struct l_dbus *dbus,
 	if (wsc->pending)
 		return dbus_error_busy(message);
 
+	wsc->station = station_find(netdev_get_ifindex(wsc->netdev));
+	if (!wsc->station)
+		return dbus_error_not_available(message);
+
 	if (!l_dbus_message_get_arguments(message, "s", &pin))
 		return dbus_error_invalid_args(message);
 
@@ -976,9 +992,10 @@ static struct l_dbus_message *wsc_cancel(struct l_dbus *dbus,
 
 	wsc_cancel_scan(wsc);
 
-	if (wsc->device_state_watch) {
-		device_remove_state_watch(wsc->device, wsc->device_state_watch);
-		wsc->device_state_watch = 0;
+	if (wsc->station_state_watch) {
+		station_remove_state_watch(wsc->station,
+						wsc->station_state_watch);
+		wsc->station_state_watch = 0;
 		wsc->target = NULL;
 	}
 
@@ -1021,9 +1038,10 @@ static void wsc_free(void *userdata)
 
 	wsc_cancel_scan(wsc);
 
-	if (wsc->device_state_watch) {
-		device_remove_state_watch(wsc->device, wsc->device_state_watch);
-		wsc->device_state_watch = 0;
+	if (wsc->station_state_watch) {
+		station_remove_state_watch(wsc->station,
+						wsc->station_state_watch);
+		wsc->station_state_watch = 0;
 		wsc->target = NULL;
 	}
 
@@ -1048,7 +1066,6 @@ static void wsc_add_interface(struct netdev *netdev)
 
 	wsc = l_new(struct wsc, 1);
 	wsc->netdev = netdev;
-	wsc->device = netdev_get_device(netdev);
 
 	if (!l_dbus_object_add_interface(dbus, netdev_get_path(netdev),
 						IWD_WSC_INTERFACE,

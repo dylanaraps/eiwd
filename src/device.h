@@ -28,30 +28,10 @@ struct wiphy;
 struct netdev;
 struct device;
 
-enum device_state {
-	DEVICE_STATE_OFF = 0,		/* Interface down */
-	DEVICE_STATE_DISCONNECTED,	/* Disconnected, no auto-connect */
-	DEVICE_STATE_AUTOCONNECT,	/* Disconnected, try auto-connect */
-	DEVICE_STATE_CONNECTING,	/* Connecting */
-	DEVICE_STATE_CONNECTED,
-	DEVICE_STATE_DISCONNECTING,
-	DEVICE_STATE_ROAMING
-};
-
-typedef void (*device_state_watch_func_t)(enum device_state, void *userdata);
-typedef void (*device_destroy_func_t)(void *userdata);
-
 struct network *device_get_connected_network(struct device *device);
 const char *device_get_path(struct device *device);
 bool device_is_busy(struct device *device);
 struct wiphy *device_get_wiphy(struct device *device);
-enum device_state device_get_state(struct device *device);
-
-uint32_t device_add_state_watch(struct device *device,
-					device_state_watch_func_t func,
-					void *user_data,
-					device_destroy_func_t destroy);
-bool device_remove_state_watch(struct device *device, uint32_t id);
 
 void device_set_scan_results(struct device *device, struct l_queue *bss_list,
 				bool add_to_autoconnect);

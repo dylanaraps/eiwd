@@ -32,6 +32,7 @@
 #include "src/util.h"
 #include "src/iwd.h"
 #include "src/common.h"
+#include "src/watchlist.h"
 #include "src/scan.h"
 #include "src/netdev.h"
 #include "src/wiphy.h"
@@ -496,6 +497,52 @@ not_supported:
 	return NULL;
 }
 
+const char *station_state_to_string(enum station_state state)
+{
+	switch (state) {
+	case STATION_STATE_DISCONNECTED:
+		return "disconnected";
+	case STATION_STATE_AUTOCONNECT:
+		return "autoconnect";
+	case STATION_STATE_CONNECTING:
+		return "connecting";
+	case STATION_STATE_CONNECTED:
+		return "connected";
+	case STATION_STATE_DISCONNECTING:
+		return "disconnecting";
+	case STATION_STATE_ROAMING:
+		return "roaming";
+	}
+
+	return "invalid";
+}
+
+void station_enter_state(struct station *station, enum station_state state)
+{
+	station->state = state;
+
+	WATCHLIST_NOTIFY(&station->state_watches,
+					station_state_watch_func_t, state);
+}
+
+enum station_state station_get_state(struct station *station)
+{
+	return station->state;
+}
+
+uint32_t station_add_state_watch(struct station *station,
+					station_state_watch_func_t func,
+					void *user_data,
+					station_destroy_func_t destroy)
+{
+	return watchlist_add(&station->state_watches, func, user_data, destroy);
+}
+
+bool station_remove_state_watch(struct station *station, uint32_t id)
+{
+	return watchlist_remove(&station->state_watches, id);
+}
+
 struct station *station_find(uint32_t ifindex)
 {
 	const struct l_queue_entry *entry;
@@ -516,6 +563,7 @@ struct station *station_create(struct wiphy *wiphy, struct netdev *netdev)
 	struct station *station;
 
 	station = l_new(struct station, 1);
+	watchlist_init(&station->state_watches, NULL);
 
 	station->bss_list = l_queue_new();
 	station->networks = l_hashmap_new();
@@ -543,6 +591,8 @@ void station_free(struct station *station)
 	l_hashmap_destroy(station->networks, network_free);
 	l_queue_destroy(station->bss_list, bss_free);
 	l_queue_destroy(station->autoconnect_list, l_free);
+
+	watchlist_destroy(&station->state_watches);
 
 	l_free(station);
 }

@@ -28,7 +28,21 @@ enum security;
 struct scan_bss;
 struct network;
 
+enum station_state {
+	STATION_STATE_DISCONNECTED,	/* Disconnected, no auto-connect */
+	STATION_STATE_AUTOCONNECT,	/* Disconnected, try auto-connect */
+	STATION_STATE_CONNECTING,	/* Connecting */
+	STATION_STATE_CONNECTED,
+	STATION_STATE_DISCONNECTING,
+	STATION_STATE_ROAMING
+};
+
+typedef void (*station_state_watch_func_t)(enum station_state, void *userdata);
+typedef void (*station_destroy_func_t)(void *userdata);
+
 struct station {
+	enum station_state state;
+	struct watchlist state_watches;
 	struct scan_bss *connected_bss;
 	struct network *connected_network;
 	struct l_queue *autoconnect_list;
@@ -59,6 +73,15 @@ void station_set_scan_results(struct station *station, struct l_queue *bss_list,
 struct handshake_state *station_handshake_setup(struct station *station,
 						struct network *network,
 						struct scan_bss *bss);
+
+const char *station_state_to_string(enum station_state state);
+void station_enter_state(struct station *station, enum station_state state);
+enum station_state station_get_state(struct station *station);
+uint32_t station_add_state_watch(struct station *station,
+					station_state_watch_func_t func,
+					void *user_data,
+					station_destroy_func_t destroy);
+bool station_remove_state_watch(struct station *station, uint32_t id);
 
 struct station *station_find(uint32_t ifindex);
 struct station *station_create(struct wiphy *wiphy, struct netdev *netdev);
