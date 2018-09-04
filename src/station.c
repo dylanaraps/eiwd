@@ -46,6 +46,11 @@
 
 static struct l_queue *station_list;
 
+struct wiphy *station_get_wiphy(struct station *station)
+{
+	return station->wiphy;
+}
+
 struct autoconnect_entry {
 	uint16_t rank;
 	struct network *network;

@@ -65,6 +65,8 @@ struct station {
 	bool ap_directed_roaming : 1;
 };
 
+struct wiphy *station_get_wiphy(struct station *station);
+
 void station_autoconnect_next(struct station *station);
 void station_add_autoconnect_bss(struct station *station,
 					struct network *network,
