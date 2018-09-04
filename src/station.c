@@ -51,6 +51,11 @@ struct wiphy *station_get_wiphy(struct station *station)
 	return station->wiphy;
 }
 
+struct netdev *station_get_netdev(struct station *station)
+{
+	return station->netdev;
+}
+
 struct autoconnect_entry {
 	uint16_t rank;
 	struct network *network;

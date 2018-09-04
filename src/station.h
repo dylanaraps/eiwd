@@ -66,6 +66,7 @@ struct station {
 };
 
 struct wiphy *station_get_wiphy(struct station *station);
+struct netdev *station_get_netdev(struct station *station);
 
 void station_autoconnect_next(struct station *station);
 void station_add_autoconnect_bss(struct station *station,
