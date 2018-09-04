@@ -61,7 +61,7 @@ bool network_register(struct network *network, const char *path);
 void network_remove(struct network *network, int reason);
 
 int network_rank_compare(const void *a, const void *b, void *user);
-void network_rank_update(struct network *network);
+void network_rank_update(struct network *network, bool connected);
 
 void network_connect_new_hidden_network(struct network *network,
 						struct l_dbus_message *message);

@@ -125,8 +125,10 @@ static bool process_network(const void *key, void *data, void *user_data)
 	struct station *station = user_data;
 
 	if (!network_bss_list_isempty(network)) {
+		bool connected = network == station->connected_network;
+
 		/* Build the network list ordered by rank */
-		network_rank_update(network);
+		network_rank_update(network, connected);
 
 		l_queue_insert(station->networks_sorted, network,
 				network_rank_compare, NULL);

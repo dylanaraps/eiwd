@@ -1232,18 +1232,14 @@ int network_rank_compare(const void *a, const void *b, void *user)
 	return network->rank - new_network->rank;
 }
 
-void network_rank_update(struct network *network)
+void network_rank_update(struct network *network, bool connected)
 {
-	bool connected;
-	int rank;
-
 	/*
 	 * Theoretically there may be difference between the BSS selection
 	 * here and in network_bss_select but those should be rare cases.
 	 */
 	struct scan_bss *best_bss = l_queue_peek_head(network->bss_list);
-
-	connected = device_get_connected_network(network->device) == network;
+	int rank;
 
 	/*
 	 * The rank should separate networks into four groups that use
