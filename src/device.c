@@ -61,15 +61,6 @@ struct device {
 
 static uint32_t netdev_watch;
 
-/* TODO: Remove when Station/Device is split */
-static bool device_is_busy(struct device *device)
-{
-	if (!device->powered || !device->station)
-		return false;
-
-	return station_is_busy(device->station);
-}
-
 static void device_ap_roam_frame_event(struct netdev *netdev,
 		const struct mmpdu_header *hdr,
 		const void *body, size_t body_len,
@@ -447,10 +438,6 @@ static struct l_dbus_message *device_property_set_mode(struct l_dbus *dbus,
 		complete(dbus, message, NULL);
 		return NULL;
 	}
-
-	/* TODO: Special case, remove when Device/Station split is made */
-	if (iftype != NETDEV_IFTYPE_STATION && device_is_busy(device))
-		return dbus_error_busy(message);
 
 	cb_data = l_new(struct set_generic_cb_data, 1);
 	cb_data->device = device;
