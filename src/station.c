@@ -2196,6 +2196,13 @@ static void station_setup_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "ConnectHiddenNetwork", 0,
 				station_dbus_connect_hidden_network,
 				"", "s", "name");
+	l_dbus_interface_method(interface, "Disconnect", 0,
+				station_dbus_disconnect, "", "");
+	l_dbus_interface_method(interface, "GetOrderedNetworks", 0,
+				station_dbus_get_networks, "a(osns)", "",
+				"networks");
+	l_dbus_interface_method(interface, "Scan", 0,
+				station_dbus_scan, "", "");
 	l_dbus_interface_method(interface, "RegisterSignalLevelAgent", 0,
 				station_dbus_signal_agent_register,
 				"", "oan", "path", "levels");
