@@ -28,7 +28,6 @@ struct netdev;
 struct network;
 struct device;
 
-void device_disassociated(struct device *device);
 void device_transition_start(struct device *device, struct scan_bss *bss);
 
 int __device_connect_network(struct device *device, struct network *network,

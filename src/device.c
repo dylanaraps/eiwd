@@ -81,20 +81,6 @@ static bool device_is_busy(struct device *device)
 	return station_is_busy(device->station);
 }
 
-void device_disassociated(struct device *device)
-{
-	struct station *station = device->station;
-
-	l_debug("%d", device->index);
-
-	station_reset_connection_state(station);
-
-	station_enter_state(station, STATION_STATE_DISCONNECTED);
-
-	if (station->autoconnect)
-		station_enter_state(station, STATION_STATE_AUTOCONNECT);
-}
-
 static void device_disconnect_event(struct device *device)
 {
 	struct station *station = device->station;
@@ -110,7 +96,7 @@ static void device_disconnect_event(struct device *device)
 		network_connect_failed(network);
 	}
 
-	device_disassociated(device);
+	station_disassociated(station);
 }
 
 static void device_reassociate_cb(struct netdev *netdev,
@@ -372,7 +358,7 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 	if (result != NETDEV_RESULT_OK) {
 		if (result != NETDEV_RESULT_ABORTED) {
 			network_connect_failed(station->connected_network);
-			device_disassociated(device);
+			station_disassociated(station);
 		}
 
 		return;

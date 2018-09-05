@@ -108,7 +108,7 @@ void station_ap_directed_roam(struct station *station,
 void station_low_rssi(struct station *station);
 void station_ok_rssi(struct station *station);
 
-void station_reset_connection_state(struct station *station);
+void station_disassociated(struct station *station);
 
 struct l_dbus_message *station_dbus_connect_hidden_network(
 						struct l_dbus *dbus,

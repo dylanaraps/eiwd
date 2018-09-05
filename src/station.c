@@ -681,6 +681,42 @@ static void station_roam_state_clear(struct station *station)
 						station->roam_scan_id);
 }
 
+static void station_reset_connection_state(struct station *station)
+{
+	struct network *network = station->connected_network;
+	struct l_dbus *dbus = dbus_get_bus();
+
+	if (!network)
+		return;
+
+	if (station->state == STATION_STATE_CONNECTED ||
+			station->state == STATION_STATE_CONNECTING ||
+			station->state == STATION_STATE_ROAMING)
+		network_disconnected(network);
+
+	station_roam_state_clear(station);
+
+	station->connected_bss = NULL;
+	station->connected_network = NULL;
+
+	l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
+				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
+	l_dbus_property_changed(dbus, network_get_path(network),
+				IWD_NETWORK_INTERFACE, "Connected");
+}
+
+void station_disassociated(struct station *station)
+{
+	l_debug("%u", netdev_get_ifindex(station->netdev));
+
+	station_reset_connection_state(station);
+
+	station_enter_state(station, STATION_STATE_DISCONNECTED);
+
+	if (station->autoconnect)
+		station_enter_state(station, STATION_STATE_AUTOCONNECT);
+}
+
 static void station_roam_timeout_rearm(struct station *station, int seconds);
 
 void station_roamed(struct station *station)
@@ -696,7 +732,6 @@ void station_roamed(struct station *station)
 
 void station_roam_failed(struct station *station)
 {
-	struct device *device = netdev_get_device(station->netdev);
 	/*
 	 * If we're still connected to the old BSS, only clear preparing_roam
 	 * and reattempt in 60 seconds if signal level is still low at that
@@ -712,7 +747,7 @@ void station_roam_failed(struct station *station)
 	station->ap_directed_roaming = false;
 
 	if (station->state == STATION_STATE_ROAMING)
-		device_disassociated(device);
+		station_disassociated(station);
 	else if (station->signal_low)
 		station_roam_timeout_rearm(station, 60);
 }
@@ -1230,30 +1265,6 @@ void station_ok_rssi(struct station *station)
 	station->roam_trigger_timeout = NULL;
 
 	station->signal_low = false;
-}
-
-void station_reset_connection_state(struct station *station)
-{
-	struct network *network = station->connected_network;
-	struct l_dbus *dbus = dbus_get_bus();
-
-	if (!network)
-		return;
-
-	if (station->state == STATION_STATE_CONNECTED ||
-			station->state == STATION_STATE_CONNECTING ||
-			station->state == STATION_STATE_ROAMING)
-		network_disconnected(network);
-
-	station_roam_state_clear(station);
-
-	station->connected_bss = NULL;
-	station->connected_network = NULL;
-
-	l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
-				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
-	l_dbus_property_changed(dbus, network_get_path(network),
-				IWD_NETWORK_INTERFACE, "Connected");
 }
 
 static void station_hidden_network_scan_triggered(int err, void *user_data)
