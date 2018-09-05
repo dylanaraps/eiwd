@@ -526,27 +526,11 @@ static struct l_dbus_message *device_dbus_disconnect(struct l_dbus *dbus,
 {
 	struct device *device = user_data;
 	struct station *station = device->station;
-	int result;
 
-	l_debug("");
+	if (!device->powered || !device->station)
+		return dbus_error_not_available(message);
 
-	/*
-	 * Disconnect was triggered by the user, don't autoconnect. Wait for
-	 * the user's explicit instructions to scan and connect to the network
-	 */
-	station_set_autoconnect(station, false);
-
-	if (station->state == STATION_STATE_AUTOCONNECT ||
-			station->state == STATION_STATE_DISCONNECTED)
-		return l_dbus_message_new_method_return(message);
-
-	result = station_disconnect(station);
-	if (result < 0)
-		return dbus_error_from_errno(result, message);
-
-	station->disconnect_pending = l_dbus_message_ref(message);
-
-	return NULL;
+	return station_dbus_disconnect(dbus, message, station);
 }
 
 static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,

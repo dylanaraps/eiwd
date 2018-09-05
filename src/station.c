@@ -1436,6 +1436,34 @@ int station_disconnect(struct station *station)
 	return 0;
 }
 
+struct l_dbus_message *station_dbus_disconnect(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct station *station = user_data;
+	int result;
+
+	l_debug("");
+
+	/*
+	 * Disconnect was triggered by the user, don't autoconnect. Wait for
+	 * the user's explicit instructions to scan and connect to the network
+	 */
+	station_set_autoconnect(station, false);
+
+	if (station->state == STATION_STATE_AUTOCONNECT ||
+			station->state == STATION_STATE_DISCONNECTED)
+		return l_dbus_message_new_method_return(message);
+
+	result = station_disconnect(station);
+	if (result < 0)
+		return dbus_error_from_errno(result, message);
+
+	station->disconnect_pending = l_dbus_message_ref(message);
+
+	return NULL;
+}
+
 static void station_dbus_scan_triggered(int err, void *user_data)
 {
 	struct station *station = user_data;
