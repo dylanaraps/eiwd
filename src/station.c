@@ -47,6 +47,7 @@
 #include "src/station.h"
 
 static struct l_queue *station_list;
+static uint32_t netdev_watch;
 
 struct wiphy *station_get_wiphy(struct station *station)
 {
@@ -1628,6 +1629,7 @@ struct station *station_find(uint32_t ifindex)
 struct station *station_create(struct wiphy *wiphy, struct netdev *netdev)
 {
 	struct station *station;
+	struct l_dbus *dbus = dbus_get_bus();
 
 	station = l_new(struct station, 1);
 	watchlist_init(&station->state_watches, NULL);
@@ -1645,6 +1647,9 @@ struct station *station_create(struct wiphy *wiphy, struct netdev *netdev)
 	l_queue_push_head(station_list, station);
 
 	station_set_autoconnect(station, true);
+
+	l_dbus_object_add_interface(dbus, netdev_get_path(netdev),
+					IWD_STATION_INTERFACE, station);
 
 	return station;
 }
@@ -1682,14 +1687,54 @@ void station_free(struct station *station)
 	l_free(station);
 }
 
+static void station_setup_interface(struct l_dbus_interface *interface)
+{
+}
+
+static void station_destroy_interface(void *user_data)
+{
+	struct station *station = user_data;
+
+	station_free(station);
+}
+
+static void station_netdev_watch(struct netdev *netdev,
+				enum netdev_watch_event event, void *userdata)
+{
+	struct device *device = netdev_get_device(netdev);
+
+	if (!device)
+		return;
+
+	switch (event) {
+	case NETDEV_WATCH_EVENT_UP:
+	case NETDEV_WATCH_EVENT_NEW:
+		break;
+	case NETDEV_WATCH_EVENT_DOWN:
+	case NETDEV_WATCH_EVENT_DEL:
+		l_dbus_object_remove_interface(dbus_get_bus(),
+						netdev_get_path(netdev),
+						IWD_STATION_INTERFACE);
+		break;
+	default:
+		break;
+	}
+}
+
 bool station_init(void)
 {
 	station_list = l_queue_new();
+	netdev_watch = netdev_watch_add(station_netdev_watch, NULL, NULL);
+	l_dbus_register_interface(dbus_get_bus(), IWD_STATION_INTERFACE,
+					station_setup_interface,
+					station_destroy_interface, false);
 	return true;
 }
 
 void station_exit(void)
 {
+	l_dbus_unregister_interface(dbus_get_bus(), IWD_STATION_INTERFACE);
+	netdev_watch_remove(netdev_watch);
 	l_queue_destroy(station_list, NULL);
 	station_list = NULL;
 }
