@@ -1464,6 +1464,46 @@ struct l_dbus_message *station_dbus_disconnect(struct l_dbus *dbus,
 	return NULL;
 }
 
+struct l_dbus_message *station_dbus_get_networks(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct station *station = user_data;
+	struct l_dbus_message *reply;
+	struct l_dbus_message_builder *builder;
+	struct l_queue *sorted = station->networks_sorted;
+	const struct l_queue_entry *entry;
+
+	reply = l_dbus_message_new_method_return(message);
+	builder = l_dbus_message_builder_new(reply);
+
+	l_dbus_message_builder_enter_array(builder, "(osns)");
+
+	for (entry = l_queue_get_entries(sorted); entry; entry = entry->next) {
+		const struct network *network = entry->data;
+		enum security security = network_get_security(network);
+		int16_t signal_strength = network_get_signal_strength(network);
+
+		l_dbus_message_builder_enter_struct(builder, "osns");
+		l_dbus_message_builder_append_basic(builder, 'o',
+						network_get_path(network));
+		l_dbus_message_builder_append_basic(builder, 's',
+						network_get_ssid(network));
+		l_dbus_message_builder_append_basic(builder, 'n',
+							&signal_strength);
+		l_dbus_message_builder_append_basic(builder, 's',
+						security_to_str(security));
+		l_dbus_message_builder_leave_struct(builder);
+	}
+
+	l_dbus_message_builder_leave_array(builder);
+
+	l_dbus_message_builder_finalize(builder);
+	l_dbus_message_builder_destroy(builder);
+
+	return reply;
+}
+
 static void station_dbus_scan_triggered(int err, void *user_data)
 {
 	struct station *station = user_data;

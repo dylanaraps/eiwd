@@ -117,6 +117,9 @@ struct l_dbus_message *station_dbus_connect_hidden_network(
 struct l_dbus_message *station_dbus_disconnect(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data);
+struct l_dbus_message *station_dbus_get_networks(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data);
 struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data);
