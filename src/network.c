@@ -41,7 +41,6 @@
 #include "src/dbus.h"
 #include "src/agent.h"
 #include "src/netdev.h"
-#include "src/device.h"
 #include "src/wiphy.h"
 #include "src/watchlist.h"
 #include "src/station.h"
@@ -463,8 +462,6 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 {
 	struct station *station = network->station;
 	struct wiphy *wiphy = station_get_wiphy(station);
-	struct netdev *netdev = station_get_netdev(station);
-	struct device *device = netdev_get_device(netdev);
 	bool is_autoconnectable;
 	bool is_rsn;
 	int ret;
@@ -540,7 +537,7 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 			goto close_settings;
 	}
 
-	return __device_connect_network(device, network, bss);
+	return __station_connect_network(station, network, bss);
 
 close_settings:
 	network_settings_close(network);
@@ -635,8 +632,6 @@ static void passphrase_callback(enum agent_result result,
 {
 	struct network *network = user_data;
 	struct station *station = network->station;
-	struct netdev *netdev = station_get_netdev(station);
-	struct device *device = netdev_get_device(netdev);
 	struct scan_bss *bss;
 
 	l_debug("result %d", result);
@@ -686,7 +681,7 @@ static void passphrase_callback(enum agent_result result,
 	 */
 	network->update_psk = true;
 
-	device_connect_network(device, network, bss, message);
+	station_connect_network(station, network, bss, message);
 	l_dbus_message_unref(message);
 	return;
 
@@ -712,8 +707,6 @@ static struct l_dbus_message *network_connect_psk(struct network *network,
 					struct l_dbus_message *message)
 {
 	struct station *station = network->station;
-	struct netdev *netdev = station_get_netdev(station);
-	struct device *device = netdev_get_device(netdev);
 
 	l_debug("");
 
@@ -742,7 +735,7 @@ static struct l_dbus_message *network_connect_psk(struct network *network,
 		if (!network->agent_request)
 			return dbus_error_no_agent(message);
 	} else
-		device_connect_network(device, network, bss, message);
+		station_connect_network(station, network, bss, message);
 
 	return NULL;
 }
@@ -942,8 +935,6 @@ static struct l_dbus_message *network_connect_8021x(struct network *network,
 						struct l_dbus_message *message)
 {
 	struct station *station = network->station;
-	struct netdev *netdev = station_get_netdev(station);
-	struct device *device = netdev_get_device(netdev);
 	int r;
 	struct l_queue *missing_secrets = NULL;
 	struct l_dbus_message *reply;
@@ -976,7 +967,7 @@ static struct l_dbus_message *network_connect_8021x(struct network *network,
 			goto error;
 		}
 
-		device_connect_network(device, network, bss, message);
+		station_connect_network(station, network, bss, message);
 
 		return NULL;
 	}
@@ -1002,8 +993,6 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 {
 	struct network *network = user_data;
 	struct station *station = network->station;
-	struct netdev *netdev = station_get_netdev(station);
-	struct device *device = netdev_get_device(netdev);
 	struct scan_bss *bss;
 
 	l_debug("");
@@ -1026,7 +1015,7 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	case SECURITY_PSK:
 		return network_connect_psk(network, bss, message);
 	case SECURITY_NONE:
-		device_connect_network(device, network, bss, message);
+		station_connect_network(station, network, bss, message);
 		return NULL;
 	case SECURITY_8021X:
 		if (!network_settings_load(network))
@@ -1042,8 +1031,6 @@ void network_connect_new_hidden_network(struct network *network,
 						struct l_dbus_message *message)
 {
 	struct station *station = network->station;
-	struct netdev *netdev = station_get_netdev(station);
-	struct device *device = netdev_get_device(netdev);
 	struct scan_bss *bss;
 	struct l_dbus_message *error;
 
@@ -1071,7 +1058,7 @@ void network_connect_new_hidden_network(struct network *network,
 		error = network_connect_psk(network, bss, message);
 		break;
 	case SECURITY_NONE:
-		device_connect_network(device, network, bss, message);
+		station_connect_network(station, network, bss, message);
 		return;
 	default:
 		error = dbus_error_not_supported(message);

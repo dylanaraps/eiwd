@@ -22,18 +22,9 @@
 
 #include <stdbool.h>
 
-struct scan_bss;
 struct wiphy;
 struct netdev;
-struct network;
 struct device;
 
-void device_transition_start(struct device *device, struct scan_bss *bss);
-
-int __device_connect_network(struct device *device, struct network *network,
-				struct scan_bss *bss);
-void device_connect_network(struct device *device, struct network *network,
-				struct scan_bss *bss,
-				struct l_dbus_message *message);
 struct device *device_create(struct wiphy *wiphy, struct netdev *netdev);
 void device_remove(struct device *device);

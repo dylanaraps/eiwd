@@ -396,9 +396,9 @@ static void station_handshake_event(struct handshake_state *hs,
 	}
 }
 
-struct handshake_state *station_handshake_setup(struct station *station,
-						struct network *network,
-						struct scan_bss *bss)
+static struct handshake_state *station_handshake_setup(struct station *station,
+							struct network *network,
+							struct scan_bss *bss)
 {
 	enum security security = network_get_security(network);
 	struct wiphy *wiphy = station->wiphy;
@@ -597,7 +597,8 @@ const char *station_state_to_string(enum station_state state)
 	return "invalid";
 }
 
-void station_enter_state(struct station *station, enum station_state state)
+static void station_enter_state(struct station *station,
+						enum station_state state)
 {
 	uint32_t index = netdev_get_ifindex(station->netdev);
 	struct l_dbus *dbus = dbus_get_bus();
@@ -706,7 +707,7 @@ static void station_reset_connection_state(struct station *station)
 				IWD_NETWORK_INTERFACE, "Connected");
 }
 
-void station_disassociated(struct station *station)
+static void station_disassociated(struct station *station)
 {
 	l_debug("%u", netdev_get_ifindex(station->netdev));
 
@@ -718,7 +719,7 @@ void station_disassociated(struct station *station)
 		station_enter_state(station, STATION_STATE_AUTOCONNECT);
 }
 
-void station_disconnect_event(struct station *station)
+static void station_disconnect_event(struct station *station)
 {
 	l_debug("%u", netdev_get_ifindex(station->netdev));
 
@@ -736,7 +737,7 @@ void station_disconnect_event(struct station *station)
 
 static void station_roam_timeout_rearm(struct station *station, int seconds);
 
-void station_roamed(struct station *station)
+static void station_roamed(struct station *station)
 {
 	/*
 	 * New signal high/low notification should occur on the next
@@ -747,7 +748,7 @@ void station_roamed(struct station *station)
 	station->roam_no_orig_ap = false;
 }
 
-void station_roam_failed(struct station *station)
+static void station_roam_failed(struct station *station)
 {
 	/*
 	 * If we're still connected to the old BSS, only clear preparing_roam
@@ -767,6 +768,221 @@ void station_roam_failed(struct station *station)
 		station_disassociated(station);
 	else if (station->signal_low)
 		station_roam_timeout_rearm(station, 60);
+}
+
+static void station_reassociate_cb(struct netdev *netdev,
+					enum netdev_result result,
+					void *user_data)
+{
+	struct station *station = user_data;
+
+	l_debug("%u, result: %d", netdev_get_ifindex(station->netdev), result);
+
+	if (station->state != STATION_STATE_ROAMING)
+		return;
+
+	if (result == NETDEV_RESULT_OK) {
+		station_roamed(station);
+		station_enter_state(station, STATION_STATE_CONNECTED);
+	} else
+		station_roam_failed(station);
+}
+
+static void station_fast_transition_cb(struct netdev *netdev,
+					enum netdev_result result,
+					void *user_data)
+{
+	struct station *station = user_data;
+
+	l_debug("%u, result: %d", netdev_get_ifindex(station->netdev), result);
+
+	if (station->state != STATION_STATE_ROAMING)
+		return;
+
+	if (result == NETDEV_RESULT_OK) {
+		station_roamed(station);
+		station_enter_state(station, STATION_STATE_CONNECTED);
+	} else
+		station_roam_failed(station);
+}
+
+static void station_netdev_event(struct netdev *netdev, enum netdev_event event,
+					void *user_data);
+
+static void station_transition_reassociate(struct station *station,
+						struct scan_bss *bss,
+						struct handshake_state *new_hs)
+{
+	if (netdev_reassociate(station->netdev, bss, station->connected_bss,
+				new_hs, station_netdev_event,
+				station_reassociate_cb, station) < 0) {
+		handshake_state_free(new_hs);
+		station_roam_failed(station);
+		return;
+	}
+
+	station->connected_bss = bss;
+	station->preparing_roam = false;
+	station_enter_state(station, STATION_STATE_ROAMING);
+}
+
+static bool bss_match_bssid(const void *a, const void *b)
+{
+	const struct scan_bss *bss = a;
+	const uint8_t *bssid = b;
+
+	return !memcmp(bss->addr, bssid, sizeof(bss->addr));
+}
+
+static void station_preauthenticate_cb(struct netdev *netdev,
+					enum netdev_result result,
+					const uint8_t *pmk, void *user_data)
+{
+	struct station *station = user_data;
+	struct network *connected = station->connected_network;
+	struct scan_bss *bss;
+	struct handshake_state *new_hs;
+
+	l_debug("%u, result: %d", netdev_get_ifindex(station->netdev), result);
+
+	if (!station->preparing_roam || result == NETDEV_RESULT_ABORTED)
+		return;
+
+	bss = l_queue_find(station->bss_list, bss_match_bssid,
+				station->preauth_bssid);
+	if (!bss) {
+		l_error("Roam target BSS not found");
+		station_roam_failed(station);
+		return;
+	}
+
+	new_hs = station_handshake_setup(station, connected, bss);
+	if (!new_hs) {
+		l_error("station_handshake_setup failed");
+
+		station_roam_failed(station);
+		return;
+	}
+
+	if (result == NETDEV_RESULT_OK) {
+		uint8_t pmkid[16];
+		uint8_t rsne_buf[300];
+		struct ie_rsn_info rsn_info;
+
+		handshake_state_set_pmk(new_hs, pmk, 32);
+		handshake_state_set_authenticator_address(new_hs,
+					station->preauth_bssid);
+		handshake_state_set_supplicant_address(new_hs,
+					netdev_get_address(station->netdev));
+
+		/*
+		 * Rebuild the RSNE to include the negotiated PMKID.  Note
+		 * supplicant_ie can't be a WPA IE here, including because
+		 * the WPA IE doesn't have a capabilities field and
+		 * target_rsne->preauthentication would have been false in
+		 * station_transition_start.
+		 */
+		ie_parse_rsne_from_data(new_hs->supplicant_ie,
+					new_hs->supplicant_ie[1] + 2,
+					&rsn_info);
+
+		handshake_state_get_pmkid(new_hs, pmkid);
+
+		rsn_info.num_pmkids = 1;
+		rsn_info.pmkids = pmkid;
+
+		ie_build_rsne(&rsn_info, rsne_buf);
+		handshake_state_set_supplicant_rsn(new_hs, rsne_buf);
+	}
+
+	station_transition_reassociate(station, bss, new_hs);
+}
+
+static void station_transition_start(struct station *station,
+							struct scan_bss *bss)
+{
+	struct handshake_state *hs = netdev_get_handshake(station->netdev);
+	struct network *connected = station->connected_network;
+	enum security security = network_get_security(connected);
+	uint16_t mdid;
+	struct handshake_state *new_hs;
+	struct ie_rsn_info cur_rsne, target_rsne;
+
+	l_debug("%u, target %s", netdev_get_ifindex(station->netdev),
+			util_address_to_string(bss->addr));
+
+	/* Reset AP roam flag, at this point the roaming behaves the same */
+	station->ap_directed_roaming = false;
+
+	if (hs->mde)
+		ie_parse_mobility_domain_from_data(hs->mde, hs->mde[1] + 2,
+							&mdid, NULL, NULL);
+
+	/* Can we use Fast Transition? */
+	if (hs->mde && bss->mde_present && l_get_le16(bss->mde) == mdid) {
+		/*
+		 * There's no need to regenerate the RSNE because neither
+		 * the AKM nor cipher suite can change:
+		 *
+		 * 12.5.2: "If the FTO selects a pairwise cipher suite in
+		 * the RSNE that is different from the ones used in the
+		 * Initial mobility domain association, then the AP shall
+		 * reject the Authentication Request with status code 19
+		 * (i.e., Invalid Pairwise Cipher)."
+		 */
+		if (netdev_fast_transition(station->netdev, bss,
+					station_fast_transition_cb) < 0) {
+			station_roam_failed(station);
+			return;
+		}
+
+		station->connected_bss = bss;
+		station->preparing_roam = false;
+		station_enter_state(station, STATION_STATE_ROAMING);
+
+		return;
+	}
+
+	/* Non-FT transition */
+
+	/*
+	 * FT not available, we can try preauthentication if available.
+	 * 802.11-2012 section 11.5.9.2:
+	 * "A STA shall not use preauthentication within the same mobility
+	 * domain if AKM suite type 00-0F-AC:3 or 00-0F-AC:4 is used in
+	 * the current association."
+	 */
+	if (security == SECURITY_8021X &&
+			!station->roam_no_orig_ap &&
+			scan_bss_get_rsn_info(station->connected_bss,
+						&cur_rsne) >= 0 &&
+			scan_bss_get_rsn_info(bss, &target_rsne) >= 0 &&
+			cur_rsne.preauthentication &&
+			target_rsne.preauthentication) {
+		/*
+		 * Both the current and the target AP support
+		 * pre-authentication and we're using 8021x authentication so
+		 * attempt to pre-authenticate and reassociate afterwards.
+		 * If the pre-authentication fails or times out we simply
+		 * won't supply any PMKID when reassociating.
+		 * Remain in the preparing_roam state.
+		 */
+		memcpy(station->preauth_bssid, bss->addr, ETH_ALEN);
+
+		if (netdev_preauthenticate(station->netdev, bss,
+						station_preauthenticate_cb,
+						station) >= 0)
+			return;
+	}
+
+	new_hs = station_handshake_setup(station, connected, bss);
+	if (!new_hs) {
+		l_error("station_handshake_setup failed in reassociation");
+		station_roam_failed(station);
+		return;
+	}
+
+	station_transition_reassociate(station, bss, new_hs);
 }
 
 static void station_roam_scan_triggered(int err, void *user_data)
@@ -789,7 +1005,6 @@ static bool station_roam_scan_notify(uint32_t wiphy_id, uint32_t ifindex,
 					void *userdata)
 {
 	struct station *station = userdata;
-	struct device *device = netdev_get_device(station->netdev);
 	struct network *network = station->connected_network;
 	struct handshake_state *hs = netdev_get_handshake(station->netdev);
 	struct scan_bss *bss;
@@ -895,7 +1110,7 @@ next:
 		l_queue_push_tail(station->bss_list, best_bss);
 	}
 
-	device_transition_start(device, best_bss);
+	station_transition_start(station, best_bss);
 
 	return true;
 
@@ -1155,7 +1370,7 @@ static void station_roam_timeout_rearm(struct station *station, int seconds)
 								station, NULL);
 }
 
-void station_lost_beacon(struct station *station)
+static void station_lost_beacon(struct station *station)
 {
 	l_debug("%d", netdev_get_ifindex(station->netdev));
 
@@ -1261,7 +1476,7 @@ format_error:
 	l_debug("bad AP roam frame formatting");
 }
 
-void station_low_rssi(struct station *station)
+static void station_low_rssi(struct station *station)
 {
 	if (station->signal_low)
 		return;
@@ -1276,12 +1491,135 @@ void station_low_rssi(struct station *station)
 	station_roam_timeout_rearm(station, 5);
 }
 
-void station_ok_rssi(struct station *station)
+static void station_ok_rssi(struct station *station)
 {
 	l_timeout_remove(station->roam_trigger_timeout);
 	station->roam_trigger_timeout = NULL;
 
 	station->signal_low = false;
+}
+
+static void station_netdev_event(struct netdev *netdev, enum netdev_event event,
+					void *user_data)
+{
+	struct station *station = user_data;
+
+	switch (event) {
+	case NETDEV_EVENT_AUTHENTICATING:
+		l_debug("Authenticating");
+		break;
+	case NETDEV_EVENT_ASSOCIATING:
+		l_debug("Associating");
+		break;
+	case NETDEV_EVENT_LOST_BEACON:
+		station_lost_beacon(station);
+		break;
+	case NETDEV_EVENT_DISCONNECT_BY_AP:
+	case NETDEV_EVENT_DISCONNECT_BY_SME:
+		station_disconnect_event(station);
+		break;
+	case NETDEV_EVENT_RSSI_THRESHOLD_LOW:
+		station_low_rssi(station);
+		break;
+	case NETDEV_EVENT_RSSI_THRESHOLD_HIGH:
+		station_ok_rssi(station);
+		break;
+	case NETDEV_EVENT_RSSI_LEVEL_NOTIFY:
+		station_rssi_level_changed(station);
+		break;
+	};
+}
+
+static void station_connect_cb(struct netdev *netdev, enum netdev_result result,
+					void *user_data)
+{
+	struct station *station = user_data;
+
+	l_debug("%u, result: %d", netdev_get_ifindex(station->netdev), result);
+
+	if (station->connect_pending) {
+		struct l_dbus_message *reply;
+
+		switch (result) {
+		case NETDEV_RESULT_ABORTED:
+			reply = dbus_error_aborted(station->connect_pending);
+			break;
+		case NETDEV_RESULT_OK:
+			reply = l_dbus_message_new_method_return(
+						station->connect_pending);
+			l_dbus_message_set_arguments(reply, "");
+			break;
+		default:
+			reply = dbus_error_failed(station->connect_pending);
+			break;
+		}
+
+		dbus_pending_reply(&station->connect_pending, reply);
+	}
+
+	if (result != NETDEV_RESULT_OK) {
+		if (result != NETDEV_RESULT_ABORTED) {
+			network_connect_failed(station->connected_network);
+			station_disassociated(station);
+		}
+
+		return;
+	}
+
+	network_connected(station->connected_network);
+	station_enter_state(station, STATION_STATE_CONNECTED);
+}
+
+int __station_connect_network(struct station *station, struct network *network,
+				struct scan_bss *bss)
+{
+	struct l_dbus *dbus = dbus_get_bus();
+	struct netdev *netdev = station->netdev;
+	struct handshake_state *hs;
+	int r;
+
+	if (station_is_busy(station))
+		return -EBUSY;
+
+	hs = station_handshake_setup(station, network, bss);
+	if (!hs)
+		return -ENOTSUP;
+
+	r = netdev_connect(station->netdev, bss, hs, station_netdev_event,
+					station_connect_cb, station);
+	if (r < 0) {
+		handshake_state_free(hs);
+		return r;
+	}
+
+	station->connected_bss = bss;
+	station->connected_network = network;
+
+	station_enter_state(station, STATION_STATE_CONNECTING);
+
+	l_dbus_property_changed(dbus, netdev_get_path(netdev),
+				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
+	l_dbus_property_changed(dbus, network_get_path(network),
+				IWD_NETWORK_INTERFACE, "Connected");
+
+	return 0;
+}
+
+void station_connect_network(struct station *station, struct network *network,
+				struct scan_bss *bss,
+				struct l_dbus_message *message)
+{
+	int err = __station_connect_network(station, network, bss);
+
+	if (err < 0) {
+		struct l_dbus *dbus = dbus_get_bus();
+
+		l_dbus_send(dbus, dbus_error_from_errno(err, message));
+		return;
+	}
+
+	station->connect_pending = l_dbus_message_ref(message);
+	station->autoconnect = true;
 }
 
 static void station_hidden_network_scan_triggered(int err, void *user_data)

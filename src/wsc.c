@@ -31,7 +31,6 @@
 #include "src/dbus.h"
 #include "src/netdev.h"
 #include "src/watchlist.h"
-#include "src/device.h"
 #include "src/wiphy.h"
 #include "src/station.h"
 #include "src/scan.h"
@@ -114,7 +113,6 @@ static struct l_dbus_message *wsc_error_time_expired(struct l_dbus_message *msg)
 }
 static void wsc_try_credentials(struct wsc *wsc)
 {
-	struct device *device = netdev_get_device(wsc->netdev);
 	unsigned int i;
 	struct network *network;
 	struct scan_bss *bss;
@@ -138,7 +136,8 @@ static void wsc_try_credentials(struct wsc *wsc)
 				!network_set_psk(network, wsc->creds[i].psk))
 			continue;
 
-		device_connect_network(device, network, bss, wsc->pending);
+		station_connect_network(wsc->station, network, bss,
+								wsc->pending);
 		l_dbus_message_unref(wsc->pending);
 		wsc->pending = NULL;
 

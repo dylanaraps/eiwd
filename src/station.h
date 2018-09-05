@@ -60,6 +60,7 @@ struct station {
 	struct timespec roam_min_time;
 	struct l_timeout *roam_trigger_timeout;
 	uint32_t roam_scan_id;
+	uint8_t preauth_bssid[6];
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
@@ -84,12 +85,7 @@ struct network *station_network_find(struct station *station, const char *ssid,
 void station_set_scan_results(struct station *station, struct l_queue *bss_list,
 				bool add_to_autoconnect);
 
-struct handshake_state *station_handshake_setup(struct station *station,
-						struct network *network,
-						struct scan_bss *bss);
-
 const char *station_state_to_string(enum station_state state);
-void station_enter_state(struct station *station, enum station_state state);
 enum station_state station_get_state(struct station *station);
 uint32_t station_add_state_watch(struct station *station,
 					station_state_watch_func_t func,
@@ -99,18 +95,9 @@ bool station_remove_state_watch(struct station *station, uint32_t id);
 
 bool station_set_autoconnect(struct station *station, bool autoconnect);
 
-void station_roam_failed(struct station *station);
-void station_roamed(struct station *station);
-void station_lost_beacon(struct station *station);
 void station_ap_directed_roam(struct station *station,
 				const struct mmpdu_header *hdr,
 				const void *body, size_t body_len);
-
-void station_low_rssi(struct station *station);
-void station_ok_rssi(struct station *station);
-
-void station_disassociated(struct station *station);
-void station_disconnect_event(struct station *station);
 
 struct l_dbus_message *station_dbus_connect_hidden_network(
 						struct l_dbus *dbus,
@@ -126,6 +113,11 @@ struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data);
 
+int __station_connect_network(struct station *station, struct network *network,
+				struct scan_bss *bss);
+void station_connect_network(struct station *station, struct network *network,
+				struct scan_bss *bss,
+				struct l_dbus_message *message);
 int station_disconnect(struct station *station);
 
 void station_rssi_level_changed(struct station *station);
