@@ -758,7 +758,7 @@ static void station_roam_failed(struct station *station)
 	 * are now disconnected.
 	 */
 
-	l_debug("%d", netdev_get_ifindex(station->netdev));
+	l_debug("%u", netdev_get_ifindex(station->netdev));
 
 	station->preparing_roam = false;
 	station->roam_no_orig_ap = false;
@@ -1323,7 +1323,7 @@ static void station_roam_trigger_cb(struct l_timeout *timeout, void *user_data)
 {
 	struct station *station = user_data;
 
-	l_debug("%d", netdev_get_ifindex(station->netdev));
+	l_debug("%u", netdev_get_ifindex(station->netdev));
 
 	l_timeout_remove(station->roam_trigger_timeout);
 	station->roam_trigger_timeout = NULL;
@@ -1372,7 +1372,7 @@ static void station_roam_timeout_rearm(struct station *station, int seconds)
 
 static void station_lost_beacon(struct station *station)
 {
-	l_debug("%d", netdev_get_ifindex(station->netdev));
+	l_debug("%u", netdev_get_ifindex(station->netdev));
 
 	if (station->state != STATION_STATE_ROAMING &&
 			station->state != STATION_STATE_CONNECTED)
