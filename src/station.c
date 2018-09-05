@@ -201,7 +201,7 @@ struct network *station_network_find(struct station *station, const char *ssid,
 /*
  * Returns the network object the BSS was added to or NULL if ignored.
  */
-struct network *station_add_seen_bss(struct station *station,
+static struct network *station_add_seen_bss(struct station *station,
 						struct scan_bss *bss)
 {
 	struct network *network;
@@ -1256,6 +1256,133 @@ void station_reset_connection_state(struct station *station)
 				IWD_NETWORK_INTERFACE, "Connected");
 }
 
+static void station_hidden_network_scan_triggered(int err, void *user_data)
+{
+	struct station *station = user_data;
+
+	l_debug("");
+
+	if (!err)
+		return;
+
+	dbus_pending_reply(&station->connect_pending,
+				dbus_error_failed(station->connect_pending));
+}
+
+static bool station_hidden_network_scan_results(uint32_t wiphy_id,
+						uint32_t ifindex, int err,
+						struct l_queue *bss_list,
+						void *userdata)
+{
+	struct station *station = userdata;
+	struct network *network_psk;
+	struct network *network_open;
+	struct network *network;
+	const char *ssid;
+	uint8_t ssid_len;
+	struct l_dbus_message *msg;
+	struct scan_bss *bss;
+
+	l_debug("");
+
+	msg = station->connect_pending;
+	station->connect_pending = NULL;
+
+	if (err) {
+		dbus_pending_reply(&msg, dbus_error_failed(msg));
+		return false;
+	}
+
+	if (!l_dbus_message_get_arguments(msg, "s", &ssid)) {
+		dbus_pending_reply(&msg, dbus_error_invalid_args(msg));
+		return false;
+	}
+
+	ssid_len = strlen(ssid);
+
+	while ((bss = l_queue_pop_head(bss_list))) {
+		if (bss->ssid_len != ssid_len ||
+					memcmp(bss->ssid, ssid, ssid_len))
+			goto next;
+
+		if (station_add_seen_bss(station, bss)) {
+			l_queue_push_tail(station->bss_list, bss);
+
+			continue;
+		}
+
+next:
+		scan_bss_free(bss);
+	}
+
+	l_queue_destroy(bss_list, NULL);
+
+	network_psk = station_network_find(station, ssid, SECURITY_PSK);
+	network_open = station_network_find(station, ssid, SECURITY_NONE);
+
+	if (!network_psk && !network_open) {
+		dbus_pending_reply(&msg, dbus_error_not_found(msg));
+		return true;
+	}
+
+	if (network_psk && network_open) {
+		dbus_pending_reply(&msg, dbus_error_service_set_overlap(msg));
+		return true;
+	}
+
+	network = network_psk ? : network_open;
+
+	network_connect_new_hidden_network(network, msg);
+	l_dbus_message_unref(msg);
+
+	return true;
+}
+
+struct l_dbus_message *station_dbus_connect_hidden_network(
+						struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct station *station = user_data;
+	uint32_t index = netdev_get_ifindex(station->netdev);
+	struct scan_parameters params = {
+		.flush = true,
+		.randomize_mac_addr_hint = true,
+	};
+	const char *ssid;
+
+	l_debug("");
+
+	if (station->connect_pending || station_is_busy(station))
+		return dbus_error_busy(message);
+
+	if (!l_dbus_message_get_arguments(message, "s", &ssid))
+		return dbus_error_invalid_args(message);
+
+	if (strlen(ssid) > 32)
+		return dbus_error_invalid_args(message);
+
+	if (known_networks_find(ssid, SECURITY_PSK) ||
+			known_networks_find(ssid, SECURITY_NONE))
+		return dbus_error_already_provisioned(message);
+
+	if (station_network_find(station, ssid, SECURITY_PSK) ||
+			station_network_find(station, ssid, SECURITY_NONE))
+		return dbus_error_not_hidden(message);
+
+	params.ssid = ssid;
+
+	if (!scan_active_full(index, &params,
+				station_hidden_network_scan_triggered,
+				station_hidden_network_scan_results,
+				station, NULL))
+		return dbus_error_failed(message);
+
+	station->connect_pending = l_dbus_message_ref(message);
+
+	return NULL;
+}
+
 static void station_dbus_scan_triggered(int err, void *user_data)
 {
 	struct station *station = user_data;
@@ -1382,6 +1509,10 @@ void station_free(struct station *station)
 		return;
 
 	periodic_scan_stop(station);
+
+	if (station->connect_pending)
+		dbus_pending_reply(&station->connect_pending,
+				dbus_error_aborted(station->connect_pending));
 
 	if (station->scan_pending)
 		dbus_pending_reply(&station->scan_pending,

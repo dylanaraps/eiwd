@@ -51,6 +51,7 @@ struct station {
 	struct l_queue *bss_list;
 	struct l_hashmap *networks;
 	struct l_queue *networks_sorted;
+	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *scan_pending;
 
 	/* Roaming related members */
@@ -77,9 +78,6 @@ bool station_is_busy(struct station *station);
 
 struct network *station_network_find(struct station *station, const char *ssid,
 					enum security security);
-
-struct network *station_add_seen_bss(struct station *station,
-						struct scan_bss *bss);
 
 void station_set_scan_results(struct station *station, struct l_queue *bss_list,
 				bool add_to_autoconnect);
@@ -111,6 +109,10 @@ void station_ok_rssi(struct station *station);
 
 void station_reset_connection_state(struct station *station);
 
+struct l_dbus_message *station_dbus_connect_hidden_network(
+						struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data);
 struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data);

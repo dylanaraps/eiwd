@@ -49,7 +49,6 @@
 
 struct device {
 	uint32_t index;
-	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
 	uint8_t preauth_bssid[ETH_ALEN];
 	struct signal_agent *signal_agent;
@@ -103,11 +102,11 @@ static void device_disconnect_event(struct device *device)
 
 	l_debug("%d", device->index);
 
-	if (device->connect_pending) {
+	if (station->connect_pending) {
 		struct network *network = station->connected_network;
 
-		dbus_pending_reply(&device->connect_pending,
-				dbus_error_failed(device->connect_pending));
+		dbus_pending_reply(&station->connect_pending,
+				dbus_error_failed(station->connect_pending));
 
 		network_connect_failed(network);
 	}
@@ -351,24 +350,24 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 
 	l_debug("%d, result: %d", device->index, result);
 
-	if (device->connect_pending) {
+	if (station->connect_pending) {
 		struct l_dbus_message *reply;
 
 		switch (result) {
 		case NETDEV_RESULT_ABORTED:
-			reply = dbus_error_aborted(device->connect_pending);
+			reply = dbus_error_aborted(station->connect_pending);
 			break;
 		case NETDEV_RESULT_OK:
 			reply = l_dbus_message_new_method_return(
-						device->connect_pending);
+						station->connect_pending);
 			l_dbus_message_set_arguments(reply, "");
 			break;
 		default:
-			reply = dbus_error_failed(device->connect_pending);
+			reply = dbus_error_failed(station->connect_pending);
 			break;
 		}
 
-		dbus_pending_reply(&device->connect_pending, reply);
+		dbus_pending_reply(&station->connect_pending, reply);
 	}
 
 	if (result != NETDEV_RESULT_OK) {
@@ -491,6 +490,7 @@ void device_connect_network(struct device *device, struct network *network,
 				struct scan_bss *bss,
 				struct l_dbus_message *message)
 {
+	struct station *station = device->station;
 	int err = __device_connect_network(device, network, bss);
 
 	if (err < 0) {
@@ -500,8 +500,8 @@ void device_connect_network(struct device *device, struct network *network,
 		return;
 	}
 
-	device->connect_pending = l_dbus_message_ref(message);
-	device->station->autoconnect = true;
+	station->connect_pending = l_dbus_message_ref(message);
+	station->autoconnect = true;
 }
 
 static struct l_dbus_message *device_scan(struct l_dbus *dbus,
@@ -754,134 +754,17 @@ static struct l_dbus_message *device_signal_agent_unregister(
 	return l_dbus_message_new_method_return(message);
 }
 
-static void device_hidden_network_scan_triggered(int err, void *user_data)
-{
-	struct device *device = user_data;
-
-	l_debug("");
-
-	if (!err)
-		return;
-
-	dbus_pending_reply(&device->connect_pending,
-				dbus_error_failed(device->connect_pending));
-}
-
-static bool device_hidden_network_scan_results(uint32_t wiphy_id,
-						uint32_t ifindex, int err,
-						struct l_queue *bss_list,
-						void *userdata)
-{
-	struct device *device = userdata;
-	struct station *station = device->station;
-	struct network *network_psk;
-	struct network *network_open;
-	struct network *network;
-	const char *ssid;
-	uint8_t ssid_len;
-	struct l_dbus_message *msg;
-	struct scan_bss *bss;
-
-	l_debug("");
-
-	msg = device->connect_pending;
-	device->connect_pending = NULL;
-
-	if (err) {
-		dbus_pending_reply(&msg, dbus_error_failed(msg));
-		return false;
-	}
-
-	if (!l_dbus_message_get_arguments(msg, "s", &ssid)) {
-		dbus_pending_reply(&msg, dbus_error_invalid_args(msg));
-		return false;
-	}
-
-	ssid_len = strlen(ssid);
-
-	while ((bss = l_queue_pop_head(bss_list))) {
-		if (bss->ssid_len != ssid_len ||
-					memcmp(bss->ssid, ssid, ssid_len))
-			goto next;
-
-		if (station_add_seen_bss(device->station, bss)) {
-			l_queue_push_tail(device->station->bss_list, bss);
-
-			continue;
-		}
-
-next:
-		scan_bss_free(bss);
-	}
-
-	l_queue_destroy(bss_list, NULL);
-
-	network_psk = station_network_find(station, ssid, SECURITY_PSK);
-	network_open = station_network_find(station, ssid, SECURITY_NONE);
-
-	if (!network_psk && !network_open) {
-		dbus_pending_reply(&msg, dbus_error_not_found(msg));
-		return true;
-	}
-
-	if (network_psk && network_open) {
-		dbus_pending_reply(&msg, dbus_error_service_set_overlap(msg));
-		return true;
-	}
-
-	network = network_psk ? : network_open;
-
-	network_connect_new_hidden_network(network, msg);
-	l_dbus_message_unref(msg);
-
-	return true;
-}
-
 static struct l_dbus_message *device_connect_hidden_network(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
 {
 	struct device *device = user_data;
 	struct station *station = device->station;
-	const char *ssid;
-	struct scan_parameters params = {
-		.flush = true,
-		.randomize_mac_addr_hint = true,
-	};
 
-	l_debug("");
+	if (!device->powered || !device->station)
+		return dbus_error_not_available(message);
 
-	if (!device->powered)
-		return dbus_error_failed(message);
-
-	if (device->connect_pending || device_is_busy(device))
-		return dbus_error_busy(message);
-
-	if (!l_dbus_message_get_arguments(message, "s", &ssid))
-		return dbus_error_invalid_args(message);
-
-	if (strlen(ssid) > 32)
-		return dbus_error_invalid_args(message);
-
-	if (known_networks_find(ssid, SECURITY_PSK) ||
-			known_networks_find(ssid, SECURITY_NONE))
-		return dbus_error_already_provisioned(message);
-
-	if (station_network_find(station, ssid, SECURITY_PSK) ||
-			station_network_find(station, ssid, SECURITY_NONE))
-		return dbus_error_not_hidden(message);
-
-	params.ssid = ssid;
-
-	if (!scan_active_full(device->index, &params,
-				device_hidden_network_scan_triggered,
-				device_hidden_network_scan_results,
-				device, NULL))
-		return dbus_error_failed(message);
-
-	device->connect_pending = l_dbus_message_ref(message);
-
-	return NULL;
+	return station_dbus_connect_hidden_network(dbus, message, station);
 }
 
 static bool device_property_get_name(struct l_dbus *dbus,
@@ -1286,10 +1169,6 @@ static void device_netdev_notify(struct netdev *netdev,
 
 		device->powered = false;
 
-		if (device->connect_pending)
-			dbus_pending_reply(&device->connect_pending,
-				dbus_error_aborted(device->connect_pending));
-
 		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
 					IWD_DEVICE_INTERFACE, "Powered");
 		break;
@@ -1350,10 +1229,6 @@ void device_remove(struct device *device)
 	struct l_dbus *dbus;
 
 	l_debug("");
-
-	if (device->connect_pending)
-		dbus_pending_reply(&device->connect_pending,
-				dbus_error_aborted(device->connect_pending));
 
 	if (device->signal_agent) {
 		device_signal_agent_release(device->signal_agent,
