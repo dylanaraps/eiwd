@@ -99,10 +99,6 @@ void station_ap_directed_roam(struct station *station,
 				const struct mmpdu_header *hdr,
 				const void *body, size_t body_len);
 
-struct l_dbus_message *station_dbus_connect_hidden_network(
-						struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data);
 struct l_dbus_message *station_dbus_disconnect(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data);

@@ -1704,7 +1704,7 @@ next:
 	return true;
 }
 
-struct l_dbus_message *station_dbus_connect_hidden_network(
+static struct l_dbus_message *station_dbus_connect_hidden_network(
 						struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -2193,6 +2193,9 @@ void station_free(struct station *station)
 
 static void station_setup_interface(struct l_dbus_interface *interface)
 {
+	l_dbus_interface_method(interface, "ConnectHiddenNetwork", 0,
+				station_dbus_connect_hidden_network,
+				"", "s", "name");
 	l_dbus_interface_method(interface, "RegisterSignalLevelAgent", 0,
 				station_dbus_signal_agent_register,
 				"", "oan", "path", "levels");

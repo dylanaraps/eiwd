@@ -115,19 +115,6 @@ static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
 	return station_dbus_get_networks(dbus, message, station);
 }
 
-static struct l_dbus_message *device_connect_hidden_network(struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data)
-{
-	struct device *device = user_data;
-	struct station *station = device->station;
-
-	if (!device->powered || !device->station)
-		return dbus_error_not_available(message);
-
-	return station_dbus_connect_hidden_network(dbus, message, station);
-}
-
 static bool device_property_get_name(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -464,8 +451,6 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "GetOrderedNetworks", 0,
 				device_get_networks, "a(osns)", "",
 				"networks");
-	l_dbus_interface_method(interface, "ConnectHiddenNetwork", 0,
-				device_connect_hidden_network, "", "s", "name");
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					device_property_get_name, NULL);
 	l_dbus_interface_property(interface, "Address", 0, "s",
