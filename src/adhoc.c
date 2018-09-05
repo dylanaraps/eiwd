@@ -526,7 +526,7 @@ static void adhoc_add_interface(struct netdev *netdev)
 	adhoc = l_new(struct adhoc_state, 1);
 	adhoc->netdev = netdev;
 
-	/* setup ap dbus interface */
+	/* setup adhoc dbus interface */
 	l_dbus_object_add_interface(dbus_get_bus(),
 			netdev_get_path(netdev), IWD_ADHOC_INTERFACE, adhoc);
 }
