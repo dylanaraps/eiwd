@@ -1599,6 +1599,166 @@ struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 	return NULL;
 }
 
+struct signal_agent {
+	char *owner;
+	char *path;
+	unsigned int disconnect_watch;
+};
+
+static void station_signal_agent_notify(struct signal_agent *agent,
+					const char *device_path, int level)
+{
+	struct l_dbus_message *msg;
+	uint8_t value = level;
+
+	msg = l_dbus_message_new_method_call(dbus_get_bus(),
+						agent->owner, agent->path,
+						IWD_SIGNAL_AGENT_INTERFACE,
+						"Changed");
+	l_dbus_message_set_arguments(msg, "oy", device_path, value);
+	l_dbus_message_set_no_reply(msg, true);
+
+	l_dbus_send(dbus_get_bus(), msg);
+}
+
+void station_rssi_level_changed(struct station *station)
+{
+	struct netdev *netdev = station->netdev;
+
+	if (!station->signal_agent)
+		return;
+
+	station_signal_agent_notify(station->signal_agent,
+					netdev_get_path(netdev),
+					netdev_get_rssi_level(netdev));
+}
+
+static void station_signal_agent_release(struct signal_agent *agent,
+						const char *device_path)
+{
+	struct l_dbus_message *msg;
+
+	msg = l_dbus_message_new_method_call(dbus_get_bus(),
+						agent->owner, agent->path,
+						IWD_SIGNAL_AGENT_INTERFACE,
+						"Release");
+	l_dbus_message_set_arguments(msg, "o", device_path);
+	l_dbus_message_set_no_reply(msg, true);
+
+	l_dbus_send(dbus_get_bus(), msg);
+}
+
+static void signal_agent_free(void *data)
+{
+	struct signal_agent *agent = data;
+
+	l_free(agent->owner);
+	l_free(agent->path);
+	l_dbus_remove_watch(dbus_get_bus(), agent->disconnect_watch);
+	l_free(agent);
+}
+
+static void signal_agent_disconnect(struct l_dbus *dbus, void *user_data)
+{
+	struct station *station = user_data;
+
+	l_debug("signal_agent %s disconnected", station->signal_agent->owner);
+
+	l_idle_oneshot(signal_agent_free, station->signal_agent, NULL);
+	station->signal_agent = NULL;
+
+	netdev_set_rssi_report_levels(station->netdev, NULL, 0);
+}
+
+static struct l_dbus_message *station_dbus_signal_agent_register(
+						struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct station *station = user_data;
+	const char *path, *sender;
+	struct l_dbus_message_iter level_iter;
+	int8_t levels[16];
+	int err;
+	int16_t val;
+	size_t count = 0;
+
+	if (station->signal_agent)
+		return dbus_error_already_exists(message);
+
+	l_debug("signal agent register called");
+
+	if (!l_dbus_message_get_arguments(message, "oan", &path, &level_iter))
+		return dbus_error_invalid_args(message);
+
+	while (l_dbus_message_iter_next_entry(&level_iter, &val)) {
+		if (count >= L_ARRAY_SIZE(levels) || val > 127 || val < -127)
+			return dbus_error_invalid_args(message);
+
+		levels[count++] = val;
+	}
+
+	if (count < 1)
+		return dbus_error_invalid_args(message);
+
+	err = netdev_set_rssi_report_levels(station->netdev, levels, count);
+	if (err == -ENOTSUP)
+		return dbus_error_not_supported(message);
+	else if (err < 0)
+		return dbus_error_failed(message);
+
+	sender = l_dbus_message_get_sender(message);
+
+	station->signal_agent = l_new(struct signal_agent, 1);
+	station->signal_agent->owner = l_strdup(sender);
+	station->signal_agent->path = l_strdup(path);
+	station->signal_agent->disconnect_watch =
+		l_dbus_add_disconnect_watch(dbus, sender,
+						signal_agent_disconnect,
+						station, NULL);
+
+	l_debug("agent %s path %s", sender, path);
+
+	/*
+	 * TODO: send an initial notification in a oneshot idle callback,
+	 * if state is connected.
+	 */
+
+	return l_dbus_message_new_method_return(message);
+}
+
+static struct l_dbus_message *station_dbus_signal_agent_unregister(
+						struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct station *station = user_data;
+	const char *path, *sender;
+
+	if (!station->signal_agent)
+		return dbus_error_failed(message);
+
+	l_debug("signal agent unregister");
+
+	if (!l_dbus_message_get_arguments(message, "o", &path))
+		return dbus_error_invalid_args(message);
+
+	if (strcmp(station->signal_agent->path, path))
+		return dbus_error_not_found(message);
+
+	sender = l_dbus_message_get_sender(message);
+
+	if (strcmp(station->signal_agent->owner, sender))
+		return dbus_error_not_found(message);
+
+	signal_agent_free(station->signal_agent);
+	station->signal_agent = NULL;
+
+	netdev_set_rssi_report_levels(station->netdev, NULL, 0);
+
+	return l_dbus_message_new_method_return(message);
+}
+
 void station_foreach(station_foreach_func_t func, void *user_data)
 {
 	const struct l_queue_entry *entry;
@@ -1663,6 +1823,12 @@ void station_free(struct station *station)
 
 	periodic_scan_stop(station);
 
+	if (station->signal_agent) {
+		station_signal_agent_release(station->signal_agent,
+					netdev_get_path(station->netdev));
+		signal_agent_free(station->signal_agent);
+	}
+
 	if (station->connect_pending)
 		dbus_pending_reply(&station->connect_pending,
 				dbus_error_aborted(station->connect_pending));
@@ -1689,6 +1855,12 @@ void station_free(struct station *station)
 
 static void station_setup_interface(struct l_dbus_interface *interface)
 {
+	l_dbus_interface_method(interface, "RegisterSignalLevelAgent", 0,
+				station_dbus_signal_agent_register,
+				"", "oan", "path", "levels");
+	l_dbus_interface_method(interface, "UnregisterSignalLevelAgent", 0,
+				station_dbus_signal_agent_unregister,
+				"", "o", "path");
 }
 
 static void station_destroy_interface(void *user_data)

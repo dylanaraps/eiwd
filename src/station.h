@@ -54,6 +54,7 @@ struct station {
 	struct l_dbus_message *connect_pending;
 	struct l_dbus_message *disconnect_pending;
 	struct l_dbus_message *scan_pending;
+	struct signal_agent *signal_agent;
 
 	/* Roaming related members */
 	struct timespec roam_min_time;
@@ -126,6 +127,8 @@ struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 						void *user_data);
 
 int station_disconnect(struct station *station);
+
+void station_rssi_level_changed(struct station *station);
 
 struct station *station_find(uint32_t ifindex);
 void station_foreach(station_foreach_func_t func, void *user_data);

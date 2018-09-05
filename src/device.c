@@ -50,7 +50,6 @@
 struct device {
 	uint32_t index;
 	uint8_t preauth_bssid[ETH_ALEN];
-	struct signal_agent *signal_agent;
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
@@ -59,12 +58,6 @@ struct device {
 	bool powered : 1;
 
 	uint32_t ap_roam_watch;
-};
-
-struct signal_agent {
-	char *owner;
-	char *path;
-	unsigned int disconnect_watch;
 };
 
 static uint32_t netdev_watch;
@@ -350,37 +343,6 @@ static void device_connect_cb(struct netdev *netdev, enum netdev_result result,
 	station_enter_state(station, STATION_STATE_CONNECTED);
 }
 
-static void device_signal_agent_notify(struct signal_agent *agent,
-					const char *device_path, int level)
-{
-	struct l_dbus_message *msg;
-	uint8_t value = level;
-
-	msg = l_dbus_message_new_method_call(dbus_get_bus(),
-						agent->owner, agent->path,
-						IWD_SIGNAL_AGENT_INTERFACE,
-						"Changed");
-	l_dbus_message_set_arguments(msg, "oy", device_path, value);
-	l_dbus_message_set_no_reply(msg, true);
-
-	l_dbus_send(dbus_get_bus(), msg);
-}
-
-static void device_signal_agent_release(struct signal_agent *agent,
-					const char *device_path)
-{
-	struct l_dbus_message *msg;
-
-	msg = l_dbus_message_new_method_call(dbus_get_bus(),
-						agent->owner, agent->path,
-						IWD_SIGNAL_AGENT_INTERFACE,
-						"Release");
-	l_dbus_message_set_arguments(msg, "o", device_path);
-	l_dbus_message_set_no_reply(msg, true);
-
-	l_dbus_send(dbus_get_bus(), msg);
-}
-
 static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 					void *user_data)
 {
@@ -408,11 +370,7 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 		station_ok_rssi(station);
 		break;
 	case NETDEV_EVENT_RSSI_LEVEL_NOTIFY:
-		if (device->signal_agent)
-			device_signal_agent_notify(device->signal_agent,
-					netdev_get_path(netdev),
-					netdev_get_rssi_level(netdev));
-
+		station_rssi_level_changed(station);
 		break;
 	};
 }
@@ -512,116 +470,6 @@ static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
 		return dbus_error_not_available(message);
 
 	return station_dbus_get_networks(dbus, message, station);
-}
-
-static void signal_agent_free(void *data)
-{
-	struct signal_agent *agent = data;
-
-	l_free(agent->owner);
-	l_free(agent->path);
-	l_dbus_remove_watch(dbus_get_bus(), agent->disconnect_watch);
-	l_free(agent);
-}
-
-static void signal_agent_disconnect(struct l_dbus *dbus, void *user_data)
-{
-	struct device *device = user_data;
-
-	l_debug("signal_agent %s disconnected", device->signal_agent->owner);
-
-	l_idle_oneshot(signal_agent_free, device->signal_agent, NULL);
-	device->signal_agent = NULL;
-
-	netdev_set_rssi_report_levels(device->netdev, NULL, 0);
-}
-
-static struct l_dbus_message *device_signal_agent_register(struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data)
-{
-	struct device *device = user_data;
-	const char *path, *sender;
-	struct l_dbus_message_iter level_iter;
-	int8_t levels[16];
-	int err;
-	int16_t val;
-	size_t count = 0;
-
-	if (device->signal_agent)
-		return dbus_error_already_exists(message);
-
-	l_debug("signal agent register called");
-
-	if (!l_dbus_message_get_arguments(message, "oan", &path, &level_iter))
-		return dbus_error_invalid_args(message);
-
-	while (l_dbus_message_iter_next_entry(&level_iter, &val)) {
-		if (count >= L_ARRAY_SIZE(levels) || val > 127 || val < -127)
-			return dbus_error_invalid_args(message);
-
-		levels[count++] = val;
-	}
-
-	if (count < 1)
-		return dbus_error_invalid_args(message);
-
-	err = netdev_set_rssi_report_levels(device->netdev, levels, count);
-	if (err == -ENOTSUP)
-		return dbus_error_not_supported(message);
-	else if (err < 0)
-		return dbus_error_failed(message);
-
-	sender = l_dbus_message_get_sender(message);
-
-	device->signal_agent = l_new(struct signal_agent, 1);
-	device->signal_agent->owner = l_strdup(sender);
-	device->signal_agent->path = l_strdup(path);
-	device->signal_agent->disconnect_watch =
-		l_dbus_add_disconnect_watch(dbus, sender,
-						signal_agent_disconnect,
-						device, NULL);
-
-	l_debug("agent %s path %s", sender, path);
-
-	/*
-	 * TODO: send an initial notification in a oneshot idle callback,
-	 * if state is connected.
-	 */
-
-	return l_dbus_message_new_method_return(message);
-}
-
-static struct l_dbus_message *device_signal_agent_unregister(
-						struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data)
-{
-	struct device *device = user_data;
-	const char *path, *sender;
-
-	if (!device->signal_agent)
-		return dbus_error_failed(message);
-
-	l_debug("signal agent unregister");
-
-	if (!l_dbus_message_get_arguments(message, "o", &path))
-		return dbus_error_invalid_args(message);
-
-	if (strcmp(device->signal_agent->path, path))
-		return dbus_error_not_found(message);
-
-	sender = l_dbus_message_get_sender(message);
-
-	if (strcmp(device->signal_agent->owner, sender))
-		return dbus_error_not_found(message);
-
-	signal_agent_free(device->signal_agent);
-	device->signal_agent = NULL;
-
-	netdev_set_rssi_report_levels(device->netdev, NULL, 0);
-
-	return l_dbus_message_new_method_return(message);
 }
 
 static struct l_dbus_message *device_connect_hidden_network(struct l_dbus *dbus,
@@ -977,12 +825,6 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "GetOrderedNetworks", 0,
 				device_get_networks, "a(osns)", "",
 				"networks");
-	l_dbus_interface_method(interface, "RegisterSignalLevelAgent", 0,
-				device_signal_agent_register,
-				"", "oan", "path", "levels");
-	l_dbus_interface_method(interface, "UnregisterSignalLevelAgent", 0,
-				device_signal_agent_unregister,
-				"", "o", "path");
 	l_dbus_interface_method(interface, "ConnectHiddenNetwork", 0,
 				device_connect_hidden_network, "", "s", "name");
 	l_dbus_interface_property(interface, "Name", 0, "s",
@@ -1096,18 +938,10 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 
 void device_remove(struct device *device)
 {
-	struct l_dbus *dbus;
+	struct l_dbus *dbus = dbus_get_bus();
 
 	l_debug("");
 
-	if (device->signal_agent) {
-		device_signal_agent_release(device->signal_agent,
-					netdev_get_path(device->netdev));
-		signal_agent_free(device->signal_agent);
-	}
-
-
-	dbus = dbus_get_bus();
 	l_dbus_unregister_object(dbus, netdev_get_path(device->netdev));
 
 	scan_ifindex_remove(device->index);
