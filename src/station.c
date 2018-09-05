@@ -2097,6 +2097,51 @@ static struct l_dbus_message *station_dbus_signal_agent_unregister(
 	return l_dbus_message_new_method_return(message);
 }
 
+static bool station_property_get_connected_network(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct station *station = user_data;
+
+	if (!station->connected_network)
+		return false;
+
+	l_dbus_message_builder_append_basic(builder, 'o',
+				network_get_path(station->connected_network));
+
+	return true;
+}
+
+static bool station_property_get_scanning(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct station *station = user_data;
+	bool scanning = station->scanning;
+
+	l_dbus_message_builder_append_basic(builder, 'b', &scanning);
+
+	return true;
+}
+
+static bool station_property_get_state(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct station *station = user_data;
+	const char *statestr = station_state_to_string(station->state);
+
+	/* Special case.  For now we treat AUTOCONNECT as disconnected */
+	if (station->state == STATION_STATE_AUTOCONNECT)
+		statestr = "disconnected";
+
+	l_dbus_message_builder_append_basic(builder, 's', statestr);
+	return true;
+}
+
 void station_foreach(station_foreach_func_t func, void *user_data)
 {
 	const struct l_queue_entry *entry;
@@ -2209,6 +2254,14 @@ static void station_setup_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "UnregisterSignalLevelAgent", 0,
 				station_dbus_signal_agent_unregister,
 				"", "o", "path");
+
+	l_dbus_interface_property(interface, "ConnectedNetwork", 0, "o",
+					station_property_get_connected_network,
+					NULL);
+	l_dbus_interface_property(interface, "Scanning", 0, "b",
+					station_property_get_scanning, NULL);
+	l_dbus_interface_property(interface, "State", 0, "s",
+					station_property_get_state, NULL);
 }
 
 static void station_destroy_interface(void *user_data)
