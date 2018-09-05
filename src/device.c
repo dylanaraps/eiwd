@@ -49,7 +49,6 @@
 
 struct device {
 	uint32_t index;
-	struct l_dbus_message *disconnect_pending;
 	uint8_t preauth_bssid[ETH_ALEN];
 	struct signal_agent *signal_agent;
 
@@ -521,60 +520,6 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 	return station_dbus_scan(dbus, message, station);
 }
 
-static void device_disconnect_cb(struct netdev *netdev, bool success,
-					void *user_data)
-{
-	struct device *device = user_data;
-	struct station *station = device->station;
-
-	l_debug("%d, success: %d", device->index, success);
-
-	if (device->disconnect_pending) {
-		struct l_dbus_message *reply;
-
-		if (success) {
-			reply = l_dbus_message_new_method_return(
-						device->disconnect_pending);
-			l_dbus_message_set_arguments(reply, "");
-		} else
-			reply = dbus_error_failed(device->disconnect_pending);
-
-
-		dbus_pending_reply(&device->disconnect_pending, reply);
-
-	}
-
-	station_enter_state(station, STATION_STATE_DISCONNECTED);
-
-	if (station->autoconnect)
-		station_enter_state(station, STATION_STATE_AUTOCONNECT);
-}
-
-int device_disconnect(struct device *device)
-{
-	struct station *station = device->station;
-
-	if (station->state == STATION_STATE_DISCONNECTING)
-		return -EBUSY;
-
-	if (!station->connected_bss)
-		return -ENOTCONN;
-
-	if (netdev_disconnect(device->netdev, device_disconnect_cb, device) < 0)
-		return -EIO;
-
-	/*
-	 * If the disconnect somehow fails we won't know if we're still
-	 * connected so we may as well indicate now that we're no longer
-	 * connected.
-	 */
-	station_reset_connection_state(station);
-
-	station_enter_state(station, STATION_STATE_DISCONNECTING);
-
-	return 0;
-}
-
 static struct l_dbus_message *device_dbus_disconnect(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -595,11 +540,11 @@ static struct l_dbus_message *device_dbus_disconnect(struct l_dbus *dbus,
 			station->state == STATION_STATE_DISCONNECTED)
 		return l_dbus_message_new_method_return(message);
 
-	result = device_disconnect(device);
+	result = station_disconnect(station);
 	if (result < 0)
 		return dbus_error_from_errno(result, message);
 
-	device->disconnect_pending = l_dbus_message_ref(message);
+	station->disconnect_pending = l_dbus_message_ref(message);
 
 	return NULL;
 }

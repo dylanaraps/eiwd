@@ -1383,6 +1383,59 @@ struct l_dbus_message *station_dbus_connect_hidden_network(
 	return NULL;
 }
 
+static void station_disconnect_cb(struct netdev *netdev, bool success,
+					void *user_data)
+{
+	struct station *station = user_data;
+
+	l_debug("%u, success: %d",
+			netdev_get_ifindex(station->netdev), success);
+
+	if (station->disconnect_pending) {
+		struct l_dbus_message *reply;
+
+		if (success) {
+			reply = l_dbus_message_new_method_return(
+						station->disconnect_pending);
+			l_dbus_message_set_arguments(reply, "");
+		} else
+			reply = dbus_error_failed(station->disconnect_pending);
+
+
+		dbus_pending_reply(&station->disconnect_pending, reply);
+
+	}
+
+	station_enter_state(station, STATION_STATE_DISCONNECTED);
+
+	if (station->autoconnect)
+		station_enter_state(station, STATION_STATE_AUTOCONNECT);
+}
+
+int station_disconnect(struct station *station)
+{
+	if (station->state == STATION_STATE_DISCONNECTING)
+		return -EBUSY;
+
+	if (!station->connected_bss)
+		return -ENOTCONN;
+
+	if (netdev_disconnect(station->netdev,
+					station_disconnect_cb, station) < 0)
+		return -EIO;
+
+	/*
+	 * If the disconnect somehow fails we won't know if we're still
+	 * connected so we may as well indicate now that we're no longer
+	 * connected.
+	 */
+	station_reset_connection_state(station);
+
+	station_enter_state(station, STATION_STATE_DISCONNECTING);
+
+	return 0;
+}
+
 static void station_dbus_scan_triggered(int err, void *user_data)
 {
 	struct station *station = user_data;
@@ -1513,6 +1566,10 @@ void station_free(struct station *station)
 	if (station->connect_pending)
 		dbus_pending_reply(&station->connect_pending,
 				dbus_error_aborted(station->connect_pending));
+
+	if (station->disconnect_pending)
+		dbus_pending_reply(&station->disconnect_pending,
+			dbus_error_aborted(station->disconnect_pending));
 
 	if (station->scan_pending)
 		dbus_pending_reply(&station->scan_pending,

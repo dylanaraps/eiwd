@@ -52,6 +52,7 @@ struct station {
 	struct l_hashmap *networks;
 	struct l_queue *networks_sorted;
 	struct l_dbus_message *connect_pending;
+	struct l_dbus_message *disconnect_pending;
 	struct l_dbus_message *scan_pending;
 
 	/* Roaming related members */
@@ -116,6 +117,8 @@ struct l_dbus_message *station_dbus_connect_hidden_network(
 struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data);
+
+int station_disconnect(struct station *station);
 
 struct station *station_find(uint32_t ifindex);
 void station_foreach(station_foreach_func_t func, void *user_data);

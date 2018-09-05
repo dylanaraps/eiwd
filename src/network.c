@@ -1334,13 +1334,12 @@ struct network_info *network_info_add_known(const char *ssid,
 static void disconnect_no_longer_known(struct station *station, void *user_data)
 {
 	struct network_info *info = user_data;
-	struct device *device = netdev_get_device(station_get_netdev(station));
 	struct network *network;
 
 	network = station_get_connected_network(station);
 
 	if (network && network->info == info)
-		device_disconnect(device);
+		station_disconnect(station);
 }
 
 void network_info_forget_known(struct network_info *network)

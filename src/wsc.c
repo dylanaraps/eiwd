@@ -489,7 +489,6 @@ static void station_state_watch(enum station_state state, void *userdata)
 
 static void wsc_check_can_connect(struct wsc *wsc, struct scan_bss *target)
 {
-	struct device *device = netdev_get_device(wsc->netdev);
 	l_debug("%p", wsc);
 
 	/*
@@ -505,7 +504,7 @@ static void wsc_check_can_connect(struct wsc *wsc, struct scan_bss *target)
 		return;
 	case STATION_STATE_CONNECTING:
 	case STATION_STATE_CONNECTED:
-		if (device_disconnect(device) < 0)
+		if (station_disconnect(wsc->station) < 0)
 			goto error;
 
 		/* fall through */
