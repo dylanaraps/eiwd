@@ -307,7 +307,7 @@ class Device(IWDDBusAbstract):
            Possible exception: BusyEx
                                FailedEx
         '''
-        self._iface.Scan(dbus_interface=self._iface_name,
+        self._iface.Scan(dbus_interface=IWD_STATION_INTERFACE,
                                reply_handler=self._success,
                                error_handler=self._failure)
 
@@ -320,7 +320,7 @@ class Device(IWDDBusAbstract):
                                FailedEx
                                NotConnectedEx
         '''
-        self._iface.Disconnect(dbus_interface=self._iface_name,
+        self._iface.Disconnect(dbus_interface=IWD_STATION_INTERFACE,
                                reply_handler=self._success,
                                error_handler=self._failure)
 
@@ -339,7 +339,7 @@ class Device(IWDDBusAbstract):
            main sorting factor.
         '''
         ordered_networks = []
-        for bus_obj in self._iface.GetOrderedNetworks():
+        for bus_obj in self._station.GetOrderedNetworks():
             ordered_network = OrderedNetwork(bus_obj)
             ordered_networks.append(ordered_network)
         return ordered_networks
@@ -393,7 +393,8 @@ class Device(IWDDBusAbstract):
                                NotFoundEx
                                ServiceSetOverlapEx
         '''
-        self._iface.ConnectHiddenNetwork(name, dbus_interface=self._iface_name,
+        self._iface.ConnectHiddenNetwork(name,
+                               dbus_interface=IWD_STATION_INTERFACE,
                                reply_handler=self._success,
                                error_handler=self._failure)
         self._wait_for_async_op()
