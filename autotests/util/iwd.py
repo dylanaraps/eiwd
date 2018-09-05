@@ -33,6 +33,7 @@ IWD_WSC_INTERFACE =             'net.connman.iwd.WiFiSimpleConfiguration'
 IWD_SIGNAL_AGENT_INTERFACE =    'net.connman.iwd.SignalLevelAgent'
 IWD_AP_INTERFACE =              'net.connman.iwd.AccessPoint'
 IWD_ADHOC_INTERFACE =           'net.connman.iwd.AdHoc'
+IWD_STATION_INTERFACE =         'net.connman.iwd.Station'
 
 IWD_AGENT_MANAGER_PATH =        '/'
 IWD_TOP_LEVEL_PATH =            '/'
@@ -213,6 +214,7 @@ class Device(IWDDBusAbstract):
     '''
     _iface_name = IWD_DEVICE_INTERFACE
     _wps_manager_if = None
+    _station_if = None
 
     @property
     def _wps_manager(self):
@@ -222,6 +224,14 @@ class Device(IWDDBusAbstract):
                                                     self.device_path),
                                IWD_WSC_INTERFACE)
         return _wps_manager_if
+
+    @property
+    def _station(self):
+        if self._station_if is None:
+            _station_if = dbus.Interface(self._bus.get_object(IWD_SERVICE,
+                                                            self.device_path),
+                                            IWD_STATION_INTERFACE)
+        return _station_if
 
     @property
     def device_path(self):
@@ -347,18 +357,18 @@ class Device(IWDDBusAbstract):
         self._wait_for_async_op()
 
     def register_signal_agent(self, signal_agent, levels):
-        self._iface.RegisterSignalLevelAgent(signal_agent.path,
-                                             dbus.Array(levels, 'n'),
-                                             dbus_interface=self._iface_name,
-                                             reply_handler=self._success,
-                                             error_handler=self._failure)
+        self._station.RegisterSignalLevelAgent(signal_agent.path,
+                                        dbus.Array(levels, 'n'),
+                                        dbus_interface=IWD_STATION_INTERFACE,
+                                        reply_handler=self._success,
+                                        error_handler=self._failure)
         self._wait_for_async_op()
 
     def unregister_signal_agent(self, signal_agent):
-        self._iface.UnregisterSignalLevelAgent(signal_agent.path,
-                                               dbus_interface=self._iface_name,
-                                               reply_handler=self._success,
-                                               error_handler=self._failure)
+        self._station.UnregisterSignalLevelAgent(signal_agent.path,
+                                        dbus_interface=IWD_STATION_INTERFACE,
+                                        reply_handler=self._success,
+                                        error_handler=self._failure)
         self._wait_for_async_op()
 
     def start_ap(self, ssid, psk):
