@@ -81,24 +81,6 @@ static bool device_is_busy(struct device *device)
 	return station_is_busy(device->station);
 }
 
-static void device_disconnect_event(struct device *device)
-{
-	struct station *station = device->station;
-
-	l_debug("%d", device->index);
-
-	if (station->connect_pending) {
-		struct network *network = station->connected_network;
-
-		dbus_pending_reply(&station->connect_pending,
-				dbus_error_failed(station->connect_pending));
-
-		network_connect_failed(network);
-	}
-
-	station_disassociated(station);
-}
-
 static void device_reassociate_cb(struct netdev *netdev,
 					enum netdev_result result,
 					void *user_data)
@@ -417,7 +399,7 @@ static void device_netdev_event(struct netdev *netdev, enum netdev_event event,
 		break;
 	case NETDEV_EVENT_DISCONNECT_BY_AP:
 	case NETDEV_EVENT_DISCONNECT_BY_SME:
-		device_disconnect_event(device);
+		station_disconnect_event(station);
 		break;
 	case NETDEV_EVENT_RSSI_THRESHOLD_LOW:
 		station_low_rssi(station);

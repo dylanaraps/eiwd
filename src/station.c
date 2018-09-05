@@ -717,6 +717,22 @@ void station_disassociated(struct station *station)
 		station_enter_state(station, STATION_STATE_AUTOCONNECT);
 }
 
+void station_disconnect_event(struct station *station)
+{
+	l_debug("%u", netdev_get_ifindex(station->netdev));
+
+	if (station->connect_pending) {
+		struct network *network = station->connected_network;
+
+		dbus_pending_reply(&station->connect_pending,
+				dbus_error_failed(station->connect_pending));
+
+		network_connect_failed(network);
+	}
+
+	station_disassociated(station);
+}
+
 static void station_roam_timeout_rearm(struct station *station, int seconds);
 
 void station_roamed(struct station *station)

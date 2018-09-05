@@ -109,6 +109,7 @@ void station_low_rssi(struct station *station);
 void station_ok_rssi(struct station *station);
 
 void station_disassociated(struct station *station);
+void station_disconnect_event(struct station *station);
 
 struct l_dbus_message *station_dbus_connect_hidden_network(
 						struct l_dbus *dbus,
