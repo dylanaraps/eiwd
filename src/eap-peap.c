@@ -361,30 +361,29 @@ static void eap_peap_phase2_handle_request(struct eap_state *eap,
 								size_t len)
 {
 	struct eap_peap_state *peap = eap_get_data(eap);
+	uint8_t id;
+
+	if (len > 4 && pkt[4] == EAP_TYPE_EXTENSIONS) {
+		uint16_t pkt_len;
+		uint8_t code = pkt[0];
+
+		if (code != EAP_CODE_REQUEST)
+			return;
+
+		pkt_len = l_get_be16(pkt + 2);
+		if (pkt_len != len)
+			return;
+
+		id = pkt[1];
+
+		eap_extensions_handle_request(eap, id,
+				pkt + EAP_EXTENSIONS_HEADER_LEN,
+				len - EAP_EXTENSIONS_HEADER_LEN);
+
+		return;
+	}
 
 	if (peap->version == PEAP_VERSION_0) {
-		uint8_t id;
-
-		if (len > 4 && pkt[4] == EAP_TYPE_EXTENSIONS) {
-			uint16_t pkt_len;
-			uint8_t code = pkt[0];
-
-			if (code != EAP_CODE_REQUEST)
-				return;
-
-			pkt_len = l_get_be16(pkt + 2);
-			if (pkt_len != len)
-				return;
-
-			id = pkt[1];
-
-			eap_extensions_handle_request(eap, id,
-					pkt + EAP_EXTENSIONS_HEADER_LEN,
-					len - EAP_EXTENSIONS_HEADER_LEN);
-
-			return;
-		}
-
 		if (len < 1)
 			return;
 
