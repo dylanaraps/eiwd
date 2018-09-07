@@ -554,7 +554,7 @@ static bool eap_peap_tunnel_init(struct eap_state *eap)
 
 	if (!l_tls_set_auth_data(peap->tunnel, peap->client_cert,
 					peap->client_key, NULL)) {
-		l_error("Failed to set authentication data.");
+		l_error("PEAP: Failed to set authentication data.");
 		return false;
 	}
 
@@ -592,21 +592,21 @@ static int eap_peap_init_request_assembly(struct eap_state *eap,
 		return -EINVAL;
 
 	/*
-	 * Some of the PEAP server implementations brake the protocol and do not
+	 * Some of the PEAP server implementations break the protocol and do not
 	 * set the M flag for the first packet during the fragmented
 	 * transmission. To stay compatible with such devices, we have relaxed
 	 * this requirement in iwd.
 	 */
 	if (!(flags & PEAP_FLAG_M))
-		l_warn("Server has failed to set the M flag in the first packet"
-					" of the fragmented transmission.");
+		l_warn("PEAP: Server has failed to set the M flag in the first"
+				" packet of the fragmented transmission.");
 
 	peap->rx_pdu_buf_len = l_get_be32(pkt);
 	len -= 4;
 
 	if (!peap->rx_pdu_buf_len || peap->rx_pdu_buf_len > PEAP_PDU_MAX_LEN) {
-		l_warn("Fragmented pkt size is outside of alowed boundaries "
-					"[1, %u]", PEAP_PDU_MAX_LEN);
+		l_warn("PEAP: Fragmented pkt size is outside of alowed"
+				" boundaries [1, %u]", PEAP_PDU_MAX_LEN);
 
 		return -EINVAL;
 	}
@@ -635,7 +635,7 @@ static int eap_peap_init_request_assembly(struct eap_state *eap,
 	}
 
 	if (peap->rx_pdu_buf_len < len) {
-		l_warn("Fragmented pkt size is smaller than the received "
+		l_warn("PEAP: Fragmented pkt size is smaller than the received "
 								"packet");
 
 		return -EINVAL;
@@ -717,7 +717,7 @@ static int eap_peap_handle_fragmented_request(struct eap_state *eap,
 	pdu_len = len - rx_header_offset;
 
 	if (peap->rx_pdu_buf_len < peap->rx_pdu_buf_offset + pdu_len) {
-		l_error("Request fragment pkt size mismatch");
+		l_error("PEAP: Request fragment pkt size mismatch");
 		return -EINVAL;
 	}
 
@@ -787,7 +787,7 @@ static void eap_peap_handle_request(struct eap_state *eap,
 			goto error;
 
 		if (peap->rx_pdu_buf_len != peap->rx_pdu_buf_offset) {
-			l_error("Request fragment pkt size mismatch");
+			l_error("PEAP: Request fragment pkt size mismatch");
 			goto error;
 		}
 
@@ -920,7 +920,7 @@ static int eap_peap_check_settings(struct l_settings *settings,
 	if (client_cert) {
 		cert = l_pem_load_certificate(client_cert, &size);
 		if (!cert) {
-			l_error("Failed to load %s", client_cert);
+			l_error("PEAP: Failed to load %s", client_cert);
 			return -EIO;
 		}
 
