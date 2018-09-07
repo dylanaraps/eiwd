@@ -255,7 +255,7 @@ void __eap_handle_request(struct eap_state *eap, uint16_t id,
 	switch (type) {
 	case EAP_TYPE_IDENTITY:
 		if (len >= 2)
-			l_warn("EAP identity prompt: \"%.*s\"",
+			l_debug("Optional EAP server identity prompt: \"%.*s\"",
 					(int) len - 1, pkt + 1);
 
 		eap_send_identity_response(eap, eap->identity);
