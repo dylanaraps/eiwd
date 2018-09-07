@@ -583,13 +583,13 @@ static void eap_peap_handle_payload(struct eap_state *eap,
 	peap->plain_buf = NULL;
 }
 
-static bool eap_peap_init_request_assembly(struct eap_state *eap,
+static int eap_peap_init_request_assembly(struct eap_state *eap,
 						const uint8_t *pkt, size_t len,
 						uint8_t flags) {
 	struct eap_peap_state *peap = eap_get_data(eap);
 
 	if (peap->rx_pdu_buf || len < 4)
-		return false;
+		return -EINVAL;
 
 	/*
 	 * Some of the PEAP server implementations brake the protocol and do not
@@ -602,25 +602,49 @@ static bool eap_peap_init_request_assembly(struct eap_state *eap,
 					" of the fragmented transmission.");
 
 	peap->rx_pdu_buf_len = l_get_be32(pkt);
+	len -= 4;
 
 	if (!peap->rx_pdu_buf_len || peap->rx_pdu_buf_len > PEAP_PDU_MAX_LEN) {
 		l_warn("Fragmented pkt size is outside of alowed boundaries "
 					"[1, %u]", PEAP_PDU_MAX_LEN);
 
-		return false;
+		return -EINVAL;
+	}
+
+	if (peap->rx_pdu_buf_len == len) {
+		/*
+		 * PEAPv1: draft-josefsson-pppext-eap-tls-eap-05, Section 3.2:
+		 * "The L bit (length included) is set to indicate the presence
+		 * of the four octet TLS Message Length field, and MUST be set
+		 * for the first fragment of a fragmented TLS message or set of
+		 * messages."
+		 *
+		 * TTLSv0: RFC 5281, Section 9.2.2:
+		 * "Unfragmented messages MAY have the L bit set and include
+		 * the length of the message (though this information is
+		 * redundant)."
+		 *
+		 * Some of the PEAP server implementations set the L flag along
+		 * with redundant TLS Message Length field for the un-fragmented
+		 * packets.
+		 */
+		l_warn("PEAP: Server has set the redundant TLS Message Length "
+					"field for the un-fragmented packet.");
+
+		return -ENOMSG;
 	}
 
 	if (peap->rx_pdu_buf_len < len) {
 		l_warn("Fragmented pkt size is smaller than the received "
 								"packet");
 
-		return false;
+		return -EINVAL;
 	}
 
 	peap->rx_pdu_buf = l_malloc(peap->rx_pdu_buf_len);
 	peap->rx_pdu_buf_offset = 0;
 
-	return true;
+	return 0;
 }
 
 static void eap_peap_send_fragmented_request_ack(struct eap_state *eap)
@@ -679,9 +703,10 @@ static int eap_peap_handle_fragmented_request(struct eap_state *eap,
 	size_t pdu_len;
 
 	if (flags_version & PEAP_FLAG_L) {
-		if (!eap_peap_init_request_assembly(eap, pkt, len,
-								flags_version))
-			return -EINVAL;
+		int r = eap_peap_init_request_assembly(eap, pkt, len,
+								flags_version);
+		if (r)
+			return r;
 
 		rx_header_offset = 4;
 	}
@@ -747,6 +772,17 @@ static void eap_peap_handle_request(struct eap_state *eap,
 		if (r == -EAGAIN)
 			return;
 
+		if (r == -ENOMSG) {
+			/*
+			 * Redundant usage of the L flag, no packet reassembly
+			 * is required.
+			 */
+			pkt += 4;
+			len -= 4;
+
+			goto proceed;
+		}
+
 		if (r < 0)
 			goto error;
 
@@ -759,6 +795,7 @@ static void eap_peap_handle_request(struct eap_state *eap,
 		len = peap->rx_pdu_buf_len;
 	}
 
+proceed:
 	/*
 	 * tx_pdu_buf is used for the retransmission and needs to be cleared on
 	 * a new request
