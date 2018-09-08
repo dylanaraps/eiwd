@@ -112,7 +112,7 @@ static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
 	if (!device->powered || !device->station)
 		return dbus_error_not_available(message);
 
-	return station_dbus_get_networks(dbus, message, station);
+	return station_build_get_networks_reply(station, message, true);
 }
 
 static bool device_property_get_name(struct l_dbus *dbus,

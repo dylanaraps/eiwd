@@ -1843,11 +1843,11 @@ struct l_dbus_message *station_dbus_disconnect(struct l_dbus *dbus,
 	return NULL;
 }
 
-struct l_dbus_message *station_dbus_get_networks(struct l_dbus *dbus,
+struct l_dbus_message *station_build_get_networks_reply(
+						struct station *station,
 						struct l_dbus_message *message,
-						void *user_data)
+						bool legacy)
 {
-	struct station *station = user_data;
 	struct l_dbus_message *reply;
 	struct l_dbus_message_builder *builder;
 	struct l_queue *sorted = station->networks_sorted;
@@ -1856,22 +1856,35 @@ struct l_dbus_message *station_dbus_get_networks(struct l_dbus *dbus,
 	reply = l_dbus_message_new_method_return(message);
 	builder = l_dbus_message_builder_new(reply);
 
-	l_dbus_message_builder_enter_array(builder, "(osns)");
+	if (legacy)
+		l_dbus_message_builder_enter_array(builder, "(osns)");
+	else
+		l_dbus_message_builder_enter_array(builder, "(on)");
 
 	for (entry = l_queue_get_entries(sorted); entry; entry = entry->next) {
 		const struct network *network = entry->data;
 		enum security security = network_get_security(network);
 		int16_t signal_strength = network_get_signal_strength(network);
 
-		l_dbus_message_builder_enter_struct(builder, "osns");
+		if (legacy)
+			l_dbus_message_builder_enter_struct(builder, "osns");
+		else
+			l_dbus_message_builder_enter_struct(builder, "on");
+
 		l_dbus_message_builder_append_basic(builder, 'o',
 						network_get_path(network));
-		l_dbus_message_builder_append_basic(builder, 's',
+
+		if (legacy)
+			l_dbus_message_builder_append_basic(builder, 's',
 						network_get_ssid(network));
+
 		l_dbus_message_builder_append_basic(builder, 'n',
 							&signal_strength);
-		l_dbus_message_builder_append_basic(builder, 's',
+
+		if (legacy)
+			l_dbus_message_builder_append_basic(builder, 's',
 						security_to_str(security));
+
 		l_dbus_message_builder_leave_struct(builder);
 	}
 
@@ -1881,6 +1894,14 @@ struct l_dbus_message *station_dbus_get_networks(struct l_dbus *dbus,
 	l_dbus_message_builder_destroy(builder);
 
 	return reply;
+}
+
+static struct l_dbus_message *station_dbus_get_networks(struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct station *station = user_data;
+	return station_build_get_networks_reply(station, message, false);
 }
 
 static void station_dbus_scan_triggered(int err, void *user_data)
@@ -2259,7 +2280,7 @@ static void station_setup_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "Disconnect", 0,
 				station_dbus_disconnect, "", "");
 	l_dbus_interface_method(interface, "GetOrderedNetworks", 0,
-				station_dbus_get_networks, "a(osns)", "",
+				station_dbus_get_networks, "a(on)", "",
 				"networks");
 	l_dbus_interface_method(interface, "Scan", 0,
 				station_dbus_scan, "", "");
