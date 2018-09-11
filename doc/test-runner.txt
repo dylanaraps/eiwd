@@ -292,6 +292,11 @@ follows:
 	For EAP-PWD tests uncomment the following:
 		#CONFIG_EAP_PWD=y
 
+	For SAE tests add the following lines:
+		CONFIG_SAE=y
+		CONFIG_OWE=y
+		CONFIG_DPP=y
+
 	Note: You may need to pre-install: 'gnutls-devel' and 'libgcrypt-devel'
 	libraries.
 
