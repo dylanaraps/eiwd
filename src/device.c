@@ -149,7 +149,7 @@ static bool device_property_get_connected_network(struct l_dbus *dbus,
 	struct device *device = user_data;
 	struct station *station = device->station;
 
-	if (!station->connected_network)
+	if (!station || !station->connected_network)
 		return false;
 
 	l_dbus_message_builder_append_basic(builder, 'o',
@@ -306,7 +306,12 @@ static bool device_property_get_scanning(struct l_dbus *dbus,
 {
 	struct device *device = user_data;
 	struct station *station = device->station;
-	bool scanning = station->scanning;
+	bool scanning;
+
+	if (!station)
+		return false;
+
+	scanning = station->scanning;
 
 	l_dbus_message_builder_append_basic(builder, 'b', &scanning);
 
