@@ -47,6 +47,8 @@
 
 #include "src/backtrace.h"
 
+struct l_genl *genl;
+struct l_genl_family *nl80211;
 static struct l_settings *iwd_config;
 static struct l_timeout *timeout;
 static const char *interfaces;
@@ -64,12 +66,17 @@ static void main_loop_quit(struct l_timeout *timeout, void *user_data)
 	l_main_quit();
 }
 
-void iwd_shutdown(void)
+static void iwd_shutdown(void)
 {
 	if (terminating)
 		return;
 
 	terminating = true;
+
+	if (!nl80211) {
+		l_main_quit();
+		return;
+	}
 
 	dbus_shutdown();
 	netdev_shutdown();
@@ -161,6 +168,54 @@ static void nl80211_vanished(void *user_data)
 	ap_exit();
 	scan_exit();
 	wiphy_exit();
+}
+
+static void request_name_callback(struct l_dbus *dbus, bool success,
+					bool queued, void *user_data)
+{
+	if (!success) {
+		l_error("Name request failed");
+		goto fail_exit;
+	}
+
+	if (!l_dbus_object_manager_enable(dbus))
+		l_warn("Unable to register the ObjectManager");
+
+	genl = l_genl_new_default();
+	if (!genl) {
+		l_error("Failed to open generic netlink socket");
+		goto fail_exit;
+	}
+
+	if (getenv("IWD_GENL_DEBUG"))
+		l_genl_set_debug(genl, do_debug, "[GENL] ", NULL);
+
+	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
+	if (!nl80211) {
+		l_error("Failed to open nl80211 interface");
+		goto fail_exit;
+	}
+
+	l_genl_family_set_watches(nl80211, nl80211_appeared, nl80211_vanished,
+								nl80211, NULL);
+	return;
+
+fail_exit:
+	l_main_quit();
+}
+
+static void dbus_ready(void *user_data)
+{
+	struct l_dbus *dbus = user_data;
+
+	l_dbus_name_acquire(dbus, "net.connman.iwd", false, false, true,
+				request_name_callback, NULL);
+}
+
+static void dbus_disconnected(void *user_data)
+{
+	l_info("D-Bus disconnected, quitting...");
+	iwd_shutdown();
 }
 
 static void print_koption(const void *key, void *value, void *user_data)
@@ -297,8 +352,7 @@ int main(int argc, char *argv[])
 	struct l_signal *signal;
 	sigset_t mask;
 	int exit_status;
-	struct l_genl *genl;
-	struct l_genl_family *nl80211;
+	struct l_dbus *dbus;
 	char *config_path;
 	uint32_t eap_mtu;
 
@@ -400,28 +454,18 @@ int main(int argc, char *argv[])
 
 	exit_status = EXIT_FAILURE;
 
-	if (!dbus_init(enable_dbus_debug)) {
+	dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
+	if (!dbus) {
 		l_error("Failed to initialize D-Bus");
 		goto fail_dbus;
 	}
 
-	genl = l_genl_new_default();
-	if (!genl) {
-		l_error("Failed to open generic netlink socket");
-		goto fail_genl;
-	}
+	if (enable_dbus_debug)
+		l_dbus_set_debug(dbus, do_debug, "[DBUS] ", NULL);
 
-	if (getenv("IWD_GENL_DEBUG"))
-		l_genl_set_debug(genl, do_debug, "[GENL] ", NULL);
-
-	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
-	if (!nl80211) {
-		l_error("Failed to open nl80211 interface");
-		goto fail_nl80211;
-	}
-
-	l_genl_family_set_watches(nl80211, nl80211_appeared, nl80211_vanished,
-								nl80211, NULL);
+	l_dbus_set_ready_handler(dbus, dbus_ready, dbus, NULL);
+	l_dbus_set_disconnect_handler(dbus, dbus_disconnected, NULL, NULL);
+	dbus_init(dbus);
 
 	eap_init(eap_mtu);
 	eapol_init();
@@ -460,10 +504,9 @@ fail_netdev:
 	eap_exit();
 
 	l_genl_family_unref(nl80211);
-fail_nl80211:
 	l_genl_unref(genl);
-fail_genl:
 	dbus_exit();
+	l_dbus_destroy(dbus);
 fail_dbus:
 	l_settings_free(iwd_config);
 

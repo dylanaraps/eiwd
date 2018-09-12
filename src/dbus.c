@@ -39,13 +39,6 @@
 
 struct l_dbus *g_dbus = 0;
 
-static void do_debug(const char *str, void *user_data)
-{
-	const char *prefix = user_data;
-
-	l_info("%s%s", prefix, str);
-}
-
 const char *dbus_iftype_to_string(uint32_t iftype)
 {
 	switch (iftype) {
@@ -204,58 +197,21 @@ void dbus_pending_reply(struct l_dbus_message **msg,
 	*msg = NULL;
 }
 
-static void request_name_callback(struct l_dbus *dbus, bool success,
-					bool queued, void *user_data)
-{
-	if (!success)
-		l_error("Name request failed");
-}
-
-static void ready_callback(void *user_data)
-{
-	l_dbus_name_acquire(g_dbus, "net.connman.iwd", false, false, true,
-				request_name_callback, NULL);
-
-	if (!l_dbus_object_manager_enable(g_dbus))
-		l_info("Unable to register the ObjectManager");
-
-	agent_init(g_dbus);
-}
-
-static void disconnect_callback(void *user_data)
-{
-	l_info("D-Bus disconnected, quitting...");
-	iwd_shutdown();
-}
-
 struct l_dbus *dbus_get_bus(void)
 {
 	return g_dbus;
 }
 
-bool dbus_init(bool enable_debug)
+bool dbus_init(struct l_dbus *dbus)
 {
-	g_dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
-	if (!g_dbus)
-		return false;
-
-	if (enable_debug)
-		l_dbus_set_debug(g_dbus, do_debug, "[DBUS] ", NULL);
-
-	l_dbus_set_ready_handler(g_dbus, ready_callback, g_dbus, NULL);
-	l_dbus_set_disconnect_handler(g_dbus, disconnect_callback, NULL, NULL);
-
-	return true;
+	g_dbus = dbus;
+	return agent_init(dbus);
 }
 
-bool dbus_exit(void)
+void dbus_exit(void)
 {
 	agent_exit(g_dbus);
-
-	l_dbus_destroy(g_dbus);
 	g_dbus = NULL;
-
-	return true;
 }
 
 void dbus_shutdown(void)

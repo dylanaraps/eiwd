@@ -26,8 +26,6 @@ struct l_genl_family;
 
 const struct l_settings *iwd_get_config(void);
 
-void iwd_shutdown(void);
-
 bool netdev_init(const char *whitelist, const char *blacklist);
 void netdev_exit(void);
 void netdev_set_nl80211(struct l_genl_family *nl80211);
