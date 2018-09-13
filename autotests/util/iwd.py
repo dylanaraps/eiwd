@@ -605,11 +605,18 @@ class KnownNetwork(IWDDBusAbstract):
 class OrderedNetwork(object):
     '''Represents a network found in the scan'''
 
+    _bus = dbus.SystemBus()
+
     def __init__(self, o_n_tuple):
         self._network_object = Network(o_n_tuple[0])
-        self._name = o_n_tuple[1]
-        self._signal_strength = o_n_tuple[2]
-        self._type = NetworkType.from_string(o_n_tuple[3])
+        self._network_proxy = dbus.Interface(self._bus.get_object(IWD_SERVICE,
+                                        o_n_tuple[0]),
+                                        DBUS_PROPERTIES)
+        self._properties = self._network_proxy.GetAll(IWD_NETWORK_INTERFACE)
+
+        self._name = self._properties['Name']
+        self._signal_strength = o_n_tuple[1]
+        self._type = NetworkType.from_string(str(self._properties['Type']))
 
     @property
     def network_object(self):
@@ -651,8 +658,8 @@ class OrderedNetwork(object):
 
     def __str__(self):
         return 'Ordered Network:\n'\
-                '\tName:\t\t' + self.name + '\n'\
-                '\tNetwork Type:\t' + str(self.type) + '\n'\
+                '\tName:\t\t' + self._name + '\n'\
+                '\tNetwork Type:\t' + str(self._type) + '\n'\
                 '\tSignal Strength:'\
                     + ('None' if self.signal_strength is None else\
                         str(self.signal_strength)) + '\n'\
