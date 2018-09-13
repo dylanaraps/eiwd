@@ -27,3 +27,4 @@ scripts/config --enable CONFIG_PKCS8_PRIVATE_KEY_PARSER
 scripts/config --enable CONFIG_HW_RANDOM_VIRTIO
 scripts/config --enable CONFIG_HW_RANDOM_INTEL
 #scripts/config --enable CONFIG_HW_RANDOM_AMD
+scripts/config --enable CONFIG_SECURITYFS
