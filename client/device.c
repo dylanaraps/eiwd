@@ -911,19 +911,6 @@ char *device_wsc_family_arg_completion(const char *text, int state)
 						"Name", text, state);
 }
 
-const struct proxy_interface *device_ap_get(const char *device_name)
-{
-	const struct device *device;
-	const struct proxy_interface *proxy =
-					get_device_proxy_by_name(device_name);
-
-	if (!proxy)
-		return NULL;
-
-	device = proxy_interface_get_data(proxy);
-
-	return device->ap;
-}
 
 char *device_ap_family_arg_completion(const char *text, int state)
 {

@@ -33,7 +33,6 @@
 
 struct ap {
 	bool started;
-	const struct proxy_interface *device;
 };
 
 static void *ap_create(void)
@@ -45,48 +44,12 @@ static void ap_destroy(void *data)
 {
 	struct ap *ap = data;
 
-	ap->device = NULL;
-
 	l_free(ap);
-}
-
-static bool ap_bind_interface(const struct proxy_interface *proxy,
-				const struct proxy_interface *dependency)
-{
-	const char *interface = proxy_interface_get_interface(dependency);
-
-	if (!strcmp(interface, IWD_DEVICE_INTERFACE)) {
-		struct ap *ap = proxy_interface_get_data(proxy);
-
-		ap->device = dependency;
-
-		return true;
-	}
-
-	return false;
-}
-
-static bool ap_unbind_interface(const struct proxy_interface *proxy,
-				const struct proxy_interface *dependency)
-{
-	const char *interface = proxy_interface_get_interface(dependency);
-
-	if (!strcmp(interface, IWD_DEVICE_INTERFACE)) {
-		struct ap *ap = proxy_interface_get_data(proxy);
-
-		ap->device = NULL;
-
-		return true;
-	}
-
-	return false;
 }
 
 static const struct proxy_interface_type_ops ap_ops = {
 	.create = ap_create,
 	.destroy = ap_destroy,
-	.bind_interface = ap_bind_interface,
-	.unbind_interface = ap_unbind_interface,
 };
 
 static const char *get_started_tostr(const void *data)
@@ -127,20 +90,24 @@ static void check_errors_method_callback(struct l_dbus_message *message,
 	dbus_message_has_error(message);
 }
 
-static bool match_by_device(const void *a, const void *b)
-{
-	const struct ap *ap = a;
-
-	return ap->device ? true : false;
-}
-
 static void display_ap_inline(const char *margin, const void *data)
 {
-	const struct ap *ap = data;
+	const struct proxy_interface *ap_i = data;
+	const struct ap *ap = proxy_interface_get_data(ap_i);
+	struct proxy_interface *device_i =
+		proxy_interface_find(IWD_DEVICE_INTERFACE,
+					proxy_interface_get_path(ap_i));
+	const char *identity;
 
-	if (ap->device && proxy_interface_get_identity_str(ap->device))
-		display("%s%-*s%-*s\n", margin,
-			20, proxy_interface_get_identity_str(ap->device),
+	if (!device_i)
+		return;
+
+	identity = proxy_interface_get_identity_str(device_i);
+	if (!identity)
+		return;
+
+	display("%s%-*s%-*s\n", margin,
+			20, identity,
 			8, get_started_tostr(ap));
 }
 
@@ -149,7 +116,7 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 	const struct l_queue_entry *entry;
 	struct l_queue *match =
 		proxy_interface_find_all(IWD_ACCESS_POINT_INTERFACE,
-						match_by_device, NULL);
+						NULL, NULL);
 
 	display_table_header("Devices in Access Point Mode", MARGIN "%-*s%-*s",
 				20, "Name",
@@ -163,8 +130,7 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 	}
 
 	for (entry = l_queue_get_entries(match); entry; entry = entry->next) {
-		const struct ap *ap = proxy_interface_get_data(entry->data);
-
+		const struct proxy_interface *ap = entry->data;
 		display_ap_inline(MARGIN, ap);
 	}
 
@@ -177,13 +143,7 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 
 static enum cmd_status cmd_start(const char *device_name, char **argv, int argc)
 {
-	const struct proxy_interface *proxy = device_ap_get(device_name);
-
-	if (!proxy) {
-		display("Invalid device name '%s'\n", device_name);
-
-		return CMD_STATUS_INVALID_VALUE;
-	}
+	const struct proxy_interface *ap_i;
 
 	if (argc < 2)
 		return CMD_STATUS_INVALID_ARGS;
@@ -200,7 +160,13 @@ static enum cmd_status cmd_start(const char *device_name, char **argv, int argc)
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
-	proxy_interface_method_call(proxy, "Start", "ss",
+	ap_i = device_proxy_find(device_name, IWD_ACCESS_POINT_INTERFACE);
+	if (!ap_i) {
+		display("No ap on device: '%s'\n", device_name);
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	proxy_interface_method_call(ap_i, "Start", "ss",
 						check_errors_method_callback,
 						argv[0], argv[1]);
 
@@ -209,15 +175,15 @@ static enum cmd_status cmd_start(const char *device_name, char **argv, int argc)
 
 static enum cmd_status cmd_stop(const char *device_name, char **argv, int argc)
 {
-	const struct proxy_interface *proxy = device_ap_get(device_name);
+	const struct proxy_interface *ap_i =
+		device_proxy_find(device_name, IWD_ACCESS_POINT_INTERFACE);
 
-	if (!proxy) {
-		display("Invalid device name '%s'\n", device_name);
-
+	if (!ap_i) {
+		display("No ap on device: '%s'\n", device_name);
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
-	proxy_interface_method_call(proxy, "Stop", "",
+	proxy_interface_method_call(ap_i, "Stop", "",
 						check_errors_method_callback);
 
 	return CMD_STATUS_TRIGGERED;

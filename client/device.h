@@ -25,7 +25,6 @@ const struct proxy_interface *device_wsc_get(const char *device_name);
 
 char *device_wsc_family_arg_completion(const char *text, int state);
 
-const struct proxy_interface *device_ap_get(const char *device_name);
 char *device_ap_family_arg_completion(const char *text, int state);
 
 char *device_ad_hoc_family_arg_completion(const char *text, int state);
