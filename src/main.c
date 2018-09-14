@@ -359,7 +359,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "Bi:I:p:P:c:vd::h",
+		opt = getopt_long(argc, argv, "Bi:I:p:P:c:d::vh",
 							main_options, NULL);
 		if (opt < 0)
 			break;
@@ -380,9 +380,6 @@ int main(int argc, char *argv[])
 		case 'P':
 			nophys = optarg;
 			break;
-		case 'v':
-			printf("%s\n", VERSION);
-			return EXIT_SUCCESS;
 		case 'c':
 			config_dir = optarg;
 			break;
@@ -400,6 +397,9 @@ int main(int argc, char *argv[])
 			else
 				debugopt = "*";
 			break;
+		case 'v':
+			printf("%s\n", VERSION);
+			return EXIT_SUCCESS;
 		case 'h':
 			usage();
 			return EXIT_SUCCESS;
