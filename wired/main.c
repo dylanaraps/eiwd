@@ -46,6 +46,33 @@ static void signal_handler(struct l_signal *signal, uint32_t signo,
 	}
 }
 
+static void request_name_callback(struct l_dbus *dbus, bool success,
+						bool queued, void *user_data)
+{
+	if (!success) {
+		l_error("Failed to request D-Bus service Name");
+		l_main_quit();
+		return;
+	}
+
+	if (!l_dbus_object_manager_enable(dbus))
+		l_warn("Unable to register ObjectManager interface");
+}
+
+static void dbus_ready(void *user_data)
+{
+	struct l_dbus *dbus = user_data;
+
+	l_dbus_name_acquire(dbus, "net.connman.ead", false, false, true,
+						request_name_callback, NULL);
+}
+
+static void dbus_disconnected(void *user_data)
+{
+	l_info("D-Bus disconnected, quitting...");
+	l_main_quit();
+}
+
 static void usage(void)
 {
 	printf("ead - Authentication daemon\n"
@@ -71,6 +98,8 @@ int main(int argc, char *argv[])
 {
 	struct l_signal *signal;
 	sigset_t mask;
+	int exit_status;
+	struct l_dbus *dbus;
 	const char *interfaces = NULL;
 	const char *nointerfaces = NULL;
 	const char *debugopt = NULL;
@@ -129,9 +158,22 @@ int main(int argc, char *argv[])
 
 	l_info("Authentication daemon version %s", VERSION);
 
+	exit_status = EXIT_FAILURE;
+
+	dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
+	if (!dbus) {
+		l_error("Failed to initialize D-Bus");
+		goto done;
+	}
+
+	l_dbus_set_ready_handler(dbus, dbus_ready, dbus, NULL);
+	l_dbus_set_disconnect_handler(dbus, dbus_disconnected, NULL, NULL);
+
 	eap_init(0);
 	network_init();
 	ethdev_init(interfaces, nointerfaces);
+
+	exit_status = EXIT_SUCCESS;
 
 	l_main_run();
 
@@ -139,9 +181,12 @@ int main(int argc, char *argv[])
 	network_exit();
 	eap_exit();
 
+	l_dbus_destroy(dbus);
+
+done:
 	l_signal_remove(signal);
 
 	l_main_exit();
 
-	return EXIT_SUCCESS;
+	return exit_status;
 }
