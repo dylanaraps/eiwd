@@ -35,14 +35,11 @@
 
 struct device {
 	bool powered;
-	bool scanning;
 	bool wds;
 	char *address;
 	char *name;
-	char *state;
 	char *mode;
 	const struct proxy_interface *adapter;
-	const struct proxy_interface *connected_network;
 };
 
 static struct proxy_interface *default_device;
@@ -55,13 +52,6 @@ static void display_device(const struct proxy_interface *proxy)
 	proxy_properties_display(proxy, caption, MARGIN, 20, 47);
 
 	l_free(caption);
-
-	if (device->connected_network) {
-		display("%s%*s  %-*s%-*s\n", MARGIN, 8, "",
-			20, "Connected network",
-			47, proxy_interface_get_identity_str(
-					device->connected_network) ? : "");
-	}
 
 	if (device->adapter) {
 		display("%s%*s  %-*s%-*s\n", MARGIN, 8, "", 20, "Adapter", 47,
@@ -155,45 +145,6 @@ static void update_address(void *data, struct l_dbus_message_iter *variant)
 	device->address = l_strdup(value);
 }
 
-static const char *get_state(const void *data)
-{
-	const struct device *device = data;
-
-	return device->state;
-}
-
-static void update_state(void *data, struct l_dbus_message_iter *variant)
-{
-	struct device *device = data;
-	const char *value;
-
-	l_free(device->state);
-
-	if (!l_dbus_message_iter_get_variant(variant, "s", &value)) {
-		device->state = NULL;
-
-		return;
-	}
-
-	device->state = l_strdup(value);
-}
-
-static void update_connected_network(void *data,
-					struct l_dbus_message_iter *variant)
-{
-	struct device *device = data;
-	const char *path;
-
-	if (!l_dbus_message_iter_get_variant(variant, "o", &path)) {
-		device->connected_network = NULL;
-
-		return;
-	}
-
-	device->connected_network = proxy_interface_find(IWD_NETWORK_INTERFACE,
-									path);
-}
-
 static const char *get_powered_tostr(const void *data)
 {
 	const struct device *device = data;
@@ -236,27 +187,6 @@ static void update_wds(void *data, struct l_dbus_message_iter *variant)
 	device->wds = value;
 }
 
-static const char *get_scanning_tostr(const void *data)
-{
-	const struct device *device = data;
-
-	return device->scanning ? "yes" : "no";
-}
-
-static void update_scanning(void *data, struct l_dbus_message_iter *variant)
-{
-	struct device *device = data;
-	bool value;
-
-	if (!l_dbus_message_iter_get_variant(variant, "b", &value)) {
-		device->scanning = false;
-
-		return;
-	}
-
-	device->scanning = value;
-}
-
 static void update_adapter(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
@@ -283,10 +213,6 @@ static const struct proxy_interface_property device_properties[] = {
 	{ "WDS",      "b", update_wds,      get_wds_tostr,     true,
 		properties_builder_append_on_off_variant,
 		properties_on_off_opts },
-	{ "Scanning", "b", update_scanning, get_scanning_tostr },
-	{ "State",    "s", update_state,    get_state },
-	{ "ConnectedNetwork",
-			"o", update_connected_network },
 	{ }
 };
 
@@ -432,11 +358,9 @@ static void device_destroy(void *data)
 
 	l_free(device->address);
 	l_free(device->name);
-	l_free(device->state);
 	l_free(device->mode);
 
 	device->adapter = NULL;
-	device->connected_network = NULL;
 
 	l_free(device);
 }
@@ -452,12 +376,10 @@ static void display_device_inline(const char *margin, const void *data)
 	else
 		adapter_str = "-";
 
-	display("%s%-*s%-*s%-*s%-*s%-*s\n", margin,
+	display("%s%-*s%-*s%-*s\n", margin,
 		20, device->name ? : "",
 		20, device->address ? : "",
-		15, device->state ? : "",
-		10, adapter_str,
-		8, device->scanning ? "scanning" : "");
+		10, adapter_str);
 }
 
 static const char *device_identity(void *data)
@@ -829,6 +751,14 @@ char *device_ad_hoc_family_arg_completion(const char *text, int state)
 					match_by_partial_name,
 					"Name", text, state,
 					IWD_AD_HOC_INTERFACE);
+}
+
+char *device_station_family_arg_completion(const char *text, int state)
+{
+	return proxy_property_str_completion(&device_interface_type,
+					match_by_partial_name,
+					"Name", text, state,
+					IWD_STATION_INTERFACE);
 }
 
 static char *family_arg_completion(const char *text, int state)

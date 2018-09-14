@@ -171,7 +171,7 @@ client_iwctl_SOURCES = client/main.c \
 			client/known-networks.c \
 			client/network.h client/network.c \
 			client/properties.h client/properties.c \
-			client/wsc.c
+			client/wsc.c client/station.c
 client_iwctl_LDADD = ell/libell-internal.la -lreadline
 endif
 
