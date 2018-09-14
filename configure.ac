@@ -154,6 +154,11 @@ AC_ARG_ENABLE(ofono, AC_HELP_STRING([--enable-ofono],
 					[enable_ofono=${enableval}])
 AM_CONDITIONAL(OFONO, test "${enable_ofono}" = "yes")
 
+AC_ARG_ENABLE(tools, AC_HELP_STRING([--enable-tools],
+				[enable internal testing utilities]),
+					[enable_tools=${enableval}])
+AM_CONDITIONAL(TOOLS, test "${enable_tools}" = "yes")
+
 AC_ARG_ENABLE([docs], AC_HELP_STRING([--enable-docs],
 				[build documentation and manual pages]),
 					[enable_docs=${enableval}])

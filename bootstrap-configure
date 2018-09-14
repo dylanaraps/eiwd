@@ -11,5 +11,6 @@ fi
 		--localstatedir=/var \
 		--enable-sim-hardcoded \
 		--enable-ofono \
+		--enable-tools \
 		--disable-dbus-policy \
 		--disable-systemd-service $*
