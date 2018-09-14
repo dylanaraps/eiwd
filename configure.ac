@@ -53,18 +53,6 @@ AC_ARG_ENABLE(pie, AC_HELP_STRING([--enable-pie],
 	fi
 ])
 
-
-AC_ARG_ENABLE(sim_hardcoded, AC_HELP_STRING([--disable-sim-hardcoded],
-			[disable hard coded SIM keys]),
-			[enable_sim_hardcoded=${enableval}])
-AM_CONDITIONAL(SIM_HARDCODED, test "${enable_sim_hardcoded}" != "no")
-
-AC_ARG_ENABLE(ofono, AC_HELP_STRING([--disable-ofono],
-			[disable ofono support]),
-			[echo "CHECKING"
-			enable_ofono=${enableval}])
-AM_CONDITIONAL(OFONO, test "${enable_ofono}" != "no")
-
 if (test "${prefix}" = "NONE"); then
 	dnl no prefix and no localstatedir, so default to /var
 	if (test "$localstatedir" = '${prefix}/var'); then
@@ -155,6 +143,16 @@ if (test "${enable_dbus_policy}" != "no" && test -z "${path_dbus_datadir}"); the
 	AC_MSG_RESULT([${path_dbus_datadir}])
 fi
 AC_SUBST(DBUS_DATADIR, [${path_dbus_datadir}])
+
+AC_ARG_ENABLE(sim_hardcoded, AC_HELP_STRING([--enable-sim-hardcoded],
+				[enabled hard coded SIM keys]),
+					[enable_sim_hardcoded=${enableval}])
+AM_CONDITIONAL(SIM_HARDCODED, test "${enable_sim_hardcoded}" = "yes")
+
+AC_ARG_ENABLE(ofono, AC_HELP_STRING([--enable-ofono],
+				[enable oFono SIM authentication support]),
+					[enable_ofono=${enableval}])
+AM_CONDITIONAL(OFONO, test "${enable_ofono}" = "yes")
 
 AC_ARG_ENABLE([docs], AC_HELP_STRING([--enable-docs],
 				[build documentation and manual pages]),
