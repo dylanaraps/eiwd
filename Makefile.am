@@ -112,6 +112,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h \
 					src/dbus.h src/dbus.c \
 					src/mpdu.h src/mpdu.c \
 					src/eapol.h src/eapol.c \
+					src/eapolutil.h src/eapolutil.c \
 					src/handshake.h src/handshake.c \
 					src/scan.h src/scan.c \
 					src/common.h src/common.c \
@@ -187,10 +188,8 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					src/util.h src/util.c \
 					src/crypto.h src/crypto.c \
 					src/watchlist.h src/watchlist.c \
-					src/eapol.h src/eapol.c \
-					src/handshake.h src/handshake.c \
-					src/eap.h src/eap.c src/eap-private.h \
-					src/eap-dummy.c
+					src/eapolutil.h src/eapolutil.c \
+					src/handshake.h src/handshake.c
 monitor_iwmon_LDADD = ell/libell-internal.la
 endif
 
@@ -258,6 +257,7 @@ unit_test_eap_sim_SOURCES = unit/test-eap-sim.c \
 		src/ie.h src/ie.c \
 		src/watchlist.h src/watchlist.c \
 		src/eapol.h src/eapol.c \
+		src/eapolutil.h src/eapolutil.c \
 		src/handshake.h src/handshake.c \
 		src/eap.h src/eap.c src/eap-private.h \
 		src/util.h src/util.c \
@@ -312,6 +312,7 @@ unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/ie.h src/ie.c \
 				src/watchlist.h src/watchlist.c \
 				src/eapol.h src/eapol.c \
+				src/eapolutil.h src/eapolutil.c \
 				src/handshake.h src/handshake.c \
 				src/eap.h src/eap.c src/eap-private.h \
 				src/eap-tls.c src/eap-ttls.c \
@@ -331,6 +332,7 @@ unit_test_wsc_SOURCES = unit/test-wsc.c src/wscutil.h src/wscutil.c \
 				src/ie.h src/ie.c \
 				src/watchlist.h src/watchlist.c \
 				src/eapol.h src/eapol.c \
+				src/eapolutil.h src/eapolutil.c \
 				src/handshake.h src/handshake.c \
 				src/eap.h src/eap.c src/eap-private.h \
 				src/util.h src/util.c \

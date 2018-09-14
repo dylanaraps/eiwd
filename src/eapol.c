@@ -273,53 +273,6 @@ void eapol_key_data_append(struct eapol_key *ek, enum handshake_kde selector,
 	ek->key_data_len = L_CPU_TO_BE16(key_data_len);
 }
 
-const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len)
-{
-	const struct eapol_key *ek;
-	uint16_t key_data_len;
-
-	if (len < sizeof(struct eapol_key))
-		return NULL;
-
-	ek = (const struct eapol_key *) frame;
-
-	switch (ek->header.protocol_version) {
-	case EAPOL_PROTOCOL_VERSION_2001:
-	case EAPOL_PROTOCOL_VERSION_2004:
-		break;
-	default:
-		return NULL;
-	}
-
-	if (ek->header.packet_type != 3)
-		return NULL;
-
-	switch (ek->descriptor_type) {
-	case EAPOL_DESCRIPTOR_TYPE_RC4:
-	case EAPOL_DESCRIPTOR_TYPE_80211:
-	case EAPOL_DESCRIPTOR_TYPE_WPA:
-		break;
-	default:
-		return NULL;
-	}
-
-	switch (ek->key_descriptor_version) {
-	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4:
-	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
-	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
-	case EAPOL_KEY_DESCRIPTOR_VERSION_AKM_DEFINED:
-		break;
-	default:
-		return NULL;
-	}
-
-	key_data_len = L_BE16_TO_CPU(ek->key_data_len);
-	if (len < sizeof(struct eapol_key) + key_data_len)
-		return NULL;
-
-	return ek;
-}
-
 #define VERIFY_PTK_COMMON(ek)	\
 	if (!ek->key_type)	\
 		return false;	\
