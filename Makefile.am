@@ -197,6 +197,10 @@ wired_ead_SOURCES = wired/main.c
 wired_ead_LDADD = ell/libell-internal.la
 wired_ead_DEPENDENCIES = ell/libell-internal.la
 
+if DBUS_POLICY
+dist_dbus_data_DATA += wired/ead-dbus.conf
+endif
+
 if SYSTEMD_SERVICE
 wired_ead_DEPENDENCIES += wired/ead.service
 
