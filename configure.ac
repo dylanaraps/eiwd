@@ -77,6 +77,11 @@ AC_CHECK_HEADERS(linux/types.h linux/if_alg.h)
 AC_CHECK_HEADERS_ONCE(execinfo.h)
 AC_CHECK_LIB(execinfo, backtrace)
 
+AC_ARG_ENABLE([daemon], AC_HELP_STRING([--disable-daemon],
+				[don't install iwd system daemon]),
+					[enable_daemon=${enableval}])
+AM_CONDITIONAL(DAEMON, test "${enable_daemon}" != "no")
+
 AC_ARG_ENABLE([client], AC_HELP_STRING([--disable-client],
 				[don't install iwctl client utility]),
 					[enable_client=${enableval}])

@@ -8,11 +8,6 @@ builtin_sources =
 
 noinst_LTLIBRARIES = ell/libell-internal.la
 
-if DBUS_POLICY
-dbus_datadir = @DBUS_DATADIR@/dbus-1/system.d
-dist_dbus_data_DATA = src/iwd-dbus.conf
-endif
-
 ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/util.h ell/util.c \
 			ell/test.h ell/test.c \
@@ -72,6 +67,11 @@ bin_PROGRAMS =
 libexec_PROGRAMS =
 noinst_PROGRAMS =
 
+if DBUS_POLICY
+dbus_datadir = @DBUS_DATADIR@/dbus-1/system.d
+dist_dbus_data_DATA =
+endif
+
 if SYSTEMD_SERVICE
 systemd_unitdir = @SYSTEMD_UNITDIR@
 systemd_unit_DATA =
@@ -80,6 +80,7 @@ dbus_busdir = @DBUS_BUSDIR@
 dbus_bus_DATA =
 endif
 
+if DAEMON
 libexec_PROGRAMS += src/iwd
 
 src_iwd_SOURCES = src/main.c linux/nl80211.h \
@@ -137,11 +138,16 @@ builtin_modules += ofono
 builtin_sources += plugins/ofono.c
 endif
 
+if DBUS_POLICY
+dist_dbus_data_DATA += src/iwd-dbus.conf
+endif
+
 if SYSTEMD_SERVICE
 src_iwd_DEPENDENCIES += src/iwd.service
 
 systemd_unit_DATA += src/iwd.service
 dbus_bus_DATA += src/net.connman.iwd.service
+endif
 endif
 
 if CLIENT
