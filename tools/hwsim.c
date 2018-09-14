@@ -39,7 +39,7 @@
 #include "src/storage.h"
 #include "src/mpdu.h"
 
-#define HWSIM_SERVICE "net.connman.iwd.hwsim"
+#define HWSIM_SERVICE "net.connman.hwsim"
 
 #define HWSIM_RADIO_MANAGER_INTERFACE HWSIM_SERVICE ".RadioManager"
 #define HWSIM_RADIO_INTERFACE HWSIM_SERVICE ".Radio"
@@ -2123,7 +2123,7 @@ static void request_name_callback(struct l_dbus *dbus, bool success,
 
 static void ready_callback(void *user_data)
 {
-	l_dbus_name_acquire(dbus, "net.connman.iwd.hwsim", false, false, true,
+	l_dbus_name_acquire(dbus, HWSIM_SERVICE, false, false, true,
 				request_name_callback, NULL);
 
 	if (!l_dbus_object_manager_enable(dbus))

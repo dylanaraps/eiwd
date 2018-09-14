@@ -8,12 +8,12 @@ from enum import Enum
 
 import iwd
 
-HWSIM_SERVICE =                 'net.connman.iwd.hwsim'
-HWSIM_RULE_MANAGER_INTERFACE =  'net.connman.iwd.hwsim.RuleManager'
-HWSIM_RULE_INTERFACE =          'net.connman.iwd.hwsim.Rule'
-HWSIM_RADIO_MANAGER_INTERFACE = 'net.connman.iwd.hwsim.RadioManager'
-HWSIM_RADIO_INTERFACE =         'net.connman.iwd.hwsim.Radio'
-HWSIM_INTERFACE_INTERFACE =     'net.connman.iwd.hwsim.Interface'
+HWSIM_SERVICE =                 'net.connman.hwsim'
+HWSIM_RULE_MANAGER_INTERFACE =  'net.connman.hwsim.RuleManager'
+HWSIM_RULE_INTERFACE =          'net.connman.hwsim.Rule'
+HWSIM_RADIO_MANAGER_INTERFACE = 'net.connman.hwsim.RadioManager'
+HWSIM_RADIO_INTERFACE =         'net.connman.hwsim.Radio'
+HWSIM_INTERFACE_INTERFACE =     'net.connman.hwsim.Interface'
 
 HWSIM_AGENT_MANAGER_PATH =      '/'
 

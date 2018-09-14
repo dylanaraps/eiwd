@@ -1,14 +1,14 @@
 RadioManager hierarchy
 ======================
 
-Service		net.connman.iwd.hwsim
-Interface	net.connman.iwd.hwsim.RadioManager [Experimental]
+Service		net.connman.hwsim
+Interface	net.connman.hwsim.RadioManager [Experimental]
 Object path	/
 
 Methods		object CreateRadio(string name, boolean p2p_device)
 			Add one virtual radio device to the simulator, a
 			path to a new object with the
-			net.connman.iwd.hwsim.Radio interface is returned.
+			net.connman.hwsim.Radio interface is returned.
 			The radio is created with one network interface of
 			the type "managed" (Station) and optionally one
 			P2P Device interface.  The name parameter may be
@@ -18,8 +18,8 @@ Methods		object CreateRadio(string name, boolean p2p_device)
 			use the default name if the requested name can not
 			be used.
 
-Service		net.connman.iwd.hwsim
-Interface	net.connman.iwd.hwsim.Radio [Experimental]
+Service		net.connman.hwsim
+Interface	net.connman.hwsim.Radio [Experimental]
 Object path	/{radio0,radio1,...}
 
 Methods		void Remove()
@@ -55,8 +55,8 @@ Properties	string Name [readonly]
 			kept by the simulator.  Only present if one of
 			these custom domains is in use.
 
-Service		net.connman.iwd.hwsim
-Interface	net.connman.iwd.hwsim.Interface [Experimental]
+Service		net.connman.hwsim
+Interface	net.connman.hwsim.Interface [Experimental]
 Object path	/{radio0,radio1,...}/{1,2,...}
 
 Methods		void SendFrame(string addr, uint32 freq, int32 signal,

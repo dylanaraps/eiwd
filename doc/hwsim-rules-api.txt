@@ -1,8 +1,8 @@
 RuleManager hierarchy
 =====================
 
-Service		net.connman.iwd.hwsim
-Interface	net.connman.iwd.hwsim.RuleManager [Experimental]
+Service		net.connman.hwsim
+Interface	net.connman.hwsim.RuleManager [Experimental]
 Object path	/
 
 Methods		object AddRule()
@@ -18,8 +18,8 @@ Methods		object AddRule()
 			priority property.  See below for specifics on
 			those properties.
 
-Service		net.connman.iwd.hwsim
-Interface	net.connman.iwd.hwsim.Rule [Experimental]
+Service		net.connman.hwsim
+Interface	net.connman.hwsim.Rule [Experimental]
 Object path	/{rule0,rule1,...}
 
 Methods		void Remove()
@@ -31,7 +31,7 @@ Properties	string Source
 			and Destination addresses refer to the hardware
 			addresses of the source and the destination
 			radios as given by the
-			net.connman.iwd.hwsim.Radio.Addresses property
+			net.connman.hwsim.Radio.Addresses property
 			on the radio object (see hwsim-radio-api.txt).
 			While those addresses initially match the network
 			interface mac addresses, and that present in the
