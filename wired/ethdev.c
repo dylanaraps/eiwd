@@ -20,23 +20,16 @@
  *
  */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include <stdlib.h>
 #include <ell/ell.h>
 
 #include "src/eap.h"
 #include "wired/ethdev.h"
 
-int main(int argc, char *argv[])
+bool ethdev_init(void)
 {
-	eap_init(0);
-	ethdev_init();
+	return false;
+}
 
-	ethdev_exit();
-	eap_exit();
-
-	return EXIT_SUCCESS;
+void ethdev_exit(void)
+{
 }
