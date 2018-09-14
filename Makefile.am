@@ -190,7 +190,7 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					src/eapol.h src/eapol.c \
 					src/handshake.h src/handshake.c \
 					src/eap.h src/eap.c src/eap-private.h \
-					src/eap-tls.c src/eap-ttls.c
+					src/eap-dummy.c
 monitor_iwmon_LDADD = ell/libell-internal.la
 endif
 
