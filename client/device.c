@@ -620,24 +620,41 @@ static const struct proxy_interface *device_get_default(void)
 	return default_device;
 }
 
-static const struct proxy_interface *get_device_proxy_by_name(
-							const char *device_name)
+static const struct proxy_interface *device_proxy_find_by_name(const char *name)
 {
 	struct l_queue *match;
 	struct proxy_interface *proxy = NULL;
 
-	if (!device_name)
+	if (!name)
 		return NULL;
 
 	match = proxy_interface_find_all(device_interface_type.interface,
-						match_by_name, device_name);
+						match_by_name, name);
 
 	if (l_queue_length(match))
 		proxy = l_queue_pop_head(match);
 	else
-		display("Device %s not found.\n", device_name);
+		display("Device %s not found.\n", name);
 
 	l_queue_destroy(match, NULL);
+
+	return proxy;
+}
+
+const struct proxy_interface *device_proxy_find(const char *device_name,
+							const char *interface)
+{
+	const struct proxy_interface *device_i =
+					device_proxy_find_by_name(device_name);
+	const struct proxy_interface *proxy;
+
+	if (!device_i)
+		return NULL;
+
+	proxy = proxy_interface_find(interface,
+					proxy_interface_get_path(device_i));
+	if (!proxy)
+		return NULL;
 
 	return proxy;
 }
@@ -646,7 +663,7 @@ static enum cmd_status cmd_show(const char *device_name,
 						char **argv, int argc)
 {
 	const struct proxy_interface *proxy =
-					get_device_proxy_by_name(device_name);
+					device_proxy_find_by_name(device_name);
 
 	if (!proxy)
 		return CMD_STATUS_INVALID_ARGS;
@@ -666,7 +683,7 @@ static enum cmd_status cmd_scan(const char *device_name,
 						char **argv, int argc)
 {
 	const struct proxy_interface *proxy =
-					get_device_proxy_by_name(device_name);
+					device_proxy_find_by_name(device_name);
 
 	if (!proxy)
 		return CMD_STATUS_INVALID_ARGS;
@@ -681,7 +698,7 @@ static enum cmd_status cmd_disconnect(const char *device_name,
 						char **argv, int argc)
 {
 	const struct proxy_interface *proxy =
-					get_device_proxy_by_name(device_name);
+					device_proxy_find_by_name(device_name);
 
 	if (!proxy)
 		return CMD_STATUS_INVALID_ARGS;
@@ -696,7 +713,7 @@ static enum cmd_status cmd_get_networks(const char *device_name,
 						char **argv, int argc)
 {
 	const struct proxy_interface *proxy =
-					get_device_proxy_by_name(device_name);
+					device_proxy_find_by_name(device_name);
 
 	if (!proxy)
 		return CMD_STATUS_INVALID_ARGS;
@@ -733,7 +750,7 @@ static enum cmd_status cmd_set_property(const char *device_name,
 						char **argv, int argc)
 {
 	const struct proxy_interface *proxy =
-					get_device_proxy_by_name(device_name);
+					device_proxy_find_by_name(device_name);
 
 	if (!proxy)
 		return CMD_STATUS_INVALID_VALUE;
@@ -755,7 +772,7 @@ static enum cmd_status cmd_connect(const char *device_name,
 	struct l_queue *match;
 	const struct proxy_interface *network_proxy;
 	const struct proxy_interface *device_proxy =
-					get_device_proxy_by_name(device_name);
+					device_proxy_find_by_name(device_name);
 
 	if (!device_proxy)
 		return CMD_STATUS_INVALID_VALUE;
@@ -795,7 +812,7 @@ static enum cmd_status cmd_connect_hidden_network(const char *device_name,
 							int argc)
 {
 	const struct proxy_interface *proxy =
-					get_device_proxy_by_name(device_name);
+					device_proxy_find_by_name(device_name);
 
 	if (!proxy)
 		return CMD_STATUS_INVALID_VALUE;
