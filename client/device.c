@@ -890,27 +890,12 @@ static const struct command device_commands[] = {
 	{ }
 };
 
-const struct proxy_interface *device_wsc_get(const char *device_name)
-{
-	const struct device *device;
-	const struct proxy_interface *proxy =
-					get_device_proxy_by_name(device_name);
-
-	if (!proxy)
-		return NULL;
-
-	device = proxy_interface_get_data(proxy);
-
-	return device->wsc;
-}
-
 char *device_wsc_family_arg_completion(const char *text, int state)
 {
 	return proxy_property_str_completion(&device_interface_type,
 						match_by_partial_name_and_wsc,
 						"Name", text, state);
 }
-
 
 char *device_ap_family_arg_completion(const char *text, int state)
 {

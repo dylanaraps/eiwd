@@ -32,8 +32,6 @@
 #include "display.h"
 
 struct wsc {
-	const struct proxy_interface *device;
-
 	/* TODO: Add status */
 };
 
@@ -46,48 +44,12 @@ static void wsc_destroy(void *data)
 {
 	struct wsc *wsc = data;
 
-	wsc->device = NULL;
-
 	l_free(wsc);
-}
-
-static bool wsc_bind_interface(const struct proxy_interface *proxy,
-				const struct proxy_interface *dependency)
-{
-	const char *interface = proxy_interface_get_interface(dependency);
-
-	if (!strcmp(interface, IWD_DEVICE_INTERFACE)) {
-		struct wsc *wsc = proxy_interface_get_data(proxy);
-
-		wsc->device = dependency;
-
-		return true;
-	}
-
-	return false;
-}
-
-static bool wsc_unbind_interface(const struct proxy_interface *proxy,
-				const struct proxy_interface *dependency)
-{
-	const char *interface = proxy_interface_get_interface(dependency);
-
-	if (!strcmp(interface, IWD_DEVICE_INTERFACE)) {
-		struct wsc *wsc = proxy_interface_get_data(proxy);
-
-		wsc->device = NULL;
-
-		return true;
-	}
-
-	return false;
 }
 
 static const struct proxy_interface_type_ops wsc_ops = {
 	.create = wsc_create,
 	.destroy = wsc_destroy,
-	.bind_interface = wsc_bind_interface,
-	.unbind_interface = wsc_unbind_interface,
 };
 
 static struct proxy_interface_type wsc_interface_type = {
@@ -123,28 +85,29 @@ static void generate_pin_callback(struct l_dbus_message *message,
 					check_errors_method_callback, pin);
 }
 
-static bool match_by_device(const void *a, const void *b)
-{
-	const struct wsc *wsc = a;
-
-	return wsc->device ? true : false;
-}
-
 static void display_wsc_inline(const char *margin, const void *data)
 {
-	const struct wsc *wsc = data;
+	const struct proxy_interface *wsc_i = data;
+	struct proxy_interface *device_i =
+		proxy_interface_find(IWD_DEVICE_INTERFACE,
+					proxy_interface_get_path(wsc_i));
+	const char *identity;
 
-	if (wsc->device && proxy_interface_get_identity_str(wsc->device))
-		display("%s%-*s\n", margin,
-			20, proxy_interface_get_identity_str(wsc->device));
+	if (!device_i)
+		return;
+
+	identity = proxy_interface_get_identity_str(device_i);
+	if (!identity)
+		return;
+
+	display("%s%-*s\n", margin, 20, identity);
 }
 
 static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 {
 	const struct l_queue_entry *entry;
 	struct l_queue *match =
-		proxy_interface_find_all(IWD_WSC_INTERFACE,
-						match_by_device, NULL);
+		proxy_interface_find_all(IWD_WSC_INTERFACE, NULL, NULL);
 
 	display_table_header("WSC-capable Devices", MARGIN "%-*s", 20, "Name");
 
@@ -156,8 +119,7 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 	}
 
 	for (entry = l_queue_get_entries(match); entry; entry = entry->next) {
-		const struct wsc *wsc = proxy_interface_get_data(entry->data);
-
+		const struct proxy_interface *wsc = entry->data;
 		display_wsc_inline(MARGIN, wsc);
 	}
 
@@ -171,15 +133,15 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 static enum cmd_status cmd_push_button(const char *device_name,
 							char **argv, int argc)
 {
-	const struct proxy_interface *proxy = device_wsc_get(device_name);
+	const struct proxy_interface *wsc_i =
+		device_proxy_find(device_name, IWD_WSC_INTERFACE);
 
-	if (!proxy) {
-		display("Invalid device name '%s'\n", device_name);
-
+	if (!wsc_i) {
+		display("No wsc on device: '%s'\n", device_name);
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
-	proxy_interface_method_call(proxy, "PushButton", "",
+	proxy_interface_method_call(wsc_i, "PushButton", "",
 						check_errors_method_callback);
 
 	return CMD_STATUS_TRIGGERED;
@@ -188,18 +150,18 @@ static enum cmd_status cmd_push_button(const char *device_name,
 static enum cmd_status cmd_start_user_pin(const char *device_name,
 							char **argv, int argc)
 {
-	const struct proxy_interface *proxy = device_wsc_get(device_name);
-
-	if (!proxy) {
-		display("Invalid device name '%s'\n", device_name);
-
-		return CMD_STATUS_INVALID_VALUE;
-	}
+	const struct proxy_interface *wsc_i;
 
 	if (argc != 1)
 		return CMD_STATUS_INVALID_ARGS;
 
-	proxy_interface_method_call(proxy, "StartPin", "s",
+	wsc_i = device_proxy_find(device_name, IWD_WSC_INTERFACE);
+	if (!wsc_i) {
+		display("No wsc on device: '%s'\n", device_name);
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	proxy_interface_method_call(wsc_i, "StartPin", "s",
 					check_errors_method_callback, argv[0]);
 
 	return CMD_STATUS_TRIGGERED;
@@ -208,15 +170,15 @@ static enum cmd_status cmd_start_user_pin(const char *device_name,
 static enum cmd_status cmd_start_pin(const char *device_name,
 							char **argv, int argc)
 {
-	const struct proxy_interface *proxy = device_wsc_get(device_name);
+	const struct proxy_interface *wsc_i =
+		device_proxy_find(device_name, IWD_WSC_INTERFACE);
 
-	if (!proxy) {
-		display("Invalid device name '%s'\n", device_name);
-
+	if (!wsc_i) {
+		display("No wsc on device: '%s'\n", device_name);
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
-	proxy_interface_method_call(proxy, "GeneratePin", "",
+	proxy_interface_method_call(wsc_i, "GeneratePin", "",
 							generate_pin_callback);
 
 	return CMD_STATUS_TRIGGERED;
@@ -225,15 +187,15 @@ static enum cmd_status cmd_start_pin(const char *device_name,
 static enum cmd_status cmd_cancel(const char *device_name,
 						char **argv, int argc)
 {
-	const struct proxy_interface *proxy = device_wsc_get(device_name);
+	const struct proxy_interface *wsc_i =
+		device_proxy_find(device_name, IWD_WSC_INTERFACE);
 
-	if (!proxy) {
-		display("Invalid device name '%s'\n", device_name);
-
+	if (!wsc_i) {
+		display("No wsc on device: '%s'\n", device_name);
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
-	proxy_interface_method_call(proxy, "Cancel", "",
+	proxy_interface_method_call(wsc_i, "Cancel", "",
 						check_errors_method_callback);
 
 	return CMD_STATUS_TRIGGERED;
