@@ -43,9 +43,6 @@ struct device {
 	char *mode;
 	const struct proxy_interface *adapter;
 	const struct proxy_interface *connected_network;
-	const struct proxy_interface *wsc;
-	const struct proxy_interface *ap;
-	const struct proxy_interface *ad_hoc;
 };
 
 static struct proxy_interface *default_device;
@@ -440,65 +437,8 @@ static void device_destroy(void *data)
 
 	device->adapter = NULL;
 	device->connected_network = NULL;
-	device->wsc = NULL;
 
 	l_free(device);
-}
-
-static bool device_bind_interface(const struct proxy_interface *proxy,
-				const struct proxy_interface *dependency)
-{
-	const char *interface = proxy_interface_get_interface(dependency);
-
-	if (!strcmp(interface, IWD_WSC_INTERFACE)) {
-		struct device *device = proxy_interface_get_data(proxy);
-
-		device->wsc = dependency;
-
-		return true;
-	} else if (!strcmp(interface, IWD_ACCESS_POINT_INTERFACE)) {
-		struct device *device = proxy_interface_get_data(proxy);
-
-		device->ap = dependency;
-
-		return true;
-	} else if (!strcmp(interface, IWD_AD_HOC_INTERFACE)) {
-		struct device *device = proxy_interface_get_data(proxy);
-
-		device->ad_hoc = dependency;
-
-		return true;
-	}
-
-	return false;
-}
-
-static bool device_unbind_interface(const struct proxy_interface *proxy,
-				const struct proxy_interface *dependency)
-{
-	const char *interface = proxy_interface_get_interface(dependency);
-
-	if (!strcmp(interface, IWD_WSC_INTERFACE)) {
-		struct device *device = proxy_interface_get_data(proxy);
-
-		device->wsc = NULL;
-
-		return true;
-	} else if (!strcmp(interface, IWD_ACCESS_POINT_INTERFACE)) {
-		struct device *device = proxy_interface_get_data(proxy);
-
-		device->ap = NULL;
-
-		return true;
-	} else if (!strcmp(interface, IWD_AD_HOC_INTERFACE)) {
-		struct device *device = proxy_interface_get_data(proxy);
-
-		device->ad_hoc = NULL;
-
-		return true;
-	}
-
-	return false;
 }
 
 static void display_device_inline(const char *margin, const void *data)
@@ -530,8 +470,6 @@ static const char *device_identity(void *data)
 static const struct proxy_interface_type_ops device_ops = {
 	.create = device_create,
 	.destroy = device_destroy,
-	.bind_interface = device_bind_interface,
-	.unbind_interface = device_unbind_interface,
 	.identity = device_identity,
 	.display = display_device_inline,
 };
@@ -556,27 +494,6 @@ static bool match_by_partial_name(const void *a, const void *b)
 	const char *text = b;
 
 	return !strncmp(device->name, text, strlen(text));
-}
-
-static bool match_by_partial_name_and_wsc(const void *a, const void *b)
-{
-	const struct device *device = a;
-
-	return match_by_partial_name(a, b) && device->wsc ? true : false;
-}
-
-static bool match_by_partial_name_and_ap(const void *a, const void *b)
-{
-	const struct device *device = a;
-
-	return match_by_partial_name(a, b) && device->ap ? true : false;
-}
-
-static bool match_by_partial_name_and_ad_hoc(const void *a, const void *b)
-{
-	const struct device *device = a;
-
-	return match_by_partial_name(a, b) && device->ad_hoc ? true : false;
 }
 
 static bool match_all(const void *a, const void *b)
