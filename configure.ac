@@ -77,14 +77,14 @@ AC_CHECK_HEADERS(linux/types.h linux/if_alg.h)
 AC_CHECK_HEADERS_ONCE(execinfo.h)
 AC_CHECK_LIB(execinfo, backtrace)
 
+AC_ARG_ENABLE([client], AC_HELP_STRING([--disable-client],
+				[don't install iwctl client utility]),
+					[enable_client=${enableval}])
+AM_CONDITIONAL(CLIENT, test "${enable_client}" != "no")
 if (test "${enable_client}" != "no"); then
 	AC_CHECK_HEADERS(readline/readline.h, enable_readline=yes,
 			AC_MSG_ERROR(readline header files are required))
 fi
-
-AC_ARG_ENABLE([client], AC_HELP_STRING([--disable-client],
-				[don't install iwctl client utility]),
-					[enable_client=${enableval}])
 AM_CONDITIONAL(CLIENT, test "${enable_client}" != "no")
 
 AC_ARG_ENABLE([monitor], AC_HELP_STRING([--disable-monitor],
