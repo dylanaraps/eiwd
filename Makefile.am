@@ -179,6 +179,14 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 monitor_iwmon_LDADD = ell/libell-internal.la
 endif
 
+if WIRED
+libexec_PROGRAMS += wired/ead
+
+wired_ead_SOURCES = wired/main.c
+wired_ead_LDADD = ell/libell-internal.la
+wired_ead_DEPENDENCIES = ell/libell-internal.la
+endif
+
 if TOOLS
 noinst_PROGRAMS += tools/hwsim
 

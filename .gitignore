@@ -22,6 +22,7 @@ src/iwd
 src/iwd.service
 client/iwctl
 monitor/iwmon
+wired/ead
 tools/hwsim
 tools/test-runner
 doc/iwmon.1

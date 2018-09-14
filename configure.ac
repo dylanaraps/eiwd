@@ -154,6 +154,11 @@ AC_ARG_ENABLE(ofono, AC_HELP_STRING([--enable-ofono],
 					[enable_ofono=${enableval}])
 AM_CONDITIONAL(OFONO, test "${enable_ofono}" = "yes")
 
+AC_ARG_ENABLE(wired, AC_HELP_STRING([--enable-wired],
+				[enable Ethernet authentication support]),
+					[enable_wired=${enableval}])
+AM_CONDITIONAL(WIRED, test "${enable_wired}" = "yes")
+
 AC_ARG_ENABLE(tools, AC_HELP_STRING([--enable-tools],
 				[enable internal testing utilities]),
 					[enable_tools=${enableval}])
