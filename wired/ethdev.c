@@ -45,6 +45,8 @@ struct ethdev {
 	uint32_t index;
 	char ifname[IFNAMSIZ];
 	uint8_t addr[ETH_ALEN];
+	bool active;
+	bool lower_up;
 	struct l_queue *eapol_sessions;
 };
 
@@ -371,9 +373,13 @@ static void newlink_notify(const struct ifinfomsg *ifi, int bytes)
 	uint8_t *addr = NULL;
 	const char *ifname = NULL;
 	uint8_t linkmode = 0, operstate = 0;
+	bool active, lower_up;
 
 	if (ifi->ifi_type != ARPHRD_ETHER)
 		return;
+
+	active = ifi->ifi_flags & IFF_UP;
+	lower_up = ifi->ifi_flags & IFF_LOWER_UP;
 
 	for (attr = IFLA_RTA(ifi); RTA_OK(attr, bytes);
 						attr = RTA_NEXT(attr, bytes)) {
@@ -397,7 +403,7 @@ static void newlink_notify(const struct ifinfomsg *ifi, int bytes)
 	if (!addr || !ifname)
 		return;
 
-	l_info("%s: linkmode %u operstate %u", ifname, linkmode, operstate);
+	l_debug("%s: linkmode %u operstate %u", ifname, linkmode, operstate);
 
 	if (!is_ifname_valid(ifname)) {
 		l_debug("Ignoring device with interface name %s", ifname);
@@ -427,20 +433,28 @@ static void newlink_notify(const struct ifinfomsg *ifi, int bytes)
 
 		dev = l_new(struct ethdev, 1);
 		dev->index = index;
+		dev->active = false;
+		dev->lower_up = false;
 		dev->eapol_sessions = l_queue_new();
 
 		l_debug("Creating device %u", dev->index);
 
 		l_queue_push_tail(ethdev_list, dev);
-
-		pae_write(dev, pae_group_addr,
-					eapol_start, sizeof(eapol_start));
 	}
 
 	if (ifname)
 		strcpy(dev->ifname, ifname);
 
 	memcpy(dev->addr, addr, ETH_ALEN);
+
+	if (lower_up && !dev->lower_up)
+		pae_write(dev, pae_group_addr,
+					eapol_start, sizeof(eapol_start));
+	else if (!lower_up && dev->lower_up)
+		l_queue_destroy(dev->eapol_sessions, eapol_free);
+
+	dev->active = active;
+	dev->lower_up = lower_up;
 }
 
 static void dellink_notify(const struct ifinfomsg *ifi, int bytes)
