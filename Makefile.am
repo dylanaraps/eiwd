@@ -80,50 +80,54 @@ dbus_busdir = @DBUS_BUSDIR@
 dbus_bus_DATA =
 endif
 
+eap_sources = src/eap.c src/eap.h src/eap-private.h \
+				src/eap-wsc.c erc/eap-wsc.h \
+				src/eap-md5.c \
+				src/eap-tls.c \
+				src/eap-ttls.c \
+				src/eap-mschapv2.c src/eap-mschapv2.h \
+				src/eap-sim.c \
+				src/eap-aka.c \
+				src/eap-peap.c \
+				src/eap-gtc.c \
+				src/eap-pwd.c \
+				src/util.h src/util.c \
+				src/crypto.h src/crypto.c \
+				src/ecc.h src/ecc.c \
+				src/wscutil.h src/wscutil.c \
+				src/simutil.h src/simutil.c \
+				src/simauth.h src/simauth.c \
+				src/watchlist.h src/watchlist.c
+
 if DAEMON
 libexec_PROGRAMS += src/iwd
 
-src_iwd_SOURCES = src/main.c linux/nl80211.h \
+src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h \
+					src/plugin.h src/plugin.c \
 					src/netdev.h src/netdev.c \
 					src/wiphy.h src/wiphy.c \
 					src/device.h src/device.c \
 					src/station.h src/station.c \
 					src/ie.h src/ie.c \
 					src/dbus.h src/dbus.c \
-					src/crypto.h src/crypto.c \
 					src/mpdu.h src/mpdu.c \
 					src/eapol.h src/eapol.c \
 					src/handshake.h src/handshake.c \
 					src/scan.h src/scan.c \
-					src/util.h src/util.c \
 					src/common.h src/common.c \
 					src/agent.h src/agent.c \
 					src/storage.h src/storage.c \
 					src/network.h src/network.c \
-					src/wscutil.h src/wscutil.c \
 					src/wsc.c \
-					src/eap-wsc.h src/eap-wsc.c \
-					src/eap.h src/eap.c src/eap-private.h \
-					src/eap-md5.c \
-					src/eap-tls.c src/eap-ttls.c \
-					src/eap-mschapv2.c src/eap-mschapv2.h \
 					src/backtrace.h src/backtrace.c \
 					src/knownnetworks.h \
 					src/knownnetworks.c \
 					src/rfkill.h src/rfkill.c \
-					src/watchlist.h src/watchlist.c \
 					src/ftutil.h src/ftutil.c \
-					src/iwd.h src/eap-sim.c src/eap-aka.c \
-					src/simutil.h src/simutil.c \
 					src/ap.h src/ap.c \
-					src/simauth.h src/simauth.c \
-					src/plugin.h src/plugin.c \
-					src/eap-peap.c \
-					src/eap-gtc.c \
-					src/eap-pwd.c \
-					src/ecc.h src/ecc.c \
 					src/adhoc.h src/adhoc.c \
 					src/sae.h src/sae.c \
+					$(eap_sources) \
 					$(builtin_sources)
 src_iwd_LDADD = ell/libell-internal.la -ldl
 src_iwd_DEPENDENCIES = ell/libell-internal.la
@@ -193,7 +197,7 @@ endif
 if WIRED
 libexec_PROGRAMS += wired/ead
 
-wired_ead_SOURCES = wired/main.c
+wired_ead_SOURCES = wired/main.c $(eap_sources)
 wired_ead_LDADD = ell/libell-internal.la
 wired_ead_DEPENDENCIES = ell/libell-internal.la
 
