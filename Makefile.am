@@ -69,8 +69,10 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 ell_libell_internal_la_SOURCES = $(ell_sources)
 
 bin_PROGRAMS =
+libexec_PROGRAMS =
+noinst_PROGRAMS =
 
-libexec_PROGRAMS = src/iwd
+libexec_PROGRAMS += src/iwd
 
 src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/netdev.h src/netdev.c \
@@ -114,9 +116,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 					src/adhoc.h src/adhoc.c \
 					src/sae.h src/sae.c \
 					$(builtin_sources)
-
 src_iwd_LDADD = ell/libell-internal.la -ldl
-
 src_iwd_DEPENDENCIES = ell/libell-internal.la
 
 if SYSTEMD_SERVICE
@@ -169,13 +169,15 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 monitor_iwmon_LDADD = ell/libell-internal.la
 endif
 
-noinst_PROGRAMS = tools/hwsim tools/test-runner
+noinst_PROGRAMS += tools/hwsim
 
 tools_hwsim_SOURCES = tools/hwsim.c src/mpdu.h \
 					src/util.h src/util.c \
 					src/storage.h src/storage.c \
 					src/common.h src/common.c
 tools_hwsim_LDADD = ell/libell-internal.la
+
+noinst_PROGRAMS += tools/test-runner
 
 tools_test_runner_SOURCES = tools/test-runner.c
 tools_test_runner_LDADD = ell/libell-internal.la
