@@ -20,7 +20,9 @@
  *
  */
 
-struct ethdev;
+struct l_settings;
 
-bool ethdev_init(const char *whitelist, const char *blacklist);
-void ethdev_exit(void);
+bool network_init(void);
+void network_exit(void);
+
+struct l_settings *network_lookup_security(const char *filename);

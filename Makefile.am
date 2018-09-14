@@ -196,7 +196,8 @@ endif
 if WIRED
 libexec_PROGRAMS += wired/ead
 
-wired_ead_SOURCES = wired/main.c wired/ethdev.h wired/ethdev.c $(eap_sources)
+wired_ead_SOURCES = wired/main.c wired/ethdev.h wired/ethdev.c \
+				wired/network.h wired/network.c $(eap_sources)
 wired_ead_LDADD = ell/libell-internal.la
 wired_ead_DEPENDENCIES = ell/libell-internal.la
 
