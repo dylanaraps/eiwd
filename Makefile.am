@@ -72,6 +72,14 @@ bin_PROGRAMS =
 libexec_PROGRAMS =
 noinst_PROGRAMS =
 
+if SYSTEMD_SERVICE
+systemd_unitdir = @SYSTEMD_UNITDIR@
+systemd_unit_DATA =
+
+dbus_busdir = @DBUS_BUSDIR@
+dbus_bus_DATA =
+endif
+
 libexec_PROGRAMS += src/iwd
 
 src_iwd_SOURCES = src/main.c linux/nl80211.h \
@@ -132,11 +140,8 @@ endif
 if SYSTEMD_SERVICE
 src_iwd_DEPENDENCIES += src/iwd.service
 
-systemd_unitdir = @SYSTEMD_UNITDIR@
-systemd_unit_DATA = src/iwd.service
-
-dbus_busdir = @DBUS_BUSDIR@
-dbus_bus_DATA = src/net.connman.iwd.service
+systemd_unit_DATA += src/iwd.service
+dbus_bus_DATA += src/net.connman.iwd.service
 endif
 
 if CLIENT
@@ -185,6 +190,13 @@ libexec_PROGRAMS += wired/ead
 wired_ead_SOURCES = wired/main.c
 wired_ead_LDADD = ell/libell-internal.la
 wired_ead_DEPENDENCIES = ell/libell-internal.la
+
+if SYSTEMD_SERVICE
+wired_ead_DEPENDENCIES += wired/ead.service
+
+systemd_unit_DATA += wired/ead.service
+dbus_bus_DATA += wired/net.connman.ead.service
+endif
 endif
 
 if TOOLS
