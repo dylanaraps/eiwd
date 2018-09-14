@@ -57,9 +57,6 @@ class Test(unittest.TestCase):
         testutil.test_ifaces_connected(list(hostapd.hostapd_map.keys())[0],
                                        dev.name)
 
-        self.assertRaises(iwd.dbus.DBusException, dev.start_ap,
-                          'TestAP2', 'Password2')
-
         dev.disconnect()
 
         condition = 'not obj.connected'
@@ -106,7 +103,7 @@ class Test(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        pass
+        IWD.copy_to_storage('TestAP1.psk')
 
     @classmethod
     def tearDownClass(cls):
