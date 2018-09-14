@@ -1,0 +1,74 @@
+Virtual Ethernet Device
+=======================
+
+Virtual Ethernet device pairs are a pair of fake Ethernet devices that act
+as a pipe, Traffic sent via one interface comes out the other. As these are
+Ethernet devices and not point to point devices you can handle broadcast
+traffic on these interfaces and use protocols other than IP.
+
+To create a virtual ethernet pipe with one end called veth0 and the other
+called veth1, use the following command:
+
+	ip link add veth0 type veth peer name veth1
+
+The pair of interfaces are identical and act as a dumb pipe, there is no
+master or slave end. Deleting either end will cause both interfaces to be
+deleted. The pair of interfaces implement carrier detection and can tell
+when one side of the link is in the 'DOWN' state. if the other link is in
+the 'DOWN' state it will indicate 'NO-CARRIER' until the other end is
+brought up:
+
+	ip link set veth0 up
+	ip link set veth1 up
+
+
+Testing 802.1x on Virtual Ethernet Device
+=========================================
+
+It is based on hostapd and wpa_supplicant. To compile them, go in the
+hostapd/wpa_supplicant directory, copy "defconfig" to ".config", for
+hostapd uncomment the line "CONFIG_DRIVER_WIRED=y" and "make".
+
+Using hostapd (the authenticator) and following hostapd.conf file:
+
+	interface=veth0
+	driver=wired
+	ieee8021x=1
+	eapol_key_index_workaround=0
+	eap_server=1
+	eap_user_file=hostapd.eap_user # replace with the right path
+	ca_cert=newcertca.crt # replace with your CA certificate path
+	server_cert=newcertca.crt # replace with your server certificate path (here I use the same as for the CA for simplicity)
+	private_key=newkeyca.key # replace with your server private key path
+
+A sample hostapd.eap_user that works is the following:
+
+	# Phase 1 users
+	*	PEAP
+	# Phase 2
+	"test"	MSCHAPV2	"password"	[2]
+
+To execute hostapd (add "-dd" for debug mode):
+
+	sudo ./hostapd hostapd.conf
+
+Using wpa_supplicant (the supplicant, i.e., the client) with the following
+wpa_supplicant.conf configuration file:
+
+	ap_scan=0
+	fast_reauth=1
+	network={
+		ssid=""
+		scan_ssid=0
+		key_mgmt=IEEE8021X
+		eap=PEAP
+		phase2="auth=MSCHAPV2"
+		identity="test"
+		password="password"
+		ca_cert="newcertca.crt" # replace with your CA certificate path
+	}
+
+To run wpa_supplicant (add "-dd -K" for debugging):
+
+	sudo ./wpa_supplicant -iveth1 -c./wpa_supplicant.conf -Dwired
+
