@@ -97,6 +97,7 @@ char *proxy_property_str_completion(const struct proxy_interface_type *type,
 
 void *proxy_interface_get_data(const struct proxy_interface *proxy);
 const char *proxy_interface_get_interface(const struct proxy_interface *proxy);
+const char *proxy_interface_get_path(const struct proxy_interface *proxy);
 const char *proxy_interface_get_identity_str(
 					const struct proxy_interface *proxy);
 

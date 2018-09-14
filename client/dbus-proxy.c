@@ -677,6 +677,11 @@ const char *proxy_interface_get_interface(const struct proxy_interface *proxy)
 	return proxy->type->interface;
 }
 
+const char *proxy_interface_get_path(const struct proxy_interface *proxy)
+{
+	return proxy->path;
+}
+
 const char *proxy_interface_get_identity_str(
 					const struct proxy_interface *proxy)
 {
