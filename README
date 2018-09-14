@@ -11,6 +11,7 @@ In order to compile the source code you need following software packages:
 	- GCC compiler
 	- GNU C library
 	- Embedded Linux library
+	- readline (command line client)
 
 To configure run:
 	./configure --prefix=/usr
@@ -46,6 +47,123 @@ source code:
 It is not required to build or install Embedded Linux library. The build
 will happen when building the Wireless daemon and it will then be linked
 internally.
+
+
+Configuration and options
+=========================
+
+The configuration system provides switches to disable certain build time
+configuration options which are generally useful and enabled by default:
+
+	--disable-daemon
+
+		Disable installation of Wireless daemon
+
+		By default the Wireless daemon binary iwd is enabled and
+		placed into --libexecdir directory.
+
+	--disable-client
+
+		Disable installation of Wireless client utility
+
+		By default the Wireless client binary iwctl is enabled
+		and place into --bindir directory.
+
+	--disable-monitor
+
+		Disable installation of Wireless monitor utility
+
+		By default the Wireless monitor binary iwmon is enabled
+		and place into --bindir directory.
+
+	--disable-dbus-policy
+
+		Disable installation of D-Bus system policy configuration
+
+		By default the accompanying D-Bus policy file will be
+		installed in the D-Bus data directory. The location of
+		that directory will be automatically detected or can be
+		manually configured via the --with-dbus-datadir option.
+
+		The D-Bus policy is required for daemons to gain service
+		name ownership and clients to access them. When disabling
+		this option, manual installation of D-Bus polices is
+		required.
+
+		Note: This option affects all D-Bus policy configurations.
+
+	--disable-systemd-service
+
+		Disable installation of systemd service configuration
+
+		By default the accompanying systemd service unit with
+		D-Bus autostart configuration will be installed. The
+		locations will be automatically detected or can be
+		manually configured via --with-dbus-busdir option
+		and --with-systemd-unitdir option.
+
+		Using systemd is optional, but highly recommended. When
+		disabling this option, manual installation is required.
+
+		Note: This option affects all systemd unit setups.
+
+When building for a system that wants to use wireless technology, disabling
+any of the above options makes only limited sense. It may break the general
+setup and usability for wireless connections.
+
+The configuration system provides switches for optional build time features
+that can be enabled if the functionality is required:
+
+	--enable-sim-hardcoded
+
+		Enable support for hard coded SIM keys
+
+		Note: With --disable-daemon this option is ignored
+
+	--enable-ofono
+
+		Enable support for oFono SIM authentication
+
+		Note: With --disable-daemon this option is ignored
+
+	--enable-wired
+
+		Enable installation of Ethernet authentication daemon
+
+		This allows enabling the Ethernet daemon binary ead which
+		is then placed into --libexecdir directory.
+
+		With this option the support for 802.1x for wired Ethernet
+		connections can be enabled. It provides its own D-Bus
+		policy and systemd configuration.
+
+	--enable-hwsim
+
+		Enable installation of Wireless simulation utility
+
+		This allows enabling the Simulation daemon binary hwsim
+		which is then placed into --bindir directory.
+
+		With this utility and mac80211_hwim kernel module the
+		simulation of 802.11 networks can be tested. It provides
+		its own D-Bus policy configuration.
+
+		This utility is only useful for developers and should not
+		be considered for general installation. For this reason
+		no systemd configuration is provided.
+
+	--enable-tools
+
+		Enable compilation of various testing utilities
+
+		This enables building of all utilities that are however
+		not installed and only useful during development.
+
+	--enable-docs
+
+		Enable generation of documentation and manual pages
+
+		Note: This option does not provide any value right now
 
 
 Netlink monitoring
