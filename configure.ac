@@ -64,13 +64,19 @@ fi
 
 if (test "$localstatedir" = '${prefix}/var'); then
 	daemon_storagedir="${prefix}/var/lib/iwd"
+	wired_storagedir="${prefix}/var/lib/ead"
 else
 	daemon_storagedir="${localstatedir}/lib/iwd"
+	wired_storagedir="${localstatedir}/lib/ead"
 fi
 
 AC_DEFINE_UNQUOTED(DAEMON_STORAGEDIR, "${daemon_storagedir}",
-			[Directory for the storage files])
-AC_DEFINE_UNQUOTED(DAEMON_CONFIGDIR, "/etc/iwd", [Configuration directory])
+			[Directory for Wireless daemon storage files])
+AC_DEFINE_UNQUOTED(DAEMON_CONFIGDIR, "/etc/iwd",
+			[Directory for Wireless daemon configuration])
+
+AC_DEFINE_UNQUOTED(WIRED_STORAGEDIR, "${wired_storagedir}",
+			[Directory for Ethernet daemon storage files])
 
 AC_CHECK_HEADERS(linux/types.h linux/if_alg.h)
 
