@@ -164,6 +164,11 @@ AC_ARG_ENABLE(wired, AC_HELP_STRING([--enable-wired],
 					[enable_wired=${enableval}])
 AM_CONDITIONAL(WIRED, test "${enable_wired}" = "yes")
 
+AC_ARG_ENABLE(hwsim, AC_HELP_STRING([--enable-hwsim],
+				[enable Wireless simulation utility]),
+					[enable_hwsim=${enableval}])
+AM_CONDITIONAL(HWSIM, test "${enable_hwsim}" = "yes")
+
 AC_ARG_ENABLE(tools, AC_HELP_STRING([--enable-tools],
 				[enable internal testing utilities]),
 					[enable_tools=${enableval}])

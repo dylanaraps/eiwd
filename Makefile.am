@@ -209,14 +209,18 @@ dbus_bus_DATA += wired/net.connman.ead.service
 endif
 endif
 
-if TOOLS
-noinst_PROGRAMS += tools/hwsim
+if HWSIM
+bin_PROGRAMS += tools/hwsim
 
 tools_hwsim_SOURCES = tools/hwsim.c src/mpdu.h \
 					src/util.h src/util.c \
 					src/storage.h src/storage.c \
 					src/common.h src/common.c
 tools_hwsim_LDADD = ell/libell-internal.la
+
+if DBUS_POLICY
+dist_dbus_data_DATA += tools/hwsim-dbus.conf
+endif
 endif
 
 if TOOLS
@@ -378,6 +382,7 @@ DISTCHECK_CONFIGURE_FLAGS = --disable-dbus-policy --disable-systemd-service \
 				--enable-sim-hardcoded \
 				--enable-ofono \
 				--enable-wired \
+				--enable-hwsim \
 				--enable-tools
 
 DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests) $(manual_pages)
