@@ -357,11 +357,12 @@ dist_man_MANS = $(manual_pages)
 endif
 
 EXTRA_DIST = src/genbuiltin src/iwd.service.in src/net.connman.iwd.service \
+			wired/ead.service.in wired/net.connman.ead.service \
 			doc/main.conf $(manual_pages:.1=.txt)
 
 AM_CFLAGS = -fvisibility=hidden
 
-CLEANFILES = src/iwd.service
+CLEANFILES = src/iwd.service wired/ead.service
 
 DISTCHECK_CONFIGURE_FLAGS = --disable-dbus-policy --disable-systemd-service \
 				--enable-sim-hardcoded \

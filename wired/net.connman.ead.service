@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=net.connman.ead
+Exec=/bin/false
+User=root
+SystemdService=ead.service

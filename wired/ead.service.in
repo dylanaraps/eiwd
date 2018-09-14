@@ -1,0 +1,13 @@
+[Unit]
+Description=Ethernet service
+Before=network.target
+Wants=network.target
+
+[Service]
+Type=dbus
+BusName=net.connman.ead
+ExecStart=@libexecdir@/ead
+LimitNPROC=1
+
+[Install]
+WantedBy=multi-user.target
