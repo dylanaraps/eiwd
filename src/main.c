@@ -437,9 +437,9 @@ int main(int argc, char *argv[])
 	l_info("Wireless daemon version %s", VERSION);
 
 	if (!config_dir)
-		config_dir = CONFIGDIR;
+		config_dir = DAEMON_CONFIGDIR;
 
-	config_path = l_strdup_printf("/%s/%s", config_dir, "main.conf");
+	config_path = l_strdup_printf("%s/%s", config_dir, "main.conf");
 	iwd_config = l_settings_new();
 
 	if (!l_settings_load_from_file(iwd_config, config_path))

@@ -183,12 +183,12 @@ char *storage_get_network_file_path(enum security type, const char *ssid)
 		hex = l_util_hexstring((const unsigned char *) ssid,
 					strlen(ssid));
 
-		path = l_strdup_printf(STORAGEDIR "/=%s.%s", hex,
+		path = l_strdup_printf(DAEMON_STORAGEDIR "/=%s.%s", hex,
 					security_to_str(type));
 
 		l_free(hex);
 	} else
-		path = l_strdup_printf(STORAGEDIR "/%s.%s", ssid,
+		path = l_strdup_printf(DAEMON_STORAGEDIR "/%s.%s", ssid,
 					security_to_str(type));
 
 	return path;

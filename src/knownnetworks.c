@@ -369,9 +369,10 @@ bool known_networks_init(void)
 		return false;
 	}
 
-	dir = opendir(STORAGEDIR);
+	dir = opendir(DAEMON_STORAGEDIR);
 	if (!dir) {
-		l_info("Unable to open %s: %s", STORAGEDIR, strerror(errno));
+		l_info("Unable to open %s: %s", DAEMON_STORAGEDIR,
+							strerror(errno));
 		l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE);
 		return false;
 	}
@@ -404,8 +405,8 @@ bool known_networks_init(void)
 
 	closedir(dir);
 
-	storage_dir_watch = l_fswatch_new(STORAGEDIR, known_networks_watch_cb,
-						NULL,
+	storage_dir_watch = l_fswatch_new(DAEMON_STORAGEDIR,
+						known_networks_watch_cb, NULL,
 						known_networks_watch_destroy);
 
 	return true;

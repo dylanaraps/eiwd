@@ -63,14 +63,14 @@ if (test "${prefix}" = "NONE"); then
 fi
 
 if (test "$localstatedir" = '${prefix}/var'); then
-	storagedir="${prefix}/var/lib/iwd"
+	daemon_storagedir="${prefix}/var/lib/iwd"
 else
-	storagedir="${localstatedir}/lib/iwd"
+	daemon_storagedir="${localstatedir}/lib/iwd"
 fi
 
-AC_DEFINE_UNQUOTED(STORAGEDIR, "${storagedir}",
+AC_DEFINE_UNQUOTED(DAEMON_STORAGEDIR, "${daemon_storagedir}",
 			[Directory for the storage files])
-AC_DEFINE_UNQUOTED(CONFIGDIR, "/etc/iwd", [Configuration directory])
+AC_DEFINE_UNQUOTED(DAEMON_CONFIGDIR, "/etc/iwd", [Configuration directory])
 
 AC_CHECK_HEADERS(linux/types.h linux/if_alg.h)
 
