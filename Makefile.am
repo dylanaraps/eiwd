@@ -169,14 +169,15 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 monitor_iwmon_LDADD = ell/libell-internal.la
 endif
 
-noinst_PROGRAMS = tools/hwsim
-noinst_PROGRAMS += tools/test-runner
+noinst_PROGRAMS = tools/hwsim tools/test-runner
 
 tools_hwsim_SOURCES = tools/hwsim.c src/mpdu.h \
 					src/util.h src/util.c \
 					src/storage.h src/storage.c \
 					src/common.h src/common.c
 tools_hwsim_LDADD = ell/libell-internal.la
+
+tools_test_runner_SOURCES = tools/test-runner.c
 tools_test_runner_LDADD = ell/libell-internal.la
 
 if SIM_HARDCODED
