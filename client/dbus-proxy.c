@@ -143,7 +143,8 @@ static void interface_update_properties(struct proxy_interface *proxy,
 char *proxy_property_str_completion(const struct proxy_interface_type *type,
 					proxy_property_match_func_t function,
 					const char *property_name,
-					const void *value, int state)
+					const void *value, int state,
+					const char *extra_interface)
 {
 	static struct l_queue *match;
 	static const struct l_queue_entry *entry;
@@ -162,6 +163,15 @@ char *proxy_property_str_completion(const struct proxy_interface_type *type,
 		const char *str;
 
 		entry = entry->next;
+
+		if (extra_interface) {
+			const char *path = proxy_interface_get_path(proxy);
+			const struct proxy_interface *extra =
+				proxy_interface_find(extra_interface, path);
+
+			if (!extra)
+				continue;
+		}
 
 		str = proxy_interface_property_tostr(proxy, property_name);
 		if (!str)

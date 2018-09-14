@@ -893,22 +893,25 @@ static const struct command device_commands[] = {
 char *device_wsc_family_arg_completion(const char *text, int state)
 {
 	return proxy_property_str_completion(&device_interface_type,
-						match_by_partial_name_and_wsc,
-						"Name", text, state);
+						match_by_partial_name,
+						"Name", text, state,
+						IWD_WSC_INTERFACE);
 }
 
 char *device_ap_family_arg_completion(const char *text, int state)
 {
 	return proxy_property_str_completion(&device_interface_type,
-						match_by_partial_name_and_ap,
-						"Name", text, state);
+						match_by_partial_name,
+						"Name", text, state,
+						IWD_ACCESS_POINT_INTERFACE);
 }
 
 char *device_ad_hoc_family_arg_completion(const char *text, int state)
 {
 	return proxy_property_str_completion(&device_interface_type,
-					match_by_partial_name_and_ad_hoc,
-					"Name", text, state);
+					match_by_partial_name,
+					"Name", text, state,
+					IWD_AD_HOC_INTERFACE);
 }
 
 static char *family_arg_completion(const char *text, int state)
@@ -939,7 +942,7 @@ static char *family_arg_completion(const char *text, int state)
 
 	return proxy_property_str_completion(&device_interface_type,
 						match_by_partial_name, "Name",
-						text, state);
+						text, state, NULL);
 }
 
 static char *entity_arg_completion(const char *text, int state)

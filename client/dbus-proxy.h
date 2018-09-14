@@ -93,7 +93,8 @@ void proxy_properties_display(const struct proxy_interface *proxy,
 char *proxy_property_str_completion(const struct proxy_interface_type *type,
 					proxy_property_match_func_t function,
 					const char *property_name,
-					const void *value, int state);
+					const void *value, int state,
+					const char *extra_interface);
 
 void *proxy_interface_get_data(const struct proxy_interface *proxy);
 const char *proxy_interface_get_interface(const struct proxy_interface *proxy);

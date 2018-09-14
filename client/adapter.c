@@ -332,7 +332,7 @@ static char *family_arg_completion(const char *text, int state)
 
 	return proxy_property_str_completion(&adapter_interface_type,
 						match_by_partial_name, "Name",
-						text, state);
+						text, state, NULL);
 }
 
 static char *entity_arg_completion(const char *text, int state)

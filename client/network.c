@@ -225,7 +225,7 @@ char *network_name_completion(const struct proxy_interface *device,
 
 	return proxy_property_str_completion(&network_interface_type,
 						match_by_partial_name, "Name",
-						&params, state);
+						&params, state, NULL);
 }
 
 struct network_search_parameters {
