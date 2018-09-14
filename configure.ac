@@ -97,37 +97,6 @@ AC_ARG_ENABLE([monitor], AC_HELP_STRING([--disable-monitor],
 					[enable_monitor=${enableval}])
 AM_CONDITIONAL(MONITOR, test "${enable_monitor}" != "no")
 
-AC_ARG_ENABLE([systemd-service], AC_HELP_STRING([--disable-systemd-service],
-				[don't install systemd service file]),
-					[enable_systemd_service=${enableval}])
-AM_CONDITIONAL(SYSTEMD_SERVICE, test "${enable_systemd_service}" != "no")
-
-AC_ARG_WITH([systemd-unitdir], AC_HELP_STRING([--with-systemd-unitdir=DIR],
-				[path to systemd unit directory]),
-					[path_systemd_unitdir=${withval}])
-if (test "${enable_systemd_service}" != "no" && test -z "${path_systemd_unitdir}"); then
-	AC_MSG_CHECKING([systemd unit directory])
-	path_systemd_unitdir="`$PKG_CONFIG --variable=systemdsystemunitdir systemd`"
-	if (test -z "${path_systemd_unitdir}"); then
-		AC_MSG_ERROR([systemd unit directory is required])
-	fi
-	AC_MSG_RESULT([${path_systemd_unitdir}])
-fi
-AC_SUBST(SYSTEMD_UNITDIR, [${path_systemd_unitdir}])
-
-AC_ARG_WITH([dbus-busdir], AC_HELP_STRING([--with-dbus-busdir=DIR],
-				[path to D-Bus bus services directory]),
-					[path_dbus_busdir=${withval}])
-if (test "${enable_systemd_service}" != "no" && test -z "${path_dbus_busdir}"); then
-	AC_MSG_CHECKING([D-Bus bus services directory])
-	path_dbus_busdir="`$PKG_CONFIG --variable=system_bus_services_dir dbus-1`"
-	if (test -z "${path_dbus_busdir}"); then
-		AC_MSG_ERROR([D-Bus bus services directory is required])
-	fi
-	AC_MSG_RESULT([${path_dbus_busdir}])
-fi
-AC_SUBST(DBUS_BUSDIR, [${path_dbus_busdir}])
-
 AC_ARG_ENABLE([dbus-policy], AC_HELP_STRING([--disable-dbus-policy],
 				[don't install D-Bus system policy file]),
 					[enable_dbus_policy=${enableval}])
@@ -148,6 +117,37 @@ if (test "${enable_dbus_policy}" != "no" && test -z "${path_dbus_datadir}"); the
 	AC_MSG_RESULT([${path_dbus_datadir}])
 fi
 AC_SUBST(DBUS_DATADIR, [${path_dbus_datadir}])
+
+AC_ARG_ENABLE([systemd-service], AC_HELP_STRING([--disable-systemd-service],
+				[don't install systemd service file]),
+					[enable_systemd_service=${enableval}])
+AM_CONDITIONAL(SYSTEMD_SERVICE, test "${enable_systemd_service}" != "no")
+
+AC_ARG_WITH([dbus-busdir], AC_HELP_STRING([--with-dbus-busdir=DIR],
+				[path to D-Bus bus services directory]),
+					[path_dbus_busdir=${withval}])
+if (test "${enable_systemd_service}" != "no" && test -z "${path_dbus_busdir}"); then
+	AC_MSG_CHECKING([D-Bus bus services directory])
+	path_dbus_busdir="`$PKG_CONFIG --variable=system_bus_services_dir dbus-1`"
+	if (test -z "${path_dbus_busdir}"); then
+		AC_MSG_ERROR([D-Bus bus services directory is required])
+	fi
+	AC_MSG_RESULT([${path_dbus_busdir}])
+fi
+AC_SUBST(DBUS_BUSDIR, [${path_dbus_busdir}])
+
+AC_ARG_WITH([systemd-unitdir], AC_HELP_STRING([--with-systemd-unitdir=DIR],
+				[path to systemd unit directory]),
+					[path_systemd_unitdir=${withval}])
+if (test "${enable_systemd_service}" != "no" && test -z "${path_systemd_unitdir}"); then
+	AC_MSG_CHECKING([systemd unit directory])
+	path_systemd_unitdir="`$PKG_CONFIG --variable=systemdsystemunitdir systemd`"
+	if (test -z "${path_systemd_unitdir}"); then
+		AC_MSG_ERROR([systemd unit directory is required])
+	fi
+	AC_MSG_RESULT([${path_systemd_unitdir}])
+fi
+AC_SUBST(SYSTEMD_UNITDIR, [${path_systemd_unitdir}])
 
 AC_ARG_ENABLE(sim_hardcoded, AC_HELP_STRING([--enable-sim-hardcoded],
 				[enabled hard coded SIM keys]),
