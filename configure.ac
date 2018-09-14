@@ -150,7 +150,7 @@ fi
 AC_SUBST(SYSTEMD_UNITDIR, [${path_systemd_unitdir}])
 
 AC_ARG_ENABLE(sim_hardcoded, AC_HELP_STRING([--enable-sim-hardcoded],
-				[enabled hard coded SIM keys]),
+				[enable hard coded SIM keys]),
 					[enable_sim_hardcoded=${enableval}])
 AM_CONDITIONAL(SIM_HARDCODED, test "${enable_sim_hardcoded}" = "yes")
 
