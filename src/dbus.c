@@ -37,7 +37,7 @@
 #include "src/iwd.h"
 #include "src/dbus.h"
 
-struct l_dbus *g_dbus = 0;
+static struct l_dbus *g_dbus = NULL;
 
 const char *dbus_iftype_to_string(uint32_t iftype)
 {
