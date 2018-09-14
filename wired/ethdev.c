@@ -451,7 +451,7 @@ static void newlink_notify(const struct ifinfomsg *ifi, int bytes)
 		pae_write(dev, pae_group_addr,
 					eapol_start, sizeof(eapol_start));
 	else if (!lower_up && dev->lower_up)
-		l_queue_destroy(dev->eapol_sessions, eapol_free);
+		l_queue_clear(dev->eapol_sessions, eapol_free);
 
 	dev->active = active;
 	dev->lower_up = lower_up;
