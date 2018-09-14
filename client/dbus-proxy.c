@@ -401,7 +401,7 @@ struct l_queue *proxy_interface_find_all(const char *interface,
 	const struct l_queue_entry *entry;
 	struct l_queue *match = NULL;
 
-	if (!interface || !function)
+	if (!interface)
 		return NULL;
 
 	for (entry = l_queue_get_entries(proxy_interfaces); entry;
@@ -411,7 +411,7 @@ struct l_queue *proxy_interface_find_all(const char *interface,
 		if (!interface_match_by_type_name(proxy->type, interface))
 			continue;
 
-		if (!function(proxy->data, value))
+		if (function && !function(proxy->data, value))
 			continue;
 
 		if (!match)
