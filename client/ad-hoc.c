@@ -33,7 +33,6 @@
 
 struct ad_hoc {
 	bool started;
-	const struct proxy_interface *device;
 };
 
 static void *ad_hoc_create(void)
@@ -45,48 +44,12 @@ static void ad_hoc_destroy(void *data)
 {
 	struct ad_hoc *ad_hoc = data;
 
-	ad_hoc->device = NULL;
-
 	l_free(ad_hoc);
-}
-
-static bool ad_hoc_bind_interface(const struct proxy_interface *proxy,
-				const struct proxy_interface *dependency)
-{
-	const char *interface = proxy_interface_get_interface(dependency);
-
-	if (!strcmp(interface, IWD_DEVICE_INTERFACE)) {
-		struct ad_hoc *ad_hoc = proxy_interface_get_data(proxy);
-
-		ad_hoc->device = dependency;
-
-		return true;
-	}
-
-	return false;
-}
-
-static bool ad_hoc_unbind_interface(const struct proxy_interface *proxy,
-				const struct proxy_interface *dependency)
-{
-	const char *interface = proxy_interface_get_interface(dependency);
-
-	if (!strcmp(interface, IWD_DEVICE_INTERFACE)) {
-		struct ad_hoc *ad_hoc = proxy_interface_get_data(proxy);
-
-		ad_hoc->device = NULL;
-
-		return true;
-	}
-
-	return false;
 }
 
 static const struct proxy_interface_type_ops ad_hoc_ops = {
 	.create = ad_hoc_create,
 	.destroy = ad_hoc_destroy,
-	.bind_interface = ad_hoc_bind_interface,
-	.unbind_interface = ad_hoc_unbind_interface,
 };
 
 static const char *get_started_tostr(const void *data)
@@ -127,20 +90,24 @@ static void check_errors_method_callback(struct l_dbus_message *message,
 	dbus_message_has_error(message);
 }
 
-static bool match_by_device(const void *a, const void *b)
-{
-	const struct ad_hoc *ad_hoc = a;
-
-	return ad_hoc->device ? true : false;
-}
-
 static void display_ad_hoc_inline(const char *margin, const void *data)
 {
-	const struct ad_hoc *ad_hoc = data;
+	const struct proxy_interface *ad_hoc_i = data;
+	const struct ad_hoc *ad_hoc = proxy_interface_get_data(ad_hoc_i);
+	struct proxy_interface *device_i =
+		proxy_interface_find(IWD_DEVICE_INTERFACE,
+					proxy_interface_get_path(ad_hoc_i));
+	const char *identity;
 
-	if (ad_hoc->device && proxy_interface_get_identity_str(ad_hoc->device))
-		display("%s%-*s%-*s\n", margin,
-			20, proxy_interface_get_identity_str(ad_hoc->device),
+	if (!device_i)
+		return;
+
+	identity = proxy_interface_get_identity_str(device_i);
+	if (!identity)
+		return;
+
+	display("%s%-*s%-*s\n", margin,
+			20, identity,
 			8, get_started_tostr(ad_hoc));
 }
 
@@ -148,8 +115,7 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 {
 	const struct l_queue_entry *entry;
 	struct l_queue *match =
-		proxy_interface_find_all(IWD_AD_HOC_INTERFACE,
-						match_by_device, NULL);
+		proxy_interface_find_all(IWD_AD_HOC_INTERFACE, NULL, NULL);
 
 	display_table_header("Devices in Ad-Hoc Mode", MARGIN "%-*s%-*s",
 				20, "Name", 8, "Started");
@@ -162,9 +128,7 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 	}
 
 	for (entry = l_queue_get_entries(match); entry; entry = entry->next) {
-		const struct ad_hoc *ad_hoc =
-					proxy_interface_get_data(entry->data);
-
+		const struct proxy_interface *ad_hoc = entry->data;
 		display_ad_hoc_inline(MARGIN, ad_hoc);
 	}
 
@@ -177,30 +141,28 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 
 static enum cmd_status cmd_start(const char *device_name, char **argv, int argc)
 {
-	const struct proxy_interface *proxy = device_ad_hoc_get(device_name);
-
-	if (!proxy) {
-		display("Invalid device name '%s'\n", device_name);
-
-		return CMD_STATUS_INVALID_VALUE;
-	}
+	const struct proxy_interface *adhoc_i;
 
 	if (argc < 2)
 		return CMD_STATUS_INVALID_ARGS;
 
 	if (strlen(argv[0]) > 32) {
 		display("Network name cannot exceed 32 characters.\n");
-
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
 	if (strlen(argv[1]) < 8) {
 		display("Passphrase cannot be shorted than 8 characters.\n");
-
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
-	proxy_interface_method_call(proxy, "Start", "ss",
+	adhoc_i = device_proxy_find(device_name, IWD_AD_HOC_INTERFACE);
+	if (!adhoc_i) {
+		display("No ad-hoc on device: '%s'\n", device_name);
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	proxy_interface_method_call(adhoc_i, "Start", "ss",
 						check_errors_method_callback,
 						argv[0], argv[1]);
 
@@ -210,13 +172,7 @@ static enum cmd_status cmd_start(const char *device_name, char **argv, int argc)
 static enum cmd_status cmd_start_open(const char *device_name,
 							char **argv, int argc)
 {
-	const struct proxy_interface *proxy = device_ad_hoc_get(device_name);
-
-	if (!proxy) {
-		display("Invalid device name '%s'\n", device_name);
-
-		return CMD_STATUS_INVALID_VALUE;
-	}
+	const struct proxy_interface *adhoc_i;
 
 	if (argc < 1)
 		return CMD_STATUS_INVALID_ARGS;
@@ -227,7 +183,13 @@ static enum cmd_status cmd_start_open(const char *device_name,
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
-	proxy_interface_method_call(proxy, "Start", "s",
+	adhoc_i = device_proxy_find(device_name, IWD_AD_HOC_INTERFACE);
+	if (!adhoc_i) {
+		display("No ad-hoc on device: '%s'\n", device_name);
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	proxy_interface_method_call(adhoc_i, "Start", "s",
 						check_errors_method_callback,
 						argv[0]);
 
@@ -236,15 +198,15 @@ static enum cmd_status cmd_start_open(const char *device_name,
 
 static enum cmd_status cmd_stop(const char *device_name, char **argv, int argc)
 {
-	const struct proxy_interface *proxy = device_ad_hoc_get(device_name);
+	const struct proxy_interface *adhoc_i =
+			device_proxy_find(device_name, IWD_AD_HOC_INTERFACE);
 
-	if (!proxy) {
-		display("Invalid device name '%s'\n", device_name);
-
+	if (!adhoc_i) {
+		display("No ad-hoc on device: '%s'\n", device_name);
 		return CMD_STATUS_INVALID_VALUE;
 	}
 
-	proxy_interface_method_call(proxy, "Stop", "",
+	proxy_interface_method_call(adhoc_i, "Stop", "",
 						check_errors_method_callback);
 
 	return CMD_STATUS_TRIGGERED;
