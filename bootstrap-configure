@@ -9,7 +9,7 @@ fi
 		--enable-debug \
 		--prefix=/usr \
 		--localstatedir=/var \
-		--enable-ofono \
 		--enable-sim-hardcoded \
+		--enable-ofono \
 		--disable-dbus-policy \
 		--disable-systemd-service $*

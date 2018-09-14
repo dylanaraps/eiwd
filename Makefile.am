@@ -119,6 +119,16 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h \
 src_iwd_LDADD = ell/libell-internal.la -ldl
 src_iwd_DEPENDENCIES = ell/libell-internal.la
 
+if SIM_HARDCODED
+builtin_modules += sim_hardcoded
+builtin_sources += plugins/sim_hardcoded.c
+endif
+
+if OFONO
+builtin_modules += ofono
+builtin_sources += plugins/ofono.c
+endif
+
 if SYSTEMD_SERVICE
 src_iwd_DEPENDENCIES += src/iwd.service
 
@@ -181,15 +191,6 @@ noinst_PROGRAMS += tools/test-runner
 
 tools_test_runner_SOURCES = tools/test-runner.c
 tools_test_runner_LDADD = ell/libell-internal.la
-
-if SIM_HARDCODED
-builtin_modules += sim_hardcoded
-builtin_sources += plugins/sim_hardcoded.c
-endif
-
-if OFONO
-builtin_modules += ofono
-builtin_sources += plugins/ofono.c
 endif
 
 unit_tests = unit/test-cmac-aes \
