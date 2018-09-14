@@ -351,7 +351,11 @@ AM_CFLAGS = -fvisibility=hidden
 
 CLEANFILES = src/iwd.service
 
-DISTCHECK_CONFIGURE_FLAGS = --disable-dbus-policy --disable-systemd-service
+DISTCHECK_CONFIGURE_FLAGS = --disable-dbus-policy --disable-systemd-service \
+				--enable-sim-hardcoded \
+				--enable-ofono \
+				--enable-wired \
+				--enable-tools
 
 DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests) $(manual_pages)
 
