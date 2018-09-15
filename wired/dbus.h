@@ -23,6 +23,8 @@
 enum l_dbus_bus;
 struct l_dbus;
 
+struct l_dbus *dbus_get(void);
+
 typedef void (*dbus_ready_func_t) (struct l_dbus *dbus, void *user_data);
 typedef void (*dbus_shutdown_func_t) (struct l_dbus *dbus, void *user_data);
 

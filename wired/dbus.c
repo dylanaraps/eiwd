@@ -30,6 +30,11 @@
 
 static struct l_dbus *dbus = NULL;
 
+struct l_dbus *dbus_get(void)
+{
+	return dbus;
+}
+
 struct dbus_info {
 	char *name;
 	dbus_ready_func_t ready_func;
