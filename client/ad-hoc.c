@@ -229,31 +229,8 @@ static const struct command ad_hoc_commands[] = {
 
 static char *family_arg_completion(const char *text, int state)
 {
-	static bool first_pass;
-	static size_t index;
-	static size_t len;
-	const char *cmd;
-
-	if (!state) {
-		index = 0;
-		len = strlen(text);
-		first_pass = true;
-	}
-
-	while ((cmd = ad_hoc_commands[index].cmd)) {
-		if (ad_hoc_commands[index++].entity)
-			continue;
-
-		if (!strncmp(cmd, text, len))
-			return l_strdup(cmd);
-	}
-
-	if (first_pass) {
-		state = 0;
-		first_pass = false;
-	}
-
-	return device_ad_hoc_family_arg_completion(text, state);
+	return device_arg_completion(text, state, ad_hoc_commands,
+							IWD_AD_HOC_INTERFACE);
 }
 
 static char *entity_arg_completion(const char *text, int state)

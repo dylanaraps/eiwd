@@ -201,31 +201,8 @@ static const struct command ap_commands[] = {
 
 static char *family_arg_completion(const char *text, int state)
 {
-	static bool first_pass;
-	static size_t index;
-	static size_t len;
-	const char *cmd;
-
-	if (!state) {
-		index = 0;
-		len = strlen(text);
-		first_pass = true;
-	}
-
-	while ((cmd = ap_commands[index].cmd)) {
-		if (ap_commands[index++].entity)
-			continue;
-
-		if (!strncmp(cmd, text, len))
-			return l_strdup(cmd);
-	}
-
-	if (first_pass) {
-		state = 0;
-		first_pass = false;
-	}
-
-	return device_ap_family_arg_completion(text, state);
+	return device_arg_completion(text, state, ap_commands,
+						IWD_ACCESS_POINT_INTERFACE);
 }
 
 static char *entity_arg_completion(const char *text, int state)

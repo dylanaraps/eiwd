@@ -435,39 +435,9 @@ static const struct command device_commands[] = {
 	{ }
 };
 
-char *device_wsc_family_arg_completion(const char *text, int state)
-{
-	return proxy_property_str_completion(&device_interface_type,
-						match_by_partial_name,
-						"Name", text, state,
-						IWD_WSC_INTERFACE);
-}
-
-char *device_ap_family_arg_completion(const char *text, int state)
-{
-	return proxy_property_str_completion(&device_interface_type,
-						match_by_partial_name,
-						"Name", text, state,
-						IWD_ACCESS_POINT_INTERFACE);
-}
-
-char *device_ad_hoc_family_arg_completion(const char *text, int state)
-{
-	return proxy_property_str_completion(&device_interface_type,
-					match_by_partial_name,
-					"Name", text, state,
-					IWD_AD_HOC_INTERFACE);
-}
-
-char *device_station_family_arg_completion(const char *text, int state)
-{
-	return proxy_property_str_completion(&device_interface_type,
-					match_by_partial_name,
-					"Name", text, state,
-					IWD_STATION_INTERFACE);
-}
-
-static char *family_arg_completion(const char *text, int state)
+char *device_arg_completion(const char *text, int state,
+				const struct command *commands,
+				const char *extra_interface)
 {
 	static bool first_pass;
 	static size_t index;
@@ -480,8 +450,8 @@ static char *family_arg_completion(const char *text, int state)
 		first_pass = true;
 	}
 
-	while ((cmd = device_commands[index].cmd)) {
-		if (device_commands[index++].entity)
+	while ((cmd = commands[index].cmd)) {
+		if (commands[index++].entity)
 			continue;
 
 		if (!strncmp(cmd, text, len))
@@ -495,7 +465,12 @@ static char *family_arg_completion(const char *text, int state)
 
 	return proxy_property_str_completion(&device_interface_type,
 						match_by_partial_name, "Name",
-						text, state, NULL);
+						text, state, extra_interface);
+}
+
+static char *family_arg_completion(const char *text, int state)
+{
+	return device_arg_completion(text, state, device_commands, NULL);
 }
 
 static char *entity_arg_completion(const char *text, int state)

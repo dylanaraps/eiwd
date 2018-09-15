@@ -22,10 +22,9 @@
 
 struct proxy_interface;
 
-char *device_wsc_family_arg_completion(const char *text, int state);
-char *device_ap_family_arg_completion(const char *text, int state);
-char *device_ad_hoc_family_arg_completion(const char *text, int state);
-char *device_station_family_arg_completion(const char *text, int state);
+char *device_arg_completion(const char *text, int state,
+				const struct command *commands,
+				const char *extra_interface);
 
 const struct proxy_interface *device_proxy_find_by_name(const char *name);
 const struct proxy_interface *device_proxy_find(const char *device_name,
