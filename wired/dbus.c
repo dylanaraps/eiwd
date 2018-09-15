@@ -51,7 +51,7 @@ static void request_name_callback(struct l_dbus *dbus, bool success,
 		l_warn("Unable to register ObjectManager interface");
 
 	if (info->ready_func)
-		info->ready_func(info->user_data);
+		info->ready_func(dbus, info->user_data);
 }
 
 static void dbus_ready(void *user_data)
@@ -111,7 +111,7 @@ int dbus_run(enum l_dbus_bus bus, const char *name,
 	exit_status = l_main_run_with_signal(dbus_signal_handler, info);
 
 	if (shutdown_func)
-		shutdown_func(info->user_data);
+		shutdown_func(dbus, info->user_data);
 
 	l_dbus_destroy(dbus);
 	dbus = NULL;

@@ -40,7 +40,7 @@ struct main_opts {
 	const char *nointerfaces;
 };
 
-static void dbus_ready(void *user_data)
+static void dbus_ready(struct l_dbus *dbus, void *user_data)
 {
 	struct main_opts *opts = user_data;
 
@@ -51,7 +51,7 @@ static void dbus_ready(void *user_data)
 	ethdev_init(opts->interfaces, opts->nointerfaces);
 }
 
-static void dbus_shutdown(void *user_data)
+static void dbus_shutdown(struct l_dbus *dbus, void *user_data)
 {
 	l_info("System shutdown");
 
