@@ -42,38 +42,6 @@ typedef void (*station_foreach_func_t)(struct station *, void *data);
 typedef void (*station_state_watch_func_t)(enum station_state, void *userdata);
 typedef void (*station_destroy_func_t)(void *userdata);
 
-struct station {
-	enum station_state state;
-	struct watchlist state_watches;
-	struct scan_bss *connected_bss;
-	struct network *connected_network;
-	struct l_queue *autoconnect_list;
-	struct l_queue *bss_list;
-	struct l_hashmap *networks;
-	struct l_queue *networks_sorted;
-	struct l_dbus_message *connect_pending;
-	struct l_dbus_message *disconnect_pending;
-	struct l_dbus_message *scan_pending;
-	struct signal_agent *signal_agent;
-
-	/* Roaming related members */
-	struct timespec roam_min_time;
-	struct l_timeout *roam_trigger_timeout;
-	uint32_t roam_scan_id;
-	uint8_t preauth_bssid[6];
-
-	struct wiphy *wiphy;
-	struct netdev *netdev;
-
-	bool seen_hidden_networks : 1;
-	bool preparing_roam : 1;
-	bool signal_low : 1;
-	bool roam_no_orig_ap : 1;
-	bool ap_directed_roaming : 1;
-	bool scanning : 1;
-	bool autoconnect : 1;
-};
-
 struct wiphy *station_get_wiphy(struct station *station);
 struct netdev *station_get_netdev(struct station *station);
 struct network *station_get_connected_network(struct station *station);

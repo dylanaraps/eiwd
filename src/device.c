@@ -98,23 +98,6 @@ static bool device_property_get_address(struct l_dbus *dbus,
 	return true;
 }
 
-static bool device_property_get_connected_network(struct l_dbus *dbus,
-					struct l_dbus_message *message,
-					struct l_dbus_message_builder *builder,
-					void *user_data)
-{
-	struct device *device = user_data;
-	struct station *station = device->station;
-
-	if (!station || !station->connected_network)
-		return false;
-
-	l_dbus_message_builder_append_basic(builder, 'o',
-				network_get_path(station->connected_network));
-
-	return true;
-}
-
 static bool device_property_get_powered(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -256,57 +239,6 @@ static struct l_dbus_message *device_property_set_4addr(struct l_dbus *dbus,
 	return NULL;
 }
 
-static bool device_property_get_scanning(struct l_dbus *dbus,
-					struct l_dbus_message *message,
-					struct l_dbus_message_builder *builder,
-					void *user_data)
-{
-	struct device *device = user_data;
-	struct station *station = device->station;
-	bool scanning;
-
-	if (!station)
-		return false;
-
-	scanning = station->scanning;
-
-	l_dbus_message_builder_append_basic(builder, 'b', &scanning);
-
-	return true;
-}
-
-static bool device_property_get_state(struct l_dbus *dbus,
-					struct l_dbus_message *message,
-					struct l_dbus_message_builder *builder,
-					void *user_data)
-{
-	struct device *device = user_data;
-	const char *statestr;
-
-	/* TODO: Remove when Device/Station split is done */
-	if (netdev_get_iftype(device->netdev) != NETDEV_IFTYPE_STATION) {
-		uint32_t iftype = netdev_get_iftype(device->netdev);
-		l_dbus_message_builder_append_basic(builder, 's',
-						dbus_iftype_to_string(iftype));
-		return true;
-	}
-
-	if (device->powered == false) {
-		l_dbus_message_builder_append_basic(builder,
-							's', "disconnected");
-		return true;
-	}
-
-	statestr = station_state_to_string(device->station->state);
-
-	/* Special case.  For now we treat AUTOCONNECT as disconnected */
-	if (device->station->state == STATION_STATE_AUTOCONNECT)
-		statestr = "disconnected";
-
-	l_dbus_message_builder_append_basic(builder, 's', statestr);
-	return true;
-}
-
 static bool device_property_get_adapter(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -410,19 +342,12 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 					device_property_get_name, NULL);
 	l_dbus_interface_property(interface, "Address", 0, "s",
 					device_property_get_address, NULL);
-	l_dbus_interface_property(interface, "ConnectedNetwork", 0, "o",
-					device_property_get_connected_network,
-					NULL);
 	l_dbus_interface_property(interface, "WDS", 0, "b",
 					device_property_get_4addr,
 					device_property_set_4addr);
 	l_dbus_interface_property(interface, "Powered", 0, "b",
 					device_property_get_powered,
 					device_property_set_powered);
-	l_dbus_interface_property(interface, "Scanning", 0, "b",
-					device_property_get_scanning, NULL);
-	l_dbus_interface_property(interface, "State", 0, "s",
-					device_property_get_state, NULL);
 	l_dbus_interface_property(interface, "Adapter", 0, "o",
 					device_property_get_adapter, NULL);
 	l_dbus_interface_property(interface, "Mode", 0, "s",

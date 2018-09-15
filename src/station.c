@@ -49,6 +49,38 @@
 static struct l_queue *station_list;
 static uint32_t netdev_watch;
 
+struct station {
+	enum station_state state;
+	struct watchlist state_watches;
+	struct scan_bss *connected_bss;
+	struct network *connected_network;
+	struct l_queue *autoconnect_list;
+	struct l_queue *bss_list;
+	struct l_hashmap *networks;
+	struct l_queue *networks_sorted;
+	struct l_dbus_message *connect_pending;
+	struct l_dbus_message *disconnect_pending;
+	struct l_dbus_message *scan_pending;
+	struct signal_agent *signal_agent;
+
+	/* Roaming related members */
+	struct timespec roam_min_time;
+	struct l_timeout *roam_trigger_timeout;
+	uint32_t roam_scan_id;
+	uint8_t preauth_bssid[6];
+
+	struct wiphy *wiphy;
+	struct netdev *netdev;
+
+	bool seen_hidden_networks : 1;
+	bool preparing_roam : 1;
+	bool signal_low : 1;
+	bool roam_no_orig_ap : 1;
+	bool ap_directed_roaming : 1;
+	bool scanning : 1;
+	bool autoconnect : 1;
+};
+
 struct wiphy *station_get_wiphy(struct station *station)
 {
 	return station->wiphy;
@@ -539,8 +571,6 @@ static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
 		station->scanning = false;
 		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
 					IWD_STATION_INTERFACE, "Scanning");
-		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
-					IWD_DEVICE_INTERFACE, "Scanning");
 	}
 
 	if (err)
@@ -563,8 +593,6 @@ static void periodic_scan_trigger(int err, void *user_data)
 	station->scanning = true;
 	l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
 				IWD_STATION_INTERFACE, "Scanning");
-	l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
-				IWD_DEVICE_INTERFACE, "Scanning");
 }
 
 static void periodic_scan_stop(struct station *station)
@@ -578,8 +606,6 @@ static void periodic_scan_stop(struct station *station)
 		station->scanning = false;
 		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
 					IWD_STATION_INTERFACE, "Scanning");
-		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
-					IWD_DEVICE_INTERFACE, "Scanning");
 	}
 }
 
@@ -617,12 +643,9 @@ static void station_enter_state(struct station *station,
 	disconnected = station->state <= STATION_STATE_AUTOCONNECT;
 
 	if ((disconnected && state > STATION_STATE_AUTOCONNECT) ||
-			(!disconnected && state != station->state)) {
+			(!disconnected && state != station->state))
 		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
 					IWD_STATION_INTERFACE, "State");
-		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
-					IWD_DEVICE_INTERFACE, "State");
-	}
 
 	switch (state) {
 	case STATION_STATE_AUTOCONNECT:
@@ -712,8 +735,6 @@ static void station_reset_connection_state(struct station *station)
 
 	l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
 				IWD_STATION_INTERFACE, "ConnectedNetwork");
-	l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
-				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
 	l_dbus_property_changed(dbus, network_get_path(network),
 				IWD_NETWORK_INTERFACE, "Connected");
 }
@@ -1610,8 +1631,6 @@ int __station_connect_network(struct station *station, struct network *network,
 
 	l_dbus_property_changed(dbus, netdev_get_path(netdev),
 				IWD_STATION_INTERFACE, "ConnectedNetwork");
-	l_dbus_property_changed(dbus, netdev_get_path(netdev),
-				IWD_DEVICE_INTERFACE, "ConnectedNetwork");
 	l_dbus_property_changed(dbus, network_get_path(network),
 				IWD_NETWORK_INTERFACE, "Connected");
 
@@ -1900,8 +1919,6 @@ static void station_dbus_scan_triggered(int err, void *user_data)
 	station->scanning = true;
 	l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
 				IWD_STATION_INTERFACE, "Scanning");
-	l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
-				IWD_DEVICE_INTERFACE, "Scanning");
 }
 
 static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
