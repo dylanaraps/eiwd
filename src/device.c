@@ -72,19 +72,6 @@ static void device_ap_roam_frame_event(struct netdev *netdev,
 	station_ap_directed_roam(station, hdr, body, body_len);
 }
 
-static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data)
-{
-	struct device *device = user_data;
-	struct station *station = device->station;
-
-	if (!device->powered || !device->station)
-		return dbus_error_not_available(message);
-
-	return station_build_get_networks_reply(station, message, true);
-}
-
 static bool device_property_get_name(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -419,9 +406,6 @@ static struct l_dbus_message *device_property_set_mode(struct l_dbus *dbus,
 
 static void setup_device_interface(struct l_dbus_interface *interface)
 {
-	l_dbus_interface_method(interface, "GetOrderedNetworks", 0,
-				device_get_networks, "a(osns)", "",
-				"networks");
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					device_property_get_name, NULL);
 	l_dbus_interface_property(interface, "Address", 0, "s",

@@ -99,11 +99,6 @@ void station_ap_directed_roam(struct station *station,
 				const struct mmpdu_header *hdr,
 				const void *body, size_t body_len);
 
-struct l_dbus_message *station_build_get_networks_reply(
-						struct station *station,
-						struct l_dbus_message *message,
-						bool legacy);
-
 int __station_connect_network(struct station *station, struct network *network,
 				struct scan_bss *bss);
 void station_connect_network(struct station *station, struct network *network,
