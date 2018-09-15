@@ -202,10 +202,28 @@ static enum cmd_status cmd_disconnect(const char *device_name,
 	return CMD_STATUS_TRIGGERED;
 }
 
+static enum cmd_status cmd_scan(const char *device_name,
+						char **argv, int argc)
+{
+	const struct proxy_interface *station_i =
+			device_proxy_find(device_name, IWD_STATION_INTERFACE);
+
+	if (!station_i) {
+		display("No station on device: '%s'\n", device_name);
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	proxy_interface_method_call(station_i, "Scan", "",
+						check_errors_method_callback);
+
+	return CMD_STATUS_TRIGGERED;
+}
+
 static const struct command station_commands[] = {
 	{ NULL, "list", NULL, cmd_list, "List Ad-Hoc devices", true },
 	{ "<wlan>", "disconnect",
 				NULL,   cmd_disconnect, "Disconnect" },
+	{ "<wlan>", "scan",     NULL,   cmd_scan, "Scan for networks" },
 	{ }
 };
 

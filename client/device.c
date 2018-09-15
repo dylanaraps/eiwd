@@ -518,21 +518,6 @@ static void check_errors_method_callback(struct l_dbus_message *message,
 	dbus_message_has_error(message);
 }
 
-static enum cmd_status cmd_scan(const char *device_name,
-						char **argv, int argc)
-{
-	const struct proxy_interface *proxy =
-					device_proxy_find_by_name(device_name);
-
-	if (!proxy)
-		return CMD_STATUS_INVALID_ARGS;
-
-	proxy_interface_method_call(proxy, "Scan", "",
-						check_errors_method_callback);
-
-	return CMD_STATUS_TRIGGERED;
-}
-
 static enum cmd_status cmd_get_networks(const char *device_name,
 						char **argv, int argc)
 {
@@ -688,7 +673,6 @@ static char *set_property_cmd_arg_completion(const char *text, int state)
 static const struct command device_commands[] = {
 	{ NULL,     "list",     NULL,   cmd_list, "List devices",     true },
 	{ "<wlan>", "show",     NULL,   cmd_show, "Show device info", true },
-	{ "<wlan>", "scan",     NULL,   cmd_scan, "Scan for networks" },
 	{ "<wlan>", "get-networks",
 				"[rssi-dbms/rssi-bars]",
 					cmd_get_networks,
