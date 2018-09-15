@@ -89,19 +89,6 @@ static struct l_dbus_message *device_scan(struct l_dbus *dbus,
 	return station_dbus_scan(dbus, message, station);
 }
 
-static struct l_dbus_message *device_dbus_disconnect(struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data)
-{
-	struct device *device = user_data;
-	struct station *station = device->station;
-
-	if (!device->powered || !device->station)
-		return dbus_error_not_available(message);
-
-	return station_dbus_disconnect(dbus, message, station);
-}
-
 static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -451,8 +438,6 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Scan", 0,
 				device_scan, "", "");
-	l_dbus_interface_method(interface, "Disconnect", 0,
-				device_dbus_disconnect, "", "");
 	l_dbus_interface_method(interface, "GetOrderedNetworks", 0,
 				device_get_networks, "a(osns)", "",
 				"networks");

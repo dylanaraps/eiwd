@@ -1815,7 +1815,7 @@ int station_disconnect(struct station *station)
 	return 0;
 }
 
-struct l_dbus_message *station_dbus_disconnect(struct l_dbus *dbus,
+static struct l_dbus_message *station_dbus_disconnect(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
 {
