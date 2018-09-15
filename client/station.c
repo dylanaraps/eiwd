@@ -185,6 +185,28 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 	return CMD_STATUS_DONE;
 }
 
+static enum cmd_status cmd_connect_hidden_network(const char *device_name,
+							char **argv,
+							int argc)
+{
+	const struct proxy_interface *station_i;
+
+	if (argc != 1)
+		return CMD_STATUS_INVALID_ARGS;
+
+	station_i = device_proxy_find(device_name, IWD_STATION_INTERFACE);
+	if (!station_i) {
+		display("No station on device: '%s'\n", device_name);
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	proxy_interface_method_call(station_i, "ConnectHiddenNetwork", "s",
+					check_errors_method_callback,
+					argv[0]);
+
+	return CMD_STATUS_TRIGGERED;
+}
+
 static enum cmd_status cmd_disconnect(const char *device_name,
 						char **argv, int argc)
 {
@@ -221,6 +243,11 @@ static enum cmd_status cmd_scan(const char *device_name,
 
 static const struct command station_commands[] = {
 	{ NULL, "list", NULL, cmd_list, "List Ad-Hoc devices", true },
+	{ "<wlan>", "connect-hidden",
+				"<\"network name\">",
+					cmd_connect_hidden_network,
+						"Connect to hidden network",
+									false },
 	{ "<wlan>", "disconnect",
 				NULL,   cmd_disconnect, "Disconnect" },
 	{ "<wlan>", "scan",     NULL,   cmd_scan, "Scan for networks" },
