@@ -281,6 +281,177 @@ static enum cmd_status cmd_disconnect(const char *device_name,
 	return CMD_STATUS_TRIGGERED;
 }
 
+struct ordered_network {
+	char *network_path;
+	int16_t signal_strength;
+};
+
+static void ordered_networks_destroy(void *data)
+{
+	struct ordered_network *network = data;
+
+	l_free(network->network_path);
+	l_free(network);
+}
+
+static const char *dbms_tostars(int16_t dbms)
+{
+	if (dbms >= -6000)
+		return "****";
+
+	if (dbms >= -6700)
+		return "***" COLOR_BOLDGRAY "*" COLOR_OFF;
+
+	if (dbms >= -7500)
+		return "**" COLOR_BOLDGRAY "**" COLOR_OFF;
+
+	return "*" COLOR_BOLDGRAY "***" COLOR_OFF;
+}
+
+#define RSSI_DBMS "rssi-dbms"
+#define RSSI_BARS "rssi-bars"
+
+static const struct {
+	const char *option;
+} ordered_networks_arg_options[] = {
+	{ RSSI_DBMS },
+	{ RSSI_BARS },
+	{ }
+};
+
+static bool display_signal_as_dbms;
+
+static void ordered_networks_display(struct l_queue *ordered_networks)
+{
+	char *dbms = NULL;
+	const struct l_queue_entry *entry;
+	bool is_first;
+
+	display_table_header("Available networks", "%s%-*s%-*s%-*s%*s",
+					MARGIN, 2, "", 32, "Network name",
+					10, "Security", 6, "Signal");
+
+	if (!l_queue_length(ordered_networks)) {
+		display("No networks available\n");
+		display_table_footer();
+
+		return;
+	}
+
+	for (is_first = true, entry = l_queue_get_entries(ordered_networks);
+						entry; entry = entry->next) {
+		struct ordered_network *network = entry->data;
+		const char *network_name =
+				network_get_name(network->network_path);
+		const char *network_type =
+				network_get_type(network->network_path);
+
+		if (display_signal_as_dbms)
+			dbms = l_strdup_printf("%d", network->signal_strength);
+
+		if (is_first && network_is_connected(network->network_path)) {
+			display("%s%-*s%-*s%-*s%-*s\n", MARGIN,
+				2, COLOR_BOLDGRAY "> " COLOR_OFF,
+				32, network_name, 10, network_type,
+				6, display_signal_as_dbms ? dbms :
+					dbms_tostars(network->signal_strength));
+
+			l_free(dbms);
+			is_first = false;
+			continue;
+		}
+
+		display("%s%-*s%-*s%-*s%-*s\n", MARGIN, 2, "",
+				32, network_name, 10, network_type,
+				6, display_signal_as_dbms ? dbms :
+					dbms_tostars(network->signal_strength));
+
+		l_free(dbms);
+	}
+
+	display_table_footer();
+}
+
+static void ordered_networks_callback(struct l_dbus_message *message,
+								void *proxy)
+{
+	struct l_queue *networks = NULL;
+	struct ordered_network network;
+	struct l_dbus_message_iter iter;
+
+	if (dbus_message_has_error(message))
+		return;
+
+	if (!l_dbus_message_get_arguments(message, "a(on)", &iter)) {
+		l_error("Failed to parse ordered networks callback message");
+
+		return;
+	}
+
+	while (l_dbus_message_iter_next_entry(&iter,
+						&network.network_path,
+						&network.signal_strength)) {
+		struct ordered_network *net = l_new(struct ordered_network, 1);
+
+		if (!networks)
+			networks = l_queue_new();
+
+		net->network_path = l_strdup(network.network_path);
+		net->signal_strength = network.signal_strength;
+
+		l_queue_push_tail(networks, net);
+	}
+
+	ordered_networks_display(networks);
+
+	l_queue_destroy(networks, ordered_networks_destroy);
+}
+
+static char *get_networks_cmd_arg_completion(const char *text, int state)
+{
+	static int index;
+	static int len;
+	const char *arg;
+
+	if (!state) {
+		index = 0;
+		len = strlen(text);
+	}
+
+	while ((arg = ordered_networks_arg_options[index++].option)) {
+		if (!strncmp(arg, text, len))
+			return l_strdup(arg);
+	}
+
+	return NULL;
+}
+
+static enum cmd_status cmd_get_networks(const char *device_name,
+						char **argv, int argc)
+{
+	const struct proxy_interface *station_i =
+			device_proxy_find(device_name, IWD_STATION_INTERFACE);
+
+	if (!station_i) {
+		display("No station on device: '%s'\n", device_name);
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	if (!argc)
+		goto proceed;
+
+	if (!strcmp(argv[0], RSSI_DBMS))
+		display_signal_as_dbms = true;
+	else
+		display_signal_as_dbms = false;
+
+proceed:
+	proxy_interface_method_call(station_i, "GetOrderedNetworks", "",
+					ordered_networks_callback);
+
+	return CMD_STATUS_TRIGGERED;
+}
+
 static enum cmd_status cmd_scan(const char *device_name,
 						char **argv, int argc)
 {
@@ -312,6 +483,11 @@ static const struct command station_commands[] = {
 									false },
 	{ "<wlan>", "disconnect",
 				NULL,   cmd_disconnect, "Disconnect" },
+	{ "<wlan>", "get-networks",
+				"[rssi-dbms/rssi-bars]",
+					cmd_get_networks,
+						"Get networks",       true,
+			get_networks_cmd_arg_completion },
 	{ "<wlan>", "scan",     NULL,   cmd_scan, "Scan for networks" },
 	{ }
 };
