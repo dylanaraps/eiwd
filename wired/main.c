@@ -35,16 +35,29 @@
 #include "wired/ethdev.h"
 #include "wired/network.h"
 
-static void signal_handler(struct l_signal *signal, uint32_t signo,
-							void *user_data)
+struct main_opts {
+	const char *interfaces;
+	const char *nointerfaces;
+};
+
+static void dbus_ready(void *user_data)
 {
-	switch (signo) {
-	case SIGINT:
-	case SIGTERM:
-		l_info("Terminate");
-		l_main_quit();
-		break;
-	}
+	struct main_opts *opts = user_data;
+
+	l_info("System ready");
+
+	eap_init(0);
+	network_init();
+	ethdev_init(opts->interfaces, opts->nointerfaces);
+}
+
+static void dbus_shutdown(void *user_data)
+{
+	l_info("System shutdown");
+
+	ethdev_exit();
+	network_exit();
+	eap_exit();
 }
 
 static void usage(void)
@@ -70,11 +83,7 @@ static const struct option main_options[] = {
 
 int main(int argc, char *argv[])
 {
-	struct l_signal *signal;
-	sigset_t mask;
-	int exit_status;
-	const char *interfaces = NULL;
-	const char *nointerfaces = NULL;
+	struct main_opts opts;
 	const char *debugopt = NULL;
 
 	for (;;) {
@@ -86,10 +95,10 @@ int main(int argc, char *argv[])
 
 		switch (opt) {
 		case 'i':
-			interfaces = optarg;
+			opts.interfaces = optarg;
 			break;
 		case 'I':
-			nointerfaces = optarg;
+			opts.nointerfaces = optarg;
 			break;
 		case 'd':
 			if (optarg)
@@ -117,43 +126,11 @@ int main(int argc, char *argv[])
 
 	l_log_set_stderr();
 
-	if (!l_main_init())
-		return EXIT_FAILURE;
-
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGINT);
-	sigaddset(&mask, SIGTERM);
-
-	signal = l_signal_create(&mask, signal_handler, NULL, NULL);
-
 	if (debugopt)
 		l_debug_enable(debugopt);
 
 	l_info("Authentication daemon version %s", VERSION);
 
-	exit_status = EXIT_FAILURE;
-
-	if (!dbus_init())
-		goto done;
-
-	eap_init(0);
-	network_init();
-	ethdev_init(interfaces, nointerfaces);
-
-	exit_status = EXIT_SUCCESS;
-
-	l_main_run();
-
-	ethdev_exit();
-	network_exit();
-	eap_exit();
-
-	dbus_exit();
-
-done:
-	l_signal_remove(signal);
-
-	l_main_exit();
-
-	return exit_status;
+	return dbus_run(L_DBUS_SYSTEM_BUS, "net.connman.ead",
+				dbus_ready, dbus_shutdown, &opts, NULL);
 }

@@ -20,5 +20,15 @@
  *
  */
 
-bool dbus_init(void);
-void dbus_exit(void);
+enum l_dbus_bus;
+
+typedef void (*dbus_ready_func_t) (void *user_data);
+typedef void (*dbus_shutdown_func_t) (void *user_data);
+
+typedef void (*dbus_destroy_func_t) (void *user_data);
+
+int dbus_run(enum l_dbus_bus bus, const char *name,
+					dbus_ready_func_t ready_func,
+					dbus_shutdown_func_t shutdown_func,
+					void *user_data,
+					dbus_destroy_func_t destroy);
