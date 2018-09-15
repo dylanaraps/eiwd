@@ -440,7 +440,7 @@ static void device_set_default(const char *device_name)
 	l_queue_destroy(match, NULL);
 }
 
-static const struct proxy_interface *device_get_default(void)
+const struct proxy_interface *device_get_default(void)
 {
 	struct l_queue *match;
 
@@ -459,7 +459,7 @@ static const struct proxy_interface *device_get_default(void)
 	return default_device;
 }
 
-static const struct proxy_interface *device_proxy_find_by_name(const char *name)
+const struct proxy_interface *device_proxy_find_by_name(const char *name)
 {
 	struct l_queue *match;
 	struct proxy_interface *proxy = NULL;
@@ -574,48 +574,6 @@ static enum cmd_status cmd_set_property(const char *device_name,
 	return CMD_STATUS_TRIGGERED;
 }
 
-static enum cmd_status cmd_connect(const char *device_name,
-						char **argv, int argc)
-{
-	struct network_args network_args;
-	struct l_queue *match;
-	const struct proxy_interface *network_proxy;
-	const struct proxy_interface *device_proxy =
-					device_proxy_find_by_name(device_name);
-
-	if (!device_proxy)
-		return CMD_STATUS_INVALID_VALUE;
-
-	if (argc < 1)
-		return CMD_STATUS_INVALID_ARGS;
-
-	network_args.name = argv[0];
-	network_args.type = argc >= 2 ? argv[1] : NULL;
-
-	match = network_match_by_device_and_args(device_proxy, &network_args);
-	if (!match) {
-		display("Invalid network name '%s'\n", network_args.name);
-		return CMD_STATUS_INVALID_VALUE;
-	}
-
-	if (l_queue_length(match) > 1) {
-		if (!network_args.type) {
-			display("Provided network name is ambiguous. "
-				"Please specify security type.\n");
-		}
-
-		l_queue_destroy(match, NULL);
-
-		return CMD_STATUS_INVALID_VALUE;
-	}
-
-	network_proxy = l_queue_pop_head(match);
-	l_queue_destroy(match, NULL);
-	network_connect(network_proxy);
-
-	return CMD_STATUS_TRIGGERED;
-}
-
 static char *get_networks_cmd_arg_completion(const char *text, int state)
 {
 	static int index;
@@ -633,16 +591,6 @@ static char *get_networks_cmd_arg_completion(const char *text, int state)
 	}
 
 	return NULL;
-}
-
-static char *connect_cmd_arg_completion(const char *text, int state)
-{
-	const struct proxy_interface *device = device_get_default();
-
-	if (!device)
-		return NULL;
-
-	return network_name_completion(device, text, state);
 }
 
 static char *set_property_cmd_arg_completion(const char *text, int state)
@@ -663,11 +611,6 @@ static const struct command device_commands[] = {
 					cmd_set_property,
 						"Set property",       false,
 		set_property_cmd_arg_completion },
-	{ "<wlan>", "connect",
-				"<\"network name\"> [security]",
-					cmd_connect,
-						"Connect to network", false,
-		connect_cmd_arg_completion },
 	{ }
 };
 

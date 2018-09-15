@@ -29,6 +29,7 @@
 #include "command.h"
 #include "dbus-proxy.h"
 #include "device.h"
+#include "network.h"
 #include "display.h"
 
 struct station {
@@ -185,6 +186,62 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 	return CMD_STATUS_DONE;
 }
 
+static char *connect_cmd_arg_completion(const char *text, int state)
+{
+	const struct proxy_interface *device = device_get_default();
+
+	if (!device)
+		return NULL;
+
+	return network_name_completion(device, text, state);
+}
+
+static enum cmd_status cmd_connect(const char *device_name,
+						char **argv, int argc)
+{
+	const struct proxy_interface *station_i;
+	struct network_args network_args;
+	struct l_queue *match;
+	const struct proxy_interface *network_proxy;
+	const struct proxy_interface *device_proxy;
+
+	if (argc < 1)
+		return CMD_STATUS_INVALID_ARGS;
+
+	station_i = device_proxy_find(device_name, IWD_STATION_INTERFACE);
+	if (!station_i) {
+		display("No station on device: '%s'\n", device_name);
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	device_proxy = device_proxy_find_by_name(device_name);
+	network_args.name = argv[0];
+	network_args.type = argc >= 2 ? argv[1] : NULL;
+
+	match = network_match_by_device_and_args(device_proxy, &network_args);
+	if (!match) {
+		display("Invalid network name '%s'\n", network_args.name);
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	if (l_queue_length(match) > 1) {
+		if (!network_args.type) {
+			display("Provided network name is ambiguous. "
+				"Please specify security type.\n");
+		}
+
+		l_queue_destroy(match, NULL);
+
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	network_proxy = l_queue_pop_head(match);
+	l_queue_destroy(match, NULL);
+	network_connect(network_proxy);
+
+	return CMD_STATUS_TRIGGERED;
+}
+
 static enum cmd_status cmd_connect_hidden_network(const char *device_name,
 							char **argv,
 							int argc)
@@ -243,6 +300,11 @@ static enum cmd_status cmd_scan(const char *device_name,
 
 static const struct command station_commands[] = {
 	{ NULL, "list", NULL, cmd_list, "List Ad-Hoc devices", true },
+	{ "<wlan>", "connect",
+				"<\"network name\"> [security]",
+					cmd_connect,
+						"Connect to network", false,
+		connect_cmd_arg_completion },
 	{ "<wlan>", "connect-hidden",
 				"<\"network name\">",
 					cmd_connect_hidden_network,
