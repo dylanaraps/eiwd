@@ -66,6 +66,17 @@ const char *network_get_type(const char *path)
 	return network->type;
 }
 
+const char *network_get_name(const char *path)
+{
+	const struct network *network;
+	const struct proxy_interface *proxy =
+			proxy_interface_find(IWD_NETWORK_INTERFACE, path);
+
+	network = proxy_interface_get_data(proxy);
+
+	return network->name;
+}
+
 void network_connect(const struct proxy_interface *proxy)
 {
 	if (!proxy)
