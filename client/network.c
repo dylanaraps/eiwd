@@ -55,6 +55,17 @@ bool network_is_connected(const char *path)
 	return network->connected;
 }
 
+const char *network_get_type(const char *path)
+{
+	const struct network *network;
+	const struct proxy_interface *proxy =
+			proxy_interface_find(IWD_NETWORK_INTERFACE, path);
+
+	network = proxy_interface_get_data(proxy);
+
+	return network->type;
+}
+
 void network_connect(const struct proxy_interface *proxy)
 {
 	if (!proxy)

@@ -26,6 +26,7 @@ struct network_args {
 };
 
 bool network_is_connected(const char *path);
+const char *network_get_type(const char *path);
 void network_connect(const struct proxy_interface *proxy);
 
 char *network_name_completion(const struct proxy_interface *device,
