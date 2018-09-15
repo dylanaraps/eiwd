@@ -533,21 +533,6 @@ static enum cmd_status cmd_scan(const char *device_name,
 	return CMD_STATUS_TRIGGERED;
 }
 
-static enum cmd_status cmd_disconnect(const char *device_name,
-						char **argv, int argc)
-{
-	const struct proxy_interface *proxy =
-					device_proxy_find_by_name(device_name);
-
-	if (!proxy)
-		return CMD_STATUS_INVALID_ARGS;
-
-	proxy_interface_method_call(proxy, "Disconnect", "",
-						check_errors_method_callback);
-
-	return CMD_STATUS_TRIGGERED;
-}
-
 static enum cmd_status cmd_get_networks(const char *device_name,
 						char **argv, int argc)
 {
@@ -724,8 +709,6 @@ static const struct command device_commands[] = {
 					cmd_connect_hidden_network,
 						"Connect to hidden network",
 									false },
-	{ "<wlan>", "disconnect",
-				NULL,   cmd_disconnect, "Disconnect" },
 	{ }
 };
 

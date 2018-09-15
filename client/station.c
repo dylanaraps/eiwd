@@ -129,6 +129,12 @@ static struct proxy_interface_type station_interface_type = {
 	.ops = &station_ops,
 };
 
+static void check_errors_method_callback(struct l_dbus_message *message,
+								void *user_data)
+{
+	dbus_message_has_error(message);
+}
+
 static void display_station_inline(const char *margin, const void *data)
 {
 	const struct proxy_interface *station_i = data;
@@ -179,8 +185,27 @@ static enum cmd_status cmd_list(const char *device_name, char **argv, int argc)
 	return CMD_STATUS_DONE;
 }
 
+static enum cmd_status cmd_disconnect(const char *device_name,
+						char **argv, int argc)
+{
+	const struct proxy_interface *station_i =
+			device_proxy_find(device_name, IWD_STATION_INTERFACE);
+
+	if (!station_i) {
+		display("No station on device: '%s'\n", device_name);
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	proxy_interface_method_call(station_i, "Disconnect", "",
+						check_errors_method_callback);
+
+	return CMD_STATUS_TRIGGERED;
+}
+
 static const struct command station_commands[] = {
 	{ NULL, "list", NULL, cmd_list, "List Ad-Hoc devices", true },
+	{ "<wlan>", "disconnect",
+				NULL,   cmd_disconnect, "Disconnect" },
 	{ }
 };
 
