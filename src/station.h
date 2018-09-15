@@ -103,9 +103,6 @@ struct l_dbus_message *station_build_get_networks_reply(
 						struct station *station,
 						struct l_dbus_message *message,
 						bool legacy);
-struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data);
 
 int __station_connect_network(struct station *station, struct network *network,
 				struct scan_bss *bss);

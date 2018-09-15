@@ -72,23 +72,6 @@ static void device_ap_roam_frame_event(struct netdev *netdev,
 	station_ap_directed_roam(station, hdr, body, body_len);
 }
 
-static struct l_dbus_message *device_scan(struct l_dbus *dbus,
-						struct l_dbus_message *message,
-						void *user_data)
-{
-	struct device *device = user_data;
-	struct station *station = device->station;
-
-	/* TODO: Remove when Device/Station split is done */
-	if (netdev_get_iftype(device->netdev) != NETDEV_IFTYPE_STATION)
-		return dbus_error_not_available(message);
-
-	if (!device->powered)
-		return dbus_error_failed(message);
-
-	return station_dbus_scan(dbus, message, station);
-}
-
 static struct l_dbus_message *device_get_networks(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -436,8 +419,6 @@ static struct l_dbus_message *device_property_set_mode(struct l_dbus *dbus,
 
 static void setup_device_interface(struct l_dbus_interface *interface)
 {
-	l_dbus_interface_method(interface, "Scan", 0,
-				device_scan, "", "");
 	l_dbus_interface_method(interface, "GetOrderedNetworks", 0,
 				device_get_networks, "a(osns)", "",
 				"networks");

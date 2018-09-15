@@ -1931,7 +1931,7 @@ static void station_dbus_scan_triggered(int err, void *user_data)
 				IWD_DEVICE_INTERFACE, "Scanning");
 }
 
-struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
+static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
 {
