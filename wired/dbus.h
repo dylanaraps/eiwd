@@ -23,15 +23,18 @@
 enum l_dbus_bus;
 struct l_dbus;
 
-struct l_dbus *dbus_get(void);
+struct l_dbus *dbus_app_get(void);
 
-typedef void (*dbus_ready_func_t) (struct l_dbus *dbus, void *user_data);
-typedef void (*dbus_shutdown_func_t) (struct l_dbus *dbus, void *user_data);
+typedef void (*dbus_app_destroy_func_t) (void *user_data);
 
-typedef void (*dbus_destroy_func_t) (void *user_data);
+struct dbus_app {
+	enum l_dbus_bus bus;
+	const char *name;
+	void (*ready) (struct l_dbus *dbus, void *user_data);
+	void (*shutdown) (struct l_dbus *dbus, void *user_data);
+};
 
-int dbus_run(enum l_dbus_bus bus, const char *name,
-					dbus_ready_func_t ready_func,
-					dbus_shutdown_func_t shutdown_func,
-					void *user_data,
-					dbus_destroy_func_t destroy);
+void dbus_app_shutdown_complete(void);
+
+int dbus_app_run(const struct dbus_app *app, void *user_data,
+					dbus_app_destroy_func_t destroy);

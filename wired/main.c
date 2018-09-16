@@ -58,7 +58,16 @@ static void dbus_shutdown(struct l_dbus *dbus, void *user_data)
 	ethdev_exit();
 	network_exit();
 	eap_exit();
+
+	dbus_app_shutdown_complete();
 }
+
+static const struct dbus_app app = {
+	.bus		= L_DBUS_SYSTEM_BUS,
+	.name		= "net.connman.ead",
+	.ready		= dbus_ready,
+	.shutdown	= dbus_shutdown,
+};
 
 static void usage(void)
 {
@@ -131,6 +140,5 @@ int main(int argc, char *argv[])
 
 	l_info("Authentication daemon version %s", VERSION);
 
-	return dbus_run(L_DBUS_SYSTEM_BUS, "net.connman.ead",
-				dbus_ready, dbus_shutdown, &opts, NULL);
+	return dbus_app_run(&app, &opts, NULL);
 }

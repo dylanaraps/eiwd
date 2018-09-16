@@ -30,16 +30,34 @@
 
 static struct l_dbus *dbus = NULL;
 
-struct l_dbus *dbus_get(void)
+struct l_dbus *dbus_app_get(void)
 {
 	return dbus;
 }
 
 struct dbus_info {
-	char *name;
-	dbus_ready_func_t ready_func;
+	const struct dbus_app *app;
 	void *user_data;
 };
+
+void dbus_app_shutdown_complete(void)
+{
+	l_main_quit();
+}
+
+static void dbus_shutdown(struct dbus_info *info)
+{
+	static bool terminated = false;
+
+	if (!terminated) {
+		terminated = true;
+
+		if (info->app->shutdown)
+			info->app->shutdown(dbus, info->user_data);
+		else
+			l_main_quit();
+	}
+}
 
 static void request_name_callback(struct l_dbus *dbus, bool success,
 						bool queued, void *user_data)
@@ -55,59 +73,65 @@ static void request_name_callback(struct l_dbus *dbus, bool success,
 	if (!l_dbus_object_manager_enable(dbus))
 		l_warn("Unable to register ObjectManager interface");
 
-	if (info->ready_func)
-		info->ready_func(dbus, info->user_data);
+	if (info->app->ready)
+		info->app->ready(dbus, info->user_data);
 }
 
 static void dbus_ready(void *user_data)
 {
 	struct dbus_info *info = user_data;
 
-	l_dbus_name_acquire(dbus, info->name, false, false, true,
+	if (info->app->name) {
+		l_dbus_name_acquire(dbus, info->app->name, false, false, true,
 						request_name_callback, info);
+		return;
+	}
+
+	if (info->app->ready)
+		info->app->ready(dbus, info->user_data);
 }
 
 static void dbus_disconnected(void *user_data)
 {
-	l_info("D-Bus disconnected, quitting...");
-	l_main_quit();
+	struct dbus_info *info = user_data;
+
+	l_info("D-Bus disconnected");
+	dbus_shutdown(info);
 }
 
 static void dbus_signal_handler(uint32_t signo, void *user_data)
 {
+	struct dbus_info *info = user_data;
+
 	switch (signo) {
 	case SIGINT:
 	case SIGTERM:
-		l_info("Terminate");
-		l_main_quit();
+		l_info("Termination signal");
+		dbus_shutdown(info);
 		break;
 	}
 }
 
-int dbus_run(enum l_dbus_bus bus, const char *name,
-					dbus_ready_func_t ready_func,
-					dbus_shutdown_func_t shutdown_func,
-					void *user_data,
-					dbus_destroy_func_t destroy)
+int dbus_app_run(const struct dbus_app *app, void *user_data,
+					dbus_app_destroy_func_t destroy)
 {
 	struct dbus_info *info;
 	int exit_status;
 
-	if (dbus)
+	if (dbus || !app)
 		return EXIT_FAILURE;
 
 	if (!l_main_init())
 		return EXIT_FAILURE;
 
-	dbus = l_dbus_new_default(bus);
+	dbus = l_dbus_new_default(app->bus);
 	if (!dbus) {
 		l_error("Failed to initialize D-Bus");
 		return EXIT_FAILURE;
 	}
 
 	info = l_new(struct dbus_info, 1);
-	info->name = l_strdup(name);
-	info->ready_func = ready_func;
+	info->app = app;
 	info->user_data = user_data;
 
 	l_dbus_set_ready_handler(dbus, dbus_ready, info, NULL);
@@ -115,16 +139,12 @@ int dbus_run(enum l_dbus_bus bus, const char *name,
 
 	exit_status = l_main_run_with_signal(dbus_signal_handler, info);
 
-	if (shutdown_func)
-		shutdown_func(dbus, info->user_data);
-
 	l_dbus_destroy(dbus);
 	dbus = NULL;
 
 	if (destroy)
 		destroy(info->user_data);
 
-	l_free(info->name);
 	l_free(info);
 
 	return exit_status;
