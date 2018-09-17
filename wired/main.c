@@ -95,6 +95,9 @@ int main(int argc, char *argv[])
 	struct main_opts opts;
 	const char *debugopt = NULL;
 
+	opts.interfaces = NULL;
+	opts.nointerfaces = NULL;
+
 	for (;;) {
 		int opt;
 

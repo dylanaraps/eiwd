@@ -59,8 +59,8 @@ struct eapol {
 
 static struct l_netlink *rtnl = NULL;
 static struct l_queue *ethdev_list = NULL;
-static char **whitelist_filter;
-static char **blacklist_filter;
+static char **whitelist_filter = NULL;
+static char **blacklist_filter = NULL;
 
 static struct l_io *pae_io;
 
