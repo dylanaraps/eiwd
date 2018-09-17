@@ -38,8 +38,18 @@
 #include <ell/ell.h>
 
 #include "src/eap.h"
+#include "wired/dbus.h"
 #include "wired/network.h"
 #include "wired/ethdev.h"
+
+#define ADAPTER_INTERFACE	"net.connman.ead.Adapter"
+#define ADAPTER_BASEPATH	"/net/connman/ead/adapter"
+
+#define PROP_NAME		"Name"
+#define PROP_ADDRESS		"Address"
+#define PROP_ACTIVE		"Active"
+#define PROP_CONNECTED		"Connected"
+#define PROP_AUTHENTICATED	"Authenticated"
 
 struct ethdev {
 	uint32_t index;
@@ -47,7 +57,9 @@ struct ethdev {
 	uint8_t addr[ETH_ALEN];
 	bool active;
 	bool lower_up;
+	bool auth_done;
 	struct l_queue *eapol_sessions;
+	char *path;
 };
 
 struct eapol {
@@ -150,6 +162,15 @@ static void eap_complete(enum eap_result result, void *user_data)
 	struct ethdev *dev = eapol->dev;
 
 	l_debug("result %u", result);
+
+	if (result == EAP_RESULT_SUCCESS) {
+		if (!dev->auth_done) {
+			dev->auth_done = true;
+			l_dbus_property_changed(dbus_app_get(), dev->path,
+							ADAPTER_INTERFACE,
+							PROP_AUTHENTICATED);
+		}
+	}
 
 	l_queue_remove(dev->eapol_sessions, eapol);
 	eapol_free(eapol);
@@ -333,6 +354,11 @@ static void ethdev_free(void *data)
 	l_debug("Freeing device %s", dev->ifname);
 
 	l_queue_destroy(dev->eapol_sessions, eapol_free);
+
+	l_dbus_object_remove_interface(dbus_app_get(), dev->path,
+							ADAPTER_INTERFACE);
+
+	l_free(dev->path);
 	l_free(dev);
 }
 
@@ -373,7 +399,7 @@ static void newlink_notify(const struct ifinfomsg *ifi, int bytes)
 	uint8_t *addr = NULL;
 	const char *ifname = NULL;
 	uint8_t linkmode = 0, operstate = 0;
-	bool active, lower_up;
+	bool active, lower_up, lower_changed = false;
 
 	if (ifi->ifi_type != ARPHRD_ETHER)
 		return;
@@ -433,13 +459,21 @@ static void newlink_notify(const struct ifinfomsg *ifi, int bytes)
 
 		dev = l_new(struct ethdev, 1);
 		dev->index = index;
-		dev->active = false;
-		dev->lower_up = false;
+		dev->active = active;
+		dev->lower_up = lower_up;
+		dev->auth_done = false;
 		dev->eapol_sessions = l_queue_new();
+		dev->path = l_strdup_printf("%s/%u", ADAPTER_BASEPATH,
+								dev->index);
 
 		l_debug("Creating device %u", dev->index);
 
+		l_dbus_object_add_interface(dbus_app_get(), dev->path,
+						ADAPTER_INTERFACE, dev);
+
 		l_queue_push_tail(ethdev_list, dev);
+
+		lower_changed = true;
 	}
 
 	if (ifname)
@@ -447,14 +481,27 @@ static void newlink_notify(const struct ifinfomsg *ifi, int bytes)
 
 	memcpy(dev->addr, addr, ETH_ALEN);
 
-	if (lower_up && !dev->lower_up)
-		pae_write(dev, pae_group_addr,
-					eapol_start, sizeof(eapol_start));
-	else if (!lower_up && dev->lower_up)
-		l_queue_clear(dev->eapol_sessions, eapol_free);
+	if (active != dev->active) {
+		dev->active = active;
+		l_dbus_property_changed(dbus_app_get(), dev->path,
+					ADAPTER_INTERFACE, PROP_ACTIVE);
+	}
 
-	dev->active = active;
-	dev->lower_up = lower_up;
+	if (lower_up != dev->lower_up) {
+		dev->lower_up = lower_up;
+		l_dbus_property_changed(dbus_app_get(), dev->path,
+					ADAPTER_INTERFACE, PROP_CONNECTED);
+
+		lower_changed = true;
+	}
+
+	if (lower_changed) {
+		if (dev->lower_up)
+			pae_write(dev, pae_group_addr,
+					eapol_start, sizeof(eapol_start));
+		else
+			l_queue_clear(dev->eapol_sessions, eapol_free);
+	}
 }
 
 static void dellink_notify(const struct ifinfomsg *ifi, int bytes)
@@ -518,6 +565,83 @@ static void getlink_callback(int error, uint16_t type, const void *data,
 	newlink_notify(ifi, bytes);
 }
 
+static bool property_get_name(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct ethdev *dev = user_data;
+
+	l_dbus_message_builder_append_basic(builder, 's', dev->ifname);
+	return true;
+}
+
+static bool property_get_address(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct ethdev *dev = user_data;
+        char str[18];
+
+	sprintf(str, "%02x:%02x:%02x:%02x:%02x:%02x",
+				dev->addr[0], dev->addr[1], dev->addr[2],
+				dev->addr[3], dev->addr[4], dev->addr[5]);
+
+	l_dbus_message_builder_append_basic(builder, 's', str);
+	return true;
+}
+
+static bool property_get_active(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct ethdev *dev = user_data;
+	bool active = dev->active;
+
+	l_dbus_message_builder_append_basic(builder, 'b', &active);
+	return true;
+}
+
+static bool property_get_connected(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct ethdev *dev = user_data;
+	bool connected = dev->lower_up;
+
+	l_dbus_message_builder_append_basic(builder, 'b', &connected);
+	return true;
+}
+
+static bool property_get_authenticated(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct ethdev *dev = user_data;
+	bool authenticated = dev->auth_done;
+
+	l_dbus_message_builder_append_basic(builder, 'b', &authenticated);
+	return true;
+}
+
+static void setup_adapter_interface(struct l_dbus_interface *interface)
+{
+	l_dbus_interface_property(interface, PROP_NAME, 0, "s",
+					property_get_name, NULL);
+	l_dbus_interface_property(interface, PROP_ADDRESS, 0, "s",
+					property_get_address, NULL);
+	l_dbus_interface_property(interface, PROP_ACTIVE, 0, "b",
+					property_get_active, NULL);
+	l_dbus_interface_property(interface, PROP_CONNECTED, 0, "b",
+					property_get_connected, NULL);
+	l_dbus_interface_property(interface, PROP_AUTHENTICATED, 0, "b",
+					property_get_authenticated, NULL);
+}
+
 bool ethdev_init(const char *whitelist, const char *blacklist)
 {
 	struct ifinfomsg msg;
@@ -544,6 +668,13 @@ bool ethdev_init(const char *whitelist, const char *blacklist)
 
 	ethdev_list = l_queue_new();
 
+	if (!l_dbus_register_interface(dbus_app_get(), ADAPTER_INTERFACE,
+					setup_adapter_interface, NULL, false)) {
+		l_error("Unable to register the adapter interface");
+		l_netlink_destroy(rtnl);
+		return false;
+	}
+
 	if (whitelist)
 		whitelist_filter = l_strsplit(whitelist, ',');
 
@@ -563,8 +694,7 @@ void ethdev_exit(void)
 	if (!rtnl)
 		return;
 
-	l_queue_destroy(ethdev_list, ethdev_free);
-	ethdev_list = NULL;
+	l_dbus_unregister_interface(dbus_app_get(), ADAPTER_INTERFACE);
 
 	pae_close();
 
@@ -574,4 +704,7 @@ void ethdev_exit(void)
 	l_debug("Closing route netlink socket");
 	l_netlink_destroy(rtnl);
 	rtnl = NULL;
+
+	l_queue_destroy(ethdev_list, ethdev_free);
+	ethdev_list = NULL;
 }
