@@ -1933,8 +1933,6 @@ static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 	if (station->scan_pending)
 		return dbus_error_busy(message);
 
-	station->scan_pending = l_dbus_message_ref(message);
-
 	/*
 	 * If we're not connected and no hidden networks are seen & configured,
 	 * use passive scanning to hide our MAC address
@@ -1959,6 +1957,8 @@ static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 					new_scan_results, station, NULL))
 			return dbus_error_failed(message);
 	}
+
+	station->scan_pending = l_dbus_message_ref(message);
 
 	return NULL;
 }
