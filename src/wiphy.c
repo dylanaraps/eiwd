@@ -90,6 +90,7 @@ enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy, uint16_t mask)
 
 	return 0;
 }
+
 static void wiphy_free(void *data)
 {
 	struct wiphy *wiphy = data;
