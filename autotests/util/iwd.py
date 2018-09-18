@@ -215,6 +215,7 @@ class Device(IWDDBusAbstract):
     _iface_name = IWD_DEVICE_INTERFACE
     _wps_manager_if = None
     _station_if = None
+    _station_props = None
 
     @property
     def _wps_manager(self):
@@ -228,10 +229,36 @@ class Device(IWDDBusAbstract):
     @property
     def _station(self):
         if self._station_if is None:
-            _station_if = dbus.Interface(self._bus.get_object(IWD_SERVICE,
+            self._station_if = dbus.Interface(self._bus.get_object(IWD_SERVICE,
                                                             self.device_path),
                                             IWD_STATION_INTERFACE)
-        return _station_if
+        return self._station_if
+
+    def _station_properties(self):
+        if self._station_props is not None:
+            return self._station_props
+
+        if self._properties['Mode'] != 'station':
+            self._prop_proxy.Set(IWD_DEVICE_INTERFACE, 'Mode', 'station')
+
+        self._station_prop_if = \
+                dbus.Interface(self._bus.get_object(IWD_SERVICE,
+                                                            self.device_path),
+                                                DBUS_PROPERTIES)
+
+        self._station_props = self._station_prop_if.GetAll(IWD_STATION_INTERFACE)
+
+        self._station_prop_if.connect_to_signal("PropertiesChanged",
+                                        self.__station_property_changed_handler,
+                                        DBUS_PROPERTIES, path_keyword="path")
+
+        return self._station_props
+
+    def __station_property_changed_handler(self, interface, changed,
+                                                            invalidated, path):
+        if interface == IWD_STATION_INTERFACE and path == self._object_path:
+            for name, value in changed.items():
+                self._station_props[name] = value
 
     @property
     def device_path(self):
@@ -267,7 +294,8 @@ class Device(IWDDBusAbstract):
 
             @rtype: object (State)
         '''
-        return DeviceState.from_str(self._properties['State'])
+        props = self._station_properties()
+        return DeviceState.from_str(props['State'])
 
     @property
     def connected_network(self):
@@ -278,7 +306,8 @@ class Device(IWDDBusAbstract):
 
             @rtype: object (Network)
         '''
-        return self._properties.get('ConnectedNetwork')
+        props = self._station_properties()
+        return props.get('ConnectedNetwork')
 
     @property
     def powered(self):
@@ -299,7 +328,8 @@ class Device(IWDDBusAbstract):
 
         @rtype: boolean
         '''
-        return bool(self._properties['Scanning'])
+        props = self._station_properties()
+        return bool(props['Scanning'])
 
     def scan(self):
         '''Schedule a network scan.
