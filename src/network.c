@@ -129,11 +129,12 @@ void network_connected(struct network *network)
 		/*
 		 * This is an open network seen for the first time:
 		 *
-		 * Write an empty settings file to keep track of the
+		 * Write a settings file to keep track of the
 		 * last connected time.  This will also make iwd autoconnect
 		 * to this network in the future.
 		 */
-		network->settings = l_settings_new();
+		if (!network->settings)
+			network->settings = l_settings_new();
 
 		storage_network_sync(network_get_security(network),
 					network->info->ssid,
