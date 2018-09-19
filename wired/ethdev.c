@@ -28,13 +28,13 @@
 #include <errno.h>
 #include <unistd.h>
 #include <fnmatch.h>
+#include <net/if_arp.h>
 #include <linux/rtnetlink.h>
 #include <linux/if.h>
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
 #include <linux/filter.h>
 #include <arpa/inet.h>
-#include <net/if_arp.h>
 #include <ell/ell.h>
 
 #include "src/eap.h"
