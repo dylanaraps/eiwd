@@ -81,7 +81,7 @@ dbus_bus_DATA =
 endif
 
 eap_sources = src/eap.c src/eap.h src/eap-private.h \
-				src/eap-wsc.c erc/eap-wsc.h \
+				src/eap-wsc.c src/eap-wsc.h \
 				src/eap-md5.c \
 				src/eap-tls.c \
 				src/eap-ttls.c \
