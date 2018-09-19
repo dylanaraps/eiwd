@@ -252,6 +252,10 @@ enum ie_rsn_akm_suite {
 	IE_RSN_AKM_SUITE_FT_OVER_8021X_SHA384	= 0x1000,
 };
 
+#define IE_AKM_IS_SAE(akm) \
+	((akm == IE_RSN_AKM_SUITE_SAE_SHA256) || \
+	(akm == IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256))
+
 struct ie_tlv_iter {
 	unsigned int max;
 	unsigned int pos;

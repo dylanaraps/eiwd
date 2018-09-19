@@ -2510,7 +2510,7 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	if (netdev->connected)
 		return -EISCONN;
 
-	if (hs->akm_suite == IE_RSN_AKM_SUITE_SAE_SHA256) {
+	if (IE_AKM_IS_SAE(hs->akm_suite)) {
 		netdev->sae_sm = sae_sm_new(hs, netdev_tx_sae_frame,
 						netdev_sae_complete, netdev);
 	} else {

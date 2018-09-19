@@ -81,6 +81,7 @@ bool eapol_calculate_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AKM_DEFINED:
 		switch (akm) {
 		case IE_RSN_AKM_SUITE_SAE_SHA256:
+		case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
 			return cmac_aes(kck, 16, frame, frame_len, mic, 16);
 		default:
 			return false;
@@ -123,6 +124,7 @@ bool eapol_verify_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AKM_DEFINED:
 		switch (akm) {
 		case IE_RSN_AKM_SUITE_SAE_SHA256:
+		case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
 			checksum = l_checksum_new_cmac_aes(kck, 16);
 			break;
 		default:
@@ -167,7 +169,7 @@ uint8_t *eapol_decrypt_key_data(enum ie_rsn_akm_suite akm, const uint8_t *kek,
 		 * type this will need to be expanded to handle the AKM types in
 		 * its own switch.
 		 */
-		if (akm != IE_RSN_AKM_SUITE_SAE_SHA256)
+		if (!IE_AKM_IS_SAE(akm))
 			return NULL;
 
 		/* Fall through */
