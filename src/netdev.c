@@ -2292,6 +2292,8 @@ static void netdev_sae_complete(uint16_t status, void *user_data)
 {
 	struct netdev *netdev = user_data;
 	struct l_genl_msg *msg;
+	struct iovec iov[3];
+	int iov_elems = 0;
 
 	if (status != 0) {
 		l_error("SAE exchange failed on %u result %u",
@@ -2302,9 +2304,17 @@ static void netdev_sae_complete(uint16_t status, void *user_data)
 
 	msg = netdev_build_cmd_associate_common(netdev);
 
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IE,
-					netdev->handshake->supplicant_ie[1] + 2,
-					netdev->handshake->supplicant_ie);
+	iov[iov_elems].iov_base = netdev->handshake->supplicant_ie;
+	iov[iov_elems].iov_len = netdev->handshake->supplicant_ie[1] + 2;
+	iov_elems++;
+
+	if (netdev->handshake->mde) {
+		iov[iov_elems].iov_base = netdev->handshake->mde;
+		iov[iov_elems].iov_len = netdev->handshake->mde[1] + 2;
+		iov_elems++;
+	}
+
+	l_genl_msg_append_attrv(msg, NL80211_ATTR_IE, iov, iov_elems);
 
 	/* netdev_cmd_connect_cb can be reused */
 	netdev->connect_cmd_id = l_genl_family_send(nl80211, msg,
