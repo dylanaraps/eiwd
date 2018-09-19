@@ -17,8 +17,7 @@ class Test(unittest.TestCase):
         psk_agent = PSKAgent("secret123")
         wd.register_psk_agent(psk_agent)
 
-        devices = wd.list_devices();
-        self.assertIsNotNone(devices)
+        devices = wd.list_devices(1);
         device = devices[0]
 
         condition = 'not obj.scanning'

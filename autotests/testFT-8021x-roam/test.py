@@ -26,7 +26,7 @@ class Test(unittest.TestCase):
 
         wd = IWD()
 
-        device = wd.list_devices()[0];
+        device = wd.list_devices(1)[0];
 
         # Check that iwd selects BSS 0 first
         rule0.signal = -2000
@@ -107,7 +107,7 @@ class Test(unittest.TestCase):
 
         wd = IWD()
 
-        device = wd.list_devices()[0];
+        device = wd.list_devices(1)[0];
 
         # Check that iwd selects BSS 0 first
         rule0.signal = -2000
@@ -182,7 +182,7 @@ class Test(unittest.TestCase):
 
         hwsim = Hwsim()
         wd = IWD()
-        device = wd.list_devices()[0]
+        device = wd.list_devices(1)[0]
         try:
             device.disconnect()
         except:

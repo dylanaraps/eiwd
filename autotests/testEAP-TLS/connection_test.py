@@ -26,8 +26,7 @@ class Test(unittest.TestCase):
                 hostapd_ifname = ifname
                 break
 
-        devices = wd.list_devices();
-        self.assertIsNotNone(devices)
+        devices = wd.list_devices(1);
         device = devices[0]
 
         condition = 'not obj.scanning'

@@ -17,8 +17,7 @@ class Test(unittest.TestCase):
     def test_disconnect(self):
         wd = IWD()
 
-        devices = wd.list_devices();
-        self.assertIsNotNone(devices)
+        devices = wd.list_devices(1);
         device = devices[0]
 
         hostapd_if = list(hostapd_map.values())[0]
