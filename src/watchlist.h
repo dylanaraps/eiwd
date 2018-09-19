@@ -66,6 +66,8 @@ void __watchlist_prune_stale(struct watchlist *watchlist);
 		for (; entry; entry = entry->next) {			\
 			struct watchlist_item *item = entry->data;	\
 			type t = item->notify;				\
+			if (item->id == 0)				\
+				continue;				\
 			t(args, item->notify_data);			\
 		}							\
 		(watchlist)->in_notify = false;				\
@@ -83,6 +85,8 @@ void __watchlist_prune_stale(struct watchlist *watchlist);
 			struct watchlist_item *item = entry->data;	\
 			type t = item->notify;				\
 									\
+			if (item->id == 0)				\
+				continue;				\
 			if (!match(item, match_data))			\
 				continue;				\
 									\
@@ -102,6 +106,8 @@ void __watchlist_prune_stale(struct watchlist *watchlist);
 		for (; entry; entry = entry->next) {			\
 			struct watchlist_item *item = entry->data;	\
 			type t = item->notify;				\
+			if (item->id == 0)				\
+				continue;				\
 			t(item->notify_data);			\
 		}							\
 		(watchlist)->in_notify = false;				\
