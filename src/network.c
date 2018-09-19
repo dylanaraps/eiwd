@@ -109,7 +109,12 @@ static bool network_secret_check_cacheable(void *data, void *user_data)
 {
 	struct eap_secret_info *secret = data;
 
-	return secret->cache_policy == EAP_CACHE_NEVER;
+	if (secret->cache_policy == EAP_CACHE_NEVER) {
+		eap_secret_info_free(secret);
+		return true;
+	}
+
+	return false;
 }
 
 void network_connected(struct network *network)
