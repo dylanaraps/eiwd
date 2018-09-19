@@ -609,7 +609,7 @@ static void periodic_scan_stop(struct station *station)
 	}
 }
 
-const char *station_state_to_string(enum station_state state)
+static const char *station_state_to_string(enum station_state state)
 {
 	switch (state) {
 	case STATION_STATE_DISCONNECTED:
