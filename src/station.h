@@ -73,8 +73,6 @@ void station_connect_network(struct station *station, struct network *network,
 				struct l_dbus_message *message);
 int station_disconnect(struct station *station);
 
-void station_rssi_level_changed(struct station *station);
-
 struct station *station_find(uint32_t ifindex);
 void station_foreach(station_foreach_func_t func, void *user_data);
 struct station *station_create(struct wiphy *wiphy, struct netdev *netdev);

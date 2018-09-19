@@ -1531,6 +1531,8 @@ static void station_ok_rssi(struct station *station)
 	station->signal_low = false;
 }
 
+static void station_rssi_level_changed(struct station *station);
+
 static void station_netdev_event(struct netdev *netdev, enum netdev_event event,
 					void *user_data)
 {
@@ -1985,7 +1987,7 @@ static void station_signal_agent_notify(struct signal_agent *agent,
 	l_dbus_send(dbus_get_bus(), msg);
 }
 
-void station_rssi_level_changed(struct station *station)
+static void station_rssi_level_changed(struct station *station)
 {
 	struct netdev *netdev = station->netdev;
 
