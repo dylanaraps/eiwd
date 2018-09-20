@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2013-2014  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2013-2018  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -46,7 +46,6 @@ struct eap_ttls_state {
 	size_t tx_pkt_len, tx_pkt_capacity, tx_pkt_offset;
 	uint8_t *avp_buf;
 	size_t avp_received, avp_capacity;
-	bool phase1_completed;
 	bool completed;
 	struct eap_state *phase2_eap;
 	uint8_t negotiated_version;
@@ -54,7 +53,6 @@ struct eap_ttls_state {
 
 static void __eap_ttls_reset_state(struct eap_ttls_state *ttls)
 {
-	ttls->phase1_completed = false;
 	ttls->completed = false;
 
 	l_free(ttls->rx_pkt_buf);
@@ -342,8 +340,6 @@ static void eap_ttls_ready_cb(const char *peer_identity, void *user_data)
 	uint8_t packet[5] = { EAP_CODE_REQUEST, 0, 0, 5, EAP_TYPE_IDENTITY };
 
 	/* TODO: if we have a CA certificate require non-NULL peer_identity */
-
-	ttls->phase1_completed = true;
 
 	/*
 	 * TTLSv0 seems to assume that the TLS handshake phase authenticates
