@@ -1,3 +1,10 @@
+ver 0.8:
+	Fix issue with handling EAP_CACHE_NEVER secret types.
+	Fix issue with redundant usage of the L flag and PEAP.
+	Fix issue with EAP type 33 as termination mechanism for PEAPv1.
+	Add initial version of Ethernet authentication daemon.
+	Add support for Station mode interface.
+
 ver 0.7:
 	Fix issue with hard coded peer address and SAE networks.
 	Fix issue with raw passphrase requirement and SAE networks.
