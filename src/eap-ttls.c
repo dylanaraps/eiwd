@@ -33,6 +33,23 @@
 #include "eap.h"
 #include "eap-private.h"
 
+enum radius_attr {
+	RADIUS_ATTR_EAP_MESSAGE			= 79,
+};
+
+struct phase2_method {
+	void *state;
+	bool (*init)(struct eap_state *eap);
+	bool (*handle_avp)(struct eap_state *eap, enum radius_attr type,
+				uint32_t vendor_id, const uint8_t *data,
+								size_t len);
+	bool (*load_settings)(struct eap_state *eap,
+						struct l_settings *settings,
+						const char *prefix);
+	void (*destroy)(struct eap_state *eap);
+	bool (*reset)(struct eap_state *eap);
+};
+
 struct eap_ttls_state {
 	char *ca_cert;
 	char *client_cert;
@@ -49,6 +66,8 @@ struct eap_ttls_state {
 	bool completed;
 	struct eap_state *phase2_eap;
 	uint8_t negotiated_version;
+
+	struct phase2_method *phase2;
 };
 
 static void __eap_ttls_reset_state(struct eap_ttls_state *ttls)
@@ -81,13 +100,11 @@ static bool eap_ttls_reset_state(struct eap_state *eap)
 {
 	struct eap_ttls_state *ttls = eap_get_data(eap);
 
-	if (!ttls->phase2_eap)
-		return false;
-
-	if (!eap_reset(ttls->phase2_eap))
-		return false;
+	if (ttls->phase2->reset)
+		ttls->phase2->reset(eap);
 
 	__eap_ttls_reset_state(ttls);
+
 	return true;
 }
 
@@ -96,6 +113,9 @@ static void eap_ttls_free(struct eap_state *eap)
 	struct eap_ttls_state *ttls = eap_get_data(eap);
 
 	__eap_ttls_reset_state(ttls);
+
+	if (ttls->phase2->destroy)
+		ttls->phase2->destroy(eap);
 
 	eap_set_data(eap, NULL);
 
@@ -108,11 +128,6 @@ static void eap_ttls_free(struct eap_state *eap)
 		l_free(ttls->passphrase);
 	}
 
-	if (ttls->phase2_eap) {
-		eap_free(ttls->phase2_eap);
-		ttls->phase2_eap = NULL;
-	}
-
 	l_free(ttls);
 }
 
@@ -123,6 +138,98 @@ static void eap_ttls_free(struct eap_state *eap)
 #define EAP_TTLS_FLAG_S	(1 << 5)
 #define EAP_TTLS_FLAG_MASK	\
 	(EAP_TTLS_FLAG_L | EAP_TTLS_FLAG_M | EAP_TTLS_FLAG_S)
+
+static void eap_ttls_phase2_eap_send_response(const uint8_t *data, size_t len,
+								void *user_data)
+{
+}
+
+static void eap_ttls_phase2_eap_complete(enum eap_result result,
+								void *user_data)
+{
+	struct eap_state *eap = user_data;
+	struct eap_ttls_state *ttls = eap_get_data(eap);
+
+	ttls->completed = true;
+}
+
+static bool eap_ttls_phase2_eap_load_settings(struct eap_state *eap,
+						struct l_settings *settings,
+						const char *prefix)
+{
+	struct eap_ttls_state *ttls = eap_get_data(eap);
+
+	ttls->phase2->state = eap_new(eap_ttls_phase2_eap_send_response,
+						eap_ttls_phase2_eap_complete,
+						eap);
+	if (!ttls->phase2->state) {
+		l_error("Could not create the TTLS Phase 2 EAP instance");
+		return false;
+	}
+
+	if (!eap_load_settings(ttls->phase2->state, settings, prefix)) {
+		eap_free(ttls->phase2->state);
+		return false;
+	}
+
+	return true;
+}
+
+static bool eap_ttls_phase2_eap_init(struct eap_state *eap)
+{
+	struct eap_ttls_state *ttls = eap_get_data(eap);
+	uint8_t packet[5] = { EAP_CODE_REQUEST, 0, 0, 5, EAP_TYPE_IDENTITY };
+
+	if (!ttls->phase2->state)
+		return false;
+	/*
+	 * Consume a fake Request/Identity packet so that the EAP instance
+	 * starts with its Response/Identity right away.
+	 */
+	eap_rx_packet(ttls->phase2->state, packet, sizeof(packet));
+
+	return true;
+}
+
+static bool eap_ttls_phase2_eap_handle_avp(struct eap_state *eap,
+						enum radius_attr type,
+						uint32_t vendor_id,
+						const uint8_t *data,
+						size_t len)
+{
+	return true;
+}
+
+static void eap_ttls_phase2_eap_destroy(struct eap_state *eap)
+{
+	struct eap_ttls_state *ttls = eap_get_data(eap);
+
+	if (!ttls->phase2->state)
+		return;
+
+	eap_reset(ttls->phase2->state);
+
+	eap_free(ttls->phase2->state);
+	ttls->phase2->state = NULL;
+}
+
+static bool eap_ttls_phase2_eap_reset(struct eap_state *eap)
+{
+	struct eap_ttls_state *ttls = eap_get_data(eap);
+
+	if (!ttls->phase2->state)
+		return false;
+
+	return eap_reset(ttls->phase2->state);
+}
+
+static struct phase2_method phase2_eap = {
+	.load_settings = eap_ttls_phase2_eap_load_settings,
+	.init = eap_ttls_phase2_eap_init,
+	.handle_avp = eap_ttls_phase2_eap_handle_avp,
+	.destroy = eap_ttls_phase2_eap_destroy,
+	.reset = eap_ttls_phase2_eap_reset,
+};
 
 static uint8_t *eap_ttls_tx_buf_reserve(struct eap_ttls_state *ttls,
 					size_t size)
@@ -294,50 +401,12 @@ static void eap_ttls_data_cb(const uint8_t *data, size_t len, void *user_data)
 	ttls->avp_received = len;
 }
 
-static void eap_ttls_eap_tx_packet(const uint8_t *eap_data, size_t len,
-					void *user_data)
-{
-	struct eap_state *eap = user_data;
-	struct eap_ttls_state *ttls = eap_get_data(eap);
-	uint8_t buf[sizeof(struct eap_ttls_avp) + len + 3];
-	struct eap_ttls_avp *avp = (struct eap_ttls_avp *) buf;
-	size_t avp_len = sizeof(struct eap_ttls_avp) + len;
-
-	l_put_be32(RADIUS_AVP_EAP_MESSAGE, &avp->avp_code);
-
-	avp->avp_flags = EAP_TTLS_AVP_FLAG_M;
-
-	avp->avp_len[0] = avp_len >> 16;
-	avp->avp_len[1] = avp_len >>  8;
-	avp->avp_len[2] = avp_len >>  0;
-
-	memcpy(avp->data, eap_data, len);
-
-	if (avp_len & 3)
-		memset(avp->data + len, 0, 4 - (avp_len & 3));
-
-	l_tls_write(ttls->tls, buf, (avp_len + 3) & ~3);
-}
-
-static void eap_ttls_eap_complete(enum eap_result result, void *user_data)
-{
-	struct eap_state *eap = user_data;
-	struct eap_ttls_state *ttls = eap_get_data(eap);
-
-	/*
-	 * TODO: We currently do not implement chaining per Section 11.3,
-	 * so simply set completed to true
-	 */
-	ttls->completed = true;
-}
-
 static void eap_ttls_ready_cb(const char *peer_identity, void *user_data)
 {
 	struct eap_state *eap = user_data;
 	struct eap_ttls_state *ttls = eap_get_data(eap);
 	uint8_t msk_emsk[128];
 	uint8_t seed[64];
-	uint8_t packet[5] = { EAP_CODE_REQUEST, 0, 0, 5, EAP_TYPE_IDENTITY };
 
 	/* TODO: if we have a CA certificate require non-NULL peer_identity */
 
@@ -365,15 +434,11 @@ static void eap_ttls_ready_cb(const char *peer_identity, void *user_data)
 	eap_set_key_material(eap, msk_emsk + 0, 64, msk_emsk + 64, 64,
 				NULL, 0);
 
-	/* Start the EAP negotiation */
-	if (!ttls->phase2_eap)
+	if (!ttls->phase2->state)
 		goto err;
 
-	/*
-	 * Consume a fake Request/Identity packet so that the EAP instance
-	 * starts with its Response/Identity right away.
-	 */
-	eap_rx_packet(ttls->phase2_eap, packet, sizeof(packet));
+	if (ttls->phase2->init)
+		ttls->phase2->init(eap);
 
 	return;
 err:
@@ -772,25 +837,19 @@ static bool eap_ttls_load_settings(struct eap_state *eap,
 			prefix);
 	ttls->passphrase = l_settings_get_string(settings, "Security", setting);
 
-	ttls->phase2_eap = eap_new(eap_ttls_eap_tx_packet,
-				eap_ttls_eap_complete, eap);
-	if (!ttls->phase2_eap) {
-		l_error("Could not create the TTLS inner EAP instance");
-		goto err;
-	}
-
-	snprintf(setting, sizeof(setting), "%sTTLS-Phase2-", prefix);
-
-	if (!eap_load_settings(ttls->phase2_eap, settings, setting)) {
-		eap_free(ttls->phase2_eap);
-		goto err;
-	}
+	ttls->phase2 = &phase2_eap;
 
 	eap_set_data(eap, ttls);
+
+	snprintf(setting, sizeof(setting), "%sTTLS-Phase2-", prefix);
+	if (ttls->phase2->load_settings &&
+			!ttls->phase2->load_settings(eap, settings, setting))
+		goto err;
 
 	return true;
 
 err:
+	eap_set_data(eap, NULL);
 	l_free(ttls->ca_cert);
 	l_free(ttls->client_cert);
 	l_free(ttls->client_key);
