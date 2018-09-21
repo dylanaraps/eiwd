@@ -32,10 +32,91 @@
 
 #include "eap.h"
 #include "eap-private.h"
+#include "eap-tls-common.h"
+
+#define TTLS_AVP_HEADER_LEN 8
+#define TTLS_AVP_LEN_MASK 0xFFFFFF
+
+enum ttls_avp_flag {
+	TTLS_AVP_FLAG_M =	0x40,
+	TTLS_AVP_FLAG_V =	0x80,
+	TTLS_AVP_FLAG_MASK =	0xFF,
+};
 
 enum radius_attr {
 	RADIUS_ATTR_EAP_MESSAGE			= 79,
 };
+
+struct avp_iter {
+	enum radius_attr type;
+	uint8_t flags;
+	uint32_t len;
+	uint32_t vendor_id;
+	const uint8_t *data;
+	const uint8_t *buf;
+	size_t buf_len;
+	size_t offset;
+};
+
+static void avp_iter_init(struct avp_iter *iter, const uint8_t *buf, size_t len)
+{
+	iter->buf = buf;
+	iter->buf_len = len;
+	iter->offset = 0;
+}
+
+static bool avp_iter_next(struct avp_iter *iter)
+{
+	const uint8_t *start = iter->buf + iter->offset;
+	const uint8_t *end = iter->buf + iter->buf_len;
+	enum radius_attr type;
+	uint32_t len;
+	uint8_t flags;
+	uint8_t pad_len;
+
+	/* Make sure we have at least the header fields */
+	if (iter->offset + TTLS_AVP_HEADER_LEN >= iter->buf_len)
+		return false;
+
+	type = l_get_be32(start);
+	start += 4;
+
+	len = l_get_be32(start);
+	start += 4;
+
+	flags = (len >> 24) & TTLS_AVP_FLAG_MASK;
+	len &= TTLS_AVP_LEN_MASK;
+
+	len -= TTLS_AVP_HEADER_LEN;
+
+	if (start + len > end)
+		return false;
+
+	if (flags & TTLS_AVP_FLAG_V) {
+		if (len < 4)
+			return false;
+
+		iter->vendor_id = l_get_be32(start);
+		start += 4;
+		len -= 4;
+	} else {
+		iter->vendor_id = 0;
+	}
+
+	iter->type = type;
+	iter->flags = flags;
+	iter->len = len;
+	iter->data = start;
+
+	if (len & 3)
+		pad_len = 4 - (len & 3);
+	else
+		pad_len = 0;
+
+	iter->offset = start + len + pad_len - iter->buf;
+
+	return true;
+}
 
 struct phase2_method {
 	void *state;
@@ -454,6 +535,38 @@ static void eap_ttls_disconnect_cb(enum l_tls_alert_desc reason,
 	ttls->completed = true;
 }
 
+static void eap_ttls_handle_payload(struct eap_state *eap,
+						const uint8_t *pkt,
+						size_t pkt_len)
+{
+	struct eap_ttls_state *ttls = eap_get_data(eap);
+	struct avp_iter iter;
+
+	l_tls_handle_rx(ttls->tls, pkt, pkt_len);
+
+	if (!ttls->phase2->handle_avp)
+		return;
+
+	/* Plaintext phase two data is stored into ttls->avp_buf */
+	if (!ttls->avp_buf)
+		return;
+
+	avp_iter_init(&iter, ttls->avp_buf, ttls->avp_received);
+
+	while (avp_iter_next(&iter)) {
+		if (ttls->phase2->handle_avp(eap, iter.type, iter.vendor_id,
+							iter.data, iter.len))
+			continue;
+
+		if (iter.flags & TTLS_AVP_FLAG_M)
+			l_tls_close(ttls->tls);
+	}
+
+	l_free(ttls->avp_buf);
+	ttls->avp_received = 0;
+	ttls->avp_capacity = 0;
+}
+
 static void eap_ttls_handle_request(struct eap_state *eap,
 					const uint8_t *pkt, size_t len)
 {
@@ -624,16 +737,8 @@ static void eap_ttls_handle_request(struct eap_state *eap,
 		len = 0;
 	}
 
-	/*
-	 * Here we take advantage of knowing that ell will send all the
-	 * records corresponding to the current handshake step from within
-	 * the l_tls_handle_rx call because it doesn't use any other context
-	 * such as timers - basic TLS specifies no timeouts.  Otherwise we
-	 * would need to analyze the record types in eap_ttls_tx_cb to decide
-	 * when we're ready to send out a response.
-	 */
 	if (len)
-		l_tls_handle_rx(ttls->tls, pkt, len);
+		eap_ttls_handle_payload(eap, pkt, len);
 
 	if (ttls->rx_pkt_buf) {
 		l_free(ttls->rx_pkt_buf);
