@@ -491,6 +491,12 @@ static void newlink_notify(const struct ifinfomsg *ifi, int bytes)
 	}
 
 	if (lower_up != dev->lower_up) {
+		if (!lower_up) {
+			dev->auth_done = false;
+			l_dbus_property_changed(dbus_app_get(), dev->path,
+					ADAPTER_INTERFACE, PROP_AUTHENTICATED);
+		}
+
 		dev->lower_up = lower_up;
 		l_dbus_property_changed(dbus_app_get(), dev->path,
 					ADAPTER_INTERFACE, PROP_CONNECTED);
