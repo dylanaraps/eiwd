@@ -471,6 +471,9 @@ static void newlink_notify(const struct ifinfomsg *ifi, int bytes)
 		l_dbus_object_add_interface(dbus_app_get(), dev->path,
 						ADAPTER_INTERFACE, dev);
 
+		l_dbus_object_add_interface(dbus_app_get(), dev->path,
+					L_DBUS_INTERFACE_PROPERTIES, NULL);
+
 		l_queue_push_tail(ethdev_list, dev);
 
 		lower_changed = true;
