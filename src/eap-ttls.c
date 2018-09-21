@@ -47,6 +47,126 @@ enum radius_attr {
 	RADIUS_ATTR_EAP_MESSAGE			= 79,
 };
 
+struct avp_builder {
+	uint8_t flags;
+	size_t capacity;
+	uint8_t *buf;
+	size_t offset;
+	uint32_t current_len;
+};
+
+static void avp_builder_grow(struct avp_builder *builder)
+{
+	builder->buf = l_realloc(builder->buf, builder->capacity * 2);
+	builder->capacity *= 2;
+}
+
+static uint8_t *avp_builder_reserve(struct avp_builder *builder, size_t len)
+{
+	while (builder->offset + TTLS_AVP_HEADER_LEN + builder->current_len
+						+ len >= builder->capacity) {
+		avp_builder_grow(builder);
+	}
+
+	return builder->buf + builder->offset + TTLS_AVP_HEADER_LEN +
+							builder->current_len;
+}
+
+static void avp_builder_finalize_avp(struct avp_builder *builder)
+{
+	uint8_t *p = builder->buf + builder->offset;
+
+	if (builder->current_len & 3) {
+		/*
+		* If an AVP is not a multiple of four octets, it must be padded
+		* with zeros to the next four-octet boundary.
+		*/
+		uint8_t pad_len = 4 - (builder->current_len & 3);
+
+		memset(avp_builder_reserve(builder, pad_len), 0, pad_len);
+	}
+
+	builder->current_len += TTLS_AVP_HEADER_LEN;
+	builder->offset += (builder->current_len + 3) & ~3;
+	builder->current_len |= builder->flags << 24;
+
+	l_put_be32(builder->current_len, p + 4);
+
+	builder->flags = 0;
+	builder->current_len = 0;
+}
+
+static bool avp_builder_start_avp(struct avp_builder *builder,
+					enum radius_attr type,
+					bool mandatory, uint32_t vendor_id)
+{
+	uint8_t *p;
+
+	if (!builder->current_len && builder->offset)
+		return false;
+
+	if (builder->offset + TTLS_AVP_HEADER_LEN + (vendor_id ? 4 : 0)
+							>= builder->capacity)
+		avp_builder_grow(builder);
+
+	p = builder->buf + builder->offset;
+	l_put_be32(type, p);
+
+	if (mandatory)
+		builder->flags |= TTLS_AVP_FLAG_M;
+
+	if (vendor_id) {
+		builder->flags |= TTLS_AVP_FLAG_V;
+		l_put_be32(vendor_id, p + TTLS_AVP_HEADER_LEN);
+		builder->current_len += 4;
+	}
+
+	return true;
+}
+
+static struct avp_builder *avp_builder_new(size_t capacity)
+{
+	struct avp_builder *builder;
+
+	if (!capacity)
+		return NULL;
+
+	builder = l_new(struct avp_builder, 1);
+	builder->buf = l_malloc(capacity);
+	builder->capacity = capacity;
+
+	return builder;
+}
+
+static uint8_t *avp_builder_free(struct avp_builder *builder, bool free_data,
+							size_t *out_size)
+{
+	uint8_t *ret;
+
+	if (free_data) {
+		l_free(builder->buf);
+		builder->buf = NULL;
+	}
+
+	ret = builder->buf;
+
+	if (out_size)
+		*out_size = builder->offset;
+
+	l_free(builder);
+
+	return ret;
+}
+
+static bool avp_builder_put_bytes(struct avp_builder *builder,
+						const void *data, size_t len)
+{
+	memcpy(avp_builder_reserve(builder, len), data, len);
+	builder->current_len += len;
+
+	return true;
+}
+
 struct avp_iter {
 	enum radius_attr type;
 	uint8_t flags;
@@ -144,7 +264,6 @@ struct eap_ttls_state {
 	size_t tx_pkt_len, tx_pkt_capacity, tx_pkt_offset;
 	struct databuf *avp_buf;
 	bool completed;
-	struct eap_state *phase2_eap;
 	uint8_t negotiated_version;
 
 	struct phase2_method *phase2;
@@ -220,6 +339,22 @@ static void eap_ttls_free(struct eap_state *eap)
 static void eap_ttls_phase2_eap_send_response(const uint8_t *data, size_t len,
 								void *user_data)
 {
+	struct eap_state *eap = user_data;
+	struct eap_ttls_state *ttls = eap_get_data(eap);
+	struct avp_builder *builder;
+	uint8_t *msg_data;
+	size_t msg_data_len;
+
+	builder = avp_builder_new(TTLS_AVP_HEADER_LEN + len);
+
+	avp_builder_start_avp(builder, RADIUS_ATTR_EAP_MESSAGE, true, 0);
+	avp_builder_put_bytes(builder, data, len);
+	avp_builder_finalize_avp(builder);
+
+	msg_data = avp_builder_free(builder, false, &msg_data_len);
+
+	l_tls_write(ttls->tls, msg_data, msg_data_len);
+	l_free(msg_data);
 }
 
 static void eap_ttls_phase2_eap_complete(enum eap_result result,
@@ -657,10 +792,8 @@ static void eap_ttls_handle_request(struct eap_state *eap,
 		l_tls_free(ttls->tls);
 		ttls->tls = NULL;
 
-		if (ttls->phase2_eap) {
-			eap_free(ttls->phase2_eap);
-			ttls->phase2_eap = NULL;
-		}
+		if (ttls->phase2->destroy)
+			ttls->phase2->destroy(eap);
 	}
 
 	return;
