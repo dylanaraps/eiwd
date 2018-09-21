@@ -33,21 +33,32 @@
 
 #include "wired/network.h"
 
+#define STORAGEFILE_SUFFIX	".8021x"
+#define STORAGEFILE_SUFFIX_LEN	6
+
 struct network {
-	char *filename;
+	char *name;
 };
 
 static struct l_queue *network_list;
 static struct l_fswatch *storage_watch;
 
-static struct network *network_new(const char *filename)
+static char *network_name_from_filename(const char *filename)
+{
+	if (!l_str_has_suffix(filename, STORAGEFILE_SUFFIX))
+		return NULL;
+
+	return l_strndup(filename, strlen(filename) - STORAGEFILE_SUFFIX_LEN);
+}
+
+static struct network *network_new(const char *name)
 {
 	struct network *net;
 
-	l_debug("Creating network %s", filename);
+	l_debug("Creating network '%s'", name);
 
 	net = l_new(struct network, 1);
-	net->filename = l_strdup(filename);
+	net->name = l_strdup(name);
 
 	return net;
 }
@@ -56,31 +67,32 @@ static void network_free(void *data)
 {
 	struct network *net = data;
 
-	l_debug("Freeing network %s", net->filename);
+	l_debug("Freeing network '%s'", net->name);
 
-	l_free(net->filename);
+	l_free(net->name);
 	l_free(net);
 }
 
 static bool network_match(const void *a, const void *b)
 {
 	const struct network *net = a;
-	const char *filename = b;
+	const char *name = b;
 
-	return strcmp(net->filename, filename);
+	return strcmp(net->name, name);
 }
 
-static struct network *network_lookup(const char *filename)
+static struct network *network_lookup(const char *name)
 {
-	return l_queue_find(network_list, network_match, filename);
+	return l_queue_find(network_list, network_match, name);
 }
 
-struct l_settings *network_lookup_security(const char *filename)
+struct l_settings *network_lookup_security(const char *network)
 {
 	struct l_settings *conf;
 	char *path;
 
-	path = l_strdup_printf("%s/%s.8021x", WIRED_STORAGEDIR, filename);
+	path = l_strdup_printf("%s/%s%s", WIRED_STORAGEDIR, network,
+							STORAGEFILE_SUFFIX);
 
 	l_debug("Loading %s", path);
 
@@ -98,6 +110,7 @@ static void network_storage_watch_cb(struct l_fswatch *watch,
 					void *user_data)
 {
 	struct network *net;
+	char *name;
 
 	/*
 	 * Ignore notifications for the actual directory, we can't do
@@ -105,6 +118,10 @@ static void network_storage_watch_cb(struct l_fswatch *watch,
 	 * notifications for files in the storage directory.
 	 */
 	if (!filename)
+		return;
+
+	name = network_name_from_filename(filename);
+	if (!name)
 		return;
 
 	switch (event) {
@@ -120,12 +137,17 @@ static void network_storage_watch_cb(struct l_fswatch *watch,
 		 * created, permissions granted, syntax fixed, etc.)
 		 * so we always need to re-read the file.
 		 */
-		net = network_lookup(filename);
+		net = network_lookup(name);
 		if (!net) {
-			net = network_new(filename);
+			net = network_new(name);
 			l_queue_push_tail(network_list, net);
+		} else {
+			l_free(net->name);
+			net->name = l_strdup(name);
 		}
 	}
+
+	l_free(name);
 }
 
 static void network_storage_watch_destroy(void *user_data)
@@ -149,12 +171,19 @@ bool network_init(void)
 
 	while ((dirent = readdir(dir))) {
 		struct network *net;
+		char *name;
 
 		if (dirent->d_type != DT_REG && dirent->d_type != DT_LNK)
 			continue;
 
-		net = network_new(dirent->d_name);
+		name = network_name_from_filename(dirent->d_name);
+		if (!name)
+			continue;
+
+		net = network_new(name);
 		l_queue_push_tail(network_list, net);
+
+		l_free(name);
 	}
 
 	closedir(dir);
