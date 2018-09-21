@@ -142,8 +142,7 @@ struct eap_ttls_state {
 	size_t rx_pkt_received, rx_pkt_len;
 	uint8_t *tx_pkt_buf;
 	size_t tx_pkt_len, tx_pkt_capacity, tx_pkt_offset;
-	uint8_t *avp_buf;
-	size_t avp_received, avp_capacity;
+	struct databuf *avp_buf;
 	bool completed;
 	struct eap_state *phase2_eap;
 	uint8_t negotiated_version;
@@ -166,10 +165,8 @@ static void __eap_ttls_reset_state(struct eap_ttls_state *ttls)
 	ttls->tx_pkt_len = 0;
 	ttls->tx_pkt_offset = 0;
 
-	l_free(ttls->avp_buf);
+	databuf_free(ttls->avp_buf);
 	ttls->avp_buf = NULL;
-	ttls->avp_received = 0;
-	ttls->avp_capacity = 0;
 
 	if (ttls->tls) {
 		l_tls_free(ttls->tls);
@@ -278,6 +275,13 @@ static bool eap_ttls_phase2_eap_handle_avp(struct eap_state *eap,
 						const uint8_t *data,
 						size_t len)
 {
+	struct eap_ttls_state *ttls = eap_get_data(eap);
+
+	if (type != RADIUS_ATTR_EAP_MESSAGE)
+		return false;
+
+	eap_rx_packet(ttls->phase2->state, data, len);
+
 	return true;
 }
 
@@ -337,149 +341,16 @@ static void eap_ttls_tx_cb(const uint8_t *data, size_t len, void *user_data)
 	memcpy(eap_ttls_tx_buf_reserve(ttls, len), data, len);
 }
 
-struct eap_ttls_avp {
-	__be32 avp_code;
-	uint8_t avp_flags;
-	uint8_t avp_len[3];
-	uint8_t data[0];
-} __attribute__ ((packed));
-
-#define EAP_TTLS_AVP_FLAG_V	(1 << 7)
-#define EAP_TTLS_AVP_FLAG_M	(1 << 6)
-
-#define RADIUS_AVP_EAP_MESSAGE	79
-
-static bool eap_ttls_handle_avp(struct eap_state *eap, struct eap_ttls_avp *avp)
-{
-	struct eap_ttls_state *ttls = eap_get_data(eap);
-	uint8_t *data;
-	uint64_t code;
-	size_t data_len;
-
-	data = avp->data;
-	data_len = ((avp->avp_len[0] << 16) |
-		(avp->avp_len[1] << 8) |
-		(avp->avp_len[2] << 0)) - sizeof(struct eap_ttls_avp);
-
-	code = l_get_be32(&avp->avp_code);
-
-	if (avp->avp_flags & EAP_TTLS_AVP_FLAG_V) {
-		if (data_len < 4)
-			goto avp_err;
-
-		code |= (uint64_t) l_get_be32(data) << 32;
-		data += 4;
-		data_len -= 4;
-	}
-
-	switch (code) {
-	/* EAP-Message attribute, actually defined in RFC2869 5.13 */
-	case RADIUS_AVP_EAP_MESSAGE:
-		if (!ttls->phase2_eap)
-			goto avp_err;
-
-		/* TODO: split if necessary */
-		eap_rx_packet(ttls->phase2_eap, data, data_len);
-
-		break;
-
-	default:
-		if (avp->avp_flags & EAP_TTLS_AVP_FLAG_M)
-			goto avp_err;
-
-		break;
-	}
-
-	return true;
-
-avp_err:
-	l_tls_close(ttls->tls);
-
-	return false;
-}
-
-static size_t avp_min_len(const uint8_t *buf, size_t len)
-{
-	struct eap_ttls_avp *avp;
-
-	if (len < sizeof(struct eap_ttls_avp))
-		return sizeof(struct eap_ttls_avp);
-
-	avp = (struct eap_ttls_avp *) buf;
-
-	return (((avp->avp_len[0] << 16) |
-		(avp->avp_len[1] << 8) |
-		(avp->avp_len[2] << 0)) + 3) & ~3;
-}
-
-static void eap_ttls_data_cb(const uint8_t *data, size_t len, void *user_data)
+static void eap_ttls_data_cb(const uint8_t *data, size_t data_len,
+								void *user_data)
 {
 	struct eap_state *eap = user_data;
 	struct eap_ttls_state *ttls = eap_get_data(eap);
-	struct eap_ttls_avp *avp;
-	size_t avp_len, chunk_len;
 
-	/* Continue assembling the AVP that we have buffered */
-	while (ttls->avp_received) {
-		avp_len = avp_min_len(ttls->avp_buf, ttls->avp_received);
-		chunk_len = avp_len - ttls->avp_received;
+	if (!ttls->avp_buf)
+		ttls->avp_buf = databuf_new(data_len);
 
-		if (chunk_len > len)
-			chunk_len = len;
-
-		if (ttls->avp_received + chunk_len > ttls->avp_capacity) {
-			ttls->avp_capacity = avp_len;
-			ttls->avp_buf = l_realloc(ttls->avp_buf,
-							ttls->avp_capacity);
-		}
-
-		memcpy(ttls->avp_buf + ttls->avp_received, data, chunk_len);
-		ttls->avp_received += chunk_len;
-
-		if (avp_len > ttls->avp_received) /* Wait for more data */
-			return;
-
-		/* Do we have a full AVP or just the header */
-		if (ttls->avp_received - chunk_len >=
-				sizeof(struct eap_ttls_avp)) {
-			ttls->avp_received = 0;
-
-			avp = (struct eap_ttls_avp *) ttls->avp_buf;
-
-			if (!eap_ttls_handle_avp(eap, avp))
-				return;
-
-			data += chunk_len;
-			len -= chunk_len;
-		}
-	}
-
-	/* Handle all the AVPs fully contained in the newly received data */
-	while (len) {
-		avp_len = avp_min_len(data, len);
-		if (len < avp_len || len < sizeof(struct eap_ttls_avp))
-			break;
-
-		avp = (struct eap_ttls_avp *) data;
-
-		if (!eap_ttls_handle_avp(eap, avp))
-			return;
-
-		data += avp_len;
-		len -= avp_len;
-	}
-
-	if (!len)
-		return;
-
-	/* Store the remaining bytes */
-	if (ttls->avp_capacity < len) {
-		ttls->avp_capacity = avp_len;
-		ttls->avp_buf = l_realloc(ttls->avp_buf, ttls->avp_capacity);
-	}
-
-	memcpy(ttls->avp_buf, data, len);
-	ttls->avp_received = len;
+	databuf_append(ttls->avp_buf, data, data_len);
 }
 
 static void eap_ttls_ready_cb(const char *peer_identity, void *user_data)
@@ -551,7 +422,7 @@ static void eap_ttls_handle_payload(struct eap_state *eap,
 	if (!ttls->avp_buf)
 		return;
 
-	avp_iter_init(&iter, ttls->avp_buf, ttls->avp_received);
+	avp_iter_init(&iter, ttls->avp_buf->data, ttls->avp_buf->len);
 
 	while (avp_iter_next(&iter)) {
 		if (ttls->phase2->handle_avp(eap, iter.type, iter.vendor_id,
@@ -562,9 +433,8 @@ static void eap_ttls_handle_payload(struct eap_state *eap,
 			l_tls_close(ttls->tls);
 	}
 
-	l_free(ttls->avp_buf);
-	ttls->avp_received = 0;
-	ttls->avp_capacity = 0;
+	databuf_free(ttls->avp_buf);
+	ttls->avp_buf = NULL;
 }
 
 static void eap_ttls_handle_request(struct eap_state *eap,
