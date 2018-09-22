@@ -4200,7 +4200,9 @@ static void netdev_initial_up_cb(int error, uint16_t type, const void *data,
 
 	netdev->set_powered_cmd_id = 0;
 
-	if (error != 0) {
+	if (!error)
+		netdev->ifi_flags |= IFF_UP;
+	else {
 		l_error("Error bringing interface %i up: %s", netdev->index,
 			strerror(-error));
 
@@ -4230,7 +4232,9 @@ static void netdev_initial_down_cb(int error, uint16_t type, const void *data,
 {
 	struct netdev *netdev = user_data;
 
-	if (error != 0) {
+	if (!error)
+		netdev->ifi_flags &= ~IFF_UP;
+	else {
 		l_error("Error taking interface %i down: %s", netdev->index,
 			strerror(-error));
 
