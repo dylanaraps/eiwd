@@ -26,6 +26,7 @@
 #include <linux/types.h>
 
 struct handshake_state;
+enum crypto_cipher;
 
 /* 802.11-2016 Table 12-6 in section 12.7.2 */
 enum handshake_kde {
@@ -194,6 +195,8 @@ const uint8_t *handshake_util_find_igtk_kde(const uint8_t *data,
 					size_t data_len, size_t *out_igtk_len);
 const uint8_t *handshake_util_find_pmkid_kde(const uint8_t *data,
 					size_t data_len);
+void handshake_util_build_gtk_kde(enum crypto_cipher cipher, const uint8_t *key,
+					unsigned int key_index, uint8_t *to);
 
 void handshake_event(struct handshake_state *hs, enum handshake_event event,
 		void *event_data);

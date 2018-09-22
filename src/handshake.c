@@ -651,6 +651,21 @@ const uint8_t *handshake_util_find_pmkid_kde(const uint8_t *data,
 	return pmkid;
 }
 
+/* Defined in 802.11-2016 12.7.2 j), Figure 12-34 */
+void handshake_util_build_gtk_kde(enum crypto_cipher cipher, const uint8_t *key,
+					unsigned int key_index, uint8_t *to)
+{
+	size_t key_len = crypto_cipher_key_len(cipher);
+
+	*to++ = IE_TYPE_VENDOR_SPECIFIC;
+	*to++ = 6 + key_len;
+	l_put_be32(HANDSHAKE_KDE_GTK, to);
+	to += 4;
+	*to++ = key_index;
+	*to++ = 0;
+	memcpy(to, key, key_len);
+}
+
 /*
  * Unwrap a GTK / IGTK included in an FTE following 802.11-2012, Section 12.8.5:
  *
