@@ -75,5 +75,3 @@ int station_disconnect(struct station *station);
 
 struct station *station_find(uint32_t ifindex);
 void station_foreach(station_foreach_func_t func, void *user_data);
-struct station *station_create(struct wiphy *wiphy, struct netdev *netdev);
-void station_free(struct station *station);

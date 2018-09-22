@@ -2214,7 +2214,7 @@ struct station *station_find(uint32_t ifindex)
 	return NULL;
 }
 
-struct station *station_create(struct wiphy *wiphy, struct netdev *netdev)
+static struct station *station_create(struct netdev *netdev)
 {
 	struct station *station;
 	struct l_dbus *dbus = dbus_get_bus();
@@ -2229,7 +2229,7 @@ struct station *station_create(struct wiphy *wiphy, struct netdev *netdev)
 				(l_hashmap_compare_func_t) strcmp);
 	station->networks_sorted = l_queue_new();
 
-	station->wiphy = wiphy;
+	station->wiphy = netdev_get_wiphy(netdev);
 	station->netdev = netdev;
 
 	l_queue_push_head(station_list, station);
@@ -2242,7 +2242,7 @@ struct station *station_create(struct wiphy *wiphy, struct netdev *netdev)
 	return station;
 }
 
-void station_free(struct station *station)
+static void station_free(struct station *station)
 {
 	l_debug("");
 
@@ -2332,7 +2332,7 @@ static void station_netdev_watch(struct netdev *netdev,
 	case NETDEV_WATCH_EVENT_NEW:
 		if (netdev_get_iftype(netdev) == NETDEV_IFTYPE_STATION &&
 				netdev_get_is_up(netdev))
-			station_create(netdev_get_wiphy(netdev), netdev);
+			station_create(netdev);
 		break;
 	case NETDEV_WATCH_EVENT_DOWN:
 	case NETDEV_WATCH_EVENT_DEL:
