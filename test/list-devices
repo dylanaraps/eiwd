@@ -31,6 +31,8 @@ for path, phy in tree.children.items():
 
     for key in properties:
         val = properties[key]
+        if key == 'SupportedModes':
+            val = [str(mode) for mode in val]
         print("    %s = %s" % (key, val))
 
     print("    Devices:")
@@ -39,21 +41,28 @@ for path, phy in tree.children.items():
         if 'net.connman.iwd.Device' not in device.interfaces:
             continue
 
-        properties = device.interfaces['net.connman.iwd.Device']
-        device = dbus.Interface(bus.get_object("net.connman.iwd", path2),
-                                                    'net.connman.iwd.Device')
-
         print("    [ %s ]" % path2)
+        for interface in device.interfaces:
+            name = interface.rsplit('.', 1)[-1]
+            if name not in ('Device', 'Station', 'AccessPoint', 'AdHoc'):
+                continue
 
-        for key in properties:
-            val = properties[key]
-            print("        %s = %s" % (key, val))
+            properties = device.interfaces[interface]
+            for key in properties:
+                val = properties[key]
+                print("        %s.%s = %s" % (name, key, val))
 
-        print("        Sorted networks:")
+            if name != 'Station':
+                continue
 
-        for path3, ssid, rssi, security in device.GetOrderedNetworks():
-            print("        [ %s ]" % path3)
+            print("        Sorted networks:")
 
-            print("            SSID = %s" % (ssid,))
-            print("            Signal strength = %i dBm" % (rssi / 100,))
-            print("            Security = %s" % (security,))
+            station = dbus.Interface(bus.get_object("net.connman.iwd", path2),
+                                     'net.connman.iwd.Station')
+            for path3, rssi in station.GetOrderedNetworks():
+                print("        [ %s ]" % path3)
+
+                properties2 = objects[path3]['net.connman.iwd.Network']
+                print("            SSID = %s" % (properties2['Name'],))
+                print("            Signal strength = %i dBm" % (rssi / 100,))
+                print("            Security = %s" % (properties2['Type'],))
