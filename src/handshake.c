@@ -445,6 +445,21 @@ bool handshake_state_get_pmkid(struct handshake_state *s, uint8_t *out_pmkid)
 					use_sha256);
 }
 
+void handshake_state_set_gtk(struct handshake_state *s, const uint8_t *key,
+				unsigned int key_index, const uint8_t *rsc)
+{
+	enum crypto_cipher cipher =
+		ie_rsn_cipher_suite_to_cipher(s->group_cipher);
+	int key_len = crypto_cipher_key_len(cipher);
+
+	if (!key_len)
+		return;
+
+	memcpy(s->gtk, key, key_len);
+	s->gtk_index = key_index;
+	memcpy(s->gtk_rsc, rsc, 6);
+}
+
 /*
  * This function performs a match of the RSN/WPA IE obtained from the scan
  * results vs the RSN/WPA IE obtained as part of the 4-way handshake.  If they

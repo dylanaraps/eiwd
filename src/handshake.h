@@ -109,6 +109,9 @@ struct handshake_state {
 	uint8_t r0khid[48];
 	size_t r0khid_len;
 	uint8_t r1khid[6];
+	uint8_t gtk[32];
+	uint8_t gtk_rsc[6];
+	unsigned int gtk_index;
 	void *user_data;
 
 	void (*free)(struct handshake_state *s);
@@ -178,6 +181,9 @@ bool handshake_state_get_pmkid(struct handshake_state *s, uint8_t *out_pmkid);
 
 bool handshake_decode_fte_key(struct handshake_state *s, const uint8_t *wrapped,
 				size_t key_len, uint8_t *key_out);
+
+void handshake_state_set_gtk(struct handshake_state *s, const uint8_t *key,
+				unsigned int key_index, const uint8_t *rsc);
 
 bool handshake_util_ap_ie_matches(const uint8_t *msg_ie,
 					const uint8_t *scan_ie, bool is_wpa);
