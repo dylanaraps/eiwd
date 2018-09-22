@@ -4160,6 +4160,9 @@ static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 		}
 	}
 
+	if (!netdev->device) /* Did we send NETDEV_WATCH_EVENT_NEW yet? */
+		return;
+
 	new_up = netdev_get_is_up(netdev);
 
 	if (old_up != new_up)
