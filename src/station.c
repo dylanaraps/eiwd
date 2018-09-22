@@ -2249,6 +2249,9 @@ void station_free(struct station *station)
 	if (!l_queue_remove(station_list, station))
 		return;
 
+	if (station->connected_bss)
+		netdev_disconnect(station->netdev, NULL, NULL);
+
 	periodic_scan_stop(station);
 
 	if (station->signal_agent) {
