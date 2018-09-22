@@ -283,11 +283,6 @@ static void set_mode_cb(struct netdev *netdev, int result, void *user_data)
 	l_dbus_property_changed(cb_data->dbus,
 				netdev_get_path(cb_data->device->netdev),
 				IWD_DEVICE_INTERFACE, "Mode");
-
-	/* TODO: Special case, remove when Device/Station split is made */
-	l_dbus_property_changed(cb_data->dbus,
-				netdev_get_path(cb_data->device->netdev),
-				IWD_DEVICE_INTERFACE, "State");
 }
 
 static struct l_dbus_message *device_property_set_mode(struct l_dbus *dbus,
@@ -368,21 +363,11 @@ static void device_netdev_notify(struct netdev *netdev,
 	switch (event) {
 	case NETDEV_WATCH_EVENT_UP:
 		device->powered = true;
+
 		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
 					IWD_DEVICE_INTERFACE, "Powered");
-
-		/* TODO: Remove when Device/Station split is done */
-		if (netdev_get_iftype(device->netdev) != NETDEV_IFTYPE_STATION)
-			return;
-
-		device->station = station_create(device->wiphy, device->netdev);
 		break;
 	case NETDEV_WATCH_EVENT_DOWN:
-		if (device->station) {
-			station_free(device->station);
-			device->station = NULL;
-		}
-
 		device->powered = false;
 
 		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
@@ -432,10 +417,6 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 			device_ap_roam_frame_event, device);
 
 	device->powered = netdev_get_is_up(netdev);
-
-	if (device->powered &&
-			netdev_get_iftype(netdev) == NETDEV_IFTYPE_STATION)
-		device->station = station_create(device->wiphy, device->netdev);
 
 	return device;
 }
