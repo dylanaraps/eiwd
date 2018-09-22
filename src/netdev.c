@@ -1128,12 +1128,6 @@ static struct l_genl_msg *netdev_build_cmd_new_key_group(struct netdev *netdev,
 	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_DATA, key_len, key);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_CIPHER, 4, &cipher);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_SEQ, ctr_len, ctr);
-
-	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY_DEFAULT_TYPES);
-	l_genl_msg_append_attr(msg, NL80211_KEY_DEFAULT_TYPE_MULTICAST,
-				0, NULL);
-	l_genl_msg_leave_nested(msg);
-
 	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 
