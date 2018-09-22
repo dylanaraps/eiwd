@@ -1460,7 +1460,8 @@ static void ap_netdev_watch(struct netdev *netdev,
 	switch (event) {
 	case NETDEV_WATCH_EVENT_UP:
 	case NETDEV_WATCH_EVENT_NEW:
-		if (netdev_get_iftype(netdev) == NETDEV_IFTYPE_AP)
+		if (netdev_get_iftype(netdev) == NETDEV_IFTYPE_AP &&
+				netdev_get_is_up(netdev))
 			ap_add_interface(netdev);
 		break;
 	case NETDEV_WATCH_EVENT_DOWN:
