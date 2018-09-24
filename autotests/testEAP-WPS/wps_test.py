@@ -14,6 +14,8 @@ from hostapd import hostapd_map
 class Test(unittest.TestCase):
 
     def test_push_button_success(self):
+        self.hostapd.wps_push_button()
+
         wd = IWD()
 
         devices = wd.list_devices(1);
@@ -29,13 +31,46 @@ class Test(unittest.TestCase):
         condition = 'obj.state == DeviceState.disconnected'
         wd.wait_for_object_condition(device, condition)
 
+    def test_pin_success(self):
+        wd = IWD()
+
+        devices = wd.list_devices(1);
+        device = devices[0]
+        pin = device.wps_generate_pin()
+        self.hostapd.wps_pin(pin)
+
+        device.wps_start_pin(pin)
+
+        condition = 'obj.state == DeviceState.connected'
+        wd.wait_for_object_condition(device, condition)
+
+        device.disconnect()
+
+        condition = 'obj.state == DeviceState.disconnected'
+        wd.wait_for_object_condition(device, condition)
+
+    def test_4_digit_pin_success(self):
+        wd = IWD()
+
+        devices = wd.list_devices(1);
+        device = devices[0]
+        pin = '1234'
+        self.hostapd.wps_pin(pin)
+
+        device.wps_start_pin(pin)
+
+        condition = 'obj.state == DeviceState.connected'
+        wd.wait_for_object_condition(device, condition)
+
+        device.disconnect()
+
+        condition = 'obj.state == DeviceState.disconnected'
+        wd.wait_for_object_condition(device, condition)
 
     @classmethod
     def setUpClass(cls):
         cls.hostapd_if = list(hostapd_map.values())[0]
         cls.hostapd = HostapdCLI(cls.hostapd_if)
-
-        cls.hostapd.wps_push_button()
 
     @classmethod
     def tearDownClass(cls):
