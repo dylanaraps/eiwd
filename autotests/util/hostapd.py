@@ -44,6 +44,9 @@ class HostapdCLI:
     def wps_push_button(self):
         os.system(self.cmdline + ' wps_pbc')
 
+    def wps_pin(self, pin):
+        os.system(self.cmdline + ' wps_pin any ' + pin)
+
     def deauthenticate(self, client_address):
         os.system(self.cmdline + ' deauthenticate ' + client_address)
 

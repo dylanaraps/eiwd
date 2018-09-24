@@ -380,6 +380,13 @@ class Device(IWDDBusAbstract):
                                      error_handler=self._failure)
         self._wait_for_async_op()
 
+    def wps_generate_pin(self):
+        return self._wps_manager.GeneratePin()
+
+    def wps_start_pin(self, pin):
+        self._wps_manager.StartPin(pin, reply_handler=self._success,
+                                        error_handler=self._failure)
+
     def wps_cancel(self):
         self._wps_manager.Cancel(dbus_interface=IWD_WSC_INTERFACE,
                                  reply_handler=self._success,
