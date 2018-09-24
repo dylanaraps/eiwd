@@ -2322,11 +2322,6 @@ static void station_destroy_interface(void *user_data)
 static void station_netdev_watch(struct netdev *netdev,
 				enum netdev_watch_event event, void *userdata)
 {
-	struct device *device = netdev_get_device(netdev);
-
-	if (!device)
-		return;
-
 	switch (event) {
 	case NETDEV_WATCH_EVENT_UP:
 	case NETDEV_WATCH_EVENT_NEW:
