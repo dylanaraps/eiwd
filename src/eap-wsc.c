@@ -1277,9 +1277,6 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 				goto err;
 		}
 
-		if (i < 8)
-			goto err;
-
 		wsc->device_password = strdup(device_password);
 		/*
 		 * WSC 2.0.5: Section 7.4:
