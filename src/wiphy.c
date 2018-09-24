@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2013-2014  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2013-2018  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -44,6 +44,7 @@
 #include "src/wiphy.h"
 #include "src/storage.h"
 #include "src/util.h"
+#include "src/common.h"
 
 static struct l_genl_family *nl80211 = NULL;
 static struct l_hwdb *hwdb;
@@ -87,6 +88,59 @@ enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy, uint16_t mask)
 
 	if (mask & IE_RSN_CIPHER_SUITE_BIP)
 		return IE_RSN_CIPHER_SUITE_BIP;
+
+	return 0;
+}
+
+enum ie_rsn_akm_suite wiphy_select_akm(struct wiphy *wiphy,
+					struct scan_bss *bss)
+{
+	struct ie_rsn_info info;
+	enum security security;
+
+	memset(&info, 0, sizeof(info));
+	scan_bss_get_rsn_info(bss, &info);
+
+	security = security_determine(bss->capability, &info);
+
+	/*
+	 * If FT is available, use FT authentication to keep the door open
+	 * for fast transitions.  Otherwise use SHA256 version if present.
+	 */
+	if (security == SECURITY_8021X) {
+		if ((info.akm_suites & IE_RSN_AKM_SUITE_FT_OVER_8021X) &&
+				bss->rsne && bss->mde_present)
+			return IE_RSN_AKM_SUITE_FT_OVER_8021X;
+
+		if (info.akm_suites & IE_RSN_AKM_SUITE_8021X_SHA256)
+			return IE_RSN_AKM_SUITE_8021X_SHA256;
+
+		if (info.akm_suites & IE_RSN_AKM_SUITE_8021X)
+			return IE_RSN_AKM_SUITE_8021X;
+	} else if (security == SECURITY_PSK) {
+		/*
+		 * Prefer connecting to SAE/WPA3 network, but only if SAE is
+		 * supported. This allows us to connect to a hybrid WPA2/WPA3
+		 * AP even if SAE/WPA3 is not supported.
+		 */
+		if (info.akm_suites & IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256 &&
+				wiphy_has_feature(wiphy, NL80211_FEATURE_SAE))
+			return IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256;
+
+		if (info.akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256 &&
+				wiphy_has_feature(wiphy, NL80211_FEATURE_SAE))
+			return IE_RSN_AKM_SUITE_SAE_SHA256;
+
+		if ((info.akm_suites & IE_RSN_AKM_SUITE_FT_USING_PSK) &&
+				bss->rsne && bss->mde_present)
+			return IE_RSN_AKM_SUITE_FT_USING_PSK;
+
+		if (info.akm_suites & IE_RSN_AKM_SUITE_PSK_SHA256)
+			return IE_RSN_AKM_SUITE_PSK_SHA256;
+
+		if (info.akm_suites & IE_RSN_AKM_SUITE_PSK)
+			return IE_RSN_AKM_SUITE_PSK;
+	}
 
 	return 0;
 }

@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2013-2014  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2013-2018  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -28,6 +28,8 @@ struct scan_bss;
 
 enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy,
 							uint16_t mask);
+enum ie_rsn_akm_suite wiphy_select_akm(struct wiphy *wiphy,
+					struct scan_bss *bss);
 
 struct wiphy *wiphy_find(int wiphy_id);
 

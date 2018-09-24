@@ -358,48 +358,6 @@ void station_set_scan_results(struct station *station, struct l_queue *bss_list,
 	l_queue_destroy(old_bss_list, bss_free);
 }
 
-static enum ie_rsn_akm_suite select_akm_suite(struct network *network,
-						struct scan_bss *bss,
-						struct ie_rsn_info *info)
-{
-	enum security security = network_get_security(network);
-
-	/*
-	 * If FT is available, use FT authentication to keep the door open
-	 * for fast transitions.  Otherwise use SHA256 version if present.
-	 */
-
-	if (security == SECURITY_8021X) {
-		if ((info->akm_suites & IE_RSN_AKM_SUITE_FT_OVER_8021X) &&
-				bss->rsne && bss->mde_present)
-			return IE_RSN_AKM_SUITE_FT_OVER_8021X;
-
-		if (info->akm_suites & IE_RSN_AKM_SUITE_8021X_SHA256)
-			return IE_RSN_AKM_SUITE_8021X_SHA256;
-
-		if (info->akm_suites & IE_RSN_AKM_SUITE_8021X)
-			return IE_RSN_AKM_SUITE_8021X;
-	} else if (security == SECURITY_PSK) {
-		if (info->akm_suites & IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256)
-			return IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256;
-
-		if (info->akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256)
-			return IE_RSN_AKM_SUITE_SAE_SHA256;
-
-		if ((info->akm_suites & IE_RSN_AKM_SUITE_FT_USING_PSK) &&
-				bss->rsne && bss->mde_present)
-			return IE_RSN_AKM_SUITE_FT_USING_PSK;
-
-		if (info->akm_suites & IE_RSN_AKM_SUITE_PSK_SHA256)
-			return IE_RSN_AKM_SUITE_PSK_SHA256;
-
-		if (info->akm_suites & IE_RSN_AKM_SUITE_PSK)
-			return IE_RSN_AKM_SUITE_PSK;
-	}
-
-	return 0;
-}
-
 static void station_handshake_event(struct handshake_state *hs,
 					enum handshake_event event,
 					void *event_data, void *user_data)
@@ -451,7 +409,7 @@ static int station_build_handshake_rsn(struct handshake_state *hs,
 		memset(&bss_info, 0, sizeof(bss_info));
 		scan_bss_get_rsn_info(bss, &bss_info);
 
-		info.akm_suites = select_akm_suite(network, bss, &bss_info);
+		info.akm_suites = wiphy_select_akm(wiphy, bss);
 
 		if (!info.akm_suites)
 			goto not_supported;
