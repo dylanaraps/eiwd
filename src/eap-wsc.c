@@ -1159,7 +1159,6 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 	uint8_t private_key[192];
 	size_t len;
 	unsigned int u32;
-	const char *device_password;
 
 	wsc = l_new(struct eap_wsc_state, 1);
 
@@ -1267,17 +1266,16 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 
 	wsc->m1->device_password_id = u32;
 
-	device_password = l_settings_get_string(settings, "WSC",
+	wsc->device_password = l_settings_get_string(settings, "WSC",
 							"DevicePassword");
-	if (device_password) {
+	if (wsc->device_password) {
 		int i;
 
-		for (i = 0; device_password[i]; i++) {
-			if (!l_ascii_isxdigit(device_password[i]))
+		for (i = 0; wsc->device_password[i]; i++) {
+			if (!l_ascii_isxdigit(wsc->device_password[i]))
 				goto err;
 		}
 
-		wsc->device_password = strdup(device_password);
 		/*
 		 * WSC 2.0.5: Section 7.4:
 		 * If an out-of-band mechanism is used as the configuration
