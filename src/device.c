@@ -52,7 +52,6 @@ struct device {
 
 	struct wiphy *wiphy;
 	struct netdev *netdev;
-	struct station *station;
 
 	bool powered : 1;
 
@@ -67,7 +66,10 @@ static void device_ap_roam_frame_event(struct netdev *netdev,
 		void *user_data)
 {
 	struct device *device = user_data;
-	struct station *station = device->station;
+	struct station *station = station_find(device->index);
+
+	if (!station)
+		return;
 
 	station_ap_directed_roam(station, hdr, body, body_len);
 }
