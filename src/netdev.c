@@ -361,7 +361,8 @@ int netdev_set_powered(struct netdev *netdev, bool powered,
 			netdev_command_cb_t callback, void *user_data,
 			netdev_destroy_func_t destroy)
 {
-	if (netdev->set_powered_cmd_id)
+	if (netdev->set_powered_cmd_id ||
+			netdev->set_interface_cmd_id)
 		return -EBUSY;
 
 	netdev->set_powered_cmd_id =
