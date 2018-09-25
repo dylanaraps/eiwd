@@ -50,17 +50,21 @@ struct ap_state {
 	char *ssid;
 	int channel;
 	unsigned int ciphers;
+	enum ie_rsn_cipher_suite group_cipher;
 	uint32_t beacon_interval;
 	struct l_uintset *rates;
 	uint8_t pmk[32];
 	struct l_queue *frame_watch_ids;
 	uint32_t start_stop_cmd_id;
+	uint8_t gtk[CRYPTO_MAX_GTK_LEN];
+	uint8_t gtk_index;
 
 	uint16_t last_aid;
 	struct l_queue *sta_states;
 
 	struct l_dbus_message *pending;
 	bool started : 1;
+	bool gtk_set : 1;
 };
 
 struct sta_state {
@@ -76,6 +80,7 @@ struct sta_state {
 	uint8_t *assoc_rsne;
 	struct eapol_sm *sm;
 	struct handshake_state *hs;
+	uint32_t gtk_query_cmd_id;
 };
 
 static struct l_genl_family *nl80211 = NULL;
@@ -90,6 +95,9 @@ static void ap_sta_free(void *data)
 
 	if (sta->assoc_resp_cmd_id)
 		l_genl_family_cancel(nl80211, sta->assoc_resp_cmd_id);
+
+	if (sta->gtk_query_cmd_id)
+		l_genl_family_cancel(nl80211, sta->gtk_query_cmd_id);
 
 	if (sta->sm)
 		eapol_sm_free(sta->sm);
@@ -152,6 +160,11 @@ static void ap_del_station(struct sta_state *sta, uint16_t reason,
 	netdev_del_station(sta->ap->netdev, sta->addr, reason, disassociate);
 	sta->associated = false;
 	sta->rsna = false;
+
+	if (sta->gtk_query_cmd_id) {
+		l_genl_family_cancel(nl80211, sta->gtk_query_cmd_id);
+		sta->gtk_query_cmd_id = 0;
+	}
 
 	if (sta->sm)
 		eapol_sm_free(sta->sm);
@@ -252,7 +265,7 @@ static void ap_set_rsn_info(struct ap_state *ap, struct ie_rsn_info *rsn)
 	memset(rsn, 0, sizeof(*rsn));
 	rsn->akm_suites = IE_RSN_AKM_SUITE_PSK;
 	rsn->pairwise_ciphers = ap->ciphers;
-	rsn->group_cipher = IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC;
+	rsn->group_cipher = ap->group_cipher;
 }
 
 /*
@@ -390,21 +403,14 @@ static void ap_handshake_event(struct handshake_state *hs,
 	}
 }
 
-static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
+static void ap_start_rsna(struct sta_state *sta, const uint8_t *gtk_rsc)
 {
-	struct sta_state *sta = user_data;
 	struct ap_state *ap = sta->ap;
 	struct netdev *netdev = sta->ap->netdev;
 	const uint8_t *own_addr = netdev_get_address(netdev);
 	struct scan_bss bss;
 	struct ie_rsn_info rsn;
 	uint8_t bss_rsne[24];
-
-	if (l_genl_msg_get_error(msg) < 0) {
-		l_error("NEW_STATION/SET_STATION failed: %i",
-			l_genl_msg_get_error(msg));
-		return;
-	}
 
 	memset(&bss, 0, sizeof(bss));
 
@@ -427,6 +433,10 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 	handshake_state_set_authenticator_address(sta->hs, own_addr);
 	handshake_state_set_supplicant_address(sta->hs, sta->addr);
 
+	if (gtk_rsc)
+		handshake_state_set_gtk(sta->hs, ap->gtk, ap->gtk_index,
+					gtk_rsc);
+
 	sta->sm = eapol_sm_new(sta->hs);
 	if (!sta->sm) {
 		handshake_state_free(sta->hs);
@@ -439,6 +449,221 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 	eapol_sm_set_protocol_version(sta->sm, EAPOL_PROTOCOL_VERSION_2004);
 
 	eapol_register(sta->sm);
+
+	return;
+
+error:
+	ap_del_station(sta, MMPDU_REASON_CODE_UNSPECIFIED, true);
+}
+
+static void ap_gtk_query_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct sta_state *sta = user_data;
+	struct l_genl_attr attr, nested;
+	uint16_t type, len;
+	const void *data;
+
+	sta->gtk_query_cmd_id = 0;
+
+	if (l_genl_msg_get_error(msg) < 0 || !l_genl_attr_init(&attr, msg)) {
+		l_error("GET_KEY failed for the GTK: %i",
+			l_genl_msg_get_error(msg));
+		goto error;
+	}
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		if (type != NL80211_ATTR_KEY)
+			continue;
+
+		break;
+	}
+
+	if (type != NL80211_ATTR_KEY || !l_genl_attr_recurse(&attr, &nested)) {
+		l_error("Can't recurse into ATTR_KEY in GET_KEY reply");
+		goto error;
+	}
+
+	while (l_genl_attr_next(&nested, &type, &len, &data)) {
+		if (type != NL80211_KEY_SEQ)
+			continue;
+
+		break;
+	}
+
+	if (type != NL80211_KEY_SEQ) {
+		l_error("KEY_SEQ not returned in GET_KEY reply");
+		goto error;
+	}
+
+	if (len != 6) {
+		l_error("KEY_SEQ length != 6 in GET_KEY reply");
+		goto error;
+	}
+
+	ap_start_rsna(sta, data);
+	return;
+
+error:
+	ap_del_station(sta, MMPDU_REASON_CODE_UNSPECIFIED, true);
+}
+
+static struct l_genl_msg *ap_build_cmd_new_key(struct ap_state *ap,
+						uint32_t cipher, size_t key_len)
+{
+	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_NEW_KEY, 128);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY);
+	l_genl_msg_append_attr(msg, NL80211_KEY_IDX, 1, &ap->gtk_index);
+	l_genl_msg_append_attr(msg, NL80211_KEY_DATA, key_len, ap->gtk);
+	l_genl_msg_append_attr(msg, NL80211_KEY_CIPHER, 4, &cipher);
+	l_genl_msg_leave_nested(msg);
+
+	return msg;
+}
+
+static struct l_genl_msg *ap_build_cmd_set_key(struct ap_state *ap)
+{
+	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_SET_KEY, 128);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY);
+	l_genl_msg_append_attr(msg, NL80211_KEY_IDX, 1, &ap->gtk_index);
+	l_genl_msg_append_attr(msg, NL80211_KEY_DEFAULT, 0, NULL);
+	l_genl_msg_enter_nested(msg, NL80211_KEY_DEFAULT_TYPES);
+	l_genl_msg_append_attr(msg, NL80211_KEY_DEFAULT_TYPE_MULTICAST,
+				0, NULL);
+	l_genl_msg_leave_nested(msg);
+	l_genl_msg_leave_nested(msg);
+
+	return msg;
+}
+
+static struct l_genl_msg *ap_build_cmd_del_key(struct ap_state *ap)
+{
+	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_DEL_KEY, 128);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY);
+	l_genl_msg_append_attr(msg, NL80211_KEY_IDX, 1, &ap->gtk_index);
+	l_genl_msg_leave_nested(msg);
+
+	return msg;
+}
+
+static struct l_genl_msg *ap_build_cmd_get_key(struct ap_state *ap)
+{
+	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_GET_KEY, 128);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &ap->gtk_index);
+
+	return msg;
+}
+
+static void ap_gtk_op_cb(struct l_genl_msg *msg, void *user_data)
+{
+	if (l_genl_msg_get_error(msg) < 0) {
+		uint8_t cmd = l_genl_msg_get_command(msg);
+		const char *cmd_name =
+			cmd == NL80211_CMD_NEW_KEY ? "NEW_KEY" :
+			cmd == NL80211_CMD_SET_KEY ? "SET_KEY" :
+			"DEL_KEY";
+
+		l_error("%s failed for the GTK: %i",
+			cmd_name, l_genl_msg_get_error(msg));
+	}
+}
+
+static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct sta_state *sta = user_data;
+	struct ap_state *ap = sta->ap;
+
+	if (l_genl_msg_get_error(msg) < 0) {
+		l_error("NEW_STATION/SET_STATION failed: %i",
+			l_genl_msg_get_error(msg));
+		return;
+	}
+
+	/*
+	 * Set up the group key.  If this is our first STA then we have
+	 * to add the new GTK to the kernel.  In theory we should be
+	 * able to supply our own RSC (e.g. generated randomly) and use it
+	 * immediately for our 4-Way Handshake without querying the kernel.
+	 * However NL80211_CMD_NEW_KEY only lets us set the receive RSC --
+	 * the Rx PN for CCMP and the Rx IV for TKIP -- and the
+	 * transmit RSC always starts as all zeros.  There's effectively
+	 * no way to set the Tx RSC or query the Rx RSC through nl80211.
+	 * So we query the Tx RSC in both scenarios just in case some
+	 * driver/hardware uses a different initial Tx RSC.
+	 *
+	 * Optimally we would get called back by the EAPoL state machine
+	 * only when building the step 3 of 4 message to query the RSC as
+	 * late as possible but that would complicate EAPoL.
+	 */
+	if (ap->group_cipher != IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC &&
+			!ap->gtk_set) {
+		enum crypto_cipher group_cipher =
+			ie_rsn_cipher_suite_to_cipher(ap->group_cipher);
+		int gtk_len = crypto_cipher_key_len(group_cipher);
+
+		/*
+		 * Generate our GTK.  Not following the example derivation
+		 * method in 802.11-2016 section 12.7.1.4 because a simple
+		 * l_getrandom is just as good.
+		 */
+		l_getrandom(ap->gtk, gtk_len);
+		ap->gtk_index = 1;
+
+		msg = ap_build_cmd_new_key(ap, group_cipher, gtk_len);
+		if (!l_genl_family_send(nl80211, msg, ap_gtk_op_cb, NULL,
+					NULL)) {
+			l_genl_msg_unref(msg);
+			l_error("Issuing NEW_KEY failed");
+			goto error;
+		}
+
+		msg = ap_build_cmd_set_key(ap);
+		if (!l_genl_family_send(nl80211, msg, ap_gtk_op_cb, NULL,
+					NULL)) {
+			l_genl_msg_unref(msg);
+			l_error("Issuing SET_KEY failed");
+			goto error;
+		}
+
+		/*
+		 * Set the flag now because any new associating STA will
+		 * just use NL80211_CMD_GET_KEY from now.
+		 */
+		ap->gtk_set = true;
+	}
+
+	if (ap->group_cipher == IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC)
+		ap_start_rsna(sta, NULL);
+	else {
+		msg = ap_build_cmd_get_key(ap);
+		sta->gtk_query_cmd_id = l_genl_family_send(nl80211, msg,
+								ap_gtk_query_cb,
+								sta, NULL);
+		if (!sta->gtk_query_cmd_id) {
+			l_genl_msg_unref(msg);
+			l_error("Issuing GET_KEY failed");
+			goto error;
+		}
+	}
 
 	return;
 
@@ -1235,6 +1460,7 @@ static int ap_start(struct ap_state *ap, const char *ssid, const char *psk,
 	ap->channel = 6;
 	/* TODO: Add all ciphers supported by wiphy */
 	ap->ciphers = wiphy_select_cipher(wiphy, 0xffff);
+	ap->group_cipher = wiphy_select_cipher(wiphy, 0xffff);
 	ap->beacon_interval = 100;
 	/* TODO: Use actual supported rates */
 	ap->rates = l_uintset_new(200);
@@ -1354,6 +1580,19 @@ static int ap_stop(struct ap_state *ap, struct l_dbus_message *message)
 	if (!ap->start_stop_cmd_id) {
 		l_genl_msg_unref(cmd);
 		return -EIO;
+	}
+
+	if (ap->gtk_set) {
+		struct l_genl_msg *msg;
+
+		ap->gtk_set = false;
+
+		msg = ap_build_cmd_del_key(ap);
+		if (!l_genl_family_send(nl80211, msg, ap_gtk_op_cb, NULL,
+					NULL)) {
+			l_genl_msg_unref(msg);
+			l_error("Issuing DEL_KEY failed");
+		}
 	}
 
 	ap->pending = l_dbus_message_ref(message);
