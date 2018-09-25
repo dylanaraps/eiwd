@@ -102,7 +102,7 @@ static bool avp_builder_start_avp(struct avp_builder *builder,
 {
 	uint8_t *p;
 
-	if (!builder->current_len && builder->offset)
+	if (builder->current_len)
 		return false;
 
 	if (builder->offset + TTLS_AVP_HEADER_LEN + (vendor_id ? 4 : 0)
