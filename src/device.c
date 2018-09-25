@@ -31,21 +31,13 @@
 #include <ell/ell.h>
 
 #include "src/iwd.h"
-#include "src/common.h"
 #include "src/util.h"
-#include "src/ie.h"
-#include "src/handshake.h"
 #include "src/wiphy.h"
 #include "src/scan.h"
 #include "src/netdev.h"
 #include "src/dbus.h"
-#include "src/network.h"
-#include "src/knownnetworks.h"
-#include "src/device.h"
-#include "src/watchlist.h"
-#include "src/ap.h"
-#include "src/adhoc.h"
 #include "src/station.h"
+#include "src/device.h"
 
 struct device {
 	uint32_t index;
