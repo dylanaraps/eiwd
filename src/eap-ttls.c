@@ -58,6 +58,9 @@ struct avp_builder {
 static void avp_builder_grow(struct avp_builder *builder)
 {
 	builder->buf = l_realloc(builder->buf, builder->capacity * 2);
+
+	memset(builder->buf + builder->capacity, 0, builder->capacity);
+
 	builder->capacity *= 2;
 }
 
@@ -132,7 +135,10 @@ static struct avp_builder *avp_builder_new(size_t capacity)
 		return NULL;
 
 	builder = l_new(struct avp_builder, 1);
+
 	builder->buf = l_malloc(capacity);
+	memset(builder->buf, 0, capacity);
+
 	builder->capacity = capacity;
 
 	return builder;
