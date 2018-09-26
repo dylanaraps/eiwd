@@ -813,6 +813,59 @@ err:
 	eap_method_error(eap);
 }
 
+static const struct {
+	const char *name;
+	struct phase2_method *method;
+} tunneled_non_eap_methods[] = {
+	{ }
+};
+
+static int eap_ttls_check_tunneled_auth_settings(struct l_settings *settings,
+						struct l_queue *secrets,
+						const char *prefix,
+						struct l_queue **out_missing)
+{
+	const struct eap_secret_info *secret;
+	char identity_key[64];
+	char password_key[64];
+
+	L_AUTO_FREE_VAR(char *, identity);
+	L_AUTO_FREE_VAR(char *, password) = NULL;
+
+	snprintf(identity_key, sizeof(identity_key), "%sIdentity", prefix);
+	snprintf(password_key, sizeof(password_key), "%sPassword", prefix);
+
+	identity = l_settings_get_string(settings, "Security", identity_key);
+
+	if (!identity) {
+		secret = l_queue_find(secrets, eap_secret_info_match,
+								identity_key);
+		if (!secret) {
+			eap_append_secret(out_missing,
+					EAP_SECRET_REMOTE_USER_PASSWORD,
+					identity_key, password_key, NULL,
+					EAP_CACHE_TEMPORARY);
+		}
+
+		return 0;
+	}
+
+	password = l_settings_get_string(settings, "Security", password_key);
+
+	if (!password) {
+		secret = l_queue_find(secrets, eap_secret_info_match,
+								password_key);
+		if (!secret) {
+			eap_append_secret(out_missing,
+					EAP_SECRET_REMOTE_PASSWORD,
+					password_key, NULL, identity,
+					EAP_CACHE_TEMPORARY);
+		}
+	}
+
+	return 0;
+}
+
 static int eap_ttls_check_settings(struct l_settings *settings,
 					struct l_queue *secrets,
 					const char *prefix,
@@ -824,6 +877,8 @@ static int eap_ttls_check_settings(struct l_settings *settings,
 	L_AUTO_FREE_VAR(char *, passphrase) = NULL;
 	uint8_t *cert;
 	size_t size;
+	const char *phase2_method;
+	uint8_t i;
 
 	snprintf(setting, sizeof(setting), "%sTTLS-CACert", prefix);
 	path = l_settings_get_string(settings, "Security", setting);
@@ -922,7 +977,19 @@ static int eap_ttls_check_settings(struct l_settings *settings,
 		return -ENOENT;
 	}
 
+	snprintf(setting, sizeof(setting), "%sTTLS-Phase2-Method", prefix);
+	phase2_method = l_settings_get_value(settings, "Security", setting);
+
 	snprintf(setting, sizeof(setting), "%sTTLS-Phase2-", prefix);
+
+	for (i = 0; tunneled_non_eap_methods[i].name; i++) {
+		if (strcmp(tunneled_non_eap_methods[i].name, phase2_method))
+			continue;
+
+		return eap_ttls_check_tunneled_auth_settings(settings, secrets,
+								setting,
+								out_missing);
+	}
 
 	return __eap_check_settings(settings, secrets, setting, false,
 					out_missing);
@@ -933,7 +1000,9 @@ static bool eap_ttls_load_settings(struct eap_state *eap,
 					const char *prefix)
 {
 	struct eap_ttls_state *ttls;
+	const char *phase2_method;
 	char setting[64];
+	uint8_t i;
 
 	ttls = l_new(struct eap_ttls_state, 1);
 
@@ -951,7 +1020,20 @@ static bool eap_ttls_load_settings(struct eap_state *eap,
 			prefix);
 	ttls->passphrase = l_settings_get_string(settings, "Security", setting);
 
-	ttls->phase2 = &phase2_eap;
+	snprintf(setting, sizeof(setting), "%sTTLS-Phase2-Method", prefix);
+	phase2_method = l_settings_get_value(settings, "Security", setting);
+
+	for (i = 0; tunneled_non_eap_methods[i].name; i++) {
+		if (strcmp(tunneled_non_eap_methods[i].name, phase2_method))
+			continue;
+
+		ttls->phase2 = tunneled_non_eap_methods[i].method;
+
+		break;
+	}
+
+	if (!ttls->phase2)
+		ttls->phase2 = &phase2_eap;
 
 	eap_set_data(eap, ttls);
 
