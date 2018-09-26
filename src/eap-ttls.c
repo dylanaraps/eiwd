@@ -247,7 +247,7 @@ struct phase2_method {
 	bool (*load_settings)(struct eap_state *eap,
 						struct l_settings *settings,
 						const char *prefix);
-	void (*destroy)(struct eap_state *eap);
+	void (*destroy)(void *state);
 	bool (*reset)(struct eap_state *eap);
 };
 
@@ -311,8 +311,10 @@ static void eap_ttls_free(struct eap_state *eap)
 
 	__eap_ttls_reset_state(ttls);
 
-	if (ttls->phase2->destroy)
-		ttls->phase2->destroy(eap);
+	if (ttls->phase2->destroy) {
+		ttls->phase2->destroy(ttls->phase2->state);
+		ttls->phase2->state = NULL;
+	}
 
 	eap_set_data(eap, NULL);
 
@@ -420,17 +422,13 @@ static bool eap_ttls_phase2_eap_handle_avp(struct eap_state *eap,
 	return true;
 }
 
-static void eap_ttls_phase2_eap_destroy(struct eap_state *eap)
+static void eap_ttls_phase2_eap_destroy(void *state)
 {
-	struct eap_ttls_state *ttls = eap_get_data(eap);
-
-	if (!ttls->phase2->state)
+	if (!state)
 		return;
 
-	eap_reset(ttls->phase2->state);
-
-	eap_free(ttls->phase2->state);
-	ttls->phase2->state = NULL;
+	eap_reset(state);
+	eap_free(state);
 }
 
 static bool eap_ttls_phase2_eap_reset(struct eap_state *eap)
@@ -792,8 +790,10 @@ static void eap_ttls_handle_request(struct eap_state *eap,
 		l_tls_free(ttls->tls);
 		ttls->tls = NULL;
 
-		if (ttls->phase2->destroy)
-			ttls->phase2->destroy(eap);
+		if (ttls->phase2->destroy) {
+			ttls->phase2->destroy(ttls->phase2->state);
+			ttls->phase2->state = NULL;
+		}
 	}
 
 	return;
