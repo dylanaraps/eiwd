@@ -161,14 +161,6 @@ static uint8_t *avp_builder_free(struct avp_builder *builder, bool free_data,
 	return ret;
 }
 
-static bool avp_builder_put_bytes(struct avp_builder *builder,
-						const void *data, size_t len)
-{
-	memcpy(avp_builder_reserve(builder, len), data, len);
-
-	return true;
-}
-
 struct avp_iter {
 	enum radius_attr type;
 	uint8_t flags;
@@ -352,7 +344,7 @@ static void eap_ttls_phase2_eap_send_response(const uint8_t *data, size_t len,
 	builder = avp_builder_new(TTLS_AVP_HEADER_LEN + len);
 
 	avp_builder_start_avp(builder, RADIUS_ATTR_EAP_MESSAGE, true, 0);
-	avp_builder_put_bytes(builder, data, len);
+	memcpy(avp_builder_reserve(builder, 1, len), data, len);
 	avp_builder_finalize_avp(builder);
 
 	msg_data = avp_builder_free(builder, false, &msg_data_len);
