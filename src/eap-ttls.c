@@ -45,6 +45,8 @@ enum ttls_avp_flag {
 };
 
 enum radius_attr {
+	RADIUS_ATTR_USER_NAME			= 1,
+	RADIUS_ATTR_USER_PASSWORD		= 2,
 	RADIUS_ATTR_EAP_MESSAGE			= 79,
 };
 
@@ -159,6 +161,38 @@ static uint8_t *avp_builder_free(struct avp_builder *builder, bool free_data,
 	l_free(builder);
 
 	return ret;
+}
+
+static void build_avp_user_name(struct avp_builder *builder,
+							const char *user_name)
+{
+	size_t len = strlen(user_name);
+	uint8_t *to;
+
+	avp_builder_start_avp(builder, RADIUS_ATTR_USER_NAME, true, 0);
+
+	to = avp_builder_reserve(builder, 1, len);
+	memcpy(to, user_name, len);
+
+	avp_builder_finalize_avp(builder);
+}
+
+static void build_avp_user_password(struct avp_builder *builder,
+						const char *user_password)
+{
+	size_t len = strlen(user_password);
+	uint8_t *to;
+
+	avp_builder_start_avp(builder, RADIUS_ATTR_USER_PASSWORD, true, 0);
+
+	/*
+	 * Null-pad the password to a multiple of 16 octets, to obfuscate
+	 * its length
+	 */
+	to = avp_builder_reserve(builder, 1, align_len(len, 16));
+	memcpy(to, user_password, len);
+
+	avp_builder_finalize_avp(builder);
 }
 
 struct avp_iter {
@@ -328,6 +362,91 @@ static void eap_ttls_free(struct eap_state *eap)
 #define EAP_TTLS_FLAG_S	(1 << 5)
 #define EAP_TTLS_FLAG_MASK	\
 	(EAP_TTLS_FLAG_L | EAP_TTLS_FLAG_M | EAP_TTLS_FLAG_S)
+
+struct phase2_credentials {
+	char *username;
+	char *password;
+};
+
+static void eap_ttls_phase2_credentials_destroy(void *state)
+{
+	struct phase2_credentials *credentials = state;
+
+	if (!credentials)
+		return;
+
+	l_free(credentials->username);
+
+	memset(credentials->password, 0, strlen(credentials->password));
+	l_free(credentials->password);
+
+	l_free(credentials);
+}
+
+static bool eap_ttls_phase2_non_eap_load_settings(struct phase2_method *phase2,
+						struct l_settings *settings,
+						const char *prefix)
+{
+	struct phase2_credentials *credentials;
+	char setting[64];
+
+	credentials = l_new(struct phase2_credentials, 1);
+
+	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
+	credentials->username =
+			l_settings_get_string(settings, "Security", setting);
+
+	if (!credentials->username) {
+		l_error("Phase 2 Identity is missing.");
+		goto error;
+	}
+
+	snprintf(setting, sizeof(setting), "%sPassword", prefix);
+	credentials->password =
+			l_settings_get_string(settings, "Security", setting);
+
+	if (!credentials->password) {
+		l_error("Phase 2 Password is missing.");
+		goto error;
+	}
+
+	phase2->state = credentials;
+
+	return true;
+
+error:
+	l_free(credentials->username);
+	l_free(credentials->password);
+	l_free(credentials);
+
+	return false;
+}
+
+static bool eap_ttls_phase2_pap_init(struct eap_state *eap)
+{
+	struct eap_ttls_state *ttls = eap_get_data(eap);
+	struct phase2_credentials *state = ttls->phase2->state;
+	struct avp_builder *builder;
+	uint8_t *buf;
+	size_t buf_len;
+
+	builder = avp_builder_new(512);
+
+	build_avp_user_name(builder, state->username);
+	build_avp_user_password(builder, state->password);
+
+	buf = avp_builder_free(builder, false, &buf_len);
+
+	l_tls_write(ttls->tls, buf, buf_len);
+	l_free(buf);
+
+	return true;
+}
+
+static struct phase2_method phase2_pap = {
+	.init = eap_ttls_phase2_pap_init,
+	.destroy = eap_ttls_phase2_credentials_destroy,
+};
 
 static void eap_ttls_phase2_eap_send_response(const uint8_t *data, size_t len,
 								void *user_data)
@@ -801,6 +920,7 @@ static const struct {
 	const char *name;
 	struct phase2_method *method;
 } tunneled_non_eap_methods[] = {
+	{ "Tunneled-PAP", &phase2_pap },
 	{ }
 };
 
@@ -1016,6 +1136,11 @@ static bool eap_ttls_load_settings(struct eap_state *eap,
 			continue;
 
 		ttls->phase2 = tunneled_non_eap_methods[i].method;
+
+		if (!eap_ttls_phase2_non_eap_load_settings(ttls->phase2,
+								settings,
+								setting))
+			goto err;
 
 		break;
 	}
