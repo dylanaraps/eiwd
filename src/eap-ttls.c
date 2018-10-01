@@ -47,6 +47,8 @@ enum ttls_avp_flag {
 enum radius_attr {
 	RADIUS_ATTR_USER_NAME			= 1,
 	RADIUS_ATTR_USER_PASSWORD		= 2,
+	RADIUS_ATTR_CHAP_PASSWORD		= 3,
+	RADIUS_ATTR_CHAP_CHALLENGE		= 60,
 	RADIUS_ATTR_EAP_MESSAGE			= 79,
 };
 
@@ -192,6 +194,32 @@ static void build_avp_user_password(struct avp_builder *builder,
 	to = avp_builder_reserve(builder, 1, align_len(len, 16));
 	memcpy(to, user_password, len);
 
+	avp_builder_finalize_avp(builder);
+}
+
+#define CHAP_IDENT_LEN		1
+#define CHAP_CHALLENGE_LEN	16
+#define CHAP_PASSWORD_LEN	16
+
+static void build_avp_chap_challenge(struct avp_builder *builder,
+						const uint8_t *challenge)
+{
+	avp_builder_start_avp(builder, RADIUS_ATTR_CHAP_CHALLENGE, true, 0);
+	memcpy(avp_builder_reserve(builder, 1, CHAP_CHALLENGE_LEN), challenge,
+							CHAP_CHALLENGE_LEN);
+	avp_builder_finalize_avp(builder);
+}
+
+static void build_avp_chap_password(struct avp_builder *builder,
+					const uint8_t *ident,
+					const uint8_t *password_hash)
+{
+	avp_builder_start_avp(builder, RADIUS_ATTR_CHAP_PASSWORD, true, 0);
+
+	memcpy(avp_builder_reserve(builder, 1, CHAP_IDENT_LEN), ident,
+							CHAP_IDENT_LEN);
+	memcpy(avp_builder_reserve(builder, 1, CHAP_PASSWORD_LEN),
+					password_hash, CHAP_PASSWORD_LEN);
 	avp_builder_finalize_avp(builder);
 }
 
@@ -421,6 +449,75 @@ error:
 
 	return false;
 }
+
+static void eap_ttls_phase2_chap_generate_challenge(struct l_tls *tunnel,
+							uint8_t *challenge,
+							size_t challenge_len)
+{
+	uint8_t seed[64];
+
+	memcpy(seed +  0, tunnel->pending.client_random, 32);
+	memcpy(seed + 32, tunnel->pending.server_random, 32);
+
+	tls_prf_get_bytes(tunnel, L_CHECKSUM_SHA256, 32,
+				tunnel->pending.master_secret,
+				sizeof(tunnel->pending.master_secret),
+				"ttls challenge", seed, 64,
+				challenge, challenge_len);
+
+	memset(seed, 0, 64);
+}
+
+static bool eap_ttls_phase2_chap_init(struct eap_state *eap)
+{
+	struct eap_ttls_state *ttls = eap_get_data(eap);
+	struct phase2_credentials *credentials = ttls->phase2->state;
+	struct avp_builder *builder;
+	uint8_t challenge[CHAP_CHALLENGE_LEN + CHAP_IDENT_LEN];
+	uint8_t password_hash[CHAP_PASSWORD_LEN];
+	uint8_t ident;
+	struct l_checksum *hash;
+	uint8_t *data;
+	size_t data_len;
+
+	eap_ttls_phase2_chap_generate_challenge(ttls->tls, challenge,
+							CHAP_CHALLENGE_LEN +
+							CHAP_IDENT_LEN);
+
+	ident = challenge[CHAP_CHALLENGE_LEN];
+
+	hash = l_checksum_new(L_CHECKSUM_MD5);
+	if (!hash) {
+		l_error("Can't create the MD5 checksum");
+		return false;
+	}
+
+	l_checksum_update(hash, &ident, CHAP_IDENT_LEN);
+	l_checksum_update(hash, credentials->password,
+						strlen(credentials->password));
+	l_checksum_update(hash, challenge, CHAP_CHALLENGE_LEN);
+
+	l_checksum_get_digest(hash, password_hash, CHAP_PASSWORD_LEN);
+	l_checksum_free(hash);
+
+	builder = avp_builder_new(512);
+
+	build_avp_user_name(builder, credentials->username);
+	build_avp_chap_challenge(builder, challenge);
+	build_avp_chap_password(builder, &ident, password_hash);
+
+	data = avp_builder_free(builder, false, &data_len);
+
+	l_tls_write(ttls->tls, data, data_len);
+	l_free(data);
+
+	return true;
+}
+
+static struct phase2_method phase2_chap = {
+	.init = eap_ttls_phase2_chap_init,
+	.destroy = eap_ttls_phase2_credentials_destroy,
+};
 
 static bool eap_ttls_phase2_pap_init(struct eap_state *eap)
 {
@@ -920,6 +1017,7 @@ static const struct {
 	const char *name;
 	struct phase2_method *method;
 } tunneled_non_eap_methods[] = {
+	{ "Tunneled-CHAP", &phase2_chap },
 	{ "Tunneled-PAP", &phase2_pap },
 	{ }
 };
