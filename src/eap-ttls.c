@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <ell/ell.h>
 #include <ell/tls-private.h>
+#include <ell/private.h>
 
 #include "eap.h"
 #include "eap-private.h"
@@ -48,81 +49,77 @@ enum radius_attr {
 };
 
 struct avp_builder {
-	uint8_t flags;
-	size_t capacity;
+	uint32_t capacity;
 	uint8_t *buf;
-	size_t offset;
-	uint32_t current_len;
+	uint32_t pos;
+	uint8_t *avp_start;
 };
 
-static void avp_builder_grow(struct avp_builder *builder)
+static uint8_t *avp_builder_reserve(struct avp_builder *builder,
+					uint32_t alignment, size_t len)
 {
-	builder->buf = l_realloc(builder->buf, builder->capacity * 2);
+	size_t aligned_pos = align_len(builder->pos, alignment);
+	size_t end = aligned_pos + len;
 
-	memset(builder->buf + builder->capacity, 0, builder->capacity);
-
-	builder->capacity *= 2;
-}
-
-static uint8_t *avp_builder_reserve(struct avp_builder *builder, size_t len)
-{
-	while (builder->offset + TTLS_AVP_HEADER_LEN + builder->current_len
-						+ len >= builder->capacity) {
-		avp_builder_grow(builder);
+	if (end > builder->capacity) {
+		builder->buf = l_realloc(builder->buf, end);
+		builder->capacity = end;
 	}
 
-	return builder->buf + builder->offset + TTLS_AVP_HEADER_LEN +
-							builder->current_len;
+	if (aligned_pos - builder->pos > 0)
+		memset(builder->buf + builder->pos, 0,
+						aligned_pos - builder->pos);
+
+	builder->pos = end;
+
+	return builder->buf + aligned_pos;
 }
 
-static void avp_builder_finalize_avp(struct avp_builder *builder)
+static bool avp_builder_finalize_avp(struct avp_builder *builder)
 {
-	uint8_t *p = builder->buf + builder->offset;
+	uint8_t *p;
+	uint32_t len;
 
-	if (builder->current_len & 3) {
-		/*
-		* If an AVP is not a multiple of four octets, it must be padded
-		* with zeros to the next four-octet boundary.
-		*/
-		uint8_t pad_len = 4 - (builder->current_len & 3);
+	if (!builder->avp_start)
+		return false;
 
-		memset(avp_builder_reserve(builder, pad_len), 0, pad_len);
-	}
+	p = builder->buf + builder->pos;
 
-	builder->current_len += TTLS_AVP_HEADER_LEN;
-	builder->offset += (builder->current_len + 3) & ~3;
-	builder->current_len |= builder->flags << 24;
+	len = l_get_be32(builder->avp_start + 4);
+	len |= p - builder->avp_start;
+	l_put_be32(len, builder->avp_start + 4);
 
-	l_put_be32(builder->current_len, p + 4);
+	builder->avp_start = 0;
 
-	builder->flags = 0;
-	builder->current_len = 0;
+	return true;
 }
 
 static bool avp_builder_start_avp(struct avp_builder *builder,
 					enum radius_attr type,
 					bool mandatory, uint32_t vendor_id)
 {
-	uint8_t *p;
+	uint32_t flags;
 
-	if (builder->current_len)
+	if (builder->avp_start)
 		return false;
 
-	if (builder->offset + TTLS_AVP_HEADER_LEN + (vendor_id ? 4 : 0)
-							>= builder->capacity)
-		avp_builder_grow(builder);
+	builder->avp_start = avp_builder_reserve(builder, 4,
+							TTLS_AVP_HEADER_LEN +
+							(vendor_id ? 4 : 0));
 
-	p = builder->buf + builder->offset;
-	l_put_be32(type, p);
+	l_put_be32(type, builder->avp_start);
+
+	flags = 0;
 
 	if (mandatory)
-		builder->flags |= TTLS_AVP_FLAG_M;
+		flags |= TTLS_AVP_FLAG_M;
 
 	if (vendor_id) {
-		builder->flags |= TTLS_AVP_FLAG_V;
-		l_put_be32(vendor_id, p + TTLS_AVP_HEADER_LEN);
-		builder->current_len += 4;
+		flags |= TTLS_AVP_FLAG_V;
+		l_put_be32(vendor_id, builder->avp_start + TTLS_AVP_HEADER_LEN);
 	}
+
+	l_put_be32(flags << 24, builder->avp_start + 4);
 
 	return true;
 }
@@ -157,7 +154,7 @@ static uint8_t *avp_builder_free(struct avp_builder *builder, bool free_data,
 	ret = builder->buf;
 
 	if (out_size)
-		*out_size = builder->offset;
+		*out_size = builder->pos;
 
 	l_free(builder);
 
@@ -168,7 +165,6 @@ static bool avp_builder_put_bytes(struct avp_builder *builder,
 						const void *data, size_t len)
 {
 	memcpy(avp_builder_reserve(builder, len), data, len);
-	builder->current_len += len;
 
 	return true;
 }
