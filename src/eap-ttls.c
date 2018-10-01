@@ -238,9 +238,6 @@ struct phase2_method {
 	bool (*handle_avp)(struct eap_state *eap, enum radius_attr type,
 				uint32_t vendor_id, const uint8_t *data,
 								size_t len);
-	bool (*load_settings)(struct eap_state *eap,
-						struct l_settings *settings,
-						const char *prefix);
 	void (*destroy)(void *state);
 	bool (*reset)(struct eap_state *eap);
 };
@@ -436,7 +433,6 @@ static bool eap_ttls_phase2_eap_reset(struct eap_state *eap)
 }
 
 static struct phase2_method phase2_eap = {
-	.load_settings = eap_ttls_phase2_eap_load_settings,
 	.init = eap_ttls_phase2_eap_init,
 	.handle_avp = eap_ttls_phase2_eap_handle_avp,
 	.destroy = eap_ttls_phase2_eap_destroy,
@@ -1011,6 +1007,10 @@ static bool eap_ttls_load_settings(struct eap_state *eap,
 	snprintf(setting, sizeof(setting), "%sTTLS-Phase2-Method", prefix);
 	phase2_method = l_settings_get_value(settings, "Security", setting);
 
+	snprintf(setting, sizeof(setting), "%sTTLS-Phase2-", prefix);
+
+	eap_set_data(eap, ttls);
+
 	for (i = 0; tunneled_non_eap_methods[i].name; i++) {
 		if (strcmp(tunneled_non_eap_methods[i].name, phase2_method))
 			continue;
@@ -1020,15 +1020,12 @@ static bool eap_ttls_load_settings(struct eap_state *eap,
 		break;
 	}
 
-	if (!ttls->phase2)
+	if (!ttls->phase2) {
 		ttls->phase2 = &phase2_eap;
 
-	eap_set_data(eap, ttls);
-
-	snprintf(setting, sizeof(setting), "%sTTLS-Phase2-", prefix);
-	if (ttls->phase2->load_settings &&
-			!ttls->phase2->load_settings(eap, settings, setting))
-		goto err;
+		if (!eap_ttls_phase2_eap_load_settings(eap, settings, setting))
+			goto err;
+	}
 
 	return true;
 
