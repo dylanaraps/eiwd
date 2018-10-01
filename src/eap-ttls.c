@@ -301,7 +301,7 @@ struct phase2_method {
 				uint32_t vendor_id, const uint8_t *data,
 								size_t len);
 	void (*destroy)(void *state);
-	bool (*reset)(struct eap_state *eap);
+	bool (*reset)(void *state);
 };
 
 struct eap_ttls_state {
@@ -351,7 +351,7 @@ static bool eap_ttls_reset_state(struct eap_state *eap)
 	struct eap_ttls_state *ttls = eap_get_data(eap);
 
 	if (ttls->phase2->reset)
-		ttls->phase2->reset(eap);
+		ttls->phase2->reset(ttls->phase2->state);
 
 	__eap_ttls_reset_state(ttls);
 
@@ -638,14 +638,12 @@ static void eap_ttls_phase2_eap_destroy(void *state)
 	eap_free(state);
 }
 
-static bool eap_ttls_phase2_eap_reset(struct eap_state *eap)
+static bool eap_ttls_phase2_eap_reset(void *state)
 {
-	struct eap_ttls_state *ttls = eap_get_data(eap);
-
-	if (!ttls->phase2->state)
+	if (!state)
 		return false;
 
-	return eap_reset(ttls->phase2->state);
+	return eap_reset(state);
 }
 
 static struct phase2_method phase2_eap = {
