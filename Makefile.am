@@ -448,4 +448,5 @@ maintainer-clean-local:
 	-rm -rf build-aux ell
 
 src/builtin.h: src/genbuiltin config.status
+	$(AM_V_at)$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(srcdir)/src/genbuiltin $(builtin_modules) > $@
