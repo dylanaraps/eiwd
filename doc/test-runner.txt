@@ -297,6 +297,9 @@ follows:
 		CONFIG_OWE=y
 		CONFIG_DPP=y
 
+	For pre-authentication tests add the following:
+		CONFIG_RADIUS_SERVER=y
+
 	Note: You may need to pre-install: 'gnutls-devel' and 'libgcrypt-devel'
 	libraries.
 
