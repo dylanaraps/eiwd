@@ -282,6 +282,7 @@ follows:
 
 		#CONFIG_IEEE80211R=y
 		#CONFIG_WNM_AP=y
+		#CONFIG_WNM=y
 
 	For EAP-SIM/AKA tests uncomment the following:
 
