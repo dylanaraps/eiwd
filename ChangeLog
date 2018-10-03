@@ -1,3 +1,8 @@
+ver 0.9:
+	Fix issue with handling EAP-WSC passwords.
+	Add support for TTLS-CHAP and TTLS-PAP.
+	Add support for handling FT over SAE.
+
 ver 0.8:
 	Fix issue with handling EAP_CACHE_NEVER secret types.
 	Fix issue with redundant usage of the L flag and PEAP.
