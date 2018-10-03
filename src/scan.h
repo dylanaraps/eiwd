@@ -41,7 +41,6 @@ typedef void (*scan_freq_set_func_t)(uint32_t freq, void *userdata);
 
 struct scan_freq_set;
 struct ie_rsn_info;
-enum ie_bss_capability;
 
 struct scan_bss {
 	uint8_t addr[6];

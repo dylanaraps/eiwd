@@ -264,6 +264,11 @@ static struct network *station_add_seen_bss(struct station *station,
 	memcpy(ssid, bss->ssid, bss->ssid_len);
 	ssid[bss->ssid_len] = '\0';
 
+	if (!(bss->capability & IE_BSS_CAP_ESS)) {
+		l_debug("Ignoring non-ESS BSS \"%s\"", ssid);
+		return NULL;
+	}
+
 	memset(&info, 0, sizeof(info));
 	r = scan_bss_get_rsn_info(bss, &info);
 	if (r < 0) {
