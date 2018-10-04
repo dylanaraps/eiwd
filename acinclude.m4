@@ -12,7 +12,7 @@ AC_DEFUN([AC_PROG_CC_PIE], [
 
 AC_DEFUN([COMPILER_FLAGS], [
 	if (test "${CFLAGS}" = ""); then
-		CFLAGS="-Wall -O2 -fsigned-char "
+		CFLAGS="-Wall -O2 -fsigned-char -fno-exceptions"
 		CFLAGS+=" -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2"
 	fi
 	if (test "$USE_MAINTAINER_MODE" = "yes"); then
