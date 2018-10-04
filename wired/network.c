@@ -91,10 +91,13 @@ static void network_create(const char *name)
 	struct network *net;
 
 	net = network_lookup(name);
-	if (!net) {
-		net = network_new(name);
-		l_queue_push_tail(network_list, net);
+	if (net) {
+		l_debug("Refresh network '%s'", net->name);
+		return;
 	}
+
+	net = network_new(name);
+	l_queue_push_tail(network_list, net);
 }
 
 static void network_remove(const char *name)
@@ -111,10 +114,10 @@ static void network_reload(const char *name)
 	struct network *net;
 
 	net = network_lookup(name);
-	if (!net)
+	if (net) {
+		l_debug("Refresh network '%s'", net->name);
 		return;
-
-	l_debug("Refresh network '%s'", net->name);
+	}
 }
 
 struct l_settings *network_lookup_security(const char *network)
