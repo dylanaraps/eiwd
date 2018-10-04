@@ -41,7 +41,7 @@ struct network {
 };
 
 static struct l_queue *network_list;
-static struct l_fswatch *storage_watch;
+static struct l_dir_watch *storage_watch;
 
 static char *network_name_from_filename(const char *filename)
 {
@@ -78,12 +78,43 @@ static bool network_match(const void *a, const void *b)
 	const struct network *net = a;
 	const char *name = b;
 
-	return strcmp(net->name, name);
+	return !strcmp(net->name, name);
 }
 
 static struct network *network_lookup(const char *name)
 {
 	return l_queue_find(network_list, network_match, name);
+}
+
+static void network_create(const char *name)
+{
+	struct network *net;
+
+	net = network_lookup(name);
+	if (!net) {
+		net = network_new(name);
+		l_queue_push_tail(network_list, net);
+	}
+}
+
+static void network_remove(const char *name)
+{
+	struct network *net;
+
+	net = l_queue_remove_if(network_list, network_match, name);
+	if (net)
+		network_free(net);
+}
+
+static void network_reload(const char *name)
+{
+	struct network *net;
+
+	net = network_lookup(name);
+	if (!net)
+		return;
+
+	l_debug("Refresh network '%s'", net->name);
 }
 
 struct l_settings *network_lookup_security(const char *network)
@@ -104,47 +135,28 @@ struct l_settings *network_lookup_security(const char *network)
 	return conf;
 }
 
-static void network_storage_watch_cb(struct l_fswatch *watch,
-					const char *filename,
-					enum l_fswatch_event event,
+static void network_storage_watch_cb(const char *filename,
+					enum l_dir_watch_event event,
 					void *user_data)
 {
-	struct network *net;
 	char *name;
-
-	/*
-	 * Ignore notifications for the actual directory, we can't do
-	 * anything about some of them anyway.  Only react to
-	 * notifications for files in the storage directory.
-	 */
-	if (!filename)
-		return;
 
 	name = network_name_from_filename(filename);
 	if (!name)
 		return;
 
 	switch (event) {
-	case L_FSWATCH_EVENT_DELETE:
-	case L_FSWATCH_EVENT_MOVE:
-	case L_FSWATCH_EVENT_MODIFY:
-	case L_FSWATCH_EVENT_ATTRIB:
-	case L_FSWATCH_EVENT_CREATE:
-		/*
-		 * For now treat all the operations the same.  E.g. they may
-		 * result in the removal of the network (file moved out, not
-		 * readable or invalid) or the creation of a new network (file
-		 * created, permissions granted, syntax fixed, etc.)
-		 * so we always need to re-read the file.
-		 */
-		net = network_lookup(name);
-		if (!net) {
-			net = network_new(name);
-			l_queue_push_tail(network_list, net);
-		} else {
-			l_free(net->name);
-			net->name = l_strdup(name);
-		}
+	case L_DIR_WATCH_EVENT_CREATED:
+		network_create(name);
+		break;
+	case L_DIR_WATCH_EVENT_REMOVED:
+		network_remove(name);
+		break;
+	case L_DIR_WATCH_EVENT_MODIFIED:
+		network_reload(name);
+		break;
+	case L_DIR_WATCH_EVENT_ACCESSED:
+		break;
 	}
 
 	l_free(name);
@@ -188,7 +200,7 @@ bool network_init(void)
 
 	closedir(dir);
 
-	storage_watch = l_fswatch_new(WIRED_STORAGEDIR,
+	storage_watch = l_dir_watch_new(WIRED_STORAGEDIR,
 					network_storage_watch_cb, NULL,
 					network_storage_watch_destroy);
 
@@ -197,7 +209,7 @@ bool network_init(void)
 
 void network_exit(void)
 {
-	l_fswatch_destroy(storage_watch);
+	l_dir_watch_destroy(storage_watch);
 
 	l_queue_destroy(network_list, network_free);
 	network_list = NULL;
