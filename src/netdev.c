@@ -612,9 +612,11 @@ static void netdev_free(void *data)
 		netdev->set_powered_cmd_id = 0;
 	}
 
-	WATCHLIST_NOTIFY(&netdev_watches, netdev_watch_func_t,
-				netdev, NETDEV_WATCH_EVENT_DEL);
-	device_remove(netdev->device);
+	if (netdev->device) {
+		WATCHLIST_NOTIFY(&netdev_watches, netdev_watch_func_t,
+					netdev, NETDEV_WATCH_EVENT_DEL);
+		device_remove(netdev->device);
+	}
 
 	watchlist_destroy(&netdev->frame_watches);
 	watchlist_destroy(&netdev->station_watches);
