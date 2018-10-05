@@ -1187,6 +1187,12 @@ static bool netdev_copy_tk(uint8_t *tk_buf, const uint8_t *tk,
 	return true;
 }
 
+static const uint8_t *netdev_choose_key_address(
+					struct netdev_handshake_state *nhs)
+{
+	return (nhs->super.authenticator) ? nhs->super.spa : nhs->super.aa;
+}
+
 static void netdev_set_gtk(struct handshake_state *hs, uint8_t key_index,
 				const uint8_t *gtk, uint8_t gtk_len,
 				const uint8_t *rsc, uint8_t rsc_len,
@@ -1271,24 +1277,6 @@ static void netdev_set_igtk(struct handshake_state *hs, uint8_t key_index,
 
 	l_genl_msg_unref(msg);
 	netdev_setting_keys_failed(nhs, MMPDU_REASON_CODE_UNSPECIFIED);
-}
-
-static const uint8_t *netdev_choose_key_address(
-					struct netdev_handshake_state *nhs)
-{
-	switch (nhs->netdev->type) {
-	case NL80211_IFTYPE_STATION:
-		return nhs->super.aa;
-	case NL80211_IFTYPE_AP:
-		return nhs->super.spa;
-	case NL80211_IFTYPE_ADHOC:
-		if (nhs->super.authenticator)
-			return nhs->super.spa;
-		else
-			return nhs->super.aa;
-	default:
-		return NULL;
-	}
 }
 
 static void netdev_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
