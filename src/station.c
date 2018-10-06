@@ -62,6 +62,8 @@ struct station {
 	struct l_dbus_message *disconnect_pending;
 	struct l_dbus_message *scan_pending;
 	struct signal_agent *signal_agent;
+	uint32_t scan_id;
+	uint32_t hidden_network_scan_id;
 
 	/* Roaming related members */
 	struct timespec roam_min_time;
@@ -589,6 +591,13 @@ static void periodic_scan_stop(struct station *station)
 		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
 					IWD_STATION_INTERFACE, "Scanning");
 	}
+}
+
+static void station_scan_destroy(void *userdata)
+{
+	struct station *station = userdata;
+
+	station->scan_id = 0;
 }
 
 static const char *station_state_to_string(enum station_state state)
@@ -1718,6 +1727,13 @@ next:
 	return true;
 }
 
+static void station_hidden_network_scan_destroy(void *userdata)
+{
+	struct station *station = userdata;
+
+	station->hidden_network_scan_id = 0;
+}
+
 static struct l_dbus_message *station_dbus_connect_hidden_network(
 						struct l_dbus *dbus,
 						struct l_dbus_message *message,
@@ -1752,10 +1768,11 @@ static struct l_dbus_message *station_dbus_connect_hidden_network(
 
 	params.ssid = ssid;
 
-	if (!scan_active_full(index, &params,
+	station->hidden_network_scan_id = scan_active_full(index, &params,
 				station_hidden_network_scan_triggered,
 				station_hidden_network_scan_results,
-				station, NULL))
+				station, station_hidden_network_scan_destroy);
+	if (!station->hidden_network_scan_id)
 		return dbus_error_failed(message);
 
 	station->connect_pending = l_dbus_message_ref(message);
@@ -1912,7 +1929,7 @@ static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 
 	l_debug("Scan called from DBus");
 
-	if (station->scan_pending)
+	if (station->scan_id)
 		return dbus_error_busy(message);
 
 	/*
@@ -1922,9 +1939,10 @@ static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 	if (!station->connected_bss &&
 			!(station->seen_hidden_networks &&
 				known_networks_has_hidden())) {
-		if (!scan_passive(index, station_dbus_scan_triggered,
-					new_scan_results, station, NULL))
-			return dbus_error_failed(message);
+		station->scan_id = scan_passive(index,
+					station_dbus_scan_triggered,
+					new_scan_results, station,
+					station_scan_destroy);
 	} else {
 		struct scan_parameters params;
 
@@ -1934,11 +1952,14 @@ static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 		if (!station->connected_bss)
 			params.randomize_mac_addr_hint = true;
 
-		if (!scan_active_full(index, &params,
+		station->scan_id = scan_active_full(index, &params,
 					station_dbus_scan_triggered,
-					new_scan_results, station, NULL))
-			return dbus_error_failed(message);
+					new_scan_results, station,
+					station_scan_destroy);
 	}
+
+	if (!station->scan_id)
+		return dbus_error_failed(message);
 
 	station->scan_pending = l_dbus_message_ref(message);
 
@@ -2234,6 +2255,14 @@ static void station_free(struct station *station)
 	if (station->scan_pending)
 		dbus_pending_reply(&station->scan_pending,
 			dbus_error_aborted(station->scan_pending));
+
+	if (station->scan_id)
+		scan_cancel(netdev_get_ifindex(station->netdev),
+				station->scan_id);
+
+	if (station->hidden_network_scan_id)
+		scan_cancel(netdev_get_ifindex(station->netdev),
+				station->hidden_network_scan_id);
 
 	l_timeout_remove(station->roam_trigger_timeout);
 
