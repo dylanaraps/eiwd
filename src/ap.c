@@ -453,48 +453,15 @@ error:
 static void ap_gtk_query_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct sta_state *sta = user_data;
-	struct l_genl_attr attr, nested;
-	uint16_t type, len;
-	const void *data;
+	const void *gtk_rsc;
 
 	sta->gtk_query_cmd_id = 0;
 
-	if (l_genl_msg_get_error(msg) < 0 || !l_genl_attr_init(&attr, msg)) {
-		l_error("GET_KEY failed for the GTK: %i",
-			l_genl_msg_get_error(msg));
+	gtk_rsc = nl80211_parse_get_key_seq(msg);
+	if (!gtk_rsc)
 		goto error;
-	}
 
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		if (type != NL80211_ATTR_KEY)
-			continue;
-
-		break;
-	}
-
-	if (type != NL80211_ATTR_KEY || !l_genl_attr_recurse(&attr, &nested)) {
-		l_error("Can't recurse into ATTR_KEY in GET_KEY reply");
-		goto error;
-	}
-
-	while (l_genl_attr_next(&nested, &type, &len, &data)) {
-		if (type != NL80211_KEY_SEQ)
-			continue;
-
-		break;
-	}
-
-	if (type != NL80211_KEY_SEQ) {
-		l_error("KEY_SEQ not returned in GET_KEY reply");
-		goto error;
-	}
-
-	if (len != 6) {
-		l_error("KEY_SEQ length != 6 in GET_KEY reply");
-		goto error;
-	}
-
-	ap_start_rsna(sta, data);
+	ap_start_rsna(sta, gtk_rsc);
 	return;
 
 error:

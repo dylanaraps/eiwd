@@ -133,3 +133,47 @@ struct l_genl_msg *nl80211_build_get_key(uint32_t ifindex, uint8_t key_index)
 
 	return msg;
 }
+
+const void *nl80211_parse_get_key_seq(struct l_genl_msg *msg)
+{
+	struct l_genl_attr attr, nested;
+	uint16_t type, len;
+	const void *data;
+
+	if (l_genl_msg_get_error(msg) < 0 || !l_genl_attr_init(&attr, msg)) {
+		l_error("GET_KEY failed for the GTK: %i",
+			l_genl_msg_get_error(msg));
+		return NULL;
+	}
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		if (type != NL80211_ATTR_KEY)
+			continue;
+
+		break;
+	}
+
+	if (type != NL80211_ATTR_KEY || !l_genl_attr_recurse(&attr, &nested)) {
+		l_error("Can't recurse into ATTR_KEY in GET_KEY reply");
+		return NULL;
+	}
+
+	while (l_genl_attr_next(&nested, &type, &len, &data)) {
+		if (type != NL80211_KEY_SEQ)
+			continue;
+
+		break;
+	}
+
+	if (type != NL80211_KEY_SEQ) {
+		l_error("KEY_SEQ not returned in GET_KEY reply");
+		return NULL;
+	}
+
+	if (len != 6) {
+		l_error("KEY_SEQ length != 6 in GET_KEY reply");
+		return NULL;
+	}
+
+	return data;
+}

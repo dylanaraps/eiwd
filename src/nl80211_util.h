@@ -39,3 +39,5 @@ struct l_genl_msg *nl80211_build_set_station_unauthorized(uint32_t ifindex,
 struct l_genl_msg *nl80211_build_set_key(uint32_t ifindex, uint8_t key_index);
 
 struct l_genl_msg *nl80211_build_get_key(uint32_t ifindex, uint8_t key_index);
+
+const void *nl80211_parse_get_key_seq(struct l_genl_msg *msg);
