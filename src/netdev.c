@@ -1167,6 +1167,8 @@ static void netdev_set_gtk(struct handshake_state *hs, uint8_t key_index,
 	struct netdev *netdev = nhs->netdev;
 	uint8_t gtk_buf[32];
 	struct l_genl_msg *msg;
+	const uint8_t *addr = (netdev->type == NL80211_IFTYPE_ADHOC) ?
+				nhs->super.aa : NULL;
 
 	l_debug("%d", netdev->index);
 
@@ -1184,7 +1186,7 @@ static void netdev_set_gtk(struct handshake_state *hs, uint8_t key_index,
 	}
 
 	msg = nl80211_build_new_key_group(netdev->index, cipher, key_index,
-					gtk_buf, gtk_len, rsc, rsc_len);
+					gtk_buf, gtk_len, rsc, rsc_len, addr);
 
 	nhs->group_new_key_cmd_id =
 		l_genl_family_send(nl80211, msg, netdev_new_group_key_cb,
@@ -1229,7 +1231,7 @@ static void netdev_set_igtk(struct handshake_state *hs, uint8_t key_index,
 	}
 
 	msg = nl80211_build_new_key_group(netdev->index, cipher, key_index,
-					igtk_buf, igtk_len, ipn, ipn_len);
+					igtk_buf, igtk_len, ipn, ipn_len, NULL);
 
 	nhs->group_management_new_key_cmd_id =
 			l_genl_family_send(nl80211, msg,

@@ -30,21 +30,34 @@
 struct l_genl_msg *nl80211_build_new_key_group(uint32_t ifindex, uint32_t cipher,
 					uint8_t key_id, const uint8_t *key,
 					size_t key_len, const uint8_t *ctr,
-					size_t ctr_len)
+					size_t ctr_len, const uint8_t *addr)
 {
 	struct l_genl_msg *msg;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_NEW_KEY, 512);
 
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
-	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY);
 
+	if (addr)
+		l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, addr);
+
+	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY);
 	l_genl_msg_append_attr(msg, NL80211_KEY_DATA, key_len, key);
 	l_genl_msg_append_attr(msg, NL80211_KEY_CIPHER, 4, &cipher);
 	l_genl_msg_append_attr(msg, NL80211_KEY_IDX, 1, &key_id);
 
 	if (ctr)
 		l_genl_msg_append_attr(msg, NL80211_KEY_SEQ, ctr_len, ctr);
+
+	if (addr) {
+		uint32_t type = NL80211_KEYTYPE_GROUP;
+
+		l_genl_msg_append_attr(msg, NL80211_KEY_TYPE, 4, &type);
+		l_genl_msg_enter_nested(msg, NL80211_KEY_DEFAULT_TYPES);
+		l_genl_msg_append_attr(msg, NL80211_KEY_DEFAULT_TYPE_MULTICAST,
+					0, NULL);
+		l_genl_msg_leave_nested(msg);
+	}
 
 	l_genl_msg_leave_nested(msg);
 

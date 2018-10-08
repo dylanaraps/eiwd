@@ -567,7 +567,8 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 		msg = nl80211_build_new_key_group(
 						netdev_get_ifindex(ap->netdev),
 						group_cipher, ap->gtk_index,
-						ap->gtk, gtk_len, NULL, 0);
+						ap->gtk, gtk_len, NULL,
+						0, NULL);
 
 		if (!l_genl_family_send(nl80211, msg, ap_gtk_op_cb, NULL,
 					NULL)) {
