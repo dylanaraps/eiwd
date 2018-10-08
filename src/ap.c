@@ -501,26 +501,6 @@ error:
 	ap_del_station(sta, MMPDU_REASON_CODE_UNSPECIFIED, true);
 }
 
-static struct l_genl_msg *ap_build_cmd_set_key(struct ap_state *ap)
-{
-	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
-	struct l_genl_msg *msg;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_SET_KEY, 128);
-
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
-	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY);
-	l_genl_msg_append_attr(msg, NL80211_KEY_IDX, 1, &ap->gtk_index);
-	l_genl_msg_append_attr(msg, NL80211_KEY_DEFAULT, 0, NULL);
-	l_genl_msg_enter_nested(msg, NL80211_KEY_DEFAULT_TYPES);
-	l_genl_msg_append_attr(msg, NL80211_KEY_DEFAULT_TYPE_MULTICAST,
-				0, NULL);
-	l_genl_msg_leave_nested(msg);
-	l_genl_msg_leave_nested(msg);
-
-	return msg;
-}
-
 static struct l_genl_msg *ap_build_cmd_del_key(struct ap_state *ap)
 {
 	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
@@ -532,19 +512,6 @@ static struct l_genl_msg *ap_build_cmd_del_key(struct ap_state *ap)
 	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY);
 	l_genl_msg_append_attr(msg, NL80211_KEY_IDX, 1, &ap->gtk_index);
 	l_genl_msg_leave_nested(msg);
-
-	return msg;
-}
-
-static struct l_genl_msg *ap_build_cmd_get_key(struct ap_state *ap)
-{
-	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
-	struct l_genl_msg *msg;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_GET_KEY, 128);
-
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &ap->gtk_index);
 
 	return msg;
 }
@@ -642,7 +609,8 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 			goto error;
 		}
 
-		msg = ap_build_cmd_set_key(ap);
+		msg = nl80211_build_set_key(netdev_get_ifindex(ap->netdev),
+						ap->gtk_index);
 		if (!l_genl_family_send(nl80211, msg, ap_gtk_op_cb, NULL,
 					NULL)) {
 			l_genl_msg_unref(msg);
@@ -660,7 +628,8 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 	if (ap->group_cipher == IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC)
 		ap_start_rsna(sta, NULL);
 	else {
-		msg = ap_build_cmd_get_key(ap);
+		msg = nl80211_build_get_key(netdev_get_ifindex(ap->netdev),
+					ap->gtk_index);
 		sta->gtk_query_cmd_id = l_genl_family_send(nl80211, msg,
 								ap_gtk_query_cb,
 								sta, NULL);
