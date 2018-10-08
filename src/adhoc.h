@@ -22,5 +22,5 @@
 
 struct device;
 
-bool adhoc_init(void);
+bool adhoc_init(struct l_genl_family *nl);
 void adhoc_exit(void);

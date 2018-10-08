@@ -159,6 +159,7 @@ static void nl80211_appeared(void *user_data)
 		l_error("Unable to init scan functionality");
 
 	ap_init(nl80211);
+	adhoc_init(nl80211);
 }
 
 static void nl80211_vanished(void *user_data)
@@ -166,6 +167,7 @@ static void nl80211_vanished(void *user_data)
 	l_debug("Lost nl80211 interface");
 
 	ap_exit();
+	adhoc_exit();
 	scan_exit();
 	wiphy_exit();
 }
@@ -477,7 +479,6 @@ int main(int argc, char *argv[])
 	if (!device_init())
 		goto fail_device;
 
-	adhoc_init();
 	station_init();
 	wsc_init();
 	network_init();
@@ -494,7 +495,6 @@ int main(int argc, char *argv[])
 	network_exit();
 	wsc_exit();
 	station_exit();
-	adhoc_exit();
 	device_exit();
 fail_device:
 	netdev_exit();

@@ -26,6 +26,8 @@
 
 #include <ell/ell.h>
 
+#include "linux/nl80211.h"
+
 #include "src/iwd.h"
 #include "src/device.h"
 #include "src/netdev.h"
@@ -38,6 +40,7 @@
 #include "src/mpdu.h"
 #include "src/adhoc.h"
 #include "src/dbus.h"
+#include "src/nl80211_util.h"
 
 struct adhoc_state {
 	struct netdev *netdev;
@@ -47,8 +50,13 @@ struct adhoc_state {
 	uint32_t sta_watch_id;
 	uint32_t netdev_watch_id;
 	struct l_dbus_message *pending;
+	uint32_t ciphers;
+	uint32_t group_cipher;
+	uint8_t gtk[CRYPTO_MAX_GTK_LEN];
+	uint8_t gtk_index;
 	bool started : 1;
 	bool open : 1;
+	bool gtk_set : 1;
 };
 
 struct sta_state {
@@ -58,10 +66,12 @@ struct sta_state {
 	struct handshake_state *hs_sta;
 	struct eapol_sm *sm_a;
 	struct handshake_state *hs_auth;
+	uint32_t gtk_query_cmd_id;
 
 	bool authenticated : 1;
 };
 
+static struct l_genl_family *nl80211 = NULL;
 static uint32_t netdev_watch;
 
 static void adhoc_sta_free(void *data)
@@ -70,6 +80,9 @@ static void adhoc_sta_free(void *data)
 
 	if (sta->adhoc->open)
 		goto end;
+
+	if (sta->gtk_query_cmd_id)
+		l_genl_family_cancel(nl80211, sta->gtk_query_cmd_id);
 
 	if (sta->sm)
 		eapol_sm_free(sta->sm);
@@ -92,6 +105,11 @@ static void adhoc_remove_sta(struct sta_state *sta)
 	if (!l_queue_remove(sta->adhoc->sta_states, sta)) {
 		l_error("station %p was not found", sta);
 		return;
+	}
+
+	if (sta->gtk_query_cmd_id) {
+		l_genl_family_cancel(nl80211, sta->gtk_query_cmd_id);
+		sta->gtk_query_cmd_id = 0;
 	}
 
 	/* signal station has been removed */
@@ -125,12 +143,10 @@ static void adhoc_reset(struct adhoc_state *adhoc)
 static void adhoc_set_rsn_info(struct adhoc_state *adhoc,
 						struct ie_rsn_info *rsn)
 {
-	struct wiphy *wiphy = netdev_get_wiphy(adhoc->netdev);
-
 	memset(rsn, 0, sizeof(*rsn));
 	rsn->akm_suites = IE_RSN_AKM_SUITE_PSK;
-	rsn->pairwise_ciphers = wiphy_select_cipher(wiphy, 0xffff);
-	rsn->group_cipher = IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC;
+	rsn->pairwise_ciphers = adhoc->ciphers;
+	rsn->group_cipher = adhoc->group_cipher;
 }
 
 static bool ap_sta_match_addr(const void *a, const void *b)
@@ -180,7 +196,8 @@ static void adhoc_handshake_event(struct handshake_state *hs,
 	}
 }
 
-static struct eapol_sm *adhoc_new_sm(struct sta_state *sta, bool authenticator)
+static struct eapol_sm *adhoc_new_sm(struct sta_state *sta, bool authenticator,
+					const uint8_t *gtk_rsc)
 {
 	struct adhoc_state *adhoc = sta->adhoc;
 	struct netdev *netdev = adhoc->netdev;
@@ -216,6 +233,10 @@ static struct eapol_sm *adhoc_new_sm(struct sta_state *sta, bool authenticator)
 		handshake_state_set_supplicant_address(hs, own_addr);
 	}
 
+	if (gtk_rsc)
+		handshake_state_set_gtk(hs, adhoc->gtk, adhoc->gtk_index,
+					gtk_rsc);
+
 	sm = eapol_sm_new(hs);
 	if (!sm) {
 		l_error("could not create sm object");
@@ -239,14 +260,118 @@ static void adhoc_free(struct adhoc_state *adhoc)
 	l_free(adhoc);
 }
 
+static void adhoc_start_rsna(struct sta_state *sta, const uint8_t *gtk_rsc)
+{
+	sta->sm_a = adhoc_new_sm(sta, true, gtk_rsc);
+	if (!sta->sm_a) {
+		l_error("could not create authenticator state machine");
+		goto failed;
+	}
+
+	sta->sm = adhoc_new_sm(sta, false, NULL);
+	if (!sta->sm) {
+		l_error("could not create station state machine");
+		goto failed;
+	}
+
+	eapol_register(sta->sm);
+	eapol_register(sta->sm_a);
+
+	eapol_start(sta->sm);
+
+	return;
+
+failed:
+	adhoc_remove_sta(sta);
+}
+
+static void adhoc_gtk_op_cb(struct l_genl_msg *msg, void *user_data)
+{
+	if (l_genl_msg_get_error(msg) < 0) {
+		uint8_t cmd = l_genl_msg_get_command(msg);
+		const char *cmd_name =
+			cmd == NL80211_CMD_NEW_KEY ? "NEW_KEY" : "SET_KEY";
+
+		l_error("%s failed for the GTK: %i",
+			cmd_name, l_genl_msg_get_error(msg));
+	}
+}
+
+static void adhoc_gtk_query_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct sta_state *sta = user_data;
+	const void *gtk_rsc;
+
+	sta->gtk_query_cmd_id = 0;
+
+	gtk_rsc = nl80211_parse_get_key_seq(msg);
+	if (!gtk_rsc)
+		goto error;
+
+	adhoc_start_rsna(sta, gtk_rsc);
+	return;
+
+error:
+	adhoc_remove_sta(sta);
+}
+
 static void adhoc_new_station(struct adhoc_state *adhoc, const uint8_t *mac)
 {
 	struct sta_state *sta;
+	struct l_genl_msg *msg;
 
 	sta = l_queue_find(adhoc->sta_states, ap_sta_match_addr, mac);
 	if (sta) {
 		l_warn("new station event with already connected STA");
 		return;
+	}
+
+	/*
+	 * Follows same logic as AP. If this is the first station we create and
+	 * set a group key. Any subsequent connections will use GET_KEY for this
+	 * tx GTK.
+	 */
+	if (adhoc->group_cipher != IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC &&
+			!adhoc->gtk_set && !adhoc->open) {
+		enum crypto_cipher group_cipher =
+			ie_rsn_cipher_suite_to_cipher(adhoc->group_cipher);
+		int gtk_len = crypto_cipher_key_len(group_cipher);
+
+		/*
+		 * Generate our GTK.  Not following the example derivation
+		 * method in 802.11-2016 section 12.7.1.4 because a simple
+		 * l_getrandom is just as good.
+		 */
+		l_getrandom(adhoc->gtk, gtk_len);
+		adhoc->gtk_index = 1;
+
+		msg = nl80211_build_new_key_group(
+					netdev_get_ifindex(adhoc->netdev),
+					group_cipher, adhoc->gtk_index,
+					adhoc->gtk, gtk_len, NULL,
+					0, NULL);
+
+		if (!l_genl_family_send(nl80211, msg, adhoc_gtk_op_cb, NULL,
+					NULL)) {
+			l_genl_msg_unref(msg);
+			l_error("Issuing NEW_KEY failed");
+			return;
+		}
+
+		msg = nl80211_build_set_key(netdev_get_ifindex(adhoc->netdev),
+						adhoc->gtk_index);
+		if (!l_genl_family_send(nl80211, msg, adhoc_gtk_op_cb, NULL,
+					NULL)) {
+			l_genl_msg_unref(msg);
+			l_error("Issuing SET_KEY failed");
+			return;
+		}
+
+		/*
+		 * Set the flag now because any new associating STA will
+		 * just use NL80211_CMD_GET_KEY from now.
+		 */
+		adhoc->gtk_set = true;
 	}
 
 	sta = l_new(struct sta_state, 1);
@@ -269,27 +394,22 @@ static void adhoc_new_station(struct adhoc_state *adhoc, const uint8_t *mac)
 		return;
 	}
 
-	sta->sm_a = adhoc_new_sm(sta, true);
-	if (!sta->sm_a) {
-		l_error("could not create authenticator state machine");
-		goto failed;
+	if (adhoc->group_cipher == IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC)
+		adhoc_start_rsna(sta, NULL);
+	else {
+		msg = nl80211_build_get_key(netdev_get_ifindex(adhoc->netdev),
+					adhoc->gtk_index);
+		sta->gtk_query_cmd_id = l_genl_family_send(nl80211, msg,
+							adhoc_gtk_query_cb,
+							sta, NULL);
+		if (!sta->gtk_query_cmd_id) {
+			l_genl_msg_unref(msg);
+			l_error("Issuing GET_KEY failed");
+
+			adhoc_remove_sta(sta);
+			return;
+		}
 	}
-
-	sta->sm = adhoc_new_sm(sta, false);
-	if (!sta->sm) {
-		l_error("could not create station state machine");
-		goto failed;
-	}
-
-	eapol_register(sta->sm);
-	eapol_register(sta->sm_a);
-
-	eapol_start(sta->sm);
-
-	return;
-
-failed:
-	adhoc_remove_sta(sta);
 }
 
 static void adhoc_del_station(struct adhoc_state *adhoc, const uint8_t *mac)
@@ -363,11 +483,10 @@ static struct l_dbus_message *adhoc_dbus_start(struct l_dbus *dbus,
 	adhoc->ssid = l_strdup(ssid);
 	adhoc->pending = l_dbus_message_ref(message);
 	adhoc->sta_states = l_queue_new();
+	adhoc->ciphers = wiphy_select_cipher(wiphy, 0xffff);
+	adhoc->group_cipher = wiphy_select_cipher(wiphy, 0xffff);
 
-	memset(&rsn, 0, sizeof(rsn));
-	rsn.akm_suites = IE_RSN_AKM_SUITE_PSK;
-	rsn.pairwise_ciphers = wiphy_select_cipher(wiphy, 0xffff);
-	rsn.group_cipher = IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC;
+	adhoc_set_rsn_info(adhoc, &rsn);
 	ie_build_rsne(&rsn, ie_elems);
 
 	rsn_ie.iov_base = ie_elems;
@@ -556,11 +675,14 @@ static void adhoc_netdev_watch(struct netdev *netdev,
 	}
 }
 
-bool adhoc_init(void)
+bool adhoc_init(struct l_genl_family *nl)
 {
 	netdev_watch = netdev_watch_add(adhoc_netdev_watch, NULL, NULL);
 	l_dbus_register_interface(dbus_get_bus(), IWD_ADHOC_INTERFACE,
 			adhoc_setup_interface, adhoc_destroy_interface, false);
+
+	nl80211 = nl;
+
 	return true;
 }
 
