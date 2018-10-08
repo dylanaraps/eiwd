@@ -1,0 +1,37 @@
+/*
+ *
+ *  Wireless daemon for Linux
+ *
+ *  Copyright (C) 2018 Intel Corporation. All rights reserved.
+ *
+ *  This library is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU Lesser General Public
+ *  License as published by the Free Software Foundation; either
+ *  version 2.1 of the License, or (at your option) any later version.
+ *
+ *  This library is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *  Lesser General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this library; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ *
+ */
+
+#include <ell/ell.h>
+
+struct l_genl_msg *nl80211_build_new_key_group(uint32_t ifindex,
+					uint32_t cipher, uint8_t key_id,
+					const uint8_t *key, size_t key_len,
+					const uint8_t *ctr, size_t ctr_len);
+
+struct l_genl_msg *nl80211_build_set_station_authorized(uint32_t ifindex,
+							const uint8_t *addr);
+
+struct l_genl_msg *nl80211_build_set_station_associated(uint32_t ifindex,
+							const uint8_t *addr);
+
+struct l_genl_msg *nl80211_build_set_station_unauthorized(uint32_t ifindex,
+							const uint8_t *addr);

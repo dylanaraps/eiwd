@@ -44,6 +44,7 @@
 #include "src/handshake.h"
 #include "src/ap.h"
 #include "src/dbus.h"
+#include "src/nl80211_util.h"
 
 struct ap_state {
 	struct netdev *netdev;
@@ -220,20 +221,13 @@ static void ap_drop_rsna(struct sta_state *sta)
 {
 	struct l_genl_msg *msg;
 	uint32_t ifindex = netdev_get_ifindex(sta->ap->netdev);
-	struct nl80211_sta_flag_update flags = {
-		.mask = (1 << NL80211_STA_FLAG_AUTHORIZED) |
-			(1 << NL80211_STA_FLAG_MFP),
-		.set = 0,
-	};
 	uint8_t key_id = 0;
 
 	sta->rsna = false;
 
-	msg = l_genl_msg_new_sized(NL80211_CMD_SET_STATION, 128);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
+	msg = nl80211_build_set_station_unauthorized(ifindex, sta->addr);
+
 	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_AID, 2, &sta->aid);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_FLAGS2, 8, &flags);
 
 	if (!l_genl_family_send(nl80211, msg, ap_set_sta_cb, NULL, NULL)) {
 		l_genl_msg_unref(msg);
@@ -507,24 +501,6 @@ error:
 	ap_del_station(sta, MMPDU_REASON_CODE_UNSPECIFIED, true);
 }
 
-static struct l_genl_msg *ap_build_cmd_new_key(struct ap_state *ap,
-						uint32_t cipher, size_t key_len)
-{
-	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
-	struct l_genl_msg *msg;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_NEW_KEY, 128);
-
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
-	l_genl_msg_enter_nested(msg, NL80211_ATTR_KEY);
-	l_genl_msg_append_attr(msg, NL80211_KEY_IDX, 1, &ap->gtk_index);
-	l_genl_msg_append_attr(msg, NL80211_KEY_DATA, key_len, ap->gtk);
-	l_genl_msg_append_attr(msg, NL80211_KEY_CIPHER, 4, &cipher);
-	l_genl_msg_leave_nested(msg);
-
-	return msg;
-}
-
 static struct l_genl_msg *ap_build_cmd_set_key(struct ap_state *ap)
 {
 	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
@@ -569,6 +545,32 @@ static struct l_genl_msg *ap_build_cmd_get_key(struct ap_state *ap)
 
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &ap->gtk_index);
+
+	return msg;
+}
+
+static struct l_genl_msg *ap_build_cmd_new_station(struct sta_state *sta)
+{
+	struct l_genl_msg *msg;
+	uint32_t ifindex = netdev_get_ifindex(sta->ap->netdev);
+	/*
+	 * This should hopefully work both with and without
+	 * NL80211_FEATURE_FULL_AP_CLIENT_STATE.
+	 */
+	struct nl80211_sta_flag_update flags = {
+		.mask = (1 << NL80211_STA_FLAG_AUTHENTICATED) |
+			(1 << NL80211_STA_FLAG_ASSOCIATED) |
+			(1 << NL80211_STA_FLAG_AUTHORIZED) |
+			(1 << NL80211_STA_FLAG_MFP),
+		.set = (1 << NL80211_STA_FLAG_AUTHENTICATED) |
+			(1 << NL80211_STA_FLAG_ASSOCIATED),
+	};
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_NEW_STATION, 300);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_FLAGS2, 8, &flags);
 
 	return msg;
 }
@@ -628,7 +630,11 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 		l_getrandom(ap->gtk, gtk_len);
 		ap->gtk_index = 1;
 
-		msg = ap_build_cmd_new_key(ap, group_cipher, gtk_len);
+		msg = nl80211_build_new_key_group(
+						netdev_get_ifindex(ap->netdev),
+						group_cipher, ap->gtk_index,
+						ap->gtk, gtk_len, NULL, 0);
+
 		if (!l_genl_family_send(nl80211, msg, ap_gtk_op_cb, NULL,
 					NULL)) {
 			l_genl_msg_unref(msg);
@@ -675,25 +681,15 @@ static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
 {
 	struct l_genl_msg *msg;
 	uint32_t ifindex = netdev_get_ifindex(ap->netdev);
-	/*
-	 * This should hopefully work both with and without
-	 * NL80211_FEATURE_FULL_AP_CLIENT_STATE.
-	 */
-	struct nl80211_sta_flag_update flags = {
-		.mask = (1 << NL80211_STA_FLAG_AUTHENTICATED) |
-			(1 << NL80211_STA_FLAG_ASSOCIATED) |
-			(1 << NL80211_STA_FLAG_AUTHORIZED) |
-			(1 << NL80211_STA_FLAG_MFP),
-		.set = (1 << NL80211_STA_FLAG_AUTHENTICATED) |
-			(1 << NL80211_STA_FLAG_ASSOCIATED),
-	};
+
 	uint8_t rates[256];
 	uint32_t r, minr, maxr, count = 0;
 	uint16_t capability = l_get_le16(&sta->capability);
-	uint8_t cmd = NL80211_CMD_NEW_STATION;
 
 	if (sta->associated)
-		cmd = NL80211_CMD_SET_STATION;
+		msg = nl80211_build_set_station_associated(ifindex, sta->addr);
+	else
+		msg = ap_build_cmd_new_station(sta);
 
 	sta->associated = true;
 	sta->rsna = false;
@@ -705,11 +701,7 @@ static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
 		if (l_uintset_contains(sta->rates, r))
 			rates[count++] = r;
 
-	msg = l_genl_msg_new_sized(cmd, 300);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_AID, 2, &sta->aid);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_FLAGS2, 8, &flags);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_SUPPORTED_RATES,
 				count, &rates);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_LISTEN_INTERVAL, 2,
@@ -719,7 +711,7 @@ static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
 
 	if (!l_genl_family_send(nl80211, msg, ap_associate_sta_cb, sta, NULL)) {
 		l_genl_msg_unref(msg);
-		if (cmd == NL80211_CMD_NEW_STATION)
+		if (l_genl_msg_get_command(msg) == NL80211_CMD_NEW_STATION)
 			l_error("Issuing NEW_STATION failed");
 		else
 			l_error("Issuing SET_STATION failed");

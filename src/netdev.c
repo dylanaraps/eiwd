@@ -56,6 +56,7 @@
 #include "src/util.h"
 #include "src/watchlist.h"
 #include "src/sae.h"
+#include "src/nl80211_util.h"
 
 #ifndef ENOTSUPP
 #define ENOTSUPP 524
@@ -1071,25 +1072,6 @@ done:
 	netdev_connect_ok(netdev);
 }
 
-static struct l_genl_msg *netdev_build_cmd_set_station(struct netdev *netdev,
-							const uint8_t *sta)
-{
-	struct l_genl_msg *msg;
-	struct nl80211_sta_flag_update flags;
-
-	flags.mask = 1 << NL80211_STA_FLAG_AUTHORIZED;
-	flags.set = flags.mask;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_SET_STATION, 512);
-
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, sta);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_FLAGS2,
-				sizeof(struct nl80211_sta_flag_update), &flags);
-
-	return msg;
-}
-
 static void netdev_new_group_key_cb(struct l_genl_msg *msg, void *data)
 {
 	struct netdev_handshake_state *nhs = data;
@@ -1117,24 +1099,6 @@ static void netdev_new_group_management_key_cb(struct l_genl_msg *msg,
 				netdev->index);
 		netdev_setting_keys_failed(nhs, MMPDU_REASON_CODE_UNSPECIFIED);
 	}
-}
-
-static struct l_genl_msg *netdev_build_cmd_new_key_group(struct netdev *netdev,
-					uint32_t cipher, uint8_t key_id,
-					const uint8_t *key, size_t key_len,
-					const uint8_t *ctr, size_t ctr_len)
-{
-	struct l_genl_msg *msg;
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_NEW_KEY, 512);
-
-	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_DATA, key_len, key);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_CIPHER, 4, &cipher);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_SEQ, ctr_len, ctr);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-
-	return msg;
 }
 
 static bool netdev_copy_tk(uint8_t *tk_buf, const uint8_t *tk,
@@ -1219,9 +1183,9 @@ static void netdev_set_gtk(struct handshake_state *hs, uint8_t key_index,
 		return;
 	}
 
-	msg = netdev_build_cmd_new_key_group(netdev, cipher, key_index,
-						gtk_buf, gtk_len,
-						rsc, rsc_len);
+	msg = nl80211_build_new_key_group(netdev->index, cipher, key_index,
+					gtk_buf, gtk_len, rsc, rsc_len);
+
 	nhs->group_new_key_cmd_id =
 		l_genl_family_send(nl80211, msg, netdev_new_group_key_cb,
 						nhs, NULL);
@@ -1264,9 +1228,9 @@ static void netdev_set_igtk(struct handshake_state *hs, uint8_t key_index,
 		return;
 	}
 
-	msg = netdev_build_cmd_new_key_group(netdev, cipher, key_index,
-						igtk_buf, igtk_len,
-						ipn, ipn_len);
+	msg = nl80211_build_new_key_group(netdev->index, cipher, key_index,
+					igtk_buf, igtk_len, ipn, ipn_len);
+
 	nhs->group_management_new_key_cmd_id =
 			l_genl_family_send(nl80211, msg,
 				netdev_new_group_management_key_cb,
@@ -1298,7 +1262,7 @@ static void netdev_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 	 * we're already operational, it will not hurt during re-keying
 	 * and is necessary after an FT.
 	 */
-	msg = netdev_build_cmd_set_station(netdev, addr);
+	msg = nl80211_build_set_station_authorized(netdev->index, addr);
 
 	nhs->set_station_cmd_id =
 		l_genl_family_send(nl80211, msg, netdev_set_station_cb,
