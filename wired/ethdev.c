@@ -347,11 +347,31 @@ static char *read_devtype_from_uevent(const char *ifname)
 	return devtype;
 }
 
+static int modify_membership(struct ethdev *dev, int optname)
+{
+	struct packet_mreq mreq;
+	int fd;
+
+	fd = l_io_get_fd(pae_io);
+	if (fd < 0)
+		return -1;
+
+	memset(&mreq, 0, sizeof(mreq));
+	mreq.mr_ifindex = dev->index;
+	mreq.mr_type = PACKET_MR_MULTICAST;
+	mreq.mr_alen = ETH_ALEN;
+	memcpy(mreq.mr_address, pae_group_addr, ETH_ALEN);
+
+	return setsockopt(fd, SOL_PACKET, optname, &mreq, sizeof(mreq));
+}
+
 static void ethdev_free(void *data)
 {
 	struct ethdev *dev = data;
 
 	l_debug("Freeing device %s", dev->ifname);
+
+	modify_membership(dev, PACKET_DROP_MEMBERSHIP);
 
 	l_queue_destroy(dev->eapol_sessions, eapol_free);
 
@@ -467,6 +487,8 @@ static void newlink_notify(const struct ifinfomsg *ifi, int bytes)
 								dev->index);
 
 		l_debug("Creating device %u", dev->index);
+
+		modify_membership(dev, PACKET_ADD_MEMBERSHIP);
 
 		l_dbus_object_add_interface(dbus_app_get(), dev->path,
 						ADAPTER_INTERFACE, dev);
