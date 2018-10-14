@@ -65,7 +65,6 @@ struct ethdev {
 struct eapol {
 	struct ethdev *dev;
 	uint8_t addr[ETH_ALEN];
-	bool use_group_addr;
 	struct eap_state *eap;
 	struct l_settings *cred;
 };
@@ -154,10 +153,11 @@ static void eap_tx_packet(const uint8_t *eap_data, size_t len, void *user_data)
 	l_put_be16(len, frame + 2);
 	memcpy(frame + 4, eap_data, len);
 
-	if (eapol->use_group_addr)
-		pae_write(eapol->dev, pae_group_addr, frame, len + 4);
-	else
-		pae_write(eapol->dev, eapol->addr, frame, len + 4);
+	/*
+	 * The supplicant / client always uses the PAE group address for
+	 * sending the EAP packets.
+	 */
+	pae_write(eapol->dev, pae_group_addr, frame, len + 4);
 }
 
 static void eap_complete(enum eap_result result, void *user_data)
@@ -203,7 +203,6 @@ static void rx_packet(struct ethdev *dev, const uint8_t *addr,
 			eapol = l_new(struct eapol, 1);
 			eapol->dev = dev;
 			memcpy(eapol->addr, addr, ETH_ALEN);
-			eapol->use_group_addr = true;
 			eapol->eap = eap_new(eap_tx_packet,
 							eap_complete, eapol);
 			if (!eapol->eap) {
