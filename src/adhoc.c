@@ -40,7 +40,7 @@
 #include "src/mpdu.h"
 #include "src/adhoc.h"
 #include "src/dbus.h"
-#include "src/nl80211_util.h"
+#include "src/nl80211util.h"
 
 struct adhoc_state {
 	struct netdev *netdev;

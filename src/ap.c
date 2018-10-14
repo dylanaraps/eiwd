@@ -44,7 +44,7 @@
 #include "src/handshake.h"
 #include "src/ap.h"
 #include "src/dbus.h"
-#include "src/nl80211_util.h"
+#include "src/nl80211util.h"
 
 struct ap_state {
 	struct netdev *netdev;

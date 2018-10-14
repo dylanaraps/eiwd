@@ -56,7 +56,7 @@
 #include "src/util.h"
 #include "src/watchlist.h"
 #include "src/sae.h"
-#include "src/nl80211_util.h"
+#include "src/nl80211util.h"
 
 #ifndef ENOTSUPP
 #define ENOTSUPP 524

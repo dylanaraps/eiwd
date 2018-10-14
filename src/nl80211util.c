@@ -25,7 +25,7 @@
 
 #include "linux/nl80211.h"
 
-#include "nl80211_util.h"
+#include "src/nl80211util.h"
 
 struct l_genl_msg *nl80211_build_new_key_group(uint32_t ifindex, uint32_t cipher,
 					uint8_t key_id, const uint8_t *key,
