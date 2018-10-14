@@ -416,7 +416,7 @@ static bool eap_ttls_phase2_non_eap_load_settings(struct phase2_method *phase2,
 						const char *prefix)
 {
 	struct phase2_credentials *credentials;
-	char setting[64];
+	char setting[72];
 
 	credentials = l_new(struct phase2_credentials, 1);
 
@@ -1026,8 +1026,8 @@ static int eap_ttls_check_tunneled_auth_settings(struct l_settings *settings,
 						struct l_queue **out_missing)
 {
 	const struct eap_secret_info *secret;
-	char identity_key[64];
-	char password_key[64];
+	char identity_key[72];
+	char password_key[72];
 
 	L_AUTO_FREE_VAR(char *, identity);
 	L_AUTO_FREE_VAR(char *, password) = NULL;
