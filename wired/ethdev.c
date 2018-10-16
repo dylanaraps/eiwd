@@ -257,6 +257,9 @@ static bool pae_read(struct l_io *io, void *user_data)
 		return false;
 	}
 
+	if (sll.sll_hatype != ARPHRD_ETHER)
+		return true;
+
 	if (sll.sll_halen != ETH_ALEN)
 		return true;
 
