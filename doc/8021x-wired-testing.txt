@@ -34,7 +34,7 @@ Using hostapd (the authenticator) and following hostapd.conf file:
 	interface=veth0
 	driver=wired
 	ieee8021x=1
-	eapol_key_index_workaround=0
+	use_pae_group_addr=1
 	eap_server=1
 	eap_user_file=hostapd.eap_user # replace with the right path
 	ca_cert=newcertca.crt # replace with your CA certificate path
