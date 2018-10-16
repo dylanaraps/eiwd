@@ -9,7 +9,7 @@ traffic on these interfaces and use protocols other than IP.
 To create a virtual ethernet pipe with one end called veth0 and the other
 called veth1, use the following command:
 
-	ip link add veth0 type veth peer name veth1
+	sudo ip link add veth0 type veth peer name veth1
 
 The pair of interfaces are identical and act as a dumb pipe, there is no
 master or slave end. Deleting either end will cause both interfaces to be
@@ -18,8 +18,8 @@ when one side of the link is in the 'DOWN' state. if the other link is in
 the 'DOWN' state it will indicate 'NO-CARRIER' until the other end is
 brought up:
 
-	ip link set veth0 up
-	ip link set veth1 up
+	sudo ip link set veth0 up
+	sudo ip link set veth1 up
 
 
 Testing 802.1x on Virtual Ethernet Device
@@ -72,3 +72,29 @@ To run wpa_supplicant (add "-dd -K" for debugging):
 
 	sudo ./wpa_supplicant -iveth1 -c./wpa_supplicant.conf -Dwired
 
+
+Running Authenticator in a network namespace
+============================================
+
+In some cases it might be useful to run hostapd in a network namespace to
+provide real separation between the two network interfaces. First create
+the "hostap" named network namespace:
+
+	sudo ip netns add hostap
+
+Now move the network interface of hostapd into the "hostap" named network
+namespace:
+
+	sudo ip link set veth0 netns hostap
+
+Inside the "hostap" named network namespace the loopback interface needs
+to be brought up and also the network interface:
+
+	sudo ip netns exec hostap ip link set lo up
+	sudo ip netns exec hostap ip link set veth0 up
+
+Then execute hostapd inside the network namespace:
+
+	sudo ip netns exec hostap ./hostapd wired_hostapd.conf
+
+After that run wpa_supplicant as described above.
