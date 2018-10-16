@@ -185,14 +185,23 @@ static void rx_packet(struct ethdev *dev, const uint8_t *addr,
 {
 	const struct eapol_hdr *hdr = frame;
 	struct eapol *eapol;
+	uint16_t pkt_len;
 
 	if (len < 4) {
 		l_error("Too short EAPoL packet with %zu bytes", len);
 		return;
 	}
 
-	if (L_BE16_TO_CPU(hdr->pkt_len) != len - 4) {
-		l_error("Length mismatch with EAPoL packet");
+	pkt_len = L_BE16_TO_CPU(hdr->pkt_len);
+
+	/*
+	 * EAPoL packet frames might contain padding at the end and so just
+	 * ensure that at least packet body length worth of packet body is
+	 * actually present.
+	 */
+	if (len - 4 < pkt_len) {
+		l_error("Missing %zu bytes from EAPoL packet",
+							pkt_len - (len - 4));
 		return;
 	}
 
@@ -218,7 +227,7 @@ static void rx_packet(struct ethdev *dev, const uint8_t *addr,
 			eapol->cred = network_lookup_security("default");
 			eap_load_settings(eapol->eap, eapol->cred, "EAP-");
 		}
-		eap_rx_packet(eapol->eap, frame + 4, len - 4);
+		eap_rx_packet(eapol->eap, frame + 4, pkt_len);
 		break;
 	}
 }
