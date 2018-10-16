@@ -266,6 +266,10 @@ static bool pae_read(struct l_io *io, void *user_data)
 	if (ntohs(sll.sll_protocol) != ETH_P_PAE)
 		return true;
 
+	if (sll.sll_pkttype != PACKET_HOST &&
+					sll.sll_pkttype != PACKET_MULTICAST)
+		return true;
+
 	dev = ethdev_lookup(sll.sll_ifindex);
 	if (!dev)
 		return true;
