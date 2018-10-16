@@ -142,6 +142,8 @@ int dbus_app_run(const struct dbus_app *app, void *user_data,
 	l_dbus_destroy(dbus);
 	dbus = NULL;
 
+	l_main_exit();
+
 	if (destroy)
 		destroy(info->user_data);
 
