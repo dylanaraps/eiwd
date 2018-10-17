@@ -180,6 +180,20 @@ static void eap_complete(enum eap_result result, void *user_data)
 	eapol_free(eapol);
 }
 
+static void eap_key_material(const uint8_t *msk_data, size_t msk_len,
+				const uint8_t *emsk_data, size_t emsk_len,
+				const uint8_t *iv, size_t iv_len,
+				void *user_data)
+{
+	l_debug("EAP key material received");
+}
+
+static void eap_event(unsigned int event, const void *event_data,
+							void *user_data)
+{
+	l_debug("event %u", event);
+}
+
 static void rx_packet(struct ethdev *dev, const uint8_t *addr,
 					const void *frame, size_t len)
 {
@@ -226,6 +240,9 @@ static void rx_packet(struct ethdev *dev, const uint8_t *addr,
 
 			eapol->cred = network_lookup_security("default");
 			eap_load_settings(eapol->eap, eapol->cred, "EAP-");
+
+			eap_set_key_material_func(eapol->eap, eap_key_material);
+			eap_set_event_func(eapol->eap, eap_event);
 		}
 		eap_rx_packet(eapol->eap, frame + 4, pkt_len);
 		break;
