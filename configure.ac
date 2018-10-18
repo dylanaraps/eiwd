@@ -155,6 +155,28 @@ if (test "${enable_systemd_service}" != "no" && test -z "${path_systemd_unitdir}
 fi
 AC_SUBST(SYSTEMD_UNITDIR, [${path_systemd_unitdir}])
 
+AC_ARG_ENABLE([external_ell], AC_HELP_STRING([--enable-external-ell],
+				[enable external Embedded Linux library]),
+					[enable_external_ell=${enableval}])
+if (test "${enable_external_ell}" = "yes"); then
+	if (test "${enable_daemon}" != "no" ||
+			test "${enable_monitor}" != "no" ||
+			test "${enable_wired}" = "yes" ||
+			test "${enable_hwsim}" = "yes"); then
+		ell_min_version="0.12"
+	else if (test "${enable_client}" != "no"); then
+		ell_min_version="0.8"
+	else
+		ell_min_version="0.5"
+	fi
+	fi
+	PKG_CHECK_MODULES(ELL, ell >= ${ell_min_version}, dummy=yes,
+		AC_MSG_ERROR(Embedded Linux library >= 0.12 is required))
+	AC_SUBST(ELL_CFLAGS)
+	AC_SUBST(ELL_LIBS)
+fi
+AM_CONDITIONAL(EXTERNAL_ELL, test "${enable_external_ell}" = "yes")
+
 AC_ARG_ENABLE([sim_hardcoded], AC_HELP_STRING([--enable-sim-hardcoded],
 				[enable hard coded SIM keys]),
 					[enable_sim_hardcoded=${enableval}])

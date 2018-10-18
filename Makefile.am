@@ -6,6 +6,17 @@ ACLOCAL_AMFLAGS = -I build-aux
 builtin_modules =
 builtin_sources =
 
+if EXTERNAL_ELL
+ell_cflags = @ELL_CFLAGS@
+ell_ldadd = @ELL_LIBS@
+ell_dependencies =
+ell_built_sources =
+else
+ell_cflags =
+ell_ldadd = ell/libell-internal.la
+ell_dependencies = $(ell_ldadd)
+ell_built_sources = ell/internal
+
 noinst_LTLIBRARIES = ell/libell-internal.la
 
 ell_sources = ell/ell.h ell/private.h ell/missing.h \
@@ -63,6 +74,7 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/fswatch.h ell/fswatch.c
 
 ell_libell_internal_la_SOURCES = $(ell_sources)
+endif
 
 bin_PROGRAMS =
 libexec_PROGRAMS =
@@ -133,8 +145,8 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h \
 					src/nl80211util.h src/nl80211util.c \
 					$(eap_sources) \
 					$(builtin_sources)
-src_iwd_LDADD = ell/libell-internal.la -ldl
-src_iwd_DEPENDENCIES = ell/libell-internal.la
+src_iwd_LDADD = $(ell_ldadd) -ldl
+src_iwd_DEPENDENCIES = $(ell_dependencies)
 
 if SIM_HARDCODED
 builtin_modules += sim_hardcoded
@@ -175,7 +187,7 @@ client_iwctl_SOURCES = client/main.c \
 			client/network.h client/network.c \
 			client/properties.h client/properties.c \
 			client/wsc.c client/station.c
-client_iwctl_LDADD = ell/libell-internal.la -lreadline
+client_iwctl_LDADD = $(ell_ldadd) -lreadline
 endif
 
 if MONITOR
@@ -193,7 +205,7 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					src/watchlist.h src/watchlist.c \
 					src/eapolutil.h src/eapolutil.c \
 					src/handshake.h src/handshake.c
-monitor_iwmon_LDADD = ell/libell-internal.la
+monitor_iwmon_LDADD = $(ell_ldadd)
 endif
 
 if WIRED
@@ -202,8 +214,8 @@ libexec_PROGRAMS += wired/ead
 wired_ead_SOURCES = wired/main.c wired/ethdev.h wired/ethdev.c \
 				wired/network.h wired/network.c \
 				wired/dbus.h wired/dbus.c $(eap_sources)
-wired_ead_LDADD = ell/libell-internal.la
-wired_ead_DEPENDENCIES = ell/libell-internal.la
+wired_ead_LDADD = $(ell_ldadd)
+wired_ead_DEPENDENCIES = $(ell_dependencies)
 
 if DBUS_POLICY
 dist_dbus_data_DATA += wired/ead-dbus.conf
@@ -224,7 +236,7 @@ tools_hwsim_SOURCES = tools/hwsim.c src/mpdu.h \
 					src/util.h src/util.c \
 					src/storage.h src/storage.c \
 					src/common.h src/common.c
-tools_hwsim_LDADD = ell/libell-internal.la
+tools_hwsim_LDADD = $(ell_ldadd)
 
 if DBUS_POLICY
 dist_dbus_data_DATA += tools/hwsim-dbus.conf
@@ -235,7 +247,7 @@ if TOOLS
 noinst_PROGRAMS += tools/test-runner
 
 tools_test_runner_SOURCES = tools/test-runner.c
-tools_test_runner_LDADD = ell/libell-internal.la
+tools_test_runner_LDADD = $(ell_ldadd)
 endif
 
 unit_tests = unit/test-cmac-aes \
@@ -269,48 +281,48 @@ unit_test_eap_sim_SOURCES = unit/test-eap-sim.c \
 		src/simauth.h src/simauth.c \
 		src/eap-sim.c
 
-unit_test_eap_sim_LDADD = ell/libell-internal.la
+unit_test_eap_sim_LDADD = $(ell_ldadd)
 
 unit_test_cmac_aes_SOURCES = unit/test-cmac-aes.c \
 					src/crypto.h src/crypto.c
-unit_test_cmac_aes_LDADD = ell/libell-internal.la
+unit_test_cmac_aes_LDADD = $(ell_ldadd)
 
 unit_test_arc4_SOURCES = unit/test-arc4.c \
 					src/crypto.h src/crypto.c
 
-unit_test_arc4_LDADD = ell/libell-internal.la
+unit_test_arc4_LDADD = $(ell_ldadd)
 
 unit_test_hmac_md5_SOURCES = unit/test-hmac-md5.c \
 					src/crypto.h src/crypto.c
-unit_test_hmac_md5_LDADD = ell/libell-internal.la
+unit_test_hmac_md5_LDADD = $(ell_ldadd)
 
 unit_test_hmac_sha1_SOURCES = unit/test-hmac-sha1.c \
 					src/crypto.h src/crypto.c
-unit_test_hmac_sha1_LDADD = ell/libell-internal.la
+unit_test_hmac_sha1_LDADD = $(ell_ldadd)
 
 unit_test_hmac_sha256_SOURCES = unit/test-hmac-sha256.c \
 					src/crypto.h src/crypto.c
-unit_test_hmac_sha256_LDADD = ell/libell-internal.la
+unit_test_hmac_sha256_LDADD = $(ell_ldadd)
 
 unit_test_prf_sha1_SOURCES = unit/test-prf-sha1.c \
 					src/crypto.h src/crypto.c
-unit_test_prf_sha1_LDADD = ell/libell-internal.la
+unit_test_prf_sha1_LDADD = $(ell_ldadd)
 
 unit_test_kdf_sha256_SOURCES = unit/test-kdf-sha256.c \
 					src/crypto.h src/crypto.c
-unit_test_kdf_sha256_LDADD = ell/libell-internal.la
+unit_test_kdf_sha256_LDADD = $(ell_ldadd)
 
 unit_test_ie_SOURCES = unit/test-ie.c src/ie.h src/ie.c
-unit_test_ie_LDADD = ell/libell-internal.la
+unit_test_ie_LDADD = $(ell_ldadd)
 
 unit_test_crypto_SOURCES = unit/test-crypto.c \
 				src/crypto.h src/crypto.c
-unit_test_crypto_LDADD = ell/libell-internal.la
+unit_test_crypto_LDADD = $(ell_ldadd)
 
 unit_test_mpdu_SOURCES = unit/test-mpdu.c \
 				src/mpdu.h src/mpdu.c \
 				src/ie.h src/ie.c
-unit_test_mpdu_LDADD = ell/libell-internal.la
+unit_test_mpdu_LDADD = $(ell_ldadd)
 
 unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/crypto.h src/crypto.c \
@@ -323,15 +335,15 @@ unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/eap-tls.c src/eap-ttls.c \
 				src/eap-md5.c src/util.c \
 				src/eap-tls-common.h src/eap-tls-common.c
-unit_test_eapol_LDADD = ell/libell-internal.la
+unit_test_eapol_LDADD = $(ell_ldadd)
 
 unit_test_ssid_to_utf8_SOURCES = src/util.h src/util.c \
 				unit/test-ssid-to-utf8.c
-unit_test_ssid_to_utf8_LDADD = ell/libell-internal.la
+unit_test_ssid_to_utf8_LDADD = $(ell_ldadd)
 
 unit_test_ssid_security_SOURCES = unit/test-ssid-security.c src/ie.h src/ie.c \
 				src/common.h src/common.c
-unit_test_ssid_security_LDADD = ell/libell-internal.la
+unit_test_ssid_security_LDADD = $(ell_ldadd)
 
 unit_test_wsc_SOURCES = unit/test-wsc.c src/wscutil.h src/wscutil.c \
 				src/crypto.h src/crypto.c \
@@ -343,13 +355,12 @@ unit_test_wsc_SOURCES = unit/test-wsc.c src/wscutil.h src/wscutil.c \
 				src/eap.h src/eap.c src/eap-private.h \
 				src/util.h src/util.c \
 				src/eap-wsc.h src/eap-wsc.c
-unit_test_wsc_LDADD = ell/libell-internal.la
+unit_test_wsc_LDADD = $(ell_ldadd)
 
 unit_test_eap_mschapv2_SOURCES = src/eap-mschapv2.h src/eap-mschapv2.c \
 				src/eap.c src/eap.h src/eap-private.h \
 				unit/test-eap-mschapv2.c
-
-unit_test_eap_mschapv2_LDADD = ell/libell-internal.la
+unit_test_eap_mschapv2_LDADD = $(ell_ldadd)
 
 unit_test_client_SOURCES = unit/test-client.c \
 				client/adapter.c \
@@ -360,10 +371,10 @@ unit_test_client_SOURCES = unit/test-client.c \
 				client/display.h client/display.c \
 				client/network.h client/network.c \
 				client/properties.h client/properties.c
-unit_test_client_LDADD = ell/libell-internal.la -lreadline
+unit_test_client_LDADD = $(ell_ldadd) -lreadline
 
 unit_test_ecc_SOURCES = unit/test-ecc.c src/ecc.c src/ecc.h
-unit_test_ecc_LDADD = ell/libell-internal.la
+unit_test_ecc_LDADD = $(ell_ldadd)
 
 unit_test_sae_SOURCES = unit/test-sae.c \
 				src/sae.h src/sae.c \
@@ -372,7 +383,7 @@ unit_test_sae_SOURCES = unit/test-sae.c \
 				src/handshake.h src/handshake.c \
 				src/util.h src/util.c \
 				src/ecc.h src/ecc.c
-unit_test_sae_LDADD = ell/libell-internal.la
+unit_test_sae_LDADD = $(ell_ldadd)
 
 TESTS = $(unit_tests)
 
@@ -386,7 +397,7 @@ EXTRA_DIST = src/genbuiltin src/iwd.service.in src/net.connman.iwd.service \
 			wired/ead.service.in wired/net.connman.ead.service \
 			doc/main.conf $(manual_pages:.1=.txt)
 
-AM_CFLAGS = -fvisibility=hidden
+AM_CFLAGS = $(ell_cflags) -fvisibility=hidden
 
 CLEANFILES = src/iwd.service wired/ead.service
 
@@ -401,7 +412,7 @@ DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests) $(manual_pages)
 
 MAINTAINERCLEANFILES = Makefile.in configure config.h.in aclocal.m4
 
-BUILT_SOURCES = ell/internal src/builtin.h
+BUILT_SOURCES = $(ell_built_sources) src/builtin.h
 
 ell/internal: Makefile
 	$(AM_V_at)$(MKDIR_P) ell
