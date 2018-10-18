@@ -155,27 +155,27 @@ if (test "${enable_systemd_service}" != "no" && test -z "${path_systemd_unitdir}
 fi
 AC_SUBST(SYSTEMD_UNITDIR, [${path_systemd_unitdir}])
 
-AC_ARG_ENABLE(sim_hardcoded, AC_HELP_STRING([--enable-sim-hardcoded],
+AC_ARG_ENABLE([sim_hardcoded], AC_HELP_STRING([--enable-sim-hardcoded],
 				[enable hard coded SIM keys]),
 					[enable_sim_hardcoded=${enableval}])
 AM_CONDITIONAL(SIM_HARDCODED, test "${enable_sim_hardcoded}" = "yes")
 
-AC_ARG_ENABLE(ofono, AC_HELP_STRING([--enable-ofono],
+AC_ARG_ENABLE([ofono], AC_HELP_STRING([--enable-ofono],
 				[enable oFono SIM authentication support]),
 					[enable_ofono=${enableval}])
 AM_CONDITIONAL(OFONO, test "${enable_ofono}" = "yes")
 
-AC_ARG_ENABLE(wired, AC_HELP_STRING([--enable-wired],
+AC_ARG_ENABLE([wired], AC_HELP_STRING([--enable-wired],
 				[enable Ethernet authentication support]),
 					[enable_wired=${enableval}])
 AM_CONDITIONAL(WIRED, test "${enable_wired}" = "yes")
 
-AC_ARG_ENABLE(hwsim, AC_HELP_STRING([--enable-hwsim],
+AC_ARG_ENABLE([hwsim], AC_HELP_STRING([--enable-hwsim],
 				[enable Wireless simulation utility]),
 					[enable_hwsim=${enableval}])
 AM_CONDITIONAL(HWSIM, test "${enable_hwsim}" = "yes")
 
-AC_ARG_ENABLE(tools, AC_HELP_STRING([--enable-tools],
+AC_ARG_ENABLE([tools], AC_HELP_STRING([--enable-tools],
 				[enable internal testing utilities]),
 					[enable_tools=${enableval}])
 AM_CONDITIONAL(TOOLS, test "${enable_tools}" = "yes")
