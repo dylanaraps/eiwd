@@ -24,13 +24,14 @@ class Test(unittest.TestCase):
         sleep(1)
         dev2.start_adhoc("AdHocNetwork", "InvalidPassword")
 
-        wd.wait(15)
        # dev1.adhoc_wait_for_connected(dev2.address)
        # dev2.adhoc_wait_for_connected(dev1.address)
 
        # testutil.test_iface_operstate(dev1.name)
        # testutil.test_iface_operstate(dev2.name)
        # testutil.test_ifaces_connected(dev1.name, dev2.name)
+
+        del wd
 
     @classmethod
     def setUpClass(cls):

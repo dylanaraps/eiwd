@@ -31,6 +31,8 @@ class Test(unittest.TestCase):
         #testutil.test_iface_operstate(dev2.name)
         #testutil.test_ifaces_connected(dev1.name, dev2.name)
 
+        del wd
+
     @classmethod
     def setUpClass(cls):
         pass
