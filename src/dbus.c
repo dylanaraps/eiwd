@@ -29,7 +29,6 @@
 #include <errno.h>
 
 #include <ell/ell.h>
-#include <ell/dbus-private.h>
 
 #include "linux/nl80211.h"
 
