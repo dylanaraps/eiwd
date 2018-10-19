@@ -29,8 +29,6 @@
 #include <errno.h>
 #include <ell/ell.h>
 
-#include "ell/tls-private.h"
-
 #include "util.h"
 #include "eap.h"
 #include "eap-private.h"
@@ -455,18 +453,8 @@ static void eap_ttls_phase2_chap_generate_challenge(struct l_tls *tunnel,
 							uint8_t *challenge,
 							size_t challenge_len)
 {
-	uint8_t seed[64];
-
-	memcpy(seed +  0, tunnel->pending.client_random, 32);
-	memcpy(seed + 32, tunnel->pending.server_random, 32);
-
-	l_tls_prf_get_bytes(tunnel, L_CHECKSUM_SHA256, 32,
-				tunnel->pending.master_secret,
-				sizeof(tunnel->pending.master_secret),
-				"ttls challenge", seed, 64,
-				challenge, challenge_len);
-
-	memset(seed, 0, 64);
+	l_tls_prf_get_bytes(tunnel, L_CHECKSUM_SHA256, 32, true,
+				"ttls challenge", challenge, challenge_len);
 }
 
 static bool eap_ttls_phase2_chap_init(struct eap_state *eap)
@@ -696,7 +684,6 @@ static void eap_ttls_ready_cb(const char *peer_identity, void *user_data)
 	struct eap_state *eap = user_data;
 	struct eap_ttls_state *ttls = eap_get_data(eap);
 	uint8_t msk_emsk[128];
-	uint8_t seed[64];
 
 	/* TODO: if we have a CA certificate require non-NULL peer_identity */
 
@@ -710,16 +697,8 @@ static void eap_ttls_ready_cb(const char *peer_identity, void *user_data)
 	eap_method_success(eap);
 
 	/* MSK, EMSK and challenge derivation */
-	memcpy(seed +  0, ttls->tls->pending.client_random, 32);
-	memcpy(seed + 32, ttls->tls->pending.server_random, 32);
-
-	l_tls_prf_get_bytes(ttls->tls, L_CHECKSUM_SHA256, 32,
-				ttls->tls->pending.master_secret,
-				sizeof(ttls->tls->pending.master_secret),
-				"ttls keying material", seed, 64,
-				msk_emsk, 128);
-
-	memset(seed, 0, 64);
+	l_tls_prf_get_bytes(ttls->tls, L_CHECKSUM_SHA256, 32, true,
+				"ttls keying material", msk_emsk, 128);
 
 	eap_set_key_material(eap, msk_emsk + 0, 64, msk_emsk + 64, 64,
 				NULL, 0);

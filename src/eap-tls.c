@@ -29,8 +29,6 @@
 #include <errno.h>
 #include <ell/ell.h>
 
-#include "ell/tls-private.h"
-
 #include "eap.h"
 #include "eap-private.h"
 
@@ -137,7 +135,6 @@ static void eap_tls_ready_cb(const char *peer_identity, void *user_data)
 	struct eap_tls_state *tls = eap_get_data(eap);
 	uint8_t msk_emsk[128];
 	uint8_t iv[64];
-	uint8_t seed[64];
 
 	/* TODO: if we have a CA certificate require non-NULL peer_identity */
 
@@ -147,19 +144,10 @@ static void eap_tls_ready_cb(const char *peer_identity, void *user_data)
 	eap_start_complete_timeout(eap);
 
 	/* MSK, EMSK and IV derivation */
-	memcpy(seed +  0, tls->tls->pending.client_random, 32);
-	memcpy(seed + 32, tls->tls->pending.server_random, 32);
-
-	l_tls_prf_get_bytes(tls->tls, L_CHECKSUM_SHA256, 32,
-				tls->tls->pending.master_secret,
-				sizeof(tls->tls->pending.master_secret),
-				"client EAP encryption", seed, 64,
-				msk_emsk, 128);
-	l_tls_prf_get_bytes(tls->tls, L_CHECKSUM_SHA256, 32, NULL, 0,
-				"client EAP encryption", seed, 64,
-				iv, 64);
-
-	memset(seed, 0, 64);
+	l_tls_prf_get_bytes(tls->tls, L_CHECKSUM_SHA256, 32, true,
+				"client EAP encryption", msk_emsk, 128);
+	l_tls_prf_get_bytes(tls->tls, L_CHECKSUM_SHA256, 32, false,
+				"client EAP encryption", iv, 64);
 
 	eap_set_key_material(eap, msk_emsk + 0, 64, msk_emsk + 64, 64, iv, 64);
 }

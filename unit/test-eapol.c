@@ -30,8 +30,6 @@
 #include <linux/if_ether.h>
 #include <ell/ell.h>
 
-#include "ell/tls-private.h"
-
 #include "src/util.h"
 #include "src/eapol.h"
 #include "src/crypto.h"
@@ -2840,20 +2838,14 @@ static void eapol_sm_test_tls_test_ready(const char *peer_identity,
 						void *user_data)
 {
 	struct eapol_8021x_tls_test_state *s = user_data;
-	uint8_t seed[64];
 
 	assert(!s->tx_ack);
 	/* TODO: require the right peer_identity */
 
 	s->success = true;
 
-	memcpy(seed +  0, s->tls->pending.client_random, 32);
-	memcpy(seed + 32, s->tls->pending.server_random, 32);
-
-	l_tls_prf_get_bytes(s->tls, L_CHECKSUM_SHA256, 32,
-				s->tls->pending.master_secret,
-				sizeof(s->tls->pending.master_secret),
-				"client EAP encryption", seed, 64, s->pmk, 32);
+	l_tls_prf_get_bytes(s->tls, L_CHECKSUM_SHA256, 32, true,
+				"client EAP encryption", s->pmk, 32);
 }
 
 static void eapol_sm_test_tls_test_disconnected(enum l_tls_alert_desc reason,
@@ -3164,19 +3156,12 @@ static void eapol_sm_test_eap_ttls_test_ready(const char *peer_identity,
 						void *user_data)
 {
 	struct eapol_8021x_eap_ttls_test_state *s = user_data;
-	uint8_t seed[64];
 
 	assert(!s->tls.tx_ack);
 	/* TODO: require the right peer_identity */
 
-	memcpy(seed +  0, s->tls.tls->pending.client_random, 32);
-	memcpy(seed + 32, s->tls.tls->pending.server_random, 32);
-
-	l_tls_prf_get_bytes(s->tls.tls, L_CHECKSUM_SHA256, 32,
-				s->tls.tls->pending.master_secret,
-				sizeof(s->tls.tls->pending.master_secret),
-				"ttls keying material", seed, 64,
-				s->tls.pmk, 32);
+	l_tls_prf_get_bytes(s->tls.tls, L_CHECKSUM_SHA256, 32, true,
+				"ttls keying material", s->tls.pmk, 32);
 
 	s->challenge_sent = false;
 }

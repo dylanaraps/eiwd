@@ -29,8 +29,6 @@
 #include <errno.h>
 #include <ell/ell.h>
 
-#include "ell/tls-private.h"
-
 #include "eap.h"
 #include "eap-private.h"
 
@@ -495,7 +493,6 @@ static void eap_peap_tunnel_ready(const char *peer_identity, void *user_data)
 	struct eap_peap_state *peap = eap_get_data(eap);
 
 	uint8_t msk_emsk[128];
-	uint8_t random[64];
 
 	/*
 	* PEAPv1: draft-josefsson-pppext-eap-tls-eap-05, Section 2.1.1
@@ -515,14 +512,8 @@ static void eap_peap_tunnel_ready(const char *peer_identity, void *user_data)
 	eap_start_complete_timeout(eap);
 
 	/* MSK, EMSK and challenge derivation */
-	memcpy(random +  0, peap->tunnel->pending.client_random, 32);
-	memcpy(random + 32, peap->tunnel->pending.server_random, 32);
-
-	l_tls_prf_get_bytes(peap->tunnel, L_CHECKSUM_SHA256, 32,
-				peap->tunnel->pending.master_secret,
-				sizeof(peap->tunnel->pending.master_secret),
-				"client EAP encryption", random, 64,
-				msk_emsk, 128);
+	l_tls_prf_get_bytes(peap->tunnel, L_CHECKSUM_SHA256, 32, true,
+				"client EAP encryption", msk_emsk, 128);
 
 	eap_set_key_material(eap, msk_emsk + 0, 64, NULL, 0, NULL, 0);
 
