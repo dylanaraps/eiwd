@@ -29,8 +29,8 @@
 #include <errno.h>
 #include <ell/ell.h>
 #include <ell/tls-private.h>
-#include <ell/private.h>
 
+#include "util.h"
 #include "eap.h"
 #include "eap-private.h"
 #include "eap-tls-common.h"
