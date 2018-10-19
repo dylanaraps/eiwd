@@ -2850,7 +2850,7 @@ static void eapol_sm_test_tls_test_ready(const char *peer_identity,
 	memcpy(seed +  0, s->tls->pending.client_random, 32);
 	memcpy(seed + 32, s->tls->pending.server_random, 32);
 
-	tls_prf_get_bytes(s->tls, L_CHECKSUM_SHA256, 32,
+	l_tls_prf_get_bytes(s->tls, L_CHECKSUM_SHA256, 32,
 				s->tls->pending.master_secret,
 				sizeof(s->tls->pending.master_secret),
 				"client EAP encryption", seed, 64, s->pmk, 32);
@@ -3172,7 +3172,7 @@ static void eapol_sm_test_eap_ttls_test_ready(const char *peer_identity,
 	memcpy(seed +  0, s->tls.tls->pending.client_random, 32);
 	memcpy(seed + 32, s->tls.tls->pending.server_random, 32);
 
-	tls_prf_get_bytes(s->tls.tls, L_CHECKSUM_SHA256, 32,
+	l_tls_prf_get_bytes(s->tls.tls, L_CHECKSUM_SHA256, 32,
 				s->tls.tls->pending.master_secret,
 				sizeof(s->tls.tls->pending.master_secret),
 				"ttls keying material", seed, 64,

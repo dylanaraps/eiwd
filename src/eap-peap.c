@@ -518,7 +518,7 @@ static void eap_peap_tunnel_ready(const char *peer_identity, void *user_data)
 	memcpy(random +  0, peap->tunnel->pending.client_random, 32);
 	memcpy(random + 32, peap->tunnel->pending.server_random, 32);
 
-	tls_prf_get_bytes(peap->tunnel, L_CHECKSUM_SHA256, 32,
+	l_tls_prf_get_bytes(peap->tunnel, L_CHECKSUM_SHA256, 32,
 				peap->tunnel->pending.master_secret,
 				sizeof(peap->tunnel->pending.master_secret),
 				"client EAP encryption", random, 64,

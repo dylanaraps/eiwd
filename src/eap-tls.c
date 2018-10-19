@@ -150,12 +150,12 @@ static void eap_tls_ready_cb(const char *peer_identity, void *user_data)
 	memcpy(seed +  0, tls->tls->pending.client_random, 32);
 	memcpy(seed + 32, tls->tls->pending.server_random, 32);
 
-	tls_prf_get_bytes(tls->tls, L_CHECKSUM_SHA256, 32,
+	l_tls_prf_get_bytes(tls->tls, L_CHECKSUM_SHA256, 32,
 				tls->tls->pending.master_secret,
 				sizeof(tls->tls->pending.master_secret),
 				"client EAP encryption", seed, 64,
 				msk_emsk, 128);
-	tls_prf_get_bytes(tls->tls, L_CHECKSUM_SHA256, 32, NULL, 0,
+	l_tls_prf_get_bytes(tls->tls, L_CHECKSUM_SHA256, 32, NULL, 0,
 				"client EAP encryption", seed, 64,
 				iv, 64);
 

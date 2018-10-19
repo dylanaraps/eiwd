@@ -460,7 +460,7 @@ static void eap_ttls_phase2_chap_generate_challenge(struct l_tls *tunnel,
 	memcpy(seed +  0, tunnel->pending.client_random, 32);
 	memcpy(seed + 32, tunnel->pending.server_random, 32);
 
-	tls_prf_get_bytes(tunnel, L_CHECKSUM_SHA256, 32,
+	l_tls_prf_get_bytes(tunnel, L_CHECKSUM_SHA256, 32,
 				tunnel->pending.master_secret,
 				sizeof(tunnel->pending.master_secret),
 				"ttls challenge", seed, 64,
@@ -713,7 +713,7 @@ static void eap_ttls_ready_cb(const char *peer_identity, void *user_data)
 	memcpy(seed +  0, ttls->tls->pending.client_random, 32);
 	memcpy(seed + 32, ttls->tls->pending.server_random, 32);
 
-	tls_prf_get_bytes(ttls->tls, L_CHECKSUM_SHA256, 32,
+	l_tls_prf_get_bytes(ttls->tls, L_CHECKSUM_SHA256, 32,
 				ttls->tls->pending.master_secret,
 				sizeof(ttls->tls->pending.master_secret),
 				"ttls keying material", seed, 64,
