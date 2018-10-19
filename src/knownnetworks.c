@@ -42,7 +42,7 @@
 
 static struct l_queue *known_networks;
 static size_t num_known_hidden_networks;
-static struct l_fswatch *storage_dir_watch;
+static struct l_dir_watch *storage_dir_watch;
 
 static int timespec_compare(const struct timespec *tsa,
 				const struct timespec *tsb)
@@ -294,10 +294,9 @@ static void known_network_removed(struct network_info *network)
 	network_info_forget_known(network);
 }
 
-static void known_networks_watch_cb(struct l_fswatch *watch,
-					const char *filename,
-					enum l_fswatch_event event,
-					void *user_data)
+static void known_networks_watch_cb(const char *filename,
+                                                enum l_dir_watch_event event,
+                                                void *user_data)
 {
 	const char *ssid;
 	L_AUTO_FREE_VAR(char *, full_path) = NULL;
@@ -323,11 +322,9 @@ static void known_networks_watch_cb(struct l_fswatch *watch,
 	full_path = storage_get_network_file_path(security, ssid);
 
 	switch (event) {
-	case L_FSWATCH_EVENT_DELETE:
-	case L_FSWATCH_EVENT_MOVE:
-	case L_FSWATCH_EVENT_MODIFY:
-	case L_FSWATCH_EVENT_ATTRIB:
-	case L_FSWATCH_EVENT_CREATE:
+	case L_DIR_WATCH_EVENT_CREATED:
+	case L_DIR_WATCH_EVENT_REMOVED:
+	case L_DIR_WATCH_EVENT_MODIFIED:
 		/*
 		 * For now treat all the operations the same.  E.g. they may
 		 * result in the removal of the network (file moved out, not
@@ -347,6 +344,9 @@ static void known_networks_watch_cb(struct l_fswatch *watch,
 		}
 
 		l_settings_free(settings);
+		break;
+	case L_DIR_WATCH_EVENT_ACCESSED:
+		break;
 	}
 }
 
@@ -405,7 +405,7 @@ bool known_networks_init(void)
 
 	closedir(dir);
 
-	storage_dir_watch = l_fswatch_new(DAEMON_STORAGEDIR,
+	storage_dir_watch = l_dir_watch_new(DAEMON_STORAGEDIR,
 						known_networks_watch_cb, NULL,
 						known_networks_watch_destroy);
 
@@ -416,7 +416,7 @@ void known_networks_exit(void)
 {
 	struct l_dbus *dbus = dbus_get_bus();
 
-	l_fswatch_destroy(storage_dir_watch);
+	l_dir_watch_destroy(storage_dir_watch);
 
 	l_queue_destroy(known_networks, network_info_free);
 	known_networks = NULL;
