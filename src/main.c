@@ -29,7 +29,6 @@
 #include <errno.h>
 #include <getopt.h>
 #include <ell/ell.h>
-#include "ell/key-private.h"
 
 #include "linux/nl80211.h"
 

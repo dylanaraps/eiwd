@@ -30,7 +30,6 @@
 #include <stdlib.h>
 #include <linux/if_ether.h>
 #include <ell/ell.h>
-#include <ell/key-private.h>
 
 #include "src/wscutil.h"
 #include "src/eapol.h"
