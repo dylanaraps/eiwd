@@ -95,6 +95,7 @@ struct netdev {
 	uint32_t join_adhoc_cmd_id;
 	uint32_t leave_adhoc_cmd_id;
 	uint32_t set_interface_cmd_id;
+	uint32_t rekey_offload_cmd_id;
 	enum netdev_result result;
 	struct l_timeout *neighbor_report_timeout;
 	struct l_timeout *sa_query_timeout;
@@ -611,6 +612,11 @@ static void netdev_free(void *data)
 	if (netdev->set_powered_cmd_id) {
 		l_netlink_cancel(rtnl, netdev->set_powered_cmd_id);
 		netdev->set_powered_cmd_id = 0;
+	}
+
+	if (netdev->rekey_offload_cmd_id) {
+		l_genl_family_cancel(nl80211, netdev->rekey_offload_cmd_id);
+		netdev->rekey_offload_cmd_id = 0;
 	}
 
 	if (netdev->device) {
@@ -1374,6 +1380,8 @@ static void hardware_rekey_cb(struct l_genl_msg *msg, void *data)
 	struct netdev *netdev = data;
 	int err;
 
+	netdev->rekey_offload_cmd_id = 0;
+
 	err = l_genl_msg_get_error(msg);
 	if (err < 0) {
 		if (err == -EOPNOTSUPP) {
@@ -1427,10 +1435,10 @@ static void netdev_set_rekey_offload(uint32_t ifindex,
 		return;
 
 	l_debug("%d", netdev->index);
-	msg = netdev_build_cmd_replay_counter(netdev, kek, kck,
-					replay_counter);
-	l_genl_family_send(nl80211, msg, hardware_rekey_cb, netdev, NULL);
-
+	msg = netdev_build_cmd_replay_counter(netdev, kek, kck, replay_counter);
+	netdev->rekey_offload_cmd_id = l_genl_family_send(nl80211, msg,
+							hardware_rekey_cb,
+							netdev, NULL);
 }
 
 /*
