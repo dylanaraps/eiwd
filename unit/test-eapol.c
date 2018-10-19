@@ -29,7 +29,8 @@
 #include <assert.h>
 #include <linux/if_ether.h>
 #include <ell/ell.h>
-#include <ell/tls-private.h>
+
+#include "ell/tls-private.h"
 
 #include "src/util.h"
 #include "src/eapol.h"

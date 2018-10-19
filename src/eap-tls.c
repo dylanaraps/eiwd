@@ -28,8 +28,8 @@
 #include <stdio.h>
 #include <errno.h>
 #include <ell/ell.h>
-#include <ell/tls-private.h>
-#include <ell/pem.h>
+
+#include "ell/tls-private.h"
 
 #include "eap.h"
 #include "eap-private.h"

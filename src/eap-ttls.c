@@ -28,7 +28,8 @@
 #include <stdio.h>
 #include <errno.h>
 #include <ell/ell.h>
-#include <ell/tls-private.h>
+
+#include "ell/tls-private.h"
 
 #include "util.h"
 #include "eap.h"
