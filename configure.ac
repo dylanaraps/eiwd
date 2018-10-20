@@ -104,7 +104,7 @@ AC_ARG_ENABLE([monitor], AC_HELP_STRING([--disable-monitor],
 AM_CONDITIONAL(MONITOR, test "${enable_monitor}" != "no")
 
 AC_ARG_ENABLE([dbus-policy], AC_HELP_STRING([--disable-dbus-policy],
-				[don't install D-Bus system policy file]),
+				[don't install D-Bus system policy files]),
 					[enable_dbus_policy=${enableval}])
 AM_CONDITIONAL(DBUS_POLICY, test "${enable_dbus_policy}" != "no")
 
@@ -125,7 +125,7 @@ fi
 AC_SUBST(DBUS_DATADIR, [${path_dbus_datadir}])
 
 AC_ARG_ENABLE([systemd-service], AC_HELP_STRING([--disable-systemd-service],
-				[don't install systemd service file]),
+				[don't install systemd service files]),
 					[enable_systemd_service=${enableval}])
 AM_CONDITIONAL(SYSTEMD_SERVICE, test "${enable_systemd_service}" != "no")
 
