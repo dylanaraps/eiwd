@@ -1027,11 +1027,18 @@ static void netdev_setting_keys_failed(struct netdev_handshake_state *nhs,
 	 * 1. new_key(ptk)
 	 * 2. new_key(gtk) [optional]
 	 * 3. new_key(igtk) [optional]
-	 * 4. set_station
+	 * 4. rekey offload [optional]
+	 * 5. set_station
 	 *
 	 * Cancel all pending commands, then de-authenticate
 	 */
 	netdev_handshake_state_cancel_all(nhs);
+
+	if (netdev->rekey_offload_cmd_id) {
+		l_genl_family_cancel(nl80211, netdev->rekey_offload_cmd_id);
+		netdev->rekey_offload_cmd_id = 0;
+	}
+
 	netdev->result = NETDEV_RESULT_KEY_SETTING_FAILED;
 
 	handshake_event(&nhs->super, HANDSHAKE_EVENT_SETTING_KEYS_FAILED, NULL);
@@ -2941,6 +2948,11 @@ int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 		l_genl_family_cancel(nl80211,
 			nhs->group_management_new_key_cmd_id);
 		nhs->group_management_new_key_cmd_id = 0;
+	}
+
+	if (netdev->rekey_offload_cmd_id) {
+		l_genl_family_cancel(nl80211, netdev->rekey_offload_cmd_id);
+		netdev->rekey_offload_cmd_id = 0;
 	}
 
 	netdev_rssi_polling_update(netdev);
