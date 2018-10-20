@@ -1,3 +1,10 @@
+ver 0.10:
+	Fix issue with Ethernet authentication packet handling.
+	Fix issue with ad-hoc network scan results in station mode.
+	Fix issue with cancellation of ongoing rekey offload.
+	Add support for setting per-mac GTK credentials.
+	Add support for using external Embedded Linux library.
+
 ver 0.9:
 	Fix issue with handling EAP-WSC passwords.
 	Add support for TTLS-CHAP and TTLS-PAP.
