@@ -161,16 +161,10 @@ static void do_debug(const char *str, void *user_data)
 	l_info("%s%s", prefix, str);
 }
 
-static void netdev_handshake_state_free(struct handshake_state *hs)
+/* Cancels ongoing GTK/IGTK related commands (if any) */
+static void netdev_handshake_state_cancel_rekey(
+					struct netdev_handshake_state *nhs)
 {
-	struct netdev_handshake_state *nhs =
-			container_of(hs, struct netdev_handshake_state, super);
-
-	if (nhs->pairwise_new_key_cmd_id) {
-		l_genl_family_cancel(nl80211, nhs->pairwise_new_key_cmd_id);
-		nhs->pairwise_new_key_cmd_id = 0;
-	}
-
 	if (nhs->group_new_key_cmd_id) {
 		l_genl_family_cancel(nl80211, nhs->group_new_key_cmd_id);
 		nhs->group_new_key_cmd_id = 0;
@@ -181,12 +175,30 @@ static void netdev_handshake_state_free(struct handshake_state *hs)
 					nhs->group_management_new_key_cmd_id);
 		nhs->group_management_new_key_cmd_id = 0;
 	}
+}
+
+static void netdev_handshake_state_cancel_all(
+					struct netdev_handshake_state *nhs)
+{
+	if (nhs->pairwise_new_key_cmd_id) {
+		l_genl_family_cancel(nl80211, nhs->pairwise_new_key_cmd_id);
+		nhs->pairwise_new_key_cmd_id = 0;
+	}
+
+	netdev_handshake_state_cancel_rekey(nhs);
 
 	if (nhs->set_station_cmd_id) {
 		l_genl_family_cancel(nl80211, nhs->set_station_cmd_id);
 		nhs->set_station_cmd_id = 0;
 	}
+}
 
+static void netdev_handshake_state_free(struct handshake_state *hs)
+{
+	struct netdev_handshake_state *nhs =
+			container_of(hs, struct netdev_handshake_state, super);
+
+	netdev_handshake_state_cancel_all(nhs);
 	l_free(nhs);
 }
 
@@ -1019,18 +1031,7 @@ static void netdev_setting_keys_failed(struct netdev_handshake_state *nhs,
 	 *
 	 * Cancel all pending commands, then de-authenticate
 	 */
-	l_genl_family_cancel(nl80211, nhs->pairwise_new_key_cmd_id);
-	nhs->pairwise_new_key_cmd_id = 0;
-
-	l_genl_family_cancel(nl80211, nhs->group_new_key_cmd_id);
-	nhs->group_new_key_cmd_id = 0;
-
-	l_genl_family_cancel(nl80211, nhs->group_management_new_key_cmd_id);
-	nhs->group_management_new_key_cmd_id = 0;
-
-	l_genl_family_cancel(nl80211, nhs->set_station_cmd_id);
-	nhs->set_station_cmd_id = 0;
-
+	netdev_handshake_state_cancel_all(nhs);
 	netdev->result = NETDEV_RESULT_KEY_SETTING_FAILED;
 
 	handshake_event(&nhs->super, HANDSHAKE_EVENT_SETTING_KEYS_FAILED, NULL);
