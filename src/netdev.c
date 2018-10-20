@@ -1389,6 +1389,11 @@ static void hardware_rekey_cb(struct l_genl_msg *msg, void *data)
 			l_error("hardware_rekey not supported");
 			netdev->rekey_offload_support = false;
 		}
+
+		/*
+		 * TODO: Ignore all other errors for now, until WoWLAN is
+		 * supported properly
+		 */
 	}
 }
 
