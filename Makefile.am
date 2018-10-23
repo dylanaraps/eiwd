@@ -109,7 +109,8 @@ eap_sources = src/eap.c src/eap.h src/eap-private.h \
 				src/simutil.h src/simutil.c \
 				src/simauth.h src/simauth.c \
 				src/watchlist.h src/watchlist.c \
-				src/eap-tls-common.h src/eap-tls-common.c
+				src/eap-tls-common.h src/eap-tls-common.c \
+				src/mschaputil.h src/mschaputil.c
 
 if DAEMON
 libexec_PROGRAMS += src/iwd
@@ -332,7 +333,8 @@ unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/eap.h src/eap.c src/eap-private.h \
 				src/eap-tls.c src/eap-ttls.c \
 				src/eap-md5.c src/util.c \
-				src/eap-tls-common.h src/eap-tls-common.c
+				src/eap-tls-common.h src/eap-tls-common.c \
+				src/mschaputil.h src/mschaputil.c
 unit_test_eapol_LDADD = $(ell_ldadd)
 
 unit_test_ssid_to_utf8_SOURCES = src/util.h src/util.c \
