@@ -30,6 +30,7 @@
 #include <ell/ell.h>
 
 #include "util.h"
+#include "mschaputil.h"
 #include "eap.h"
 #include "eap-private.h"
 #include "eap-tls-common.h"
@@ -47,6 +48,7 @@ enum radius_attr {
 	RADIUS_ATTR_USER_NAME			= 1,
 	RADIUS_ATTR_USER_PASSWORD		= 2,
 	RADIUS_ATTR_CHAP_PASSWORD		= 3,
+	RADIUS_ATTR_MS_CHAP_CHALLENGE		= 11,
 	RADIUS_ATTR_CHAP_CHALLENGE		= 60,
 	RADIUS_ATTR_EAP_MESSAGE			= 79,
 };
@@ -219,6 +221,58 @@ static void build_avp_chap_password(struct avp_builder *builder,
 							CHAP_IDENT_LEN);
 	memcpy(avp_builder_reserve(builder, 1, CHAP_PASSWORD_LEN),
 					password_hash, CHAP_PASSWORD_LEN);
+	avp_builder_finalize_avp(builder);
+}
+
+#define RADIUS_VENDOR_ID_MICROSOFT 311
+#define RADIUS_ATTR_MS_CHAP_RESPONSE 1
+
+#define MS_CHAP_CHALLENGE_LEN	8
+#define MS_CHAP_LM_RESPONSE_LEN 24
+#define MS_CHAP_NT_RESPONSE_LEN 24
+
+static void build_avp_ms_chap_challenge(struct avp_builder *builder,
+						const uint8_t *challenge)
+{
+	avp_builder_start_avp(builder, RADIUS_ATTR_MS_CHAP_CHALLENGE, true,
+						RADIUS_VENDOR_ID_MICROSOFT);
+	memcpy(avp_builder_reserve(builder, 1, MS_CHAP_CHALLENGE_LEN),
+					challenge, MS_CHAP_CHALLENGE_LEN);
+	avp_builder_finalize_avp(builder);
+}
+
+static void build_avp_ms_chap_response(struct avp_builder *builder,
+					const uint8_t *ident,
+					const uint8_t *challenge,
+					const uint8_t *password_hash)
+{
+	uint8_t *flags;
+	uint8_t nt_challenge_response[NT_CHALLENGE_RESPONSE_LEN];
+
+	avp_builder_start_avp(builder, RADIUS_ATTR_MS_CHAP_RESPONSE, true,
+						RADIUS_VENDOR_ID_MICROSOFT);
+
+	memcpy(avp_builder_reserve(builder, 1, CHAP_IDENT_LEN),
+							ident, CHAP_IDENT_LEN);
+
+	/*
+	 * RFC 2548: Section 2.1.3
+	 *
+	 * The Flags field is set to one (0x01), the NT-Response field is to
+	 * be used in preference to the LM-Response field for authentication.
+	 */
+	flags = avp_builder_reserve(builder, 1, 1);
+	*flags = 1;
+
+	/* The LM-Response field is left empty */
+	avp_builder_reserve(builder, 1, MS_CHAP_LM_RESPONSE_LEN);
+
+	mschap_challenge_response(challenge, password_hash,
+							nt_challenge_response);
+
+	memcpy(avp_builder_reserve(builder, 1, NT_CHALLENGE_RESPONSE_LEN),
+			nt_challenge_response, NT_CHALLENGE_RESPONSE_LEN);
+
 	avp_builder_finalize_avp(builder);
 }
 
@@ -505,6 +559,45 @@ static bool eap_ttls_phase2_chap_init(struct eap_state *eap)
 
 static struct phase2_method phase2_chap = {
 	.init = eap_ttls_phase2_chap_init,
+	.destroy = eap_ttls_phase2_credentials_destroy,
+};
+
+static bool eap_ttls_phase2_ms_chap_init(struct eap_state *eap)
+{
+	struct eap_ttls_state *ttls = eap_get_data(eap);
+	struct phase2_credentials *credentials = ttls->phase2->state;
+	struct avp_builder *builder;
+	uint8_t challenge[MS_CHAP_CHALLENGE_LEN + CHAP_IDENT_LEN];
+	uint8_t password_hash[16];
+	uint8_t ident;
+	uint8_t *data;
+	size_t data_len;
+
+	eap_ttls_phase2_chap_generate_challenge(ttls->tls, challenge,
+							MS_CHAP_CHALLENGE_LEN +
+							CHAP_IDENT_LEN);
+
+	ident = challenge[MS_CHAP_CHALLENGE_LEN];
+
+	builder = avp_builder_new(512);
+
+	build_avp_user_name(builder, credentials->username);
+	build_avp_ms_chap_challenge(builder, challenge);
+
+	mschap_nt_password_hash(credentials->password, password_hash);
+
+	build_avp_ms_chap_response(builder, &ident, challenge, password_hash);
+
+	data = avp_builder_free(builder, false, &data_len);
+
+	l_tls_write(ttls->tls, data, data_len);
+	l_free(data);
+
+	return true;
+}
+
+static struct phase2_method phase2_ms_chap = {
+	.init = eap_ttls_phase2_ms_chap_init,
 	.destroy = eap_ttls_phase2_credentials_destroy,
 };
 
@@ -996,6 +1089,7 @@ static const struct {
 	struct phase2_method *method;
 } tunneled_non_eap_methods[] = {
 	{ "Tunneled-CHAP", &phase2_chap },
+	{ "Tunneled-MSCHAP", &phase2_ms_chap },
 	{ "Tunneled-PAP", &phase2_pap },
 	{ }
 };
