@@ -1436,7 +1436,8 @@ static void unicast_handler(struct l_genl_msg *msg, void *user_data)
 			break;
 
 		default:
-			l_warn("Unhandled attribute type: %u", type);
+			if (type >= __HWSIM_ATTR_MAX)
+				l_warn("Unknown attribute type: %u", type);
 			break;
 		}
 	}
