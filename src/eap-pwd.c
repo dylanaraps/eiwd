@@ -695,37 +695,50 @@ static int eap_pwd_check_settings(struct l_settings *settings,
 					const char *prefix,
 					struct l_queue **out_missing)
 {
-	const char *password;
-	L_AUTO_FREE_VAR(char *, identity);
 	const struct eap_secret_info *secret;
-	char setting[64], setting2[64];
+	char identity_key[72];
+	char password_key[72];
+	char password_key_old[72];
 
-	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-	identity = l_settings_get_string(settings, "Security", setting);
+	L_AUTO_FREE_VAR(char *, identity);
+	L_AUTO_FREE_VAR(char *, password) = NULL;
 
-	snprintf(setting2, sizeof(setting2), "%sPWD-Password", prefix);
-	password = l_settings_get_value(settings, "Security", setting2);
+	snprintf(identity_key, sizeof(identity_key), "%sIdentity", prefix);
+	snprintf(password_key, sizeof(password_key), "%sPassword", prefix);
+
+	identity = l_settings_get_string(settings, "Security", identity_key);
 
 	if (!identity) {
-		secret = l_queue_find(secrets, eap_secret_info_match, setting);
-		if (!secret) {
-			eap_append_secret(out_missing,
-					EAP_SECRET_REMOTE_USER_PASSWORD,
-					setting, setting2, NULL,
+		secret = l_queue_find(secrets, eap_secret_info_match,
+								identity_key);
+		if (secret)
+			return 0;
+
+		eap_append_secret(out_missing, EAP_SECRET_REMOTE_USER_PASSWORD,
+					identity_key, password_key, NULL,
 					EAP_CACHE_TEMPORARY);
-		}
 
 		return 0;
 	}
 
+	password = l_settings_get_string(settings, "Security", password_key);
+
 	if (!password) {
-		secret = l_queue_find(secrets, eap_secret_info_match, setting2);
-		if (!secret) {
-			eap_append_secret(out_missing,
-					EAP_SECRET_REMOTE_PASSWORD,
-					setting2, NULL, identity,
+		snprintf(password_key_old, sizeof(password_key_old),
+						"%sPWD-Password", prefix);
+		password = l_settings_get_string(settings, "Security",
+							password_key_old);
+		if (password)
+			return 0;
+
+		secret = l_queue_find(secrets, eap_secret_info_match,
+								password_key);
+		if (secret)
+			return 0;
+
+		eap_append_secret(out_missing, EAP_SECRET_REMOTE_PASSWORD,
+					password_key, NULL, identity,
 					EAP_CACHE_TEMPORARY);
-		}
 	}
 
 	return 0;
@@ -736,26 +749,37 @@ static bool eap_pwd_load_settings(struct eap_state *eap,
 					const char *prefix)
 {
 	struct eap_pwd_handle *pwd;
-	char setting[64];
+	char setting_key[72];
 
 	pwd = l_new(struct eap_pwd_handle, 1);
 
 	pwd->state = EAP_PWD_STATE_INIT;
 
-	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-	pwd->identity = l_settings_get_string(settings, "Security", setting);
+	snprintf(setting_key, sizeof(setting_key), "%sIdentity", prefix);
+	pwd->identity = l_settings_get_string(settings, "Security",
+								setting_key);
 
 	if (!pwd->identity) {
-		l_error("EAP-Identity is missing");
+		l_error("'%s' setting is missing", setting_key);
 		goto error;
 	}
 
-	snprintf(setting, sizeof(setting), "%sPWD-Password", prefix);
-	pwd->password = l_settings_get_string(settings, "Security", setting);
+	snprintf(setting_key, sizeof(setting_key), "%sPassword", prefix);
+	pwd->password = l_settings_get_string(settings, "Security",
+								setting_key);
 
 	if (!pwd->password) {
-		l_error("EAP-PWD password is missing");
-		goto error;
+		snprintf(setting_key, sizeof(setting_key), "%sPWD-Password",
+									prefix);
+		pwd->password = l_settings_get_string(settings, "Security",
+								setting_key);
+
+		if (!pwd->password) {
+			snprintf(setting_key, sizeof(setting_key), "%sPassword",
+									prefix);
+			l_error("'%s' setting is missing", setting_key);
+			goto error;
+		}
 	}
 
 	eap_set_data(eap, pwd);
@@ -766,6 +790,7 @@ error:
 	l_free(pwd->identity);
 	l_free(pwd->password);
 	l_free(pwd);
+
 	return false;
 }
 
