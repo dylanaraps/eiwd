@@ -32,7 +32,7 @@
 #include "eap-private.h"
 
 struct eap_gtc_state {
-	char *secret;
+	char *password;
 };
 
 static void eap_gtc_free(struct eap_state *eap)
@@ -41,7 +41,7 @@ static void eap_gtc_free(struct eap_state *eap)
 
 	eap_set_data(eap, NULL);
 
-	l_free(gtc->secret);
+	l_free(gtc->password);
 	l_free(gtc);
 }
 
@@ -49,7 +49,7 @@ static void eap_gtc_handle_request(struct eap_state *eap,
 					const uint8_t *pkt, size_t len)
 {
 	struct eap_gtc_state *gtc = eap_get_data(eap);
-	size_t secret_len = strlen(gtc->secret);
+	size_t secret_len = strlen(gtc->password);
 	uint8_t response[5 + secret_len];
 
 	if (len < 8)
@@ -58,7 +58,7 @@ static void eap_gtc_handle_request(struct eap_state *eap,
 	if (strncmp((const char *)pkt, "Password", 8))
 		goto error;
 
-	memcpy(response + 5, gtc->secret, secret_len);
+	memcpy(response + 5, gtc->password, secret_len);
 
 	eap_send_response(eap, EAP_TYPE_GTC, response, 5 + secret_len);
 
@@ -76,39 +76,50 @@ static int eap_gtc_check_settings(struct l_settings *settings,
 					const char *prefix,
 					struct l_queue **out_missing)
 {
-	char setting[64];
-	char setting2[64];
-	L_AUTO_FREE_VAR(char *, identity);
 	const struct eap_secret_info *secret;
+	char identity_key[72];
+	char password_key[72];
+	char password_key_old[72];
 
-	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-	identity = l_settings_get_string(settings, "Security", setting);
+	L_AUTO_FREE_VAR(char *, identity);
+	L_AUTO_FREE_VAR(char *, password) = NULL;
 
-	snprintf(setting2, sizeof(setting2), "%sGTC-Secret", prefix);
+	snprintf(identity_key, sizeof(identity_key), "%sIdentity", prefix);
+	snprintf(password_key, sizeof(password_key), "%sPassword", prefix);
 
-	/* no identity setting found */
+	identity = l_settings_get_string(settings, "Security", identity_key);
+
 	if (!identity) {
-		secret = l_queue_find(secrets, eap_secret_info_match, setting);
+		secret = l_queue_find(secrets, eap_secret_info_match,
+								identity_key);
+		if (secret)
+			return 0;
 
-		/* no secret found either */
-		if (!secret)
-			eap_append_secret(out_missing,
-						EAP_SECRET_REMOTE_USER_PASSWORD,
-						setting, setting2, NULL,
-						EAP_CACHE_NEVER);
+		eap_append_secret(out_missing, EAP_SECRET_REMOTE_USER_PASSWORD,
+					identity_key, password_key, NULL,
+					EAP_CACHE_TEMPORARY);
 
 		return 0;
 	}
 
-	/* identity found, but secret missing */
-	if (!l_settings_get_value(settings, "Security", setting2)) {
-		secret = l_queue_find(secrets, eap_secret_info_match, setting2);
+	password = l_settings_get_string(settings, "Security", password_key);
 
-		if (!secret)
-			eap_append_secret(out_missing,
-						EAP_SECRET_REMOTE_PASSWORD,
-						setting2, NULL, identity,
-						EAP_CACHE_NEVER);
+	if (!password) {
+		snprintf(password_key_old, sizeof(password_key_old),
+						"%sGTC-Secret", prefix);
+		password = l_settings_get_string(settings, "Security",
+							password_key_old);
+		if (password)
+			return 0;
+
+		secret = l_queue_find(secrets, eap_secret_info_match,
+								password_key);
+		if (secret)
+			return 0;
+
+		eap_append_secret(out_missing, EAP_SECRET_REMOTE_PASSWORD,
+					password_key, NULL, identity,
+					EAP_CACHE_TEMPORARY);
 	}
 
 	return 0;
@@ -119,14 +130,27 @@ static bool eap_gtc_load_settings(struct eap_state *eap,
 					const char *prefix)
 {
 	struct eap_gtc_state *gtc;
-	char setting[64];
-	char *secret;
+	char password_key[72];
+	char *password;
 
-	snprintf(setting, sizeof(setting), "%sGTC-Secret", prefix);
-	secret = l_settings_get_string(settings, "Security", setting);
+	snprintf(password_key, sizeof(password_key), "%sPassword", prefix);
+	password = l_settings_get_string(settings, "Security", password_key);
+
+	if (!password) {
+		snprintf(password_key, sizeof(password_key), "%sGTC-Secret",
+									prefix);
+		password = l_settings_get_string(settings, "Security",
+								password_key);
+
+		if (!password) {
+			l_error("Property '%sPassword' is missing.", prefix);
+			return false;
+		}
+	}
 
 	gtc = l_new(struct eap_gtc_state, 1);
-	gtc->secret = secret;
+	gtc->password = password;
+
 	eap_set_data(eap, gtc);
 
 	return true;
