@@ -1,0 +1,4 @@
+# Phase 1 users
+* TTLS
+# Phase 2
+"user" TTLS-MSCHAP "testpasswd" [2]
