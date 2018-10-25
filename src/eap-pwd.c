@@ -728,8 +728,11 @@ static int eap_pwd_check_settings(struct l_settings *settings,
 						"%sPWD-Password", prefix);
 		password = l_settings_get_string(settings, "Security",
 							password_key_old);
-		if (password)
+		if (password) {
+			l_warn("Setting '%s' is deprecated, use '%s' instead",
+					password_key_old, password_key);
 			return 0;
+		}
 
 		secret = l_queue_find(secrets, eap_secret_info_match,
 								password_key);
