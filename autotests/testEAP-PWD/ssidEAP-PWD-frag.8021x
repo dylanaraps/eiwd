@@ -1,7 +1,7 @@
 [Security]
 EAP-Method=PWD
 EAP-Identity=eap-pwd-identity
-EAP-PWD-Password=secret123
+EAP-Password=secret123
 
 [Settings]
 Autoconnect=false
