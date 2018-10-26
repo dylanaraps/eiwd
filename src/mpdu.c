@@ -26,8 +26,8 @@
 
 #include <ell/ell.h>
 
-#include "ie.h"
-#include "mpdu.h"
+#include "src/ie.h"
+#include "src/mpdu.h"
 
 static bool validate_mgmt_header(const struct mmpdu_header *mpdu,
 					int len, int *offset)
