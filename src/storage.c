@@ -38,8 +38,8 @@
 
 #include <ell/ell.h>
 
-#include "common.h"
-#include "storage.h"
+#include "src/common.h"
+#include "src/storage.h"
 
 #ifdef TEMP_FAILURE_RETRY
 #define TFR TEMP_FAILURE_RETRY
