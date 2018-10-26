@@ -25,9 +25,9 @@
 #include <errno.h>
 #include <ell/ell.h>
 
-#include "iwd.h"
-#include "watchlist.h"
-#include "simauth.h"
+#include "src/iwd.h"
+#include "src/watchlist.h"
+#include "src/simauth.h"
 
 static struct l_queue *auth_providers;
 

@@ -25,10 +25,10 @@
 #include <errno.h>
 #include <ell/ell.h>
 
-#include "eap-private.h"
+#include "src/eap-private.h"
 
-#include "crypto.h"
-#include "simutil.h"
+#include "src/crypto.h"
+#include "src/simutil.h"
 
 /*
  * RFC 3174 functions
