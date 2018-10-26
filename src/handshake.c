@@ -33,12 +33,13 @@
 #include <linux/if_ether.h>
 #include <arpa/inet.h>
 #include <linux/filter.h>
+
 #include <ell/ell.h>
 
-#include "crypto.h"
-#include "ie.h"
-#include "util.h"
-#include "handshake.h"
+#include "src/crypto.h"
+#include "src/ie.h"
+#include "src/util.h"
+#include "src/handshake.h"
 
 static bool handshake_get_nonce(uint8_t nonce[])
 {
