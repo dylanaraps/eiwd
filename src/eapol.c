@@ -28,14 +28,14 @@
 #include <linux/if_ether.h>
 #include <ell/ell.h>
 
-#include "crypto.h"
-#include "eapol.h"
-#include "ie.h"
-#include "util.h"
-#include "mpdu.h"
-#include "eap.h"
-#include "handshake.h"
-#include "watchlist.h"
+#include "src/crypto.h"
+#include "src/eapol.h"
+#include "src/ie.h"
+#include "src/util.h"
+#include "src/mpdu.h"
+#include "src/eap.h"
+#include "src/handshake.h"
+#include "src/watchlist.h"
 
 struct l_queue *state_machines;
 struct l_queue *preauths;

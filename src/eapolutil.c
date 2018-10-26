@@ -27,7 +27,7 @@
 #include <stdio.h>
 #include <ell/ell.h>
 
-#include "eapolutil.h"
+#include "src/eapolutil.h"
 
 const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len)
 {
