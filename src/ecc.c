@@ -33,9 +33,7 @@
 #include <sys/types.h>
 #include <string.h>
 
-#include <ell/ell.h>
-
-#include "ecc.h"
+#include "src/ecc.h"
 
 #define MAX_TRIES 16
 
