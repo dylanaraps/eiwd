@@ -33,12 +33,12 @@
 
 #include <ell/ell.h>
 
-#include "iwd.h"
-#include "storage.h"
-#include "common.h"
-#include "network.h"
-#include "dbus.h"
-#include "knownnetworks.h"
+#include "src/iwd.h"
+#include "src/storage.h"
+#include "src/common.h"
+#include "src/network.h"
+#include "src/dbus.h"
+#include "src/knownnetworks.h"
 
 static struct l_queue *known_networks;
 static size_t num_known_hidden_networks;
