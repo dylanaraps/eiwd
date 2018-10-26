@@ -25,11 +25,12 @@
 #endif
 
 #include <errno.h>
-#include <ell/ell.h>
-#include "util.h"
-#include "crypto.h"
 
-#include "ie.h"
+#include <ell/ell.h>
+
+#include "src/util.h"
+#include "src/crypto.h"
+#include "src/ie.h"
 
 static const uint8_t ieee_oui[3] = { 0x00, 0x0f, 0xac };
 static const uint8_t microsoft_oui[3] = { 0x00, 0x50, 0xf2 };
