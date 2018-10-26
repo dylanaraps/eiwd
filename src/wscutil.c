@@ -31,7 +31,7 @@
 
 #include <ell/ell.h>
 
-#include "wscutil.h"
+#include "src/wscutil.h"
 
 const unsigned char wsc_wfa_oui[3] = { 0x00, 0x37, 0x2a };
 
