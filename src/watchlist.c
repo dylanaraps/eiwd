@@ -26,7 +26,7 @@
 
 #include <ell/ell.h>
 
-#include "watchlist.h"
+#include "src/watchlist.h"
 
 static bool watchlist_item_match(const void *a, const void *b)
 {
