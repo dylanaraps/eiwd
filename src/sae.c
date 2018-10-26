@@ -22,13 +22,13 @@
 
 #include <ell/ell.h>
 
-#include "util.h"
-#include "ie.h"
-#include "handshake.h"
-#include "crypto.h"
-#include "mpdu.h"
-#include "ecc.h"
-#include "sae.h"
+#include "src/util.h"
+#include "src/ie.h"
+#include "src/handshake.h"
+#include "src/crypto.h"
+#include "src/mpdu.h"
+#include "src/ecc.h"
+#include "src/sae.h"
 
 #define SAE_RETRANSMIT_TIMEOUT	2
 #define SAE_SYNC_MAX		3
