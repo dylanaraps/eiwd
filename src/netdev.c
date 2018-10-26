@@ -1425,8 +1425,11 @@ static void netdev_set_tk(struct handshake_state *hs,
 	 * by the STA Authenticator with the higher MAC address...
 	 */
 	if (netdev->type == NL80211_IFTYPE_ADHOC &&
-			memcmp(nhs->super.aa, nhs->super.spa, 6) < 0)
+			memcmp(nhs->super.aa, nhs->super.spa, 6) < 0) {
+		nhs->ptk_installed = true;
+		try_handshake_complete(nhs);
 		return;
+	}
 
 	l_debug("%d", netdev->index);
 

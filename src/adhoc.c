@@ -67,7 +67,8 @@ struct sta_state {
 	struct eapol_sm *sm_a;
 	struct handshake_state *hs_auth;
 	uint32_t gtk_query_cmd_id;
-
+	bool hs_sta_done : 1;
+	bool hs_auth_done : 1;
 	bool authenticated : 1;
 };
 
@@ -183,7 +184,13 @@ static void adhoc_handshake_event(struct handshake_state *hs,
 
 		return;
 	case HANDSHAKE_EVENT_COMPLETE:
-		if ((sta->hs_auth == hs || sta->hs_sta == hs) &&
+		if (sta->hs_auth == hs)
+			sta->hs_auth_done = true;
+
+		if (sta->hs_sta == hs)
+			sta->hs_sta_done = true;
+
+		if ((sta->hs_auth_done && sta->hs_sta_done) &&
 				!sta->authenticated) {
 			sta->authenticated = true;
 			l_dbus_property_changed(dbus_get_bus(),
