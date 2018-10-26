@@ -26,7 +26,7 @@
 
 #include <ell/ell.h>
 
-#include "mschaputil.h"
+#include "src/mschaputil.h"
 
 static bool mschap_des_encrypt(const uint8_t *challenge, const uint8_t *key,
 							uint8_t *cipher_text)
