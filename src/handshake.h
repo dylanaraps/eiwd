@@ -104,6 +104,7 @@ struct handshake_state {
 	bool have_anonce : 1;
 	bool have_pmkid : 1;
 	bool authenticator : 1;
+	bool wait_for_gtk : 1;
 	uint8_t ssid[32];
 	size_t ssid_len;
 	char *passphrase;

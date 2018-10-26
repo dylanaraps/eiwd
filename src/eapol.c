@@ -1462,13 +1462,22 @@ retransmit:
 	if (sm->handshake->ptk_complete)
 		return;
 
-	handshake_state_install_ptk(sm->handshake);
+	/*
+	 * For WPA1 the group handshake should be happening after we set the
+	 * ptk, this flag tells netdev to wait for the gtk/igtk before
+	 * completing the connection.
+	 */
+	if (!gtk && sm->handshake->group_cipher !=
+			IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC)
+		sm->handshake->wait_for_gtk = true;
 
 	if (gtk)
 		eapol_install_gtk(sm, gtk_key_index, gtk, gtk_len, ek->key_rsc);
 
 	if (igtk)
 		eapol_install_igtk(sm, igtk_key_index, igtk, igtk_len);
+
+	handshake_state_install_ptk(sm->handshake);
 
 	if (rekey_offload)
 		rekey_offload(sm->handshake->ifindex, ptk->kek, ptk->kck,

@@ -68,6 +68,10 @@ struct netdev_handshake_state {
 	uint32_t group_new_key_cmd_id;
 	uint32_t group_management_new_key_cmd_id;
 	uint32_t set_station_cmd_id;
+	bool ptk_installed;
+	bool gtk_installed;
+	bool igtk_installed;
+	bool complete;
 	struct netdev *netdev;
 };
 
@@ -99,6 +103,7 @@ struct netdev {
 	enum netdev_result result;
 	struct l_timeout *neighbor_report_timeout;
 	struct l_timeout *sa_query_timeout;
+	struct l_timeout *group_handshake_timeout;
 	uint16_t sa_query_id;
 	uint8_t prev_bssid[ETH_ALEN];
 	int8_t rssi_levels[16];
@@ -212,6 +217,16 @@ struct handshake_state *netdev_handshake_state_new(struct netdev *netdev)
 	nhs->super.free = netdev_handshake_state_free;
 
 	nhs->netdev = netdev;
+	/*
+	 * Since GTK/IGTK are optional (NO_GROUP_TRAFFIC), we set them as
+	 * 'installed' upon initalization. If/When the gtk/igtk callback is
+	 * called they will get set to false until we have received a successful
+	 * callback from nl80211. From these callbacks we can check that all
+	 * the keys have been installed, and only then trigger the handshake
+	 * complete callback.
+	 */
+	nhs->gtk_installed = true;
+	nhs->igtk_installed = true;
 
 	return &nhs->super;
 }
@@ -544,6 +559,11 @@ static void netdev_connect_free(struct netdev *netdev)
 	if (netdev->sa_query_timeout) {
 		l_timeout_remove(netdev->sa_query_timeout);
 		netdev->sa_query_timeout = NULL;
+	}
+
+	if (netdev->group_handshake_timeout) {
+		l_timeout_remove(netdev->group_handshake_timeout);
+		netdev->group_handshake_timeout = NULL;
 	}
 
 	netdev->operational = false;
@@ -1039,6 +1059,11 @@ static void netdev_setting_keys_failed(struct netdev_handshake_state *nhs,
 		netdev->rekey_offload_cmd_id = 0;
 	}
 
+	if (netdev->group_handshake_timeout) {
+		l_timeout_remove(netdev->group_handshake_timeout);
+		netdev->group_handshake_timeout = NULL;
+	}
+
 	netdev->result = NETDEV_RESULT_KEY_SETTING_FAILED;
 
 	handshake_event(&nhs->super, HANDSHAKE_EVENT_SETTING_KEYS_FAILED, NULL);
@@ -1058,6 +1083,17 @@ static void netdev_setting_keys_failed(struct netdev_handshake_state *nhs,
 	}
 }
 
+static void try_handshake_complete(struct netdev_handshake_state *nhs)
+{
+	if (nhs->ptk_installed && nhs->gtk_installed && nhs->igtk_installed &&
+			!nhs->complete) {
+		nhs->complete = true;
+		handshake_event(&nhs->super, HANDSHAKE_EVENT_COMPLETE, NULL);
+
+		netdev_connect_ok(nhs->netdev);
+	}
+}
+
 static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev_handshake_state *nhs = user_data;
@@ -1065,6 +1101,7 @@ static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
 	int err;
 
 	nhs->set_station_cmd_id = 0;
+	nhs->ptk_installed = true;
 
 	if (netdev->type == NL80211_IFTYPE_STATION && !netdev->connected)
 		return;
@@ -1080,10 +1117,8 @@ static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	handshake_event(&nhs->super, HANDSHAKE_EVENT_COMPLETE, NULL);
-
 done:
-	netdev_connect_ok(netdev);
+	try_handshake_complete(nhs);
 }
 
 static void netdev_new_group_key_cb(struct l_genl_msg *msg, void *data)
@@ -1093,11 +1128,16 @@ static void netdev_new_group_key_cb(struct l_genl_msg *msg, void *data)
 
 	nhs->group_new_key_cmd_id = 0;
 
-	if (l_genl_msg_get_error(msg) >= 0)
+	if (l_genl_msg_get_error(msg) < 0) {
+		l_error("New Key for Group Key failed for ifindex: %d",
+				netdev->index);
+		netdev_setting_keys_failed(nhs, MMPDU_REASON_CODE_UNSPECIFIED);
 		return;
+	}
 
-	l_error("New Key for Group Key failed for ifindex: %d", netdev->index);
-	netdev_setting_keys_failed(nhs, MMPDU_REASON_CODE_UNSPECIFIED);
+	nhs->gtk_installed = true;
+
+	try_handshake_complete(nhs);
 }
 
 static void netdev_new_group_management_key_cb(struct l_genl_msg *msg,
@@ -1112,7 +1152,12 @@ static void netdev_new_group_management_key_cb(struct l_genl_msg *msg,
 		l_error("New Key for Group Mgmt failed for ifindex: %d",
 				netdev->index);
 		netdev_setting_keys_failed(nhs, MMPDU_REASON_CODE_UNSPECIFIED);
+		return;
 	}
+
+	nhs->igtk_installed = true;
+
+	try_handshake_complete(nhs);
 }
 
 static bool netdev_copy_tk(uint8_t *tk_buf, const uint8_t *tk,
@@ -1184,6 +1229,8 @@ static void netdev_set_gtk(struct handshake_state *hs, uint8_t key_index,
 	const uint8_t *addr = (netdev->type == NL80211_IFTYPE_ADHOC) ?
 				nhs->super.aa : NULL;
 
+	nhs->gtk_installed = false;
+
 	l_debug("%d", netdev->index);
 
 	if (crypto_cipher_key_len(cipher) != gtk_len) {
@@ -1197,6 +1244,11 @@ static void netdev_set_gtk(struct handshake_state *hs, uint8_t key_index,
 		netdev_setting_keys_failed(nhs,
 					MMPDU_REASON_CODE_INVALID_GROUP_CIPHER);
 		return;
+	}
+
+	if (hs->wait_for_gtk) {
+		l_timeout_remove(netdev->group_handshake_timeout);
+		netdev->group_handshake_timeout = NULL;
 	}
 
 	msg = nl80211_build_new_key_group(netdev->index, cipher, key_index,
@@ -1223,6 +1275,8 @@ static void netdev_set_igtk(struct handshake_state *hs, uint8_t key_index,
 	uint8_t igtk_buf[16];
 	struct netdev *netdev = nhs->netdev;
 	struct l_genl_msg *msg;
+
+	nhs->igtk_installed = false;
 
 	l_debug("%d", netdev->index);
 
@@ -1312,6 +1366,30 @@ static struct l_genl_msg *netdev_build_cmd_new_key_pairwise(
 	return msg;
 }
 
+static void netdev_group_timeout_cb(struct l_timeout *timeout, void *user_data)
+{
+	struct netdev_handshake_state *nhs = user_data;
+
+	/*
+	 * There was a problem with the ptk, this should have triggered a key
+	 * setting failure event already.
+	 */
+	if (!nhs->ptk_installed)
+		return;
+
+	/*
+	 * If this happens, we never completed the group handshake. We can still
+	 * complete the connection, but we will not have group traffic.
+	 */
+	l_warn("completing connection with no group traffic on ifindex %d",
+			nhs->netdev->index);
+
+	nhs->complete = true;
+	handshake_event(&nhs->super, HANDSHAKE_EVENT_COMPLETE, NULL);
+
+	netdev_connect_ok(nhs->netdev);
+}
+
 static void netdev_set_tk(struct handshake_state *hs,
 				const uint8_t *tk, uint32_t cipher)
 {
@@ -1322,6 +1400,22 @@ static void netdev_set_tk(struct handshake_state *hs,
 	struct l_genl_msg *msg;
 	enum mmpdu_reason_code rc;
 	const uint8_t *addr = netdev_choose_key_address(nhs);
+
+	/*
+	 * WPA1 does the group handshake after the 4-way finishes so we can't
+	 * rely on the gtk/igtk being set immediately after the ptk. Since
+	 * 'gtk_installed' is initially set to true (to handle NO_GROUP_TRAFFIC)
+	 * we must set it false so we don't notify that the connection was
+	 * successful until we get the gtk/igtk callbacks. Note that we do not
+	 * need to set igtk_installed false because the igtk could not happen at
+	 * all.
+	 */
+	if (hs->wait_for_gtk) {
+		nhs->gtk_installed = false;
+
+		netdev->group_handshake_timeout = l_timeout_create(2,
+					netdev_group_timeout_cb, nhs, NULL);
+	}
 
 	/*
 	 * 802.11 Section 4.10.4.3:
@@ -2938,6 +3032,12 @@ int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 	 */
 	nhs = container_of(netdev->handshake,
 				struct netdev_handshake_state, super);
+
+	/* reset key states just as we do in initialization */
+	nhs->complete = false;
+	nhs->ptk_installed = false;
+	nhs->gtk_installed = true;
+	nhs->igtk_installed = true;
 
 	if (nhs->group_new_key_cmd_id) {
 		l_genl_family_cancel(nl80211, nhs->group_new_key_cmd_id);
