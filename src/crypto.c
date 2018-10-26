@@ -31,7 +31,7 @@
 
 #include <ell/ell.h>
 
-#include "crypto.h"
+#include "src/crypto.h"
 
 /* RFC 3526, Section 2 */
 const unsigned char crypto_dh5_prime[] = {
