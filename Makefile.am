@@ -23,6 +23,7 @@ ell_sources = ell/ell.h ell/private.h ell/missing.h \
 			ell/util.h ell/util.c \
 			ell/test.h ell/test.c \
 			ell/strv.h ell/strv.c \
+			ell/utf8.h ell/utf8.c \
 			ell/queue.h ell/queue.c \
 			ell/hashmap.h ell/hashmap.c \
 			ell/ringbuf.h ell/ringbuf.c \
