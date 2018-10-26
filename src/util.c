@@ -28,12 +28,9 @@
 #include <stdio.h>
 #include <sys/uio.h>
 
-#include <ell/string.h>
-#include <ell/genl.h>
-#include <ell/util.h>
-#include <ell/log.h>
+#include <ell/ell.h>
 
-#include "util.h"
+#include "src/util.h"
 
 const char *util_ssid_to_utf8(size_t len, const uint8_t *ssid)
 {
