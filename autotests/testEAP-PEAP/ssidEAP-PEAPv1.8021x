@@ -6,7 +6,7 @@ EAP-PEAP-ClientCert=/tmp/certs/cert-client.pem
 EAP-PEAP-ClientKey=/tmp/certs/cert-client-key-pkcs8.pem
 EAP-PEAP-Phase2-Method=MD5
 EAP-PEAP-Phase2-Identity=secure@identity.com
-EAP-PEAP-Phase2-MD5-Secret=testpasswd
+EAP-PEAP-Phase2-Password=testpasswd
 
 [Settings]
 Autoconnect=false

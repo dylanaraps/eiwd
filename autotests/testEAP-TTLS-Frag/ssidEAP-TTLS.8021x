@@ -6,7 +6,7 @@ EAP-TTLS-ClientCert=/tmp/certs/cert-client.pem
 EAP-TTLS-ClientKey=/tmp/certs/cert-client-key-pkcs8.pem
 EAP-TTLS-Phase2-Method=MD5
 EAP-TTLS-Phase2-Identity=abc@example.com
-EAP-TTLS-Phase2-MD5-Secret=testpasswd
+EAP-TTLS-Phase2-Password=testpasswd
 
 [Settings]
 Autoconnect=False
