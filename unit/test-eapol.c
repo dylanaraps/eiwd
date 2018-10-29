@@ -3176,7 +3176,7 @@ static void eapol_sm_test_eap_ttls_md5(const void *data)
 		"EAP-TTLS-ClientKey=ell/unit/cert-client-key-pkcs8.pem\n"
 		"EAP-TTLS-Phase2-Method=MD5\n"
 		"EAP-TTLS-Phase2-Identity=abc@example.com\n"
-		"EAP-TTLS-Phase2-MD5-Secret=testpasswd";
+		"EAP-TTLS-Phase2-Password=testpasswd";
 	struct eapol_8021x_eap_ttls_test_state s;
 
 	s.tls.app_data_cb = eapol_sm_test_eap_ttls_new_data;
