@@ -92,13 +92,50 @@ static int eap_md5_check_settings(struct l_settings *settings,
 					const char *prefix,
 					struct l_queue **out_missing)
 {
-	char setting[64];
+	const struct eap_secret_info *secret;
+	char identity_key[72];
+	char password_key[72];
+	char password_key_old[72];
 
-	snprintf(setting, sizeof(setting), "%sMD5-Secret", prefix);
+	L_AUTO_FREE_VAR(char *, identity);
+	L_AUTO_FREE_VAR(char *, password) = NULL;
 
-	if (!l_settings_get_value(settings, "Security", setting)) {
-		l_error("Property %s is missing", setting);
-		return -ENOENT;
+	snprintf(identity_key, sizeof(identity_key), "%sIdentity", prefix);
+	snprintf(password_key, sizeof(password_key), "%sPassword", prefix);
+
+	identity = l_settings_get_string(settings, "Security", identity_key);
+
+	if (!identity) {
+		secret = l_queue_find(secrets, eap_secret_info_match,
+								identity_key);
+		if (secret)
+			return 0;
+
+		eap_append_secret(out_missing, EAP_SECRET_REMOTE_USER_PASSWORD,
+					identity_key, password_key, NULL,
+					EAP_CACHE_TEMPORARY);
+
+		return 0;
+	}
+
+	password = l_settings_get_string(settings, "Security", password_key);
+
+	if (!password) {
+		snprintf(password_key_old, sizeof(password_key_old),
+						"%sMD5-Secret", prefix);
+		password = l_settings_get_string(settings, "Security",
+							password_key_old);
+		if (password)
+			return 0;
+
+		secret = l_queue_find(secrets, eap_secret_info_match,
+								password_key);
+		if (secret)
+			return 0;
+
+		eap_append_secret(out_missing, EAP_SECRET_REMOTE_PASSWORD,
+					password_key, NULL, identity,
+					EAP_CACHE_TEMPORARY);
 	}
 
 	return 0;
@@ -109,14 +146,27 @@ static bool eap_md5_load_settings(struct eap_state *eap,
 					const char *prefix)
 {
 	struct eap_md5_state *md5;
-	char setting[64];
+	char password_key[72];
 	char *secret;
 
-	snprintf(setting, sizeof(setting), "%sMD5-Secret", prefix);
-	secret = l_settings_get_string(settings, "Security", setting);
+	snprintf(password_key, sizeof(password_key), "%sPassword", prefix);
+	secret = l_settings_get_string(settings, "Security", password_key);
+
+	if (!secret) {
+		snprintf(password_key, sizeof(password_key), "%sMD5-Secret",
+									prefix);
+		secret = l_settings_get_string(settings, "Security",
+								password_key);
+
+		if (!secret) {
+			l_error("Property '%sPassword' is missing.", prefix);
+			return false;
+		}
+	}
 
 	md5 = l_new(struct eap_md5_state, 1);
 	md5->secret = secret;
+
 	eap_set_data(eap, md5);
 
 	return true;
