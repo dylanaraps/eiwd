@@ -8,6 +8,7 @@ Type=dbus
 BusName=net.connman.iwd
 ExecStart=@libexecdir@/iwd
 LimitNPROC=1
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
