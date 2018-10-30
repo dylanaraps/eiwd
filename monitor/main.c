@@ -221,6 +221,7 @@ static struct l_netlink *rtm_interface_send_message(struct l_netlink *rtnl,
 		RTA_SPACE(nlmon_type_len);
 
 	rtmmsg = l_malloc(bufsize);
+	memset(rtmmsg, 0, bufsize);
 
 	rtmmsg->ifi_family = AF_UNSPEC;
 	rtmmsg->ifi_change = ~0;
