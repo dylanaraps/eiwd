@@ -830,7 +830,7 @@ int main(int argc, char *argv[])
 
 done:
 	l_signal_remove(signal);
-	l_free(timeout);
+	l_timeout_remove(timeout);
 
 	l_main_exit();
 
