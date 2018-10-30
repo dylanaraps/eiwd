@@ -15,65 +15,105 @@ else
 ell_cflags =
 ell_ldadd = ell/libell-internal.la
 ell_dependencies = $(ell_ldadd)
-ell_built_sources = ell/internal
+ell_built_sources = ell/internal ell/ell.h
 
 noinst_LTLIBRARIES = ell/libell-internal.la
 
-ell_sources = ell/ell.h ell/private.h ell/missing.h \
-			ell/util.h ell/util.c \
-			ell/test.h ell/test.c \
-			ell/strv.h ell/strv.c \
-			ell/utf8.h ell/utf8.c \
-			ell/queue.h ell/queue.c \
-			ell/hashmap.h ell/hashmap.c \
-			ell/ringbuf.h ell/ringbuf.c \
-			ell/string.h ell/string.c \
-			ell/settings.h ell/settings.c \
-			ell/main.h ell/main.c \
-			ell/idle.h ell/idle.c \
-			ell/signal.h ell/signal.c \
-			ell/timeout.h ell/timeout.c \
-			ell/io.h ell/io.c \
-			ell/log.h ell/log.c \
-			ell/plugin.h ell/plugin.c \
-			ell/checksum.h ell/checksum.c \
+ell_headers = ell/util.h \
+			ell/test.h \
+			ell/strv.h \
+			ell/utf8.h \
+			ell/queue.h \
+			ell/hashmap.h \
+			ell/string.h \
+			ell/settings.h \
+			ell/main.h \
+			ell/idle.h \
+			ell/signal.h \
+			ell/timeout.h \
+			ell/io.h \
+			ell/ringbuf.h \
+			ell/log.h \
+			ell/plugin.h \
+			ell/checksum.h \
+			ell/netlink.h \
+			ell/genl.h \
+			ell/dbus.h \
+			ell/dbus-service.h \
+			ell/dbus-client.h \
+			ell/hwdb.h \
+			ell/cipher.h \
+			ell/random.h \
+			ell/uintset.h \
+			ell/base64.h \
+			ell/pem.h \
+			ell/tls.h \
+			ell/uuid.h \
+			ell/key.h \
+			ell/pkcs5.h \
+			ell/file.h \
+			ell/dir.h \
+			ell/net.h \
+			ell/dhcp.h
+
+ell_sources = ell/private.h \
+			ell/missing.h \
+			ell/util.c \
+			ell/test.c \
+			ell/strv.c \
+			ell/utf8.c \
+			ell/queue.c \
+			ell/hashmap.c \
+			ell/string.c \
+			ell/settings.c \
+			ell/main.c \
+			ell/idle.c \
+			ell/signal.c \
+			ell/timeout.c \
+			ell/io.c \
+			ell/ringbuf.c \
+			ell/log.c \
+			ell/plugin.c \
+			ell/checksum.c \
 			ell/netlink-private.h \
-			ell/netlink.h ell/netlink.c \
+			ell/netlink.c \
 			ell/genl-private.h \
-			ell/genl.h ell/genl.c \
+			ell/genl.c \
 			ell/dbus-private.h \
-			ell/dbus.h ell/dbus.c \
-			ell/dbus-util.c \
+			ell/dbus.c \
 			ell/dbus-message.c \
-			ell/dbus-service.h ell/dbus-service.c \
-			ell/dbus-filter.c \
+			ell/dbus-util.c \
+			ell/dbus-service.c \
+			ell/dbus-client.c \
 			ell/dbus-name-cache.c \
+			ell/dbus-filter.c \
 			ell/gvariant-private.h \
 			ell/gvariant-util.c \
 			ell/siphash-private.h \
 			ell/siphash.c \
-			ell/hwdb.h ell/hwdb.c \
-			ell/cipher.h ell/cipher.c \
-			ell/random.h ell/random.c \
-			ell/uintset.h ell/uintset.c \
-			ell/base64.h ell/base64.c \
-			ell/pem.h ell/pem.c \
-			ell/tls-private.h \
-			ell/tls.h ell/tls.c \
-			ell/tls-record.c \
-			ell/uuid.h ell/uuid.c \
-			ell/key.h ell/key.c \
+			ell/hwdb.c \
+			ell/cipher.c \
+			ell/random.c \
+			ell/uintset.c \
+			ell/base64.c \
 			ell/asn1-private.h \
-			ell/pkcs5.h ell/pkcs5.c \
+			ell/pem.c \
+			ell/tls-private.h \
+			ell/tls.c \
+			ell/tls-record.c \
+			ell/uuid.c \
+			ell/key.c \
 			ell/pkcs5-private.h \
-			ell/file.h ell/file.c \
-			ell/dir.h ell/dir.c \
-			ell/dbus-client.h ell/dbus-client.c \
-			ell/net.h ell/net.c \
-			ell/dhcp.h ell/dhcp.c ell/dhcp-transport.c \
-			ell/dhcp-private.h ell/dhcp-lease.c
+			ell/pkcs5.c \
+			ell/file.c \
+			ell/dir.c \
+			ell/net.c \
+			ell/dhcp-private.h \
+			ell/dhcp.c \
+			ell/dhcp-transport.c \
+			ell/dhcp-lease.c
 
-ell_libell_internal_la_SOURCES = $(ell_sources)
+ell_libell_internal_la_SOURCES = $(ell_headers) $(ell_sources)
 endif
 
 bin_PROGRAMS =
@@ -418,17 +458,17 @@ BUILT_SOURCES = $(ell_built_sources) src/builtin.h
 
 ell/internal: Makefile
 	$(AM_V_at)$(MKDIR_P) ell
-	$(AM_V_GEN)for f in $(ell_sources) ; do \
+	$(AM_V_GEN)for f in $(ell_headers) $(ell_sources) ; do \
 		if [ ! -f $$f ] ; then \
 			$(LN_S) -t ell -f $(abs_srcdir)/../ell/$$f ; \
 		fi \
 	done > $@
-	$(AM_V_at)$(MKDIR_P) linux
-	$(AM_V_GEN)for f in $(ell_linux_headers) ; do \
-		if [ ! -f $$f ] ; then \
-			$(LN_S) -t linux -f $(abs_srcdir)/../ell/$$f ; \
-		fi \
-	done > $@
+
+ell/ell.h: Makefile
+	$(AM_V_at)echo -n > $@
+	$(AM_V_GEN)for f in $(ell_headers) ; do \
+		echo "#include <$$f>" >> $@ ; \
+	done
 
 ell/unit/test_data: Makefile
 	$(AM_V_at)$(MKDIR_P) ell/unit
