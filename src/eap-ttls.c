@@ -443,6 +443,8 @@ static void eap_ttls_free(struct eap_state *eap)
 #define EAP_TTLS_FLAG_S	(1 << 5)
 #define EAP_TTLS_FLAG_MASK	\
 	(EAP_TTLS_FLAG_L | EAP_TTLS_FLAG_M | EAP_TTLS_FLAG_S)
+#define EAP_TTLS_FLAG_LM_MASK	\
+	(EAP_TTLS_FLAG_L | EAP_TTLS_FLAG_M)
 
 struct phase2_credentials {
 	char *username;
@@ -912,8 +914,15 @@ static void eap_ttls_handle_request(struct eap_state *eap,
 		goto err;
 	}
 
+	/* Sanity check that first fragmented request has L flag set */
+	if ((flags & EAP_TTLS_FLAG_LM_MASK) == EAP_TTLS_FLAG_M &&
+				!ttls->rx_pkt_buf) {
+		l_error("EAP-TTLS request 1st fragment with no length");
+		goto err;
+	}
+
 	if (flags & EAP_TTLS_FLAG_L) {
-		if (len < 7) {
+		if (len < 4) {
 			l_error("EAP-TTLS request with L flag too short");
 			goto err;
 		}
@@ -922,35 +931,31 @@ static void eap_ttls_handle_request(struct eap_state *eap,
 		pkt += 4;
 		len -= 4;
 
-		if (ttls->rx_pkt_buf) {
-			l_error("EAP-TTLS request L flag invalid");
+		if (flags & EAP_TTLS_FLAG_M) {
+			if (ttls->rx_pkt_buf)
+				goto add_to_pkt_buf;
 
-			l_free(ttls->rx_pkt_buf);
-			ttls->rx_pkt_buf = NULL;
+			if (total_len > 512*1024) {
+				l_error("Maximum message size exceeded");
+				goto err;
+			}
 
-			goto err;
-		}
-
-		if (!(flags & EAP_TTLS_FLAG_M) && total_len != len) {
+			ttls->rx_pkt_buf = l_malloc(total_len);
+			ttls->rx_pkt_len = total_len;
+			ttls->rx_pkt_received = 0;
+			goto add_to_pkt_buf;
+		} else if (total_len != len && !ttls->rx_pkt_buf) {
+			/*
+			 * Sanity check length for unfragmented request
+			 * with L flag set
+			 */
 			l_error("EAP-TTLS request Length value invalid");
-
 			goto err;
 		}
-	}
-
-	if (!ttls->rx_pkt_buf && (flags & EAP_TTLS_FLAG_M)) {
-		if (!(flags & EAP_TTLS_FLAG_L)) {
-			l_error("EAP-TTLS request 1st fragment with no length");
-
-			goto err;
-		}
-
-		ttls->rx_pkt_buf = l_malloc(total_len);
-		ttls->rx_pkt_len = total_len;
-		ttls->rx_pkt_received = 0;
 	}
 
 	if (ttls->rx_pkt_buf) {
+add_to_pkt_buf:
 		if (
 				((flags & EAP_TTLS_FLAG_M) &&
 				 ttls->rx_pkt_received + len >=
