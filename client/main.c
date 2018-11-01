@@ -31,8 +31,7 @@
 #include "display.h"
 #include "dbus-proxy.h"
 
-static void signal_handler(struct l_signal *signal, uint32_t signo,
-				void *user_data)
+static void signal_handler(uint32_t signo, void *user_data)
 {
 	switch (signo) {
 	case SIGINT:
@@ -46,18 +45,10 @@ static void signal_handler(struct l_signal *signal, uint32_t signo,
 int main(int argc, char *argv[])
 {
 	int exit_status;
-	struct l_signal *signal;
-	sigset_t mask;
 	bool interactive;
 
 	if (!l_main_init())
 		return EXIT_FAILURE;
-
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGINT);
-	sigaddset(&mask, SIGTERM);
-
-	signal = l_signal_create(&mask, signal_handler, NULL, NULL);
 
 	l_log_set_stderr();
 
@@ -68,7 +59,7 @@ int main(int argc, char *argv[])
 
 	dbus_proxy_init();
 
-	l_main_run();
+	l_main_run_with_signal(signal_handler, NULL);
 
 	dbus_proxy_exit();
 
@@ -77,8 +68,6 @@ int main(int argc, char *argv[])
 
 	exit_status = command_get_exit_status();
 	command_exit();
-
-	l_signal_remove(signal);
 
 	l_main_exit();
 
