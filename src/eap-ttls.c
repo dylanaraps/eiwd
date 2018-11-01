@@ -818,6 +818,11 @@ static void eap_ttls_disconnect_cb(enum l_tls_alert_desc reason,
 	ttls->completed = true;
 }
 
+static void eap_ttls_debug_cb(const char *str, void *user_data)
+{
+	l_info("EAP-TTLS %s", str);
+}
+
 static void eap_ttls_handle_payload(struct eap_state *eap,
 						const uint8_t *pkt,
 						size_t pkt_len)
@@ -1003,6 +1008,9 @@ add_to_pkt_buf:
 			l_error("Creating a TLS instance failed");
 			goto err;
 		}
+
+		if (getenv("IWD_TLS_DEBUG"))
+			l_tls_set_debug(ttls->tls, eap_ttls_debug_cb, NULL, NULL);
 
 		l_tls_set_auth_data(ttls->tls, ttls->client_cert,
 					ttls->client_key, ttls->passphrase);

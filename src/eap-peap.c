@@ -523,7 +523,13 @@ static void eap_peap_tunnel_ready(const char *peer_identity, void *user_data)
 static void eap_peap_tunnel_disconnected(enum l_tls_alert_desc reason,
 						bool remote, void *user_data)
 {
-	l_info("PEAP TLS tunnel has disconnected with alert: %d", reason);
+	l_info("PEAP TLS tunnel has disconnected with alert: %s",
+		l_tls_alert_to_str(reason));
+}
+
+static void eap_peap_debug_cb(const char *str, void *user_data)
+{
+	l_info("PEAP TLS %s", str);
 }
 
 static bool eap_peap_tunnel_init(struct eap_state *eap)
@@ -543,6 +549,9 @@ static bool eap_peap_tunnel_init(struct eap_state *eap)
 		l_error("Failed to create a TLS instance.");
 		return false;
 	}
+
+	if (getenv("IWD_TLS_DEBUG"))
+		l_tls_set_debug(peap->tunnel, eap_peap_debug_cb, NULL, NULL);
 
 	if (!l_tls_set_auth_data(peap->tunnel, peap->client_cert,
 					peap->client_key, NULL)) {
