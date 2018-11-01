@@ -30,7 +30,6 @@
 
 #include "src/dbus.h"
 #include "src/netdev.h"
-#include "src/watchlist.h"
 #include "src/wiphy.h"
 #include "src/station.h"
 #include "src/scan.h"
