@@ -24,7 +24,9 @@
 #include <config.h>
 #endif
 
+#define _GNU_SOURCE
 #include <stdio.h>
+#include <string.h>
 #include <ell/ell.h>
 #include <readline/readline.h>
 
