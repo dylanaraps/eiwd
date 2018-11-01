@@ -46,8 +46,8 @@
 
 #include "src/backtrace.h"
 
-struct l_genl *genl;
-struct l_genl_family *nl80211;
+static struct l_genl *genl;
+static struct l_genl_family *nl80211;
 static struct l_settings *iwd_config;
 static struct l_timeout *timeout;
 static const char *interfaces;
