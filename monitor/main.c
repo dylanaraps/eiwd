@@ -24,10 +24,12 @@
 #include <config.h>
 #endif
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <errno.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <string.h>
 #include <getopt.h>
 #include <signal.h>
 #include <sys/socket.h>

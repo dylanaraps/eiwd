@@ -24,11 +24,13 @@
 #include <config.h>
 #endif
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/uio.h>
+#include <sys/types.h>
 #include <ell/ell.h>
 
 #include "monitor/pcap.h"
