@@ -72,6 +72,8 @@ struct iwmon_interface {
 	struct l_netlink *genl;
 };
 
+static struct iwmon_interface monitor_interface = { };
+
 static void genl_parse(uint16_t type, const void *data, uint32_t len,
 							const char *ifname)
 {
@@ -649,15 +651,12 @@ static void main_loop_quit(struct l_timeout *timeout, void *user_data)
 	l_main_quit();
 }
 
-static void signal_handler(struct l_signal *signal, uint32_t signo,
-							void *user_data)
+static void signal_handler(uint32_t signo, void *user_data)
 {
-	struct iwmon_interface *monitor_interface = user_data;
-
 	switch (signo) {
 	case SIGINT:
 	case SIGTERM:
-		iwmon_interface_disable(monitor_interface);
+		iwmon_interface_disable(&monitor_interface);
 
 		timeout = l_timeout_create(1, main_loop_quit, NULL, NULL);
 		break;
@@ -701,8 +700,6 @@ int main(int argc, char *argv[])
 	const char *ifname = NULL;
 	struct iwmon_interface monitor_interface = { };
 	uint16_t nl80211_family = 0;
-	struct l_signal *signal;
-	sigset_t mask;
 	int exit_status;
 
 	for (;;) {
@@ -779,13 +776,6 @@ int main(int argc, char *argv[])
 	if (!l_main_init())
 		return EXIT_FAILURE;
 
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGINT);
-	sigaddset(&mask, SIGTERM);
-
-	signal = l_signal_create(&mask, signal_handler, &monitor_interface,
-					NULL);
-
 	printf("Wireless monitor ver %s\n", VERSION);
 
 	if (analyze_path) {
@@ -819,7 +809,7 @@ int main(int argc, char *argv[])
 	monitor_interface.ifname = l_strdup(ifname);
 	iwmon_interface_lookup(&monitor_interface);
 
-	l_main_run();
+	exit_status = l_main_run_with_signal(signal_handler, NULL);
 
 	l_netlink_destroy(monitor_interface.rtnl);
 	l_netlink_destroy(monitor_interface.genl);
@@ -827,10 +817,7 @@ int main(int argc, char *argv[])
 
 	nlmon_close(nlmon);
 
-	exit_status = EXIT_SUCCESS;
-
 done:
-	l_signal_remove(signal);
 	l_timeout_remove(timeout);
 
 	l_main_exit();
