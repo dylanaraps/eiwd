@@ -83,8 +83,7 @@ static void iwd_shutdown(void)
 	timeout = l_timeout_create(1, main_loop_quit, NULL, NULL);
 }
 
-static void signal_handler(struct l_signal *signal, uint32_t signo,
-							void *user_data)
+static void signal_handler(uint32_t signo, void *user_data)
 {
 	switch (signo) {
 	case SIGINT:
@@ -350,8 +349,6 @@ done:
 int main(int argc, char *argv[])
 {
 	bool enable_dbus_debug = false;
-	struct l_signal *signal;
-	sigset_t mask;
 	int exit_status;
 	struct l_dbus *dbus;
 	char *config_path;
@@ -422,12 +419,6 @@ int main(int argc, char *argv[])
 	if (!l_main_init())
 		return EXIT_FAILURE;
 
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGINT);
-	sigaddset(&mask, SIGTERM);
-
-	signal = l_signal_create(&mask, signal_handler, NULL, NULL);
-
 	if (debugopt)
 		l_debug_enable(debugopt);
 
@@ -485,8 +476,7 @@ int main(int argc, char *argv[])
 	sim_auth_init();
 	plugin_init(plugins, noplugins);
 
-	exit_status = EXIT_SUCCESS;
-	l_main_run();
+	exit_status = l_main_run_with_signal(signal_handler, NULL);
 
 	plugin_exit();
 	sim_auth_exit();
@@ -509,7 +499,6 @@ fail_netdev:
 fail_dbus:
 	l_settings_free(iwd_config);
 
-	l_signal_remove(signal);
 	l_timeout_remove(timeout);
 
 	l_main_exit();
