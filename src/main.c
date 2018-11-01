@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <getopt.h>
+#include <signal.h>
 #include <ell/ell.h>
 
 #include "linux/nl80211.h"

@@ -24,6 +24,7 @@
 #include <config.h>
 #endif
 
+#include <signal.h>
 #include <ell/ell.h>
 
 #include "wired/dbus.h"

@@ -24,10 +24,12 @@
 #include <config.h>
 #endif
 
-#include <ell/ell.h>
+#include <stdio.h>
+#include <signal.h>
+
 #include <readline/history.h>
 #include <readline/readline.h>
-#include <stdio.h>
+#include <ell/ell.h>
 
 #include "agent.h"
 #include "command.h"
@@ -577,29 +579,19 @@ void display_quit(void)
 	rl_crlf();
 }
 
-static void signal_handler(struct l_signal *signal, uint32_t signo,
-								void *user_data)
+static void signal_handler(void *user_data)
 {
-	switch (signo) {
-	case SIGWINCH:
-		if (display_refresh.cmd)
-			display_refresh_reset();
-		break;
-	}
+	if (display_refresh.cmd)
+		display_refresh_reset();
 }
 
 void display_init(void)
 {
-	sigset_t mask;
-
 	display_refresh.redo_entries = l_queue_new();
 
 	setlinebuf(stdout);
 
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGWINCH);
-
-	resize_signal = l_signal_create(&mask, signal_handler, NULL, NULL);
+	resize_signal = l_signal_create(SIGWINCH, signal_handler, NULL, NULL);
 
 	rl_attempted_completion_function = command_completion;
 	rl_completion_display_matches_hook = display_completion_matches;

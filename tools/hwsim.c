@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include <signal.h>
 #include <linux/if_ether.h>
 #include <linux/rtnetlink.h>
 #include <net/if_arp.h>

@@ -25,6 +25,7 @@
 #endif
 
 #include <errno.h>
+#include <signal.h>
 #include <ell/ell.h>
 
 #include "command.h"
