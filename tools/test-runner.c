@@ -32,7 +32,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <signal.h>
 #include <string.h>
 #include <getopt.h>
 #include <poll.h>
@@ -1470,8 +1469,7 @@ static void test_timeout_timer_tick(struct l_timeout *timeout, void *user_data)
 	l_main_quit();
 }
 
-static void test_timeout_signal_handler(struct l_signal *signal, uint32_t signo,
-								void *user_data)
+static void test_timeout_signal_handler(uint32_t signo, void *user_data)
 {
 	switch (signo) {
 	case SIGINT:
@@ -1484,8 +1482,6 @@ static void test_timeout_signal_handler(struct l_signal *signal, uint32_t signo,
 static pid_t start_execution_timeout_timer(unsigned int max_exec_interval_sec,
 							pid_t *test_exec_pid)
 {
-	sigset_t mask;
-	struct l_signal *signal;
 	struct l_timeout *test_exec_timeout;
 	pid_t test_timer_pid;
 
@@ -1499,22 +1495,15 @@ static pid_t start_execution_timeout_timer(unsigned int max_exec_interval_sec,
 		if (!l_main_init())
 			exit(EXIT_FAILURE);
 
-		sigemptyset(&mask);
-		sigaddset(&mask, SIGINT);
-		sigaddset(&mask, SIGTERM);
-
-		signal = l_signal_create(&mask, test_timeout_signal_handler,
-							test_exec_pid, NULL);
 		test_exec_timeout =
 			l_timeout_create(max_exec_interval_sec,
 						test_timeout_timer_tick,
 						test_exec_pid,
 						NULL);
 
-		l_main_run();
+		l_main_run_with_signal(test_timeout_signal_handler, NULL);
 
 		l_timeout_remove(test_exec_timeout);
-		l_signal_remove(signal);
 
 		l_main_exit();
 
