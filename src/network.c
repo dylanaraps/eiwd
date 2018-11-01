@@ -42,7 +42,6 @@
 #include "src/agent.h"
 #include "src/netdev.h"
 #include "src/wiphy.h"
-#include "src/watchlist.h"
 #include "src/station.h"
 #include "src/eap.h"
 #include "src/knownnetworks.h"
