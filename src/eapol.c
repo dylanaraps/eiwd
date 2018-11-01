@@ -627,6 +627,41 @@ struct eapol_key *eapol_create_gtk_2_of_2(
 	return step2;
 }
 
+struct eapol_frame_watch {
+	uint32_t ifindex;
+	struct watchlist_item super;
+};
+
+static void eapol_frame_watch_free(struct watchlist_item *item)
+{
+	struct eapol_frame_watch *efw =
+		container_of(item, struct eapol_frame_watch, super);
+
+	l_free(efw);
+}
+
+static const struct watchlist_ops eapol_frame_watch_ops = {
+	.item_free = eapol_frame_watch_free,
+};
+
+static int32_t eapol_frame_watch_add(uint32_t ifindex,
+					eapol_frame_watch_func_t handler,
+					void *user_data)
+{
+	struct eapol_frame_watch *efw;
+
+	efw = l_new(struct eapol_frame_watch, 1);
+	efw->ifindex = ifindex;
+
+	return watchlist_link(&frame_watches, &efw->super,
+				handler, user_data, NULL);
+}
+
+static bool eapol_frame_watch_remove(uint32_t id)
+{
+	return watchlist_remove(&frame_watches, id);
+}
+
 struct eapol_sm {
 	struct handshake_state *handshake;
 	enum eapol_protocol_version protocol_version;
@@ -2083,41 +2118,6 @@ eap_error:
 			(int) sm->handshake->ifindex);
 
 	return false;
-}
-
-struct eapol_frame_watch {
-	uint32_t ifindex;
-	struct watchlist_item super;
-};
-
-static void eapol_frame_watch_free(struct watchlist_item *item)
-{
-	struct eapol_frame_watch *efw =
-		container_of(item, struct eapol_frame_watch, super);
-
-	l_free(efw);
-}
-
-static const struct watchlist_ops eapol_frame_watch_ops = {
-	.item_free = eapol_frame_watch_free,
-};
-
-uint32_t eapol_frame_watch_add(uint32_t ifindex,
-				eapol_frame_watch_func_t handler,
-				void *user_data)
-{
-	struct eapol_frame_watch *efw;
-
-	efw = l_new(struct eapol_frame_watch, 1);
-	efw->ifindex = ifindex;
-
-	return watchlist_link(&frame_watches, &efw->super,
-				handler, user_data, NULL);
-}
-
-bool eapol_frame_watch_remove(uint32_t id)
-{
-	return watchlist_remove(&frame_watches, id);
 }
 
 struct preauth_sm {

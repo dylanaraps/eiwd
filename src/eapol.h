@@ -123,11 +123,6 @@ void eapol_sm_set_event_func(struct eapol_sm *sm, eapol_sm_event_func_t func);
 void eapol_register(struct eapol_sm *sm);
 bool eapol_start(struct eapol_sm *sm);
 
-uint32_t eapol_frame_watch_add(uint32_t ifindex,
-				eapol_frame_watch_func_t handler,
-				void *user_data);
-bool eapol_frame_watch_remove(uint32_t id);
-
 struct preauth_sm *eapol_preauth_start(const uint8_t *aa,
 					const struct handshake_state *hs,
 					eapol_preauth_cb_t cb, void *user_data,
