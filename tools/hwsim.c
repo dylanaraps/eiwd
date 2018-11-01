@@ -2391,8 +2391,7 @@ static void hwsim_disappeared(void *user_data)
 	l_main_quit();
 }
 
-static void signal_handler(struct l_signal *signal, uint32_t signo,
-							void *user_data)
+static void signal_handler(uint32_t signo, void *user_data)
 {
 	switch (signo) {
 	case SIGINT:
@@ -2431,8 +2430,6 @@ static const struct option main_options[] = {
 
 int main(int argc, char *argv[])
 {
-	struct l_signal *signal;
-	sigset_t mask;
 	int actions = 0;
 
 	for (;;) {
@@ -2503,12 +2500,6 @@ int main(int argc, char *argv[])
 	if (!l_main_init())
 		return EXIT_FAILURE;
 
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGINT);
-	sigaddset(&mask, SIGTERM);
-
-	signal = l_signal_create(&mask, signal_handler, NULL, NULL);
-
 	l_log_set_stderr();
 
 	printf("Wireless simulator ver %s\n", VERSION);
@@ -2543,9 +2534,7 @@ int main(int argc, char *argv[])
 	l_genl_family_set_watches(hwsim, hwsim_ready, hwsim_disappeared,
 					NULL, NULL);
 
-	exit_status = EXIT_SUCCESS;
-
-	l_main_run();
+	exit_status = l_main_run_with_signal(signal_handler, NULL);
 
 	l_genl_family_unref(hwsim);
 	l_genl_family_unref(nl80211);
@@ -2561,7 +2550,6 @@ int main(int argc, char *argv[])
 	l_netlink_destroy(rtnl);
 
 done:
-	l_signal_remove(signal);
 	l_main_exit();
 
 	return exit_status;
