@@ -82,7 +82,7 @@ bool agent_manager_unregister_agent(void)
 
 static void *agent_manager_create(void)
 {
-	char *path = l_strdup_printf("/agent/%lu", getpid());
+	char *path = l_strdup_printf("/agent/%i", getpid());
 
 	agent_init(path);
 

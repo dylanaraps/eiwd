@@ -322,14 +322,14 @@ void display_table_footer(void)
 void display_command_line(const char *command_family,
 						const struct command *cmd)
 {
-	char *cmd_line = l_strdup_printf("%s%s%s%s%s %s",
+	char *cmd_line = l_strdup_printf("%s%s%s%s%s%s%s",
 				command_family ? : "",
 				command_family ? " " : "",
 				cmd->entity ? : "",
 				cmd->entity  ? " " : "",
 				cmd->cmd,
-				cmd->arg ? : "",
-				cmd->arg ? " " : "");
+				cmd->arg ? " " : "",
+				cmd->arg ? : "");
 
 	display(MARGIN "%-*s%s\n", 50, cmd_line, cmd->desc ? : "");
 
