@@ -459,11 +459,8 @@ static int analyze_pcap(const char *pathname)
 			continue;
 		}
 
-		arphrd_type = L_GET_UNALIGNED((const uint16_t *) (buf + 2));
-		arphrd_type = L_BE16_TO_CPU(arphrd_type);
-
-		proto_type = L_GET_UNALIGNED((const uint16_t *) (buf + 14));
-		proto_type = L_BE16_TO_CPU(proto_type);
+		arphrd_type = l_get_be16(buf + 2);
+		proto_type = l_get_be16(buf + 14);
 
 		switch (arphrd_type) {
 		case ARPHRD_ETHER:
@@ -603,14 +600,9 @@ static int process_pcap(struct pcap *pcap, uint16_t id)
 			continue;
 		}
 
-		pkt_type = L_GET_UNALIGNED((const uint16_t *) buf);
-		pkt_type = L_BE16_TO_CPU(pkt_type);
-
-		arphrd_type = L_GET_UNALIGNED((const uint16_t *) (buf + 2));
-		arphrd_type = L_BE16_TO_CPU(arphrd_type);
-
-		proto_type = L_GET_UNALIGNED((const uint16_t *) (buf + 14));
-		proto_type = L_BE16_TO_CPU(proto_type);
+		pkt_type = l_get_be16(buf);
+		arphrd_type = l_get_be16(buf + 2);
+		proto_type = l_get_be16(buf + 14);
 
 		switch (arphrd_type) {
 		case ARPHRD_ETHER:

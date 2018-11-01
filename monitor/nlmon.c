@@ -4049,14 +4049,9 @@ static void store_packet(struct nlmon *nlmon, const struct timeval *tv,
 
 	memset(sll_hdr, 0, sizeof(sll_hdr));
 
-	pkt_type = L_CPU_TO_BE16(pkt_type);
-	L_PUT_UNALIGNED(pkt_type, (uint16_t *) buf);
-
-	arphrd_type = L_CPU_TO_BE16(arphrd_type);
-	L_PUT_UNALIGNED(arphrd_type, (uint16_t *) (buf + 2));
-
-	proto_type = L_CPU_TO_BE16(proto_type);
-	L_PUT_UNALIGNED(proto_type, (uint16_t *) (buf + 14));
+	l_put_be16(pkt_type, buf);
+	l_put_be16(arphrd_type, buf + 2);
+	l_put_be16(proto_type, buf + 14);
 
 	pcap_write(nlmon->pcap, tv, &sll_hdr, sizeof(sll_hdr), data, size);
 }
