@@ -1290,7 +1290,7 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 					'A' + wsc->device_password[i] - 'a';
 		}
 	} else
-		wsc->device_password = strdup("00000000");
+		wsc->device_password = l_strdup("00000000");
 
 	if (!load_hexencoded(settings, "E-SNonce1", wsc->e_snonce1, 16))
 		l_getrandom(wsc->e_snonce1, 16);

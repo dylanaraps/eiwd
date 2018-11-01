@@ -24,9 +24,11 @@
 #include <config.h>
 #endif
 
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <time.h>
 #include <sys/socket.h>
 #include <limits.h>
 #include <linux/if.h>

@@ -73,7 +73,7 @@ void __handshake_set_install_igtk_func(handshake_install_igtk_func_t func)
 
 void handshake_state_free(struct handshake_state *s)
 {
-	typeof(s->free) destroy = s->free;
+	__typeof__(s->free) destroy = s->free;
 
 	l_free(s->authenticator_ie);
 	l_free(s->supplicant_ie);

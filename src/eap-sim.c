@@ -27,6 +27,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <errno.h>
+#include <alloca.h>
 #include <ell/ell.h>
 
 #include "eap.h"

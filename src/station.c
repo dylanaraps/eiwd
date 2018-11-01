@@ -24,9 +24,11 @@
 #include <config.h>
 #endif
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <errno.h>
 #include <time.h>
+#include <sys/time.h>
 #include <linux/if_ether.h>
 
 #include <ell/ell.h>

@@ -25,9 +25,10 @@
 #endif
 
 #include <sys/types.h>
+#include <stdio.h>
 #include <errno.h>
 #include <limits.h>
-#include <stdio.h>
+#include <alloca.h>
 
 #include <ell/ell.h>
 
@@ -1187,7 +1188,7 @@ bool network_register(struct network *network, const char *path)
 		l_info("Unable to register %s interface",
 						L_DBUS_INTERFACE_PROPERTIES);
 
-	network->object_path = strdup(path);
+	network->object_path = l_strdup(path);
 
 	return true;
 }

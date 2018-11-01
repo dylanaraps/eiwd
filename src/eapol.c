@@ -25,6 +25,7 @@
 #endif
 
 #include <string.h>
+#include <alloca.h>
 #include <linux/if_ether.h>
 #include <ell/ell.h>
 

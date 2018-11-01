@@ -24,9 +24,10 @@
 #include <config.h>
 #endif
 
-#include <string.h>
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <errno.h>
+#include <string.h>
 #include <ell/ell.h>
 
 #include "eap.h"

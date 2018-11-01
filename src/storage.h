@@ -20,6 +20,8 @@
  *
  */
 
+#include <time.h>
+
 struct l_settings;
 enum security;
 

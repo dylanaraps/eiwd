@@ -367,7 +367,7 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 				goto chal_error;
 			}
 
-			aka->kdf_in = strndup((const char *)(contents + 2),
+			aka->kdf_in = l_strndup((const char *)(contents + 2),
 					kdf_in_len);
 
 			break;

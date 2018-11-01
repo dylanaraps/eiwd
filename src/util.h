@@ -29,7 +29,7 @@
 #define align_len(len, boundary) (((len)+(boundary)-1) & ~((boundary)-1))
 
 #define container_of(ptr, type, member) ({			\
-	const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
+	const __typeof__( ((type *)0)->member ) *__mptr = (ptr);	\
 	(type *)( (char *)__mptr - offsetof(type,member) );})
 
 #define MAC "%02x:%02x:%02x:%02x:%02x:%02x"

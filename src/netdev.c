@@ -25,6 +25,7 @@
 #endif
 
 #include <stdlib.h>
+#include <alloca.h>
 #include <stdio.h>
 #include <linux/rtnetlink.h>
 #include <net/if_arp.h>
