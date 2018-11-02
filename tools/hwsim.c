@@ -2373,7 +2373,7 @@ static void hwsim_ready(void *user_data)
 		l_genl_family_set_watches(nl80211, nl80211_ready, NULL,
 						NULL, NULL);
 
-		if (!l_genl_set_unicast_handler(genl, unicast_handler,
+		if (!l_genl_family_set_unicast_handler(hwsim, unicast_handler,
 						NULL, NULL)) {
 			l_error("Failed to set unicast handler");
 			goto error;
