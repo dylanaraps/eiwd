@@ -1785,6 +1785,9 @@ static void create_network_and_run_tests(const void *key, void *value,
 		list_interfaces();
 	}
 
+	if (check_verbosity("tls"))
+		setenv("IWD_TLS_DEBUG", "on", true);
+
 	if (!configure_hostapd_instances(hw_settings, config_dir_path,
 						wiphy_list, hostapd_pids))
 		goto exit_hostapd;
