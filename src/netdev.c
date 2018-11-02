@@ -4847,7 +4847,6 @@ bool netdev_init(const char *whitelist, const char *blacklist)
 void netdev_set_nl80211(struct l_genl_family *in)
 {
 	struct l_genl_msg *msg;
-	struct l_genl *genl = l_genl_family_get_genl(in);
 
 	nl80211 = in;
 
@@ -4864,7 +4863,7 @@ void netdev_set_nl80211(struct l_genl_family *in)
 								NULL, NULL))
 		l_error("Registering for MLME notification failed");
 
-	if (!l_genl_set_unicast_handler(genl, netdev_unicast_notify,
+	if (!l_genl_family_set_unicast_handler(nl80211, netdev_unicast_notify,
 								NULL, NULL))
 		l_error("Registering for unicast notification failed");
 }
