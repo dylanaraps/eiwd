@@ -231,7 +231,7 @@ error:
  * Note that for efficiency @key_data is being modified, including in
  * case of failure, so it must be sufficiently larger than @key_data_len.
  */
-bool eapol_encrypt_key_data(const uint8_t *kek, uint8_t *key_data,
+static bool eapol_encrypt_key_data(const uint8_t *kek, uint8_t *key_data,
 				size_t key_data_len,
 				struct eapol_key *out_frame)
 {
@@ -260,7 +260,8 @@ bool eapol_encrypt_key_data(const uint8_t *kek, uint8_t *key_data,
 	return true;
 }
 
-void eapol_key_data_append(struct eapol_key *ek, enum handshake_kde selector,
+static void eapol_key_data_append(struct eapol_key *ek,
+				enum handshake_kde selector,
 				const uint8_t *data, size_t data_len)
 {
 	uint16_t key_data_len = L_BE16_TO_CPU(ek->key_data_len);
@@ -1178,6 +1179,32 @@ static void eapol_ptk_3_of_4_retry(struct l_timeout *timeout,
 	l_debug("attempt %i", sm->frame_retry);
 }
 
+static const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len,
+				const uint8_t **optional)
+{
+	struct ie_tlv_iter iter;
+	const uint8_t *first = NULL;
+
+	ie_tlv_iter_init(&iter, data, data_len);
+
+	while (ie_tlv_iter_next(&iter)) {
+		if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_RSN)
+			continue;
+
+		if (!first) {
+			first = ie_tlv_iter_get_data(&iter) - 2;
+			continue;
+		}
+
+		if (optional)
+			*optional = ie_tlv_iter_get_data(&iter) - 2;
+
+		return first;
+	}
+
+	return first;
+}
+
 /* 802.11-2016 Section 12.7.6.3 */
 static void eapol_handle_ptk_2_of_4(struct eapol_sm *sm,
 					const struct eapol_key *ek)
@@ -1231,32 +1258,6 @@ static void eapol_handle_ptk_2_of_4(struct eapol_sm *sm,
 	sm->frame_retry = 0;
 
 	eapol_ptk_3_of_4_retry(NULL, sm);
-}
-
-const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len,
-				const uint8_t **optional)
-{
-	struct ie_tlv_iter iter;
-	const uint8_t *first = NULL;
-
-	ie_tlv_iter_init(&iter, data, data_len);
-
-	while (ie_tlv_iter_next(&iter)) {
-		if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_RSN)
-			continue;
-
-		if (!first) {
-			first = ie_tlv_iter_get_data(&iter) - 2;
-			continue;
-		}
-
-		if (optional)
-			*optional = ie_tlv_iter_get_data(&iter) - 2;
-
-		return first;
-	}
-
-	return first;
 }
 
 static const uint8_t *eapol_find_wpa_ie(const uint8_t *data, size_t data_len)

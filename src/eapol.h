@@ -59,11 +59,6 @@ bool eapol_verify_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
 uint8_t *eapol_decrypt_key_data(enum ie_rsn_akm_suite akm, const uint8_t *kek,
 				const struct eapol_key *frame,
 				size_t *decrypted_size);
-bool eapol_encrypt_key_data(const uint8_t *kek, uint8_t *key_data,
-				size_t key_data_len,
-				struct eapol_key *out_frame);
-void eapol_key_data_append(struct eapol_key *ek, enum handshake_kde selector,
-				const uint8_t *data, size_t data_len);
 
 bool eapol_verify_ptk_1_of_4(const struct eapol_key *ek);
 bool eapol_verify_ptk_2_of_4(const struct eapol_key *ek);
@@ -92,9 +87,6 @@ struct eapol_key *eapol_create_gtk_2_of_2(
 				enum eapol_key_descriptor_version version,
 				uint64_t key_replay_counter,
 				bool is_wpa, uint8_t wpa_key_id);
-
-const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len,
-				const uint8_t **optional);
 
 void __eapol_rx_packet(uint32_t ifindex, const uint8_t *src, uint16_t proto,
 			const uint8_t *frame, size_t len, bool noencrypt);
