@@ -61,6 +61,11 @@ will send an SA Query frame, which IWD will respond to if it is still connected.
         - EAP-PEAP
         - EAP-TTLS
 
+- In addition to the default station mode, IWD supports:
+        - AdHoc (IBSS) - Both unicast and multicast traffic is supported.
+        - Access Point - Both unicast and multicast traffic is supported. AP
+                         mode does not yet support EAP methods.
+
 Wireless monitor
 ================
 
