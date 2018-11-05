@@ -1371,8 +1371,7 @@ int ie_parse_supported_rates(struct ie_tlv_iter *iter,
 
 	len = ie_tlv_iter_get_length(iter);
 
-	if (ie_tlv_iter_get_tag(iter) == IE_TYPE_SUPPORTED_RATES &&
-			(len == 0 || len > 8))
+	if (ie_tlv_iter_get_tag(iter) == IE_TYPE_SUPPORTED_RATES && len == 0)
 		return -EINVAL;
 
 	rates = ie_tlv_iter_get_data(iter);
