@@ -39,7 +39,7 @@ struct network *network_create(struct station *station, const char *ssid,
 const char *network_get_ssid(const struct network *network);
 const char *network_get_path(const struct network *network);
 enum security network_get_security(const struct network *network);
-const uint8_t *network_get_psk(const struct network *network);
+const uint8_t *network_get_psk(struct network *network);
 const char *network_get_passphrase(const struct network *network);
 struct l_queue *network_get_secrets(const struct network *network);
 int network_get_signal_strength(const struct network *network);

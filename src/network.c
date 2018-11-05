@@ -59,7 +59,7 @@ struct network {
 	struct l_settings *settings;
 	struct l_queue *secrets;
 	bool update_psk:1;  /* Whether PSK should be written to storage */
-	bool ask_psk:1; /* Whether we should force-ask agent for PSK */
+	bool ask_passphrase:1; /* Whether we should force-ask agent */
 	int rank;
 };
 
@@ -312,9 +312,30 @@ enum security network_get_security(const struct network *network)
 	return network->info->type;
 }
 
-const uint8_t *network_get_psk(const struct network *network)
+const uint8_t *network_get_psk(struct network *network)
 {
-	return network->psk;
+	int r;
+
+	if (network->psk)
+		return network->psk;
+
+	if (!network->passphrase)
+		return NULL;
+
+	network->psk = l_malloc(32);
+	r = crypto_psk_from_passphrase(network->passphrase,
+					(uint8_t *) network->info->ssid,
+					strlen(network->info->ssid),
+					network->psk);
+	if (!r)
+		return network->psk;
+
+	l_free(network->psk);
+	network->psk = NULL;
+	l_error("PMK generation failed: %s.  "
+		"Ensure Crypto Engine is properly configured",
+		strerror(-r));
+	return NULL;
 }
 
 const char *network_get_passphrase(const struct network *network)
@@ -399,36 +420,33 @@ static bool network_set_8021x_secrets(struct network *network)
 	return true;
 }
 
-static int network_load_psk(struct network *network)
+static int network_load_psk(struct network *network, bool need_passphrase)
 {
 	size_t len;
 	const char *psk = l_settings_get_value(network->settings,
 						"Security", "PreSharedKey");
-
-	if (!psk)
-		return -ENOKEY;
-
-	l_free(network->psk);
-	network->psk = l_util_from_hexstring(psk, &len);
-	if (!network->psk)
-		return -EINVAL;
-
-	if (len != 32) {
-		l_free(network->psk);
-		network->psk = NULL;
-		return -EINVAL;
-	}
-
-	l_free(network->passphrase);
-	network->passphrase = l_settings_get_string(network->settings,
+	char *passphrase = l_settings_get_string(network->settings,
 						"Security", "Passphrase");
 
-	return 0;
+	if ((!psk || need_passphrase) && !passphrase)
+		return -ENOKEY;
+
+	l_free(network->passphrase);
+	network->passphrase = passphrase;
+	l_free(network->psk);
+	network->psk = l_util_from_hexstring(psk, &len);
+	if (network->psk && len == 32)
+		return 0;
+
+	l_free(network->passphrase);
+	network->passphrase = NULL;
+	l_free(network->psk);
+	network->psk = NULL;
+	return -EINVAL;
 }
 
 void network_sync_psk(struct network *network)
 {
-	char *hex;
 	struct l_settings *fs_settings;
 
 	if (!network->update_psk)
@@ -436,32 +454,51 @@ void network_sync_psk(struct network *network)
 
 	network->update_psk = false;
 
-	hex = l_util_hexstring(network->psk, 32);
-	l_settings_set_value(network->settings, "Security",
+	fs_settings = storage_network_open(SECURITY_PSK, network->info->ssid);
+
+	if (network->psk) {
+		char *hex = l_util_hexstring(network->psk, 32);
+		l_settings_set_value(network->settings, "Security",
 						"PreSharedKey", hex);
 
-	if (network->passphrase)
+		if (fs_settings)
+			l_settings_set_value(fs_settings, "Security",
+						"PreSharedKey", hex);
+
+		l_free(hex);
+	}
+
+	if (network->passphrase) {
 		l_settings_set_string(network->settings, "Security",
 							"Passphrase",
 							network->passphrase);
 
-	fs_settings = storage_network_open(SECURITY_PSK, network->info->ssid);
-	if (fs_settings) {
-		l_settings_set_value(fs_settings, "Security",
-						"PreSharedKey", hex);
-		if (network->passphrase)
+		if (fs_settings)
 			l_settings_set_string(fs_settings, "Security",
 							"Passphrase",
 							network->passphrase);
+	}
 
+	if (fs_settings) {
 		storage_network_sync(SECURITY_PSK, network->info->ssid,
 					fs_settings);
 		l_settings_free(fs_settings);
 	} else
 		storage_network_sync(SECURITY_PSK, network->info->ssid,
 					network->settings);
+}
 
-	l_free(hex);
+static bool bss_is_sae(struct scan_bss *bss)
+{
+	struct ie_rsn_info rsn;
+
+	memset(&rsn, 0, sizeof(rsn));
+	scan_bss_get_rsn_info(bss, &rsn);
+
+	if (rsn.akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256)
+		return true;
+
+	return false;
 }
 
 int network_autoconnect(struct network *network, struct scan_bss *bss)
@@ -477,7 +514,7 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 		is_rsn = false;
 		break;
 	case SECURITY_PSK:
-		if (network->ask_psk)
+		if (network->ask_passphrase)
 			return -ENOKEY;
 
 		/* Fall through */
@@ -504,12 +541,9 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 			goto close_settings;
 		}
 
-		if (rsn.akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256 &&
-				!l_settings_has_key(network->settings,
-						"Security", "Passphrase")) {
-			ret = -ENOKEY;
+		ret = network_load_psk(network, bss_is_sae(bss));
+		if (ret < 0)
 			goto close_settings;
-		}
 	}
 
 	/* If no entry, default to Autoconnectable=True */
@@ -521,11 +555,7 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 	if (!is_autoconnectable)
 		goto close_settings;
 
-	if (network_get_security(network) == SECURITY_PSK) {
-		ret = network_load_psk(network);
-		if (ret < 0)
-			goto close_settings;
-	} else if (network_get_security(network) == SECURITY_8021X) {
+	if (network_get_security(network) == SECURITY_8021X) {
 		struct l_queue *missing_secrets = NULL;
 
 		ret = eap_check_settings(network->settings, network->secrets,
@@ -558,7 +588,7 @@ void network_connect_failed(struct network *network)
 	 */
 	if (network_get_security(network) == SECURITY_PSK) {
 		network->update_psk = false;
-		network->ask_psk = true;
+		network->ask_passphrase = true;
 	}
 
 	l_queue_destroy(network->secrets, eap_secret_info_free);
@@ -665,20 +695,9 @@ static void passphrase_callback(enum agent_result result,
 	}
 
 	l_free(network->psk);
-	network->psk = l_malloc(32);
+	network->psk = NULL;
 	l_free(network->passphrase);
 	network->passphrase = l_strdup(passphrase);
-
-	if (crypto_psk_from_passphrase(passphrase,
-					(uint8_t *) network->info->ssid,
-					strlen(network->info->ssid),
-					network->psk) < 0) {
-		l_error("PMK generation failed.  "
-			"Ensure Crypto Engine is properly configured");
-		dbus_pending_reply(&message, dbus_error_failed(message));
-
-		goto err;
-	}
 
 	/*
 	 * We need to store the PSK in our permanent store.  However, before
@@ -695,43 +714,31 @@ err:
 	network_settings_close(network);
 }
 
-static bool bss_is_sae(struct scan_bss *bss)
-{
-	struct ie_rsn_info rsn;
-
-	memset(&rsn, 0, sizeof(rsn));
-	scan_bss_get_rsn_info(bss, &rsn);
-
-	if (rsn.akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256)
-		return true;
-
-	return false;
-}
-
 static struct l_dbus_message *network_connect_psk(struct network *network,
 					struct scan_bss *bss,
 					struct l_dbus_message *message)
 {
 	struct station *station = network->station;
-
-	l_debug("");
-
-	if (network_settings_load(network))
-		network_load_psk(network);
-	else
-		network->settings = l_settings_new();
-
-	l_debug("ask_psk: %s", network->ask_psk ? "true" : "false");
-
 	/*
 	 * A legacy psk file may only contain the PreSharedKey entry. For SAE
 	 * networks the raw Passphrase is required. So in this case where
-	 * the psk is found but no passphrase, we ask the agent. In this case
-	 * the psk file will be re-written to contain the raw passphrase.
+	 * the psk is found but no Passphrase, we ask the agent.  The psk file
+	 * will then be re-written to contain the raw passphrase.
 	 */
-	if (network->ask_psk || !network->psk ||
-			(!network->passphrase && bss_is_sae(bss))) {
-		network->ask_psk = false;
+	bool need_passphrase = bss_is_sae(bss);
+
+	l_debug("ask_passphrase: %s",
+		network->ask_passphrase ? "true" : "false");
+
+	if  (!network_settings_load(network)) {
+		network->settings = l_settings_new();
+		network->ask_passphrase = true;
+	} else if (!network->ask_passphrase)
+		network->ask_passphrase =
+			network_load_psk(network, need_passphrase) < 0;
+
+	if (network->ask_passphrase) {
+		network->ask_passphrase = false;
 
 		network->agent_request =
 			agent_request_passphrase(network->object_path,
