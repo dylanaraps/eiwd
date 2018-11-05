@@ -794,7 +794,8 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 			if (ie_parse_supported_rates(&iter,
 						&bss->supported_rates) < 0)
 				l_warn("Unable to parse [Extended] "
-					"Supported Rates IE");
+					"Supported Rates IE for "
+					MAC, MAC_STR(bss->addr));
 			break;
 		case IE_TYPE_RSN:
 			if (!bss->rsne)
@@ -804,7 +805,8 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 		case IE_TYPE_BSS_LOAD:
 			if (ie_parse_bss_load(&iter, NULL, &bss->utilization,
 						NULL) < 0)
-				l_warn("Unable to parse BSS Load IE");
+				l_warn("Unable to parse BSS Load IE for "
+					MAC, MAC_STR(bss->addr));
 			else
 				l_debug("Load: %u/255", bss->utilization);
 
