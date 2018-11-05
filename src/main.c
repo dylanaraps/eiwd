@@ -337,8 +337,11 @@ static int check_crypto()
 
 	l_hashmap_foreach(options, print_koption, NULL);
 
-	l_info("The following optimized implementations might be available:");
-	l_hashmap_foreach(optional, print_koption, NULL);
+	if (!l_hashmap_isempty(optional)) {
+		l_info("The following optimized implementations might be "
+			"available:");
+		l_hashmap_foreach(optional, print_koption, NULL);
+	}
 
 done:
 	l_hashmap_destroy(options, NULL);
