@@ -66,6 +66,11 @@ will send an SA Query frame, which IWD will respond to if it is still connected.
         - Access Point - Both unicast and multicast traffic is supported. AP
                          mode does not yet support EAP methods.
 
+- IWD supports SAE (Simultaneous Authentication of Equals). SAE is required for
+the WPA3 certification. SAE uses a Diffie-Hellman key exchange to produce the
+PMK thats used in the 4-way handshake. Support for hybrid WPA3/WPA2 AP's is
+also implemented, where WPA3 is preferred.
+
 Wireless monitor
 ================
 
