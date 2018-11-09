@@ -245,10 +245,12 @@ static void display_device_inline(const char *margin, const void *data)
 	else
 		adapter_str = "-";
 
-	display("%s%-*s%-*s%-*s\n", margin,
+	display("%s%-*s%-*s%-*s%-*s%-*s\n", margin,
 		20, device->name ? : "",
 		20, device->address ? : "",
-		10, adapter_str);
+		10, get_powered_tostr(device),
+		10, adapter_str,
+		10, device->mode);
 }
 
 static const char *device_identity(void *data)
@@ -390,8 +392,9 @@ static void check_errors_method_callback(struct l_dbus_message *message,
 static enum cmd_status cmd_list(const char *device_name,
 						char **argv, int argc)
 {
-	display_table_header("Devices", MARGIN "%-*s%-*s%-*s%-*s", 20, "Name",
-				20, "Address", 15, "State", 10, "Adapter");
+	display_table_header("Devices", MARGIN "%-*s%-*s%-*s%-*s%-*s",
+				20, "Name", 20, "Address", 10, "Powered",
+				10, "Adapter", 10, "Mode");
 
 	proxy_interface_display_list(device_interface_type.interface);
 
