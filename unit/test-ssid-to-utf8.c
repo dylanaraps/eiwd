@@ -63,7 +63,7 @@ const struct ssid_test_data ssid_samples[] = {
 static void ssid_to_utf8(const void *data)
 {
 	const struct ssid_test_data *ssid = data;
-	int i = 0, samples = sizeof(ssid_samples) / sizeof(ssid_samples[0]);
+	int i = 0, samples = L_ARRAY_SIZE(ssid_samples);
 
 	while (i < samples) {
 		const char *result = util_ssid_to_utf8(ssid[i].len,
