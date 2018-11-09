@@ -168,8 +168,9 @@ void display_refresh_set_cmd(const char *family, const char *entity,
 		display_refresh.argc = argc;
 
 		display_refresh.argv = l_new(char *, argc + 1);
+
 		for (i = 0; i < argc; i++)
-			display_refresh.argv[i] = argv[i];
+			display_refresh.argv[i] = l_strdup(argv[i]);
 
 		l_queue_clear(display_refresh.redo_entries, l_free);
 
