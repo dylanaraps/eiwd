@@ -1907,6 +1907,57 @@ static struct l_dbus_message *station_dbus_get_networks(struct l_dbus *dbus,
 	return reply;
 }
 
+static struct l_dbus_message *station_dbus_get_hidden_stations(
+						struct l_dbus *dbus,
+						struct l_dbus_message *message,
+						void *user_data)
+{
+	struct station *station = user_data;
+	struct l_dbus_message *reply =
+				l_dbus_message_new_method_return(message);
+	struct l_dbus_message_builder *builder =
+				l_dbus_message_builder_new(reply);
+	const struct l_queue_entry *entry;
+
+	l_dbus_message_builder_enter_array(builder, "(sns)");
+
+	for (entry = l_queue_get_entries(station->hidden_bss_list_sorted);
+						entry; entry = entry->next) {
+		struct scan_bss *bss = entry->data;
+		int16_t signal_strength = bss->signal_strength;
+		struct ie_rsn_info info;
+		enum security security;
+		int r;
+
+		memset(&info, 0, sizeof(info));
+		r = scan_bss_get_rsn_info(bss, &info);
+		if (r < 0) {
+			if (r != -ENOENT)
+				continue;
+
+			security = security_determine(bss->capability, NULL);
+		} else {
+			security = security_determine(bss->capability, &info);
+		}
+
+		l_dbus_message_builder_enter_struct(builder, "sns");
+		l_dbus_message_builder_append_basic(builder, 's',
+					util_address_to_string(bss->addr));
+		l_dbus_message_builder_append_basic(builder, 'n',
+							&signal_strength);
+		l_dbus_message_builder_append_basic(builder, 's',
+						security_to_str(security));
+		l_dbus_message_builder_leave_struct(builder);
+	}
+
+	l_dbus_message_builder_leave_array(builder);
+
+	l_dbus_message_builder_finalize(builder);
+	l_dbus_message_builder_destroy(builder);
+
+	return reply;
+}
+
 static void station_dbus_scan_triggered(int err, void *user_data)
 {
 	struct station *station = user_data;
@@ -2300,6 +2351,9 @@ static void station_setup_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "GetOrderedNetworks", 0,
 				station_dbus_get_networks, "a(on)", "",
 				"networks");
+	l_dbus_interface_method(interface, "GetHiddenStations", 0,
+				station_dbus_get_hidden_stations, "a(sns)", "",
+				"stations");
 	l_dbus_interface_method(interface, "Scan", 0,
 				station_dbus_scan, "", "");
 	l_dbus_interface_method(interface, "RegisterSignalLevelAgent", 0,
