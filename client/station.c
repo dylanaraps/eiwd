@@ -452,57 +452,59 @@ proceed:
 	return CMD_STATUS_TRIGGERED;
 }
 
-struct hidden_station {
+struct hidden_access_point {
 	char *address;
 	int16_t signal_strength;
 	char *type;
 };
 
-static void hidden_station_destroy(void *data)
+static void hidden_access_point_destroy(void *data)
 {
-	struct hidden_station *station = data;
+	struct hidden_access_point *ap = data;
 
-	l_free(station->address);
-	l_free(station->type);
-	l_free(station);
+	l_free(ap->address);
+	l_free(ap->type);
+	l_free(ap);
 }
 
-static void hidden_stations_display(struct l_queue *stations)
+static void hidden_access_points_display(struct l_queue *access_points)
 {
 	const struct l_queue_entry *entry;
 
-	display_table_header("Available hidden stations", MARGIN "%-*s%-*s%*s",
+	display_table_header("Available hidden APs", MARGIN "%-*s%-*s%*s",
 				20, "Address", 10, "Security", 6, "Signal");
 
-	if (l_queue_isempty(stations)) {
-		display("No hidden stations are available.\n");
+	if (l_queue_isempty(access_points)) {
+		display("No hidden APs are available.\n");
 		display_table_footer();
 
 		return;
 	}
 
-	for (entry = l_queue_get_entries(stations); entry;
+	for (entry = l_queue_get_entries(access_points); entry;
 							entry = entry->next) {
-		const struct hidden_station *station = entry->data;
+		const struct hidden_access_point *ap = entry->data;
 		L_AUTO_FREE_VAR(char *, dbms) = NULL;
 
 		if (display_signal_as_dbms)
-			dbms = l_strdup_printf("%d", station->signal_strength);
+			dbms = l_strdup_printf("%d", ap->signal_strength);
 
 		display(MARGIN "%-*s%-*s%-*s\n",
-			20, station->address, 10, station->type,
-			6, dbms ? : dbms_tostars(station->signal_strength));
+			20, ap->address, 10, ap->type,
+			6, dbms ? : dbms_tostars(ap->signal_strength));
 	}
 
 	display_table_footer();
 }
 
-static void hidden_stations_callback(struct l_dbus_message *message,
+static void hidden_access_points_callback(struct l_dbus_message *message,
 								void *proxy)
 {
-	struct l_queue *stations = NULL;
-	struct hidden_station station;
+	struct l_queue *access_points = NULL;
 	struct l_dbus_message_iter iter;
+	const char *address;
+	uint16_t strength;
+	const char *type;
 
 	if (dbus_message_has_error(message))
 		return;
@@ -513,28 +515,27 @@ static void hidden_stations_callback(struct l_dbus_message *message,
 		return;
 	}
 
-	while (l_dbus_message_iter_next_entry(&iter,
-						&station.address,
-						&station.signal_strength,
-						&station.type)) {
-		struct hidden_station *sta = l_new(struct hidden_station, 1);
+	while (l_dbus_message_iter_next_entry(&iter, &address,
+						&strength, &type)) {
+		struct hidden_access_point *ap =
+			l_new(struct hidden_access_point, 1);
 
-		if (!stations)
-			stations = l_queue_new();
+		if (!access_points)
+			access_points = l_queue_new();
 
-		sta->address = l_strdup(station.address);
-		sta->signal_strength = station.signal_strength;
-		sta->type = l_strdup(station.type);
+		ap->address = l_strdup(address);
+		ap->signal_strength = strength;
+		ap->type = l_strdup(type);
 
-		l_queue_push_tail(stations, sta);
+		l_queue_push_tail(access_points, ap);
 	}
 
-	hidden_stations_display(stations);
+	hidden_access_points_display(access_points);
 
-	l_queue_destroy(stations, hidden_station_destroy);
+	l_queue_destroy(access_points, hidden_access_point_destroy);
 }
 
-static enum cmd_status cmd_get_hidden_stations(const char *device_name,
+static enum cmd_status cmd_get_hidden_access_points(const char *device_name,
 							char **argv, int argc)
 {
 	const struct proxy_interface *station_i =
@@ -554,8 +555,8 @@ static enum cmd_status cmd_get_hidden_stations(const char *device_name,
 		display_signal_as_dbms = false;
 
 proceed:
-	proxy_interface_method_call(station_i, "GetHiddenStations", "",
-						hidden_stations_callback);
+	proxy_interface_method_call(station_i, "GetHiddenAccessPoints", "",
+						hidden_access_points_callback);
 
 	return CMD_STATUS_TRIGGERED;
 }
@@ -596,9 +597,9 @@ static const struct command station_commands[] = {
 					cmd_get_networks,
 						"Get networks",       true,
 			get_networks_cmd_arg_completion },
-	{ "<wlan>", "get-hidden-stations", "[rssi-dbms]",
-					cmd_get_hidden_stations,
-						"Get hidden stations", true },
+	{ "<wlan>", "get-hidden-access-points", "[rssi-dbms]",
+					cmd_get_hidden_access_points,
+						"Get hidden APs", true },
 	{ "<wlan>", "scan",     NULL,   cmd_scan, "Scan for networks" },
 	{ }
 };
