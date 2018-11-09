@@ -36,6 +36,7 @@ struct adapter {
 	char *model;
 	char *name;
 	char *vendor;
+	char *supported_modes_str;
 };
 
 static const char *get_name(const void *data)
@@ -128,6 +129,32 @@ static void update_powered(void *data, struct l_dbus_message_iter *variant)
 	adapter->powered = value;
 }
 
+static void update_supported_modes(void *data,
+					struct l_dbus_message_iter *variant)
+{
+	struct adapter *adapter = data;
+	struct l_string *buf;
+	struct l_dbus_message_iter iter;
+	const char *mode;
+
+	if (!l_dbus_message_iter_get_variant(variant, "as", &iter))
+		return;
+
+	buf = l_string_new(128);
+
+	while (l_dbus_message_iter_next_entry(&iter, &mode))
+		l_string_append_printf(buf, "%s ", mode);
+
+	adapter->supported_modes_str = l_string_unwrap(buf);
+}
+
+static const char *get_supported_modes_tostr(const void *data)
+{
+	const struct adapter *adapter = data;
+
+	return adapter->supported_modes_str;
+}
+
 static const struct proxy_interface_property adapter_properties[] = {
 	{ "Name",     "s", update_name,     get_name },
 	{ "Powered",  "b", update_powered,  get_powered_tostr, true,
@@ -135,6 +162,8 @@ static const struct proxy_interface_property adapter_properties[] = {
 		properties_on_off_opts },
 	{ "Vendor",   "s", update_vendor,   get_vendor },
 	{ "Model",    "s", update_model,    get_model },
+	{ "SupportedModes", "as", update_supported_modes,
+		get_supported_modes_tostr },
 	{ }
 };
 
@@ -161,7 +190,7 @@ static void display_adapter_inline(const char *margin, const void *data)
 
 static void *adapter_create(void)
 {
-	return  l_new(struct adapter, 1);
+	return l_new(struct adapter, 1);
 }
 
 static void adapter_destroy(void *data)
@@ -171,6 +200,7 @@ static void adapter_destroy(void *data)
 	l_free(adapter->model);
 	l_free(adapter->vendor);
 	l_free(adapter->name);
+	l_free(adapter->supported_modes_str);
 
 	l_free(adapter);
 }
