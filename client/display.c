@@ -568,10 +568,6 @@ void display_agent_prompt_release(const char *label)
 	agent_saved_input = NULL;
 
 	rl_set_prompt(IWD_PROMPT);
-
-	rl_forced_update_display();
-
-	display("\r");
 }
 
 void display_quit(void)
