@@ -58,6 +58,7 @@ struct station {
 	struct network *connected_network;
 	struct l_queue *autoconnect_list;
 	struct l_queue *bss_list;
+	struct l_queue *hidden_bss_list_sorted;
 	struct l_hashmap *networks;
 	struct l_queue *networks_sorted;
 	struct l_dbus_message *connect_pending;
@@ -76,7 +77,6 @@ struct station {
 	struct wiphy *wiphy;
 	struct netdev *netdev;
 
-	bool seen_hidden_networks : 1;
 	bool preparing_roam : 1;
 	bool signal_low : 1;
 	bool roam_no_orig_ap : 1;
@@ -235,6 +235,14 @@ struct network *station_network_find(struct station *station, const char *ssid,
 	return l_hashmap_lookup(station->networks, path);
 }
 
+static int bss_signal_strength_compare(const void *a, const void *b, void *user)
+{
+	const struct scan_bss *new_bss = a;
+	const struct scan_bss *bss = b;
+
+	return bss->signal_strength - new_bss->signal_strength;
+}
+
 /*
  * Returns the network object the BSS was added to or NULL if ignored.
  */
@@ -255,8 +263,10 @@ static struct network *station_add_seen_bss(struct station *station,
 			bss->frequency, bss->rank, bss->signal_strength);
 
 	if (util_ssid_is_hidden(bss->ssid_len, bss->ssid)) {
-		l_debug("Ignoring BSS with hidden SSID");
-		station->seen_hidden_networks = true;
+		l_debug("BSS has hidden SSID");
+
+		l_queue_insert(station->hidden_bss_list_sorted, bss,
+					bss_signal_strength_compare, NULL);
 		return NULL;
 	}
 
@@ -327,7 +337,7 @@ void station_set_scan_results(struct station *station, struct l_queue *bss_list,
 
 	station->bss_list = bss_list;
 
-	station->seen_hidden_networks = false;
+	l_queue_clear(station->hidden_bss_list_sorted, NULL);
 
 	while ((network = l_queue_pop_head(station->networks_sorted)))
 		network_bss_list_clear(network);
@@ -1939,7 +1949,7 @@ static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 	 * use passive scanning to hide our MAC address
 	 */
 	if (!station->connected_bss &&
-			!(station->seen_hidden_networks &&
+			!(!l_queue_isempty(station->hidden_bss_list_sorted) &&
 				known_networks_has_hidden())) {
 		station->scan_id = scan_passive(index,
 					station_dbus_scan_triggered,
@@ -2209,6 +2219,7 @@ static struct station *station_create(struct netdev *netdev)
 	watchlist_init(&station->state_watches, NULL);
 
 	station->bss_list = l_queue_new();
+	station->hidden_bss_list_sorted = l_queue_new();
 	station->networks = l_hashmap_new();
 	l_hashmap_set_hash_function(station->networks, l_str_hash);
 	l_hashmap_set_compare_function(station->networks,
@@ -2271,6 +2282,7 @@ static void station_free(struct station *station)
 	l_queue_destroy(station->networks_sorted, NULL);
 	l_hashmap_destroy(station->networks, network_free);
 	l_queue_destroy(station->bss_list, bss_free);
+	l_queue_destroy(station->hidden_bss_list_sorted, NULL);
 	l_queue_destroy(station->autoconnect_list, l_free);
 
 	watchlist_destroy(&station->state_watches);
