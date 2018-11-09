@@ -193,7 +193,7 @@ static void check_errors_method_callback(struct l_dbus_message *message,
 
 static enum cmd_status cmd_list(const char *entity, char **args, int argc)
 {
-	display_table_header("Known Networks", MARGIN, "%-*s%-*s%-*s",
+	display_table_header("Known Networks", MARGIN "%-*s%-*s%-*s",
 					32, "Name", 11, "Security",
 					19, "Last connected");
 
