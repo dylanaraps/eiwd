@@ -185,8 +185,23 @@ void display_refresh_set_cmd(const char *family, const char *entity,
 		L_AUTO_FREE_VAR(char *, args);
 		char *prompt;
 
-		for (i = 0; i < argc; i++)
-			l_string_append_printf(buf, "'%s' ", argv[i]);
+		for (i = 0; i < argc; i++) {
+			bool needs_quotes = false;
+			char *p = argv[i];
+
+			for (p = argv[i]; *p != '\0'; p++) {
+				if (*p != ' ')
+					continue;
+
+				needs_quotes = true;
+				break;
+			}
+
+			if (needs_quotes)
+				l_string_append_printf(buf, "\"%s\" ", argv[i]);
+			else
+				l_string_append_printf(buf, "%s ", argv[i]);
+		}
 
 		args = l_string_unwrap(buf);
 
