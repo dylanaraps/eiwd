@@ -39,6 +39,7 @@ struct known_network {
 	char *name;
 	char *type;
 	char *last_connected;
+	bool hidden;
 };
 
 static const char *format_iso8601(const char *time_str, const char *format)
@@ -109,10 +110,32 @@ static void update_last_connected(void *data, struct l_dbus_message_iter *varian
 	network->last_connected = l_strdup(value);
 }
 
+static void update_hidden(void *data, struct l_dbus_message_iter *variant)
+{
+	struct known_network *network = data;
+	bool value;
+
+	if (!l_dbus_message_iter_get_variant(variant, "b", &value)) {
+		network->hidden = false;
+
+		return;
+	}
+
+	network->hidden = value;
+}
+
+static const char *get_hidden_tostr(const void *data)
+{
+	const struct known_network *network = data;
+
+	return network->hidden ? "yes" : "";
+}
+
 static const struct proxy_interface_property known_network_properties[] = {
 	{ "Name",              "s", update_name           },
 	{ "Type",              "s", update_type           },
 	{ "LastConnectedTime", "s", update_last_connected },
+	{ "Hidden",            "b", update_hidden, get_hidden_tostr },
 	{ },
 };
 
@@ -140,9 +163,9 @@ static void known_network_display_inline(const char *margin, const void *data)
 		l_strdup(format_iso8601(network->last_connected,
 						"%b %e, %l:%M %p"));
 
-	display("%s%-*s%-*s%-*s\n",
+	display("%s%-*s%-*s%-*s%-*s\n",
 		margin, 32, network->name, 11, network->type,
-		19, last_connected ? : "-");
+		9, get_hidden_tostr(network), 19, last_connected ? : "-");
 
 	l_free(last_connected);
 }
@@ -193,8 +216,8 @@ static void check_errors_method_callback(struct l_dbus_message *message,
 
 static enum cmd_status cmd_list(const char *entity, char **args, int argc)
 {
-	display_table_header("Known Networks", MARGIN "%-*s%-*s%-*s",
-					32, "Name", 11, "Security",
+	display_table_header("Known Networks", MARGIN "%-*s%-*s%-*s%-*s",
+					32, "Name", 11, "Security", 9, "Hidden",
 					19, "Last connected");
 
 	proxy_interface_display_list(known_network_interface_type.interface);
