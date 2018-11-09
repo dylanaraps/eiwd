@@ -1907,7 +1907,7 @@ static struct l_dbus_message *station_dbus_get_networks(struct l_dbus *dbus,
 	return reply;
 }
 
-static struct l_dbus_message *station_dbus_get_hidden_stations(
+static struct l_dbus_message *station_dbus_get_hidden_access_points(
 						struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -2351,9 +2351,10 @@ static void station_setup_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "GetOrderedNetworks", 0,
 				station_dbus_get_networks, "a(on)", "",
 				"networks");
-	l_dbus_interface_method(interface, "GetHiddenStations", 0,
-				station_dbus_get_hidden_stations, "a(sns)", "",
-				"stations");
+	l_dbus_interface_method(interface, "GetHiddenAccessPoints", 0,
+				station_dbus_get_hidden_access_points,
+				"a(sns)", "",
+				"accesspoints");
 	l_dbus_interface_method(interface, "Scan", 0,
 				station_dbus_scan, "", "");
 	l_dbus_interface_method(interface, "RegisterSignalLevelAgent", 0,
