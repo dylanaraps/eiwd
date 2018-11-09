@@ -29,6 +29,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/uio.h>
 #include <sys/types.h>
 #include <ell/ell.h>
