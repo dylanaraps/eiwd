@@ -1,3 +1,12 @@
+ver 0.11:
+	Fix issue with handling EAP-TTLS and redundant L flags.
+	Fix issue with handling EAP-TLS upper limit on request size.
+	Fix issue with handling handshake complete after setting keys.
+	Fix issue with handling access points with too many rates.
+	Fix issue with requiring PSK if passphrase is present.
+	Add support for retrieving list of hidden access points.
+	Add support for tunneled MS-CHAP.
+
 ver 0.10:
 	Fix issue with Ethernet authentication packet handling.
 	Fix issue with ad-hoc network scan results in station mode.
