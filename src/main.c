@@ -324,6 +324,25 @@ static int check_crypto()
 		l_hashmap_insert(options, "CONFIG_KEY_DH_OPERATIONS", &r);
 	}
 
+	if (!l_key_is_supported(L_KEY_FEATURE_RESTRICT)) {
+		l_warn("No keyring restrictions support found.");
+		l_hashmap_insert(options, "CONFIG_KEYS", &r);
+	}
+
+	if (!l_key_is_supported(L_KEY_FEATURE_CRYPTO)) {
+		l_warn("No asymmetric key support found.");
+		l_warn("TLS based WPA-Enterprise authentication methods will"
+				" not function.");
+		l_warn("Kernel 4.20+ is required for this feature.");
+		l_hashmap_insert(options, "CONFIG_ASYMMETRIC_KEY_TYPE", &r);
+		l_hashmap_insert(options,
+				"CONFIG_ASYMMETRIC_PUBLIC_KEY_SUBTYPE", &r);
+		l_hashmap_insert(options, "CONFIG_X509_CERTIFICATE_PARSER", &r);
+		l_hashmap_insert(options, "CONFIG_PKCS7_MESSAGE_PARSER", &r);
+		l_hashmap_insert(options,
+					"CONFIG_PKCS8_PRIVATE_KEY_PARSER", &r);
+	};
+
 	if (l_hashmap_isempty(options))
 		goto done;
 
