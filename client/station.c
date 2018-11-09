@@ -452,6 +452,114 @@ proceed:
 	return CMD_STATUS_TRIGGERED;
 }
 
+struct hidden_station {
+	char *address;
+	int16_t signal_strength;
+	char *type;
+};
+
+static void hidden_station_destroy(void *data)
+{
+	struct hidden_station *station = data;
+
+	l_free(station->address);
+	l_free(station->type);
+	l_free(station);
+}
+
+static void hidden_stations_display(struct l_queue *stations)
+{
+	const struct l_queue_entry *entry;
+
+	display_table_header("Available hidden stations", MARGIN "%-*s%-*s%*s",
+				20, "Address", 10, "Security", 6, "Signal");
+
+	if (l_queue_isempty(stations)) {
+		display("No hidden stations are available.\n");
+		display_table_footer();
+
+		return;
+	}
+
+	for (entry = l_queue_get_entries(stations); entry;
+							entry = entry->next) {
+		const struct hidden_station *station = entry->data;
+		L_AUTO_FREE_VAR(char *, dbms) = NULL;
+
+		if (display_signal_as_dbms)
+			dbms = l_strdup_printf("%d", station->signal_strength);
+
+		display(MARGIN "%-*s%-*s%-*s\n",
+			20, station->address, 10, station->type,
+			6, dbms ? : dbms_tostars(station->signal_strength));
+	}
+
+	display_table_footer();
+}
+
+static void hidden_stations_callback(struct l_dbus_message *message,
+								void *proxy)
+{
+	struct l_queue *stations = NULL;
+	struct hidden_station station;
+	struct l_dbus_message_iter iter;
+
+	if (dbus_message_has_error(message))
+		return;
+
+	if (!l_dbus_message_get_arguments(message, "a(sns)", &iter)) {
+		l_error("Failed to parse hidden stations callback message");
+
+		return;
+	}
+
+	while (l_dbus_message_iter_next_entry(&iter,
+						&station.address,
+						&station.signal_strength,
+						&station.type)) {
+		struct hidden_station *sta = l_new(struct hidden_station, 1);
+
+		if (!stations)
+			stations = l_queue_new();
+
+		sta->address = l_strdup(station.address);
+		sta->signal_strength = station.signal_strength;
+		sta->type = l_strdup(station.type);
+
+		l_queue_push_tail(stations, sta);
+	}
+
+	hidden_stations_display(stations);
+
+	l_queue_destroy(stations, hidden_station_destroy);
+}
+
+static enum cmd_status cmd_get_hidden_stations(const char *device_name,
+							char **argv, int argc)
+{
+	const struct proxy_interface *station_i =
+			device_proxy_find(device_name, IWD_STATION_INTERFACE);
+
+	if (!station_i) {
+		display("Device '%s' is not in station mode.\n", device_name);
+		return CMD_STATUS_INVALID_VALUE;
+	}
+
+	if (!argc)
+		goto proceed;
+
+	if (!strcmp(argv[0], RSSI_DBMS))
+		display_signal_as_dbms = true;
+	else
+		display_signal_as_dbms = false;
+
+proceed:
+	proxy_interface_method_call(station_i, "GetHiddenStations", "",
+						hidden_stations_callback);
+
+	return CMD_STATUS_TRIGGERED;
+}
+
 static enum cmd_status cmd_scan(const char *device_name,
 						char **argv, int argc)
 {
@@ -488,6 +596,9 @@ static const struct command station_commands[] = {
 					cmd_get_networks,
 						"Get networks",       true,
 			get_networks_cmd_arg_completion },
+	{ "<wlan>", "get-hidden-stations", "[rssi-dbms]",
+					cmd_get_hidden_stations,
+						"Get hidden stations", true },
 	{ "<wlan>", "scan",     NULL,   cmd_scan, "Scan for networks" },
 	{ }
 };
