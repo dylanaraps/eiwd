@@ -49,29 +49,29 @@ Methods		void Scan()
 				in 100 * dBm.  The value is the range of 0
 				(strongest signal) to -10000 (weakest signal)
 
-		array(sns) GetHiddenStations()
+		array(sns) GetHiddenAccessPoints() [experimental]
 
 			Returns a list (possibly empty) of detected hidden
-			stations.  The list is sorted according to the
-			relative signal strength of each station.
+			access points.  The list is sorted according to the
+			relative signal strength of each access point.
 
 			Every record returned contains a 3-tuple of the
 			following values.
 
 			string Address
 
-				Station's address
+				Access Point's address
 
 			int16 SignalStrength
 
-				Station's signal strength expressed in
+				Access Point's signal strength expressed in
 				100 * dBm.  The value is the range of 0
 				(strongest signal) to -10000 (weakest signal)
 
 			string Type
 
-				The type of the hidden network.  Same values
-				as Network.Type.
+				The type of the hidden Access Point.  Same
+				values as Network.Type.
 
 		void ConnectHiddenNetwork(string ssid)
 
