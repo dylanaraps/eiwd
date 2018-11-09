@@ -164,12 +164,12 @@ if (test "${enable_external_ell}" = "yes"); then
 			test "${enable_monitor}" != "no" ||
 			test "${enable_wired}" = "yes" ||
 			test "${enable_hwsim}" = "yes"); then
-		ell_min_version="0.12"
+		ell_min_version="0.14"
 	else
 		ell_min_version="0.5"
 	fi
 	PKG_CHECK_MODULES(ELL, ell >= ${ell_min_version}, dummy=yes,
-		AC_MSG_ERROR(Embedded Linux library >= 0.12 is required))
+		AC_MSG_ERROR(Embedded Linux library >= ${ell_min_version} is required))
 	AC_SUBST(ELL_CFLAGS)
 	AC_SUBST(ELL_LIBS)
 fi
