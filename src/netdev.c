@@ -4624,7 +4624,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 
 	if (!l_settings_get_bool(settings, "General",
 				"ControlPortOverNL80211", &pae_over_nl80211)) {
-		pae_over_nl80211 = false;
+		pae_over_nl80211 = true;
 		l_info("No ControlPortOverNL80211 setting, defaulting to %s",
 			pae_over_nl80211 ? "True" : "False");
 	}
