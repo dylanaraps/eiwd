@@ -31,7 +31,6 @@
 
 #include "src/dbus.h"
 #include "src/simauth.h"
-#include "src/backtrace.h"
 
 /*
  * This plugin takes care of all the communication with ofono in order to
