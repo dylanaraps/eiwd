@@ -341,15 +341,15 @@ static void ordered_networks_display(struct l_queue *ordered_networks)
 	for (is_first = true, entry = l_queue_get_entries(ordered_networks);
 						entry; entry = entry->next) {
 		struct ordered_network *network = entry->data;
-		const char *network_name =
-				network_get_name(network->network_path);
-		const char *network_type =
-				network_get_type(network->network_path);
+		const struct proxy_interface *network_i =
+				network_get_proxy(network->network_path);
+		const char *network_name = network_get_name(network_i);
+		const char *network_type = network_get_type(network_i);
 
 		if (display_signal_as_dbms)
 			dbms = l_strdup_printf("%d", network->signal_strength);
 
-		if (is_first && network_is_connected(network->network_path)) {
+		if (is_first && network_is_connected(network_i)) {
 			display("%s%-*s%-*s%-*s%-*s\n", MARGIN,
 				2, COLOR_BOLDGRAY "> " COLOR_OFF,
 				32, network_name, 10, network_type,

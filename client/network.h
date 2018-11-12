@@ -25,10 +25,11 @@ struct network_args {
 	const char *type;
 };
 
-bool network_is_connected(const char *path);
-const char *network_get_type(const char *path);
-const char *network_get_name(const char *path);
-void network_connect(const struct proxy_interface *proxy);
+const struct proxy_interface *network_get_proxy(const char *path);
+bool network_is_connected(const struct proxy_interface *network_proxy);
+const char *network_get_type(const struct proxy_interface *network_proxy);
+const char *network_get_name(const struct proxy_interface *network_proxy);
+void network_connect(const struct proxy_interface *network_proxy);
 
 char *network_name_completion(const struct proxy_interface *device,
 						const char *text, int state);

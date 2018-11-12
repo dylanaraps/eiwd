@@ -44,35 +44,28 @@ static void check_errors_method_callback(struct l_dbus_message *message,
 	dbus_message_has_error(message);
 }
 
-bool network_is_connected(const char *path)
+const struct proxy_interface *network_get_proxy(const char *path)
 {
-	const struct network *network;
-	const struct proxy_interface *proxy =
-			proxy_interface_find(IWD_NETWORK_INTERFACE, path);
+	return proxy_interface_find(IWD_NETWORK_INTERFACE, path);
+}
 
-	network = proxy_interface_get_data(proxy);
+bool network_is_connected(const struct proxy_interface *network_proxy)
+{
+	const struct network *network = proxy_interface_get_data(network_proxy);
 
 	return network->connected;
 }
 
-const char *network_get_type(const char *path)
+const char *network_get_type(const struct proxy_interface *network_proxy)
 {
-	const struct network *network;
-	const struct proxy_interface *proxy =
-			proxy_interface_find(IWD_NETWORK_INTERFACE, path);
-
-	network = proxy_interface_get_data(proxy);
+	const struct network *network = proxy_interface_get_data(network_proxy);
 
 	return network->type;
 }
 
-const char *network_get_name(const char *path)
+const char *network_get_name(const struct proxy_interface *network_proxy)
 {
-	const struct network *network;
-	const struct proxy_interface *proxy =
-			proxy_interface_find(IWD_NETWORK_INTERFACE, path);
-
-	network = proxy_interface_get_data(proxy);
+	const struct network *network = proxy_interface_get_data(network_proxy);
 
 	return network->name;
 }
