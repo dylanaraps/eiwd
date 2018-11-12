@@ -140,6 +140,8 @@ static void update_supported_modes(void *data,
 	if (!l_dbus_message_iter_get_variant(variant, "as", &iter))
 		return;
 
+	l_free(adapter->supported_modes_str);
+
 	buf = l_string_new(128);
 
 	while (l_dbus_message_iter_next_entry(&iter, &mode))
