@@ -544,7 +544,7 @@ static struct handshake_state *station_handshake_setup(struct station *station,
 		else
 			handshake_state_set_pmk(hs,
 					network_get_psk(network), 32);
-	} else
+	} else if (security == SECURITY_8021X)
 		handshake_state_set_8021x_config(hs,
 					network_get_settings(network));
 
