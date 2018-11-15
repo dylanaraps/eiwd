@@ -505,11 +505,12 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 {
 	struct station *station = network->station;
 	struct wiphy *wiphy = station_get_wiphy(station);
+	enum security security = network_get_security(network);
 	bool is_autoconnectable;
 	bool is_rsn;
 	int ret;
 
-	switch (network_get_security(network)) {
+	switch (security) {
 	case SECURITY_NONE:
 		is_rsn = false;
 		break;
@@ -541,9 +542,11 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 			goto close_settings;
 		}
 
-		ret = network_load_psk(network, bss_is_sae(bss));
-		if (ret < 0)
-			goto close_settings;
+		if (security == SECURITY_PSK) {
+			ret = network_load_psk(network, bss_is_sae(bss));
+			if (ret < 0)
+				goto close_settings;
+		}
 	}
 
 	/* If no entry, default to Autoconnectable=True */
@@ -555,7 +558,7 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 	if (!is_autoconnectable)
 		goto close_settings;
 
-	if (network_get_security(network) == SECURITY_8021X) {
+	if (security == SECURITY_8021X) {
 		struct l_queue *missing_secrets = NULL;
 
 		ret = eap_check_settings(network->settings, network->secrets,
