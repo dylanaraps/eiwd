@@ -512,6 +512,7 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 	struct station *station = network->station;
 	struct wiphy *wiphy = station_get_wiphy(station);
 	enum security security = network_get_security(network);
+	struct ie_rsn_info rsn;
 	bool is_autoconnectable;
 	bool is_rsn;
 	int ret;
@@ -544,27 +545,24 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 	if (!is_autoconnectable)
 		goto close_settings;
 
-	if (is_rsn) {
-		struct ie_rsn_info rsn;
+	if (!is_rsn)
+		goto done;
 
-		memset(&rsn, 0, sizeof(rsn));
-		scan_bss_get_rsn_info(bss, &rsn);
+	memset(&rsn, 0, sizeof(rsn));
+	scan_bss_get_rsn_info(bss, &rsn);
 
-		if (!wiphy_select_cipher(wiphy, rsn.pairwise_ciphers) ||
-				!wiphy_select_cipher(wiphy, rsn.group_cipher)) {
-			l_debug("Cipher mis-match");
-			ret = -ENETUNREACH;
-			goto close_settings;
-		}
-
-		if (security == SECURITY_PSK) {
-			ret = network_load_psk(network, bss_is_sae(bss));
-			if (ret < 0)
-				goto close_settings;
-		}
+	if (!wiphy_select_cipher(wiphy, rsn.pairwise_ciphers) ||
+			!wiphy_select_cipher(wiphy, rsn.group_cipher)) {
+		l_debug("Cipher mis-match");
+		ret = -ENETUNREACH;
+		goto close_settings;
 	}
 
-	if (security == SECURITY_8021X) {
+	if (security == SECURITY_PSK) {
+		ret = network_load_psk(network, __bss_is_sae(bss, &rsn));
+		if (ret < 0)
+			goto close_settings;
+	} else if (security == SECURITY_8021X) {
 		struct l_queue *missing_secrets = NULL;
 
 		ret = eap_check_settings(network->settings, network->secrets,
@@ -582,6 +580,7 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 			goto close_settings;
 	}
 
+done:
 	return __station_connect_network(station, network, bss);
 
 close_settings:
