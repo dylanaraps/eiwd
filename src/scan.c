@@ -1053,7 +1053,7 @@ void scan_bss_free(struct scan_bss *bss)
 	l_free(bss);
 }
 
-int scan_bss_get_rsn_info(struct scan_bss *bss, struct ie_rsn_info *info)
+int scan_bss_get_rsn_info(const struct scan_bss *bss, struct ie_rsn_info *info)
 {
 	/*
 	 * If both an RSN and a WPA elements are present currently

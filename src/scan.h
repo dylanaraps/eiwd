@@ -108,7 +108,7 @@ void scan_sched_start(struct l_genl_family *nl80211, uint32_t ifindex,
 void scan_bss_free(struct scan_bss *bss);
 int scan_bss_rank_compare(const void *a, const void *b, void *user);
 
-int scan_bss_get_rsn_info(struct scan_bss *bss, struct ie_rsn_info *info);
+int scan_bss_get_rsn_info(const struct scan_bss *bss, struct ie_rsn_info *info);
 
 uint8_t scan_freq_to_channel(uint32_t freq, enum scan_band *out_band);
 uint32_t scan_channel_to_freq(uint8_t channel, enum scan_band band);
