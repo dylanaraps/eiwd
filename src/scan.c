@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2015  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2015-2018  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -654,10 +654,25 @@ static bool scan_periodic_send_start(struct scan_context *sc)
 	return true;
 }
 
+static bool scan_periodic_is_disabled(void)
+{
+	const struct l_settings *config = iwd_get_config();
+	bool disabled;
+
+	if (!l_settings_get_bool(config, "Scan", "disable_periodic_scan",
+								&disabled))
+		return false;
+
+	return disabled;
+}
+
 void scan_periodic_start(uint32_t ifindex, scan_trigger_func_t trigger,
 				scan_notify_func_t func, void *userdata)
 {
 	struct scan_context *sc;
+
+	if (scan_periodic_is_disabled())
+		return;
 
 	sc = l_queue_find(scan_contexts, scan_context_match,
 				L_UINT_TO_PTR(ifindex));
