@@ -535,6 +535,15 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 	if (!network_settings_load(network))
 		return -ENOKEY;
 
+	/* If no entry, default to Autoconnectable=True */
+	if (!l_settings_get_bool(network->settings, "Settings",
+					"Autoconnect", &is_autoconnectable))
+		is_autoconnectable = true;
+
+	ret = -EPERM;
+	if (!is_autoconnectable)
+		goto close_settings;
+
 	if (is_rsn) {
 		struct ie_rsn_info rsn;
 
@@ -554,15 +563,6 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 				goto close_settings;
 		}
 	}
-
-	/* If no entry, default to Autoconnectable=True */
-	if (!l_settings_get_bool(network->settings, "Settings",
-					"Autoconnect", &is_autoconnectable))
-		is_autoconnectable = true;
-
-	ret = -EPERM;
-	if (!is_autoconnectable)
-		goto close_settings;
 
 	if (security == SECURITY_8021X) {
 		struct l_queue *missing_secrets = NULL;
