@@ -1,3 +1,7 @@
+ver 0.12:
+	Fix issue with handling 802.1x automatic connection.
+	Fix issue with handling missing support for backtrace.
+
 ver 0.11:
 	Fix issue with handling EAP-TTLS and redundant L flags.
 	Fix issue with handling EAP-TLS upper limit on request size.
