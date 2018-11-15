@@ -488,17 +488,23 @@ void network_sync_psk(struct network *network)
 					network->settings);
 }
 
-static bool bss_is_sae(struct scan_bss *bss)
+static inline bool __bss_is_sae(const struct scan_bss *bss,
+						const struct ie_rsn_info *rsn)
+{
+	if (rsn->akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256)
+		return true;
+
+	return false;
+}
+
+static bool bss_is_sae(const struct scan_bss *bss)
 {
 	struct ie_rsn_info rsn;
 
 	memset(&rsn, 0, sizeof(rsn));
 	scan_bss_get_rsn_info(bss, &rsn);
 
-	if (rsn.akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256)
-		return true;
-
-	return false;
+	return __bss_is_sae(bss, &rsn);
 }
 
 int network_autoconnect(struct network *network, struct scan_bss *bss)
