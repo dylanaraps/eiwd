@@ -416,86 +416,94 @@ static int station_build_handshake_rsn(struct handshake_state *hs,
 	enum security security = network_get_security(network);
 	bool add_mde = false;
 
-	if (security == SECURITY_PSK || security == SECURITY_8021X) {
-		const struct l_settings *settings = iwd_get_config();
-		struct ie_rsn_info bss_info;
-		uint8_t rsne_buf[256];
-		struct ie_rsn_info info;
-		uint32_t mfp_setting;
+	const struct l_settings *settings = iwd_get_config();
+	struct ie_rsn_info bss_info;
+	uint8_t rsne_buf[256];
+	struct ie_rsn_info info;
+	uint32_t mfp_setting;
 
-		memset(&info, 0, sizeof(info));
+	memset(&info, 0, sizeof(info));
 
-		memset(&bss_info, 0, sizeof(bss_info));
-		scan_bss_get_rsn_info(bss, &bss_info);
+	memset(&bss_info, 0, sizeof(bss_info));
+	scan_bss_get_rsn_info(bss, &bss_info);
 
-		info.akm_suites = wiphy_select_akm(wiphy, bss);
+	info.akm_suites = wiphy_select_akm(wiphy, bss);
 
-		if (!info.akm_suites)
-			goto not_supported;
+	/*
+	 * Special case for OWE. With OWE we still need to build up the
+	 * handshake object with AKM/cipher info since OWE does the full 4-way
+	 * handshake. But if this is a non-OWE open network, we can skip this.
+	 */
+	if (security == SECURITY_NONE &&
+			!(info.akm_suites & IE_RSN_AKM_SUITE_OWE))
+		goto open_network;
 
-		info.pairwise_ciphers = wiphy_select_cipher(wiphy,
-						bss_info.pairwise_ciphers);
-		info.group_cipher = wiphy_select_cipher(wiphy,
-						bss_info.group_cipher);
+	if (!info.akm_suites)
+		goto not_supported;
 
-		if (!info.pairwise_ciphers || !info.group_cipher)
-			goto not_supported;
+	info.pairwise_ciphers = wiphy_select_cipher(wiphy,
+					bss_info.pairwise_ciphers);
+	info.group_cipher = wiphy_select_cipher(wiphy,
+					bss_info.group_cipher);
 
-		if (!l_settings_get_uint(settings, "General",
-				"ManagementFrameProtection", &mfp_setting))
-			mfp_setting = 1;
+	if (!info.pairwise_ciphers || !info.group_cipher)
+		goto not_supported;
 
-		if (mfp_setting > 2) {
-			l_error("Invalid MFP value, using default of 1");
-			mfp_setting = 1;
-		}
+	if (!l_settings_get_uint(settings, "General",
+			"ManagementFrameProtection", &mfp_setting))
+		mfp_setting = 1;
 
-		switch (mfp_setting) {
-		case 0:
-			break;
-		case 1:
-			info.group_management_cipher =
-				wiphy_select_cipher(wiphy,
-					bss_info.group_management_cipher);
-			info.mfpc = info.group_management_cipher != 0;
-			break;
-		case 2:
-			info.group_management_cipher =
-				wiphy_select_cipher(wiphy,
-					bss_info.group_management_cipher);
-
-			/*
-			 * MFP required on our side, but AP doesn't support MFP
-			 * or cipher mismatch
-			 */
-			if (info.group_management_cipher == 0)
-				goto not_supported;
-
-			info.mfpc = true;
-			info.mfpr = true;
-			break;
-		}
-
-		if (bss_info.mfpr && !info.mfpc)
-			goto not_supported;
-
-		/* RSN takes priority */
-		if (bss->rsne) {
-			ie_build_rsne(&info, rsne_buf);
-			handshake_state_set_authenticator_rsn(hs, bss->rsne);
-			handshake_state_set_supplicant_rsn(hs, rsne_buf);
-		} else {
-			ie_build_wpa(&info, rsne_buf);
-			handshake_state_set_authenticator_wpa(hs, bss->wpa);
-			handshake_state_set_supplicant_wpa(hs, rsne_buf);
-		}
-
-		if (info.akm_suites & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
-					IE_RSN_AKM_SUITE_FT_USING_PSK |
-					IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256))
-			add_mde = true;
+	if (mfp_setting > 2) {
+		l_error("Invalid MFP value, using default of 1");
+		mfp_setting = 1;
 	}
 
+	switch (mfp_setting) {
+	case 0:
+		break;
+	case 1:
+		info.group_management_cipher =
+			wiphy_select_cipher(wiphy,
+				bss_info.group_management_cipher);
+		info.mfpc = info.group_management_cipher != 0;
+		break;
+	case 2:
+		info.group_management_cipher =
+			wiphy_select_cipher(wiphy,
+				bss_info.group_management_cipher);
+
+		/*
+		 * MFP required on our side, but AP doesn't support MFP
+		 * or cipher mismatch
+		 */
+		if (info.group_management_cipher == 0)
+			goto not_supported;
+
+		info.mfpc = true;
+		info.mfpr = true;
+		break;
+	}
+
+	if (bss_info.mfpr && !info.mfpc)
+		goto not_supported;
+
+	/* RSN takes priority */
+	if (bss->rsne) {
+		ie_build_rsne(&info, rsne_buf);
+		handshake_state_set_authenticator_rsn(hs, bss->rsne);
+		handshake_state_set_supplicant_rsn(hs, rsne_buf);
+	} else {
+		ie_build_wpa(&info, rsne_buf);
+		handshake_state_set_authenticator_wpa(hs, bss->wpa);
+		handshake_state_set_supplicant_wpa(hs, rsne_buf);
+	}
+
+	if (info.akm_suites & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
+				IE_RSN_AKM_SUITE_FT_USING_PSK |
+				IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256))
+		add_mde = true;
+
+open_network:
 	if (security == SECURITY_NONE)
 		/* Perform FT association if available */
 		add_mde = bss->mde_present;

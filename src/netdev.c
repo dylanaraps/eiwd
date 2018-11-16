@@ -58,6 +58,7 @@
 #include "src/watchlist.h"
 #include "src/sae.h"
 #include "src/nl80211util.h"
+#include "src/owe.h"
 
 #ifndef ENOTSUPP
 #define ENOTSUPP 524
@@ -94,6 +95,7 @@ struct netdev {
 	void *user_data;
 	struct eapol_sm *sm;
 	struct sae_sm *sae_sm;
+	struct owe_sm *owe;
 	struct handshake_state *handshake;
 	uint32_t connect_cmd_id;
 	uint32_t disconnect_cmd_id;
@@ -541,6 +543,11 @@ static void netdev_connect_free(struct netdev *netdev)
 	if (netdev->sae_sm) {
 		sae_sm_free(netdev->sae_sm);
 		netdev->sae_sm = NULL;
+	}
+
+	if (netdev->owe) {
+		owe_sm_free(netdev->owe);
+		netdev->owe = NULL;
 	}
 
 	eapol_preauth_cancel(netdev->index);
@@ -1786,8 +1793,10 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 		}
 	}
 
-	if (!netdev_handle_associate_resp_ies(netdev->handshake, rsne, mde, fte,
-						netdev->in_ft))
+	/* OWE can skip this since it handles associate itself */
+	if (!netdev->owe && !netdev_handle_associate_resp_ies(netdev->handshake,
+								rsne, mde, fte,
+								netdev->in_ft))
 		goto error;
 
 	if (netdev->sm) {
@@ -1812,6 +1821,10 @@ static void netdev_connect_event(struct l_genl_msg *msg,
 			return;
 		}
 	}
+
+	/* OWE must have failed, this is handled inside netdev_owe_complete */
+	if (netdev->owe && !netdev->sm)
+		return;
 
 	netdev_connect_ok(netdev);
 
@@ -2268,7 +2281,7 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 	 * the FT Associate command is included in the attached frame and is
 	 * not available in the Authenticate command callback.
 	 */
-	if (!netdev->in_ft && !netdev->sae_sm)
+	if (!netdev->in_ft && !netdev->sae_sm && !netdev->owe)
 		return;
 
 	if (!l_genl_attr_init(&attr, msg)) {
@@ -2308,6 +2321,8 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 		netdev_sae_process(netdev,
 				((struct mmpdu_header *)frame)->address_2,
 				frame + 26, frame_len - 26);
+	else if (netdev->owe)
+		owe_rx_authenticate(netdev->owe);
 	else
 		goto auth_error;
 
@@ -2321,7 +2336,40 @@ auth_error:
 static void netdev_associate_event(struct l_genl_msg *msg,
 							struct netdev *netdev)
 {
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	size_t frame_len = 0;
+	const uint8_t *frame;
+
 	l_debug("");
+
+	if (!netdev->owe)
+		return;
+
+	if (!l_genl_attr_init(&attr, msg)) {
+		l_debug("attr init failed");
+		return;
+	}
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_TIMED_OUT:
+			l_warn("authentication timed out");
+			goto assoc_failed;
+
+		case NL80211_ATTR_FRAME:
+			frame = data;
+			frame_len = len;
+
+			owe_rx_associate(netdev->owe, frame, frame_len);
+			return;
+		}
+	}
+
+assoc_failed:
+	netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
+	netdev_connect_failed(NULL, netdev);
 }
 
 static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
@@ -2358,6 +2406,28 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 
 	netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
 	netdev_connect_failed(NULL, netdev);
+}
+
+static struct l_genl_msg *netdev_build_cmd_authenticate(
+					struct netdev *netdev,
+					uint32_t auth_type,
+					const uint8_t *addr)
+{
+	struct handshake_state *hs = netdev->handshake;
+	struct l_genl_msg *msg;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ,
+						4, &netdev->frequency);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, addr);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, hs->ssid_len, hs->ssid);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IE, hs->supplicant_ie[1] + 2,
+					hs->supplicant_ie);
+
+	return msg;
 }
 
 static void netdev_sae_complete(uint16_t status, void *user_data)
@@ -2422,17 +2492,8 @@ static int netdev_tx_sae_frame(const uint8_t *dest, const uint8_t *body,
 {
 	struct netdev *netdev = user_data;
 	struct l_genl_msg *msg;
-	uint32_t auth_type = NL80211_AUTHTYPE_SAE;
 
-	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ,
-						4, &netdev->frequency);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, dest);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID,
-				strlen((char *) netdev->handshake->ssid),
-				netdev->handshake->ssid);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
+	msg = netdev_build_cmd_authenticate(netdev, NL80211_AUTHTYPE_SAE, dest);
 
 	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_DATA, body_len, body);
 
@@ -2443,6 +2504,87 @@ static int netdev_tx_sae_frame(const uint8_t *dest, const uint8_t *body,
 	}
 
 	return 0;
+}
+
+static void netdev_owe_auth_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	if (l_genl_msg_get_error(msg) < 0) {
+		l_error("Error sending CMD_AUTHENTICATE");
+
+		netdev->result = NETDEV_RESULT_AUTHENTICATION_FAILED;
+		netdev_connect_failed(NULL, netdev);
+		return;
+	}
+}
+
+static void netdev_owe_tx_authenticate(void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct l_genl_msg *msg;
+
+	msg = netdev_build_cmd_authenticate(netdev,
+						NL80211_AUTHTYPE_OPEN_SYSTEM,
+						netdev->handshake->aa);
+
+	if (!l_genl_family_send(nl80211, msg, netdev_owe_auth_cb, netdev, NULL)) {
+		l_genl_msg_unref(msg);
+		netdev->result = NETDEV_RESULT_AUTHENTICATION_FAILED;
+		netdev_connect_failed(NULL, netdev);
+	}
+}
+
+static void netdev_owe_assoc_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	if (l_genl_msg_get_error(msg) < 0) {
+		l_error("Error sending CMD_ASSOCIATE");
+
+		netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
+		netdev_connect_failed(NULL, netdev);
+	}
+}
+
+static void netdev_owe_tx_associate(struct iovec *ie_iov, size_t iov_len,
+					void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct l_genl_msg *msg;
+
+	msg = netdev_build_cmd_associate_common(netdev);
+
+	l_genl_msg_append_attrv(msg, NL80211_ATTR_IE, ie_iov, iov_len);
+
+	if (!l_genl_family_send(nl80211, msg, netdev_owe_assoc_cb,
+							netdev, NULL)) {
+		l_genl_msg_unref(msg);
+		netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
+		netdev_connect_failed(NULL, netdev);
+	}
+}
+
+static void netdev_owe_complete(uint16_t status, void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct l_genl_msg *msg;
+
+	if (status) {
+		/*
+		 * OWE will never fail during authenticate, at least internally,
+		 * so we can always assume its association that failed.
+		 */
+		netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
+		msg = netdev_build_cmd_disconnect(netdev, status);
+		netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
+							netdev_connect_failed,
+							netdev, NULL);
+		return;
+	}
+
+	netdev->sm = eapol_sm_new(netdev->handshake);
+	eapol_register(netdev->sm);
 }
 
 static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
@@ -2573,6 +2715,8 @@ static int netdev_connect_common(struct netdev *netdev,
 
 	if (netdev->sae_sm)
 		sae_start(netdev->sae_sm);
+	else if (netdev->owe)
+		owe_start(netdev->owe);
 
 	return 0;
 }
@@ -2592,10 +2736,19 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	if (netdev->connected)
 		return -EISCONN;
 
-	if (IE_AKM_IS_SAE(hs->akm_suite)) {
+	switch (hs->akm_suite) {
+	case IE_RSN_AKM_SUITE_SAE_SHA256:
+	case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
 		netdev->sae_sm = sae_sm_new(hs, netdev_tx_sae_frame,
 						netdev_sae_complete, netdev);
-	} else {
+		break;
+	case IE_RSN_AKM_SUITE_OWE:
+		netdev->owe = owe_sm_new(hs, netdev_owe_tx_authenticate,
+						netdev_owe_tx_associate,
+						netdev_owe_complete,
+						netdev);
+		break;
+	default:
 		cmd_connect = netdev_build_cmd_connect(netdev, bss, hs, NULL);
 
 		if (!cmd_connect)
