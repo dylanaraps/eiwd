@@ -184,6 +184,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h \
 					src/adhoc.h src/adhoc.c \
 					src/sae.h src/sae.c \
 					src/nl80211util.h src/nl80211util.c \
+					src/ecdh.h src/ecdh.c \
 					$(eap_sources) \
 					$(builtin_sources)
 src_iwd_LDADD = $(ell_ldadd) -ldl
