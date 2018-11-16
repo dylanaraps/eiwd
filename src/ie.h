@@ -224,6 +224,7 @@ enum ie_type {
 	IE_TYPE_EXTENDED_REQUEST                     = 256 + 10,
 	IE_TYPE_ESTIMATED_SERVICE_PARAMETERS         = 256 + 11,
 	IE_TYPE_FUTURE_CHANNEL_GUIDANCE              = 256 + 14,
+	IE_TYPE_OWE_DH_PARAM                         = 256 + 32,
 };
 
 enum ie_rsn_cipher_suite {
