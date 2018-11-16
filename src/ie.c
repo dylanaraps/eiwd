@@ -460,6 +460,9 @@ static int ie_parse_akm_suite(const uint8_t *data,
 		case 13:
 			*out = IE_RSN_AKM_SUITE_FT_OVER_8021X_SHA384;
 			return 0;
+		case 18:
+			*out = IE_RSN_AKM_SUITE_OWE;
+			return 0;
 		default:
 			return -ENOENT;
 		}
@@ -800,6 +803,8 @@ static bool ie_build_rsn_akm_suite(uint8_t *data, enum ie_rsn_akm_suite suite)
 		RETURN_AKM(data, ieee_oui, 12);
 	case IE_RSN_AKM_SUITE_FT_OVER_8021X_SHA384:
 		RETURN_AKM(data, ieee_oui, 13);
+	case IE_RSN_AKM_SUITE_OWE:
+		RETURN_AKM(data, ieee_oui, 18);
 	}
 
 	return false;
@@ -887,7 +892,7 @@ bool ie_build_rsne(const struct ie_rsn_info *info, uint8_t *to)
 	count = 0;
 
 	for (count = 0, akm_suite = IE_RSN_AKM_SUITE_8021X;
-			akm_suite <= IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256;
+			akm_suite <= IE_RSN_AKM_SUITE_OWE;
 				akm_suite <<= 1) {
 		if (!(info->akm_suites & akm_suite))
 			continue;
