@@ -1452,7 +1452,7 @@ static void print_ie(unsigned int level, const char *label,
 	ie_tlv_iter_init(&iter, data, size);
 
 	while (ie_tlv_iter_next(&iter)) {
-		uint8_t tag = ie_tlv_iter_get_tag(&iter);
+		uint16_t tag = ie_tlv_iter_get_tag(&iter);
 		struct attr_entry *entry = NULL;
 
 		for (i = 0; ie_entry[i].str; i++) {
