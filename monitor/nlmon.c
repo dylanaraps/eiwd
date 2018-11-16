@@ -2688,7 +2688,7 @@ static void print_akm_suites(unsigned int level, const char *label,
 	while (size >= 4) {
 		uint32_t akm = *((uint32_t *) data);
 
-		print_ie_cipher_suite(level, NULL, akm, rsn_akm_selectors);
+		print_ie_cipher_suite(level + 1, NULL, akm, rsn_akm_selectors);
 		data += 4;
 		size -= 4;
 	}
