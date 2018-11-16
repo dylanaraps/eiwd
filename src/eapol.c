@@ -84,6 +84,8 @@ bool eapol_calculate_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
 		case IE_RSN_AKM_SUITE_SAE_SHA256:
 		case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
 			return cmac_aes(kck, 16, frame, frame_len, mic, 16);
+		case IE_RSN_AKM_SUITE_OWE:
+			return hmac_sha256(kck, 16, frame, frame_len, mic, 16);
 		default:
 			return false;
 		}
@@ -128,6 +130,10 @@ bool eapol_verify_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
 		case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
 			checksum = l_checksum_new_cmac_aes(kck, 16);
 			break;
+		case IE_RSN_AKM_SUITE_OWE:
+			checksum = l_checksum_new_hmac(L_CHECKSUM_SHA256,
+								kck, 16);
+			break;
 		default:
 			return false;
 		}
@@ -165,12 +171,12 @@ uint8_t *eapol_decrypt_key_data(enum ie_rsn_akm_suite akm, const uint8_t *kek,
 		break;
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AKM_DEFINED:
 		/*
-		 * TODO: for now, only SAE is supported under the AKM_DEFINED
-		 * key descriptor version. Once 8021x suites are added for this
-		 * type this will need to be expanded to handle the AKM types in
-		 * its own switch.
+		 * TODO: for now, only SAE/OWE (group 19) is supported under the
+		 * AKM_DEFINED key descriptor version. Once 8021x suites are
+		 * added for this type this will need to be expanded to handle
+		 * the AKM types in its own switch.
 		 */
-		if (!IE_AKM_IS_SAE(akm))
+		if (!IE_AKM_IS_SAE(akm) && akm != IE_RSN_AKM_SUITE_OWE)
 			return NULL;
 
 		/* Fall through */
