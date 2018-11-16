@@ -446,6 +446,57 @@ bool hkdf_extract_sha256(const uint8_t *key, size_t key_len, uint8_t num_args,
 	return (ret == 32);
 }
 
+bool hkdf_expand_sha256(const uint8_t *key, size_t key_len, const char *info,
+			size_t info_len, void *out, size_t out_len)
+{
+	uint8_t t[32];
+	size_t t_len = 0;
+	struct iovec iov[3];
+	struct l_checksum *hmac;
+	uint8_t count = 1;
+	uint8_t *out_ptr = out;
+
+	while (out_len > 0) {
+		ssize_t ret;
+
+		hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, key, key_len);
+
+		iov[0].iov_base = t;
+		iov[0].iov_len = t_len;
+		iov[1].iov_base = (void *) info;
+		iov[1].iov_len = info_len;
+		iov[2].iov_base = &count;
+		iov[2].iov_len = 1;
+
+		if (!l_checksum_updatev(hmac, iov, 3)) {
+			l_checksum_free(hmac);
+			return false;
+		}
+
+		ret = l_checksum_get_digest(hmac, t,
+						(out_len > 32) ? 32 : out_len);
+		if (ret < 0) {
+			l_checksum_free(hmac);
+			return false;
+		}
+
+		memcpy(out_ptr, t, ret);
+		out_len -= ret;
+		out_ptr += ret;
+
+		/*
+		 * RFC specifies that T(0) = empty string, so after the first
+		 * iteration we update the length for T(1)...T(N)
+		 */
+		t_len = 32;
+		count++;
+
+		l_checksum_free(hmac);
+	}
+
+	return true;
+}
+
 /*
  * 802.11, Section 11.6.6.7:
  * PTK = PRF-X(PMK, "Pairwise key expansion", Min(AA, SA) || Max(AA, SA) ||

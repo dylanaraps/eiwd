@@ -95,6 +95,9 @@ bool prf_sha1(const void *key, size_t key_len,
 bool hkdf_extract_sha256(const uint8_t *key, size_t key_len, uint8_t num_args,
 			uint8_t *out, ...);
 
+bool hkdf_expand_sha256(const uint8_t *key, size_t key_len, const char *info,
+			size_t info_len, void *out, size_t out_len);
+
 bool crypto_derive_pairwise_ptk(const uint8_t *pmk,
 				const uint8_t *addr1, const uint8_t *addr2,
 				const uint8_t *nonce1, const uint8_t *nonce2,
