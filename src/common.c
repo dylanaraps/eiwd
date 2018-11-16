@@ -79,6 +79,9 @@ enum security security_determine(uint16_t bss_capability,
 			info->akm_suites & IE_RSN_AKM_SUITE_FT_OVER_8021X))
 		return SECURITY_8021X;
 
+	if (info && (info->akm_suites & IE_RSN_AKM_SUITE_OWE))
+		return SECURITY_NONE;
+
 	if (bss_capability & IE_BSS_CAP_PRIVACY)
 		return SECURITY_WEP;
 
