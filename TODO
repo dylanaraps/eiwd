@@ -323,15 +323,6 @@ Wireless daemon
   Priority: Low
   Complexity: C8
 
-- OWE Support
-
-  Opportunistic Wireless Encryption described in RFC 8110 provides a way for
-  open networks to be encrypted.  No authentication is provided, only
-  encryption
-
-  Priority: Low
-  Complexity: C8
-
 - iwctl should register the agent even in non-interactive mode
 
   When iwctl is started in non-interactive mode it currently does not register

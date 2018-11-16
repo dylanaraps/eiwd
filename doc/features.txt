@@ -49,6 +49,9 @@ the disassociate frame was valid. The alternate case is if the AP receives
 an (re)associate frame while the STA is still connected. In this case the AP
 will send an SA Query frame, which IWD will respond to if it is still connected.
 
+- IWD supports Opportunistic Wireless Encryption (OWE). This allows encryption
+on open networks, by using ECDH to negotiate a PMK.
+
 - IWD supports the following EAP methods:
         - EAP-SIM
         - EAP-AKA
