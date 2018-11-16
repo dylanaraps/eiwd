@@ -109,6 +109,9 @@ void eap_discard_success_and_failure(struct eap_state *eap, bool discard);
 void eap_set_data(struct eap_state *eap, void *data);
 void *eap_get_data(struct eap_state *eap);
 
+enum eap_type eap_get_method_type(struct eap_state *eap);
+const char *eap_get_method_name(struct eap_state *eap);
+
 void eap_send_response(struct eap_state *eap,
 			enum eap_type request_type,
 			uint8_t *buf, size_t len);

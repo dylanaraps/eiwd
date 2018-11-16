@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2013-2014  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2013-2018  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -588,6 +588,16 @@ void eap_set_data(struct eap_state *eap, void *data)
 void *eap_get_data(struct eap_state *eap)
 {
 	return eap->method_state;
+}
+
+enum eap_type eap_get_method_type(struct eap_state *eap)
+{
+	return eap->method->request_type;
+}
+
+const char *eap_get_method_name(struct eap_state *eap)
+{
+	return eap->method->name;
 }
 
 void eap_set_key_material(struct eap_state *eap,
