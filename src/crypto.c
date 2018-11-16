@@ -411,7 +411,7 @@ bool kdf_sha256(const void *key, size_t key_len,
  *
  * Null key equates to a zero key (makes calls in EAP-PWD more convenient)
  */
-bool hkdf_256(const uint8_t *key, size_t key_len, uint8_t num_args,
+bool hkdf_extract_sha256(const uint8_t *key, size_t key_len, uint8_t num_args,
 			uint8_t *out, ...)
 {
 	struct l_checksum *hmac;

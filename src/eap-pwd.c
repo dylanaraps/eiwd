@@ -282,9 +282,9 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 
 	while (counter < 20) {
 		/* pwd-seed = H(token|peer-ID|server-ID|password|counter) */
-		hkdf_256(NULL, 0, 5, pwd_seed, &token, 4, pwd->identity,
-				strlen(pwd->identity), pkt + 9, len - 9,
-				pwd->password, strlen(pwd->password),
+		hkdf_extract_sha256(NULL, 0, 5, pwd_seed, &token, 4,
+				pwd->identity, strlen(pwd->identity), pkt + 9,
+				len - 9, pwd->password, strlen(pwd->password),
 				&counter, 1);
 
 		/*
@@ -492,13 +492,13 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 	 * compute Confirm_P = H(kp | Element_P | Scalar_P |
 	 *                       Element_S | Scalar_S | Ciphersuite)
 	 */
-	hkdf_256(NULL, 0, 8, confirm_p, kp.x, ECC_BYTES, pwd->element_p.x,
-			ECC_BYTES, pwd->element_p.y, ECC_BYTES, pwd->scalar_p,
-			ECC_BYTES, pwd->element_s.x, ECC_BYTES,
-			pwd->element_s.y, ECC_BYTES, pwd->scalar_s,
+	hkdf_extract_sha256(NULL, 0, 8, confirm_p, kp.x, ECC_BYTES,
+			pwd->element_p.x, ECC_BYTES, pwd->element_p.y,
+			ECC_BYTES, pwd->scalar_p, ECC_BYTES, pwd->element_s.x,
+			ECC_BYTES, pwd->element_s.y, ECC_BYTES, pwd->scalar_s,
 			ECC_BYTES, &pwd->ciphersuite, 4);
 
-	hkdf_256(NULL, 0, 8, expected_confirm_s, kp.x, ECC_BYTES,
+	hkdf_extract_sha256(NULL, 0, 8, expected_confirm_s, kp.x, ECC_BYTES,
 			pwd->element_s.x, ECC_BYTES, pwd->element_s.y,
 			ECC_BYTES, pwd->scalar_s, ECC_BYTES, pwd->element_p.x,
 			ECC_BYTES, pwd->element_p.y, ECC_BYTES,
@@ -515,15 +515,15 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 	pos += 32;
 
 	/* derive MK = H(kp | Confirm_P | Confirm_S ) */
-	hkdf_256(NULL, 0, 3, mk, kp.x, ECC_BYTES, confirm_p, ECC_BYTES,
-			confirm_s, ECC_BYTES);
+	hkdf_extract_sha256(NULL, 0, 3, mk, kp.x, ECC_BYTES, confirm_p,
+			ECC_BYTES, confirm_s, ECC_BYTES);
 
 	eap_pwd_send_response(eap, resp, pos - resp);
 
 	eap_method_success(eap);
 
 	session_id[0] = 52;
-	hkdf_256(NULL, 0, 3, session_id + 1, &pwd->ciphersuite, 4,
+	hkdf_extract_sha256(NULL, 0, 3, session_id + 1, &pwd->ciphersuite, 4,
 			pwd->scalar_p, ECC_BYTES, pwd->scalar_s, ECC_BYTES);
 	kdf(mk, 32, (const char *) session_id, 33, msk_emsk, 128);
 	eap_set_key_material(eap, msk_emsk, 64, msk_emsk + 64, 64, NULL, 0);

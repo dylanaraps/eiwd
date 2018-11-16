@@ -137,7 +137,8 @@ static bool sae_pwd_seed(const uint8_t *addr1, const uint8_t *addr2,
 		memcpy(key + 6, addr1, 6);
 	}
 
-	return hkdf_256(key, 12, 2, out, base, base_len, &counter, 1);
+	return hkdf_extract_sha256(key, 12, 2, out, base, base_len,
+					&counter, 1);
 }
 
 static bool sae_pwd_value(uint8_t *pwd_seed, uint64_t *pwd_value)
