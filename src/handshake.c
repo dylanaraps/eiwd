@@ -298,7 +298,8 @@ bool handshake_state_derive_ptk(struct handshake_state *s)
 	if (s->akm_suite & (IE_RSN_AKM_SUITE_8021X_SHA256 |
 			IE_RSN_AKM_SUITE_PSK_SHA256 |
 			IE_RSN_AKM_SUITE_SAE_SHA256 |
-			IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256))
+			IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256 |
+			IE_RSN_AKM_SUITE_OWE))
 		use_sha256 = true;
 	else
 		use_sha256 = false;
