@@ -31,3 +31,8 @@ struct databuf *databuf_new(size_t capacity);
 void databuf_append(struct databuf *databuf, const uint8_t *data,
 							size_t data_len);
 void databuf_free(struct databuf *databuf);
+
+int eap_tls_common_settings_check(struct l_settings *settings,
+						struct l_queue *secrets,
+						const char *prefix,
+						struct l_queue **out_missing);
