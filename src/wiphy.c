@@ -140,6 +140,9 @@ enum ie_rsn_akm_suite wiphy_select_akm(struct wiphy *wiphy,
 
 		if (info.akm_suites & IE_RSN_AKM_SUITE_PSK)
 			return IE_RSN_AKM_SUITE_PSK;
+	} else if (security == SECURITY_NONE) {
+		if (info.akm_suites & IE_RSN_AKM_SUITE_OWE)
+			return IE_RSN_AKM_SUITE_OWE;
 	}
 
 	return 0;
