@@ -29,6 +29,7 @@
 #include <ell/ell.h>
 
 #include "src/eap.h"
+#include "src/eap-private.h"
 #include "src/eap-tls-common.h"
 
 struct databuf *databuf_new(size_t capacity)
@@ -72,6 +73,40 @@ void databuf_free(struct databuf *databuf)
 
 	l_free(databuf->data);
 	l_free(databuf);
+}
+
+struct eap_tls_state {
+	enum eap_tls_version version_negotiated;
+
+	char *ca_cert;
+	char *client_cert;
+	char *client_key;
+	char *passphrase;
+};
+
+static void __eap_tls_common_state_reset(struct eap_tls_state *eap_tls)
+{
+	eap_tls->version_negotiated = EAP_TLS_VERSION_NOT_NEGOTIATED;
+}
+
+void eap_tls_common_state_free(struct eap_state *eap)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+
+	__eap_tls_common_state_reset(eap_tls);
+
+	eap_set_data(eap, NULL);
+
+	l_free(eap_tls->ca_cert);
+	l_free(eap_tls->client_cert);
+	l_free(eap_tls->client_key);
+
+	if (eap_tls->passphrase) {
+		memset(eap_tls->passphrase, 0, strlen(eap_tls->passphrase));
+		l_free(eap_tls->passphrase);
+	}
+
+	l_free(eap_tls);
 }
 
 int eap_tls_common_settings_check(struct l_settings *settings,
@@ -187,4 +222,37 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 	}
 
 	return 0;
+}
+
+bool eap_tls_common_settings_load(struct eap_state *eap,
+						struct l_settings *settings,
+						const char *prefix)
+{
+	struct eap_tls_state *eap_tls;
+	char setting_key[72];
+
+	eap_tls = l_new(struct eap_tls_state, 1);
+
+	eap_tls->version_negotiated = EAP_TLS_VERSION_NOT_NEGOTIATED;
+
+	snprintf(setting_key, sizeof(setting_key), "%sCACert", prefix);
+	eap_tls->ca_cert = l_settings_get_string(settings, "Security",
+								setting_key);
+
+	snprintf(setting_key, sizeof(setting_key), "%sClientCert", prefix);
+	eap_tls->client_cert = l_settings_get_string(settings, "Security",
+								setting_key);
+
+	snprintf(setting_key, sizeof(setting_key), "%sClientKey", prefix);
+	eap_tls->client_key = l_settings_get_string(settings, "Security",
+								setting_key);
+
+	snprintf(setting_key, sizeof(setting_key), "%sClientKeyPassphrase",
+									prefix);
+	eap_tls->passphrase = l_settings_get_string(settings, "Security",
+								setting_key);
+
+	eap_set_data(eap, eap_tls);
+
+	return true;
 }
