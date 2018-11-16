@@ -45,6 +45,7 @@ enum crypto_akm {
 	CRYPTO_AKM_8021X_SUITE_B_SHA256 = 0x000fac0b,
 	CRYPTO_AKM_8021X_SUITE_B_SHA384 = 0x000fac0c,
 	CRYPTO_AKM_FT_OVER_8021X_SHA384 = 0x000fac0d,
+	CRYPTO_AKM_OWE = 0x000fac12,
 };
 
 /* Min & Max reported by crypto_cipher_key_len when ignoring WEP */
