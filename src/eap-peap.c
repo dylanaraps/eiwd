@@ -512,7 +512,7 @@ static void eap_peap_tunnel_ready(const char *peer_identity, void *user_data)
 	eap_start_complete_timeout(eap);
 
 	/* MSK, EMSK and challenge derivation */
-	l_tls_prf_get_bytes(peap->tunnel, L_CHECKSUM_SHA256, 32, true,
+	l_tls_prf_get_bytes(peap->tunnel, true,
 				"client EAP encryption", msk_emsk, 128);
 
 	eap_set_key_material(eap, msk_emsk + 0, 64, NULL, 0, NULL, 0);
@@ -554,13 +554,12 @@ static bool eap_peap_tunnel_init(struct eap_state *eap)
 		l_tls_set_debug(peap->tunnel, eap_peap_debug_cb, NULL, NULL);
 
 	if (!l_tls_set_auth_data(peap->tunnel, peap->client_cert,
-					peap->client_key, NULL)) {
+				peap->client_key, NULL) ||
+			(peap->ca_cert &&
+			 !l_tls_set_cacert(peap->tunnel, peap->ca_cert))) {
 		l_error("PEAP: Failed to set authentication data.");
 		return false;
 	}
-
-	if (peap->ca_cert)
-		l_tls_set_cacert(peap->tunnel, peap->ca_cert);
 
 	return true;
 }

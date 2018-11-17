@@ -509,7 +509,7 @@ static void eap_ttls_phase2_chap_generate_challenge(struct l_tls *tunnel,
 							uint8_t *challenge,
 							size_t challenge_len)
 {
-	l_tls_prf_get_bytes(tunnel, L_CHECKSUM_SHA256, 32, true,
+	l_tls_prf_get_bytes(tunnel, true,
 				"ttls challenge", challenge, challenge_len);
 }
 
@@ -792,7 +792,7 @@ static void eap_ttls_ready_cb(const char *peer_identity, void *user_data)
 	eap_method_success(eap);
 
 	/* MSK, EMSK and challenge derivation */
-	l_tls_prf_get_bytes(ttls->tls, L_CHECKSUM_SHA256, 32, true,
+	l_tls_prf_get_bytes(ttls->tls, true,
 				"ttls keying material", msk_emsk, 128);
 
 	eap_set_key_material(eap, msk_emsk + 0, 64, msk_emsk + 64, 64,
@@ -1012,11 +1012,13 @@ add_to_pkt_buf:
 		if (getenv("IWD_TLS_DEBUG"))
 			l_tls_set_debug(ttls->tls, eap_ttls_debug_cb, NULL, NULL);
 
-		l_tls_set_auth_data(ttls->tls, ttls->client_cert,
-					ttls->client_key, ttls->passphrase);
-
-		if (ttls->ca_cert)
-			l_tls_set_cacert(ttls->tls, ttls->ca_cert);
+		if (!l_tls_set_auth_data(ttls->tls, ttls->client_cert,
+					ttls->client_key, ttls->passphrase) ||
+				(ttls->ca_cert &&
+				 !l_tls_set_cacert(ttls->tls, ttls->ca_cert))) {
+			l_error("Error loading EAP-TTLS keys or certificates");
+			goto err;
+		}
 
 		/*
 		 * RFC5281 section 9.1: "For all packets other than a

@@ -146,9 +146,9 @@ static void eap_tls_ready_cb(const char *peer_identity, void *user_data)
 	eap_start_complete_timeout(eap);
 
 	/* MSK, EMSK and IV derivation */
-	l_tls_prf_get_bytes(tls->tls, L_CHECKSUM_SHA256, 32, true,
+	l_tls_prf_get_bytes(tls->tls, true,
 				"client EAP encryption", msk_emsk, 128);
-	l_tls_prf_get_bytes(tls->tls, L_CHECKSUM_SHA256, 32, false,
+	l_tls_prf_get_bytes(tls->tls, false,
 				"client EAP encryption", iv, 64);
 
 	eap_set_key_material(eap, msk_emsk + 0, 64, msk_emsk + 64, 64, iv, 64);
@@ -317,11 +317,13 @@ static void eap_tls_handle_request(struct eap_state *eap,
 		if (getenv("IWD_TLS_DEBUG"))
 			l_tls_set_debug(tls->tls, eap_tls_debug_cb, NULL, NULL);
 
-		l_tls_set_auth_data(tls->tls, tls->client_cert, tls->client_key,
-					tls->passphrase);
-
-		if (tls->ca_cert)
-			l_tls_set_cacert(tls->tls, tls->ca_cert);
+		if (!l_tls_set_auth_data(tls->tls, tls->client_cert,
+					tls->client_key, tls->passphrase) ||
+				(tls->ca_cert &&
+				 !l_tls_set_cacert(tls->tls, tls->ca_cert))) {
+			l_error("Error loading EAP-TLS keys or certificates");
+			goto err;
+		}
 	}
 
 	/*
