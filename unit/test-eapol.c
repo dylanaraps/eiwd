@@ -2844,8 +2844,8 @@ static void eapol_sm_test_tls_test_ready(const char *peer_identity,
 
 	s->success = true;
 
-	l_tls_prf_get_bytes(s->tls, L_CHECKSUM_SHA256, 32, true,
-				"client EAP encryption", s->pmk, 32);
+	assert(l_tls_prf_get_bytes(s->tls, true, "client EAP encryption",
+					s->pmk, 32));
 }
 
 static void eapol_sm_test_tls_test_disconnected(enum l_tls_alert_desc reason,
@@ -2934,9 +2934,9 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	s->tx_buf_len = 0;
 	s->tx_buf_offset = 0;
 
-	l_tls_set_auth_data(s->tls, "ell/unit/cert-server.pem",
-				"ell/unit/cert-server-key-pkcs8.pem", NULL);
-	l_tls_set_cacert(s->tls, "ell/unit/cert-ca.pem");
+	assert(l_tls_set_auth_data(s->tls, "ell/unit/cert-server.pem",
+				"ell/unit/cert-server-key-pkcs8.pem", NULL));
+	assert(l_tls_set_cacert(s->tls, "ell/unit/cert-ca.pem"));
 
 	start = 1;
 	__eapol_set_tx_packet_func(verify_8021x_tls_resp);
@@ -3160,8 +3160,8 @@ static void eapol_sm_test_eap_ttls_test_ready(const char *peer_identity,
 	assert(!s->tls.tx_ack);
 	/* TODO: require the right peer_identity */
 
-	l_tls_prf_get_bytes(s->tls.tls, L_CHECKSUM_SHA256, 32, true,
-				"ttls keying material", s->tls.pmk, 32);
+	assert(l_tls_prf_get_bytes(s->tls.tls, true, "ttls keying material",
+					s->tls.pmk, 32));
 
 	s->challenge_sent = false;
 }
