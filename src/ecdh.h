@@ -20,8 +20,15 @@
  *
  */
 
+/*
+ * Generate a private/public key pair. All inputs are expected in little-endian.
+ */
 bool ecdh_generate_key_pair(void *private, size_t priv_len,
 				void *public, size_t pub_len);
+/*
+ * Generate a shared secret from a private/public key. All inputs are expected
+ * in little-endian.
+ */
 bool ecdh_generate_shared_secret(const void *private, const void *other_public,
 					size_t pub_len, void *secret,
 					size_t secret_len);

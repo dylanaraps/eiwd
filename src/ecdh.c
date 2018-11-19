@@ -85,9 +85,6 @@ bool ecdh_generate_key_pair(void *private, size_t priv_len,
 		return false;
 	}
 
-	ecc_native2be(pub.x);
-	ecc_native2be(pub.y);
-
 	memcpy(public, &pub, pub_len);
 
 	return true;
@@ -132,6 +129,7 @@ bool ecdh_generate_shared_secret(const void *private, const void *other_public,
 
 	if (secret_len > 32)
 		return false;
+
 	/*
 	 * TODO: Once other ECC groups are added this will need to be modified
 	 * to check for 1/2 the full public key lengths
@@ -142,7 +140,6 @@ bool ecdh_generate_shared_secret(const void *private, const void *other_public,
 		 * be decoded.
 		 */
 		memcpy(x, other_public, 32);
-		ecc_be2native(x);
 
 		if (!decode_point(x, &public)) {
 			l_error("could not decode compressed public key");
@@ -150,9 +147,6 @@ bool ecdh_generate_shared_secret(const void *private, const void *other_public,
 		}
 	} else if (pub_len == 64) {
 		memcpy(&public, other_public, 64);
-
-		ecc_be2native(public.x);
-		ecc_be2native(public.y);
 	} else {
 		l_error("unsupported public key length %ld", pub_len);
 		return false;
@@ -163,8 +157,6 @@ bool ecdh_generate_shared_secret(const void *private, const void *other_public,
 
 	ecc_point_mult(&product, &public, (uint64_t *)private, z,
 				vli_num_bits(private));
-
-	ecc_native2be(product.x);
 
 	memcpy(secret, product.x, secret_len);
 

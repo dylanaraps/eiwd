@@ -60,6 +60,13 @@ struct owe_sm *owe_sm_new(struct handshake_state *hs,
 		return NULL;
 	}
 
+	/*
+	 * Store our own public key in BE ordering since all future uses
+	 * will need it.
+	 */
+	ecc_native2be(owe->public_key);
+	ecc_native2be(owe->public_key + 4);
+
 	return owe;
 }
 
@@ -113,22 +120,28 @@ void owe_rx_authenticate(struct owe_sm *owe)
 static bool owe_compute_keys(struct owe_sm *owe, const void *public_key,
 			size_t pub_len)
 {
-	uint8_t shared_secret[32];
+	uint64_t shared_secret[4];
 	uint8_t prk[32];
 	uint8_t pmk[32];
 	uint8_t pmkid[16];
 	uint8_t key[32 + 32 + 2];
+	uint64_t public_native[4];
 	struct iovec iov[2];
 	struct l_checksum *sha;
 
+	memcpy(public_native, public_key, 32);
+	ecc_be2native(public_native);
+
 	/* z = F(DH(x, Y)) */
-	if (!ecdh_generate_shared_secret(owe->private, public_key, pub_len,
+	if (!ecdh_generate_shared_secret(owe->private, public_native, pub_len,
 						shared_secret, 32))
 		return false;
 
 	memcpy(key, owe->public_key, 32);
 	memcpy(key + 32, public_key, 32);
 	l_put_le16(19, key + 64);
+
+	ecc_native2be(shared_secret);
 
 	/* prk = HKDF-extract(C | A | group, z) */
 	if (!hkdf_extract_sha256(key, 66, 1, prk, shared_secret, 32))
