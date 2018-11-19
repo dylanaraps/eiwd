@@ -148,7 +148,7 @@ bool ecdh_generate_shared_secret(const void *private, const void *other_public,
 	} else if (pub_len == 64) {
 		memcpy(&public, other_public, 64);
 	} else {
-		l_error("unsupported public key length %ld", pub_len);
+		l_error("unsupported public key length %zu", pub_len);
 		return false;
 	}
 
