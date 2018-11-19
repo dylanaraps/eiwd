@@ -81,11 +81,50 @@ static void test_compliant_key(const void *data)
 	assert(!memcmp(secret1, secret2, 32));
 }
 
+/*
+ * Test vector from RFC 5114 - 256-bit Random ECP Group
+ */
+static void test_vectors(const void *data)
+{
+	uint64_t a_secret[4] = { 0x867B7291D507A3AFull, 0x3FAF432A5ABCE59Eull,
+				0xE96A8E337A128499ull, 0x814264145F2F56F2ull };
+	struct ecc_point a_public = {
+			.x = { 0x5E8D3B4BA83AEB15ull, 0x7165BE50BC42AE4Aull,
+				0xC9B5A8D4160D09E9ull, 0x2AF502F3BE8952F2ull },
+			.y = { 0xC0F5015ECE5EFD85ull, 0x6795BD4BFF6E6DE3ull,
+				0x8681A0F9872D79D5ull, 0xEB0FAF4CA986C4D3ull }
+	};
+	uint64_t b_secret[4] = { 0xEE1B593761CF7F41ull, 0x19CE6BCCAD562B8Eull,
+				0xDB95A200CC0AB26Aull, 0x2CE1788EC197E096ull };
+	struct ecc_point b_public = {
+			.x = { 0xB3AB0715F6CE51B0ull, 0xAE06AAEA279FA775ull,
+				0x5346E8DE6C2C8646ull, 0xB120DE4AA3649279ull },
+			.y = { 0x85C34DDE5708B2B6ull, 0x3727027092A84113ull,
+				0xD8EC685FA3F071D8ull, 0x9F1B7EECE20D7B5Eull }
+	};
+	uint64_t shared_secret[4] = { 0x7F80D21C820C2788ull,
+					0xF5811E9DC8EC8EEAull,
+					0x93310412D19A08F1ull,
+					0xDD0F5396219D1EA3ull };
+
+	uint64_t a_shared[4];
+	uint64_t b_shared[4];
+
+	ecdh_generate_shared_secret(a_secret, (const void *)&b_public, 64,
+					a_shared, 32);
+	ecdh_generate_shared_secret(b_secret, (const void *)&a_public, 64,
+					b_shared, 32);
+
+	assert(!memcmp(a_shared, shared_secret, 32));
+	assert(!memcmp(b_shared, shared_secret, 32));
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
 	l_test_add("ECDH Basic", test_basic, NULL);
 	l_test_add("ECDH Compliant key", test_compliant_key, NULL);
+	l_test_add("ECDH test vector", test_vectors, NULL);
 
 	return l_test_run();
 }
