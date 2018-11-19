@@ -2355,7 +2355,7 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 		switch (type) {
 		case NL80211_ATTR_TIMED_OUT:
-			l_warn("authentication timed out");
+			l_warn("association timed out");
 			goto assoc_failed;
 
 		case NL80211_ATTR_FRAME:
