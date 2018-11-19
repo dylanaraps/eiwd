@@ -1510,9 +1510,9 @@ static void hardware_rekey_cb(struct l_genl_msg *msg, void *data)
 }
 
 static struct l_genl_msg *netdev_build_cmd_replay_counter(struct netdev *netdev,
-					const uint8_t *kek,
-					const uint8_t *kck,
-					uint64_t replay_ctr)
+							const uint8_t *kek,
+							const uint8_t *kck,
+							uint64_t replay_ctr)
 {
 	struct l_genl_msg *msg;
 
@@ -1714,8 +1714,7 @@ static bool netdev_handle_associate_resp_ies(struct handshake_state *hs,
 	return true;
 }
 
-static void netdev_connect_event(struct l_genl_msg *msg,
-							struct netdev *netdev)
+static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 {
 	struct l_genl_attr attr;
 	uint16_t type, len;
@@ -1942,8 +1941,7 @@ static struct l_genl_msg *netdev_build_cmd_associate_common(
  * RSN or non-RSN Over-the-air FT Protocol, and with the IE contents
  * according to 12.8.4: FT authentication sequence: contents of third message.
  */
-static struct l_genl_msg *netdev_build_cmd_ft_reassociate(
-							struct netdev *netdev)
+static struct l_genl_msg *netdev_build_cmd_ft_reassociate(struct netdev *netdev)
 {
 	struct l_genl_msg *msg;
 	struct iovec iov[3];
@@ -2063,7 +2061,7 @@ static void netdev_cmd_ft_reassociate_cb(struct l_genl_msg *msg,
 }
 
 static void netdev_ft_process(struct netdev *netdev, const uint8_t *frame,
-		size_t frame_len)
+				size_t frame_len)
 {
 	struct l_genl_msg *cmd_associate, *cmd_deauth;
 	uint16_t status_code;
@@ -2408,10 +2406,9 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 	netdev_connect_failed(NULL, netdev);
 }
 
-static struct l_genl_msg *netdev_build_cmd_authenticate(
-					struct netdev *netdev,
-					uint32_t auth_type,
-					const uint8_t *addr)
+static struct l_genl_msg *netdev_build_cmd_authenticate(struct netdev *netdev,
+							uint32_t auth_type,
+							const uint8_t *addr)
 {
 	struct handshake_state *hs = netdev->handshake;
 	struct l_genl_msg *msg;
@@ -2528,7 +2525,8 @@ static void netdev_owe_tx_authenticate(void *user_data)
 						NL80211_AUTHTYPE_OPEN_SYSTEM,
 						netdev->handshake->aa);
 
-	if (!l_genl_family_send(nl80211, msg, netdev_owe_auth_cb, netdev, NULL)) {
+	if (!l_genl_family_send(nl80211, msg, netdev_owe_auth_cb,
+							netdev, NULL)) {
 		l_genl_msg_unref(msg);
 		netdev->result = NETDEV_RESULT_AUTHENTICATION_FAILED;
 		netdev_connect_failed(NULL, netdev);
