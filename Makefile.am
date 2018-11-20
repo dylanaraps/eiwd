@@ -436,6 +436,7 @@ unit_test_ecdh_SOURCES = unit/test-ecdh.c \
 				src/ecdh.h src/ecdh.c \
 				src/ecc.h src/ecc.c
 unit_test_ecdh_LDADD = $(ell_ldadd)
+unit_test_ecdh_LDFLAGS = -Wl,-wrap,l_getrandom
 
 TESTS = $(unit_tests)
 

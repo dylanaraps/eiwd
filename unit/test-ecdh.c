@@ -32,6 +32,29 @@
 #include "src/ecdh.h"
 #include "src/ecc.h"
 
+static bool use_real_getrandom = true;
+
+bool __wrap_l_getrandom(void *buf, size_t len);
+bool __real_l_getrandom(void *buf, size_t len);
+
+bool __wrap_l_getrandom(void *buf, size_t len)
+{
+	static const uint8_t random_buf[] = { 0x75, 0xc5, 0xfe, 0x3e, 0x53,
+						0xcc, 0x33, 0x33, 0x64, 0xea,
+						0xdd, 0xa1, 0xe6, 0x62, 0x7a,
+						0xb1, 0x98, 0xa7, 0xa0, 0x1e,
+						0xac, 0x4b, 0x1d, 0xb8, 0x71,
+						0x5b, 0x1d, 0x00, 0x36, 0xd0,
+						0x0f, 0xde };
+
+	if (use_real_getrandom)
+		return __real_l_getrandom(buf, len);
+
+	memcpy(buf, random_buf, len);
+
+	return true;
+}
+
 /*
  * Tests the most basic case. Generate two full public keys and use to create
  * two identical shared secrets.
@@ -110,20 +133,28 @@ static void test_vectors(const void *data)
 	uint64_t a_shared[4];
 	uint64_t b_shared[4];
 
-	ecdh_generate_shared_secret(a_secret, (const void *)&b_public, 64,
-					a_shared, 32);
-	ecdh_generate_shared_secret(b_secret, (const void *)&a_public, 64,
-					b_shared, 32);
+	use_real_getrandom = false;
+
+	assert(ecdh_generate_shared_secret(a_secret, (const void *)&b_public,
+						64, a_shared, 32));
+	assert(ecdh_generate_shared_secret(b_secret, (const void *)&a_public,
+						64, b_shared, 32));
 
 	assert(!memcmp(a_shared, shared_secret, 32));
 	assert(!memcmp(b_shared, shared_secret, 32));
+
+	use_real_getrandom = true;
 }
 
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
-	l_test_add("ECDH Basic", test_basic, NULL);
-	l_test_add("ECDH Compliant key", test_compliant_key, NULL);
+
+	if (l_getrandom_is_supported()) {
+		l_test_add("ECDH Basic", test_basic, NULL);
+		l_test_add("ECDH Compliant key", test_compliant_key, NULL);
+	}
+
 	l_test_add("ECDH test vector", test_vectors, NULL);
 
 	return l_test_run();
