@@ -176,12 +176,10 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 	}
 
 	if (path) {
+		struct l_key *priv_key;
 		bool encrypted;
-		uint8_t *priv_key;
-		size_t size;
 
-		priv_key = l_pem_load_private_key(path, passphrase,
-							&encrypted, &size);
+		priv_key = l_pem_load_private_key(path, passphrase, &encrypted);
 		if (!priv_key) {
 			if (!encrypted) {
 				l_error("Error loading client private key %s",
@@ -205,8 +203,7 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 					passphrase_setting, NULL, path,
 					EAP_CACHE_TEMPORARY);
 		} else {
-			memset(priv_key, 0, size);
-			l_free(priv_key);
+			l_key_free(priv_key);
 
 			if (passphrase && !encrypted) {
 				l_error("%s present but client private "
