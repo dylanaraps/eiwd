@@ -259,12 +259,12 @@ static void scan_triggered(struct l_genl_msg *msg, void *userdata)
 	if (sr->trigger) {
 		sr->trigger(0, sr->userdata);
 
-        /*
-         * Reset callback for the consequent scan triggerings of the
-         * multi-segmented scans.
-         */
-        sr->trigger = NULL;
-    }
+		/*
+		 * Reset callback for the consequent scan triggerings of the
+		 * multi-segmented scans.
+		 */
+		sr->trigger = NULL;
+	}
 }
 
 struct scan_freq_append_data {
