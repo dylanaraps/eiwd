@@ -302,8 +302,11 @@ unit_tests = unit/test-cmac-aes \
 		unit/test-crypto unit/test-eapol unit/test-mpdu \
 		unit/test-ie unit/test-ssid-to-utf8 unit/test-ssid-security \
 		unit/test-arc4 unit/test-wsc unit/test-eap-mschapv2 \
-		unit/test-eap-sim unit/test-client unit/test-ecc \
-		unit/test-sae unit/test-ecdh
+		unit/test-eap-sim unit/test-ecc unit/test-sae unit/test-ecdh
+
+if CLIENT
+unit_tests += unit/test-client
+endif
 
 
 ell_pem_files = cert-ca-key.pem cert-client-key.pem cert-client-key-pkcs8.pem \
@@ -409,6 +412,7 @@ unit_test_eap_mschapv2_SOURCES = src/eap-mschapv2.h src/eap-mschapv2.c \
 				unit/test-eap-mschapv2.c
 unit_test_eap_mschapv2_LDADD = $(ell_ldadd)
 
+if CLIENT
 unit_test_client_SOURCES = unit/test-client.c \
 				client/adapter.c \
 				client/agent.h client/agent.c \
@@ -419,6 +423,7 @@ unit_test_client_SOURCES = unit/test-client.c \
 				client/network.h client/network.c \
 				client/properties.h client/properties.c
 unit_test_client_LDADD = $(ell_ldadd) -lreadline
+endif
 
 unit_test_ecc_SOURCES = unit/test-ecc.c src/ecc.c src/ecc.h
 unit_test_ecc_LDADD = $(ell_ldadd)
