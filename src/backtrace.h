@@ -19,7 +19,7 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  *
  */
-#ifdef HAVE_EXECINFO_H
+#ifdef HAVE_BACKTRACE
 void __iwd_backtrace_init();
 void __iwd_backtrace_print(unsigned int offset);
 #endif

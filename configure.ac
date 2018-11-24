@@ -80,8 +80,16 @@ AC_DEFINE_UNQUOTED(WIRED_STORAGEDIR, "${wired_storagedir}",
 
 AC_CHECK_HEADERS(linux/types.h linux/if_alg.h)
 
-AC_CHECK_HEADERS_ONCE(execinfo.h)
-AC_CHECK_LIB(execinfo, backtrace)
+# In maintainer mode: try to build with application backtrace and disable PIE.
+if (test "${USE_MAINTAINER_MODE}" = yes); then
+	AC_SEARCH_LIBS([backtrace], [execinfo],
+		[
+			AC_DEFINE([HAVE_BACKTRACE], [1],
+				[Define to 1 if you have backtrace(3).])
+			CFLAGS="$CFLAGS -fno-PIE"
+			LDFLAGS="$LDFLAGS -no-pie"
+		])
+fi
 
 AC_ARG_ENABLE([daemon], AC_HELP_STRING([--disable-daemon],
 				[don't install iwd system daemon]),

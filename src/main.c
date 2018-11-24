@@ -445,7 +445,7 @@ int main(int argc, char *argv[])
 	if (debugopt)
 		l_debug_enable(debugopt);
 
-#ifdef HAVE_EXECINFO_H
+#ifdef HAVE_BACKTRACE
 	__iwd_backtrace_init();
 #endif
 

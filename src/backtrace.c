@@ -27,7 +27,7 @@
 #define _GNU_SOURCE
 #include <features.h>
 
-#ifdef HAVE_EXECINFO_H
+#ifdef HAVE_BACKTRACE
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
