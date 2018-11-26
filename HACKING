@@ -2,7 +2,12 @@ Submitting patches
 ==================
 
 If you fixed a bug or you want to add support for something, patches are
-welcome! In order to ease the inclusion of your patch, it's important to follow
+welcome! The preferred method of submitting the patches to the project is by
+email to the iwd mailing list:
+
+	iwd@lists.01.org
+
+In order to ease the inclusion of your patch, it's important to follow
 some rules, otherwise it will likely be rejected by maintainers.
 
 iwd rules for submitting patches follow most of the rules used by Linux kernel
