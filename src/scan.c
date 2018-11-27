@@ -480,7 +480,7 @@ static uint32_t scan_common(uint32_t ifindex, bool passive,
 	if (!scan_request_send_next(sc, sr))
 		goto done;
 
-	scan_request_trigger_failed(sr, -EIO);
+	scan_request_free(sr);
 	return 0;
 done:
 	l_queue_push_tail(sc->requests, sr);
