@@ -215,6 +215,19 @@ static bool eap_tls_validate_version(struct eap_state *eap,
 	return true;
 }
 
+static void eap_tls_send_response(struct eap_state *eap,
+					const uint8_t *pdu, size_t pdu_len)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+	size_t msg_len = EAP_TLS_HEADER_LEN + pdu_len;
+	uint8_t buf[msg_len];
+
+	buf[EAP_TLS_HEADER_OCTET_FLAGS] = eap_tls->version_negotiated;
+	memcpy(buf + EAP_TLS_HEADER_LEN, pdu, pdu_len);
+
+	eap_send_response(eap, eap_get_method_type(eap), buf, msg_len);
+}
+
 static void eap_tls_common_send_empty_response(struct eap_state *eap)
 {
 	struct eap_tls_state *eap_tls = eap_get_data(eap);
@@ -451,6 +464,15 @@ void eap_tls_common_handle_request(struct eap_state *eap,
 	}
 
 proceed:
+	if (eap_tls->tx_pdu_buf) {
+		/*
+		* tx_pdu_buf is used for the re-transmission and needs to be
+		* cleared on a new request.
+		*/
+		databuf_free(eap_tls->tx_pdu_buf);
+		eap_tls->tx_pdu_buf = NULL;
+	}
+
 	if (flags_version & EAP_TLS_FLAG_S) {
 		if (!eap_tls_tunnel_init(eap))
 			goto error;
@@ -460,6 +482,12 @@ proceed:
 		databuf_free(eap_tls->rx_pdu_buf);
 		eap_tls->rx_pdu_buf = NULL;
 	}
+
+	if (!eap_tls->tx_pdu_buf)
+		return;
+
+	eap_tls_send_response(eap, eap_tls->tx_pdu_buf->data,
+						eap_tls->tx_pdu_buf->len);
 
 	return;
 
