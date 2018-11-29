@@ -830,3 +830,14 @@ void eap_tls_common_set_phase2_faild(struct eap_state *eap)
 
 	eap_tls->phase2_failed = true;
 }
+
+bool eap_tls_common_tunnel_prf_get_bytes(struct eap_state *eap,
+						bool use_master_secret,
+						const char *label, uint8_t *buf,
+						size_t buf_len)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+
+	return l_tls_prf_get_bytes(eap_tls->tunnel, use_master_secret, label,
+								buf, buf_len);
+}
