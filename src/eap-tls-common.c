@@ -94,6 +94,8 @@ struct eap_tls_state {
 
 	struct l_tls *tunnel;
 
+	struct databuf *plain_buf;
+	struct databuf *tx_pdu_buf;
 	struct databuf *rx_pdu_buf;
 
 	char *ca_cert;
@@ -111,6 +113,21 @@ static void __eap_tls_common_state_reset(struct eap_tls_state *eap_tls)
 	if (eap_tls->tunnel) {
 		l_tls_free(eap_tls->tunnel);
 		eap_tls->tunnel = NULL;
+	}
+
+	if (eap_tls->plain_buf) {
+		databuf_free(eap_tls->plain_buf);
+		eap_tls->plain_buf = NULL;
+	}
+
+	if (eap_tls->tx_pdu_buf) {
+		databuf_free(eap_tls->tx_pdu_buf);
+		eap_tls->tx_pdu_buf = NULL;
+	}
+
+	if (eap_tls->rx_pdu_buf) {
+		databuf_free(eap_tls->rx_pdu_buf);
+		eap_tls->rx_pdu_buf = NULL;
 	}
 }
 
@@ -144,11 +161,25 @@ static void eap_tls_tunnel_debug(const char *str, void *user_data)
 static void eap_tls_tunnel_data_send(const uint8_t *data, size_t data_len,
 								void *user_data)
 {
+	struct eap_state *eap = user_data;
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+
+	if (!eap_tls->tx_pdu_buf)
+		eap_tls->tx_pdu_buf = databuf_new(data_len);
+
+	databuf_append(eap_tls->tx_pdu_buf, data, data_len);
 }
 
 static void eap_tls_tunnel_data_received(const uint8_t *data, size_t data_len,
 								void *user_data)
 {
+	struct eap_state *eap = user_data;
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+
+	if (!eap_tls->plain_buf)
+		eap_tls->plain_buf = databuf_new(data_len);
+
+	databuf_append(eap_tls->plain_buf, data, data_len);
 }
 
 static void eap_tls_tunnel_ready(const char *peer_identity, void *user_data)
