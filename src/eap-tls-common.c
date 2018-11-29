@@ -856,3 +856,18 @@ bool eap_tls_common_tunnel_prf_get_bytes(struct eap_state *eap,
 	return l_tls_prf_get_bytes(eap_tls->tunnel, use_master_secret,
 							label, buf, buf_len);
 }
+
+void eap_tls_common_tunnel_send(struct eap_state *eap, const uint8_t *data,
+							size_t data_len)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+
+	l_tls_write(eap_tls->tunnel, data, data_len);
+}
+
+void eap_tls_common_tunnel_close(struct eap_state *eap)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+
+	l_tls_close(eap_tls->tunnel);
+}

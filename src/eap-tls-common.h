@@ -78,3 +78,6 @@ bool eap_tls_common_tunnel_prf_get_bytes(struct eap_state *eap,
 						bool use_master_secret,
 						const char *label,
 						uint8_t *buf, size_t len);
+void eap_tls_common_tunnel_send(struct eap_state *eap, const uint8_t *data,
+							size_t data_len);
+void eap_tls_common_tunnel_close(struct eap_state *eap);
