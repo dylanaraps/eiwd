@@ -996,15 +996,12 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 
 			/*
 			 * Some APs are known to send a PMKID KDE with all
-			 * zeros for the PMKID.  Likely we can still
+			 * zeros for the PMKID.  Others just send seemingly
+			 * random data.  Likely we can still
 			 * successfully negotiate a handshake, so ignore this
 			 * for now and treat it as if the PMKID KDE was not
 			 * included
 			 */
-			if (util_mem_is_zero(pmkid, 16))
-				l_debug("PMKID is all zero, ignoring");
-			else
-				goto error_unspecified;
 		}
 	}
 
