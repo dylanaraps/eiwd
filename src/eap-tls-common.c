@@ -196,6 +196,23 @@ static void eap_tls_tunnel_data_received(const uint8_t *data, size_t data_len,
 
 static void eap_tls_tunnel_ready(const char *peer_identity, void *user_data)
 {
+	struct eap_state *eap = user_data;
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+
+	/* TODO: if we have a CA certificate require non-NULL peer_identity */
+
+	/*
+	 * Since authenticator may not send us EAP-Success/EAP-Failure
+	 * in cleartext for the outer EAP method, we reinforce
+	 * the completion with a timer.
+	 */
+	eap_start_complete_timeout(eap);
+
+	if (!eap_tls->variant_ops->tunnel_ready)
+		return;
+
+	if (!eap_tls->variant_ops->tunnel_ready(eap, peer_identity))
+		l_tls_close(eap_tls->tunnel);
 }
 
 static void eap_tls_tunnel_disconnected(enum l_tls_alert_desc reason,
