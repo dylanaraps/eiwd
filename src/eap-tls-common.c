@@ -92,6 +92,8 @@ enum eap_tls_flag {
 struct eap_tls_state {
 	enum eap_tls_version version_negotiated;
 
+	struct l_tls *tunnel;
+
 	struct databuf *rx_pdu_buf;
 
 	char *ca_cert;
@@ -105,6 +107,11 @@ struct eap_tls_state {
 static void __eap_tls_common_state_reset(struct eap_tls_state *eap_tls)
 {
 	eap_tls->version_negotiated = EAP_TLS_VERSION_NOT_NEGOTIATED;
+
+	if (eap_tls->tunnel) {
+		l_tls_free(eap_tls->tunnel);
+		eap_tls->tunnel = NULL;
+	}
 }
 
 void eap_tls_common_state_free(struct eap_state *eap)
@@ -125,6 +132,32 @@ void eap_tls_common_state_free(struct eap_state *eap)
 	}
 
 	l_free(eap_tls);
+}
+
+static void eap_tls_tunnel_debug(const char *str, void *user_data)
+{
+	struct eap_state *eap = user_data;
+
+	l_info("%s: %s", eap_get_method_name(eap), str);
+}
+
+static void eap_tls_tunnel_data_send(const uint8_t *data, size_t data_len,
+								void *user_data)
+{
+}
+
+static void eap_tls_tunnel_data_received(const uint8_t *data, size_t data_len,
+								void *user_data)
+{
+}
+
+static void eap_tls_tunnel_ready(const char *peer_identity, void *user_data)
+{
+}
+
+static void eap_tls_tunnel_disconnected(enum l_tls_alert_desc reason,
+						bool remote, void *user_data)
+{
 }
 
 static bool eap_tls_validate_version(struct eap_state *eap,
@@ -294,6 +327,43 @@ static int eap_tls_handle_fragmented_request(struct eap_state *eap,
 	return 0;
 }
 
+static bool eap_tls_tunnel_init(struct eap_state *eap)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+
+	if (eap_tls->tunnel)
+		return false;
+
+	eap_tls->tunnel = l_tls_new(false, eap_tls_tunnel_data_received,
+					eap_tls_tunnel_data_send,
+					eap_tls_tunnel_ready,
+					eap_tls_tunnel_disconnected,
+					eap);
+
+	if (!eap_tls->tunnel) {
+		l_error("%s: Failed to create a TLS instance.",
+						eap_get_method_name(eap));
+		return false;
+	}
+
+	if (getenv("IWD_TLS_DEBUG"))
+		l_tls_set_debug(eap_tls->tunnel, eap_tls_tunnel_debug, NULL,
+									NULL);
+
+	if (!l_tls_set_auth_data(eap_tls->tunnel, eap_tls->client_cert,
+					eap_tls->client_key,
+					eap_tls->passphrase)) {
+		l_error("%s: Failed to set authentication data.",
+						eap_get_method_name(eap));
+		return false;
+	}
+
+	if (eap_tls->ca_cert)
+		l_tls_set_cacert(eap_tls->tunnel, eap_tls->ca_cert);
+
+	return true;
+}
+
 void eap_tls_common_handle_request(struct eap_state *eap,
 					const uint8_t *pkt, size_t len)
 {
@@ -350,6 +420,10 @@ void eap_tls_common_handle_request(struct eap_state *eap,
 	}
 
 proceed:
+	if (flags_version & EAP_TLS_FLAG_S) {
+		if (!eap_tls_tunnel_init(eap))
+			goto error;
+	}
 
 	if (eap_tls->rx_pdu_buf) {
 		databuf_free(eap_tls->rx_pdu_buf);
