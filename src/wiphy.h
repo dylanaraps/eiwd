@@ -26,6 +26,16 @@
 struct wiphy;
 struct scan_bss;
 
+enum wiphy_state_watch_event {
+	WIPHY_STATE_WATCH_EVENT_POWERED,
+	WIPHY_STATE_WATCH_EVENT_RFKILLED,
+};
+
+typedef void (*wiphy_state_watch_func_t)(struct wiphy *wiphy,
+					enum wiphy_state_watch_event event,
+					void *user_data);
+typedef void (*wiphy_destroy_func_t)(void *user_data);
+
 enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy,
 							uint16_t mask);
 enum ie_rsn_akm_suite wiphy_select_akm(struct wiphy *wiphy,
@@ -41,6 +51,11 @@ bool wiphy_has_ext_feature(struct wiphy *wiphy, uint32_t feature);
 uint8_t wiphy_get_max_num_ssids_per_scan(struct wiphy *wiphy);
 bool wiphy_supports_iftype(struct wiphy *wiphy, uint32_t iftype);
 bool wiphy_supports_adhoc_rsn(struct wiphy *wiphy);
+
+uint32_t wiphy_state_watch_add(struct wiphy *wiphy,
+				wiphy_state_watch_func_t func, void *user_data,
+				wiphy_destroy_func_t destroy);
+bool wiphy_state_watch_remove(struct wiphy *wiphy, uint32_t id);
 
 bool wiphy_init(struct l_genl_family *in, const char *whitelist,
 							const char *blacklist);
