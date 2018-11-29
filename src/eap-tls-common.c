@@ -75,6 +75,13 @@ void databuf_free(struct databuf *databuf)
 	l_free(databuf);
 }
 
+enum eap_tls_flag {
+	/* Reserved    = 0x00, */
+	EAP_TLS_FLAG_S    = 0x20,
+	EAP_TLS_FLAG_M    = 0x40,
+	EAP_TLS_FLAG_L    = 0x80,
+};
+
 struct eap_tls_state {
 	enum eap_tls_version version_negotiated;
 
@@ -109,6 +116,55 @@ void eap_tls_common_state_free(struct eap_state *eap)
 	}
 
 	l_free(eap_tls);
+}
+
+static bool eap_tls_validate_version(struct eap_state *eap,
+							uint8_t flags_version)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+	enum eap_tls_version version_proposed =
+					flags_version & EAP_TLS_VERSION_MASK;
+
+	if (eap_tls->version_negotiated == version_proposed)
+		return true;
+
+	if (!(flags_version & EAP_TLS_FLAG_S) ||
+			eap_tls->version_negotiated !=
+						EAP_TLS_VERSION_NOT_NEGOTIATED)
+		return false;
+
+	if (version_proposed < eap_tls->variant_ops->version_max_supported)
+		eap_tls->version_negotiated = version_proposed;
+	else
+		eap_tls->version_negotiated =
+				eap_tls->variant_ops->version_max_supported;
+
+	return true;
+}
+
+void eap_tls_common_handle_request(struct eap_state *eap,
+					const uint8_t *pkt, size_t len)
+{
+	uint8_t flags_version;
+
+	if (len < 1) {
+		l_error("%s: Request packet is too short.",
+						eap_get_method_name(eap));
+		goto error;
+	}
+
+	flags_version = pkt[0];
+
+	if (!eap_tls_validate_version(eap, flags_version)) {
+		l_error("%s: Version negotiation has failed.",
+						eap_get_method_name(eap));
+		goto error;
+	}
+
+	return;
+
+error:
+	eap_method_error(eap);
 }
 
 int eap_tls_common_settings_check(struct l_settings *settings,
