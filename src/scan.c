@@ -119,6 +119,9 @@ static void scan_request_free(void *data)
 {
 	struct scan_request *sr = data;
 
+	if (sr->destroy)
+		sr->destroy(sr->userdata);
+
 	l_queue_destroy(sr->cmds, (l_queue_destroy_func_t) l_genl_msg_unref);
 
 	l_free(sr);
@@ -128,9 +131,6 @@ static void scan_request_trigger_failed(struct scan_request *sr, int err)
 {
 	if (sr->trigger)
 		sr->trigger(err, sr->userdata);
-
-	if (sr->destroy)
-		sr->destroy(sr->userdata);
 
 	scan_request_free(sr);
 }
