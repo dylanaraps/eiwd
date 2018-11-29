@@ -82,6 +82,8 @@ struct eap_tls_state {
 	char *client_cert;
 	char *client_key;
 	char *passphrase;
+
+	const struct eap_tls_variant_ops *variant_ops;
 };
 
 static void __eap_tls_common_state_reset(struct eap_tls_state *eap_tls)
@@ -222,8 +224,8 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 }
 
 bool eap_tls_common_settings_load(struct eap_state *eap,
-						struct l_settings *settings,
-						const char *prefix)
+				struct l_settings *settings, const char *prefix,
+				const struct eap_tls_variant_ops *variant_ops)
 {
 	struct eap_tls_state *eap_tls;
 	char setting_key[72];
@@ -231,6 +233,7 @@ bool eap_tls_common_settings_load(struct eap_state *eap,
 	eap_tls = l_new(struct eap_tls_state, 1);
 
 	eap_tls->version_negotiated = EAP_TLS_VERSION_NOT_NEGOTIATED;
+	eap_tls->variant_ops = variant_ops;
 
 	snprintf(setting_key, sizeof(setting_key), "%sCACert", prefix);
 	eap_tls->ca_cert = l_settings_get_string(settings, "Security",

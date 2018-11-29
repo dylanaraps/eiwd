@@ -39,6 +39,16 @@ enum eap_tls_version {
 	EAP_TLS_VERSION_NOT_NEGOTIATED  = 0x08,
 };
 
+struct eap_tls_variant_ops {
+	enum eap_tls_version version_max_supported;
+
+	bool (*tunnel_ready)(struct eap_state *eap, const char *peer_identity);
+	bool (*tunnel_handle_request)(struct eap_state *eap,
+					const uint8_t *data, size_t data_len);
+	void (*reset)(void *variant_data);
+	void (*destroy)(void *variant_data);
+};
+
 void eap_tls_common_state_free(struct eap_state *eap);
 
 int eap_tls_common_settings_check(struct l_settings *settings,
@@ -46,5 +56,5 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 						const char *prefix,
 						struct l_queue **out_missing);
 bool eap_tls_common_settings_load(struct eap_state *eap,
-						struct l_settings *settings,
-						const char *prefix);
+				struct l_settings *settings, const char *prefix,
+				const struct eap_tls_variant_ops *variant_ops);
