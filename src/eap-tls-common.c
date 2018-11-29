@@ -94,6 +94,8 @@ struct eap_tls_state {
 
 	struct l_tls *tunnel;
 
+	bool method_completed:1;
+
 	struct databuf *plain_buf;
 	struct databuf *tx_pdu_buf;
 	struct databuf *rx_pdu_buf;
@@ -114,6 +116,7 @@ struct eap_tls_state {
 static void __eap_tls_common_state_reset(struct eap_tls_state *eap_tls)
 {
 	eap_tls->version_negotiated = EAP_TLS_VERSION_NOT_NEGOTIATED;
+	eap_tls->method_completed = false;
 	eap_tls->expecting_frag_ack = false;
 
 	if (eap_tls->tunnel) {
@@ -198,6 +201,13 @@ static void eap_tls_tunnel_ready(const char *peer_identity, void *user_data)
 static void eap_tls_tunnel_disconnected(enum l_tls_alert_desc reason,
 						bool remote, void *user_data)
 {
+	struct eap_state *eap = user_data;
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+
+	l_info("%s: Tunnel has disconnected with alert: %s",
+			eap_get_method_name(eap), l_tls_alert_to_str(reason));
+
+	eap_tls->method_completed = true;
 }
 
 static bool eap_tls_validate_version(struct eap_state *eap,
@@ -481,6 +491,9 @@ void eap_tls_common_handle_request(struct eap_state *eap,
 	struct eap_tls_state *eap_tls = eap_get_data(eap);
 	uint8_t flags_version;
 
+	if (eap_tls->method_completed)
+		return;
+
 	if (len < 1) {
 		l_error("%s: Request packet is too short.",
 						eap_get_method_name(eap));
@@ -713,4 +726,11 @@ bool eap_tls_common_settings_load(struct eap_state *eap,
 	eap_set_data(eap, eap_tls);
 
 	return true;
+}
+
+void eap_tls_common_set_completed(struct eap_state *eap)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+
+	eap_tls->method_completed = true;
 }
