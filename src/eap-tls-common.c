@@ -95,6 +95,7 @@ struct eap_tls_state {
 	struct l_tls *tunnel;
 
 	bool method_completed:1;
+	bool phase2_failed:1;
 
 	struct databuf *plain_buf;
 	struct databuf *tx_pdu_buf;
@@ -117,6 +118,7 @@ static void __eap_tls_common_state_reset(struct eap_tls_state *eap_tls)
 {
 	eap_tls->version_negotiated = EAP_TLS_VERSION_NOT_NEGOTIATED;
 	eap_tls->method_completed = false;
+	eap_tls->phase2_failed = false;
 	eap_tls->expecting_frag_ack = false;
 
 	if (eap_tls->tunnel) {
@@ -587,11 +589,18 @@ proceed:
 		eap_tls->rx_pdu_buf = NULL;
 	}
 
-	if (!eap_tls->tx_pdu_buf)
+	if (!eap_tls->tx_pdu_buf) {
+		if (eap_tls->phase2_failed)
+			goto error;
+
 		return;
+	}
 
 	eap_tls_send_response(eap, eap_tls->tx_pdu_buf->data,
 						eap_tls->tx_pdu_buf->len);
+
+	if (eap_tls->phase2_failed)
+		goto error;
 
 	return;
 
@@ -750,4 +759,11 @@ void eap_tls_common_set_completed(struct eap_state *eap)
 	struct eap_tls_state *eap_tls = eap_get_data(eap);
 
 	eap_tls->method_completed = true;
+}
+
+void eap_tls_common_set_phase2_faild(struct eap_state *eap)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+
+	eap_tls->phase2_failed = true;
 }

@@ -52,6 +52,7 @@ struct eap_tls_variant_ops {
 void eap_tls_common_state_free(struct eap_state *eap);
 
 void eap_tls_common_set_completed(struct eap_state *eap);
+void eap_tls_common_set_phase2_faild(struct eap_state *eap);
 
 void eap_tls_common_handle_request(struct eap_state *eap,
 					const uint8_t *pkt, size_t len);
