@@ -608,6 +608,51 @@ error:
 	eap_method_error(eap);
 }
 
+void eap_tls_common_handle_retransmit(struct eap_state *eap,
+						const uint8_t *pkt, size_t len)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+	uint8_t flags_version;
+
+	if (len < 1) {
+		l_error("%s: Request packet is too short.",
+						eap_get_method_name(eap));
+		goto error;
+	}
+
+	flags_version = pkt[0];
+
+	if (!eap_tls_validate_version(eap, flags_version)) {
+		l_error("%s: Version negotiation has failed.",
+						eap_get_method_name(eap));
+		goto error;
+	}
+
+	if (flags_version & EAP_TLS_FLAG_M) {
+		if (!eap_tls->rx_pdu_buf)
+			goto error;
+
+		eap_tls_send_fragmented_request_ack(eap);
+
+		return;
+	}
+
+	if (!eap_tls->tx_pdu_buf || !eap_tls->tx_pdu_buf->data ||
+						!eap_tls->tx_pdu_buf->len)
+		goto error;
+
+	if (EAP_TLS_HEADER_LEN + eap_tls->tx_pdu_buf->len > eap_get_mtu(eap))
+		eap_tls_send_fragment(eap);
+	else
+		eap_tls_send_response(eap, eap_tls->tx_pdu_buf->data,
+						eap_tls->tx_pdu_buf->len);
+
+	return;
+
+error:
+	eap_method_error(eap);
+}
+
 int eap_tls_common_settings_check(struct l_settings *settings,
 					struct l_queue *secrets,
 					const char *prefix,

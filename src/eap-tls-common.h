@@ -56,6 +56,8 @@ void eap_tls_common_set_phase2_faild(struct eap_state *eap);
 
 void eap_tls_common_handle_request(struct eap_state *eap,
 					const uint8_t *pkt, size_t len);
+void eap_tls_common_handle_retransmit(struct eap_state *eap,
+						const uint8_t *pkt, size_t len);
 
 int eap_tls_common_settings_check(struct l_settings *settings,
 						struct l_queue *secrets,
