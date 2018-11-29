@@ -45,9 +45,11 @@ struct device {
 	struct wiphy *wiphy;
 	struct netdev *netdev;
 
-	bool powered : 1;
+	bool powered : 1;		/* Current IFUP state */
+	bool dbus_powered : 1;		/* Last IFUP state wanted via D-Bus */
 
 	uint32_t ap_roam_watch;
+	uint32_t wiphy_rfkill_watch;
 };
 
 static uint32_t netdev_watch;
@@ -149,6 +151,8 @@ static struct l_dbus_message *device_property_set_powered(struct l_dbus *dbus,
 
 	if (!l_dbus_message_iter_get_variant(new_value, "b", &powered))
 		return dbus_error_invalid_args(message);
+
+	device->dbus_powered = powered;
 
 	if (powered == device->powered) {
 		complete(dbus, message, NULL);
@@ -380,6 +384,23 @@ static void device_netdev_notify(struct netdev *netdev,
 	}
 }
 
+static void device_wiphy_state_changed_event(struct wiphy *wiphy,
+					enum wiphy_state_watch_event event,
+					void *user_data)
+{
+	struct device *device = user_data;
+
+	switch (event) {
+	case WIPHY_STATE_WATCH_EVENT_RFKILLED:
+		break;
+	case WIPHY_STATE_WATCH_EVENT_POWERED:
+		if (device->dbus_powered)
+			netdev_set_powered(device->netdev, true,
+							NULL, NULL, NULL);
+		break;
+	}
+}
+
 struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 {
 	struct device *device;
@@ -412,6 +433,11 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 
 	device->powered = netdev_get_is_up(netdev);
 
+	device->dbus_powered = true;
+	device->wiphy_rfkill_watch =
+		wiphy_state_watch_add(wiphy, device_wiphy_state_changed_event,
+					device, NULL);
+
 	return device;
 }
 
@@ -426,6 +452,7 @@ void device_remove(struct device *device)
 	scan_ifindex_remove(device->index);
 
 	netdev_frame_watch_remove(device->netdev, device->ap_roam_watch);
+	wiphy_state_watch_remove(device->wiphy, device->wiphy_rfkill_watch);
 
 	l_free(device);
 }
