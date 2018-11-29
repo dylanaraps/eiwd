@@ -75,6 +75,13 @@ void databuf_free(struct databuf *databuf)
 	l_free(databuf);
 }
 
+#define EAP_TLS_PDU_MAX_LEN 65536
+
+#define EAP_TLS_HEADER_LEN  6
+
+#define EAP_TLS_HEADER_OCTET_FLAGS 5
+#define EAP_TLS_HEADER_OCTET_FRAG_LEN 6
+
 enum eap_tls_flag {
 	/* Reserved    = 0x00, */
 	EAP_TLS_FLAG_S    = 0x20,
@@ -84,6 +91,8 @@ enum eap_tls_flag {
 
 struct eap_tls_state {
 	enum eap_tls_version version_negotiated;
+
+	struct databuf *rx_pdu_buf;
 
 	char *ca_cert;
 	char *client_cert;
@@ -142,9 +151,153 @@ static bool eap_tls_validate_version(struct eap_state *eap,
 	return true;
 }
 
+static void eap_tls_common_send_empty_response(struct eap_state *eap)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+	uint8_t buf[EAP_TLS_HEADER_LEN];
+
+	buf[EAP_TLS_HEADER_OCTET_FLAGS] = eap_tls->version_negotiated;
+
+	eap_send_response(eap, eap_get_method_type(eap), buf,
+							EAP_TLS_HEADER_LEN);
+}
+
+static int eap_tls_init_request_assembly(struct eap_state *eap,
+						const uint8_t *pkt, size_t len,
+						uint8_t flags)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+	size_t tls_msg_len;
+
+	if (eap_tls->rx_pdu_buf) {
+		/*
+		 * EAP-TLS: RFC 5216 Section 3.1
+		 *
+		 * The L bit (length included) is set to indicate the presence
+		 * of the four-octet TLS Message Length field, and MUST be set
+		 * for the first fragment of a fragmented TLS message or set of
+		 * messages.
+		 */
+		l_warn("%s: Server has set the L bit in the fragment other "
+			"than the first of a fragmented TLS message.",
+						eap_get_method_name(eap));
+
+		return 0;
+	}
+
+	if (len < 4)
+		return -EINVAL;
+
+	if (!(flags & EAP_TLS_FLAG_M))
+		/*
+		 * EAP-TLS: RFC 5216 Section 3.1
+		 *
+		 * The M bit (more fragments) is set on all but the last
+		 * fragment.
+		 *
+		 * Note: Some of the EAP-TLS based server implementations break
+		 * the protocol and do not set the M flag for the first packet
+		 * during the fragmented transmission. To stay compatible with
+		 * such devices, we have relaxed this requirement.
+		 */
+		l_warn("%s: Server has failed to set the M flag in the first"
+				" packet of the fragmented transmission.",
+						eap_get_method_name(eap));
+
+	tls_msg_len = l_get_be32(pkt);
+	len -= 4;
+
+	if (!tls_msg_len || tls_msg_len > EAP_TLS_PDU_MAX_LEN) {
+		l_warn("%s: Fragmented pkt size is outside of alowed"
+				" boundaries [1, %u]", eap_get_method_name(eap),
+							EAP_TLS_PDU_MAX_LEN);
+
+		return -EINVAL;
+	}
+
+	if (tls_msg_len == len) {
+		/*
+		 * EAP-TLS: RFC 5216 Section 3.1
+		 *
+		 * The L bit (length included) is set to indicate the presence
+		 * of the four-octet TLS Message Length field, and MUST be set
+		 * for the first fragment of a fragmented TLS message or set of
+		 * messages.
+		 *
+		 * EAP-TTLSv0: RFC 5281, Section 9.2.2:
+		 * "Unfragmented messages MAY have the L bit set and include
+		 * the length of the message (though this information is
+		 * redundant)."
+		 *
+		 * Some of the PEAP server implementations set the L flag along
+		 * with redundant TLS Message Length field for the un-fragmented
+		 * packets.
+		 */
+		l_warn("%s: Server has set the redundant TLS Message Length "
+					"field for the un-fragmented packet.",
+						eap_get_method_name(eap));
+
+		return -ENOMSG;
+	}
+
+	if (tls_msg_len < len) {
+		l_warn("%s: Fragmented pkt size is smaller than the received "
+					"packet.", eap_get_method_name(eap));
+
+		return -EINVAL;
+	}
+
+	eap_tls->rx_pdu_buf = databuf_new(tls_msg_len);
+
+	return 0;
+}
+
+static void eap_tls_send_fragmented_request_ack(struct eap_state *eap)
+{
+	eap_tls_common_send_empty_response(eap);
+}
+
+static int eap_tls_handle_fragmented_request(struct eap_state *eap,
+						const uint8_t *pkt,
+						size_t len,
+						uint8_t flags_version)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+
+	if (flags_version & EAP_TLS_FLAG_L) {
+		int r = eap_tls_init_request_assembly(eap, pkt, len,
+								flags_version);
+		if (r)
+			return r;
+
+		pkt += 4;
+		len -= 4;
+	}
+
+	if (!eap_tls->rx_pdu_buf)
+		return -EINVAL;
+
+	if (eap_tls->rx_pdu_buf->capacity < eap_tls->rx_pdu_buf->len + len) {
+		l_error("%s: Request fragment pkt size mismatch.",
+						eap_get_method_name(eap));
+		return -EINVAL;
+	}
+
+	databuf_append(eap_tls->rx_pdu_buf, pkt, len);
+
+	if (flags_version & EAP_TLS_FLAG_M) {
+		eap_tls_send_fragmented_request_ack(eap);
+
+		return -EAGAIN;
+	}
+
+	return 0;
+}
+
 void eap_tls_common_handle_request(struct eap_state *eap,
 					const uint8_t *pkt, size_t len)
 {
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
 	uint8_t flags_version;
 
 	if (len < 1) {
@@ -159,6 +312,48 @@ void eap_tls_common_handle_request(struct eap_state *eap,
 		l_error("%s: Version negotiation has failed.",
 						eap_get_method_name(eap));
 		goto error;
+	}
+
+	pkt += 1;
+	len -= 1;
+
+	if (flags_version & EAP_TLS_FLAG_L || eap_tls->rx_pdu_buf) {
+		int r = eap_tls_handle_fragmented_request(eap, pkt, len,
+								flags_version);
+
+		if (r == -EAGAIN)
+			/* Expecting more fragments. */
+			return;
+
+		if (r == -ENOMSG) {
+			/*
+			 * Redundant usage of the L flag, no packet reassembly
+			 * is required.
+			 */
+			pkt += 4;
+			len -= 4;
+
+			goto proceed;
+		}
+
+		if (r < 0)
+			goto error;
+
+		if (eap_tls->rx_pdu_buf->capacity != eap_tls->rx_pdu_buf->len) {
+			l_error("%s: Request fragment packet size mismatch",
+						eap_get_method_name(eap));
+			goto error;
+		}
+
+		pkt = eap_tls->rx_pdu_buf->data;
+		len = eap_tls->rx_pdu_buf->len;
+	}
+
+proceed:
+
+	if (eap_tls->rx_pdu_buf) {
+		databuf_free(eap_tls->rx_pdu_buf);
+		eap_tls->rx_pdu_buf = NULL;
 	}
 
 	return;
