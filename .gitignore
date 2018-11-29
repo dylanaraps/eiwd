@@ -49,5 +49,6 @@ unit/test-eap-mschapv2
 unit/test-eap-sim
 unit/test-client
 unit/test-ecc
+unit/test-ecdh
 test-suite.log
 src/builtin.h
