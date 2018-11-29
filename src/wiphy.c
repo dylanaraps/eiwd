@@ -57,15 +57,15 @@ struct wiphy {
 	uint32_t feature_flags;
 	uint8_t ext_features[(NUM_NL80211_EXT_FEATURES + 7) / 8];
 	uint8_t max_num_ssids_per_scan;
-	bool support_scheduled_scan:1;
-	bool support_rekey_offload:1;
-	bool support_adhoc_rsn:1;
 	uint16_t supported_iftypes;
 	uint16_t supported_ciphers;
 	struct scan_freq_set *supported_freqs;
 	char *model_str;
 	char *vendor_str;
 
+	bool support_scheduled_scan:1;
+	bool support_rekey_offload:1;
+	bool support_adhoc_rsn:1;
 	bool soft_rfkill : 1;
 	bool hard_rfkill : 1;
 };
@@ -146,6 +146,16 @@ enum ie_rsn_akm_suite wiphy_select_akm(struct wiphy *wiphy,
 	}
 
 	return 0;
+}
+
+static struct wiphy *wiphy_new(uint32_t id)
+{
+	struct wiphy *wiphy = l_new(struct wiphy, 1);
+
+	wiphy->id = id;
+	wiphy->supported_freqs = scan_freq_set_new();
+
+	return wiphy;
 }
 
 static void wiphy_free(void *data)
@@ -622,9 +632,7 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 		if (!wiphy_is_managed(name))
 			return;
 
-		wiphy = l_new(struct wiphy, 1);
-		wiphy->id = id;
-		wiphy->supported_freqs = scan_freq_set_new();
+		wiphy = wiphy_new(id);
 		l_queue_push_head(wiphy_list, wiphy);
 	}
 
@@ -734,10 +742,8 @@ static void wiphy_new_wiphy_event(struct l_genl_msg *msg)
 	if (!wiphy_is_managed(name))
 		return;
 
-	wiphy = l_new(struct wiphy, 1);
-	wiphy->id = id;
+	wiphy = wiphy_new(id);
 	memcpy(wiphy->name, name, name_len);
-	wiphy->supported_freqs = scan_freq_set_new();
 	l_queue_push_head(wiphy_list, wiphy);
 
 	wiphy_parse_attributes(wiphy, &attr);
