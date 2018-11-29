@@ -320,7 +320,7 @@ static void eap_tls_send_response(struct eap_state *eap,
 	eap_tls_send_fragment(eap);
 }
 
-static void eap_tls_common_send_empty_response(struct eap_state *eap)
+void eap_tls_common_send_empty_response(struct eap_state *eap)
 {
 	struct eap_tls_state *eap_tls = eap_get_data(eap);
 	uint8_t buf[EAP_TLS_HEADER_LEN];

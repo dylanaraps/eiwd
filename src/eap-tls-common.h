@@ -68,3 +68,5 @@ bool eap_tls_common_settings_load(struct eap_state *eap,
 				struct l_settings *settings, const char *prefix,
 				const struct eap_tls_variant_ops *variant_ops,
 				void *variant_data);
+
+void eap_tls_common_send_empty_response(struct eap_state *eap);
