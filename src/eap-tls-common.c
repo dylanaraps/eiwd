@@ -98,6 +98,11 @@ struct eap_tls_state {
 	struct databuf *tx_pdu_buf;
 	struct databuf *rx_pdu_buf;
 
+	size_t tx_frag_offset;
+	size_t tx_frag_last_len;
+
+	bool expecting_frag_ack:1;
+
 	char *ca_cert;
 	char *client_cert;
 	char *client_key;
@@ -109,11 +114,15 @@ struct eap_tls_state {
 static void __eap_tls_common_state_reset(struct eap_tls_state *eap_tls)
 {
 	eap_tls->version_negotiated = EAP_TLS_VERSION_NOT_NEGOTIATED;
+	eap_tls->expecting_frag_ack = false;
 
 	if (eap_tls->tunnel) {
 		l_tls_free(eap_tls->tunnel);
 		eap_tls->tunnel = NULL;
 	}
+
+	eap_tls->tx_frag_offset = 0;
+	eap_tls->tx_frag_last_len = 0;
 
 	if (eap_tls->plain_buf) {
 		databuf_free(eap_tls->plain_buf);
@@ -215,17 +224,55 @@ static bool eap_tls_validate_version(struct eap_state *eap,
 	return true;
 }
 
+static void eap_tls_send_fragment(struct eap_state *eap)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+	size_t mtu = eap_get_mtu(eap);
+	uint8_t buf[mtu];
+	size_t len = eap_tls->tx_pdu_buf->len - eap_tls->tx_frag_offset;
+	size_t header_len = EAP_TLS_HEADER_LEN;
+
+	buf[EAP_TLS_HEADER_OCTET_FLAGS] = eap_tls->version_negotiated;
+
+	if (len > mtu - EAP_TLS_HEADER_LEN) {
+		len = mtu - EAP_TLS_HEADER_LEN;
+		buf[EAP_TLS_HEADER_OCTET_FLAGS] |= EAP_TLS_FLAG_M;
+		eap_tls->expecting_frag_ack = true;
+	}
+
+	if (!eap_tls->tx_frag_offset) {
+		buf[EAP_TLS_HEADER_OCTET_FLAGS] |= EAP_TLS_FLAG_L;
+		l_put_be32(eap_tls->tx_pdu_buf->len,
+					&buf[EAP_TLS_HEADER_OCTET_FRAG_LEN]);
+		len -= 4;
+		header_len += 4;
+	}
+
+	memcpy(buf + header_len,
+		eap_tls->tx_pdu_buf->data + eap_tls->tx_frag_offset, len);
+	eap_send_response(eap, eap_get_method_type(eap), buf, header_len + len);
+
+	eap_tls->tx_frag_last_len = len;
+}
+
 static void eap_tls_send_response(struct eap_state *eap,
 					const uint8_t *pdu, size_t pdu_len)
 {
 	struct eap_tls_state *eap_tls = eap_get_data(eap);
 	size_t msg_len = EAP_TLS_HEADER_LEN + pdu_len;
-	uint8_t buf[msg_len];
 
-	buf[EAP_TLS_HEADER_OCTET_FLAGS] = eap_tls->version_negotiated;
-	memcpy(buf + EAP_TLS_HEADER_LEN, pdu, pdu_len);
+	if (msg_len <= eap_get_mtu(eap)) {
+		uint8_t buf[msg_len];
 
-	eap_send_response(eap, eap_get_method_type(eap), buf, msg_len);
+		buf[EAP_TLS_HEADER_OCTET_FLAGS] = eap_tls->version_negotiated;
+		memcpy(buf + EAP_TLS_HEADER_LEN, pdu, pdu_len);
+
+		eap_send_response(eap, eap_get_method_type(eap), buf, msg_len);
+		return;
+	}
+
+	eap_tls->tx_frag_offset = 0;
+	eap_tls_send_fragment(eap);
 }
 
 static void eap_tls_common_send_empty_response(struct eap_state *eap)
@@ -334,6 +381,26 @@ static void eap_tls_send_fragmented_request_ack(struct eap_state *eap)
 	eap_tls_common_send_empty_response(eap);
 }
 
+static bool eap_tls_handle_fragmented_response_ack(struct eap_state *eap,
+								size_t len)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+
+	if (len)
+		return false;
+
+	if (!eap_tls->tx_frag_last_len)
+		return false;
+
+	eap_tls->tx_frag_offset += eap_tls->tx_frag_last_len;
+	eap_tls->tx_frag_last_len = 0;
+	eap_tls->expecting_frag_ack = false;
+
+	eap_tls_send_fragment(eap);
+
+	return true;
+}
+
 static int eap_tls_handle_fragmented_request(struct eap_state *eap,
 						const uint8_t *pkt,
 						size_t len,
@@ -430,6 +497,13 @@ void eap_tls_common_handle_request(struct eap_state *eap,
 
 	pkt += 1;
 	len -= 1;
+
+	if (eap_tls->expecting_frag_ack) {
+		if (!eap_tls_handle_fragmented_response_ack(eap, len))
+			goto error;
+
+		return;
+	}
 
 	if (flags_version & EAP_TLS_FLAG_L || eap_tls->rx_pdu_buf) {
 		int r = eap_tls_handle_fragmented_request(eap, pkt, len,
