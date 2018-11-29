@@ -70,8 +70,11 @@ bool eap_tls_common_settings_load(struct eap_state *eap,
 				void *variant_data);
 
 void eap_tls_common_send_empty_response(struct eap_state *eap);
+enum eap_tls_version eap_tls_common_get_negotiated_version(
+							struct eap_state *eap);
+void *eap_tls_common_get_variant_data(struct eap_state *eap);
 
 bool eap_tls_common_tunnel_prf_get_bytes(struct eap_state *eap,
 						bool use_master_secret,
-						const char *label, uint8_t *buf,
-						size_t len);
+						const char *label,
+						uint8_t *buf, size_t len);
