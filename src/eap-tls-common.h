@@ -49,6 +49,7 @@ struct eap_tls_variant_ops {
 	void (*destroy)(void *variant_data);
 };
 
+bool eap_tls_common_state_reset(struct eap_state *eap);
 void eap_tls_common_state_free(struct eap_state *eap);
 
 void eap_tls_common_set_completed(struct eap_state *eap);
@@ -65,4 +66,5 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 						struct l_queue **out_missing);
 bool eap_tls_common_settings_load(struct eap_state *eap,
 				struct l_settings *settings, const char *prefix,
-				const struct eap_tls_variant_ops *variant_ops);
+				const struct eap_tls_variant_ops *variant_ops,
+				void *variant_data);
