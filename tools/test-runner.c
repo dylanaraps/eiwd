@@ -529,19 +529,30 @@ static void create_dbus_system_conf(void)
 
 static bool start_dbus_daemon(void)
 {
-	char *argv[3];
+	char *argv[4];
 	pid_t pid;
 
 	argv[0] = "dbus-daemon";
 	argv[1] = "--system";
-	argv[2] = NULL;
+	argv[2] = "--nosyslog";
+	argv[3] = NULL;
 
-	pid = execute_program(argv, false, false);
+	if (check_verbosity("dbus"))
+		setenv("DBUS_VERBOSE", "1", true);
+
+	pid = execute_program(argv, false, check_verbosity("dbus"));
 	if (pid < 0)
 		return false;
 
 	if (!wait_for_socket("/run/dbus/system_bus_socket", 25 * 10000))
 		return false;
+
+	if (check_verbosity("dbus-monitor")) {
+		argv[0] = "dbus-monitor";
+		argv[1] = "--system";
+		argv[2] = NULL;
+		execute_program(argv, false, true);
+	}
 
 	l_debug("D-Bus is running");
 
