@@ -213,7 +213,7 @@ static enum cmd_status cmd_stop(const char *device_name, char **argv, int argc)
 }
 
 static const struct command ad_hoc_commands[] = {
-	{ NULL, "list", NULL, cmd_list, "List Ad-Hoc devices", true },
+	{ NULL, "list", NULL, cmd_list, "List devices in Ad-hoc mode", true },
 	{ "<wlan>", "start", "<\"network name\"> <passphrase>", cmd_start,
 		"Start or join an existing\n"
 		"\t\t\t\t\t\t    Ad-Hoc network called\n"

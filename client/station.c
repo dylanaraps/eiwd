@@ -579,7 +579,7 @@ static enum cmd_status cmd_scan(const char *device_name,
 }
 
 static const struct command station_commands[] = {
-	{ NULL, "list", NULL, cmd_list, "List Ad-Hoc devices", true },
+	{ NULL, "list", NULL, cmd_list, "List devices in Station mode", true },
 	{ "<wlan>", "connect",
 				"<\"network name\"> [security]",
 					cmd_connect,

@@ -190,7 +190,7 @@ static enum cmd_status cmd_stop(const char *device_name, char **argv, int argc)
 }
 
 static const struct command ap_commands[] = {
-	{ NULL, "list", NULL, cmd_list, "List access point devices", true },
+	{ NULL, "list", NULL, cmd_list, "List devices in AP mode", true },
 	{ "<wlan>", "start", "<\"network name\"> <passphrase>", cmd_start,
 		"Start an access point\n\t\t\t\t\t\t    called \"network "
 		"name\" with\n\t\t\t\t\t\t    a passphrase" },
