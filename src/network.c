@@ -314,28 +314,7 @@ enum security network_get_security(const struct network *network)
 
 const uint8_t *network_get_psk(struct network *network)
 {
-	int r;
-
-	if (network->psk)
-		return network->psk;
-
-	if (!network->passphrase)
-		return NULL;
-
-	network->psk = l_malloc(32);
-	r = crypto_psk_from_passphrase(network->passphrase,
-					(uint8_t *) network->info->ssid,
-					strlen(network->info->ssid),
-					network->psk);
-	if (!r)
-		return network->psk;
-
-	l_free(network->psk);
-	network->psk = NULL;
-	l_error("PMK generation failed: %s.  "
-		"Ensure Crypto Engine is properly configured",
-		strerror(-r));
-	return NULL;
+	return network->psk;
 }
 
 const char *network_get_passphrase(const struct network *network)
@@ -427,19 +406,52 @@ static int network_load_psk(struct network *network, bool need_passphrase)
 						"Security", "PreSharedKey");
 	char *passphrase = l_settings_get_string(network->settings,
 						"Security", "Passphrase");
+	struct network_info *info = network->info;
+	int r;
 
+	/* PSK can be generated from the passphrase but not the other way */
 	if ((!psk || need_passphrase) && !passphrase)
 		return -ENOKEY;
 
 	l_free(network->passphrase);
 	network->passphrase = passphrase;
 	l_free(network->psk);
-	network->psk = l_util_from_hexstring(psk, &len);
-	if (network->psk && len == 32)
+
+	if (psk) {
+		char *path;
+
+		network->psk = l_util_from_hexstring(psk, &len);
+		if (network->psk && len == 32)
+			return 0;
+
+		path = storage_get_network_file_path(info->type, info->ssid);
+		l_error("%s: invalid PreSharedKey format", path);
+		l_free(path);
+
+		if (!passphrase)
+			goto reset_psk;
+
+		l_free(network->psk);
+	}
+
+	network->psk = l_malloc(32);
+	r = crypto_psk_from_passphrase(passphrase, (uint8_t *) info->ssid,
+					strlen(info->ssid), network->psk);
+	if (!r) {
+		network->update_psk = true;
 		return 0;
+	}
+
+	if (r == -ERANGE || r == -EINVAL)
+		l_error("PSK generation failed: invalid passphrase format");
+	else
+		l_error("PSK generation failed: %s.  "
+			"Ensure Crypto Engine is properly configured",
+			strerror(-r));
 
 	l_free(network->passphrase);
 	network->passphrase = NULL;
+reset_psk:
 	l_free(network->psk);
 	network->psk = NULL;
 	return -EINVAL;
@@ -677,6 +689,7 @@ static void passphrase_callback(enum agent_result result,
 	struct network *network = user_data;
 	struct station *station = network->station;
 	struct scan_bss *bss;
+	int r;
 
 	l_debug("result %d", result);
 
@@ -703,7 +716,30 @@ static void passphrase_callback(enum agent_result result,
 	}
 
 	l_free(network->psk);
-	network->psk = NULL;
+	network->psk = l_malloc(32);
+	r = crypto_psk_from_passphrase(passphrase,
+					(uint8_t *) network->info->ssid,
+					strlen(network->info->ssid),
+					network->psk);
+	if (r) {
+		struct l_dbus_message *error;
+
+		l_free(network->psk);
+		network->psk = NULL;
+
+		if (r == -ERANGE || r == -EINVAL)
+			error = dbus_error_invalid_format(message);
+		else {
+			l_error("PSK generation failed: %s.  "
+				"Ensure Crypto Engine is properly configured",
+				strerror(-r));
+			error = dbus_error_failed(message);
+		}
+
+		dbus_pending_reply(&message, error);
+		goto err;
+	}
+
 	l_free(network->passphrase);
 	network->passphrase = l_strdup(passphrase);
 
