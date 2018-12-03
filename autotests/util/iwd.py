@@ -48,6 +48,7 @@ class FailedEx(dbus.DBusException): pass
 class AbortedEx(dbus.DBusException): pass
 class NotAvailableEx(dbus.DBusException): pass
 class InvalidArgsEx(dbus.DBusException): pass
+class InvalidFormatEx(dbus.DBusException): pass
 class AlreadyExistsEx(dbus.DBusException): pass
 class NotFoundEx(dbus.DBusException): pass
 class NotSupportedEx(dbus.DBusException): pass
@@ -69,6 +70,7 @@ _dbus_ex_to_py = {
     'Aborted' :         AbortedEx,
     'NotAvailable' :    NotAvailableEx,
     'InvalidArgs' :     InvalidArgsEx,
+    'InvalidFormat' :   InvalidFormatEx,
     'AlreadyExists' :   AlreadyExistsEx,
     'NotFound' :        NotFoundEx,
     'NotSupported' :    NotSupportedEx,
