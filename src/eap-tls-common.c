@@ -520,6 +520,19 @@ static bool eap_tls_tunnel_init(struct eap_state *eap)
 	return true;
 }
 
+static void eap_tls_handle_phase2_payload(struct eap_state *eap,
+							const uint8_t *pkt,
+							size_t pkt_len)
+{
+	struct eap_tls_state *eap_tls = eap_get_data(eap);
+
+	if (!eap_tls->variant_ops->tunnel_handle_request)
+		return;
+
+	if (!eap_tls->variant_ops->tunnel_handle_request(eap, pkt, pkt_len))
+		l_tls_close(eap_tls->tunnel);
+}
+
 void eap_tls_common_handle_request(struct eap_state *eap,
 					const uint8_t *pkt, size_t len)
 {
@@ -598,6 +611,22 @@ proceed:
 	if (flags_version & EAP_TLS_FLAG_S) {
 		if (!eap_tls_tunnel_init(eap))
 			goto error;
+	}
+
+	if (len)
+		l_tls_handle_rx(eap_tls->tunnel, pkt, len);
+
+	if (eap_tls->plain_buf) {
+		/*
+		 * An existence of the plain_buf indicates that the TLS tunnel
+		 * has been established and Phase 2 payload was transmitted
+		 * through it.
+		 */
+		eap_tls_handle_phase2_payload(eap, eap_tls->plain_buf->data,
+						eap_tls->plain_buf->len);
+
+		databuf_free(eap_tls->plain_buf);
+		eap_tls->plain_buf = NULL;
 	}
 
 	if (eap_tls->rx_pdu_buf) {
