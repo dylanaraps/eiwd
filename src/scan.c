@@ -139,7 +139,7 @@ static void scan_request_failed(struct scan_context *sc,
 	if (sr->trigger)
 		sr->trigger(err, sr->userdata);
 	else if (sr->callback)
-		sr->callback(0, sc->ifindex, err, NULL, sr->userdata);
+		sr->callback(sc->ifindex, err, NULL, sr->userdata);
 
 	scan_request_free(sr);
 }
@@ -1172,8 +1172,7 @@ static void scan_finished(struct scan_context *sc, uint32_t wiphy,
 	}
 
 	if (callback)
-		new_owner = callback(wiphy, sc->ifindex, err,
-					bss_list, userdata);
+		new_owner = callback(sc->ifindex, err, bss_list, userdata);
 
 	if (sr)
 		scan_request_free(sr);

@@ -33,7 +33,7 @@ enum scan_state {
 
 typedef void (*scan_func_t)(struct l_genl_msg *msg, void *user_data);
 typedef void (*scan_trigger_func_t)(int, void *);
-typedef bool (*scan_notify_func_t)(uint32_t wiphy, uint32_t ifindex, int err,
+typedef bool (*scan_notify_func_t)(uint32_t ifindex, int err,
 					struct l_queue *bss_list,
 					void *userdata);
 typedef void (*scan_destroy_func_t)(void *userdata);

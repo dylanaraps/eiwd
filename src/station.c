@@ -564,7 +564,7 @@ not_supported:
 	return NULL;
 }
 
-static bool new_scan_results(uint32_t wiphy_id, uint32_t ifindex, int err,
+static bool new_scan_results(uint32_t ifindex, int err,
 				struct l_queue *bss_list, void *userdata)
 {
 	struct station *station = userdata;
@@ -1041,8 +1041,8 @@ static void station_roam_scan_triggered(int err, void *user_data)
 	 */
 }
 
-static bool station_roam_scan_notify(uint32_t wiphy_id, uint32_t ifindex,
-					int err, struct l_queue *bss_list,
+static bool station_roam_scan_notify(uint32_t ifindex, int err,
+					struct l_queue *bss_list,
 					void *userdata)
 {
 	struct station *station = userdata;
@@ -1678,8 +1678,7 @@ static void station_hidden_network_scan_triggered(int err, void *user_data)
 				dbus_error_failed(station->connect_pending));
 }
 
-static bool station_hidden_network_scan_results(uint32_t wiphy_id,
-						uint32_t ifindex, int err,
+static bool station_hidden_network_scan_results(uint32_t ifindex, int err,
 						struct l_queue *bss_list,
 						void *userdata)
 {
