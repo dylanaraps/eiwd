@@ -63,7 +63,6 @@ struct scan_periodic {
 	void *userdata;
 	bool rearm:1;
 	bool retry:1;
-	bool triggered:1;
 	bool needs_active_scan:1;
 	bool passive:1; /* Active or Passive scan? */
 	struct l_queue *cmds;
@@ -76,7 +75,6 @@ struct scan_request {
 	void *userdata;
 	scan_destroy_func_t destroy;
 	bool passive:1; /* Active or Passive scan? */
-	bool triggered:1;
 	struct l_queue *cmds;
 };
 
@@ -84,8 +82,10 @@ struct scan_context {
 	uint32_t ifindex;
 	enum scan_state state;
 	struct scan_periodic sp;
+	struct scan_request *current_sr;
 	struct l_queue *requests;
 	unsigned int start_cmd_id;
+	bool triggered:1;
 	struct wiphy *wiphy;
 };
 
@@ -127,10 +127,19 @@ static void scan_request_free(void *data)
 	l_free(sr);
 }
 
-static void scan_request_trigger_failed(struct scan_request *sr, int err)
+static void scan_request_failed(struct scan_context *sc,
+				struct scan_request *sr, int err)
 {
+	sc->current_sr = NULL;
+	sc->triggered = false;
+	sc->start_cmd_id = 0;
+	sc->state = SCAN_STATE_NOT_RUNNING;
+	l_queue_remove(sc->requests, sr);
+
 	if (sr->trigger)
 		sr->trigger(err, sr->userdata);
+	else if (sr->callback)
+		sr->callback(0, sc->ifindex, err, NULL, sr->userdata);
 
 	scan_request_free(sr);
 }
@@ -227,7 +236,7 @@ static unsigned int scan_send_start(struct l_genl_msg **msg,
 static void scan_triggered(struct l_genl_msg *msg, void *userdata)
 {
 	struct scan_context *sc = userdata;
-	struct scan_request *sr = l_queue_peek_head(sc->requests);
+	struct scan_request *sr = sc->current_sr;
 	int err;
 
 	l_debug("");
@@ -240,8 +249,7 @@ static void scan_triggered(struct l_genl_msg *msg, void *userdata)
 		if (err == -EBUSY)
 			return;
 
-		l_queue_pop_head(sc->requests);
-		scan_request_trigger_failed(sr, err);
+		scan_request_failed(sc, sr, err);
 
 		l_error("Received error during CMD_TRIGGER_SCAN: %s (%d)",
 			strerror(-err), -err);
@@ -254,7 +262,7 @@ static void scan_triggered(struct l_genl_msg *msg, void *userdata)
 	sc->state = sr->passive ? SCAN_STATE_PASSIVE : SCAN_STATE_ACTIVE;
 	l_debug("%s scan triggered for ifindex: %u",
 		sr->passive ? "Passive" : "Active", sc->ifindex);
-	sr->triggered = true;
+	sc->triggered = true;
 
 	if (sr->trigger) {
 		sr->trigger(0, sr->userdata);
@@ -437,7 +445,8 @@ static int scan_request_send_next(struct scan_context *sc,
 
 	sc->start_cmd_id = scan_send_start(&cmd, scan_triggered, sc);
 	if (sc->start_cmd_id) {
-		sr->triggered = false;
+		sc->triggered = false;
+		sc->current_sr = sr;
 		return 0;
 	}
 
@@ -480,6 +489,7 @@ static uint32_t scan_common(uint32_t ifindex, bool passive,
 	if (!scan_request_send_next(sc, sr))
 		goto done;
 
+	sr->destroy = NULL;	/* Don't call destroy when returning error */
 	scan_request_free(sr);
 	return 0;
 done:
@@ -532,24 +542,9 @@ bool scan_cancel(uint32_t ifindex, uint32_t id)
 	if (!sc)
 		return false;
 
-	sr = l_queue_peek_head(sc->requests);
-	if (!sr)
-		return false;
-
-	if (sr->id == id) {
-		/* If we already sent the trigger command, cancel the scan */
-		if (!sr->triggered && sc->start_cmd_id) {
-			l_genl_family_cancel(nl80211, sc->start_cmd_id);
-			sc->start_cmd_id = 0;
-
-			l_queue_pop_head(sc->requests);
-
-			start_next_scan_request(sc);
-
-			goto free;
-		}
-
-		/* If already triggered, just zero out the callback */
+	/* If already triggered, just zero out the callback */
+	if (sc->current_sr && sc->current_sr->id == id && sc->triggered) {
+		sr = sc->current_sr;
 		sr->callback = NULL;
 
 		if (sr->destroy) {
@@ -565,12 +560,15 @@ bool scan_cancel(uint32_t ifindex, uint32_t id)
 	if (!sr)
 		return false;
 
-free:
-	if (sr->destroy)
-		sr->destroy(sr->userdata);
+	/* If we already sent the trigger command, cancel the scan */
+	if (sr == sc->current_sr) {
+		l_genl_family_cancel(nl80211, sc->start_cmd_id);
+		sc->start_cmd_id = 0;
+		sc->current_sr = NULL;
+		start_next_scan_request(sc);
+	}
 
 	scan_request_free(sr);
-
 	return true;
 }
 
@@ -619,7 +617,7 @@ static void scan_periodic_triggered(struct l_genl_msg *msg, void *user_data)
 	l_debug("Periodic %s scan triggered for ifindex: %u", sc->sp.passive ?
 				"passive" : "active", sc->ifindex);
 
-	sc->sp.triggered = true;
+	sc->triggered = true;
 
 	if (sc->sp.trigger)
 		sc->sp.trigger(0, sc->sp.userdata);
@@ -770,8 +768,7 @@ static bool start_next_scan_request(struct scan_context *sc)
 		if (!scan_request_send_next(sc, sr))
 			return true;
 
-		l_queue_pop_head(sc->requests);
-		scan_request_trigger_failed(sr, -EIO);
+		scan_request_failed(sc, sr, -EIO);
 	}
 
 	if (sc->sp.retry) {
@@ -1147,34 +1144,28 @@ static void discover_hidden_network_bsses(struct scan_context *sc,
 static void scan_finished(struct scan_context *sc, uint32_t wiphy,
 				int err, struct l_queue *bss_list)
 {
-	struct scan_request *sr;
+	struct scan_request *sr = sc->current_sr;
 	scan_notify_func_t callback = NULL;
 	void *userdata;
-	scan_destroy_func_t destroy = NULL;
 	bool new_owner = false;
 
-	sr = l_queue_peek_head(sc->requests);
-	if (sr && sr->triggered) {
+	if (sr) {
 		callback = sr->callback;
 		userdata = sr->userdata;
-		destroy = sr->destroy;
 
-		scan_request_free(sr);
+		sc->current_sr = NULL;
 		l_queue_pop_head(sc->requests);
 	} else if (sc->sp.interval) {
 		/*
 		 * If we'd called sc.sp->trigger, we must call back now
 		 * independent of whether the scan was succesful or was
 		 * aborted.  If the scan was successful though we call back
-		 * with the scan results even if didn't triggered this scan.
+		 * with the scan results even if we didn't trigger this scan.
 		 */
-		if (sc->sp.triggered || bss_list) {
+		if (sc->triggered || bss_list) {
 			callback = sc->sp.callback;
 			userdata = sc->sp.userdata;
-			destroy = NULL;
 		}
-
-		sc->sp.triggered = false;
 
 		if (bss_list)
 			discover_hidden_network_bsses(sc, bss_list);
@@ -1184,9 +1175,10 @@ static void scan_finished(struct scan_context *sc, uint32_t wiphy,
 		new_owner = callback(wiphy, sc->ifindex, err,
 					bss_list, userdata);
 
-	if (destroy)
-		destroy(userdata);
+	if (sr)
+		scan_request_free(sr);
 
+	sc->triggered = false;
 	sc->state = SCAN_STATE_NOT_RUNNING;
 
 	if (!start_next_scan_request(sc) && sc->sp.rearm)
@@ -1245,10 +1237,13 @@ static void scan_parse_new_scan_results(struct l_genl_msg *msg,
 
 static bool scan_send_next_cmd(struct scan_context *sc)
 {
-	struct scan_request *sr = l_queue_peek_head(sc->requests);
+	struct scan_request *sr = sc->current_sr;
 	int err;
 
-	if (sr && sr->triggered) {
+	if (!sc->triggered)
+		return false;
+
+	if (sr) {
 		err = scan_request_send_next(sc, sr);
 		if (!err)
 			return true;
@@ -1257,20 +1252,19 @@ static bool scan_send_next_cmd(struct scan_context *sc)
 		if (err < 0 && err == -ENOMSG)
 			return false;
 
-		sr = l_queue_pop_head(sc->requests);
-		scan_request_trigger_failed(sr, -EIO);
+		scan_request_failed(sc, sr, -EIO);
 
 		/*
 		 * The request is destroyed, return 'true' to stop further
 		 * processing.
 		 */
 		return true;
-	} else if (sc->sp.triggered) {
+	} else {
 		struct l_genl_msg *cmd = l_queue_pop_head(sc->sp.cmds);
 		if (!cmd)
 			return false;
 
-		sc->sp.triggered = false;
+		sc->triggered = false;
 
 		sc->start_cmd_id = scan_send_start(&cmd,
 						scan_periodic_triggered, sc);
