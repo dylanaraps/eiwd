@@ -853,7 +853,7 @@ void eap_tls_common_set_completed(struct eap_state *eap)
 	eap_tls->method_completed = true;
 }
 
-void eap_tls_common_set_phase2_faild(struct eap_state *eap)
+void eap_tls_common_set_phase2_failed(struct eap_state *eap)
 {
 	struct eap_tls_state *eap_tls = eap_get_data(eap);
 
