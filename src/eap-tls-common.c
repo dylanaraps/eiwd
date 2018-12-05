@@ -357,22 +357,6 @@ static int eap_tls_init_request_assembly(struct eap_state *eap,
 	if (len < 4)
 		return -EINVAL;
 
-	if (!(flags & EAP_TLS_FLAG_M))
-		/*
-		 * EAP-TLS: RFC 5216 Section 3.1
-		 *
-		 * The M bit (more fragments) is set on all but the last
-		 * fragment.
-		 *
-		 * Note: Some of the EAP-TLS based server implementations break
-		 * the protocol and do not set the M flag for the first packet
-		 * during the fragmented transmission. To stay compatible with
-		 * such devices, we have relaxed this requirement.
-		 */
-		l_warn("%s: Server has failed to set the M flag in the first"
-				" packet of the fragmented transmission.",
-						eap_get_method_name(eap));
-
 	tls_msg_len = l_get_be32(pkt);
 	len -= 4;
 
@@ -418,6 +402,25 @@ static int eap_tls_init_request_assembly(struct eap_state *eap,
 
 	eap_tls->rx_pdu_buf = databuf_new(tls_msg_len);
 
+	if (!(flags & EAP_TLS_FLAG_M)) {
+		/*
+		 * EAP-TLS: RFC 5216 Section 3.1
+		 *
+		 * The M bit (more fragments) is set on all but the last
+		 * fragment.
+		 *
+		 * Note: Some of the EAP-TLS based server implementations break
+		 * the protocol and do not set the M flag for the first packet
+		 * during the fragmented transmission. To stay compatible with
+		 * such devices, we have relaxed this requirement.
+		 */
+		l_warn("%s: Server has failed to set the M flag in the first"
+				" packet of the fragmented transmission.",
+						eap_get_method_name(eap));
+
+		return -EAGAIN;
+	}
+
 	return 0;
 }
 
@@ -452,11 +455,11 @@ static int eap_tls_handle_fragmented_request(struct eap_state *eap,
 						uint8_t flags_version)
 {
 	struct eap_tls_state *eap_tls = eap_get_data(eap);
+	int r = 0;
 
 	if (flags_version & EAP_TLS_FLAG_L) {
-		int r = eap_tls_init_request_assembly(eap, pkt, len,
-								flags_version);
-		if (r)
+		r = eap_tls_init_request_assembly(eap, pkt, len, flags_version);
+		if (r && r != -EAGAIN)
 			return r;
 
 		pkt += 4;
@@ -474,13 +477,10 @@ static int eap_tls_handle_fragmented_request(struct eap_state *eap,
 
 	databuf_append(eap_tls->rx_pdu_buf, pkt, len);
 
-	if (flags_version & EAP_TLS_FLAG_M) {
-		eap_tls_send_fragmented_request_ack(eap);
-
+	if (flags_version & EAP_TLS_FLAG_M)
 		return -EAGAIN;
-	}
 
-	return 0;
+	return r;
 }
 
 static bool eap_tls_tunnel_init(struct eap_state *eap)
@@ -575,9 +575,12 @@ void eap_tls_common_handle_request(struct eap_state *eap,
 		int r = eap_tls_handle_fragmented_request(eap, pkt, len,
 								flags_version);
 
-		if (r == -EAGAIN)
+		if (r == -EAGAIN) {
 			/* Expecting more fragments. */
+			eap_tls_send_fragmented_request_ack(eap);
+
 			return;
+		}
 
 		if (r == -ENOMSG) {
 			/*
