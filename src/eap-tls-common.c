@@ -530,6 +530,11 @@ static void eap_tls_handle_phase2_payload(struct eap_state *eap,
 		return;
 
 	if (!eap_tls->variant_ops->tunnel_handle_request(eap, pkt, pkt_len))
+		/*
+		 * The tunneled packet payload that violates the protocol or
+		 * fails a method-specific integrity check result in tunnel
+		 * shutdown.
+		 */
 		l_tls_close(eap_tls->tunnel);
 }
 
