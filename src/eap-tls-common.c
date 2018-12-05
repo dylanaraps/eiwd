@@ -507,15 +507,15 @@ static bool eap_tls_tunnel_init(struct eap_state *eap)
 									NULL);
 
 	if (!l_tls_set_auth_data(eap_tls->tunnel, eap_tls->client_cert,
-					eap_tls->client_key,
-					eap_tls->passphrase)) {
-		l_error("%s: Failed to set authentication data.",
+							eap_tls->client_key,
+							eap_tls->passphrase) ||
+			(eap_tls->ca_cert &&
+				!l_tls_set_cacert(eap_tls->tunnel,
+							eap_tls->ca_cert))) {
+		l_error("%s: Error loading TLS keys or certificates.",
 						eap_get_method_name(eap));
 		return false;
 	}
-
-	if (eap_tls->ca_cert)
-		l_tls_set_cacert(eap_tls->tunnel, eap_tls->ca_cert);
 
 	return true;
 }
