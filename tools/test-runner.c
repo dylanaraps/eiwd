@@ -1782,14 +1782,14 @@ static void create_network_and_run_tests(const void *key, void *value,
 		setenv("IWD_TEST_TIMEOUTS", "off", true);
 
 	if (!create_tmpfs_extra_stuff(tmpfs_extra_stuff))
-		goto exit_hwsim;
+		goto remove_abs_paths;
 
 	if (!configure_hw_radios(hw_settings, wiphy_list))
-		goto exit_hwsim;
+		goto remove_abs_paths;
 
 	medium_pid = register_hwsim_as_trans_medium();
 	if (medium_pid < 0)
-		goto exit_hwsim;
+		goto remove_abs_paths;
 
 	if (check_verbosity("hwsim")) {
 		list_hwsim_radios();
@@ -1851,11 +1851,13 @@ exit_hostapd:
 
 	terminate_medium(medium_pid);
 
+remove_abs_paths:
+	remove_absolute_path_dirs(tmpfs_extra_stuff);
+
 exit_hwsim:
 	l_queue_destroy(wiphy_list, wiphy_free);
 
 	l_settings_free(hw_settings);
-	remove_absolute_path_dirs(tmpfs_extra_stuff);
 	l_strfreev(tmpfs_extra_stuff);
 }
 
