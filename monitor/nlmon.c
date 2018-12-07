@@ -3650,7 +3650,20 @@ static void print_value(int indent, const char *label, enum attr_type type,
 		if (len != 4)
 			printf("malformed packet\n");
 		break;
-	default:
+	case ATTR_UNSPEC:
+	case ATTR_FLAG:
+	case ATTR_U8:
+	case ATTR_U64:
+	case ATTR_S8:
+	case ATTR_S32:
+	case ATTR_S64:
+	case ATTR_STRING:
+	case ATTR_ADDRESS:
+	case ATTR_BINARY:
+	case ATTR_NESTED:
+	case ATTR_ARRAY:
+	case ATTR_FLAG_OR_U16:
+	case ATTR_CUSTOM:
 		print_attr(indent, "%s: len %u", label, len);
 		print_hexdump(indent  + 1, buf, len);
 		break;
