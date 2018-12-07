@@ -378,8 +378,10 @@ error:
 	case CMD_STATUS_FAILED:
 		goto failure;
 
-	default:
+	case CMD_STATUS_TRIGGERED:
+	case CMD_STATUS_DONE:
 		l_error("Unknown command status.");
+		break;
 	}
 
 	if (interactive_mode)
