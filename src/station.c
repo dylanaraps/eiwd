@@ -546,18 +546,30 @@ static struct handshake_state *station_handshake_setup(struct station *station,
 
 	if (security == SECURITY_PSK) {
 		/* SAE will generate/set the PMK */
-		if (IE_AKM_IS_SAE(hs->akm_suite))
-			handshake_state_set_passphrase(hs,
-				network_get_passphrase(network));
-		else
-			handshake_state_set_pmk(hs,
-					network_get_psk(network), 32);
+		if (IE_AKM_IS_SAE(hs->akm_suite)) {
+			const char *passphrase =
+				network_get_passphrase(network);
+
+			if (!passphrase)
+				goto no_psk;
+
+			handshake_state_set_passphrase(hs, passphrase);
+		} else {
+			const uint8_t *psk = network_get_psk(network);
+
+			if (!psk)
+				goto no_psk;
+
+			handshake_state_set_pmk(hs, psk, 32);
+		}
 	} else if (security == SECURITY_8021X)
 		handshake_state_set_8021x_config(hs,
 					network_get_settings(network));
 
 	return hs;
 
+no_psk:
+	l_warn("Missing network PSK/passphrase");
 not_supported:
 	handshake_state_free(hs);
 
