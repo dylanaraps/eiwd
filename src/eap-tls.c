@@ -39,8 +39,6 @@ static bool eap_tls_tunnel_ready(struct eap_state *eap,
 	uint8_t msk_emsk[128];
 	uint8_t iv[64];
 
-	/* TODO: if we have a CA certificate require non-NULL peer_identity */
-
 	eap_method_success(eap);
 	eap_tls_common_set_completed(eap);
 

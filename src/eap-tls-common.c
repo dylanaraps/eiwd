@@ -217,7 +217,12 @@ static void eap_tls_tunnel_ready(const char *peer_identity, void *user_data)
 	struct eap_state *eap = user_data;
 	struct eap_tls_state *eap_tls = eap_get_data(eap);
 
-	/* TODO: if we have a CA certificate require non-NULL peer_identity */
+	if (eap_tls->ca_cert && !peer_identity) {
+		l_error("%s: TLS did not verify AP identity",
+			eap_get_method_name(eap));
+		eap_method_error(eap);
+		return;
+	}
 
 	/*
 	 * Since authenticator may not send us EAP-Success/EAP-Failure
