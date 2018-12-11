@@ -20,18 +20,6 @@
  *
  */
 
-struct databuf {
-	uint8_t *data;
-	size_t len;
-	size_t capacity;
-};
-
-struct databuf;
-struct databuf *databuf_new(size_t capacity);
-void databuf_append(struct databuf *databuf, const uint8_t *data,
-							size_t data_len);
-void databuf_free(struct databuf *databuf);
-
 enum eap_tls_version {
 	EAP_TLS_VERSION_0               = 0x00,
 	EAP_TLS_VERSION_1               = 0x01,

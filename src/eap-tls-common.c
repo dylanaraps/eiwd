@@ -32,7 +32,13 @@
 #include "src/eap-private.h"
 #include "src/eap-tls-common.h"
 
-struct databuf *databuf_new(size_t capacity)
+struct databuf {
+	uint8_t *data;
+	size_t len;
+	size_t capacity;
+};
+
+static struct databuf *databuf_new(size_t capacity)
 {
 	struct databuf *databuf;
 
@@ -46,7 +52,7 @@ struct databuf *databuf_new(size_t capacity)
 	return databuf;
 }
 
-void databuf_append(struct databuf *databuf, const uint8_t *data,
+static void databuf_append(struct databuf *databuf, const uint8_t *data,
 								size_t data_len)
 {
 	size_t new_len;
@@ -66,7 +72,7 @@ void databuf_append(struct databuf *databuf, const uint8_t *data,
 	databuf->len = new_len;
 }
 
-void databuf_free(struct databuf *databuf)
+static void databuf_free(struct databuf *databuf)
 {
 	if (!databuf)
 		return;
