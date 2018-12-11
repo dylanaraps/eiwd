@@ -1,3 +1,8 @@
+ver 0.13:
+	Fix issue with WSC interface runtime handling.
+	Add support for Opportunistic Wireless Encryption.
+	Add support for common EAP-TLS framework.
+
 ver 0.12:
 	Fix issue with handling 802.1x automatic connection.
 	Fix issue with handling missing support for backtrace.
