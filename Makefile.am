@@ -55,7 +55,9 @@ ell_headers = ell/util.h \
 			ell/dir.h \
 			ell/net.h \
 			ell/dhcp.h \
-			ell/cert.h
+			ell/cert.h \
+			ell/ecc.h \
+			ell/ecdh.h
 
 ell_sources = ell/private.h \
 			ell/missing.h \
@@ -114,7 +116,11 @@ ell_sources = ell/private.h \
 			ell/dhcp-transport.c \
 			ell/dhcp-lease.c \
 			ell/cert-private.h \
-			ell/cert.c
+			ell/cert.c \
+			ell/ecc-external.c \
+			ell/ecc-private.h \
+			ell/ecc.c \
+			ell/ecdh.c
 
 ell_libell_internal_la_SOURCES = $(ell_headers) $(ell_sources)
 endif
