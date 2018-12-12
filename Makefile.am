@@ -193,7 +193,6 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h \
 					src/adhoc.h src/adhoc.c \
 					src/sae.h src/sae.c \
 					src/nl80211util.h src/nl80211util.c \
-					src/ecdh.h src/ecdh.c \
 					src/owe.h src/owe.c \
 					$(eap_sources) \
 					$(builtin_sources)
@@ -308,7 +307,7 @@ unit_tests = unit/test-cmac-aes \
 		unit/test-crypto unit/test-eapol unit/test-mpdu \
 		unit/test-ie unit/test-ssid-to-utf8 unit/test-ssid-security \
 		unit/test-arc4 unit/test-wsc unit/test-eap-mschapv2 \
-		unit/test-eap-sim unit/test-ecc unit/test-sae unit/test-ecdh
+		unit/test-eap-sim unit/test-ecc unit/test-sae
 
 if CLIENT
 unit_tests += unit/test-client
@@ -442,12 +441,6 @@ unit_test_sae_SOURCES = unit/test-sae.c \
 				src/util.h src/util.c \
 				src/ecc.h src/ecc.c
 unit_test_sae_LDADD = $(ell_ldadd)
-
-unit_test_ecdh_SOURCES = unit/test-ecdh.c \
-				src/ecdh.h src/ecdh.c \
-				src/ecc.h src/ecc.c
-unit_test_ecdh_LDADD = $(ell_ldadd)
-unit_test_ecdh_LDFLAGS = -Wl,-wrap,l_getrandom
 
 TESTS = $(unit_tests)
 
