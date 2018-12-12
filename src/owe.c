@@ -23,17 +23,23 @@
 #include <ell/ell.h>
 
 #include "crypto.h"
-#include "ecc.h"
-#include "ecdh.h"
 #include "ie.h"
 #include "handshake.h"
 #include "owe.h"
 #include "mpdu.h"
 
+/*
+ * TODO: Once other groups are added, this will need to be dynamic. OWE does
+ * support retries with different groups, but this is not yet implemented since
+ * only group 19 is supported.
+ */
+#define OWE_DEFAULT_GROUP 19
+
 struct owe_sm {
 	struct handshake_state *hs;
-	uint8_t private[32];
-	uint64_t public_key[NUM_ECC_DIGITS * 2];
+	const struct l_ecc_curve *curve;
+	struct l_ecc_scalar *private;
+	struct l_ecc_point *public_key;
 
 	owe_tx_authenticate_func_t auth_tx;
 	owe_tx_associate_func_t assoc_tx;
@@ -48,31 +54,26 @@ struct owe_sm *owe_sm_new(struct handshake_state *hs,
 {
 	struct owe_sm *owe = l_new(struct owe_sm, 1);
 
-	memset(owe->public_key, 0, sizeof(owe->public_key));
 	owe->hs = hs;
 	owe->auth_tx = auth;
 	owe->assoc_tx = assoc;
 	owe->user_data = user_data;
 	owe->complete = complete;
+	owe->curve = l_ecc_curve_get(OWE_DEFAULT_GROUP);
 
-	if (!ecdh_generate_key_pair(owe->private, 32, owe->public_key, 64)) {
+	if (!l_ecdh_generate_key_pair(owe->curve, &owe->private,
+					&owe->public_key)) {
 		l_free(owe);
 		return NULL;
 	}
-
-	/*
-	 * Store our own public key in BE ordering since all future uses
-	 * will need it.
-	 */
-	ecc_native2be(owe->public_key);
-	ecc_native2be(owe->public_key + 4);
 
 	return owe;
 }
 
 void owe_sm_free(struct owe_sm *owe)
 {
-	memset(owe->private, 0, sizeof(owe->private));
+	l_ecc_scalar_free(owe->private);
+	l_ecc_point_free(owe->public_key);
 
 	l_free(owe);
 }
@@ -84,9 +85,10 @@ void owe_start(struct owe_sm *owe)
 
 void owe_rx_authenticate(struct owe_sm *owe)
 {
-	uint8_t buf[37];
+	uint8_t buf[5 + L_ECC_SCALAR_MAX_BYTES];
 	struct iovec iov[3];
 	int iov_elems = 0;
+	size_t len;
 
 	/*
 	 * RFC 8110 Section 4.3
@@ -102,10 +104,11 @@ void owe_rx_authenticate(struct owe_sm *owe)
 	 * 802.11 association request.
 	 */
 	buf[0] = IE_TYPE_EXTENSION;
-	buf[1] = 35; /* length */
 	buf[2] = IE_TYPE_OWE_DH_PARAM - 256;
-	l_put_le16(19, buf + 3); /* group */
-	memcpy(buf + 5, owe->public_key, 32);
+	l_put_le16(OWE_DEFAULT_GROUP, buf + 3); /* group */
+	len = l_ecc_point_get_x(owe->public_key, buf + 5,
+					L_ECC_SCALAR_MAX_BYTES);
+	buf[1] = 3 + len; /* length */
 
 	iov[iov_elems].iov_base = (void *) buf;
 	iov[iov_elems].iov_len = buf[1] + 2;
@@ -120,31 +123,41 @@ void owe_rx_authenticate(struct owe_sm *owe)
 static bool owe_compute_keys(struct owe_sm *owe, const void *public_key,
 			size_t pub_len)
 {
-	uint64_t shared_secret[4];
+	struct l_ecc_scalar *shared_secret;
+	uint8_t ss_buf[L_ECC_SCALAR_MAX_BYTES];
 	uint8_t prk[32];
 	uint8_t pmk[32];
 	uint8_t pmkid[16];
 	uint8_t key[32 + 32 + 2];
-	uint64_t public_native[4];
 	struct iovec iov[2];
 	struct l_checksum *sha;
+	struct l_ecc_point *other_public;
 
-	memcpy(public_native, public_key, 32);
-	ecc_be2native(public_native);
-
-	/* z = F(DH(x, Y)) */
-	if (!ecdh_generate_shared_secret(owe->private, public_native, pub_len,
-						shared_secret, 32))
+	other_public = l_ecc_point_from_data(owe->curve,
+						L_ECC_POINT_TYPE_COMPLIANT,
+						public_key, pub_len);
+	if (!other_public) {
+		l_error("AP public key was not valid");
 		return false;
+	}
 
-	memcpy(key, owe->public_key, 32);
+	if (!l_ecdh_generate_shared_secret(owe->curve, owe->private,
+						other_public, &shared_secret)) {
+		return false;
+	}
+
+	l_ecc_point_free(other_public);
+
+	l_ecc_scalar_get_data(shared_secret, ss_buf, sizeof(ss_buf));
+
+	l_ecc_scalar_free(shared_secret);
+
+	l_ecc_point_get_x(owe->public_key, key, sizeof(key));
 	memcpy(key + 32, public_key, 32);
-	l_put_le16(19, key + 64);
-
-	ecc_native2be(shared_secret);
+	l_put_le16(OWE_DEFAULT_GROUP, key + 64);
 
 	/* prk = HKDF-extract(C | A | group, z) */
-	if (!hkdf_extract_sha256(key, 66, 1, prk, shared_secret, 32))
+	if (!hkdf_extract_sha256(key, 66, 1, prk, ss_buf, 32))
 		goto failed;
 
 	/* PMK = HKDF-expand(prk, "OWE Key Generation", n) */
@@ -155,7 +168,7 @@ static bool owe_compute_keys(struct owe_sm *owe, const void *public_key,
 	sha = l_checksum_new(L_CHECKSUM_SHA256);
 
 	/* PMKID = Truncate-128(Hash(C | A)) */
-	iov[0].iov_base = owe->public_key;
+	iov[0].iov_base = key; /* first 32 bytes of key are owe->public_key */
 	iov[0].iov_len = 32;
 	iov[1].iov_base = (void *) public_key;
 	iov[1].iov_len = 32;
@@ -172,7 +185,8 @@ static bool owe_compute_keys(struct owe_sm *owe, const void *public_key,
 	return true;
 
 failed:
-	memset(shared_secret, 0, sizeof(shared_secret));
+	memset(ss_buf, 0, sizeof(ss_buf));
+	l_ecc_scalar_free(shared_secret);
 	return false;
 }
 
