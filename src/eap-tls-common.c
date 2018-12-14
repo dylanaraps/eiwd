@@ -725,8 +725,6 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 	char setting_key[72];
 	char client_cert_setting[72];
 	char passphrase_setting[72];
-	uint8_t *cert;
-	size_t size;
 
 	L_AUTO_FREE_VAR(char *, path);
 	L_AUTO_FREE_VAR(char *, client_cert) = NULL;
@@ -735,13 +733,16 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 	snprintf(setting_key, sizeof(setting_key), "%sCACert", prefix);
 	path = l_settings_get_string(settings, "Security", setting_key);
 	if (path) {
-		cert = l_pem_load_certificate(path, &size);
-		if (!cert) {
+		struct l_queue *cacerts;
+
+		cacerts = l_pem_load_certificate_list(path);
+		if (!cacerts) {
 			l_error("Failed to load %s", path);
 			return -EIO;
 		}
 
-		l_free(cert);
+		l_queue_destroy(cacerts,
+				(l_queue_destroy_func_t) l_cert_free);
 	}
 
 	snprintf(client_cert_setting, sizeof(client_cert_setting),
@@ -749,13 +750,15 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 	client_cert = l_settings_get_string(settings, "Security",
 							client_cert_setting);
 	if (client_cert) {
-		cert = l_pem_load_certificate(client_cert, &size);
+		struct l_certchain *cert;
+
+		cert = l_pem_load_certificate_chain(client_cert);
 		if (!cert) {
 			l_error("Failed to load %s", client_cert);
 			return -EIO;
 		}
 
-		l_free(cert);
+		l_certchain_free(cert);
 	}
 
 	l_free(path);
