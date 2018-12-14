@@ -376,6 +376,19 @@ class Device(IWDDBusAbstract):
             ordered_networks.append(ordered_network)
         return ordered_networks
 
+    def get_ordered_network(self, network):
+        '''Returns a single network from ordered network call, or None if the
+           network wasn't found. If the network is not found an exception is
+           raised, this removes the need to extra asserts in autotests.
+        '''
+        ordered_networks = self.get_ordered_networks()
+
+        for n in ordered_networks:
+            if n.name == network:
+                return n
+
+        raise Exception('Network %s not found' % network)
+
     def wps_push_button(self):
         self._wps_manager.PushButton(dbus_interface=IWD_WSC_INTERFACE,
                                      reply_handler=self._success,
