@@ -14,7 +14,7 @@ class Test(unittest.TestCase):
     def validate_connection(self, wd):
         ssid_to_connect = 'ssidEAP-PEAPv1'
 
-        devices = wd.list_devices(1);
+        devices = wd.list_devices(1)
         self.assertIsNotNone(devices)
         device = devices[0]
 

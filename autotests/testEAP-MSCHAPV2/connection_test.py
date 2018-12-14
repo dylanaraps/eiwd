@@ -16,7 +16,7 @@ class Test(unittest.TestCase):
         psk_agent = iwd.PSKAgent(*secrets)
         wd.register_psk_agent(psk_agent)
 
-        devices = wd.list_devices(1);
+        devices = wd.list_devices(1)
         device = devices[0]
 
         try:

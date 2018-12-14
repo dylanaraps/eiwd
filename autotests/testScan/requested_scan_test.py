@@ -23,7 +23,7 @@ class Test(unittest.TestCase):
 
     def set_network(self, ssid):
         if ssid not in self.dict:
-            return;
+            return
 
         if self.dict[ssid]:
             raise Exception('Duplicated list entry')
@@ -31,7 +31,7 @@ class Test(unittest.TestCase):
         self.dict[ssid] = True
 
     def validate_scan(self, wd):
-        devices = wd.list_devices(1);
+        devices = wd.list_devices(1)
         self.assertIsNotNone(devices)
         device = devices[0]
 

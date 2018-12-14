@@ -23,7 +23,7 @@ class Test(unittest.TestCase):
 
         wd = IWD()
 
-        device = wd.list_devices(1)[0];
+        device = wd.list_devices(1)[0]
 
         # Register agent early to catch any unexpected notifications
         agent = TstAgent()

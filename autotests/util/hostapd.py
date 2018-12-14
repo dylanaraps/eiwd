@@ -109,7 +109,7 @@ class HostapdCLI:
             if wname == self.ifname:
                 with open(hostapd_map[wname].config, 'r') as f:
                     # read in config file and search for key
-                    cfg = f.read();
+                    cfg = f.read()
                     match = re.search(r'%s=.*' % key, cfg)
                     if match:
                         return match.group(0).split('=')[1]
@@ -131,7 +131,7 @@ class HostapdCLI:
                 os.system('ifconfig %s up' % intf.name)
                 os.system('hostapd -g %s -i %s %s &' %
                           (intf.ctrl_interface, intf.name, intf.config))
-                break;
+                break
 
         # set flag so hostapd can be killed after the test
         self._hostapd_restarted = True

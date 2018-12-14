@@ -29,7 +29,7 @@ class Test(unittest.TestCase):
 
         wd = IWD()
 
-        devices = wd.list_devices(1);
+        devices = wd.list_devices(1)
         device = devices[0]
 
         condition = 'not obj.scanning'

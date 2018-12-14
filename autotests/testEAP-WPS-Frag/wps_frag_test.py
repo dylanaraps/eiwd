@@ -16,7 +16,7 @@ class Test(unittest.TestCase):
     def test_push_button_success(self):
         wd = IWD()
 
-        devices = wd.list_devices(1);
+        devices = wd.list_devices(1)
         device = devices[0]
 
         device.wps_push_button()

@@ -30,7 +30,7 @@ class Test(unittest.TestCase):
                                                                   'secret123'))
         wd.register_psk_agent(psk_agent)
 
-        devices = wd.list_devices(1);
+        devices = wd.list_devices(1)
         self.assertIsNotNone(devices)
         device = devices[0]
 

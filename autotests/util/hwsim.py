@@ -26,7 +26,7 @@ class HwsimDBusAbstract(iwd.AsyncOpAbstract):
         self._object_path = object_path
         proxy = self._bus.get_object(HWSIM_SERVICE, self._object_path)
         self._iface = dbus.Interface(proxy, self._iface_name)
-        self._prop_proxy = dbus.Interface(proxy, iwd.DBUS_PROPERTIES);
+        self._prop_proxy = dbus.Interface(proxy, iwd.DBUS_PROPERTIES)
 
         if properties is None:
             self._properties = self._prop_proxy.GetAll(self._iface_name)

@@ -18,7 +18,7 @@ class Test(unittest.TestCase):
 
         wd = IWD()
 
-        devices = wd.list_devices(1);
+        devices = wd.list_devices(1)
         device = devices[0]
 
         device.wps_push_button()
@@ -34,7 +34,7 @@ class Test(unittest.TestCase):
     def test_pin_success(self):
         wd = IWD()
 
-        devices = wd.list_devices(1);
+        devices = wd.list_devices(1)
         device = devices[0]
         pin = device.wps_generate_pin()
         self.hostapd.wps_pin(pin)
@@ -52,7 +52,7 @@ class Test(unittest.TestCase):
     def test_4_digit_pin_success(self):
         wd = IWD()
 
-        devices = wd.list_devices(1);
+        devices = wd.list_devices(1)
         device = devices[0]
         pin = '1234'
         self.hostapd.wps_pin(pin)

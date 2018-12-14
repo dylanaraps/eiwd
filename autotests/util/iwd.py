@@ -127,7 +127,7 @@ class IWDDBusAbstract(AsyncOpAbstract):
         self._object_path = object_path
         proxy = self._bus.get_object(IWD_SERVICE, self._object_path)
         self._iface = dbus.Interface(proxy, self._iface_name)
-        self._prop_proxy = dbus.Interface(proxy, DBUS_PROPERTIES);
+        self._prop_proxy = dbus.Interface(proxy, DBUS_PROPERTIES)
 
         if properties is None:
             self._properties = self._prop_proxy.GetAll(self._iface_name)
@@ -930,7 +930,7 @@ class IWD(AsyncOpAbstract):
     def create_in_storage(file_name, file_content):
         fo = open(IWD_STORAGE_DIR + '/' + file_name, 'w')
 
-        fo.write(file_content);
+        fo.write(file_content)
         fo.close()
 
     @staticmethod

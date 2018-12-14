@@ -31,7 +31,7 @@ class Test(unittest.TestCase):
         psk_agent = PSKAgent('abc', ('user', 'testpasswd'))
         wd.register_psk_agent(psk_agent)
 
-        device = wd.list_devices(1)[0];
+        device = wd.list_devices(1)[0]
 
         condition = 'not obj.scanning'
         wd.wait_for_object_condition(device, condition)

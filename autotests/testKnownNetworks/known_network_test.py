@@ -10,7 +10,7 @@ from iwd import IWD
 class Test(unittest.TestCase):
 
     def connect_to_new_network(self, wd):
-        devices = wd.list_devices(1);
+        devices = wd.list_devices(1)
         self.assertIsNotNone(devices)
         device = devices[0]
 

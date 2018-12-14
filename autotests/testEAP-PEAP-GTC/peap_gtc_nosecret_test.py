@@ -13,7 +13,7 @@ from iwd import PSKAgent
 class Test(unittest.TestCase):
 
     def validate_connection(self, wd):
-        devices = wd.list_devices(1);
+        devices = wd.list_devices(1)
 
         self.assertIsNotNone(devices)
         device = devices[0]
