@@ -33,13 +33,8 @@ class Test(unittest.TestCase):
             wd.wait_for_object_condition(d, condition)
 
         for i in range(len(devices)):
-            ordered_networks = devices[i].get_ordered_networks()
+            network = devices[i].get_ordered_network('ssidSAE-Clogging')
 
-            network = [x for x in ordered_networks
-                        if x.name == "ssidSAE-Clogging"][0]
-
-            self.assertIsNotNone(network)
-            self.assertEqual(network.name, "ssidSAE-Clogging")
             self.assertEqual(network.type, NetworkType.psk)
 
             networks.append(network)

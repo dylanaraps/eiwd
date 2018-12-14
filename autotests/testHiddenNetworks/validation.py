@@ -30,10 +30,8 @@ class TestConnectAutoconnect(unittest.TestCase):
             condition = 'obj.connected_network is not None'
             wd.wait_for_object_condition(device, condition)
 
-            ordered_network = device.get_ordered_networks()[0]
+            ordered_network = device.get_ordered_network(ssid)
 
-            self.assertIsNotNone(ordered_network)
-            self.assertEqual(ordered_network.name, ssid)
             self.assertTrue(ordered_network.network_object.connected)
 
             device.disconnect()

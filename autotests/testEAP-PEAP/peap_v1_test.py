@@ -12,8 +12,6 @@ from iwd import NetworkType
 class Test(unittest.TestCase):
 
     def validate_connection(self, wd):
-        ssid_to_connect = 'ssidEAP-PEAPv1'
-
         devices = wd.list_devices(1)
         self.assertIsNotNone(devices)
         device = devices[0]
@@ -26,15 +24,7 @@ class Test(unittest.TestCase):
         condition = 'not obj.scanning'
         wd.wait_for_object_condition(device, condition)
 
-        ordered_networks = device.get_ordered_networks()
-        ordered_network = None
-
-        for o_n in ordered_networks:
-            if o_n.name == ssid_to_connect:
-                ordered_network = o_n
-                break
-
-        self.assertEqual(ordered_network.name, ssid_to_connect)
+        ordered_network = device.get_ordered_network('ssidEAP-PEAPv1')
 
         self.assertEqual(ordered_network.type, NetworkType.eap)
 

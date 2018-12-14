@@ -31,15 +31,7 @@ class TestMFP(unittest.TestCase):
     '''
 
     def check_mfp_connection(self, wd, device, ssid, throws_exception):
-        ordered_networks = device.get_ordered_networks()
-        ordered_network = None
-
-        for o_n in ordered_networks:
-            if o_n.name == ssid:
-                ordered_network = o_n
-                break
-
-        self.assertEqual(ordered_network.name, ssid)
+        ordered_network = device.get_ordered_network(ssid)
 
         condition = 'not obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)

@@ -23,15 +23,8 @@ class Test(unittest.TestCase):
         condition = 'not obj.scanning'
         wd.wait_for_object_condition(device, condition)
 
-        ordered_networks = device.get_ordered_networks()
-        ordered_network = None
+        ordered_network = device.get_ordered_network('ssidEAP-PWD-frag')
 
-        for o_n in ordered_networks:
-            if o_n.name == 'ssidEAP-PWD-frag':
-                ordered_network = o_n
-                break
-
-        self.assertEqual(ordered_network.name, 'ssidEAP-PWD-frag')
         self.assertEqual(ordered_network.type, NetworkType.eap)
 
         condition = 'not obj.connected'

@@ -26,23 +26,19 @@ class Test(unittest.TestCase):
         condition = 'not obj.scanning'
         wd.wait_for_object_condition(device, condition)
 
-        ordered_networks = device.get_ordered_networks()
+        ordered_network = device.get_ordered_network('ssidSAE')
 
-        network = [x for x in ordered_networks if x.name == "ssidSAE"][0]
-
-        self.assertIsNotNone(network)
-        self.assertEqual(network.name, "ssidSAE")
-        self.assertEqual(network.type, NetworkType.psk)
+        self.assertEqual(ordered_network.type, NetworkType.psk)
 
         condition = 'obj.connected'
-        wd.wait_for_object_condition(network.network_object, condition)
+        wd.wait_for_object_condition(ordered_network.network_object, condition)
 
         device.wait_for_connected()
 
         device.disconnect()
 
         condition = 'not obj.connected'
-        wd.wait_for_object_condition(network.network_object, condition)
+        wd.wait_for_object_condition(ordered_network.network_object, condition)
 
         del wd
 
