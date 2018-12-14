@@ -420,12 +420,13 @@ error:
 	return false;
 }
 
-static void eap_ttls_phase2_chap_generate_challenge(struct eap_state *eap,
+static bool eap_ttls_phase2_chap_generate_challenge(struct eap_state *eap,
 							uint8_t *challenge,
 							size_t challenge_len)
 {
-	eap_tls_common_tunnel_prf_get_bytes(eap, true, "ttls challenge",
-						challenge, challenge_len);
+	return eap_tls_common_tunnel_prf_get_bytes(eap, true, "ttls challenge",
+								challenge,
+								challenge_len);
 }
 
 static bool eap_ttls_phase2_chap_init(struct eap_state *eap)
@@ -440,9 +441,13 @@ static bool eap_ttls_phase2_chap_init(struct eap_state *eap)
 	uint8_t *data;
 	size_t data_len;
 
-	eap_ttls_phase2_chap_generate_challenge(eap, challenge,
+	if (!eap_ttls_phase2_chap_generate_challenge(eap, challenge,
 							CHAP_CHALLENGE_LEN +
-							CHAP_IDENT_LEN);
+							CHAP_IDENT_LEN)) {
+		l_error("TTLS Tunneled-CHAP: Failed to generate CHAP "
+								"challenge.");
+		return false;
+	}
 
 	ident = challenge[CHAP_CHALLENGE_LEN];
 
@@ -490,9 +495,13 @@ static bool eap_ttls_phase2_ms_chap_init(struct eap_state *eap)
 	uint8_t *data;
 	size_t data_len;
 
-	eap_ttls_phase2_chap_generate_challenge(eap, challenge,
+	if (!eap_ttls_phase2_chap_generate_challenge(eap, challenge,
 							MS_CHAP_CHALLENGE_LEN +
-							CHAP_IDENT_LEN);
+							CHAP_IDENT_LEN)) {
+		l_error("TTLS Tunneled-MSCHAP: Failed to generate MS-CHAP "
+								"challenge.");
+		return false;
+	}
 
 	ident = challenge[MS_CHAP_CHALLENGE_LEN];
 
