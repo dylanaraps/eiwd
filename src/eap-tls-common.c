@@ -514,7 +514,7 @@ static bool eap_tls_tunnel_init(struct eap_state *eap)
 	}
 
 	if (getenv("IWD_TLS_DEBUG"))
-		l_tls_set_debug(eap_tls->tunnel, eap_tls_tunnel_debug, NULL,
+		l_tls_set_debug(eap_tls->tunnel, eap_tls_tunnel_debug, eap,
 									NULL);
 
 	if (!l_tls_set_auth_data(eap_tls->tunnel, eap_tls->client_cert,
