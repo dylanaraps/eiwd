@@ -1923,6 +1923,7 @@ static void print_results(struct l_queue *test_stat_queue)
 	char sep_line[80];
 
 	memset(sep_line, '_', sizeof(sep_line) - 1);
+	sep_line[sizeof(sep_line) - 1] = '\0';
 
 	l_info("%s\n" CONSOLE_LN_RESET, sep_line);
 	l_info("%27s " CONSOLE_LN_DEFAULT "|" CONSOLE_LN_GREEN " %s "
@@ -1932,6 +1933,7 @@ static void print_results(struct l_queue *test_stat_queue)
 		"Configuration cycle", "PASSED", "FAILED", "TIMED OUT");
 
 	memset(sep_line, '-', sizeof(sep_line) - 1);
+	sep_line[sizeof(sep_line) - 1] = '\0';
 	l_info("%s" CONSOLE_LN_RESET, sep_line);
 
 	l_queue_foreach(test_stat_queue, print_test_stat, &stat_totals);
@@ -1946,6 +1948,7 @@ static void print_results(struct l_queue *test_stat_queue)
 			stat_totals.total_timedout, stat_totals.total_duration);
 
 	memset(sep_line, '_', sizeof(sep_line) - 1);
+	sep_line[sizeof(sep_line) - 1] = '\0';
 	l_info("%s" CONSOLE_LN_RESET, sep_line);
 }
 
