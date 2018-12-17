@@ -358,7 +358,7 @@ static int eap_tls_init_request_assembly(struct eap_state *eap,
 		 * for the first fragment of a fragmented TLS message or set of
 		 * messages.
 		 */
-		l_warn("%s: Server has set the L bit in the fragment other "
+		l_debug("%s: Server has set the L bit in the fragment other "
 			"than the first of a fragmented TLS message.",
 						eap_get_method_name(eap));
 
@@ -397,7 +397,7 @@ static int eap_tls_init_request_assembly(struct eap_state *eap,
 		 * with redundant TLS Message Length field for the un-fragmented
 		 * packets.
 		 */
-		l_warn("%s: Server has set the redundant TLS Message Length "
+		l_debug("%s: Server has set the redundant TLS Message Length "
 					"field for the un-fragmented packet.",
 						eap_get_method_name(eap));
 
@@ -425,7 +425,7 @@ static int eap_tls_init_request_assembly(struct eap_state *eap,
 		 * during the fragmented transmission. To stay compatible with
 		 * such devices, we have relaxed this requirement.
 		 */
-		l_warn("%s: Server has failed to set the M flag in the first"
+		l_debug("%s: Server has failed to set the M flag in the first"
 				" packet of the fragmented transmission.",
 						eap_get_method_name(eap));
 
