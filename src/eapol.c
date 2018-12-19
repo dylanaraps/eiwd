@@ -980,8 +980,10 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 	} else if (pmkid) {
 		uint8_t own_pmkid[16];
 
-		if (handshake_state_get_pmkid(sm->handshake, own_pmkid) &&
-				memcmp(pmkid, own_pmkid, 16)) {
+		if (!handshake_state_get_pmkid(sm->handshake, own_pmkid))
+			goto error_unspecified;
+
+		if (memcmp(pmkid, own_pmkid, 16)) {
 			l_debug("Authenticator sent a PMKID that didn't match");
 
 			/*
