@@ -528,6 +528,12 @@ static bool eap_tls_tunnel_init(struct eap_state *eap)
 		return false;
 	}
 
+	if (!l_tls_start(eap_tls->tunnel)) {
+		l_error("%s: Failed to start the TLS client",
+						eap_get_method_name(eap));
+		return false;
+	}
+
 	return true;
 }
 
