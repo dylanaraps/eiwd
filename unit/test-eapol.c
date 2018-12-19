@@ -2937,6 +2937,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	assert(l_tls_set_auth_data(s->tls, "ell/unit/cert-server.pem",
 				"ell/unit/cert-server-key-pkcs8.pem", NULL));
 	assert(l_tls_set_cacert(s->tls, "ell/unit/cert-ca.pem"));
+	assert(l_tls_start(s->tls));
 
 	start = 1;
 	__eapol_set_tx_packet_func(verify_8021x_tls_resp);
