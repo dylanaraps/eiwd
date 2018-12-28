@@ -141,8 +141,8 @@ static bool owe_compute_keys(struct owe_sm *owe, const void *public_key,
 		return false;
 	}
 
-	if (!l_ecdh_generate_shared_secret(owe->curve, owe->private,
-						other_public, &shared_secret)) {
+	if (!l_ecdh_generate_shared_secret(owe->private, other_public,
+						&shared_secret)) {
 		return false;
 	}
 
