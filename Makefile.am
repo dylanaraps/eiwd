@@ -104,6 +104,8 @@ ell_sources = ell/private.h \
 			ell/tls-private.h \
 			ell/tls.c \
 			ell/tls-record.c \
+			ell/tls-suites.c \
+			ell/tls-extensions.c \
 			ell/uuid.c \
 			ell/key.c \
 			ell/pkcs5-private.h \
