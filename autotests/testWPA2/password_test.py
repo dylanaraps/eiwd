@@ -32,10 +32,7 @@ class Test(unittest.TestCase):
             condition = 'not obj.scanning'
             wd.wait_for_object_condition(device, condition)
 
-        ordered_networks = device.get_ordered_networks()
-        self.assertEqual(len(ordered_networks), 1)
-        ordered_network = ordered_networks[0]
-        self.assertEqual(ordered_network.name, "ssidCCMP")
+        ordered_network = device.get_ordered_network("ssidCCMP")
         self.assertEqual(ordered_network.type, NetworkType.psk)
         network = ordered_network.network_object
 
