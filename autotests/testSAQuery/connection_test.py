@@ -8,7 +8,6 @@ import iwd
 from iwd import IWD
 from iwd import PSKAgent
 from iwd import NetworkType
-from hwsim import Hwsim
 from hostapd import HostapdCLI
 from wiphy import wiphy_map
 
@@ -24,7 +23,6 @@ class Test(unittest.TestCase):
                 hostapd = HostapdCLI(intf)
                 break
 
-        hwsim = Hwsim()
         wd = IWD()
 
         psk_agent = PSKAgent("secret123")
