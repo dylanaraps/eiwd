@@ -12,15 +12,7 @@ from iwd import NetworkType
 class TestConnectAutoconnect(unittest.TestCase):
 
     def check_connect(self, wd, device, ssid, throws):
-        ordered_networks = device.get_ordered_networks()
-        ordered_network = None
-
-        for o_n in ordered_networks:
-            if o_n.name == ssid:
-                ordered_network = o_n
-                break
-
-        self.assertEqual(ordered_network.name, ssid)
+        ordered_network = device.get_ordered_network(ssid)
 
         condition = 'not obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
@@ -43,10 +35,8 @@ class TestConnectAutoconnect(unittest.TestCase):
             condition = 'obj.connected_network is not None'
             wd.wait_for_object_condition(device, condition)
 
-            ordered_network = device.get_ordered_networks()[0]
+            ordered_network = device.get_ordered_network(ssid)
 
-            self.assertIsNotNone(ordered_network)
-            self.assertEqual(ordered_network.name, ssid)
             self.assertTrue(ordered_network.network_object.connected)
 
             device.disconnect()
