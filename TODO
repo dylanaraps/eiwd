@@ -211,11 +211,6 @@ Wireless daemon
   Priority: Low
   Complexity: C4
 
-- Add support for Direct Link Setup from 802.11e.
-
-  Priority: Low
-  Complexity: C8
-
 - Add support for Automatic Power Save Delivery (APSD).  This includes
   scheduled (s-APSD) and unscheduled (u-APSD).  This will require rudimentary
   support of WMM protocol.  This feature was introduced in 802.11e.
@@ -247,13 +242,8 @@ Wireless daemon
   Priority: Medium
   Complexity: C8
 
-- Add support for the STK 4-Way Handshake into eapol.c as described in
-  802.11-2016 Setion 12.7.
+- Add support for WiFi P2P.
 
-  Priority: Medium
-  Complexity: C8
-
-- Add support for WiFi P2P.  This tasks depends on 'STK 4-Way Handshake' task.
   iwd will require a new P2P D-Bus API to be exposed in order for clients to
   manage P2P connections.  P2P specific logic for device management and
   switching between P2P and STA/AP modes for a particular interface will be
