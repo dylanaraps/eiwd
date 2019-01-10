@@ -2382,7 +2382,7 @@ void __eapol_set_config(struct l_settings *config)
 {
 	if (!l_settings_get_uint(config, "EAPoL",
 			"max_4way_handshake_time", &eapol_4way_handshake_time))
-		eapol_4way_handshake_time = 2;
+		eapol_4way_handshake_time = 5;
 }
 
 bool eapol_init()
