@@ -182,12 +182,12 @@ bool mschapv2_generate_nt_response(const uint8_t password_hash[static 16],
 	uint8_t challenge[8];
 	uint8_t buffer[21];
 
-	memset(buffer, 0, sizeof(buffer));
-	memcpy(buffer, password_hash, 16);
-
 	if (!mschapv2_challenge_hash(peer_challenge, server_challenge, user,
 								challenge))
 		return false;
+
+	memset(buffer, 0, sizeof(buffer));
+	memcpy(buffer, password_hash, 16);
 
 	if (!mschap_des_encrypt(challenge, buffer + 0, response + 0))
 		return false;
