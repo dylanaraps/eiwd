@@ -113,6 +113,20 @@ bool mschap_nt_password_hash(const char *password, uint8_t *password_hash)
 	return true;
 }
 
+static const char *mschapv2_exlude_domain_name(const char *username)
+{
+	const char *c;
+
+	for (c = username; *c; c++) {
+		if (*c != '\\')
+			continue;
+
+		return c + 1;
+	}
+
+	return username;
+}
+
 /**
  * Internal function to generate the challenge used in nt_response
  * https://tools.ietf.org/html/rfc2759
@@ -125,8 +139,9 @@ bool mschap_nt_password_hash(const char *password, uint8_t *password_hash)
  * Returns: true on success, false if hash/encrypt couldn't be done
  **/
 static bool mschapv2_challenge_hash(const uint8_t *peer_challenge,
-				const uint8_t *server_challenge,
-				const char *user, uint8_t challenge[static 8])
+					const uint8_t *server_challenge,
+					const char *username,
+					uint8_t challenge[static 8])
 {
 	struct l_checksum *check;
 
@@ -134,9 +149,11 @@ static bool mschapv2_challenge_hash(const uint8_t *peer_challenge,
 	if (!check)
 		return false;
 
+	username = mschapv2_exlude_domain_name(username);
+
 	l_checksum_update(check, peer_challenge, 16);
 	l_checksum_update(check, server_challenge, 16);
-	l_checksum_update(check, user, strlen(user));
+	l_checksum_update(check, username, strlen(username));
 
 	l_checksum_get_digest(check, challenge, 8);
 	l_checksum_free(check);
