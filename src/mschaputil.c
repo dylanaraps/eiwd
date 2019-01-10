@@ -202,6 +202,30 @@ bool mschapv2_generate_nt_response(const uint8_t password_hash[static 16],
 }
 
 /**
+ * Generate the hash of the password hash
+ *
+ * @password_hash: The hash of the password
+ * @password_hash_hash: The MD4 hash of the password hash
+ *
+ * Returns: true on success, false if hash/encrypt couldn't be done
+ **/
+bool mschapv2_hash_nt_password_hash(const uint8_t password_hash[static 16],
+					uint8_t password_hash_hash[static 16])
+{
+	struct l_checksum *check;
+
+	check = l_checksum_new(L_CHECKSUM_MD4);
+	if (!check)
+		return false;
+
+	l_checksum_update(check, password_hash, 16);
+	l_checksum_get_digest(check, password_hash_hash, 16);
+	l_checksum_free(check);
+
+	return true;
+}
+
+/**
  * Generate the mschapv2 authenticator response for verifying authenticator
  * This function is specified in:
  * https://tools.ietf.org/html/rfc2759

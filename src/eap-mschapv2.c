@@ -331,18 +331,12 @@ static void eap_mschapv2_handle_success(struct eap_state *eap,
 	uint8_t master_key[16];
 	uint8_t session_key[32];
 	char authenticator_resp[42];
-	struct l_checksum *check;
 	bool ret;
 
 	uint8_t buffer[5 + 1];
 
-	check = l_checksum_new(L_CHECKSUM_MD4);
-	if (!check)
-		goto err;
-
-	l_checksum_update(check, state->password_hash, 16);
-	l_checksum_get_digest(check, password_hash_hash, 16);
-	l_checksum_free(check);
+	mschapv2_hash_nt_password_hash(state->password_hash,
+							password_hash_hash);
 
 	ret = mschapv2_generate_nt_response(state->password_hash,
 						state->peer_challenge,

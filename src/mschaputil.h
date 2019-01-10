@@ -26,6 +26,8 @@ bool mschap_challenge_response(const uint8_t *challenge,
 						const uint8_t *password_hash,
 						uint8_t *response);
 bool mschap_nt_password_hash(const char *password, uint8_t *password_hash);
+bool mschapv2_hash_nt_password_hash(const uint8_t password_hash[static 16],
+					uint8_t password_hash_hash[static 16]);
 
 bool mschapv2_generate_nt_response(const uint8_t password_hash[static 16],
 				const uint8_t peer_challenge[static 16],
