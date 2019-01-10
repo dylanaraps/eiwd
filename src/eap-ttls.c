@@ -347,15 +347,6 @@ static bool avp_iter_next(struct avp_iter *iter)
 	return true;
 }
 
-struct phase2_method_ops {
-	bool (*init)(struct eap_state *eap);
-	bool (*handle_avp)(struct eap_state *eap, enum radius_attr type,
-				uint32_t vendor_id, const uint8_t *data,
-								size_t len);
-	void (*destroy)(void *state);
-	void (*reset)(void *state);
-};
-
 struct phase2_credentials {
 	char *username;
 	char *password;
@@ -365,6 +356,15 @@ struct phase2_method {
 	void *state;
 	struct phase2_credentials credentials;
 	const struct phase2_method_ops *ops;
+};
+
+struct phase2_method_ops {
+	bool (*init)(struct eap_state *eap);
+	bool (*handle_avp)(struct eap_state *eap, enum radius_attr type,
+				uint32_t vendor_id, const uint8_t *data,
+								size_t len);
+	void (*destroy)(struct phase2_method *phase2);
+	void (*reset)(struct phase2_method *phase2);
 };
 
 static void eap_ttls_phase2_credentials_destroy(
@@ -628,21 +628,21 @@ static bool eap_ttls_phase2_eap_handle_avp(struct eap_state *eap,
 	return true;
 }
 
-static void eap_ttls_phase2_eap_destroy(void *state)
+static void eap_ttls_phase2_eap_destroy(struct phase2_method *phase2)
 {
-	if (!state)
+	if (!phase2->state)
 		return;
 
-	eap_reset(state);
-	eap_free(state);
+	eap_reset(phase2->state);
+	eap_free(phase2->state);
 }
 
-static void eap_ttls_phase2_eap_reset(void *state)
+static void eap_ttls_phase2_eap_reset(struct phase2_method *phase2)
 {
-	if (!state)
+	if (!phase2->state)
 		return;
 
-	eap_reset(state);
+	eap_reset(phase2->state);
 }
 
 static const struct phase2_method_ops phase2_eap_ops = {
@@ -710,7 +710,7 @@ static void eap_ttls_state_reset(void *data)
 	if (!phase2->ops->reset)
 		return;
 
-	phase2->ops->reset(phase2->state);
+	phase2->ops->reset(phase2);
 }
 
 static void eap_ttls_state_destroy(void *data)
@@ -720,7 +720,7 @@ static void eap_ttls_state_destroy(void *data)
 	eap_ttls_phase2_credentials_destroy(&phase2->credentials);
 
 	if (phase2->ops->destroy)
-		phase2->ops->destroy(phase2->state);
+		phase2->ops->destroy(phase2);
 
 	l_free(phase2);
 }
