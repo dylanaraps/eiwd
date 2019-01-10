@@ -454,23 +454,6 @@ static bool set_password_from_string(struct eap_mschapv2_state *state,
 	return mschapv2_nt_password_hash(password, state->password_hash);
 }
 
-static void set_user_name(struct eap_mschapv2_state *state, const char *user)
-{
-	const char *pos;
-
-	if (!user)
-		return;
-
-	for (pos = user; *pos; ++pos) {
-		if (*pos == '\\') {
-			state->user = l_strdup(pos + 1);
-			return;
-		}
-	}
-
-	state->user = l_strdup(user);
-}
-
 static int eap_mschapv2_check_settings(struct l_settings *settings,
 					struct l_queue *secrets,
 					const char *prefix,
@@ -555,18 +538,18 @@ static bool eap_mschapv2_load_settings(struct eap_state *eap,
 					const char *prefix)
 {
 	struct eap_mschapv2_state *state;
-	L_AUTO_FREE_VAR(char *, identity);
 	L_AUTO_FREE_VAR(char *, password) = NULL;
 	char setting[64];
 
 	state = l_new(struct eap_mschapv2_state, 1);
 
 	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-	identity = l_settings_get_string(settings, "Security", setting);
-	if (!identity)
+	state->user = l_settings_get_string(settings, "Security", setting);
+	if (!state->user) {
+		l_error("'%s' setting is missing", setting);
 		goto error;
+	}
 
-	set_user_name(state, identity);
 	state->user_len = strlen(state->user);
 
 	/* Either read the password-hash from hexdump or password and hash it */
