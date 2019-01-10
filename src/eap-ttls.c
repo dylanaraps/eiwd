@@ -356,68 +356,57 @@ struct phase2_method_ops {
 	bool (*reset)(void *state);
 };
 
-struct phase2_method {
-	void *state;
-	const struct phase2_method_ops *ops;
-};
-
 struct phase2_credentials {
 	char *username;
 	char *password;
 };
 
-static void eap_ttls_phase2_credentials_destroy(void *state)
-{
-	struct phase2_credentials *credentials = state;
+struct phase2_method {
+	void *state;
+	struct phase2_credentials credentials;
+	const struct phase2_method_ops *ops;
+};
 
+static void eap_ttls_phase2_credentials_destroy(
+					struct phase2_credentials *credentials)
+{
 	if (!credentials)
 		return;
 
+	if (credentials->password)
+		memset(credentials->password, 0, strlen(credentials->password));
+
 	l_free(credentials->username);
-
-	memset(credentials->password, 0, strlen(credentials->password));
 	l_free(credentials->password);
-
-	l_free(credentials);
 }
 
 static bool eap_ttls_phase2_non_eap_load_settings(struct phase2_method *phase2,
 						struct l_settings *settings,
 						const char *prefix)
 {
-	struct phase2_credentials *credentials;
 	char setting[128];
 
-	credentials = l_new(struct phase2_credentials, 1);
-
 	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-	credentials->username =
+	phase2->credentials.username =
 			l_settings_get_string(settings, "Security", setting);
 
-	if (!credentials->username) {
+	if (!phase2->credentials.username) {
 		l_error("Phase 2 Identity is missing.");
-		goto error;
+		return false;
 	}
 
 	snprintf(setting, sizeof(setting), "%sPassword", prefix);
-	credentials->password =
+	phase2->credentials.password =
 			l_settings_get_string(settings, "Security", setting);
 
-	if (!credentials->password) {
+	if (!phase2->credentials.password) {
 		l_error("Phase 2 Password is missing.");
-		goto error;
+		l_free(phase2->credentials.username);
+
+		return false;
 	}
 
-	phase2->state = credentials;
-
 	return true;
-
-error:
-	l_free(credentials->username);
-	l_free(credentials->password);
-	l_free(credentials);
-
-	return false;
 }
 
 static bool eap_ttls_phase2_chap_generate_challenge(struct eap_state *eap,
@@ -432,7 +421,7 @@ static bool eap_ttls_phase2_chap_generate_challenge(struct eap_state *eap,
 static bool eap_ttls_phase2_chap_init(struct eap_state *eap)
 {
 	struct phase2_method *phase2 = eap_tls_common_get_variant_data(eap);
-	struct phase2_credentials *credentials = phase2->state;
+	struct phase2_credentials *credentials = &phase2->credentials;
 	struct avp_builder *builder;
 	uint8_t challenge[CHAP_CHALLENGE_LEN + CHAP_IDENT_LEN];
 	uint8_t password_hash[CHAP_PASSWORD_LEN];
@@ -481,13 +470,12 @@ static bool eap_ttls_phase2_chap_init(struct eap_state *eap)
 
 static const struct phase2_method_ops phase2_chap_ops = {
 	.init = eap_ttls_phase2_chap_init,
-	.destroy = eap_ttls_phase2_credentials_destroy,
 };
 
 static bool eap_ttls_phase2_ms_chap_init(struct eap_state *eap)
 {
 	struct phase2_method *phase2 = eap_tls_common_get_variant_data(eap);
-	struct phase2_credentials *credentials = phase2->state;
+	struct phase2_credentials *credentials = &phase2->credentials;
 	struct avp_builder *builder;
 	uint8_t challenge[MS_CHAP_CHALLENGE_LEN + CHAP_IDENT_LEN];
 	uint8_t password_hash[16];
@@ -524,21 +512,20 @@ static bool eap_ttls_phase2_ms_chap_init(struct eap_state *eap)
 
 static const struct phase2_method_ops phase2_mschap_ops = {
 	.init = eap_ttls_phase2_ms_chap_init,
-	.destroy = eap_ttls_phase2_credentials_destroy,
 };
 
 static bool eap_ttls_phase2_pap_init(struct eap_state *eap)
 {
 	struct phase2_method *phase2 = eap_tls_common_get_variant_data(eap);
-	struct phase2_credentials *state = phase2->state;
+	struct phase2_credentials *credentials = &phase2->credentials;
 	struct avp_builder *builder;
 	uint8_t *buf;
 	size_t buf_len;
 
 	builder = avp_builder_new(512);
 
-	build_avp_user_name(builder, state->username);
-	build_avp_user_password(builder, state->password);
+	build_avp_user_name(builder, credentials->username);
+	build_avp_user_password(builder, credentials->password);
 
 	buf = avp_builder_free(builder, false, &buf_len);
 
@@ -550,7 +537,6 @@ static bool eap_ttls_phase2_pap_init(struct eap_state *eap)
 
 static const struct phase2_method_ops phase2_pap_ops = {
 	.init = eap_ttls_phase2_pap_init,
-	.destroy = eap_ttls_phase2_credentials_destroy,
 };
 
 static void eap_ttls_phase2_eap_send_response(const uint8_t *data, size_t len,
@@ -733,6 +719,8 @@ static void eap_ttls_state_reset(void *data)
 static void eap_ttls_state_destroy(void *data)
 {
 	struct phase2_method *phase2 = data;
+
+	eap_ttls_phase2_credentials_destroy(&phase2->credentials);
 
 	if (phase2->ops->destroy)
 		phase2->ops->destroy(phase2->state);
