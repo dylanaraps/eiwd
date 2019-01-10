@@ -673,11 +673,8 @@ static bool eap_ttls_tunnel_ready(struct eap_state *eap,
 
 	eap_set_key_material(eap, msk_emsk + 0, 64, msk_emsk + 64, 64, NULL, 0);
 
-	if (!phase2->state)
-		return false;
-
 	if (phase2->ops->init)
-		phase2->ops->init(eap);
+		return phase2->ops->init(eap);
 
 	return true;
 }
