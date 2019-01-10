@@ -450,6 +450,10 @@ static void sae_process_commit(struct sae_sm *sm, const uint8_t *from,
 
 	sm->p_element = l_ecc_point_from_data(sm->curve, L_ECC_POINT_TYPE_FULL,
 						ptr, 64);
+	if (!sm->p_element) {
+		reason = MMPDU_REASON_CODE_UNSPECIFIED;
+		goto reject;
+	}
 
 	if (l_ecc_scalars_are_equal(sm->p_scalar, sm->scalar) ||
 			l_ecc_points_are_equal(sm->p_element, sm->element)) {
