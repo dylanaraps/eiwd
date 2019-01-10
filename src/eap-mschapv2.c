@@ -556,17 +556,20 @@ static bool eap_mschapv2_load_settings(struct eap_state *eap,
 	snprintf(setting, sizeof(setting), "%sPassword", prefix);
 	password = l_settings_get_string(settings, "Security", setting);
 
-	if (password)
+	if (password) {
 		set_password_from_string(state, password);
-	else {
+	} else {
 		unsigned char *tmp;
 		size_t len;
 		const char *hash_str;
 
 		snprintf(setting, sizeof(setting), "%sPassword-Hash", prefix);
 		hash_str = l_settings_get_value(settings, "Security", setting);
-		if (!hash_str)
+		if (!hash_str) {
+			l_error("Neither '%sPassword' or '%sPassword-Hash' "
+					"setting was provided", prefix, prefix);
 			goto error;
+		}
 
 		tmp = l_util_from_hexstring(hash_str, &len);
 		memcpy(state->password_hash, tmp, 16);
