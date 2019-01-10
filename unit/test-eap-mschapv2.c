@@ -30,6 +30,7 @@
 #include <ell/ell.h>
 
 #include "src/eap-mschapv2.h"
+#include "src/mschaputil.h"
 
 /* The test values here are taken from the RFCs the functions are defined in */
 
