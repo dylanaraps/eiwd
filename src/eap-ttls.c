@@ -353,7 +353,7 @@ struct phase2_method_ops {
 				uint32_t vendor_id, const uint8_t *data,
 								size_t len);
 	void (*destroy)(void *state);
-	bool (*reset)(void *state);
+	void (*reset)(void *state);
 };
 
 struct phase2_credentials {
@@ -637,12 +637,12 @@ static void eap_ttls_phase2_eap_destroy(void *state)
 	eap_free(state);
 }
 
-static bool eap_ttls_phase2_eap_reset(void *state)
+static void eap_ttls_phase2_eap_reset(void *state)
 {
 	if (!state)
-		return false;
+		return;
 
-	return eap_reset(state);
+	eap_reset(state);
 }
 
 static const struct phase2_method_ops phase2_eap_ops = {
