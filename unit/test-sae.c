@@ -194,15 +194,9 @@ static void test_confirm_timeout(const void *arg)
 {
 	struct test_data *td = l_new(struct test_data, 1);
 	struct sae_sm *sm = test_initialize(td);
-	uint8_t commit[102];
 	int i;
 
-	l_put_le16(1, commit);
-	l_put_le16(0, commit + 2);
-	l_put_le16(19, commit + 4);
-	memset(commit + 6, 0xde, 96);
-
-	sae_rx_packet(sm, aa, commit, sizeof(commit));
+	sae_rx_packet(sm, aa, aa_commit, sizeof(aa_commit));
 
 	assert(td->confirm_success);
 
