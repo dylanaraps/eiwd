@@ -38,16 +38,3 @@ bool mschapv2_get_master_key(const uint8_t pw_hash_hash[static 16],
 					uint8_t master_key[static 16]);
 
 bool mschapv2_nt_password_hash(const char *password, uint8_t hash[16]);
-
-bool mschapv2_generate_nt_response(const uint8_t password_hash[static 16],
-				const uint8_t peer_challenge[static 16],
-				const uint8_t server_challenge[static 16],
-				const char *user,
-				uint8_t response[static 24]);
-
-bool mschapv2_generate_authenticator_response(
-				const uint8_t pw_hash_hash[static 16],
-				const uint8_t nt_response[static 24],
-				const uint8_t peer_challenge[static 16],
-				const uint8_t server_challenge[static 16],
-				const char *user, char response[static 42]);
