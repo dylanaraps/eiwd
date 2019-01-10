@@ -24,13 +24,14 @@
 #include <config.h>
 #endif
 
+#include <stdio.h>
+
 #include <ell/ell.h>
 
 #include "eap.h"
 #include "eap-private.h"
 #include "crypto.h"
 #include "util.h"
-#include "ecc.h"
 
 #define EAP_PWD_GROUP_DESC	19
 #define EAP_PWD_RAND_FN		0x01
@@ -66,13 +67,14 @@ struct eap_pwd_handle {
 	enum eap_pwd_prep prep;
 	char *identity;
 	char *password;
-	struct ecc_point pwe;
-	struct ecc_point element_s;
-	struct ecc_point element_p;
+	const struct l_ecc_curve *curve;
+	struct l_ecc_point *pwe;
+	struct l_ecc_point *element_s;
+	struct l_ecc_point *element_p;
 	uint32_t ciphersuite;
-	uint64_t scalar_s[NUM_ECC_DIGITS];
-	uint64_t scalar_p[NUM_ECC_DIGITS];
-	uint64_t p_rand[NUM_ECC_DIGITS];
+	struct l_ecc_scalar *scalar_s;
+	struct l_ecc_scalar *scalar_p;
+	struct l_ecc_scalar *p_rand;
 	uint8_t *rx_frag_buf;
 	uint16_t rx_frag_total;
 	uint16_t rx_frag_count;
@@ -80,8 +82,6 @@ struct eap_pwd_handle {
 	uint8_t *tx_frag_pos;
 	uint16_t tx_frag_remaining;
 };
-
-static uint64_t curve_p[NUM_ECC_DIGITS] = CURVE_P_32;
 
 /* RFC 5931, Section 2.5 - Key Derivation Function */
 static bool kdf(uint8_t *key, size_t key_len, const char *label,
@@ -144,13 +144,20 @@ static bool eap_pwd_reset_state(struct eap_state *eap)
 	pwd->rx_frag_total = 0;
 
 	pwd->prep = EAP_PWD_PREP_NONE;
-	memset(&pwd->pwe, 0, sizeof(struct ecc_point));
-	memset(&pwd->element_s, 0, sizeof(struct ecc_point));
-	memset(&pwd->element_p, 0, sizeof(struct ecc_point));
 	pwd->ciphersuite = 0;
-	memset(pwd->scalar_s, 0, sizeof(pwd->scalar_s));
-	memset(pwd->scalar_p, 0, sizeof(pwd->scalar_p));
-	memset(pwd->p_rand, 0, sizeof(pwd->p_rand));
+
+	l_ecc_point_free(pwd->pwe);
+	pwd->pwe = NULL;
+	l_ecc_point_free(pwd->element_p);
+	pwd->element_p = NULL;
+	l_ecc_point_free(pwd->element_s);
+	pwd->element_s = NULL;
+	l_ecc_scalar_free(pwd->scalar_p);
+	pwd->scalar_p = NULL;
+	l_ecc_scalar_free(pwd->scalar_s);
+	pwd->scalar_s = NULL;
+	l_ecc_scalar_free(pwd->p_rand);
+	pwd->p_rand = NULL;
 
 	return true;
 }
@@ -225,9 +232,8 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 	uint8_t counter = 1;
 	uint8_t resp[15 + strlen(pwd->identity)];
 	uint8_t *pos;
-	uint8_t pwd_seed[ECC_BYTES];
-	uint64_t pwd_value[NUM_ECC_DIGITS];	/* used as X value */
-	uint64_t y_value[NUM_ECC_DIGITS];
+	uint8_t pwd_seed[32];
+	uint8_t pwd_value[32];	/* used as X value */
 
 	/*
 	 * Group desc (2) + Random func (1) + prf (1) + token (4) + prep (1) +
@@ -246,7 +252,12 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 	pwd->state = EAP_PWD_STATE_ID;
 
 	group = l_get_be16(pkt);
-	if (group != EAP_PWD_GROUP_DESC) {
+	/* TODO: for now, lets only allow group 19 */
+	if (group != EAP_PWD_GROUP_DESC)
+		goto error;
+
+	pwd->curve = l_ecc_curve_get(group);
+	if (!pwd->curve) {
 		l_error("group %d not supported", group);
 		goto error;
 	}
@@ -295,23 +306,17 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 				strlen("EAP-pwd Hunting And Pecking"),
 				pwd_value, 32);
 
-		ecc_be2native(pwd_value);
+		if (!(pwd_seed[31] & 1))
+			pwd->pwe = l_ecc_point_from_data(pwd->curve,
+					L_ECC_POINT_TYPE_COMPRESSED_BIT1,
+					pwd_value, 32);
+		else
+			pwd->pwe = l_ecc_point_from_data(pwd->curve,
+					L_ECC_POINT_TYPE_COMPRESSED_BIT0,
+					pwd_value, 32);
 
-		if (ecc_compute_y(y_value, pwd_value)) {
-			l_info("computed y in %u tries", counter);
-
-			/* unambiguously choose Y coordinate */
-			if ((y_value[0] & 1) != (pwd_seed[31] & 1))
-				vli_mod_sub(y_value, curve_p, y_value, curve_p);
-
-			memcpy(pwd->pwe.x, pwd_value, 32);
-			memcpy(pwd->pwe.y, y_value, 32);
-
-			if (!ecc_valid_point(&pwd->pwe))
-				goto invalid_point;
-
+		if (pwd->pwe)
 			break;
-		}
 
 		counter++;
 	}
@@ -332,8 +337,6 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 
 	return;
 
-invalid_point:
-	l_error("point not on curve");
 error:
 	eap_method_error(eap);
 }
@@ -344,9 +347,8 @@ static void eap_pwd_handle_commit(struct eap_state *eap,
 	struct eap_pwd_handle *pwd = eap_get_data(eap);
 	uint8_t resp[102];
 	uint8_t *pos;
-	uint64_t p_mask[NUM_ECC_DIGITS];
-	uint64_t one[NUM_ECC_DIGITS] = { 1 };
-	uint64_t curve_n[NUM_ECC_DIGITS] = CURVE_N_32;
+	struct l_ecc_scalar *p_mask;
+	struct l_ecc_scalar *order;
 
 	if (len != 96) {
 		l_error("bad packet length, expected 96, got %zu", len);
@@ -366,68 +368,37 @@ static void eap_pwd_handle_commit(struct eap_state *eap,
 	 * 32 bytes in length (total of 64), leaving the remainder for the
 	 * scalar value (32).
 	 */
-	memcpy(pwd->element_s.x, pkt, ECC_BYTES);
-	memcpy(pwd->element_s.y, pkt + ECC_BYTES, ECC_BYTES);
-	memcpy(pwd->scalar_s, pkt + 64, ECC_BYTES);
-
-	ecc_be2native(pwd->element_s.x);
-	ecc_be2native(pwd->element_s.y);
-	ecc_be2native(pwd->scalar_s);
-
-	if (!ecc_valid_point(&pwd->element_s))
+	pwd->element_s = l_ecc_point_from_data(pwd->curve,
+						L_ECC_POINT_TYPE_FULL, pkt, 64);
+	if (!pwd->element_s)
 		goto invalid_point;
 
-	/*
-	 * RFC 5931 Section 2.8.4.1
-	 *
-	 * chose two random numbers, 1 < s_rand, s_mask < r
-	 * compute Scalar_P and Element_P
-	 * Scalar_P = (p_rand + p_mask) mod r
-	 * Element_P = inv(p_mask * PWE)
-	 */
-	l_getrandom(pwd->p_rand, ECC_BYTES);
+	pwd->scalar_s = l_ecc_scalar_new(pwd->curve, (uint8_t *)pkt + 64, 32);
 
-	/* ensure 1 < p_rand < r */
-	while (!((vli_cmp(pwd->p_rand, one) > 0) &&
-			(vli_cmp(pwd->p_rand, curve_n) < 0)))
-		l_getrandom(pwd->p_rand, ECC_BYTES);
+	pwd->p_rand = l_ecc_scalar_new_random(pwd->curve);
+	p_mask = l_ecc_scalar_new_random(pwd->curve);
+	pwd->scalar_p = l_ecc_scalar_new(pwd->curve, NULL, 0);
 
-	l_getrandom(p_mask, ECC_BYTES);
+	order = l_ecc_curve_get_order(pwd->curve);
 
-	/* ensure 1 < p_mask < r */
-	while (!((vli_cmp(p_mask, one) > 0) &&
-			(vli_cmp(p_mask, curve_n) < 0)))
-		l_getrandom(p_mask, ECC_BYTES);
+	l_ecc_scalar_add(pwd->scalar_p, pwd->p_rand, p_mask, order);
 
-	vli_mod_add(pwd->scalar_p, pwd->p_rand, p_mask, curve_n);
+	l_ecc_scalar_free(order);
 
+	pwd->element_p = l_ecc_point_new(pwd->curve);
 	/* p_mask * PWE */
-	ecc_point_mult(&pwd->element_p, &pwd->pwe, p_mask, NULL,
-		vli_num_bits(p_mask));
+	l_ecc_point_multiply(pwd->element_p, p_mask, pwd->pwe);
 
-	if (!ecc_valid_point(&pwd->element_p))
-		goto invalid_point;
+	l_ecc_scalar_free(p_mask);
 
 	/* inv(p_mask * PWE) */
-	vli_sub(pwd->element_p.y, curve_p, pwd->element_p.y);
-
-	if (!ecc_valid_point(&pwd->element_p))
-		goto invalid_point;
-
-	/* change peer into to MSB first byte ordering before sending back */
-	ecc_native2be(pwd->element_p.x);
-	ecc_native2be(pwd->element_p.y);
-	ecc_native2be(pwd->scalar_p);
+	l_ecc_point_inverse(pwd->element_p);
 
 	/* send element_p and scalar_p */
 	pos = resp + 5; /* header */
 	*pos++ = EAP_PWD_EXCH_COMMIT;
-	memcpy(pos, pwd->element_p.x, ECC_BYTES);
-	pos += ECC_BYTES;
-	memcpy(pos, pwd->element_p.y, ECC_BYTES);
-	pos += ECC_BYTES;
-	memcpy(pos, pwd->scalar_p, ECC_BYTES);
-	pos += ECC_BYTES;
+	pos += l_ecc_point_get_data(pwd->element_p, pos, 64);
+	pos += l_ecc_scalar_get_data(pwd->scalar_p, pos, 32);
 
 	eap_pwd_send_response(eap, resp, pos - resp);
 
@@ -439,18 +410,26 @@ error:
 	eap_method_error(eap);
 }
 
+
 static void eap_pwd_handle_confirm(struct eap_state *eap,
 					const uint8_t *pkt, size_t len)
 {
 	struct eap_pwd_handle *pwd = eap_get_data(eap);
-	struct ecc_point kp;
+	struct l_ecc_point *kp;
 	uint8_t resp[38];
 	uint8_t *pos;
-	uint64_t confirm_s[NUM_ECC_DIGITS];
-	uint8_t confirm_p[ECC_BYTES];
-	uint8_t expected_confirm_s[ECC_BYTES];
+	uint8_t confirm_s[32];
+	uint8_t confirm_p[32];
+	uint8_t expected_confirm_s[32];
 	uint8_t mk[32];
 	uint8_t msk_emsk[128], session_id[33];
+	/* buffers used for the final hash */
+	uint8_t kpx[L_ECC_SCALAR_MAX_BYTES];
+	uint8_t scalar_s[L_ECC_SCALAR_MAX_BYTES];
+	uint8_t scalar_p[L_ECC_SCALAR_MAX_BYTES];
+	uint8_t element_s[L_ECC_POINT_MAX_BYTES];
+	uint8_t element_p[L_ECC_POINT_MAX_BYTES];
+	ssize_t plen, clen;
 
 	if (len != 32) {
 		l_error("bad packet length");
@@ -464,59 +443,72 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 
 	pwd->state = EAP_PWD_STATE_CONFIRM;
 
-	memcpy(confirm_s, pkt, ECC_BYTES);
+	memcpy(confirm_s, pkt, 32);
+
+	kp = l_ecc_point_new(pwd->curve);
 
 	/* compute KP = (p_rand * (Scalar_S * PWE + Element_S)) */
-	ecc_point_mult(&kp, &pwd->pwe, pwd->scalar_s, NULL,
-			vli_num_bits(pwd->scalar_s));
+	l_ecc_point_multiply(kp, pwd->scalar_s, pwd->pwe);
 
-	if (!ecc_valid_point(&kp))
+	l_ecc_point_add(kp, kp, pwd->element_s);
+
+	l_ecc_point_multiply(kp, pwd->p_rand, kp);
+
+	/*
+	 * We just need to store clen/plen once. Since all these buffers are
+	 * created with enough bytes in mind we know these wont fail. Also, all
+	 * scalar/point objects were created with the same curve, so it can be
+	 * safe to assume the return values will not change from what clen/plen
+	 * already are.
+	 */
+	clen = l_ecc_point_get_x(kp, kpx, sizeof(kpx));
+	if (clen < 0)
 		goto invalid_point;
 
-	ecc_point_add(&kp, &kp, &pwd->element_s);
-
-	if (!ecc_valid_point(&kp))
+	plen = l_ecc_point_get_data(pwd->element_s, element_s,
+					sizeof(element_s));
+	if (plen < 0)
 		goto invalid_point;
 
-	ecc_point_mult(&kp, &kp, pwd->p_rand, NULL, vli_num_bits(pwd->p_rand));
-
-	if (!ecc_valid_point(&kp))
+	if (l_ecc_point_get_data(pwd->element_p, element_p,
+					sizeof(element_p)) < 0)
 		goto invalid_point;
 
-	ecc_native2be(kp.x);
-	ecc_native2be(pwd->element_s.x);
-	ecc_native2be(pwd->element_s.y);
-	ecc_native2be(pwd->scalar_s);
+	if (l_ecc_scalar_get_data(pwd->scalar_s, scalar_s,
+					sizeof(scalar_s)) < 0)
+		goto invalid_point;
+
+	if (l_ecc_scalar_get_data(pwd->scalar_p, scalar_p,
+					sizeof(scalar_p)) < 0)
+		goto invalid_point;
+
+	l_ecc_point_free(kp);
 
 	/*
 	 * compute Confirm_P = H(kp | Element_P | Scalar_P |
 	 *                       Element_S | Scalar_S | Ciphersuite)
 	 */
-	hkdf_extract_sha256(NULL, 0, 8, confirm_p, kp.x, ECC_BYTES,
-			pwd->element_p.x, ECC_BYTES, pwd->element_p.y,
-			ECC_BYTES, pwd->scalar_p, ECC_BYTES, pwd->element_s.x,
-			ECC_BYTES, pwd->element_s.y, ECC_BYTES, pwd->scalar_s,
-			ECC_BYTES, &pwd->ciphersuite, 4);
+	hkdf_extract_sha256(NULL, 0, 6, confirm_p, kpx, clen, element_p, plen,
+				scalar_p, clen, element_s, plen, scalar_s,
+				clen, &pwd->ciphersuite, 4);
 
-	hkdf_extract_sha256(NULL, 0, 8, expected_confirm_s, kp.x, ECC_BYTES,
-			pwd->element_s.x, ECC_BYTES, pwd->element_s.y,
-			ECC_BYTES, pwd->scalar_s, ECC_BYTES, pwd->element_p.x,
-			ECC_BYTES, pwd->element_p.y, ECC_BYTES,
-			pwd->scalar_p, ECC_BYTES, &pwd->ciphersuite, 4);
+	hkdf_extract_sha256(NULL, 0, 6, expected_confirm_s, kpx, clen,
+				element_s, plen, scalar_s, clen, element_p,
+				plen, scalar_p, clen, &pwd->ciphersuite, 4);
 
-	if (memcmp(confirm_s, expected_confirm_s, ECC_BYTES)) {
+	if (memcmp(confirm_s, expected_confirm_s, 32)) {
 		l_error("Confirm_S did not verify");
 		goto error;
 	}
 
 	pos = resp + 5; /* header */
 	*pos++ = EAP_PWD_EXCH_CONFIRM;
-	memcpy(pos, confirm_p, ECC_BYTES);
+	memcpy(pos, confirm_p, 32);
 	pos += 32;
 
 	/* derive MK = H(kp | Confirm_P | Confirm_S ) */
-	hkdf_extract_sha256(NULL, 0, 3, mk, kp.x, ECC_BYTES, confirm_p,
-			ECC_BYTES, confirm_s, ECC_BYTES);
+	hkdf_extract_sha256(NULL, 0, 3, mk, kpx, clen, confirm_p,
+			32, confirm_s, 32);
 
 	eap_pwd_send_response(eap, resp, pos - resp);
 
@@ -524,13 +516,16 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 
 	session_id[0] = 52;
 	hkdf_extract_sha256(NULL, 0, 3, session_id + 1, &pwd->ciphersuite, 4,
-			pwd->scalar_p, ECC_BYTES, pwd->scalar_s, ECC_BYTES);
+			scalar_p, clen, scalar_s, clen);
+
 	kdf(mk, 32, (const char *) session_id, 33, msk_emsk, 128);
 	eap_set_key_material(eap, msk_emsk, 64, msk_emsk + 64, 64, NULL, 0);
 
 	return;
 
 invalid_point:
+	l_ecc_point_free(kp);
+
 	l_error("invalid point during confirm exchange");
 error:
 	eap_method_error(eap);
