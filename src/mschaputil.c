@@ -172,13 +172,13 @@ bool mschapv2_generate_nt_response(const uint8_t password_hash[static 16],
 								challenge))
 		return false;
 
-	if (!mschapv2_des_encrypt(challenge, buffer + 0, response + 0))
+	if (!mschap_des_encrypt(challenge, buffer + 0, response + 0))
 		return false;
 
-	if (!mschapv2_des_encrypt(challenge, buffer + 7, response + 8))
+	if (!mschap_des_encrypt(challenge, buffer + 7, response + 8))
 		return false;
 
-	if (!mschapv2_des_encrypt(challenge, buffer + 14, response + 16))
+	if (!mschap_des_encrypt(challenge, buffer + 14, response + 16))
 		return false;
 
 	return true;
@@ -223,7 +223,6 @@ bool mschapv2_generate_authenticator_response(
 	uint8_t digest[20];
 	uint8_t challenge[8];
 	char *ascii;
-	int i;
 	struct l_checksum *check;
 
 	check = l_checksum_new(L_CHECKSUM_SHA1);
@@ -253,14 +252,11 @@ bool mschapv2_generate_authenticator_response(
 	response[0] = 'S';
 	response[1] = '=';
 
-	ascii = l_util_hexstring(digest, sizeof(digest));
+	ascii = l_util_hexstring_upper(digest, sizeof(digest));
 	if (!ascii)
 		return false;
 
-	for (i = 0; i < 40; ++i) {
-		response[i + 2] = toupper(ascii[i]);
-	}
-
+	memcpy(response + 2, ascii, 40);
 	l_free(ascii);
 
 	return true;
