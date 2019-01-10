@@ -157,7 +157,6 @@ eap_sources = src/eap.c src/eap.h src/eap-private.h \
 				src/eap-pwd.c \
 				src/util.h src/util.c \
 				src/crypto.h src/crypto.c \
-				src/ecc.h src/ecc.c \
 				src/wscutil.h src/wscutil.c \
 				src/simutil.h src/simutil.c \
 				src/simauth.h src/simauth.c \
@@ -309,7 +308,7 @@ unit_tests = unit/test-cmac-aes \
 		unit/test-crypto unit/test-eapol unit/test-mpdu \
 		unit/test-ie unit/test-ssid-to-utf8 unit/test-ssid-security \
 		unit/test-arc4 unit/test-wsc unit/test-eap-mschapv2 \
-		unit/test-eap-sim unit/test-ecc unit/test-sae
+		unit/test-eap-sim unit/test-sae
 
 if CLIENT
 unit_tests += unit/test-client
@@ -432,16 +431,12 @@ unit_test_client_SOURCES = unit/test-client.c \
 unit_test_client_LDADD = $(ell_ldadd) -lreadline
 endif
 
-unit_test_ecc_SOURCES = unit/test-ecc.c src/ecc.c src/ecc.h
-unit_test_ecc_LDADD = $(ell_ldadd)
-
 unit_test_sae_SOURCES = unit/test-sae.c \
 				src/sae.h src/sae.c \
 				src/crypto.h src/crypto.c \
 				src/ie.h src/ie.c \
 				src/handshake.h src/handshake.c \
-				src/util.h src/util.c \
-				src/ecc.h src/ecc.c
+				src/util.h src/util.c
 unit_test_sae_LDADD = $(ell_ldadd)
 
 TESTS = $(unit_tests)
