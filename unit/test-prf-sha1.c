@@ -46,7 +46,7 @@ static void prf_test(const void *data)
 	const struct prf_data *test = data;
 	unsigned int prf_len;
 	unsigned char output[512];
-	char prf[128];
+	char prf[1024];
 	unsigned int i;
 	bool result;
 
