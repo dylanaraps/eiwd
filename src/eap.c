@@ -418,23 +418,6 @@ void eap_secret_info_free(void *data)
 	l_free(info);
 }
 
-static int eap_setting_exists(struct l_settings *settings,
-				const char *setting,
-				struct l_queue *secrets,
-				struct l_queue *missing)
-{
-	if (l_settings_get_value(settings, "Security", setting))
-		return 0;
-
-	if (l_queue_find(secrets, eap_secret_info_match, setting))
-		return 0;
-
-	if (l_queue_find(missing, eap_secret_info_match, setting))
-		return 0;
-
-	return -ENOENT;
-}
-
 int __eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 				const char *prefix, bool set_key_material,
 				struct l_queue **missing)
@@ -482,19 +465,10 @@ int __eap_check_settings(struct l_settings *settings, struct l_queue *secrets,
 	}
 
 	/*
-	 * Methods that provide the get_identity callback are responsible
-	 * for ensuring, inside check_settings(), that they have enough data
-	 * to return the identity after load_settings().
+	 * Individual methods are responsible for ensuring, inside their
+	 * check_settings(), that they have enough data to return the
+	 * identity after load_settings() if it is required.
 	 */
-	if (!method->get_identity) {
-		snprintf(setting, sizeof(setting), "%sIdentity", prefix);
-
-		ret = eap_setting_exists(settings, setting, secrets, *missing);
-		if (ret < 0) {
-			l_error("Property %s is missing", setting);
-			return -ENOENT;
-		}
-	}
 
 	return 0;
 }
@@ -565,9 +539,6 @@ bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
 	} else {
 		eap->identity = l_strdup(eap->method->get_identity(eap));
 	}
-
-	if (!eap->identity)
-		goto err;
 
 	return true;
 
