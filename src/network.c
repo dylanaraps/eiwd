@@ -1389,6 +1389,7 @@ static void disconnect_no_longer_known(struct station *station, void *user_data)
 void network_info_forget_known(struct network_info *network)
 {
 	network->is_known = false;
+	memset(&network->connected_time, 0, sizeof(network->connected_time));
 
 	station_foreach(emit_known_network_changed, network);
 	station_foreach(disconnect_no_longer_known, network);
