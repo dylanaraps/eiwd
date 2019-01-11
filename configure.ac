@@ -22,6 +22,9 @@ AC_LANG_C
 
 AC_PROG_CC
 AC_PROG_CC_PIE
+AC_PROG_CC_ASAN
+AC_PROG_CC_LSAN
+AC_PROG_CC_UBSAN
 AC_PROG_INSTALL
 AC_PROG_MKDIR_P
 AC_PROG_LN_S
@@ -55,6 +58,47 @@ AC_ARG_ENABLE(pie, AC_HELP_STRING([--enable-pie],
 	fi
 ])
 
+save_LIBS=$LIBS
+AC_CHECK_LIB(asan, _init)
+LIBS=$save_LIBS
+
+AC_ARG_ENABLE(asan, AC_HELP_STRING([--enable-asan],
+			[enable linking with address sanitizer]), [
+	if (test "${enableval}" = "yes" &&
+				test "${ac_cv_lib_asan__init}" = "yes" &&
+				test "${ac_cv_prog_cc_asan}" = "yes"); then
+		CFLAGS="$CFLAGS -fsanitize=address";
+		LDFLAGS="$LDFLAGS -fsanitize=address"
+	fi
+])
+
+save_LIBS=$LIBS
+AC_CHECK_LIB(lsan, _init)
+LIBS=$save_LIBS
+
+AC_ARG_ENABLE(lsan, AC_HELP_STRING([--enable-lsan],
+			[enable linking with leak sanitizer]), [
+	if (test "${enableval}" = "yes" &&
+				test "${ac_cv_lib_lsan__init}" = "yes" &&
+				test "${ac_cv_prog_cc_lsan}" = "yes"); then
+		CFLAGS="$CFLAGS -fsanitize=leak";
+		LDFLAGS="$LDFLAGS -fsanitize=leak"
+	fi
+])
+
+save_LIBS=$LIBS
+AC_CHECK_LIB(ubsan, _init)
+LIBS=$save_LIBS
+
+AC_ARG_ENABLE(ubsan, AC_HELP_STRING([--enable-ubsan],
+			[enable linking with undefined behavior sanitizer]), [
+	if (test "${enableval}" = "yes" &&
+				test "${ac_cv_lib_ubsan__init}" = "yes" &&
+				test "${ac_cv_prog_cc_ubsan}" = "yes"); then
+		CFLAGS="$CFLAGS -fsanitize=undefined";
+		LDFLAGS="$LDFLAGS -fsanitize=undefined"
+	fi
+])
 if (test "${prefix}" = "NONE"); then
 	dnl no prefix and no localstatedir, so default to /var
 	if (test "$localstatedir" = '${prefix}/var'); then
