@@ -125,7 +125,7 @@ static bool validate_mgmt_ies(const uint8_t *ies, size_t ies_len,
 			return false;
 
 		new_idx = last_idx;
-		while (tag != tag_order[new_idx] && new_idx < tag_count)
+		while (new_idx < tag_count && tag != tag_order[new_idx])
 			new_idx++;
 
 		if (new_idx < tag_count) {
