@@ -215,7 +215,7 @@ static bool sae_is_quadradic_residue(const struct l_ecc_curve *curve,
 		return false;
 	}
 
-	if (rbuf[bytes / 8] & 1) {
+	if (rbuf[bytes / 8 - 1] & 1) {
 		l_ecc_scalar_multiply(num, num, qr);
 
 		if (l_ecc_scalar_legendre(num) == -1) {
