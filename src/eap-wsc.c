@@ -778,6 +778,12 @@ static void eap_wsc_handle_m2(struct eap_state *eap,
 		return;
 	}
 
+	if (!l_key_validate_dh_payload(wsc->m2->public_key,
+					sizeof(wsc->m2->public_key),
+					crypto_dh5_prime,
+					crypto_dh5_prime_size))
+		return;
+
 	remote_public = l_key_new(L_KEY_RAW, wsc->m2->public_key,
 						sizeof(wsc->m2->public_key));
 	if (!remote_public)
@@ -1179,11 +1185,19 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 						wsc->m1->enrollee_nonce, 16))
 		l_getrandom(wsc->m1->enrollee_nonce, 16);
 
-	if (!load_hexencoded(settings, "PrivateKey", private_key, 192))
-		l_getrandom(private_key, 192);
+	if (load_hexencoded(settings, "PrivateKey", private_key, 192)) {
+		if (!l_key_validate_dh_payload(private_key, 192,
+						crypto_dh5_prime,
+						crypto_dh5_prime_size)) {
+			memset(private_key, 0, 192);
+			goto err;
+		}
 
-	wsc->private = l_key_new(L_KEY_RAW, private_key, 192);
-	memset(private_key, 0, 192);
+		wsc->private = l_key_new(L_KEY_RAW, private_key, 192);
+		memset(private_key, 0, 192);
+	} else
+		wsc->private = l_key_generate_dh_private(crypto_dh5_prime,
+							crypto_dh5_prime_size);
 
 	if (!wsc->private)
 		goto err;
