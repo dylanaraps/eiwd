@@ -71,6 +71,8 @@ bool hmac_sha1(const void *key, size_t key_len,
 		const void *data, size_t data_len, void *output, size_t size);
 bool hmac_sha256(const void *key, size_t key_len,
 		const void *data, size_t data_len, void *output, size_t size);
+bool hmac_sha384(const void *key, size_t key_len,
+		const void *data, size_t data_len, void *output, size_t size);
 bool cmac_aes(const void *key, size_t key_len,
 		const void *data, size_t data_len, void *output, size_t size);
 
