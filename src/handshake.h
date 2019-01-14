@@ -87,6 +87,7 @@ struct handshake_state {
 	enum ie_rsn_cipher_suite group_management_cipher;
 	enum ie_rsn_akm_suite akm_suite;
 	uint8_t pmk[64];
+	size_t pmk_len;
 	uint8_t snonce[32];
 	uint8_t anonce[32];
 	uint8_t ptk[64];

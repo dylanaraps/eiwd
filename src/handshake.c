@@ -108,6 +108,7 @@ void handshake_state_set_pmk(struct handshake_state *s, const uint8_t *pmk,
 				size_t pmk_len)
 {
 	memcpy(s->pmk, pmk, pmk_len);
+	s->pmk_len = pmk_len;
 	s->have_pmk = true;
 }
 
