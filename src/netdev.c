@@ -3676,7 +3676,8 @@ static bool netdev_frame_watch_match_prefix(const void *a, const void *b)
 
 	return fw->frame_type == info->frame_type &&
 		fw->prefix_len <= info->body_len &&
-		!memcmp(fw->prefix, info->body, fw->prefix_len);
+		(fw->prefix_len == 0 ||
+		 !memcmp(fw->prefix, info->body, fw->prefix_len));
 }
 
 static void netdev_mgmt_frame_event(struct l_genl_msg *msg,
@@ -4594,7 +4595,7 @@ uint32_t netdev_frame_watch_add(struct netdev *netdev, uint16_t frame_type,
 
 	fw = l_new(struct netdev_frame_watch, 1);
 	fw->frame_type = frame_type;
-	fw->prefix = l_memdup(prefix, prefix_len);
+	fw->prefix = prefix_len ? l_memdup(prefix, prefix_len) : NULL;
 	fw->prefix_len = prefix_len;
 	id = watchlist_link(&netdev->frame_watches, &fw->super,
 						handler, user_data, NULL);
