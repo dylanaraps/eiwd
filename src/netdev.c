@@ -4048,7 +4048,9 @@ int netdev_set_rssi_report_levels(struct netdev *netdev, const int8_t *levels,
 	}
 
 done:
-	memcpy(netdev->rssi_levels, levels, levels_num);
+	if (levels_num)
+		memcpy(netdev->rssi_levels, levels, levels_num);
+
 	netdev->rssi_levels_num = levels_num;
 	netdev_rssi_level_init(netdev);
 
