@@ -1,3 +1,6 @@
+ver 0.14:
+	Add support for tunneled MSCHAPv2 authentication.
+
 ver 0.13:
 	Fix issue with WSC interface runtime handling.
 	Add support for Opportunistic Wireless Encryption.
