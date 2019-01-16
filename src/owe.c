@@ -59,7 +59,7 @@ struct owe_sm *owe_sm_new(struct handshake_state *hs,
 	owe->assoc_tx = assoc;
 	owe->user_data = user_data;
 	owe->complete = complete;
-	owe->curve = l_ecc_curve_get(OWE_DEFAULT_GROUP);
+	owe->curve = l_ecc_curve_get_ike_group(OWE_DEFAULT_GROUP);
 
 	if (!l_ecdh_generate_key_pair(owe->curve, &owe->private,
 					&owe->public_key)) {

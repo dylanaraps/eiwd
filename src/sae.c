@@ -933,7 +933,7 @@ struct sae_sm *sae_sm_new(struct handshake_state *hs, sae_tx_packet_func_t tx,
 	sm->user_data = user_data;
 	sm->handshake = hs;
 	sm->state = SAE_STATE_NOTHING;
-	sm->curve = l_ecc_curve_get(19);
+	sm->curve = l_ecc_curve_get_ike_group(19);
 
 	return sm;
 }

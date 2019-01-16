@@ -256,7 +256,7 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 	if (group != EAP_PWD_GROUP_DESC)
 		goto error;
 
-	pwd->curve = l_ecc_curve_get(group);
+	pwd->curve = l_ecc_curve_get_ike_group(group);
 	if (!pwd->curve) {
 		l_error("group %d not supported", group);
 		goto error;
