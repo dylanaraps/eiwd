@@ -275,6 +275,11 @@ bool wiphy_has_feature(struct wiphy *wiphy, uint32_t feature)
 	return wiphy->feature_flags & feature;
 }
 
+bool wiphy_can_randomize_mac_addr(struct wiphy *wiphy)
+{
+	return wiphy_has_feature(wiphy, NL80211_FEATURE_SCAN_RANDOM_MAC_ADDR);
+}
+
 bool wiphy_has_ext_feature(struct wiphy *wiphy, uint32_t feature)
 {
 	return feature < sizeof(wiphy->ext_features) * 8 &&
