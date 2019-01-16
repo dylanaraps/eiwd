@@ -2002,6 +2002,12 @@ static void station_dbus_scan_triggered(int err, void *user_data)
 				IWD_STATION_INTERFACE, "Scanning");
 }
 
+static bool station_needs_hidden_network_scan(struct station *station)
+{
+	return !l_queue_isempty(station->hidden_bss_list_sorted) &&
+						known_networks_has_hidden();
+}
+
 static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -2014,18 +2020,9 @@ static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 	if (station->scan_id)
 		return dbus_error_busy(message);
 
-	/*
-	 * If we're not connected and no hidden networks are seen & configured,
-	 * use passive scanning to hide our MAC address
-	 */
-	if (!station->connected_bss &&
-			!(!l_queue_isempty(station->hidden_bss_list_sorted) &&
-				known_networks_has_hidden())) {
-		station->scan_id = scan_passive(index,
-					station_dbus_scan_triggered,
-					new_scan_results, station,
-					station_scan_destroy);
-	} else {
+	if (wiphy_can_randomize_mac_addr(station->wiphy) ||
+				station_needs_hidden_network_scan(station) ||
+						station->connected_bss) {
 		struct scan_parameters params;
 
 		memset(&params, 0, sizeof(params));
@@ -2035,9 +2032,14 @@ static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 			params.randomize_mac_addr_hint = true;
 
 		station->scan_id = scan_active_full(index, &params,
-					station_dbus_scan_triggered,
-					new_scan_results, station,
-					station_scan_destroy);
+						station_dbus_scan_triggered,
+						new_scan_results, station,
+						station_scan_destroy);
+	} else {
+		station->scan_id = scan_passive(index,
+						station_dbus_scan_triggered,
+						new_scan_results, station,
+						station_scan_destroy);
 	}
 
 	if (!station->scan_id)
