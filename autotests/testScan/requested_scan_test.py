@@ -53,7 +53,7 @@ class Test(unittest.TestCase):
             self.set_network(network.name)
 
     def test_scan(self):
-        wd = IWD(True)
+        wd = IWD(True, '/tmp')
 
         try:
             self.validate_scan(wd)

@@ -71,7 +71,7 @@ class TestConnectAutoconnect(unittest.TestCase):
 
     def validate(self, ssid, autoconnect, throws = None, use_agent = False,
                                                     wait_periodic_scan = False):
-        wd = IWD(True)
+        wd = IWD(True, '/tmp')
 
         try:
             self.validate_connection(wd, ssid, autoconnect, throws, use_agent,
