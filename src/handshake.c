@@ -303,6 +303,35 @@ static bool handshake_get_key_sizes(struct handshake_state *s, size_t *ptk_size,
 		kck = 24;
 		kek = 32;
 		break;
+	case IE_RSN_AKM_SUITE_OWE:
+		/*
+		 * RFC 8110 Section 4.4 Table 2
+		 *
+		 * Luckily with OWE we can deduce the key lengths from the PMK
+		 * size, since the PMK size maps to unique KCK/KEK lengths.
+		 */
+		switch (s->pmk_len) {
+		case 32:
+			/* SHA-256 used for PMK */
+			kck = 16;
+			kek = 16;
+			break;
+		case 48:
+			/* SHA-384 used for PMK */
+			kck = 24;
+			kek = 32;
+			break;
+		case 64:
+			/* SHA-512 used for PMK */
+			kck = 32;
+			kek = 32;
+			break;
+		default:
+			l_error("Invalid PMK length for OWE %zu\n", s->pmk_len);
+			return false;
+		}
+
+		break;
 	default:
 		kck = 16;
 		kek = 16;
