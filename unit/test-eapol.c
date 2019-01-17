@@ -1591,7 +1591,7 @@ static void eapol_key_test(const void *data)
 	const struct eapol_key_data *test = data;
 	const struct eapol_key *packet;
 
-	packet = eapol_key_validate(test->frame, test->frame_len);
+	packet = eapol_key_validate(test->frame, test->frame_len, 16);
 	assert(packet);
 
 	assert(packet->header.protocol_version == test->protocol_version);
@@ -1616,11 +1616,11 @@ static void eapol_key_test(const void *data)
 			sizeof(packet->key_nonce)));
 	assert(!memcmp(packet->eapol_key_iv, test->eapol_key_iv,
 			sizeof(packet->eapol_key_iv)));
-	assert(!memcmp(packet->key_mic_data, test->key_mic_data,
-			sizeof(packet->key_mic_data)));
+	assert(!memcmp(EAPOL_KEY_MIC(packet), test->key_mic_data,
+			sizeof(test->key_mic_data)));
 	assert(!memcmp(packet->key_rsc, test->key_rsc,
 			sizeof(packet->key_rsc)));
-	assert(L_BE16_TO_CPU(packet->key_data_len) == test->key_data_len);
+	assert(EAPOL_KEY_DATA_LEN(packet, 16) == test->key_data_len);
 }
 
 struct eapol_key_mic_test {
@@ -1728,7 +1728,8 @@ static void eapol_calculate_mic_test(const void *data)
 	memset(mic, 0, sizeof(mic));
 	frame = (struct eapol_key *) test->frame;
 
-	ret = eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, test->kck, frame, mic);
+	ret = eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, test->kck, frame,
+					mic, 16);
 	assert(ret);
 	assert(!memcmp(test->mic, mic, sizeof(mic)));
 }
@@ -1749,7 +1750,7 @@ static void eapol_4way_test(const void *data)
 		0xed, 0xab, 0x8e, 0xe1, 0x2e, 0x94, 0xbf, 0xc2,
 		0x4b, 0x33, 0x57, 0xad, 0x04, 0x96, 0x65, 0xd9 };
 	unsigned char psk[32];
-	struct crypto_ptk *ptk;
+	uint8_t *ptk;
 	size_t ptk_len;
 	bool ret;
 	const struct eapol_key *step1;
@@ -1760,13 +1761,13 @@ static void eapol_4way_test(const void *data)
 	size_t decrypted_key_data_len;
 
 	step1 = eapol_key_validate(eapol_key_data_3,
-					sizeof(eapol_key_data_3));
+					sizeof(eapol_key_data_3), 16);
 	assert(step1);
-	assert(eapol_verify_ptk_1_of_4(step1));
+	assert(eapol_verify_ptk_1_of_4(step1, 16));
 	memcpy(anonce, step1->key_nonce, sizeof(step1->key_nonce));
 
 	step2 = eapol_key_validate(eapol_key_data_4,
-					sizeof(eapol_key_data_4));
+					sizeof(eapol_key_data_4), 16);
 	assert(step2);
 	assert(eapol_verify_ptk_2_of_4(step2));
 	memcpy(snonce, step2->key_nonce, sizeof(step2->key_nonce));
@@ -1775,41 +1776,41 @@ static void eapol_4way_test(const void *data)
 						strlen(ssid), psk));
 	assert(!memcmp(expected_psk, psk, sizeof(psk)));
 
-	ptk_len = sizeof(struct crypto_ptk) +
-			crypto_cipher_key_len(CRYPTO_CIPHER_CCMP);
+	ptk_len = 32 + crypto_cipher_key_len(CRYPTO_CIPHER_CCMP);
 	ptk = l_malloc(ptk_len);
-	ret = crypto_derive_pairwise_ptk(psk, aa, spa, anonce, snonce,
-						ptk, ptk_len, false);
+	ret = crypto_derive_pairwise_ptk(psk, sizeof(psk), aa, spa, anonce,
+						snonce, ptk, ptk_len,
+						false);
 	assert(ret);
 
 	frame = eapol_create_ptk_2_of_4(EAPOL_PROTOCOL_VERSION_2001,
 				EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES,
 				eapol_key_test_4.key_replay_counter,
 				snonce, eapol_key_test_4.key_data_len,
-				eapol_key_data_4 + sizeof(struct eapol_key),
-				false);
+				eapol_key_data_4 + EAPOL_FRAME_LEN(16),
+				false, 16);
 	assert(frame);
-	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk->kck, frame, mic));
-	memcpy(frame->key_mic_data, mic, sizeof(mic));
+	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk, frame,
+					mic, 16));
+	memcpy(EAPOL_KEY_MIC(frame), mic, sizeof(mic));
 	assert(!memcmp(frame, eapol_key_data_4, sizeof(eapol_key_data_4)));
 	l_free(frame);
 
 	step3 = eapol_key_validate(eapol_key_data_5,
-					sizeof(eapol_key_data_5));
+					sizeof(eapol_key_data_5), 16);
 	assert(step3);
 	assert(eapol_verify_ptk_3_of_4(step3, false));
 	assert(!memcmp(anonce, step3->key_nonce, sizeof(step3->key_nonce)));
 
-	assert(eapol_verify_mic(IE_RSN_AKM_SUITE_PSK, ptk->kck, step3));
-
+	assert(eapol_verify_mic(IE_RSN_AKM_SUITE_PSK, ptk, step3, 16));
 	decrypted_key_data = eapol_decrypt_key_data(IE_RSN_AKM_SUITE_PSK,
-						ptk->kek, step3,
-						&decrypted_key_data_len);
+						ptk + 16, step3,
+						&decrypted_key_data_len, 16);
 	assert(decrypted_key_data[0] == 48);  // RSNE
 	l_free(decrypted_key_data);
 
 	step4 = eapol_key_validate(eapol_key_data_6,
-					sizeof(eapol_key_data_6));
+					sizeof(eapol_key_data_6), 16);
 	assert(step4);
 	assert(eapol_verify_ptk_4_of_4(step4, false));
 
@@ -1832,7 +1833,7 @@ static void eapol_wpa2_handshake_test(const void *data)
 		0xed, 0xab, 0x8e, 0xe1, 0x2e, 0x94, 0xbf, 0xc2,
 		0x4b, 0x33, 0x57, 0xad, 0x04, 0x96, 0x65, 0xd9 };
 	unsigned char psk[32];
-	struct crypto_ptk *ptk;
+	uint8_t *ptk;
 	size_t ptk_len;
 	bool ret;
 	const struct eapol_key *ptk_step1;
@@ -1845,13 +1846,13 @@ static void eapol_wpa2_handshake_test(const void *data)
 	size_t decrypted_key_data_len;
 
 	ptk_step1 = eapol_key_validate(eapol_key_data_7,
-					sizeof(eapol_key_data_7));
+					sizeof(eapol_key_data_7), 16);
 	assert(ptk_step1);
-	assert(eapol_verify_ptk_1_of_4(ptk_step1));
+	assert(eapol_verify_ptk_1_of_4(ptk_step1, 16));
 	memcpy(anonce, ptk_step1->key_nonce, sizeof(ptk_step1->key_nonce));
 
 	ptk_step2 = eapol_key_validate(eapol_key_data_8,
-					sizeof(eapol_key_data_8));
+					sizeof(eapol_key_data_8), 16);
 	assert(ptk_step2);
 	assert(eapol_verify_ptk_2_of_4(ptk_step2));
 	memcpy(snonce, ptk_step2->key_nonce, sizeof(ptk_step2->key_nonce));
@@ -1860,62 +1861,65 @@ static void eapol_wpa2_handshake_test(const void *data)
 						strlen(ssid), psk));
 	assert(!memcmp(expected_psk, psk, sizeof(psk)));
 
-	ptk_len = sizeof(struct crypto_ptk) +
-			crypto_cipher_key_len(CRYPTO_CIPHER_CCMP);
+	ptk_len = 32 + crypto_cipher_key_len(CRYPTO_CIPHER_CCMP);
 	ptk = l_malloc(ptk_len);
-	ret = crypto_derive_pairwise_ptk(psk, aa, spa, anonce, snonce,
-						ptk, ptk_len, false);
+	ret = crypto_derive_pairwise_ptk(psk, sizeof(psk), aa, spa, anonce,
+						snonce, ptk, ptk_len,
+						false);
 	assert(ret);
 
 	frame = eapol_create_ptk_2_of_4(EAPOL_PROTOCOL_VERSION_2004,
 				EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES,
 				eapol_key_test_8.key_replay_counter,
 				snonce, eapol_key_test_8.key_data_len,
-				eapol_key_data_8 + sizeof(struct eapol_key),
-				false);
+				eapol_key_data_8 + EAPOL_FRAME_LEN(16),
+				false, 16);
 	assert(frame);
-	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk->kck, frame, mic));
-	memcpy(frame->key_mic_data, mic, sizeof(mic));
+	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk, frame,
+					mic, 16));
+	memcpy(EAPOL_KEY_MIC(frame), mic, sizeof(mic));
 	assert(!memcmp(frame, eapol_key_data_8, sizeof(eapol_key_data_8)));
 	l_free(frame);
 
 	ptk_step3 = eapol_key_validate(eapol_key_data_9,
-					sizeof(eapol_key_data_9));
+					sizeof(eapol_key_data_9), 16);
 	assert(ptk_step3);
 	assert(eapol_verify_ptk_3_of_4(ptk_step3, false));
 	assert(!memcmp(anonce, ptk_step3->key_nonce,
 				sizeof(ptk_step3->key_nonce)));
 
-	assert(eapol_verify_mic(IE_RSN_AKM_SUITE_PSK, ptk->kck, ptk_step3));
+	assert(eapol_verify_mic(IE_RSN_AKM_SUITE_PSK, ptk, ptk_step3, 16));
 
 	decrypted_key_data = eapol_decrypt_key_data(IE_RSN_AKM_SUITE_PSK,
-						ptk->kek, ptk_step3,
-						&decrypted_key_data_len);
+						ptk + 16, ptk_step3,
+						&decrypted_key_data_len, 16);
 	assert(decrypted_key_data[0] == 48);  // RSNE
 	l_free(decrypted_key_data);
 
 	ptk_step4 = eapol_key_validate(eapol_key_data_10,
-					sizeof(eapol_key_data_10));
+					sizeof(eapol_key_data_10), 16);
 	assert(ptk_step4);
 	assert(eapol_verify_ptk_4_of_4(ptk_step4, false));
 
 	frame = eapol_create_ptk_4_of_4(EAPOL_PROTOCOL_VERSION_2004,
 				EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES,
-				eapol_key_test_10.key_replay_counter, false);
+				eapol_key_test_10.key_replay_counter,
+				false, 16);
 	assert(frame);
-	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk->kck, frame, mic));
-	memcpy(frame->key_mic_data, mic, sizeof(mic));
+	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk, frame,
+					mic, 16));
+	memcpy(EAPOL_KEY_MIC(frame), mic, sizeof(mic));
 	assert(!memcmp(frame, eapol_key_data_10, sizeof(eapol_key_data_10)));
 	l_free(frame);
 
 	gtk_step1 = eapol_key_validate(eapol_key_data_11,
-					sizeof(eapol_key_data_11));
+					sizeof(eapol_key_data_11), 16);
 	assert(gtk_step1);
 	assert(eapol_verify_gtk_1_of_2(gtk_step1, false));
 
 	decrypted_key_data = eapol_decrypt_key_data(IE_RSN_AKM_SUITE_PSK,
-						ptk->kek, gtk_step1,
-						&decrypted_key_data_len);
+						ptk + 16, gtk_step1,
+						&decrypted_key_data_len, 16);
 	assert(decrypted_key_data[0] == 221);  /* GTK KDE */
 	assert(decrypted_key_data[2] == 0x00);
 	assert(decrypted_key_data[3] == 0x0f);
@@ -1924,16 +1928,18 @@ static void eapol_wpa2_handshake_test(const void *data)
 	l_free(decrypted_key_data);
 
 	gtk_step2 = eapol_key_validate(eapol_key_data_12,
-					sizeof(eapol_key_data_12));
+					sizeof(eapol_key_data_12), 16);
 	assert(gtk_step2);
 	assert(eapol_verify_gtk_2_of_2(gtk_step2, false));
 
 	frame = eapol_create_gtk_2_of_2(EAPOL_PROTOCOL_VERSION_2004,
 				EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES,
-				eapol_key_test_12.key_replay_counter, false, 0);
+				eapol_key_test_12.key_replay_counter,
+				false, 0, 16);
 	assert(frame);
-	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk->kck, frame, mic));
-	memcpy(frame->key_mic_data, mic, sizeof(mic));
+	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk, frame,
+					mic, 16));
+	memcpy(EAPOL_KEY_MIC(frame), mic, sizeof(mic));
 	assert(!memcmp(frame, eapol_key_data_12, sizeof(eapol_key_data_12)));
 	l_free(frame);
 
@@ -1956,7 +1962,7 @@ static void eapol_wpa_handshake_test(const void *data)
 		0xed, 0xab, 0x8e, 0xe1, 0x2e, 0x94, 0xbf, 0xc2,
 		0x4b, 0x33, 0x57, 0xad, 0x04, 0x96, 0x65, 0xd9 };
 	unsigned char psk[32];
-	struct crypto_ptk *ptk;
+	uint8_t *ptk;
 	size_t ptk_len;
 	bool ret;
 	const struct eapol_key *ptk_step1;
@@ -1969,13 +1975,13 @@ static void eapol_wpa_handshake_test(const void *data)
 	size_t decrypted_key_data_len;
 
 	ptk_step1 = eapol_key_validate(eapol_key_data_13,
-					sizeof(eapol_key_data_13));
+					sizeof(eapol_key_data_13), 16);
 	assert(ptk_step1);
-	assert(eapol_verify_ptk_1_of_4(ptk_step1));
+	assert(eapol_verify_ptk_1_of_4(ptk_step1, 16));
 	memcpy(anonce, ptk_step1->key_nonce, sizeof(ptk_step1->key_nonce));
 
 	ptk_step2 = eapol_key_validate(eapol_key_data_14,
-					sizeof(eapol_key_data_14));
+					sizeof(eapol_key_data_14), 16);
 	assert(ptk_step2);
 	assert(eapol_verify_ptk_2_of_4(ptk_step2));
 	memcpy(snonce, ptk_step2->key_nonce, sizeof(ptk_step2->key_nonce));
@@ -1984,75 +1990,78 @@ static void eapol_wpa_handshake_test(const void *data)
 						strlen(ssid), psk));
 	assert(!memcmp(expected_psk, psk, sizeof(psk)));
 
-	ptk_len = sizeof(struct crypto_ptk) +
-			crypto_cipher_key_len(CRYPTO_CIPHER_TKIP);
+	ptk_len = 32 + crypto_cipher_key_len(CRYPTO_CIPHER_TKIP);
 	ptk = l_malloc(ptk_len);
-	ret = crypto_derive_pairwise_ptk(psk, aa, spa, anonce, snonce,
-						ptk, ptk_len, false);
+	ret = crypto_derive_pairwise_ptk(psk, sizeof(psk), aa, spa, anonce,
+						snonce, ptk, ptk_len,
+						false);
 	assert(ret);
 
 	frame = eapol_create_ptk_2_of_4(EAPOL_PROTOCOL_VERSION_2004,
 				EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4,
 				eapol_key_test_14.key_replay_counter,
 				snonce, eapol_key_test_14.key_data_len,
-				eapol_key_data_14 + sizeof(struct eapol_key),
-				true);
+				eapol_key_data_14 + EAPOL_FRAME_LEN(16),
+				true, 16);
 	assert(frame);
-	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk->kck, frame, mic));
-	memcpy(frame->key_mic_data, mic, sizeof(mic));
+	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk, frame,
+					mic, 16));
+	memcpy(EAPOL_KEY_MIC(frame), mic, sizeof(mic));
 	assert(!memcmp(frame, eapol_key_data_14, sizeof(eapol_key_data_14)));
 	l_free(frame);
 
 	ptk_step3 = eapol_key_validate(eapol_key_data_15,
-					sizeof(eapol_key_data_15));
+					sizeof(eapol_key_data_15), 16);
 	assert(ptk_step3);
 	assert(eapol_verify_ptk_3_of_4(ptk_step3, true));
 	assert(!memcmp(anonce, ptk_step3->key_nonce,
 				sizeof(ptk_step3->key_nonce)));
 
-	assert(eapol_verify_mic(IE_RSN_AKM_SUITE_PSK, ptk->kck, ptk_step3));
+	assert(eapol_verify_mic(IE_RSN_AKM_SUITE_PSK, ptk, ptk_step3, 16));
 
-	assert(ptk_step3->key_data[0] == IE_TYPE_VENDOR_SPECIFIC);
-	assert(is_ie_wpa_ie(ptk_step3->key_data + 2,
-				ptk_step3->key_data_len - 2));
+	assert(EAPOL_KEY_DATA(ptk_step3, 16)[0] == IE_TYPE_VENDOR_SPECIFIC);
+	assert(is_ie_wpa_ie(EAPOL_KEY_DATA(ptk_step3, 16) + 2,
+				EAPOL_KEY_DATA_LEN(ptk_step3, 16) - 2));
 
 	ptk_step4 = eapol_key_validate(eapol_key_data_16,
-					sizeof(eapol_key_data_16));
+					sizeof(eapol_key_data_16), 16);
 	assert(ptk_step4);
 	assert(eapol_verify_ptk_4_of_4(ptk_step4, true));
 
 	frame = eapol_create_ptk_4_of_4(EAPOL_PROTOCOL_VERSION_2004,
 				EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4,
-				eapol_key_test_16.key_replay_counter, true);
+				eapol_key_test_16.key_replay_counter, true, 16);
 	assert(frame);
-	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk->kck, frame, mic));
-	memcpy(frame->key_mic_data, mic, sizeof(mic));
+	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk, frame,
+					mic, 16));
+	memcpy(EAPOL_KEY_MIC(frame), mic, sizeof(mic));
 	assert(!memcmp(frame, eapol_key_data_16, sizeof(eapol_key_data_16)));
 	l_free(frame);
 
 	gtk_step1 = eapol_key_validate(eapol_key_data_17,
-					sizeof(eapol_key_data_17));
+					sizeof(eapol_key_data_17), 16);
 	assert(gtk_step1);
 	assert(eapol_verify_gtk_1_of_2(gtk_step1, true));
 
 	decrypted_key_data = eapol_decrypt_key_data(IE_RSN_AKM_SUITE_PSK,
-						ptk->kek, gtk_step1,
-						&decrypted_key_data_len);
+						ptk + 16, gtk_step1,
+						&decrypted_key_data_len, 16);
 	assert(decrypted_key_data_len == 32);
 	l_free(decrypted_key_data);
 
 	gtk_step2 = eapol_key_validate(eapol_key_data_18,
-					sizeof(eapol_key_data_18));
+					sizeof(eapol_key_data_18), 16);
 	assert(gtk_step2);
 	assert(eapol_verify_gtk_2_of_2(gtk_step2, true));
 
 	frame = eapol_create_gtk_2_of_2(EAPOL_PROTOCOL_VERSION_2004,
 				EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4,
 				eapol_key_test_18.key_replay_counter, true,
-				gtk_step1->wpa_key_id);
+				gtk_step1->wpa_key_id, 16);
 	assert(frame);
-	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk->kck, frame, mic));
-	memcpy(frame->key_mic_data, mic, sizeof(mic));
+	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk, frame,
+					mic, 16));
+	memcpy(EAPOL_KEY_MIC(frame), mic, sizeof(mic));
 	assert(!memcmp(frame, eapol_key_data_18, sizeof(eapol_key_data_18)));
 	l_free(frame);
 
@@ -2065,8 +2074,7 @@ static int verify_step2(uint32_t ifindex,
 			void *user_data)
 {
 	const struct eapol_key *ek = (const struct eapol_key *) ef;
-	size_t ek_len = sizeof(struct eapol_key) +
-				L_BE16_TO_CPU(ek->key_data_len);
+	size_t ek_len = EAPOL_FRAME_LEN(16) + EAPOL_KEY_DATA_LEN(ek, 16);
 
 	assert(ifindex == 1);
 	assert(proto == ETH_P_PAE);
@@ -2085,8 +2093,7 @@ static int verify_step4(uint32_t ifindex,
 			void *user_data)
 {
 	const struct eapol_key *ek = (const struct eapol_key *) ef;
-	size_t ek_len = sizeof(struct eapol_key) +
-				L_BE16_TO_CPU(ek->key_data_len);
+	size_t ek_len = EAPOL_FRAME_LEN(16) + EAPOL_KEY_DATA_LEN(ek, 16);
 
 	assert(ifindex == 1);
 	assert(!memcmp(aa_addr, aa, 6));
@@ -2105,8 +2112,7 @@ static int verify_step2_gtk(uint32_t ifindex,
 				void *user_data)
 {
 	const struct eapol_key *ek = (const struct eapol_key *) ef;
-	size_t ek_len = sizeof(struct eapol_key) +
-				L_BE16_TO_CPU(ek->key_data_len);
+	size_t ek_len = EAPOL_FRAME_LEN(16) + EAPOL_KEY_DATA_LEN(ek, 16);
 
 	assert(ifindex == 1);
 	assert(!memcmp(aa_addr, aa, 6));
@@ -2170,7 +2176,7 @@ static void eapol_sm_test_ptk(const void *data)
 	handshake_state_set_supplicant_address(hs, spa);
 
 	r =  handshake_state_set_supplicant_rsn(hs,
-				eapol_key_data_4 + sizeof(struct eapol_key));
+				eapol_key_data_4 + EAPOL_FRAME_LEN(16));
 	assert(r);
 
 	handshake_state_set_authenticator_rsn(hs, ap_rsne);
@@ -2234,7 +2240,7 @@ static void eapol_sm_test_igtk(const void *data)
 	handshake_state_set_supplicant_address(hs, spa);
 
 	r =  handshake_state_set_supplicant_rsn(hs,
-				eapol_key_data_30 + sizeof(struct eapol_key));
+				eapol_key_data_30 + EAPOL_FRAME_LEN(16));
 	assert(r);
 
 	handshake_state_set_authenticator_rsn(hs, ap_rsne);
@@ -2298,7 +2304,7 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 	handshake_state_set_supplicant_address(hs, spa);
 
 	r = handshake_state_set_supplicant_rsn(hs,
-				eapol_key_data_8 + sizeof(struct eapol_key));
+				eapol_key_data_8 + EAPOL_FRAME_LEN(16));
 	assert(r);
 
 	handshake_state_set_authenticator_rsn(hs, ap_rsne);
@@ -2365,7 +2371,7 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 	handshake_state_set_authenticator_address(hs, ap_address);
 	handshake_state_set_supplicant_address(hs, sta_address);
 	r = handshake_state_set_supplicant_wpa(hs,
-				eapol_key_data_14 + sizeof(struct eapol_key));
+				eapol_key_data_14 + EAPOL_FRAME_LEN(16));
 	assert(r);
 
 	handshake_state_set_authenticator_wpa(hs, ap_wpa_ie);
@@ -2433,7 +2439,7 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 	handshake_state_set_supplicant_address(hs, sta_address);
 
 	r = handshake_state_set_supplicant_wpa(hs,
-				eapol_key_data_20 + sizeof(struct eapol_key));
+				eapol_key_data_20 + EAPOL_FRAME_LEN(16));
 	assert(r);
 
 	handshake_state_set_authenticator_wpa(hs, ap_wpa_ie);
@@ -2487,20 +2493,20 @@ static void verify_install_gtk(struct handshake_state *hs, uint8_t key_index,
 
 static inline size_t EKL(const struct eapol_key *frame)
 {
-	return sizeof(*frame) + L_BE16_TO_CPU(frame->key_data_len);
+	return EAPOL_FRAME_LEN(16) + EAPOL_KEY_DATA_LEN(frame, 16);
 }
 
 static struct eapol_key *UPDATED_REPLAY_COUNTER(const struct eapol_key *frame,
 							uint64_t replay_counter,
-							struct crypto_ptk *ptk)
+							uint8_t *ptk)
 {
 	struct eapol_key *ret = l_memdup(frame, EKL(frame));
 	uint8_t mic[16];
 
 	ret->key_replay_counter = L_CPU_TO_BE64(replay_counter);
-	memset(ret->key_mic_data, 0, sizeof(ret->key_mic_data));
-	eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk->kck, ret, mic);
-	memcpy(ret->key_mic_data, mic, sizeof(mic));
+	memset(EAPOL_KEY_MIC(ret), 0, 16);
+	eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk, ret, mic, 16);
+	memcpy(EAPOL_KEY_MIC(ret), mic, sizeof(mic));
 
 	return ret;
 }
@@ -2517,7 +2523,7 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 		0x01, 0x00, 0x00, 0x0f, 0xac, 0x04, 0x01, 0x00,
 		0x00, 0x0f, 0xac, 0x02 };
 	uint8_t new_snonce[32];
-	struct crypto_ptk *ptk;
+	uint8_t *ptk;
 	size_t ptk_len;
 	struct eapol_key *expect;
 	struct eapol_key *retransmit;
@@ -2548,18 +2554,18 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 	handshake_state_set_supplicant_address(hs, sta_address);
 
 	r = handshake_state_set_supplicant_rsn(hs,
-				eapol_key_data_8 + sizeof(struct eapol_key));
+				eapol_key_data_8 + EAPOL_FRAME_LEN(16));
 	assert(r);
 
 	handshake_state_set_authenticator_rsn(hs, ap_rsne);
 	eapol_start(sm);
 
 	ptk_step1 = eapol_key_validate(eapol_key_data_7,
-					sizeof(eapol_key_data_7));
+					sizeof(eapol_key_data_7), 16);
 	assert(ptk_step1);
 
 	ptk_step2 = eapol_key_validate(eapol_key_data_8,
-					sizeof(eapol_key_data_8));
+					sizeof(eapol_key_data_8), 16);
 	assert(ptk_step2);
 
 	replay_counter = L_BE64_TO_CPU(ptk_step1->key_replay_counter);
@@ -2568,10 +2574,9 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 	__handshake_set_install_tk_func(verify_install_tk);
 	__handshake_set_install_gtk_func(verify_install_gtk);
 
-	ptk_len = sizeof(struct crypto_ptk) +
-			crypto_cipher_key_len(CRYPTO_CIPHER_CCMP);
+	ptk_len = 32 + crypto_cipher_key_len(CRYPTO_CIPHER_CCMP);
 	ptk = l_malloc(ptk_len);
-	assert(crypto_derive_pairwise_ptk(psk, aa, spa,
+	assert(crypto_derive_pairwise_ptk(psk, sizeof(psk), aa, spa,
 						ptk_step1->key_nonce,
 						ptk_step2->key_nonce,
 						ptk, ptk_len, false));
@@ -2619,11 +2624,11 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 	l_free(retransmit);
 
 	ptk_step3 = eapol_key_validate(eapol_key_data_9,
-					sizeof(eapol_key_data_9));
+					sizeof(eapol_key_data_9), 16);
 	assert(ptk_step3);
 
 	ptk_step4 = eapol_key_validate(eapol_key_data_10,
-					sizeof(eapol_key_data_10));
+					sizeof(eapol_key_data_10), 16);
 	assert(ptk_step4);
 
 	verify_install_tk_called = false;
@@ -2659,11 +2664,11 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 	l_free(retransmit);
 
 	gtk_step1 = eapol_key_validate(eapol_key_data_11,
-					sizeof(eapol_key_data_11));
+					sizeof(eapol_key_data_11), 16);
 	assert(gtk_step1);
 
 	gtk_step2 = eapol_key_validate(eapol_key_data_12,
-					sizeof(eapol_key_data_12));
+					sizeof(eapol_key_data_12), 16);
 	assert(gtk_step2);
 
 	/*
@@ -2888,7 +2893,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	uint8_t step1_buf[256], step2_buf[256], step3_buf[256], step4_buf[256];
 	struct eapol_key *step1, *step2, *step3, *step4;
 	uint8_t ptk_buf[64];
-	struct crypto_ptk *ptk;
+	uint8_t *ptk;
 
 	aa = ap_address;
 	spa = sta_address;
@@ -3031,33 +3036,37 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 
 	memcpy(step1_buf, eapol_key_data_13, sizeof(eapol_key_data_13));
 	step1 = (struct eapol_key *)
-		eapol_key_validate(step1_buf, sizeof(eapol_key_data_13));
+		eapol_key_validate(step1_buf, sizeof(eapol_key_data_13), 16);
 
 	memcpy(step2_buf, eapol_key_data_14, sizeof(eapol_key_data_14));
 	step2 = (struct eapol_key *)
-		eapol_key_validate(step2_buf, sizeof(eapol_key_data_14));
+		eapol_key_validate(step2_buf, sizeof(eapol_key_data_14), 16);
 
 	memcpy(step3_buf, eapol_key_data_15, sizeof(eapol_key_data_15));
 	step3 = (struct eapol_key *)
-		eapol_key_validate(step3_buf, sizeof(eapol_key_data_15));
+		eapol_key_validate(step3_buf, sizeof(eapol_key_data_15), 16);
 
 	memcpy(step4_buf, eapol_key_data_16, sizeof(eapol_key_data_16));
 	step4 = (struct eapol_key *)
-		eapol_key_validate(step4_buf, sizeof(eapol_key_data_16));
+		eapol_key_validate(step4_buf, sizeof(eapol_key_data_16), 16);
 
-	ptk = (struct crypto_ptk *) ptk_buf;
-	crypto_derive_pairwise_ptk(s->pmk, sta_address, ap_address,
-					step1->key_nonce, step2->key_nonce,
-					ptk, 64, false);
+	ptk = ptk_buf;
+	crypto_derive_pairwise_ptk(s->pmk, sizeof(s->pmk), sta_address,
+					ap_address, step1->key_nonce,
+					step2->key_nonce, ptk, 64,
+					false);
 
-	memset(step2->key_mic_data, 0, 16);
-	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk->kck, step2, step2->key_mic_data));
+	memset(EAPOL_KEY_MIC(step2), 0, 16);
+	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk, step2,
+					EAPOL_KEY_MIC(step2), 16));
 
-	memset(step3->key_mic_data, 0, 16);
-	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk->kck, step3, step3->key_mic_data));
+	memset(EAPOL_KEY_MIC(step3), 0, 16);
+	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk, step3,
+					EAPOL_KEY_MIC(step3), 16));
 
-	memset(step4->key_mic_data, 0, 16);
-	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk->kck, step4, step4->key_mic_data));
+	memset(EAPOL_KEY_MIC(step4), 0, 16);
+	assert(eapol_calculate_mic(IE_RSN_AKM_SUITE_PSK, ptk, step4,
+					EAPOL_KEY_MIC(step4), 16));
 
 	snonce = step2->key_nonce;
 
@@ -3078,7 +3087,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	__eapol_set_tx_packet_func(verify_step4);
 	__handshake_set_install_tk_func(verify_install_tk);
 	ths = container_of(hs, struct test_handshake_state, super);
-	ths->tk = ptk->tk;
+	ths->tk = ptk + 16 + 16;
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
 				step3_buf, sizeof(eapol_key_data_15), false);
 	assert(verify_step4_called);
