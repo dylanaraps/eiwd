@@ -3839,8 +3839,36 @@ static void print_attributes(int indent, const struct attr_entry *table,
 
 static void print_eapol_key(const void *data, uint32_t size)
 {
-	const struct eapol_key *ek = eapol_key_validate(data, size, 16);
+	const struct eapol_key *ek = (struct eapol_key *)data;
+	size_t mic_lengths[] = { 16, 24, 32 };
+	size_t mic_len = 0;
+	int i;
 
+	/*
+	 * The MIC length is not encoded anywhere in the frame, and should be
+	 * determined by AKM. To even further complicate things, some non
+	 * 802.11 AKMs define their own MIC lengths. But since the only valid
+	 * lengths are 16, 24 and 32 its trivial to try each until we find a
+	 * matching length.
+	 */
+	for (i = 0; i < 3; i++) {
+		size_t mlen = mic_lengths[i];
+
+		if (size < EAPOL_FRAME_LEN(mlen))
+			break;
+
+		if (size == EAPOL_FRAME_LEN(mlen) +
+				EAPOL_KEY_DATA_LEN(ek, mlen)) {
+			mic_len = mlen;
+			break;
+		}
+	}
+
+	/* could not determine MIC length, malformed packet? */
+	if (!mic_len)
+		return;
+
+	ek = eapol_key_validate(data, size, mic_len);
 	if (!ek)
 		return;
 
@@ -3871,17 +3899,21 @@ static void print_eapol_key(const void *data, uint32_t size)
 	print_hexdump(2, ek->eapol_key_iv, 16);
 	print_attr(1, "Key RSC ");
 	print_hexdump(2, ek->key_rsc, 8);
+
 	print_attr(1, "Key MIC Data");
-	print_hexdump(2, EAPOL_KEY_MIC(ek), 16);
+
+	print_hexdump(2, EAPOL_KEY_MIC(ek), mic_len);
 
 	if (ek->encrypted_key_data) {
-		print_attr(1, "Key Data: len %d", EAPOL_KEY_DATA_LEN(ek, 16));
-		print_hexdump(2, EAPOL_KEY_DATA(ek, 16),
-					EAPOL_KEY_DATA_LEN(ek, 16));
+		print_attr(1, "Key Data: len %d",
+					EAPOL_KEY_DATA_LEN(ek, mic_len));
+		print_hexdump(2, EAPOL_KEY_DATA(ek, mic_len),
+				EAPOL_KEY_DATA_LEN(ek, mic_len));
 		return;
 	}
 
-	print_ie(1, "Key Data", ek->key_data, EAPOL_KEY_DATA_LEN(ek, 16));
+	print_ie(1, "Key Data", EAPOL_KEY_DATA(ek, mic_len),
+			EAPOL_KEY_DATA_LEN(ek, mic_len));
 }
 
 static void netlink_str(char *str, size_t size,
