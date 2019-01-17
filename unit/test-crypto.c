@@ -307,29 +307,28 @@ static const struct ptk_data ptk_test_4 = {
 static void ptk_test(const void *data)
 {
 	const struct ptk_data *test = data;
-	struct crypto_ptk *ptk;
+	uint8_t *ptk;
 	size_t ptk_len;
 	bool ret;
 
-	ptk_len = sizeof(struct crypto_ptk) +
-			crypto_cipher_key_len(test->cipher);
+	ptk_len = 32 + crypto_cipher_key_len(test->cipher);
 
 	ptk = l_malloc(ptk_len);
 
-	ret = crypto_derive_pairwise_ptk(test->pmk, test->aa, test->spa,
-					test->anonce, test->snonce,
+	ret = crypto_derive_pairwise_ptk(test->pmk, 32, test->aa,
+					test->spa, test->anonce, test->snonce,
 					ptk, ptk_len, false);
 
 	assert(ret);
 
 	if (test->kck)
-		assert(!memcmp(test->kck, ptk->kck, sizeof(ptk->kck)));
+		assert(!memcmp(test->kck, ptk, 16));
 
 	if (test->kek)
-		assert(!memcmp(test->kek, ptk->kek, sizeof(ptk->kek)));
+		assert(!memcmp(test->kek, ptk + 16, 16));
 
 	if (test->tk)
-		assert(!memcmp(test->tk, ptk->tk,
+		assert(!memcmp(test->tk, ptk + 32,
 				crypto_cipher_key_len(test->cipher)));
 
 	l_free(ptk);
@@ -358,10 +357,10 @@ static void aes_wrap_test(const void *data)
 	assert(!memcmp(buf, ciphertext, sizeof(ciphertext)));
 
 	buf[10] = 10;
-	assert(!aes_unwrap(kek, buf, sizeof(ciphertext), buf));
+	assert(!aes_unwrap(kek, 16, buf, sizeof(ciphertext), buf));
 
 	memcpy(buf, ciphertext, sizeof(ciphertext));
-	assert(aes_unwrap(kek, buf, sizeof(ciphertext), buf));
+	assert(aes_unwrap(kek, 16, buf, sizeof(ciphertext), buf));
 	assert(!memcmp(buf, key_data, sizeof(key_data)));
 }
 
