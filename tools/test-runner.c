@@ -1635,6 +1635,7 @@ static void set_config_cycle_info(const char *config_dir_path,
 	struct test_stats *test_stats;
 
 	memset(sep_line, '_', sizeof(sep_line) - 1);
+	sep_line[sizeof(sep_line) - 1] = '\0';
 
 	config_name_ptr = strrchr(config_dir_path, '/');
 	config_name_ptr++;
