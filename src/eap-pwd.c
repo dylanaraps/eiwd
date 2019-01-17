@@ -293,7 +293,7 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 
 	while (counter < 20) {
 		/* pwd-seed = H(token|peer-ID|server-ID|password|counter) */
-		hkdf_extract_sha256(NULL, 0, 5, pwd_seed, &token, 4,
+		hkdf_extract(L_CHECKSUM_SHA256, NULL, 0, 5, pwd_seed, &token, 4,
 				pwd->identity, strlen(pwd->identity), pkt + 9,
 				len - 9, pwd->password, strlen(pwd->password),
 				&counter, 1);
@@ -488,13 +488,14 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 	 * compute Confirm_P = H(kp | Element_P | Scalar_P |
 	 *                       Element_S | Scalar_S | Ciphersuite)
 	 */
-	hkdf_extract_sha256(NULL, 0, 6, confirm_p, kpx, clen, element_p, plen,
-				scalar_p, clen, element_s, plen, scalar_s,
-				clen, &pwd->ciphersuite, 4);
+	hkdf_extract(L_CHECKSUM_SHA256, NULL, 0, 6, confirm_p, kpx, clen,
+				element_p, plen, scalar_p, clen, element_s,
+				plen, scalar_s, clen, &pwd->ciphersuite, 4);
 
-	hkdf_extract_sha256(NULL, 0, 6, expected_confirm_s, kpx, clen,
-				element_s, plen, scalar_s, clen, element_p,
-				plen, scalar_p, clen, &pwd->ciphersuite, 4);
+	hkdf_extract(L_CHECKSUM_SHA256, NULL, 0, 6, expected_confirm_s, kpx,
+				clen, element_s, plen, scalar_s, clen,
+				element_p, plen, scalar_p, clen,
+				&pwd->ciphersuite, 4);
 
 	if (memcmp(confirm_s, expected_confirm_s, 32)) {
 		l_error("Confirm_S did not verify");
@@ -507,7 +508,7 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 	pos += 32;
 
 	/* derive MK = H(kp | Confirm_P | Confirm_S ) */
-	hkdf_extract_sha256(NULL, 0, 3, mk, kpx, clen, confirm_p,
+	hkdf_extract(L_CHECKSUM_SHA256, NULL, 0, 3, mk, kpx, clen, confirm_p,
 			32, confirm_s, 32);
 
 	eap_pwd_send_response(eap, resp, pos - resp);
@@ -515,8 +516,8 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 	eap_method_success(eap);
 
 	session_id[0] = 52;
-	hkdf_extract_sha256(NULL, 0, 3, session_id + 1, &pwd->ciphersuite, 4,
-			scalar_p, clen, scalar_s, clen);
+	hkdf_extract(L_CHECKSUM_SHA256, NULL, 0, 3, session_id + 1,
+			&pwd->ciphersuite, 4, scalar_p, clen, scalar_s, clen);
 
 	kdf(mk, 32, (const char *) session_id, 33, msk_emsk, 128);
 	eap_set_key_material(eap, msk_emsk, 64, msk_emsk + 64, 64, NULL, 0);

@@ -157,11 +157,11 @@ static bool owe_compute_keys(struct owe_sm *owe, const void *public_key,
 	l_put_le16(OWE_DEFAULT_GROUP, key + 64);
 
 	/* prk = HKDF-extract(C | A | group, z) */
-	if (!hkdf_extract_sha256(key, 66, 1, prk, ss_buf, 32))
+	if (!hkdf_extract(L_CHECKSUM_SHA256, key, 66, 1, prk, ss_buf, 32))
 		goto failed;
 
 	/* PMK = HKDF-expand(prk, "OWE Key Generation", n) */
-	if (!hkdf_expand_sha256(prk, 32, "OWE Key Generation",
+	if (!hkdf_expand(L_CHECKSUM_SHA256, prk, 32, "OWE Key Generation",
 				strlen("OWE Key Generation"), pmk, 32))
 		goto failed;
 

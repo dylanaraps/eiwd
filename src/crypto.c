@@ -418,19 +418,24 @@ bool kdf_sha256(const void *key, size_t key_len,
  *
  * Null key equates to a zero key (makes calls in EAP-PWD more convenient)
  */
-bool hkdf_extract_sha256(const uint8_t *key, size_t key_len, uint8_t num_args,
-			uint8_t *out, ...)
+bool hkdf_extract(enum l_checksum_type type, const uint8_t *key,
+				size_t key_len, uint8_t num_args,
+				uint8_t *out, ...)
 {
 	struct l_checksum *hmac;
 	struct iovec iov[num_args];
-	const uint8_t zero_key[32] = { 0 };
+	const uint8_t zero_key[64] = { 0 };
+	size_t dlen = l_checksum_digest_length(type);
 	const uint8_t *k = key ? key : zero_key;
-	size_t k_len = key ? key_len : 32;
+	size_t k_len = key ? key_len : dlen;
 	va_list va;
 	int i;
 	int ret;
 
-	hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, k, k_len);
+	if (dlen <= 0)
+		return false;
+
+	hmac = l_checksum_new_hmac(type, k, k_len);
 	if (!hmac)
 		return false;
 
@@ -446,27 +451,32 @@ bool hkdf_extract_sha256(const uint8_t *key, size_t key_len, uint8_t num_args,
 		return false;
 	}
 
-	ret = l_checksum_get_digest(hmac, out, 32);
+	ret = l_checksum_get_digest(hmac, out, dlen);
 	l_checksum_free(hmac);
 
 	va_end(va);
-	return (ret == 32);
+	return (ret == (int) dlen);
 }
 
-bool hkdf_expand_sha256(const uint8_t *key, size_t key_len, const char *info,
-			size_t info_len, void *out, size_t out_len)
+bool hkdf_expand(enum l_checksum_type type, const uint8_t *key, size_t key_len,
+			const char *info, size_t info_len, void *out,
+			size_t out_len)
 {
-	uint8_t t[32];
+	uint8_t t[64];
 	size_t t_len = 0;
 	struct iovec iov[3];
 	struct l_checksum *hmac;
 	uint8_t count = 1;
 	uint8_t *out_ptr = out;
+	size_t dlen = l_checksum_digest_length(type);
+
+	if (dlen <= 0)
+		return false;
 
 	while (out_len > 0) {
 		ssize_t ret;
 
-		hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, key, key_len);
+		hmac = l_checksum_new_hmac(type, key, key_len);
 
 		iov[0].iov_base = t;
 		iov[0].iov_len = t_len;
@@ -481,7 +491,7 @@ bool hkdf_expand_sha256(const uint8_t *key, size_t key_len, const char *info,
 		}
 
 		ret = l_checksum_get_digest(hmac, t,
-						(out_len > 32) ? 32 : out_len);
+					(out_len > dlen) ? dlen : out_len);
 		if (ret < 0) {
 			l_checksum_free(hmac);
 			return false;
@@ -495,7 +505,7 @@ bool hkdf_expand_sha256(const uint8_t *key, size_t key_len, const char *info,
 		 * RFC specifies that T(0) = empty string, so after the first
 		 * iteration we update the length for T(1)...T(N)
 		 */
-		t_len = 32;
+		t_len = dlen;
 		count++;
 
 		l_checksum_free(hmac);
