@@ -1830,6 +1830,19 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 	return;
 
 error:
+	/*
+	 * RFC 8110 Section 4.3 - OWE Association
+	 * A client that receives an 802.11 association response with a status
+	 * code of seventy-seven SHOULD retry OWE with a different supported
+	 * group...
+	 *
+	 * Note: OWE (should have) received this already in an associate
+	 * response and will handle it.
+	 */
+	if (netdev->owe && *status_code ==
+				MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP)
+		return;
+
 	netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
 	netdev_connect_failed(NULL, netdev);
 }
