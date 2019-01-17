@@ -560,13 +560,13 @@ static bool crypto_derive_ptk(const uint8_t *pmk, size_t pmk_len,
 					data, sizeof(data), out_ptk, ptk_len);
 }
 
-bool crypto_derive_pairwise_ptk(const uint8_t *pmk,
+bool crypto_derive_pairwise_ptk(const uint8_t *pmk, size_t pmk_len,
 				const uint8_t *addr1, const uint8_t *addr2,
 				const uint8_t *nonce1, const uint8_t *nonce2,
 				uint8_t *out_ptk, size_t ptk_len,
 				bool use_sha256)
 {
-	return crypto_derive_ptk(pmk, 32, "Pairwise key expansion",
+	return crypto_derive_ptk(pmk, pmk_len, "Pairwise key expansion",
 					addr1, addr2, nonce1, nonce2,
 					out_ptk, ptk_len,
 					use_sha256);

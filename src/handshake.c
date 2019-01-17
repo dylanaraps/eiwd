@@ -386,7 +386,7 @@ bool handshake_state_derive_ptk(struct handshake_state *s)
 						s->ptk, ptk_size, ptk_name))
 			return false;
 	} else
-		if (!crypto_derive_pairwise_ptk(s->pmk, s->spa,
+		if (!crypto_derive_pairwise_ptk(s->pmk, s->pmk_len, s->spa,
 						s->aa, s->anonce, s->snonce,
 						s->ptk, ptk_size, use_sha256))
 			return false;

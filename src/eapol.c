@@ -1262,6 +1262,7 @@ static void eapol_handle_ptk_2_of_4(struct eapol_sm *sm,
 	ptk_size = handshake_state_get_ptk_size(sm->handshake);
 
 	if (!crypto_derive_pairwise_ptk(sm->handshake->pmk,
+					sm->handshake->pmk_len,
 					sm->handshake->spa, aa,
 					sm->handshake->anonce, ek->key_nonce,
 					sm->handshake->ptk, ptk_size, false))
