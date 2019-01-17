@@ -1257,7 +1257,7 @@ done:
 static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 		const char *ext_options)
 {
-	char *argv[12];
+	char *argv[13];
 	char *iwd_phys = NULL;
 	pid_t ret;
 	int idx = 0;
@@ -1265,6 +1265,7 @@ static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 	if (valgrind) {
 		argv[idx++] = "valgrind";
 		argv[idx++] = "--leak-check=full";
+		argv[idx++] = "--log-file=/tmp/valgrind.log";
 	}
 
 	if (strcmp(gdb_opt, "iwd") == 0) {
@@ -1840,6 +1841,10 @@ static void create_network_and_run_tests(const void *key, void *value,
 	/* Script has responsibility to cleanup any iwd instances it started */
 	if (iwd_pid > 0)
 		terminate_iwd(iwd_pid);
+
+	if (valgrind)
+		if (system("cat /tmp/valgrind.log"))
+			l_info("cat /tmp/valgrind.log failed");
 
 	if (ofono_req) {
 		loopback_started = false;

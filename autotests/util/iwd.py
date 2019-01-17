@@ -851,6 +851,7 @@ class IWD(AsyncOpAbstract):
             if os.environ.get('IWD_TEST_VALGRIND', None) == 'on':
                     args.append('valgrind')
                     args.append('--leak-check=full')
+                    args.append('--log-file=/tmp/valgrind.log')
 
             args.append('iwd')
             args.append('-c')
