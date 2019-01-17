@@ -130,8 +130,28 @@ bool eapol_verify_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
 			checksum = l_checksum_new_cmac_aes(kck, 16);
 			break;
 		case IE_RSN_AKM_SUITE_OWE:
-			checksum = l_checksum_new_hmac(L_CHECKSUM_SHA256,
-								kck, 16);
+			switch (mic_len) {
+			case 16:
+				checksum = l_checksum_new_hmac(
+							L_CHECKSUM_SHA256,
+							kck, 16);
+				break;
+			case 24:
+				checksum = l_checksum_new_hmac(
+							L_CHECKSUM_SHA384,
+							kck, 24);
+				break;
+			case 32:
+				checksum = l_checksum_new_hmac(
+							L_CHECKSUM_SHA512,
+							kck, 32);
+				break;
+			default:
+				l_error("Invalid MIC length of %zu for OWE",
+						mic_len);
+				return false;
+			}
+
 			break;
 		default:
 			return false;
@@ -158,12 +178,24 @@ bool eapol_verify_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
 /*
  * IEEE 802.11 Table 12-8 -- Integrity and key-wrap algorithms
  */
-static size_t eapol_get_mic_length(enum ie_rsn_akm_suite akm)
+static size_t eapol_get_mic_length(enum ie_rsn_akm_suite akm, size_t pmk_len)
 {
 	switch (akm) {
 	case IE_RSN_AKM_SUITE_8021X_SUITE_B_SHA384:
 	case IE_RSN_AKM_SUITE_FT_OVER_8021X_SHA384:
 		return 24;
+	case IE_RSN_AKM_SUITE_OWE:
+		switch (pmk_len) {
+		case 32:
+			return 16;
+		case 48:
+			return 24;
+		case 64:
+			return 32;
+		default:
+			l_error("Invalid PMK length of %zu for OWE", pmk_len);
+			return 0;
+		}
 	default:
 		return 16;
 	}
@@ -177,6 +209,7 @@ uint8_t *eapol_decrypt_key_data(enum ie_rsn_akm_suite akm, const uint8_t *kek,
 	const uint8_t *key_data = EAPOL_KEY_DATA(frame, mic_len);
 	size_t expected_len;
 	uint8_t *buf;
+	size_t kek_len;
 
 	switch (frame->key_descriptor_version) {
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4:
@@ -226,7 +259,28 @@ uint8_t *eapol_decrypt_key_data(enum ie_rsn_akm_suite akm, const uint8_t *kek,
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AKM_DEFINED:
-		if (!aes_unwrap(kek, 16, key_data, key_data_len, buf))
+		switch (akm) {
+		case IE_RSN_AKM_SUITE_OWE:
+			switch (mic_len) {
+			case 16:
+				kek_len = 16;
+				break;
+			case 24:
+			case 32:
+				kek_len = 32;
+				break;
+			default:
+				l_error("Invalid MIC length of %zu for OWE",
+						mic_len);
+				goto error;
+			}
+
+			break;
+		default:
+			kek_len = 16;
+		}
+
+		if (!aes_unwrap(kek, kek_len, key_data, key_data_len, buf))
 			goto error;
 
 		break;
@@ -1912,7 +1966,8 @@ static void eapol_eap_results_cb(const uint8_t *msk_data, size_t msk_len,
 	if (msk_len > sizeof(sm->handshake->pmk))
 		msk_len = sizeof(sm->handshake->pmk);
 
-	sm->mic_len = eapol_get_mic_length(sm->handshake->akm_suite);
+	sm->mic_len = eapol_get_mic_length(sm->handshake->akm_suite,
+						sm->handshake->pmk_len);
 
 	switch (sm->handshake->akm_suite) {
 	case IE_RSN_AKM_SUITE_FT_OVER_8021X:
@@ -2172,7 +2227,8 @@ bool eapol_start(struct eapol_sm *sm)
 				l_timeout_create(1, send_eapol_start, sm, NULL);
 	}
 
-	sm->mic_len = eapol_get_mic_length(sm->handshake->akm_suite);
+	sm->mic_len = eapol_get_mic_length(sm->handshake->akm_suite,
+						sm->handshake->pmk_len);
 
 	/* Process any frames received early due to scheduling */
 	if (sm->early_frame) {
