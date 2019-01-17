@@ -54,12 +54,6 @@ enum crypto_akm {
 #define CRYPTO_MIN_IGTK_LEN 16
 #define CRYPTO_MAX_IGTK_LEN 32
 
-struct crypto_ptk {
-	uint8_t kck[16];
-	uint8_t kek[16];
-	uint8_t tk[0];
-} __attribute__ ((packed));
-
 extern const unsigned char crypto_dh5_prime[];
 extern size_t crypto_dh5_prime_size;
 extern const unsigned char crypto_dh5_generator[];
@@ -76,7 +70,7 @@ bool hmac_sha384(const void *key, size_t key_len,
 bool cmac_aes(const void *key, size_t key_len,
 		const void *data, size_t data_len, void *output, size_t size);
 
-bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
+bool aes_unwrap(const uint8_t *kek, size_t kek_len, const uint8_t *in, size_t len,
 			uint8_t *out);
 bool aes_wrap(const uint8_t *kek, const uint8_t *in, size_t len, uint8_t *out);
 bool arc4_skip(const uint8_t *key, size_t key_len, size_t skip,
@@ -104,7 +98,7 @@ bool hkdf_expand_sha256(const uint8_t *key, size_t key_len, const char *info,
 bool crypto_derive_pairwise_ptk(const uint8_t *pmk,
 				const uint8_t *addr1, const uint8_t *addr2,
 				const uint8_t *nonce1, const uint8_t *nonce2,
-				struct crypto_ptk *out_ptk, size_t ptk_len,
+				uint8_t *out_ptk, size_t ptk_len,
 				bool use_sha256);
 
 bool crypto_derive_pmk_r0(const uint8_t *xxkey,
@@ -121,7 +115,7 @@ bool crypto_derive_pmk_r1(const uint8_t *pmk_r0,
 bool crypto_derive_ft_ptk(const uint8_t *pmk_r1, const uint8_t *pmk_r1_name,
 				const uint8_t *addr1, const uint8_t *addr2,
 				const uint8_t *nonce1, const uint8_t *nonce2,
-				struct crypto_ptk *out_ptk, size_t ptk_len,
+				uint8_t *out_ptk, size_t ptk_len,
 				uint8_t *out_ptk_name);
 
 bool crypto_derive_pmkid(const uint8_t *pmk,

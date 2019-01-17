@@ -90,7 +90,7 @@ struct handshake_state {
 	size_t pmk_len;
 	uint8_t snonce[32];
 	uint8_t anonce[32];
-	uint8_t ptk[64];
+	uint8_t ptk[80];
 	uint8_t pmk_r0[32];
 	uint8_t pmk_r0_name[16];
 	uint8_t pmk_r1[32];
@@ -164,7 +164,9 @@ void handshake_state_set_anonce(struct handshake_state *s,
 				const uint8_t *anonce);
 void handshake_state_set_pmkid(struct handshake_state *s, const uint8_t *pmkid);
 bool handshake_state_derive_ptk(struct handshake_state *s);
-const struct crypto_ptk *handshake_state_get_ptk(struct handshake_state *s);
+size_t handshake_state_get_ptk_size(struct handshake_state *s);
+const uint8_t *handshake_state_get_kck(struct handshake_state *s);
+const uint8_t *handshake_state_get_kek(struct handshake_state *s);
 void handshake_state_install_ptk(struct handshake_state *s);
 
 void handshake_state_install_gtk(struct handshake_state *s,

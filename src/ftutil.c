@@ -44,7 +44,7 @@ bool ft_calculate_fte_mic(struct handshake_state *hs, uint8_t seq_num,
 	struct iovec iov[10];
 	int iov_elems = 0;
 	struct l_checksum *checksum;
-	const struct crypto_ptk *ptk = handshake_state_get_ptk(hs);
+	const uint8_t *kck = handshake_state_get_kck(hs);
 	uint8_t zero_mic[16] = {};
 
 	iov[iov_elems].iov_base = hs->spa;
@@ -80,7 +80,7 @@ bool ft_calculate_fte_mic(struct handshake_state *hs, uint8_t seq_num,
 		iov[iov_elems++].iov_len = ric[1] + 2;
 	}
 
-	checksum = l_checksum_new_cmac_aes(ptk->kck, 16);
+	checksum = l_checksum_new_cmac_aes(kck, 16);
 	if (!checksum)
 		return false;
 

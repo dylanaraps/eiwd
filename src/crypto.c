@@ -129,7 +129,7 @@ bool cmac_aes(const void *key, size_t key_len,
  *
  * NOTE: Buffers @in and @out can overlap
  */
-bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
+bool aes_unwrap(const uint8_t *kek, size_t kek_len, const uint8_t *in, size_t len,
 			uint8_t *out)
 {
 	uint64_t b[2];
@@ -139,7 +139,7 @@ bool aes_unwrap(const uint8_t *kek, const uint8_t *in, size_t len,
 	struct l_cipher *cipher;
 	uint64_t t = n * 6;
 
-	cipher = l_cipher_new(L_CIPHER_AES, kek, 16);
+	cipher = l_cipher_new(L_CIPHER_AES, kek, kek_len);
 	if (!cipher)
 		return false;
 
@@ -552,7 +552,6 @@ static bool crypto_derive_ptk(const uint8_t *pmk, size_t pmk_len,
 	}
 
 	pos += 64;
-
 	if (use_sha256)
 		return kdf_sha256(pmk, pmk_len, label, strlen(label),
 					data, sizeof(data), out_ptk, ptk_len);
@@ -564,12 +563,12 @@ static bool crypto_derive_ptk(const uint8_t *pmk, size_t pmk_len,
 bool crypto_derive_pairwise_ptk(const uint8_t *pmk,
 				const uint8_t *addr1, const uint8_t *addr2,
 				const uint8_t *nonce1, const uint8_t *nonce2,
-				struct crypto_ptk *out_ptk, size_t ptk_len,
+				uint8_t *out_ptk, size_t ptk_len,
 				bool use_sha256)
 {
 	return crypto_derive_ptk(pmk, 32, "Pairwise key expansion",
 					addr1, addr2, nonce1, nonce2,
-					(uint8_t *) out_ptk, ptk_len,
+					out_ptk, ptk_len,
 					use_sha256);
 }
 
@@ -677,7 +676,7 @@ exit:
 bool crypto_derive_ft_ptk(const uint8_t *pmk_r1, const uint8_t *pmk_r1_name,
 				const uint8_t *addr1, const uint8_t *addr2,
 				const uint8_t *nonce1, const uint8_t *nonce2,
-				struct crypto_ptk *out_ptk, size_t ptk_len,
+				uint8_t *out_ptk, size_t ptk_len,
 				uint8_t *out_ptk_name)
 {
 	uint8_t context[ETH_ALEN * 2 + 64];

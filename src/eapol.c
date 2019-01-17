@@ -226,7 +226,7 @@ uint8_t *eapol_decrypt_key_data(enum ie_rsn_akm_suite akm, const uint8_t *kek,
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AKM_DEFINED:
-		if (!aes_unwrap(kek, key_data, key_data_len, buf))
+		if (!aes_unwrap(kek, 16, key_data, key_data_len, buf))
 			goto error;
 
 		break;
@@ -960,7 +960,7 @@ static void eapol_ptk_1_of_4_retry(struct l_timeout *timeout, void *user_data)
 static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 					const struct eapol_key *ek)
 {
-	const struct crypto_ptk *ptk;
+	const uint8_t *kck;
 	struct eapol_key *step2;
 	uint8_t mic[MIC_MAXLEN];
 	uint8_t *ies;
@@ -1084,9 +1084,9 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 					sm->handshake->snonce, ies_len, ies,
 					sm->handshake->wpa_ie, sm->mic_len);
 
-	ptk = handshake_state_get_ptk(sm->handshake);
+	kck = handshake_state_get_kck(sm->handshake);
 
-	if (!eapol_calculate_mic(sm->handshake->akm_suite, ptk->kck,
+	if (!eapol_calculate_mic(sm->handshake->akm_suite, kck,
 			step2, mic, sm->mic_len)) {
 		l_info("MIC calculation failed. "
 			"Ensure Kernel Crypto is available.");
@@ -1123,7 +1123,8 @@ static void eapol_send_ptk_3_of_4(struct eapol_sm *sm)
 				sm->handshake->pairwise_cipher);
 	enum crypto_cipher group_cipher = ie_rsn_cipher_suite_to_cipher(
 				sm->handshake->group_cipher);
-	const struct crypto_ptk *ptk = (struct crypto_ptk *) sm->handshake->ptk;
+	const uint8_t *kck;
+	const uint8_t *kek;
 	struct ie_rsn_info rsn;
 	uint8_t *rsne;
 
@@ -1174,7 +1175,9 @@ static void eapol_send_ptk_3_of_4(struct eapol_sm *sm)
 		key_data_len += gtk_kde[1] + 2;
 	}
 
-	if (!eapol_encrypt_key_data(ptk->kek, key_data_buf,
+	kek = handshake_state_get_kek(sm->handshake);
+
+	if (!eapol_encrypt_key_data(kek, key_data_buf,
 					key_data_len, ek, sm->mic_len))
 		return;
 
@@ -1183,7 +1186,9 @@ static void eapol_send_ptk_3_of_4(struct eapol_sm *sm)
 	ek->header.packet_len = L_CPU_TO_BE16(EAPOL_FRAME_LEN(sm->mic_len) +
 				key_data_len - 4);
 
-	if (!eapol_calculate_mic(sm->handshake->akm_suite, ptk->kck, ek,
+	kck = handshake_state_get_kck(sm->handshake);
+
+	if (!eapol_calculate_mic(sm->handshake->akm_suite, kck, ek,
 			EAPOL_KEY_MIC(ek), sm->mic_len))
 		return;
 
@@ -1242,10 +1247,8 @@ static void eapol_handle_ptk_2_of_4(struct eapol_sm *sm,
 					const struct eapol_key *ek)
 {
 	const uint8_t *rsne;
-	enum crypto_cipher cipher;
 	size_t ptk_size;
-	uint8_t ptk_buf[64];
-	struct crypto_ptk *ptk = (struct crypto_ptk *) ptk_buf;
+	const uint8_t *kck;
 	const uint8_t *aa = sm->handshake->aa;
 
 	l_debug("ifindex=%u", sm->handshake->ifindex);
@@ -1256,15 +1259,17 @@ static void eapol_handle_ptk_2_of_4(struct eapol_sm *sm,
 	if (L_BE64_TO_CPU(ek->key_replay_counter) != sm->replay_counter)
 		return;
 
-	cipher = ie_rsn_cipher_suite_to_cipher(sm->handshake->pairwise_cipher);
-	ptk_size = sizeof(struct crypto_ptk) + crypto_cipher_key_len(cipher);
+	ptk_size = handshake_state_get_ptk_size(sm->handshake);
 
-	if (!crypto_derive_pairwise_ptk(sm->handshake->pmk, sm->handshake->spa,
-					aa, sm->handshake->anonce,
-					ek->key_nonce, ptk, ptk_size, false))
+	if (!crypto_derive_pairwise_ptk(sm->handshake->pmk,
+					sm->handshake->spa, aa,
+					sm->handshake->anonce, ek->key_nonce,
+					sm->handshake->ptk, ptk_size, false))
 		return;
 
-	if (!eapol_verify_mic(sm->handshake->akm_suite, ptk->kck, ek,
+	kck = handshake_state_get_kck(sm->handshake);
+
+	if (!eapol_verify_mic(sm->handshake->akm_suite, kck, ek,
 					sm->mic_len))
 		return;
 
@@ -1282,7 +1287,6 @@ static void eapol_handle_ptk_2_of_4(struct eapol_sm *sm,
 		return;
 	}
 
-	memcpy(sm->handshake->ptk, ptk_buf, ptk_size);
 	memcpy(sm->handshake->snonce, ek->key_nonce,
 			sizeof(sm->handshake->snonce));
 	sm->handshake->have_snonce = true;
@@ -1316,7 +1320,8 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 					const uint8_t *decrypted_key_data,
 					size_t decrypted_key_data_size)
 {
-	const struct crypto_ptk *ptk;
+	const uint8_t *kck;
+	const uint8_t *kek;
 	struct eapol_key *step4;
 	uint8_t mic[MIC_MAXLEN];
 	const uint8_t *gtk = NULL;
@@ -1516,9 +1521,10 @@ retransmit:
 					sm->replay_counter,
 					sm->handshake->wpa_ie, sm->mic_len);
 
-	ptk = handshake_state_get_ptk(sm->handshake);
+	kck = handshake_state_get_kck(sm->handshake);
+	kek = handshake_state_get_kek(sm->handshake);
 
-	if (!eapol_calculate_mic(sm->handshake->akm_suite, ptk->kck,
+	if (!eapol_calculate_mic(sm->handshake->akm_suite, kck,
 			step4, mic, sm->mic_len)) {
 		l_free(step4);
 		handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
@@ -1550,7 +1556,7 @@ retransmit:
 	handshake_state_install_ptk(sm->handshake);
 
 	if (rekey_offload)
-		rekey_offload(sm->handshake->ifindex, ptk->kek, ptk->kck,
+		rekey_offload(sm->handshake->ifindex, kek, kck,
 				sm->replay_counter, sm->user_data);
 
 	l_timeout_remove(sm->timeout);
@@ -1566,7 +1572,7 @@ error_ie_different:
 static void eapol_handle_ptk_4_of_4(struct eapol_sm *sm,
 					const struct eapol_key *ek)
 {
-	const struct crypto_ptk *ptk = (struct crypto_ptk *) sm->handshake->ptk;
+	const uint8_t *kck;
 
 	l_debug("ifindex=%u", sm->handshake->ifindex);
 
@@ -1576,7 +1582,9 @@ static void eapol_handle_ptk_4_of_4(struct eapol_sm *sm,
 	if (L_BE64_TO_CPU(ek->key_replay_counter) != sm->replay_counter)
 		return;
 
-	if (!eapol_verify_mic(sm->handshake->akm_suite, ptk->kck, ek,
+	kck = handshake_state_get_kck(sm->handshake);
+
+	if (!eapol_verify_mic(sm->handshake->akm_suite, kck, ek,
 				sm->mic_len))
 		return;
 
@@ -1591,7 +1599,7 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 					const uint8_t *decrypted_key_data,
 					size_t decrypted_key_data_size)
 {
-	const struct crypto_ptk *ptk;
+	const uint8_t *kck;
 	struct eapol_key *step2;
 	uint8_t mic[MIC_MAXLEN];
 	const uint8_t *gtk;
@@ -1664,9 +1672,9 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 					sm->handshake->wpa_ie, ek->wpa_key_id,
 					sm->mic_len);
 
-	ptk = handshake_state_get_ptk(sm->handshake);
+	kck = handshake_state_get_kck(sm->handshake);
 
-	if (!eapol_calculate_mic(sm->handshake->akm_suite, ptk->kck,
+	if (!eapol_calculate_mic(sm->handshake->akm_suite, kck,
 			step2, mic, sm->mic_len)) {
 		l_free(step2);
 		handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
@@ -1708,7 +1716,8 @@ static void eapol_key_handle(struct eapol_sm *sm,
 				const struct eapol_frame *frame)
 {
 	const struct eapol_key *ek;
-	const struct crypto_ptk *ptk;
+	const uint8_t *kck;
+	const uint8_t *kek;
 	uint8_t *decrypted_key_data = NULL;
 	size_t key_data_len = 0;
 	uint64_t replay_counter;
@@ -1761,14 +1770,14 @@ static void eapol_key_handle(struct eapol_sm *sm,
 	if (sm->have_replay && sm->replay_counter >= replay_counter)
 		return;
 
-	ptk = handshake_state_get_ptk(sm->handshake);
+	kck = handshake_state_get_kck(sm->handshake);
 
 	if (ek->key_mic) {
 		/* Haven't received step 1 yet, so no ptk */
 		if (!sm->handshake->have_snonce)
 			return;
 
-		if (!eapol_verify_mic(sm->handshake->akm_suite, ptk->kck, ek,
+		if (!eapol_verify_mic(sm->handshake->akm_suite, kck, ek,
 					sm->mic_len))
 			return;
 	}
@@ -1779,8 +1788,10 @@ static void eapol_key_handle(struct eapol_sm *sm,
 		if (!sm->handshake->have_snonce)
 			return;
 
+		kek = handshake_state_get_kek(sm->handshake);
+
 		decrypted_key_data = eapol_decrypt_key_data(
-					sm->handshake->akm_suite, ptk->kek,
+					sm->handshake->akm_suite, kek,
 					ek, &key_data_len, sm->mic_len);
 		if (!decrypted_key_data)
 			return;

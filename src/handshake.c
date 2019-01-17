@@ -278,10 +278,51 @@ void handshake_state_set_anonce(struct handshake_state *s,
 	memcpy(s->anonce, anonce, 32);
 }
 
+/* A multi-purpose getter for key sizes */
+static bool handshake_get_key_sizes(struct handshake_state *s, size_t *ptk_size,
+					size_t *kck_size, size_t *kek_size)
+{
+	size_t kck;
+	size_t kek;
+	size_t tk;
+	enum crypto_cipher cipher =
+			ie_rsn_cipher_suite_to_cipher(s->pairwise_cipher);
+
+	tk = crypto_cipher_key_len(cipher);
+
+	/*
+	 * IEEE 802.11-2016 Table 12-8: Integrity and key-wrap algorithms
+	 *
+	 * From the table, only 00-0F-AC:12 and 00-0F-AC:13 use longer KCK and
+	 * KEK keys, which are 24 and 32 bytes respectively. The remainder use
+	 * 16 and 16 respectively.
+	 */
+	switch (s->akm_suite) {
+	case IE_RSN_AKM_SUITE_8021X_SUITE_B_SHA256:
+	case IE_RSN_AKM_SUITE_FT_OVER_8021X_SHA384:
+		kck = 24;
+		kek = 32;
+		break;
+	default:
+		kck = 16;
+		kek = 16;
+		break;
+	}
+
+	if (ptk_size)
+		*ptk_size = kck + kek + tk;
+
+	if (kck_size)
+		*kck_size = kck;
+
+	if (kek_size)
+		*kek_size = kek;
+
+	return true;
+}
+
 bool handshake_state_derive_ptk(struct handshake_state *s)
 {
-	struct crypto_ptk *ptk = (struct crypto_ptk *) s->ptk;
-	enum crypto_cipher cipher;
 	size_t ptk_size;
 	bool use_sha256;
 
@@ -305,9 +346,7 @@ bool handshake_state_derive_ptk(struct handshake_state *s)
 	else
 		use_sha256 = false;
 
-	cipher = ie_rsn_cipher_suite_to_cipher(s->pairwise_cipher);
-
-	ptk_size = sizeof(struct crypto_ptk) + crypto_cipher_key_len(cipher);
+	ptk_size = handshake_state_get_ptk_size(s);
 
 	if (s->akm_suite & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
 				IE_RSN_AKM_SUITE_FT_USING_PSK |
@@ -344,26 +383,54 @@ bool handshake_state_derive_ptk(struct handshake_state *s)
 
 		if (!crypto_derive_ft_ptk(s->pmk_r1, s->pmk_r1_name, s->aa,
 						s->spa, s->snonce, s->anonce,
-						ptk, ptk_size, ptk_name))
+						s->ptk, ptk_size, ptk_name))
 			return false;
 	} else
-		if (!crypto_derive_pairwise_ptk(s->pmk, s->spa, s->aa,
-						s->anonce, s->snonce,
-						ptk, ptk_size, use_sha256))
+		if (!crypto_derive_pairwise_ptk(s->pmk, s->spa,
+						s->aa, s->anonce, s->snonce,
+						s->ptk, ptk_size, use_sha256))
 			return false;
 
 	return true;
 }
 
-const struct crypto_ptk *handshake_state_get_ptk(struct handshake_state *s)
+size_t handshake_state_get_ptk_size(struct handshake_state *s)
 {
-	return (struct crypto_ptk *) s->ptk;
+	size_t ptk_size;
+
+	if (!handshake_get_key_sizes(s, &ptk_size, NULL, NULL))
+		return 0;
+
+	return ptk_size;
+}
+
+const uint8_t *handshake_state_get_kck(struct handshake_state *s)
+{
+	return s->ptk;
+}
+
+const uint8_t *handshake_state_get_kek(struct handshake_state *s)
+{
+	size_t kck_size;
+
+	if (!handshake_get_key_sizes(s, NULL, &kck_size, NULL))
+		return NULL;
+
+	return s->ptk + kck_size;
+}
+
+static const uint8_t *handshake_get_tk(struct handshake_state *s)
+{
+	size_t kck_size, kek_size;
+
+	if (!handshake_get_key_sizes(s, NULL, &kck_size, &kek_size))
+		return NULL;
+
+	return s->ptk + kck_size + kek_size;
 }
 
 void handshake_state_install_ptk(struct handshake_state *s)
 {
-	struct crypto_ptk *ptk = (struct crypto_ptk *) s->ptk;
-
 	s->ptk_complete = true;
 
 	if (install_tk) {
@@ -372,7 +439,7 @@ void handshake_state_install_ptk(struct handshake_state *s)
 
 		handshake_event(s, HANDSHAKE_EVENT_SETTING_KEYS, NULL);
 
-		install_tk(s, ptk->tk, cipher);
+		install_tk(s, handshake_get_tk(s), cipher);
 	}
 }
 
@@ -684,10 +751,10 @@ void handshake_util_build_gtk_kde(enum crypto_cipher cipher, const uint8_t *key,
 bool handshake_decode_fte_key(struct handshake_state *s, const uint8_t *wrapped,
 				size_t key_len, uint8_t *key_out)
 {
-	const struct crypto_ptk *ptk = handshake_state_get_ptk(s);
+	const uint8_t *kek = handshake_state_get_kek(s);
 	size_t padded_len = key_len < 16 ? 16 : align_len(key_len, 8);
 
-	if (!aes_unwrap(ptk->kek, wrapped, padded_len + 8, key_out))
+	if (!aes_unwrap(kek, 16, wrapped, padded_len + 8, key_out))
 		return false;
 
 	if (key_len < padded_len && key_out[key_len++] != 0xdd)
