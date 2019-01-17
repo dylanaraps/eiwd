@@ -29,15 +29,23 @@
 
 #include "src/eapolutil.h"
 
-const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len)
+const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len,
+						size_t mic_len)
 {
 	const struct eapol_key *ek;
-	uint16_t key_data_len;
 
-	if (len < sizeof(struct eapol_key))
+	/*
+	 * Since EAPOL_KEY_DATA_LEN actually gets the key data length bytes we
+	 * have to check this first, otherwise we could potentially overrun the
+	 * frame buffer
+	 */
+	if (len < EAPOL_FRAME_LEN(mic_len))
 		return NULL;
 
 	ek = (const struct eapol_key *) frame;
+
+	if (len < EAPOL_FRAME_LEN(mic_len) + EAPOL_KEY_DATA_LEN(ek, mic_len))
+		return NULL;
 
 	switch (ek->header.protocol_version) {
 	case EAPOL_PROTOCOL_VERSION_2001:
@@ -68,10 +76,6 @@ const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len)
 	default:
 		return NULL;
 	}
-
-	key_data_len = L_BE16_TO_CPU(ek->key_data_len);
-	if (len < sizeof(struct eapol_key) + key_data_len)
-		return NULL;
 
 	return ek;
 }

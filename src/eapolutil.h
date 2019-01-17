@@ -59,6 +59,18 @@ struct eapol_frame {
 	uint8_t data[0];
 } __attribute__ ((packed));
 
+/* gets pointer to MIC */
+#define EAPOL_KEY_MIC(ek) ((ek)->key_data)
+
+/* get key data length */
+#define EAPOL_KEY_DATA_LEN(ek, mic_len) l_get_be16((ek)->key_data + (mic_len))
+
+/* gets pointer to key data */
+#define EAPOL_KEY_DATA(ek, mic_len) ((ek)->key_data + (mic_len) + 2)
+
+/* gets frame length (not including key data) */
+#define EAPOL_FRAME_LEN(mic_len) sizeof(struct eapol_key) + (mic_len) + 2
+
 struct eapol_key {
 	struct eapol_header header;
 	uint8_t descriptor_type;
@@ -98,9 +110,8 @@ struct eapol_key {
 	uint8_t eapol_key_iv[16];
 	uint8_t key_rsc[8];
 	uint8_t reserved[8];
-	uint8_t key_mic_data[16];
-	__be16 key_data_len;
 	uint8_t key_data[0];
 } __attribute__ ((packed));
 
-const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len);
+const struct eapol_key *eapol_key_validate(const uint8_t *frame, size_t len,
+						size_t mic_len);

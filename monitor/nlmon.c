@@ -3839,7 +3839,7 @@ static void print_attributes(int indent, const struct attr_entry *table,
 
 static void print_eapol_key(const void *data, uint32_t size)
 {
-	const struct eapol_key *ek = eapol_key_validate(data, size);
+	const struct eapol_key *ek = eapol_key_validate(data, size, 16);
 
 	if (!ek)
 		return;
@@ -3872,16 +3872,16 @@ static void print_eapol_key(const void *data, uint32_t size)
 	print_attr(1, "Key RSC ");
 	print_hexdump(2, ek->key_rsc, 8);
 	print_attr(1, "Key MIC Data");
-	print_hexdump(2, ek->key_mic_data, 16);
+	print_hexdump(2, EAPOL_KEY_MIC(ek), 16);
 
 	if (ek->encrypted_key_data) {
-		print_attr(1, "Key Data: len %d",
-					L_BE16_TO_CPU(ek->key_data_len));
-		print_hexdump(2, ek->key_data, L_BE16_TO_CPU(ek->key_data_len));
+		print_attr(1, "Key Data: len %d", EAPOL_KEY_DATA_LEN(ek, 16));
+		print_hexdump(2, EAPOL_KEY_DATA(ek, 16),
+					EAPOL_KEY_DATA_LEN(ek, 16));
 		return;
 	}
 
-	print_ie(1, "Key Data", ek->key_data, L_BE16_TO_CPU(ek->key_data_len));
+	print_ie(1, "Key Data", ek->key_data, EAPOL_KEY_DATA_LEN(ek, 16));
 }
 
 static void netlink_str(char *str, size_t size,

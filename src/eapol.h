@@ -52,15 +52,16 @@ typedef void (*eapol_frame_watch_func_t)(uint16_t proto, const uint8_t *from,
 						void *user_data);
 
 bool eapol_calculate_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
-				const struct eapol_key *frame, uint8_t *mic);
+				const struct eapol_key *frame, uint8_t *mic,
+				size_t mic_len);
 bool eapol_verify_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
-			const struct eapol_key *frame);
+			const struct eapol_key *frame, size_t mic_len);
 
 uint8_t *eapol_decrypt_key_data(enum ie_rsn_akm_suite akm, const uint8_t *kek,
 				const struct eapol_key *frame,
-				size_t *decrypted_size);
+				size_t *decrypted_size, size_t mic_len);
 
-bool eapol_verify_ptk_1_of_4(const struct eapol_key *ek);
+bool eapol_verify_ptk_1_of_4(const struct eapol_key *ek, size_t mic_len);
 bool eapol_verify_ptk_2_of_4(const struct eapol_key *ek);
 bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek, bool is_wpa);
 bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek, bool is_wpa);
@@ -74,19 +75,22 @@ struct eapol_key *eapol_create_ptk_2_of_4(
 				const uint8_t snonce[],
 				size_t extra_len,
 				const uint8_t *extra_data,
-				bool is_wpa);
+				bool is_wpa,
+				size_t mic_len);
 
 struct eapol_key *eapol_create_ptk_4_of_4(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
 				uint64_t key_replay_counter,
-				bool is_wpa);
+				bool is_wpa,
+				size_t mic_len);
 
 struct eapol_key *eapol_create_gtk_2_of_2(
 				enum eapol_protocol_version protocol,
 				enum eapol_key_descriptor_version version,
 				uint64_t key_replay_counter,
-				bool is_wpa, uint8_t wpa_key_id);
+				bool is_wpa, uint8_t wpa_key_id,
+				size_t mic_len);
 
 void __eapol_rx_packet(uint32_t ifindex, const uint8_t *src, uint16_t proto,
 			const uint8_t *frame, size_t len, bool noencrypt);
