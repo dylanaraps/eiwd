@@ -85,9 +85,17 @@ bool eapol_calculate_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
 			return cmac_aes(kck, 16, frame, frame_len,
 						mic, mic_len);
 		case IE_RSN_AKM_SUITE_OWE:
-			return hmac_sha256(kck, mic_len, frame,
+			switch (mic_len) {
+			case 16:
+				return hmac_sha256(kck, mic_len, frame,
 						frame_len, mic,
 						mic_len);
+			case 24:
+				return hmac_sha384(kck, 24, frame, frame_len,
+						mic, mic_len);
+			}
+
+			/* fall through */
 		default:
 			return false;
 		}
