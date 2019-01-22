@@ -462,21 +462,19 @@ bool hkdf_expand(enum l_checksum_type type, const uint8_t *key, size_t key_len,
 			const char *info, size_t info_len, void *out,
 			size_t out_len)
 {
-	uint8_t t[64];
+	uint8_t *t = out;
 	size_t t_len = 0;
-	struct iovec iov[3];
 	struct l_checksum *hmac;
 	uint8_t count = 1;
 	uint8_t *out_ptr = out;
-	size_t dlen = l_checksum_digest_length(type);
 
-	if (dlen <= 0)
+	hmac = l_checksum_new_hmac(type, key, key_len);
+	if (!hmac)
 		return false;
 
 	while (out_len > 0) {
 		ssize_t ret;
-
-		hmac = l_checksum_new_hmac(type, key, key_len);
+		struct iovec iov[3];
 
 		iov[0].iov_base = t;
 		iov[0].iov_len = t_len;
@@ -490,26 +488,28 @@ bool hkdf_expand(enum l_checksum_type type, const uint8_t *key, size_t key_len,
 			return false;
 		}
 
-		ret = l_checksum_get_digest(hmac, t,
-					(out_len > dlen) ? dlen : out_len);
+		ret = l_checksum_get_digest(hmac, out_ptr, out_len);
 		if (ret < 0) {
 			l_checksum_free(hmac);
 			return false;
 		}
 
-		memcpy(out_ptr, t, ret);
-		out_len -= ret;
-		out_ptr += ret;
-
 		/*
 		 * RFC specifies that T(0) = empty string, so after the first
 		 * iteration we update the length for T(1)...T(N)
 		 */
-		t_len = dlen;
+		t_len = ret;
+		t = out_ptr;
 		count++;
 
-		l_checksum_free(hmac);
+		out_len -= ret;
+		out_ptr += ret;
+
+		if (out_len)
+			l_checksum_reset(hmac);
 	}
+
+	l_checksum_free(hmac);
 
 	return true;
 }
