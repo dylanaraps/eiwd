@@ -142,6 +142,9 @@ systemd_unit_DATA =
 
 dbus_busdir = @DBUS_BUSDIR@
 dbus_bus_DATA =
+
+systemd_modloaddir = @SYSTEMD_MODLOADDIR@
+systemd_modload_DATA = src/pkcs8.conf
 endif
 
 eap_sources = src/eap.c src/eap.h src/eap-private.h \

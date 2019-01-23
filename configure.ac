@@ -209,6 +209,19 @@ if (test "${enable_systemd_service}" != "no" && test -z "${path_systemd_unitdir}
 fi
 AC_SUBST(SYSTEMD_UNITDIR, [${path_systemd_unitdir}])
 
+AC_ARG_WITH([systemd-modloaddir], AC_HELP_STRING([--with-systemd-modloaddir=DIR],
+				[path to systemd modules load directory]),
+					[path_systemd_modloaddir=${withval}])
+if (test "${enable_systemd_service}" != "no" && test -z "${path_systemd_modloaddir}"); then
+	AC_MSG_CHECKING([systemd modules load directory])
+	path_systemd_modloaddir="`$PKG_CONFIG --variable=modulesloaddir systemd`"
+	if (test -z "${path_systemd_modloaddir}"); then
+		AC_MSG_ERROR([systemd modules load directory is required])
+	fi
+	AC_MSG_RESULT([${path_systemd_modloaddir}])
+fi
+AC_SUBST(SYSTEMD_MODLOADDIR, [${path_systemd_modloaddir}])
+
 AC_ARG_ENABLE([external_ell], AC_HELP_STRING([--enable-external-ell],
 				[enable external Embedded Linux library]),
 					[enable_external_ell=${enableval}])
