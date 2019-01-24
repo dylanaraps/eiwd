@@ -44,6 +44,7 @@
 #include "src/plugin.h"
 #include "src/simauth.h"
 #include "src/adhoc.h"
+#include "src/blacklist.h"
 
 #include "src/backtrace.h"
 
@@ -498,9 +499,11 @@ int main(int argc, char *argv[])
 	known_networks_init();
 	sim_auth_init();
 	plugin_init(plugins, noplugins);
+	blacklist_init();
 
 	exit_status = l_main_run_with_signal(signal_handler, NULL);
 
+	blacklist_exit();
 	plugin_exit();
 	sim_auth_exit();
 	known_networks_exit();
