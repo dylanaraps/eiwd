@@ -93,6 +93,11 @@ parameter into test-runner.
 
 Running Automated Tests
 =======================
+Before running any tests, its expected that the folder /var/lib/iwd exists on
+the host machine. If not, you will see a mounting error when starting
+test-runner.
+
+	mkdir /var/lib/iwd
 
 By default, the automated test configuration directories reside in
 '<iwd>/autotests' and have a mandatory prefix of 'test'.
