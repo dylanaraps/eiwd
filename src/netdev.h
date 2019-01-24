@@ -110,6 +110,7 @@ const char *netdev_get_name(struct netdev *netdev);
 bool netdev_get_is_up(struct netdev *netdev);
 struct device *netdev_get_device(struct netdev *netdev);
 const char *netdev_get_path(struct netdev *netdev);
+uint16_t netdev_get_last_status_code(struct netdev *netdev);
 
 struct handshake_state *netdev_handshake_state_new(struct netdev *netdev);
 struct handshake_state *netdev_get_handshake(struct netdev *netdev);
