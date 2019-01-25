@@ -258,6 +258,11 @@ void handshake_state_set_passphrase(struct handshake_state *s,
 	s->passphrase = l_strdup(passphrase);
 }
 
+void handshake_state_set_no_rekey(struct handshake_state *s, bool no_rekey)
+{
+	s->no_rekey = no_rekey;
+}
+
 void handshake_state_new_snonce(struct handshake_state *s)
 {
 	get_nonce(s->snonce);

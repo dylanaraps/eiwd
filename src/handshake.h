@@ -106,6 +106,7 @@ struct handshake_state {
 	bool have_pmkid : 1;
 	bool authenticator : 1;
 	bool wait_for_gtk : 1;
+	bool no_rekey : 1;
 	uint8_t ssid[32];
 	size_t ssid_len;
 	char *passphrase;
@@ -157,6 +158,7 @@ void handshake_state_set_event_func(struct handshake_state *s,
 					void *user_data);
 void handshake_state_set_passphrase(struct handshake_state *s,
 					const char *passphrase);
+void handshake_state_set_no_rekey(struct handshake_state *s, bool no_rekey);
 
 void handshake_state_new_snonce(struct handshake_state *s);
 void handshake_state_new_anonce(struct handshake_state *s);
