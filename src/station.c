@@ -377,6 +377,8 @@ void station_set_scan_results(struct station *station, struct l_queue *bss_list,
 	l_queue_destroy(old_bss_list, bss_free);
 }
 
+static void station_reconnect(struct station *station);
+
 static void station_handshake_event(struct handshake_state *hs,
 					enum handshake_event event,
 					void *event_data, void *user_data)
@@ -397,8 +399,11 @@ static void station_handshake_event(struct handshake_state *hs,
 	case HANDSHAKE_EVENT_FAILED:
 		netdev_handshake_failed(hs, l_get_u16(event_data));
 		break;
-	case HANDSHAKE_EVENT_SETTING_KEYS_FAILED:
+	case HANDSHAKE_EVENT_REKEY_FAILED:
+		station_reconnect(station);
+		break;
 	case HANDSHAKE_EVENT_COMPLETE:
+	case HANDSHAKE_EVENT_SETTING_KEYS_FAILED:
 		/*
 		 * currently we dont care about any other events. The
 		 * netdev_connect_cb will notify us when the connection is
@@ -1809,6 +1814,42 @@ static struct l_dbus_message *station_dbus_connect_hidden_network(
 	station->connect_pending = l_dbus_message_ref(message);
 
 	return NULL;
+}
+
+static void station_disconnect_reconnect_cb(struct netdev *netdev, bool success,
+					void *user_data)
+{
+	struct station *station = user_data;
+	struct handshake_state *hs;
+	int r;
+
+	hs = station_handshake_setup(station, station->connected_network,
+					station->connected_bss);
+	if (!hs)
+		goto error;
+
+	r = netdev_connect(station->netdev, station->connected_bss, hs,
+				station_netdev_event, station_connect_cb,
+				station);
+	if (r < 0)
+		goto error;
+
+	return;
+
+error:
+	station_disconnect(station);
+}
+
+static void station_reconnect(struct station *station)
+{
+	/*
+	 * Rather than doing 4 or so state changes, lets just go into
+	 * roaming for the duration of this reconnect.
+	 */
+	station_enter_state(station, STATION_STATE_ROAMING);
+
+	netdev_disconnect(station->netdev, station_disconnect_reconnect_cb,
+				station);
 }
 
 static void station_disconnect_cb(struct netdev *netdev, bool success,

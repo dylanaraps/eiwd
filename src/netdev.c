@@ -2748,6 +2748,10 @@ static int netdev_connect_common(struct netdev *netdev,
 	handshake_state_set_authenticator_address(hs, bss->addr);
 	handshake_state_set_supplicant_address(hs, netdev->addr);
 
+	if (!wiphy_has_ext_feature(netdev->wiphy,
+					NL80211_EXT_FEATURE_CAN_REPLACE_PTK0))
+		handshake_state_set_no_rekey(hs, true);
+
 	if (netdev->sae_sm)
 		sae_start(netdev->sae_sm);
 	else if (netdev->owe)
