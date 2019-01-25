@@ -121,6 +121,9 @@ static void ap_reset(struct ap_state *ap)
 {
 	struct netdev *netdev = ap->netdev;
 
+	if (!ap->started)
+		return;
+
 	if (ap->pending)
 		dbus_pending_reply(&ap->pending,
 				dbus_error_aborted(ap->pending));
