@@ -1104,6 +1104,16 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 			memcmp(sm->handshake->anonce,
 					ek->key_nonce, sizeof(ek->key_nonce)) ||
 			sm->handshake->ptk_complete) {
+		if (sm->handshake->ptk_complete && sm->handshake->no_rekey) {
+			/*
+			 * In case of rekey not being allowed, signal to upper
+			 * layers that we need to do a full reauth
+			 */
+			handshake_event(sm->handshake,
+					HANDSHAKE_EVENT_REKEY_FAILED, NULL);
+			return;
+		}
+
 		handshake_state_new_snonce(sm->handshake);
 		handshake_state_set_anonce(sm->handshake, ek->key_nonce);
 
