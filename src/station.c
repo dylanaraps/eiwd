@@ -1821,20 +1821,16 @@ static void station_disconnect_reconnect_cb(struct netdev *netdev, bool success,
 {
 	struct station *station = user_data;
 	struct handshake_state *hs;
-	int r;
 
 	hs = station_handshake_setup(station, station->connected_network,
 					station->connected_bss);
 	if (!hs)
 		goto error;
 
-	r = netdev_connect(station->netdev, station->connected_bss, hs,
+	if (netdev_connect(station->netdev, station->connected_bss, hs,
 				station_netdev_event, station_connect_cb,
-				station);
-	if (r < 0)
-		goto error;
-
-	return;
+				station) > 0)
+		return;
 
 error:
 	station_disconnect(station);
