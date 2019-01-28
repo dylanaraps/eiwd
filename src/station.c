@@ -1833,7 +1833,7 @@ static void station_disconnect_reconnect_cb(struct netdev *netdev, bool success,
 		return;
 
 error:
-	station_disconnect(station);
+	station_disassociated(station);
 }
 
 static void station_reconnect(struct station *station)
