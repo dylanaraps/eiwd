@@ -115,6 +115,9 @@ struct autoconnect_entry {
 	struct scan_bss *bss;
 };
 
+static void station_enter_state(struct station *station,
+						enum station_state state);
+
 static void station_autoconnect_next(struct station *station)
 {
 	struct autoconnect_entry *entry;
@@ -132,8 +135,10 @@ static void station_autoconnect_next(struct station *station)
 		r = network_autoconnect(entry->network, entry->bss);
 		l_free(entry);
 
-		if (!r)
+		if (!r) {
+			station_enter_state(station, STATION_STATE_CONNECTING);
 			return;
+		}
 	}
 }
 
@@ -680,9 +685,15 @@ static void station_enter_state(struct station *station,
 		scan_periodic_start(index, periodic_scan_trigger,
 					new_scan_results, station);
 		break;
+	case STATION_STATE_CONNECTING:
+		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
+				IWD_STATION_INTERFACE, "ConnectedNetwork");
+		l_dbus_property_changed(dbus,
+				network_get_path(station->connected_network),
+				IWD_NETWORK_INTERFACE, "Connected");
+		/* fall through */
 	case STATION_STATE_DISCONNECTED:
 	case STATION_STATE_CONNECTED:
-	case STATION_STATE_CONNECTING:
 		periodic_scan_stop(station);
 		break;
 	case STATION_STATE_DISCONNECTING:
@@ -1633,13 +1644,8 @@ static void station_connect_cb(struct netdev *netdev, enum netdev_result result,
 int __station_connect_network(struct station *station, struct network *network,
 				struct scan_bss *bss)
 {
-	struct l_dbus *dbus = dbus_get_bus();
-	struct netdev *netdev = station->netdev;
 	struct handshake_state *hs;
 	int r;
-
-	if (station_is_busy(station))
-		return -EBUSY;
 
 	hs = station_handshake_setup(station, network, bss);
 	if (!hs)
@@ -1655,13 +1661,6 @@ int __station_connect_network(struct station *station, struct network *network,
 	station->connected_bss = bss;
 	station->connected_network = network;
 
-	station_enter_state(station, STATION_STATE_CONNECTING);
-
-	l_dbus_property_changed(dbus, netdev_get_path(netdev),
-				IWD_STATION_INTERFACE, "ConnectedNetwork");
-	l_dbus_property_changed(dbus, network_get_path(network),
-				IWD_NETWORK_INTERFACE, "Connected");
-
 	return 0;
 }
 
@@ -1669,17 +1668,27 @@ void station_connect_network(struct station *station, struct network *network,
 				struct scan_bss *bss,
 				struct l_dbus_message *message)
 {
-	int err = __station_connect_network(station, network, bss);
+	struct l_dbus *dbus = dbus_get_bus();
+	int err;
 
-	if (err < 0) {
-		struct l_dbus *dbus = dbus_get_bus();
-
-		l_dbus_send(dbus, dbus_error_from_errno(err, message));
-		return;
+	if (station_is_busy(station)) {
+		err = -EBUSY;
+		goto error;
 	}
+
+	err = __station_connect_network(station, network, bss);
+	if (err < 0)
+		goto error;
+
+	station_enter_state(station, STATION_STATE_CONNECTING);
 
 	station->connect_pending = l_dbus_message_ref(message);
 	station->autoconnect = true;
+
+	return;
+
+error:
+	l_dbus_send(dbus, dbus_error_from_errno(err, message));
 }
 
 static void station_hidden_network_scan_triggered(int err, void *user_data)
@@ -1820,20 +1829,10 @@ static void station_disconnect_reconnect_cb(struct netdev *netdev, bool success,
 					void *user_data)
 {
 	struct station *station = user_data;
-	struct handshake_state *hs;
 
-	hs = station_handshake_setup(station, station->connected_network,
-					station->connected_bss);
-	if (!hs)
-		goto error;
-
-	if (netdev_connect(station->netdev, station->connected_bss, hs,
-				station_netdev_event, station_connect_cb,
-				station) > 0)
-		return;
-
-error:
-	station_disassociated(station);
+	if (__station_connect_network(station, station->connected_network,
+					station->connected_bss) < 0)
+		station_disassociated(station);
 }
 
 static void station_reconnect(struct station *station)
