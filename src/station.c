@@ -47,6 +47,8 @@
 #include "src/ie.h"
 #include "src/handshake.h"
 #include "src/station.h"
+#include "src/blacklist.h"
+#include "src/mpdu.h"
 
 static struct l_queue *station_list;
 static uint32_t netdev_watch;
@@ -131,7 +133,11 @@ static void station_autoconnect_next(struct station *station)
 			entry->bss->frequency, entry->rank,
 			entry->bss->signal_strength);
 
-		/* TODO: Blacklist the network from auto-connect */
+		if (blacklist_contains_bss(entry->bss->addr)) {
+			l_free(entry);
+			continue;
+		}
+
 		r = network_autoconnect(entry->network, entry->bss);
 		l_free(entry);
 
@@ -1142,6 +1148,9 @@ static bool station_roam_scan_notify(uint32_t ifindex, int err,
 		if (!wiphy_can_connect(station->wiphy, bss))
 			goto next;
 
+		if (blacklist_contains_bss(bss->addr))
+			goto next;
+
 		rank = bss->rank;
 
 		if (hs->mde && bss->mde_present && l_get_le16(bss->mde) == mdid)
@@ -1601,32 +1610,93 @@ static void station_netdev_event(struct netdev *netdev, enum netdev_event event,
 	};
 }
 
+static bool station_try_next_bss(struct station *station)
+{
+	struct scan_bss *next;
+	int ret;
+
+	blacklist_add_bss(station->connected_bss->addr);
+
+	next = network_bss_select(station->connected_network);
+
+	if (!next)
+		return false;
+
+	ret = __station_connect_network(station, station->connected_network,
+						next);
+	if (ret < 0)
+		return false;
+
+	l_debug("Attempting to connect to next BSS "MAC, MAC_STR(next->addr));
+
+	return true;
+}
+
+static bool station_can_retry(uint16_t status_code)
+{
+	/*
+	 * We dont want to cause a retry and blacklist if the password was
+	 * incorrect. Otherwise we would just continue to fail.
+	 *
+	 * Other status codes can be added here if its decided we want to
+	 * fail in those cases.
+	 */
+	if (status_code != MMPDU_REASON_CODE_PREV_AUTH_NOT_VALID &&
+			status_code != MMPDU_REASON_CODE_IEEE8021X_FAILED)
+		return true;
+
+	return false;
+}
+
+static void station_connect_dbus_reply(struct station *station,
+					enum netdev_result result)
+{
+	struct l_dbus_message *reply;
+
+	switch (result) {
+	case NETDEV_RESULT_ABORTED:
+		reply = dbus_error_aborted(station->connect_pending);
+		break;
+	case NETDEV_RESULT_OK:
+		reply = l_dbus_message_new_method_return(
+					station->connect_pending);
+		break;
+	default:
+		reply = dbus_error_failed(station->connect_pending);
+		break;
+	}
+
+	dbus_pending_reply(&station->connect_pending, reply);
+}
+
 static void station_connect_cb(struct netdev *netdev, enum netdev_result result,
 					void *user_data)
 {
 	struct station *station = user_data;
+	uint16_t status_code = netdev_get_last_status_code(netdev);
 
 	l_debug("%u, result: %d", netdev_get_ifindex(station->netdev), result);
 
-	if (station->connect_pending) {
-		struct l_dbus_message *reply;
-
-		switch (result) {
-		case NETDEV_RESULT_ABORTED:
-			reply = dbus_error_aborted(station->connect_pending);
+	switch (result) {
+	case NETDEV_RESULT_OK:
+		blacklist_remove_bss(station->connected_bss->addr);
+		break;
+	case NETDEV_RESULT_HANDSHAKE_FAILED:
+		if (!station_can_retry(status_code))
 			break;
-		case NETDEV_RESULT_OK:
-			reply = l_dbus_message_new_method_return(
-						station->connect_pending);
-			l_dbus_message_set_arguments(reply, "");
-			break;
-		default:
-			reply = dbus_error_failed(station->connect_pending);
-			break;
-		}
-
-		dbus_pending_reply(&station->connect_pending, reply);
+		/* fall through */
+	case NETDEV_RESULT_AUTHENTICATION_FAILED:
+	case NETDEV_RESULT_ASSOCIATION_FAILED:
+		/* Maybe there is another BSS under the same network? */
+		if (station_try_next_bss(station))
+			return;
+		/* fall through */
+	default:
+		break;
 	}
+
+	if (station->connect_pending)
+		station_connect_dbus_reply(station, result);
 
 	if (result != NETDEV_RESULT_OK) {
 		if (result != NETDEV_RESULT_ABORTED) {

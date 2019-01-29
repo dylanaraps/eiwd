@@ -47,6 +47,7 @@
 #include "src/eap.h"
 #include "src/knownnetworks.h"
 #include "src/network.h"
+#include "src/blacklist.h"
 
 struct network {
 	char *object_path;
@@ -670,8 +671,13 @@ struct scan_bss *network_bss_select(struct network *network)
 				bss_entry = bss_entry->next) {
 			struct scan_bss *bss = bss_entry->data;
 
-			if (wiphy_can_connect(wiphy, bss))
-				return bss;
+			if (!wiphy_can_connect(wiphy, bss))
+				continue;
+
+			if (blacklist_contains_bss(bss->addr))
+				continue;
+
+			return bss;
 		}
 
 		return NULL;
