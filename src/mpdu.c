@@ -147,8 +147,12 @@ static bool validate_mgmt_ies(const uint8_t *ies, size_t ies_len,
 		 * with recognizable element IDs."
 		 */
 		for (i = 0; i < last_idx; i++)
-			if (tag == tag_order[i])
-				goto check_request_response;
+			if (tag == tag_order[i]) {
+				if (response)
+					goto check_request_response;
+
+				/* Tag is out of order, but ignore this */
+			}
 	}
 
 	return true;
@@ -163,9 +167,6 @@ check_request_response:
 	 * only requirement being an ascending order of the numerical values
 	 * of the IDs.
 	 */
-	if (!response)
-		return false;
-
 	tag = ie_tlv_iter_get_tag(&iter);
 
 	while (ie_tlv_iter_next(&iter)) {
