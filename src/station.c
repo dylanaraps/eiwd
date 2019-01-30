@@ -1617,7 +1617,7 @@ static bool station_try_next_bss(struct station *station)
 
 	blacklist_add_bss(station->connected_bss->addr);
 
-	next = network_bss_select(station->connected_network);
+	next = network_bss_select(station->connected_network, false);
 
 	if (!next)
 		return false;

@@ -649,42 +649,50 @@ struct scan_bss *network_bss_find_by_addr(struct network *network,
 	return NULL;
 }
 
-/* Selects what we think is the best BSS to connect to */
-struct scan_bss *network_bss_select(struct network *network)
+struct scan_bss *network_bss_select(struct network *network,
+						bool fallback_to_blacklist)
 {
 	struct l_queue *bss_list = network->bss_list;
 	struct wiphy *wiphy = station_get_wiphy(network->station);
 	const struct l_queue_entry *bss_entry;
+	struct scan_bss *candidate = NULL;
 
-	switch (network_get_security(network)) {
-	case SECURITY_NONE:
-		/* Pick the first bss (strongest signal) */
-		return l_queue_peek_head(bss_list);
+	for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
+			bss_entry = bss_entry->next) {
+		struct scan_bss *bss = bss_entry->data;
 
-	case SECURITY_PSK:
-	case SECURITY_8021X:
-		/*
-		 * Pick the first bss that advertises ciphers compatible with
-		 * the wiphy.
-		 */
-		for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
-				bss_entry = bss_entry->next) {
-			struct scan_bss *bss = bss_entry->data;
-
+		switch (network_get_security(network)) {
+		case SECURITY_PSK:
+		case SECURITY_8021X:
 			if (!wiphy_can_connect(wiphy, bss))
 				continue;
-
-			if (blacklist_contains_bss(bss->addr))
-				continue;
-
-			return bss;
+			/* fall through */
+		case SECURITY_NONE:
+			break;
+		default:
+			return NULL;
 		}
 
-		return NULL;
+		/*
+		 * We only want to record the first (best) candidate. In case
+		 * all our BSS's are blacklisted but we still want to connect
+		 * we want to hold only this first candidate
+		 */
+		if (!candidate)
+			candidate = bss;
 
-	default:
-		return NULL;
+		if (!blacklist_contains_bss(bss->addr))
+			return bss;
 	}
+
+	/*
+	 * No BSS was found, but if we are falling back to blacklisted BSS's we
+	 * can just use the first connectable candidate found above.
+	 */
+	if (fallback_to_blacklist)
+		return candidate;
+
+	return NULL;
 }
 
 static void passphrase_callback(enum agent_result result,
@@ -713,7 +721,7 @@ static void passphrase_callback(enum agent_result result,
 		goto err;
 	}
 
-	bss = network_bss_select(network);
+	bss = network_bss_select(network, true);
 
 	/* Did all good BSSes go away while we waited */
 	if (!bss) {
@@ -946,7 +954,7 @@ static void eap_secret_done(enum agent_result result,
 		goto err;
 	}
 
-	bss = network_bss_select(network);
+	bss = network_bss_select(network, true);
 
 	/* Did all good BSSes go away while we waited */
 	if (!bss) {
@@ -1068,7 +1076,7 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 	 * agent this may not be the final choice because BSS visibility can
 	 * change while we wait for the agent.
 	 */
-	bss = network_bss_select(network);
+	bss = network_bss_select(network, true);
 
 	/* None of the BSSes is compatible with our stack */
 	if (!bss)
@@ -1106,7 +1114,7 @@ void network_connect_new_hidden_network(struct network *network,
 	 */
 	network->info->is_hidden = true;
 
-	bss = network_bss_select(network);
+	bss = network_bss_select(network, true);
 	if (!bss) {
 		/* This should never happened for the hidden networks. */
 		error = dbus_error_not_supported(message);

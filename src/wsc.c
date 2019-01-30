@@ -126,7 +126,7 @@ static void wsc_try_credentials(struct wsc *wsc)
 		bss = network_bss_find_by_addr(network, wsc->creds[i].addr);
 
 		if (!bss)
-			bss = network_bss_select(network);
+			bss = network_bss_select(network, true);
 
 		if (!bss)
 			continue;
