@@ -374,8 +374,7 @@ static void eap_pwd_handle_commit(struct eap_state *eap,
 	if (!pwd->element_s)
 		goto invalid_point;
 
-	pwd->scalar_s = l_ecc_scalar_new(pwd->curve,
-					(uint8_t *)pkt + (nbytes * 2), nbytes);
+	pwd->scalar_s = l_ecc_scalar_new(pwd->curve, pkt + nbytes * 2, nbytes);
 
 	pwd->p_rand = l_ecc_scalar_new_random(pwd->curve);
 	p_mask = l_ecc_scalar_new_random(pwd->curve);
