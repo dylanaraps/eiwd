@@ -233,7 +233,8 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 	uint8_t resp[15 + strlen(pwd->identity)];
 	uint8_t *pos;
 	uint8_t pwd_seed[32];
-	uint8_t pwd_value[32];	/* used as X value */
+	uint8_t pwd_value[L_ECC_SCALAR_MAX_BYTES];	/* used as X value */
+	size_t nbytes;
 
 	/*
 	 * Group desc (2) + Random func (1) + prf (1) + token (4) + prep (1) +
@@ -252,9 +253,6 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 	pwd->state = EAP_PWD_STATE_ID;
 
 	group = l_get_be16(pkt);
-	/* TODO: for now, lets only allow group 19 */
-	if (group != EAP_PWD_GROUP_DESC)
-		goto error;
 
 	pwd->curve = l_ecc_curve_get_ike_group(group);
 	if (!pwd->curve) {
@@ -291,6 +289,8 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 		goto error;
 	}
 
+	nbytes = l_ecc_curve_get_scalar_bytes(pwd->curve);
+
 	while (counter < 20) {
 		/* pwd-seed = H(token|peer-ID|server-ID|password|counter) */
 		hkdf_extract(L_CHECKSUM_SHA256, NULL, 0, 5, pwd_seed, &token, 4,
@@ -304,16 +304,16 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 		 */
 		kdf(pwd_seed, 32, "EAP-pwd Hunting And Pecking",
 				strlen("EAP-pwd Hunting And Pecking"),
-				pwd_value, 32);
+				pwd_value, nbytes);
 
 		if (!(pwd_seed[31] & 1))
 			pwd->pwe = l_ecc_point_from_data(pwd->curve,
 					L_ECC_POINT_TYPE_COMPRESSED_BIT1,
-					pwd_value, 32);
+					pwd_value, nbytes);
 		else
 			pwd->pwe = l_ecc_point_from_data(pwd->curve,
 					L_ECC_POINT_TYPE_COMPRESSED_BIT0,
-					pwd_value, 32);
+					pwd_value, nbytes);
 
 		if (pwd->pwe)
 			break;
@@ -345,13 +345,16 @@ static void eap_pwd_handle_commit(struct eap_state *eap,
 					const uint8_t *pkt, size_t len)
 {
 	struct eap_pwd_handle *pwd = eap_get_data(eap);
-	uint8_t resp[102];
+	uint8_t resp[L_ECC_POINT_MAX_BYTES + L_ECC_SCALAR_MAX_BYTES + 6];
 	uint8_t *pos;
 	struct l_ecc_scalar *p_mask;
 	struct l_ecc_scalar *order;
+	size_t nbytes = l_ecc_curve_get_scalar_bytes(pwd->curve);
 
-	if (len != 96) {
-		l_error("bad packet length, expected 96, got %zu", len);
+	/* [Element (nbytes * 2)][Scalar (nbytes)] */
+	if (len != nbytes + nbytes * 2) {
+		l_error("bad packet length, expected %zu, got %zu",
+				nbytes + nbytes * 2, len);
 		goto error;
 	}
 
@@ -363,17 +366,16 @@ static void eap_pwd_handle_commit(struct eap_state *eap,
 	pwd->state = EAP_PWD_STATE_COMMIT;
 
 	/*
-	 * RFC 5114 Section 2.6 - 256-bit Random ECP Group
-	 * Prime p is 32 bytes in length, therefore x and y will also each be
-	 * 32 bytes in length (total of 64), leaving the remainder for the
-	 * scalar value (32).
+	 * Commit contains Element_S (nbytes * 2) then Scalar_s (nbytes)
 	 */
 	pwd->element_s = l_ecc_point_from_data(pwd->curve,
-						L_ECC_POINT_TYPE_FULL, pkt, 64);
+						L_ECC_POINT_TYPE_FULL,
+						pkt, nbytes * 2);
 	if (!pwd->element_s)
 		goto invalid_point;
 
-	pwd->scalar_s = l_ecc_scalar_new(pwd->curve, (uint8_t *)pkt + 64, 32);
+	pwd->scalar_s = l_ecc_scalar_new(pwd->curve,
+					(uint8_t *)pkt + (nbytes * 2), nbytes);
 
 	pwd->p_rand = l_ecc_scalar_new_random(pwd->curve);
 	p_mask = l_ecc_scalar_new_random(pwd->curve);
@@ -397,8 +399,8 @@ static void eap_pwd_handle_commit(struct eap_state *eap,
 	/* send element_p and scalar_p */
 	pos = resp + 5; /* header */
 	*pos++ = EAP_PWD_EXCH_COMMIT;
-	pos += l_ecc_point_get_data(pwd->element_p, pos, 64);
-	pos += l_ecc_scalar_get_data(pwd->scalar_p, pos, 32);
+	pos += l_ecc_point_get_data(pwd->element_p, pos, nbytes * 2);
+	pos += l_ecc_scalar_get_data(pwd->scalar_p, pos, nbytes);
 
 	eap_pwd_send_response(eap, resp, pos - resp);
 
