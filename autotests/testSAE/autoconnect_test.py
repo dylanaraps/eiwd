@@ -14,9 +14,15 @@ class Test(unittest.TestCase):
     def test_connection_success(self):
         wd = IWD(True)
 
-        devices = wd.list_devices(1)
+        devices = wd.list_devices(4)
         self.assertIsNotNone(devices)
         device = devices[0]
+
+        # These devices aren't used in this test, this makes logs a bit nicer
+        # since these devices would presumably start autoconnecting.
+        devices[1].disconnect()
+        devices[2].disconnect()
+        devices[3].disconnect()
 
         condition = 'not obj.scanning'
         wd.wait_for_object_condition(device, condition)
