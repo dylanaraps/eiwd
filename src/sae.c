@@ -44,6 +44,9 @@ struct sae_sm {
 	struct l_ecc_point *pwe;
 	enum sae_state state;
 	const struct l_ecc_curve *curve;
+	unsigned int group;
+	uint8_t group_retry;
+	const unsigned int *ecc_groups;
 	struct l_ecc_scalar *rand;
 	struct l_ecc_scalar *scalar;
 	struct l_ecc_scalar *p_scalar;
@@ -101,7 +104,7 @@ static struct l_ecc_scalar *sae_pwd_value(const struct l_ecc_curve *curve,
 
 	if (!kdf_sha256(pwd_seed, 32, "SAE Hunting and Pecking",
 			strlen("SAE Hunting and Pecking"), prime, len,
-			pwd_value, 32))
+			pwd_value, len))
 		return false;
 
 	return l_ecc_scalar_new(curve, pwd_value, sizeof(pwd_value));
@@ -167,7 +170,7 @@ static void sae_reject_authentication(struct sae_sm *sm, uint16_t reason)
 	ptr += 2;
 
 	if (reason == MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP) {
-		l_put_u16(19, ptr);
+		l_put_u16(sm->group, ptr);
 		ptr += 2;
 	}
 
@@ -367,7 +370,7 @@ old_commit:
 	l_put_le16(0, ptr);
 	ptr += 2;
 	/* group */
-	l_put_le16(19, ptr);
+	l_put_le16(sm->group, ptr);
 	ptr += 2;
 
 	if (sm->token) {
@@ -425,6 +428,7 @@ static void sae_process_commit(struct sae_sm *sm, const uint8_t *from,
 	uint16_t reason = MMPDU_REASON_CODE_UNSPECIFIED;
 	ssize_t klen;
 	struct l_ecc_scalar *order;
+	unsigned int nbytes = l_ecc_curve_get_scalar_bytes(sm->curve);
 
 	if (sm->state != SAE_STATE_COMMITTED) {
 		l_error("bad state %u", sm->state);
@@ -439,17 +443,17 @@ static void sae_process_commit(struct sae_sm *sm, const uint8_t *from,
 	group = l_get_le16(ptr);
 	ptr += 2;
 
-	if (group != 19) {
+	if (group != sm->group) {
 		l_error("unsupported group: %u", group);
 		reason =  MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP;
 		goto reject;
 	}
 
-	sm->p_scalar = l_ecc_scalar_new(sm->curve, ptr, 32);
-	ptr += 32;
+	sm->p_scalar = l_ecc_scalar_new(sm->curve, ptr, nbytes);
+	ptr += nbytes;
 
 	sm->p_element = l_ecc_point_from_data(sm->curve, L_ECC_POINT_TYPE_FULL,
-						ptr, 64);
+						ptr, nbytes * 2);
 	if (!sm->p_element) {
 		reason = MMPDU_REASON_CODE_UNSPECIFIED;
 		goto reject;
@@ -504,7 +508,7 @@ static void sae_process_commit(struct sae_sm *sm, const uint8_t *from,
 	l_ecc_scalar_get_data(tmp_scalar, tmp, sizeof(tmp));
 
 	kdf_sha256(keyseed, 32, "SAE KCK and PMK", strlen("SAE KCK and PMK"),
-			tmp, 32, kck_and_pmk, 64);
+			tmp, nbytes, kck_and_pmk, 64);
 
 	memcpy(sm->kck, kck_and_pmk[0], 32);
 	memcpy(sm->pmk, kck_and_pmk[1], 32);
@@ -671,13 +675,32 @@ static bool sae_verify_nothing(struct sae_sm *sm, uint16_t transaction,
 	}
 
 	/* reject with unsupported group */
-	if (l_get_le16(frame) != 19) {
+	if (l_get_le16(frame) != sm->group) {
 		sae_reject_authentication(sm,
 				MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP);
 		return false;
 	}
 
 	return true;
+}
+
+static void sae_reset_state(struct sae_sm *sm)
+{
+	l_free(sm->token);
+	sm->token = NULL;
+
+	l_ecc_scalar_free(sm->scalar);
+	sm->scalar = NULL;
+	l_ecc_scalar_free(sm->p_scalar);
+	sm->p_scalar = NULL;
+	l_ecc_scalar_free(sm->rand);
+	sm->rand = NULL;
+	l_ecc_point_free(sm->element);
+	sm->element = NULL;
+	l_ecc_point_free(sm->p_element);
+	sm->p_element = NULL;
+	l_ecc_point_free(sm->pwe);
+	sm->pwe = NULL;
 }
 
 /*
@@ -715,12 +738,68 @@ static bool sae_verify_committed(struct sae_sm *sm, uint16_t transaction,
 		sae_process_anti_clogging(sm, frame, len);
 		return false;
 	case MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP:
-		l_error("AP requested unsupported FCC group %d",
-				l_get_le16(frame));
+		/*
+		 * TODO: hostapd in its current state does not include the
+		 * group number as it should. This is a violation of the spec,
+		 * but there isn't much we can do about it. We simply treat this
+		 * response as if its rejecting our last commit message (which
+		 * it most likely is). If/When this is fixed we should be
+		 * checking that the group matches here, e.g.
+		 *
+		 * if (l_get_le16(frame) != sm->group)
+		 * 	return false;
+		 *
+		 * According to 802.11 Section 12.4.8.6.4:
+		 *
+		 * "If the rejected group does not match the last offered group
+		 * the protocol instance shall silently discard the message and
+		 * set the t0 (retransmission) timer"
+		 */
+		if (len == 0)
+			l_warn("AP did not include group number in response!");
 
-		goto reject_unsupp_group;
+		sm->group_retry++;
+
+		if (sm->ecc_groups[sm->group_retry] == 0) {
+			/*
+			 * "If there are no other groups to choose, the protocol
+			 * instance shall send a Del event to the parent process
+			 * and transitions back to Nothing state"
+			 */
+			sm->state = SAE_STATE_NOTHING;
+			goto reject_unsupp_group;
+		}
+
+		/*
+		 * "If the rejected group matches the last offered group, the
+		 * protocol instance shall choose a different group and generate
+		 * the PWE and the secret values according to 12.4.5.2; it then
+		 * generates and transmits a new SAE Commit message to the peer,
+		 * zeros Sync, sets the t0 (retransmission) timer, and remains
+		 * in Committed state"
+		 */
+
+		sae_reset_state(sm);
+
+		sm->group = sm->ecc_groups[sm->group_retry];
+		sm->curve = l_ecc_curve_get_ike_group(sm->group);
+
+		sm->sync = 0;
+
+		sae_send_commit(sm, false);
+
+		return false;
 	case 0:
-		if (l_get_le16(frame) != 19) {
+		if (len < 2) {
+			sae_authentication_failed(sm,
+						MMPDU_REASON_CODE_UNSPECIFIED);
+			return false;
+		}
+
+		if (l_get_le16(frame) == sm->group)
+			return true;
+
+		if (!l_ecc_curve_get_ike_group(l_get_le16(frame))) {
 			if (sm->sync > SAE_SYNC_MAX) {
 				sae_authentication_failed(sm,
 						MMPDU_REASON_CODE_UNSPECIFIED);
@@ -731,6 +810,57 @@ static bool sae_verify_committed(struct sae_sm *sm, uint16_t transaction,
 
 			goto reject_unsupp_group;
 		}
+
+		/*
+		 * If we get here we know that the groups do not match, but the
+		 * group provided in the frame is supported. From section
+		 * 12.4.8.6.4 we see:
+		 *
+		 * "If the group is supported but does not match that used when
+		 * the protocol instance constructed its SAE Commit message,
+		 * DiffGrp shall be set and the local identity and peer identity
+		 * shall be checked"
+		 */
+
+		if (memcmp(sm->handshake->spa, sm->handshake->aa, 6) > 0) {
+			/*
+			 * "The mesh STA, with the numerically greater of the two
+			 * MAC addresses, drops the received SAE Commit message,
+			 * retransmits its last SAE Commit message, and shall
+			 * set the t0 (retransmission) timer and remain in
+			 * Committed state"
+			 */
+			sae_send_commit(sm, true);
+
+			return false;
+		}
+
+		/*
+		 * "The mesh STA, with the numerically lesser of the two
+		 * MAC addresses, zeros Sync, shall increment Sc, choose
+		 * the group from the received SAE Commit message,
+		 * generate new PWE and new secret values according to
+		 * 12.4.5.2, process the received SAE Commit message
+		 * according to 12.4.5.4, generate a new SAE Commit
+		 * message and SAE Confirm message, and shall transmit
+		 * the new Commit and Confirm to the peer. It shall then
+		 * transition to Confirmed state."
+		 */
+		sm->sync = 0;
+		sm->sc++;
+		sm->group = l_get_le16(frame);
+		sm->curve = l_ecc_curve_get_ike_group(sm->group);
+
+		sae_send_commit(sm, false);
+
+		sm->state = SAE_STATE_CONFIRMED;
+
+		/*
+		 * The processing and sending of the confirm message
+		 * will happen after we return. Since we have set the
+		 * state to CONFIRMED, our confirm handler will get
+		 * called.
+		 */
 
 		return true;
 	default:
@@ -774,7 +904,7 @@ static bool sae_verify_confirmed(struct sae_sm *sm, uint16_t trans,
 	}
 
 	/* frame shall be silently discarded */
-	if (l_get_le16(frame) != 19)
+	if (l_get_le16(frame) != sm->group)
 		return false;
 
 	/*
@@ -884,8 +1014,16 @@ void sae_rx_packet(struct sae_sm *sm, const uint8_t *from, const uint8_t *frame,
 	status = l_get_le16(ptr);
 	ptr += 2;
 
-	/* AP rejected authentication */
-	if (len == 4) {
+	/*
+	 * TODO: Hostapd seems to not include the group number when rejecting
+	 * with an unsupported group, which violates the spec. This means our
+	 * len == 4, but we can still recover this connection by renegotiating
+	 * a new group. Because of this we need to special case this status
+	 * code, as well as add the check in the verify function to allow for
+	 * this missing group number.
+	 */
+	if (len == 4 && status !=
+				MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP) {
 		sae_authentication_failed(sm, status);
 		return;
 	}
@@ -933,21 +1071,16 @@ struct sae_sm *sae_sm_new(struct handshake_state *hs, sae_tx_packet_func_t tx,
 	sm->user_data = user_data;
 	sm->handshake = hs;
 	sm->state = SAE_STATE_NOTHING;
-	sm->curve = l_ecc_curve_get_ike_group(19);
+	sm->ecc_groups = l_ecc_curve_get_supported_ike_groups();
+	sm->group = sm->ecc_groups[sm->group_retry];
+	sm->curve = l_ecc_curve_get_ike_group(sm->group);
 
 	return sm;
 }
 
 void sae_sm_free(struct sae_sm *sm)
 {
-	l_free(sm->token);
-
-	l_ecc_scalar_free(sm->scalar);
-	l_ecc_scalar_free(sm->p_scalar);
-	l_ecc_scalar_free(sm->rand);
-	l_ecc_point_free(sm->element);
-	l_ecc_point_free(sm->p_element);
-	l_ecc_point_free(sm->pwe);
+	sae_reset_state(sm);
 
 	/* zero out whole structure, including keys */
 	memset(sm, 0, sizeof(struct sae_sm));
