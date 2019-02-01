@@ -435,7 +435,8 @@ static void sae_process_commit(struct sae_sm *sm, const uint8_t *from,
 		goto reject;
 	}
 
-	if (len < 98) {
+	/* Scalar + Point + group */
+	if (len < nbytes + nbytes * 2 + 2) {
 		l_error("bad packet length");
 		goto reject;
 	}
@@ -588,8 +589,8 @@ reject:
 static void sae_send_commit(struct sae_sm *sm, bool retry)
 {
 	struct handshake_state *hs = sm->handshake;
-	/* regular commit + possible 256 byte token */
-	uint8_t commit[358];
+	/* regular commit + possible 256 byte token + 6 bytes header */
+	uint8_t commit[L_ECC_SCALAR_MAX_BYTES + L_ECC_POINT_MAX_BYTES + 262];
 	size_t len;
 
 	if (!sae_build_commit(sm, hs->spa, hs->aa, commit, &len, retry))
