@@ -45,6 +45,7 @@
 #include "src/simauth.h"
 #include "src/adhoc.h"
 #include "src/blacklist.h"
+#include "src/storage.h"
 
 #include "src/backtrace.h"
 
@@ -469,6 +470,11 @@ int main(int argc, char *argv[])
 		eap_mtu = 1400; /* on WiFi the real MTU is around 2304 */
 
 	exit_status = EXIT_FAILURE;
+
+	if (create_dirs(DAEMON_STORAGEDIR "/")) {
+		l_error("Failed to create " DAEMON_STORAGEDIR "/");
+		goto fail_dbus;
+	}
 
 	dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
 	if (!dbus) {
