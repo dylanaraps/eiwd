@@ -430,8 +430,7 @@ bool eapol_verify_ptk_2_of_4(const struct eapol_key *ek)
 		return false;
 
 	key_len = L_BE16_TO_CPU(ek->key_length);
-	if (key_len != 0)
-		return false;
+	L_WARN_ON(key_len != 0);
 
 	VERIFY_IS_ZERO(ek->eapol_key_iv);
 	VERIFY_IS_ZERO(ek->key_rsc);
@@ -510,8 +509,7 @@ bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek, bool is_wpa)
 		return false;
 
 	key_len = L_BE16_TO_CPU(ek->key_length);
-	if (key_len != 0)
-		return false;
+	L_WARN_ON(key_len != 0);
 
 	VERIFY_IS_ZERO(ek->key_nonce);
 	VERIFY_IS_ZERO(ek->eapol_key_iv);
