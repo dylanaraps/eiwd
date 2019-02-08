@@ -160,11 +160,8 @@ static bool eap_md5_load_settings(struct eap_state *eap,
 									prefix);
 		secret = l_settings_get_string(settings, "Security",
 								password_key);
-
-		if (!secret) {
-			l_error("Property '%sPassword' is missing.", prefix);
+		if (!secret)
 			return false;
-		}
 	}
 
 	md5 = l_new(struct eap_md5_state, 1);

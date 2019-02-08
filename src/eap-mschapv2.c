@@ -545,10 +545,8 @@ static bool eap_mschapv2_load_settings(struct eap_state *eap,
 
 	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
 	state->user = l_settings_get_string(settings, "Security", setting);
-	if (!state->user) {
-		l_error("'%s' setting is missing", setting);
+	if (!state->user)
 		goto error;
-	}
 
 	state->user_len = strlen(state->user);
 
@@ -565,11 +563,8 @@ static bool eap_mschapv2_load_settings(struct eap_state *eap,
 
 		snprintf(setting, sizeof(setting), "%sPassword-Hash", prefix);
 		hash_str = l_settings_get_value(settings, "Security", setting);
-		if (!hash_str) {
-			l_error("Neither '%sPassword' or '%sPassword-Hash' "
-					"setting was provided", prefix, prefix);
+		if (!hash_str)
 			goto error;
-		}
 
 		tmp = l_util_from_hexstring(hash_str, &len);
 		memcpy(state->password_hash, tmp, 16);

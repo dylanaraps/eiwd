@@ -144,11 +144,8 @@ static bool eap_gtc_load_settings(struct eap_state *eap,
 									prefix);
 		password = l_settings_get_string(settings, "Security",
 								password_key);
-
-		if (!password) {
-			l_error("Property '%sPassword' is missing.", prefix);
+		if (!password)
 			return false;
-		}
 	}
 
 	gtc = l_new(struct eap_gtc_state, 1);
