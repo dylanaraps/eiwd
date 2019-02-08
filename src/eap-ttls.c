@@ -1040,6 +1040,10 @@ static int eap_ttls_settings_check(struct l_settings *settings,
 									prefix);
 	phase2_method_name = l_settings_get_value(settings, "Security",
 								setting_key);
+	if (!phase2_method_name) {
+		l_error("Setting %s is missing", setting_key);
+		return -ENOENT;
+	}
 
 	snprintf(setting_prefix, sizeof(setting_prefix), "%sTTLS-Phase2-",
 									prefix);
