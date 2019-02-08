@@ -118,11 +118,6 @@ void handshake_state_set_8021x_config(struct handshake_state *s,
 	s->settings_8021x = settings;
 }
 
-struct l_settings *handshake_state_get_8021x_config(struct handshake_state *s)
-{
-	return s->settings_8021x;
-}
-
 static bool handshake_state_setup_own_ciphers(struct handshake_state *s,
 						const struct ie_rsn_info *info)
 {
