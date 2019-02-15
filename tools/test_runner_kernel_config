@@ -5,6 +5,7 @@ scripts/config --enable CONFIG_NLMON
 scripts/config --enable CONFIG_VLAN_8021Q
 
 scripts/config --enable CONFIG_CRYPTO_USER_API_SKCIPHER
+scripts/config --enable CONFIG_CRYPTO_USER_API_AEAD
 scripts/config --enable CONFIG_CRYPTO_USER_API_HASH
 scripts/config --enable CONFIG_CRYPTO_RSA
 scripts/config --enable CONFIG_CRYPTO_AES_X86_64
