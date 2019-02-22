@@ -258,6 +258,9 @@ enum ie_rsn_akm_suite {
 	((akm == IE_RSN_AKM_SUITE_SAE_SHA256) || \
 	(akm == IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256))
 
+#define IE_LEN(ie) \
+	(ie) ? (ie)[1] + 2 : 0
+
 struct ie_tlv_iter {
 	unsigned int max;
 	unsigned int pos;
