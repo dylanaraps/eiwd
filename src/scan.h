@@ -54,13 +54,15 @@ struct scan_bss {
 	uint8_t mde[3];
 	uint8_t ssid[32];
 	uint8_t ssid_len;
-	struct l_uintset *supported_rates;
+	uint8_t supp_rates_ie[10];
+	uint8_t *ext_supp_rates_ie;
 	uint8_t utilization;
 	uint8_t cc[3];
 	uint16_t rank;
 	bool mde_present : 1;
 	bool cc_present : 1;
 	bool cap_rm_neighbor_report : 1;
+	bool has_sup_rates : 1;
 };
 
 struct scan_parameters {

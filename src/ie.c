@@ -1367,51 +1367,128 @@ int ie_parse_bss_load_from_data(const uint8_t *data, uint8_t len,
 			out_channel_utilization, out_admission_capacity);
 }
 
-int ie_parse_supported_rates(struct ie_tlv_iter *iter,
-				struct l_uintset **set)
+/*
+ * We have to store this mapping since basic rates dont come with a convenient
+ * MCS index. Rates are stored as they are encoded in the Supported Rates IE.
+ * This does not include non 802.11g data rates, e.g. 1/2/4Mbps. This data was
+ * taken from 802.11 Section 17.3.10.2 and Table 10-7.
+ *
+ * Section 17.3.10.2 defines minimum RSSI for modulations, and Table
+ * 10-7 defines reference rates for the different modulations. Together we
+ * have minimum RSSI required for a given data rate.
+ */
+struct basic_rate_map {
+	int32_t rssi;
+	uint8_t rate;
+};
+
+/*
+ * Rates are stored in 500Kbps increments. This is how the IE encodes the data
+ * so its more convenient to match by this encoding. The actual data rate is
+ * converted to Mbps after we find a match
+ */
+static struct basic_rate_map rate_rssi_map[] = {
+	{ -82, 12 },
+	{ -81, 18 },
+	{ -79, 24 },
+	{ -77, 36 },
+	{ -74, 48 },
+	{ -70, 72 },
+	{ -66, 96 },
+	{ -65, 108 },
+};
+
+static int ie_parse_supported_rates(struct ie_tlv_iter *supp_rates_iter,
+					struct ie_tlv_iter *ext_supp_rates_iter,
+					int32_t rssi,
+					uint64_t *data_rate)
 {
+	uint8_t max_rate = 0;
+	uint8_t highest = 0;
 	const uint8_t *rates;
 	unsigned int len;
 	unsigned int i;
 
-	len = ie_tlv_iter_get_length(iter);
+	len = ie_tlv_iter_get_length(supp_rates_iter);
 
-	if (ie_tlv_iter_get_tag(iter) == IE_TYPE_SUPPORTED_RATES && len == 0)
+	if (len == 0)
 		return -EINVAL;
 
-	rates = ie_tlv_iter_get_data(iter);
+	/* Find highest rates possible with our RSSI */
+	for (i = 0; i < L_ARRAY_SIZE(rate_rssi_map); i++) {
+		struct basic_rate_map *map = &rate_rssi_map[i];
 
-	if (!*set)
-		*set = l_uintset_new(108);
+		if (rssi < map->rssi)
+			break;
+
+		max_rate = map->rate;
+	}
+
+	/* Find highest rate in Supported Rates IE */
+	rates = ie_tlv_iter_get_data(supp_rates_iter);
 
 	for (i = 0; i < len; i++) {
-		if (rates[i] == 0xff)
-			continue;
+		uint8_t r = rates[i] & 0x7f;
 
-		l_uintset_put(*set, rates[i] & 0x7f);
+		if (r <= max_rate && r > highest)
+			highest = r;
 	}
+
+	/* Find highest rate in Extended Supported Rates IE */
+	if (ext_supp_rates_iter) {
+		len = ie_tlv_iter_get_length(ext_supp_rates_iter);
+		rates = ie_tlv_iter_get_data(ext_supp_rates_iter);
+
+		for (i = 0; i < len; i++) {
+			uint8_t r = rates[i] & 0x7f;
+
+			if (r <= max_rate && r > highest)
+				highest = r;
+		}
+	}
+
+	*data_rate = (highest / 2) * 1000000;
 
 	return 0;
 }
 
-int ie_parse_supported_rates_from_data(const uint8_t *data, uint8_t len,
-				struct l_uintset **set)
+int ie_parse_supported_rates_from_data(const uint8_t *supp_rates_ie,
+					uint8_t supp_rates_len,
+					const uint8_t *ext_supp_rates_ie,
+					uint8_t ext_supp_rates_len,
+					int32_t rssi, uint64_t *data_rate)
 {
-	struct ie_tlv_iter iter;
-	uint8_t tag;
+	struct ie_tlv_iter supp_rates_iter;
+	struct ie_tlv_iter ext_supp_rates_iter;
 
-	ie_tlv_iter_init(&iter, data, len);
+	if (supp_rates_ie) {
+		ie_tlv_iter_init(&supp_rates_iter, supp_rates_ie,
+					supp_rates_len);
 
-	if (!ie_tlv_iter_next(&iter))
-		return -EMSGSIZE;
+		if (!ie_tlv_iter_next(&supp_rates_iter))
+			return -EMSGSIZE;
 
-	tag = ie_tlv_iter_get_tag(&iter);
+		if (ie_tlv_iter_get_tag(&supp_rates_iter) !=
+						IE_TYPE_SUPPORTED_RATES)
+			return -EPROTOTYPE;
+	}
 
-	if (tag != IE_TYPE_SUPPORTED_RATES &&
-			tag != IE_TYPE_EXTENDED_SUPPORTED_RATES)
-		return -EPROTOTYPE;
+	if (ext_supp_rates_ie) {
+		ie_tlv_iter_init(&ext_supp_rates_iter, ext_supp_rates_ie,
+					ext_supp_rates_len);
 
-	return ie_parse_supported_rates(&iter, set);
+		if (!ie_tlv_iter_next(&ext_supp_rates_iter))
+			return -EMSGSIZE;
+
+		if (ie_tlv_iter_get_tag(&ext_supp_rates_iter) !=
+					IE_TYPE_EXTENDED_SUPPORTED_RATES)
+			return -EPROTOTYPE;
+	}
+
+	return ie_parse_supported_rates(
+			(supp_rates_ie) ? &supp_rates_iter : NULL,
+			(ext_supp_rates_ie) ? &ext_supp_rates_iter : NULL,
+			rssi, data_rate);
 }
 
 int ie_parse_mobility_domain(struct ie_tlv_iter *iter, uint16_t *mdid,

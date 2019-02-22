@@ -809,12 +809,16 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 			have_ssid = true;
 			break;
 		case IE_TYPE_SUPPORTED_RATES:
+			if (iter.len > 8)
+				return false;
+
+			bss->has_sup_rates =  true;
+			memcpy(bss->supp_rates_ie, iter.data - 2, iter.len + 2);
+
+			break;
 		case IE_TYPE_EXTENDED_SUPPORTED_RATES:
-			if (ie_parse_supported_rates(&iter,
-						&bss->supported_rates) < 0)
-				l_warn("Unable to parse [Extended] "
-					"Supported Rates IE for "
-					MAC, MAC_STR(bss->addr));
+			bss->ext_supp_rates_ie = l_memdup(iter.data - 2,
+								iter.len + 2);
 			break;
 		case IE_TYPE_RSN:
 			if (!bss->rsne)
@@ -1042,17 +1046,27 @@ static void scan_bss_compute_rank(struct scan_bss *bss)
 	else if (bss->utilization <= 63)
 		rank *= RANK_LOW_UTILIZATION_FACTOR;
 
-	if (bss->supported_rates) {
-		uint8_t max = l_uintset_find_max(bss->supported_rates);
-		double factor = RANK_MAX_SUPPORTED_RATE_FACTOR -
+	if (bss->has_sup_rates || bss->ext_supp_rates_ie) {
+		uint64_t data_rate;
+
+		if (ie_parse_supported_rates_from_data(bss->has_sup_rates ?
+						bss->supp_rates_ie : NULL,
+						IE_LEN(bss->supp_rates_ie),
+						bss->ext_supp_rates_ie,
+						IE_LEN(bss->ext_supp_rates_ie),
+						bss->signal_strength / 100,
+						&data_rate) == 0) {
+			double factor = RANK_MAX_SUPPORTED_RATE_FACTOR -
 					RANK_MIN_SUPPORTED_RATE_FACTOR;
 
-		/*
-		 * Maximum rate is 54 Mbps, see DATA_RATE in 802.11-2012,
-		 * Section 6.5.5.2
-		 */
-		factor = factor * max / 108 + RANK_MIN_SUPPORTED_RATE_FACTOR;
-		rank *= factor;
+			/*
+			 * Maximum rate is 54 Mbps
+			 */
+			factor = factor * data_rate / 54000000 +
+						RANK_MIN_SUPPORTED_RATE_FACTOR;
+			rank *= factor;
+		} else
+			rank *= RANK_MIN_SUPPORTED_RATE_FACTOR;
 	}
 
 	irank = rank;
@@ -1065,7 +1079,7 @@ static void scan_bss_compute_rank(struct scan_bss *bss)
 
 void scan_bss_free(struct scan_bss *bss)
 {
-	l_uintset_free(bss->supported_rates);
+	l_free(bss->ext_supp_rates_ie);
 	l_free(bss->rsne);
 	l_free(bss->wpa);
 	l_free(bss->wsc);
