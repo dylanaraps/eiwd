@@ -67,6 +67,11 @@ static const uint8_t *aa;
 /* Supplicant Address */
 static const uint8_t *spa;
 
+static void tls_debug(const char *str, void *user_data)
+{
+	l_info("%s", str);
+}
+
 struct test_handshake_state {
 	struct handshake_state super;
 	const uint8_t *tk;
@@ -2933,6 +2938,9 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	s->tls = l_tls_new(true, s->app_data_cb, eapol_sm_test_tls_test_write,
 				s->ready_cb, s->disconnect_cb, s);
 	assert(s->tls);
+
+	if (getenv("IWD_TLS_DEBUG"))
+		l_tls_set_debug(s->tls, tls_debug, NULL, NULL);
 
 	s->last_id = 1;
 	s->success = false;
