@@ -760,6 +760,33 @@ static uint32_t ap_assoc_resp(struct ap_state *ap, struct sta_state *sta,
 					true, callback, sta);
 }
 
+static int ap_parse_supported_rates(struct ie_tlv_iter *iter,
+					struct l_uintset **set)
+{
+	const uint8_t *rates;
+	unsigned int len;
+	unsigned int i;
+
+	len = ie_tlv_iter_get_length(iter);
+
+	if (ie_tlv_iter_get_tag(iter) == IE_TYPE_SUPPORTED_RATES && len == 0)
+		return -EINVAL;
+
+	rates = ie_tlv_iter_get_data(iter);
+
+	if (!*set)
+		*set = l_uintset_new(108);
+
+	for (i = 0; i < len; i++) {
+		if (rates[i] == 0xff)
+			continue;
+
+		l_uintset_put(*set, rates[i] & 0x7f);
+	}
+
+	return 0;
+}
+
 /*
  * This handles both the Association and Reassociation Request frames.
  * Association Request is documented in 802.11-2016 9.3.3.6 (frame format),
@@ -831,7 +858,7 @@ static void ap_assoc_reassoc(struct sta_state *sta, bool reassoc,
 
 		case IE_TYPE_SUPPORTED_RATES:
 		case IE_TYPE_EXTENDED_SUPPORTED_RATES:
-			if (ie_parse_supported_rates(ies, &rates) < 0) {
+			if (ap_parse_supported_rates(ies, &rates) < 0) {
 				err = MMPDU_REASON_CODE_INVALID_IE;
 				goto bad_frame;
 			}
