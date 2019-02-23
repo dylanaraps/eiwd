@@ -866,6 +866,14 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 			bss->cc_present = true;
 
 			break;
+		case IE_TYPE_HT_CAPABILITIES:
+			if (iter.len != 26)
+				return false;
+
+			bss->ht_capable = true;
+			memcpy(bss->ht_ie, iter.data - 2, iter.len + 2);
+
+			break;
 		}
 	}
 
@@ -1049,20 +1057,19 @@ static void scan_bss_compute_rank(struct scan_bss *bss)
 	if (bss->has_sup_rates || bss->ext_supp_rates_ie) {
 		uint64_t data_rate;
 
-		if (ie_parse_supported_rates_from_data(bss->has_sup_rates ?
-						bss->supp_rates_ie : NULL,
-						IE_LEN(bss->supp_rates_ie),
-						bss->ext_supp_rates_ie,
-						IE_LEN(bss->ext_supp_rates_ie),
-						bss->signal_strength / 100,
-						&data_rate) == 0) {
+		if (ie_parse_data_rates(bss->has_sup_rates ?
+					bss->supp_rates_ie : NULL,
+					bss->ext_supp_rates_ie,
+					bss->ht_capable ? bss->ht_ie : NULL,
+					bss->signal_strength / 100,
+					&data_rate) == 0) {
 			double factor = RANK_MAX_SUPPORTED_RATE_FACTOR -
 					RANK_MIN_SUPPORTED_RATE_FACTOR;
 
 			/*
-			 * Maximum rate is 54 Mbps
+			 * Maximum rate is 600 Mbps (HT)
 			 */
-			factor = factor * data_rate / 54000000 +
+			factor = factor * data_rate / 600000000 +
 						RANK_MIN_SUPPORTED_RATE_FACTOR;
 			rank *= factor;
 		} else

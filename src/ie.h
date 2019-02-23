@@ -419,6 +419,12 @@ int ie_parse_supported_rates_from_data(const uint8_t *supp_rates_ie,
 					uint8_t ext_supp_rates_len,
 					int32_t rssi, uint64_t *data_rate);
 
+int ie_parse_data_rates(const uint8_t *supp_rates_ie,
+			const uint8_t *ext_supp_rates_ie,
+			const uint8_t *ht_ie,
+			int32_t rssi,
+			uint64_t *data_rate);
+
 int ie_parse_mobility_domain(struct ie_tlv_iter *iter, uint16_t *mdid,
 				bool *ft_over_ds, bool *resource_req);
 int ie_parse_mobility_domain_from_data(const uint8_t *data, uint8_t len,

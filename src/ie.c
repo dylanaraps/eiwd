@@ -1491,6 +1491,224 @@ int ie_parse_supported_rates_from_data(const uint8_t *supp_rates_ie,
 			rssi, data_rate);
 }
 
+enum ht_vht_channel_width {
+	HT_VHT_CHANNEL_WIDTH_20MHZ = 0,
+	HT_VHT_CHANNEL_WIDTH_40MHZ,
+	HT_VHT_CHANNEL_WIDTH_80MHZ,
+	HT_VHT_CHANNEL_WIDTH_160MHZ,
+};
+
+/*
+ * Base RSSI values for 20MHz (both HT and VHT) channel. These values can be
+ * used to calculate the minimum RSSI values for all other channel widths. HT
+ * MCS indexes are grouped into ranges of 8 (per spatial stream) where VHT are
+ * grouped in chunks of 10. This just means HT will not use the last two
+ * index's of this array.
+ */
+static const int32_t ht_vht_base_rssi[] = {
+	-82, -79, -77, -74, -70, -66, -65, -64, -59, -57
+};
+
+struct ht_vht_rate {
+	uint64_t rate;
+	uint64_t sgi_rate;
+};
+
+static const struct ht_vht_rate ht_vht_rates[] = {
+	[HT_VHT_CHANNEL_WIDTH_20MHZ] = {	.rate = 6500000,
+						.sgi_rate = 7200000 },
+	[HT_VHT_CHANNEL_WIDTH_40MHZ] = {	.rate = 13500000,
+						.sgi_rate = 15000000 },
+	[HT_VHT_CHANNEL_WIDTH_80MHZ] = {	.rate = 29300000,
+						.sgi_rate = 32500000 },
+	[HT_VHT_CHANNEL_WIDTH_160MHZ] = {	.rate = 58500000,
+						.sgi_rate = 65000000 },
+};
+
+/*
+ * Both HT and VHT rates are calculated in the same fashion. The only difference
+ * is a relative MCS index is used for HT since, for each NSS, the formula
+ * is the same with relative index's. This is why this is called with index % 8
+ * for HT, but not VHT.
+ */
+static bool calculate_ht_vht_data_rate(uint8_t index,
+					enum ht_vht_channel_width width,
+					int32_t rssi, uint8_t nss, bool sgi,
+					uint64_t *data_rate)
+{
+	const struct ht_vht_rate *rate = &ht_vht_rates[width];
+	int32_t width_adjust = width * 3;
+
+	if (rssi < ht_vht_base_rssi[index] + width_adjust)
+		return false;
+
+	if (sgi)
+		*data_rate = rate->sgi_rate;
+	else
+		*data_rate = rate->rate;
+
+	/* adjust base for spatial streams */
+	*data_rate *= nss;
+
+	/*
+	 * As with HT, the VHT rates multiplier jumps up
+	 * by 2 after MCS index 4
+	 */
+	if (index < 4)
+		*data_rate *= index + 1;
+	else
+		*data_rate *= index + 3;
+
+	return true;
+}
+
+static int ie_parse_ht_capability(struct ie_tlv_iter *iter, int32_t rssi,
+				uint64_t *data_rate)
+{
+	unsigned int len;
+	const uint8_t *data;
+	uint8_t ht_cap;
+	int i;
+	uint64_t highest_rate = 0;
+	bool support_40mhz;
+	bool short_gi_20mhz;
+	bool short_gi_40mhz;
+
+	len = ie_tlv_iter_get_length(iter);
+
+	if (len < 26)
+		return -EINVAL;
+
+	if (ie_tlv_iter_get_tag(iter) != IE_TYPE_HT_CAPABILITIES)
+		return -EINVAL;
+
+	data = ie_tlv_iter_get_data(iter);
+
+	/* Parse out channel width set and short GI */
+	ht_cap = l_get_u8(data++);
+
+	support_40mhz = util_is_bit_set(ht_cap, 1);
+	short_gi_20mhz = util_is_bit_set(ht_cap, 5);
+	short_gi_40mhz = util_is_bit_set(ht_cap, 6);
+
+	data += 2;
+
+	/*
+	 * TODO: Support MCS values 32 - 76
+	 *
+	 * The MCS values > 31 do not follow the same pattern since they use
+	 * unequal modulation per spatial stream. These higher MCS values
+	 * actually don't follow a pattern at all, since each stream can have a
+	 * different modulation a higher MCS value does not mean higher
+	 * throughput. For this reason these MCS indexes are left out.
+	 */
+	for (i = 31; i >= 0; i--) {
+		uint64_t drate;
+		uint8_t byte = i / 8;
+		uint8_t bit = i % 8;
+
+		if (!util_is_bit_set(data[byte], bit))
+			continue;
+
+		if (!support_40mhz)
+			goto check_20;
+
+		if (calculate_ht_vht_data_rate(i % 8,
+						HT_VHT_CHANNEL_WIDTH_40MHZ,
+						rssi, (i / 8) + 1,
+						short_gi_40mhz, &drate)) {
+			*data_rate = drate;
+			return 0;
+		}
+
+check_20:
+		if (!calculate_ht_vht_data_rate(i % 8,
+						HT_VHT_CHANNEL_WIDTH_20MHZ,
+						rssi, (i / 8) + 1,
+						short_gi_20mhz, &drate))
+			continue;
+
+		if (!support_40mhz) {
+			*data_rate = drate;
+			return 0;
+		}
+
+		if (drate > highest_rate)
+			highest_rate = drate;
+	}
+
+	if (!highest_rate)
+		return -ENOTSUP;
+
+	*data_rate = highest_rate;
+
+	return 0;
+}
+
+static int ie_parse_ht_capability_from_data(const uint8_t *data, uint8_t len,
+				int32_t rssi, uint64_t *data_rate)
+{
+	struct ie_tlv_iter iter;
+	uint8_t tag;
+
+	ie_tlv_iter_init(&iter, data, len);
+
+	if (!ie_tlv_iter_next(&iter))
+		return -EMSGSIZE;
+
+	tag = ie_tlv_iter_get_tag(&iter);
+
+	if (tag != IE_TYPE_HT_CAPABILITIES)
+		return -EPROTOTYPE;
+
+	return ie_parse_ht_capability(&iter, rssi, data_rate);
+}
+
+/*
+ * Calculates the theoretical maximum data rates out of the provided
+ * supported rates IE, HT IE, and VHT IE. All 3 parsing functions are allowed
+ * to return -ENOTSUP, which indicates that a data rate was not found given
+ * the provided data. This is not fatal, it most likely means our RSSI was too
+ * low.
+ */
+int ie_parse_data_rates(const uint8_t *supp_rates_ie,
+			const uint8_t *ext_supp_rates_ie,
+			const uint8_t *ht_ie,
+			int32_t rssi,
+			uint64_t *data_rate)
+{
+	int ret = -ENOTSUP;
+	uint64_t rate = 0;
+
+	/* An RSSI this low will not yield any rate results */
+	if (rssi < -82)
+		return -ENOTSUP;
+
+	if (ht_ie) {
+		ret = ie_parse_ht_capability_from_data(ht_ie, IE_LEN(ht_ie),
+						rssi, &rate);
+		if (ret == 0)
+			goto done;
+	}
+
+	if (supp_rates_ie || ext_supp_rates_ie) {
+		ret = ie_parse_supported_rates_from_data(supp_rates_ie,
+						IE_LEN(supp_rates_ie),
+						ext_supp_rates_ie,
+						IE_LEN(supp_rates_ie),
+						rssi, &rate);
+		if (ret == 0)
+			goto done;
+	}
+
+	return ret;
+
+done:
+	*data_rate = rate;
+
+	return 0;
+}
+
 int ie_parse_mobility_domain(struct ie_tlv_iter *iter, uint16_t *mdid,
 				bool *ft_over_ds, bool *resource_req)
 {
