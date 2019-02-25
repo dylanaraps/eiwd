@@ -1387,7 +1387,7 @@ struct basic_rate_map {
  * so its more convenient to match by this encoding. The actual data rate is
  * converted to Mbps after we find a match
  */
-static struct basic_rate_map rate_rssi_map[] = {
+static const struct basic_rate_map rate_rssi_map[] = {
 	{ -82, 12 },
 	{ -81, 18 },
 	{ -79, 24 },
@@ -1416,7 +1416,7 @@ static int ie_parse_supported_rates(struct ie_tlv_iter *supp_rates_iter,
 
 	/* Find highest rates possible with our RSSI */
 	for (i = 0; i < L_ARRAY_SIZE(rate_rssi_map); i++) {
-		struct basic_rate_map *map = &rate_rssi_map[i];
+		const struct basic_rate_map *map = &rate_rssi_map[i];
 
 		if (rssi < map->rssi)
 			break;
