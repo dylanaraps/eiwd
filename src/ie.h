@@ -422,6 +422,7 @@ int ie_parse_supported_rates_from_data(const uint8_t *supp_rates_ie,
 int ie_parse_data_rates(const uint8_t *supp_rates_ie,
 			const uint8_t *ext_supp_rates_ie,
 			const uint8_t *ht_ie,
+			const uint8_t *vht_ie,
 			int32_t rssi,
 			uint64_t *data_rate);
 

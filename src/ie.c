@@ -1665,6 +1665,210 @@ static int ie_parse_ht_capability_from_data(const uint8_t *data, uint8_t len,
 }
 
 /*
+ * IEEE 802.11 - Table 9-250
+ *
+ * For simplicity, we are ignoring the Extended BSS BW support, per NOTE 11:
+ *
+ * NOTE 11—A receiving STA in which dot11VHTExtendedNSSCapable is false will
+ * ignore the Extended NSS BW Support subfield and effectively evaluate this
+ * table only at the entries where Extended NSS BW Support is 0.
+ *
+ * This also allows us to group the 160/80+80 widths together, since they are
+ * the same when Extended NSS BW is zero.
+ */
+static const uint8_t vht_width_map[3][5] = {
+	[0] = { 1, 1, 1, 0, 0 },
+	[1] = { 1, 1, 1, 1, 0 },
+	[2] = { 1, 1, 1, 1, 1 },
+};
+
+static int ie_parse_vht_capability(struct ie_tlv_iter *vht_iter,
+				struct ie_tlv_iter *ht_iter, int32_t rssi,
+				uint64_t *data_rate)
+{
+	int width;
+	int mcs;
+	unsigned int nss;
+	unsigned int len;
+	const uint8_t *data;
+	uint8_t channel_width_set;
+	uint8_t rx_mcs_map[2];
+	uint8_t tx_mcs_map[2];
+	unsigned int max_rx_mcs = 0;
+	unsigned int rx_nss;
+	unsigned int max_tx_mcs = 0;
+	unsigned int tx_nss;
+	uint8_t ht_cap;
+	bool short_gi_20mhz;
+	bool short_gi_40mhz;
+	bool short_gi_80mhz;
+	bool short_gi_160mhz;
+	uint64_t highest_rate = 0;
+
+	/* grab the short GI bits from the HT IE */
+	len = ie_tlv_iter_get_length(ht_iter);
+
+	if (len != 26)
+		return -EINVAL;
+
+	data = ie_tlv_iter_get_data(ht_iter);
+
+	ht_cap = l_get_u8(data);
+
+	short_gi_20mhz = util_is_bit_set(ht_cap, 5);
+	short_gi_40mhz = util_is_bit_set(ht_cap, 6);
+
+	/* now move onto VHT */
+	len = ie_tlv_iter_get_length(vht_iter);
+
+	if (len != 12)
+		return -EINVAL;
+
+	data = ie_tlv_iter_get_data(vht_iter);
+
+	channel_width_set = util_bit_field(*data, 2, 2);
+	short_gi_80mhz = util_bit_field(*data, 5, 1);
+	short_gi_160mhz = util_bit_field(*data, 6, 1);
+
+	data += 4;
+
+	rx_mcs_map[0] = *data++;
+	rx_mcs_map[1] = *data++;
+
+	data += 2;
+
+	tx_mcs_map[0] = *data++;
+	tx_mcs_map[1] = *data++;
+
+	/* NSS->MCS map values are grouped in 2-bit values */
+	for (mcs = 15; mcs >= 0; mcs -= 2) {
+		uint8_t rx_val = util_bit_field(rx_mcs_map[mcs / 8],
+							mcs % 8, 2);
+		uint8_t tx_val = util_bit_field(tx_mcs_map[mcs / 8],
+							mcs % 8, 2);
+
+		/*
+		 * 0 indicates support for MCS 0-7
+		 * 1 indicates support for MCS 0-8
+		 * 2 indicates support for MCS 0-9
+		 *
+		 * Therefore 7 + rx/tx_val gives us our max MCS index.
+		 */
+		if (!max_rx_mcs && rx_val < 3) {
+			max_rx_mcs = 7 + rx_val;
+			rx_nss = (mcs / 2) + 1;
+		}
+
+		if (!max_tx_mcs && tx_val < 3) {
+			max_tx_mcs = 7 + tx_val;
+			tx_nss = (mcs / 2) + 1;
+		}
+
+		if (max_rx_mcs && max_tx_mcs)
+			break;
+	}
+
+	if (!max_rx_mcs && !max_tx_mcs)
+		return -EINVAL;
+
+	/*
+	 * Now, using channel width, MCS index, and NSS we can determine the
+	 * theoretical maximum data rate. We iterate through all possible
+	 * combinations (width, MCS, NSS), saving the highest data rate we find.
+	 *
+	 * We could calculate a maximum data rate separately for TX/RX, but
+	 * since this is only used for BSS ranking, the minumum between the
+	 * two should be good enough.
+	 */
+	for (width = sizeof(vht_width_map[0]) - 1; width >= 0; width--) {
+		bool sgi = false;
+
+		if (!vht_width_map[channel_width_set][width])
+			continue;
+
+		/*
+		 * Consolidate short GI support into a single boolean, dependent
+		 * on the channel width for this iteration.
+		 */
+		switch (width) {
+		case HT_VHT_CHANNEL_WIDTH_20MHZ:
+			sgi = short_gi_20mhz;
+			break;
+		case HT_VHT_CHANNEL_WIDTH_40MHZ:
+			sgi = short_gi_40mhz;
+			break;
+		case HT_VHT_CHANNEL_WIDTH_80MHZ:
+			sgi = short_gi_80mhz;
+			break;
+		case HT_VHT_CHANNEL_WIDTH_160MHZ:
+			sgi = short_gi_160mhz;
+			break;
+		}
+
+		for (nss = minsize(rx_nss, tx_nss); nss > 0; nss--) {
+			/* NSS > 4 does not apply to 20/40MHz */
+			if (width <= HT_VHT_CHANNEL_WIDTH_40MHZ && nss > 4)
+				continue;
+
+			for (mcs = minsize(max_rx_mcs, max_tx_mcs);
+						mcs >= 0; mcs--) {
+				uint64_t drate;
+
+				if (!calculate_ht_vht_data_rate(mcs, width,
+							rssi, nss, sgi, &drate))
+					continue;
+
+				if (drate > highest_rate)
+					highest_rate = drate;
+
+				/* Lower MCS index will only have lower rates */
+				goto next_chanwidth;
+			}
+		}
+next_chanwidth: ; /* empty statement */
+	}
+
+	if (highest_rate == 0)
+		return -ENOTSUP;
+
+	*data_rate = highest_rate;
+
+	return 0;
+}
+
+static int ie_parse_vht_capability_from_data(const uint8_t *vht_ie,
+					size_t vht_len, const uint8_t *ht_ie,
+					size_t ht_len, int32_t rssi,
+					uint64_t *data_rate)
+{
+	struct ie_tlv_iter vht_iter;
+	struct ie_tlv_iter ht_iter;
+	uint8_t tag;
+
+	ie_tlv_iter_init(&vht_iter, vht_ie, vht_len);
+
+	if (!ie_tlv_iter_next(&vht_iter))
+		return -EMSGSIZE;
+
+	tag = ie_tlv_iter_get_tag(&vht_iter);
+
+	if (tag != IE_TYPE_VHT_CAPABILITIES)
+		return -EPROTOTYPE;
+
+	ie_tlv_iter_init(&ht_iter, ht_ie, ht_len);
+
+	if (!ie_tlv_iter_next(&ht_iter))
+		return -EMSGSIZE;
+
+	tag = ie_tlv_iter_get_tag(&ht_iter);
+
+	if (tag != IE_TYPE_HT_CAPABILITIES)
+		return -EPROTOTYPE;
+
+	return ie_parse_vht_capability(&vht_iter, &ht_iter, rssi, data_rate);
+}
+
+/*
  * Calculates the theoretical maximum data rates out of the provided
  * supported rates IE, HT IE, and VHT IE. All 3 parsing functions are allowed
  * to return -ENOTSUP, which indicates that a data rate was not found given
@@ -1674,6 +1878,7 @@ static int ie_parse_ht_capability_from_data(const uint8_t *data, uint8_t len,
 int ie_parse_data_rates(const uint8_t *supp_rates_ie,
 			const uint8_t *ext_supp_rates_ie,
 			const uint8_t *ht_ie,
+			const uint8_t *vht_ie,
 			int32_t rssi,
 			uint64_t *data_rate)
 {
@@ -1683,6 +1888,14 @@ int ie_parse_data_rates(const uint8_t *supp_rates_ie,
 	/* An RSSI this low will not yield any rate results */
 	if (rssi < -82)
 		return -ENOTSUP;
+
+	if (ht_ie && vht_ie) {
+		ret = ie_parse_vht_capability_from_data(vht_ie, IE_LEN(vht_ie),
+							ht_ie, IE_LEN(ht_ie),
+							rssi, &rate);
+		if (ret == 0)
+			goto done;
+	}
 
 	if (ht_ie) {
 		ret = ie_parse_ht_capability_from_data(ht_ie, IE_LEN(ht_ie),

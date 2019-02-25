@@ -60,11 +60,13 @@ struct scan_bss {
 	uint8_t cc[3];
 	uint16_t rank;
 	uint8_t ht_ie[28];
+	uint8_t vht_ie[14];
 	bool mde_present : 1;
 	bool cc_present : 1;
 	bool cap_rm_neighbor_report : 1;
 	bool has_sup_rates : 1;
 	bool ht_capable : 1;
+	bool vht_capable : 1;
 };
 
 struct scan_parameters {

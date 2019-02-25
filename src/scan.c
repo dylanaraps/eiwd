@@ -874,6 +874,14 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 			memcpy(bss->ht_ie, iter.data - 2, iter.len + 2);
 
 			break;
+		case IE_TYPE_VHT_CAPABILITIES:
+			if (iter.len != 12)
+				return false;
+
+			bss->vht_capable = true;
+			memcpy(bss->vht_ie, iter.data - 2, iter.len + 2);
+
+			break;
 		}
 	}
 
@@ -1061,15 +1069,16 @@ static void scan_bss_compute_rank(struct scan_bss *bss)
 					bss->supp_rates_ie : NULL,
 					bss->ext_supp_rates_ie,
 					bss->ht_capable ? bss->ht_ie : NULL,
+					bss->vht_capable ? bss->vht_ie : NULL,
 					bss->signal_strength / 100,
 					&data_rate) == 0) {
 			double factor = RANK_MAX_SUPPORTED_RATE_FACTOR -
 					RANK_MIN_SUPPORTED_RATE_FACTOR;
 
 			/*
-			 * Maximum rate is 600 Mbps (HT)
+			 * Maximum rate is 2340Mbps (VHT)
 			 */
-			factor = factor * data_rate / 600000000 +
+			factor = factor * data_rate / 2340000000 +
 						RANK_MIN_SUPPORTED_RATE_FACTOR;
 			rank *= factor;
 		} else
