@@ -9,6 +9,14 @@ BusName=net.connman.iwd
 ExecStart=@libexecdir@/iwd
 LimitNPROC=1
 Restart=on-failure
+PrivateTmp=true
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/iwd/
+ProtectControlGroups=yes
+ProtectKernelModules=yes
 
 [Install]
 WantedBy=multi-user.target
