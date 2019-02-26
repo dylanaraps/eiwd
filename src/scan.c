@@ -1015,13 +1015,15 @@ static struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
 	return bss;
 }
 
+/* User configurable options */
+static double RANK_5G_FACTOR;
+
 static void scan_bss_compute_rank(struct scan_bss *bss)
 {
 	static const double RANK_RSNE_FACTOR = 1.2;
 	static const double RANK_WPA_FACTOR = 1.0;
 	static const double RANK_OPEN_FACTOR = 0.5;
 	static const double RANK_NO_PRIVACY_FACTOR = 0.5;
-	static const double RANK_5G_FACTOR = 1.1;
 	static const double RANK_HIGH_UTILIZATION_FACTOR = 0.8;
 	static const double RANK_LOW_UTILIZATION_FACTOR = 1.2;
 	static const double RANK_MIN_SUPPORTED_RATE_FACTOR = 0.8;
@@ -1710,6 +1712,8 @@ void scan_freq_set_foreach(struct scan_freq_set *freqs,
 
 bool scan_init(struct l_genl_family *in)
 {
+	const struct l_settings *config = iwd_get_config();
+
 	nl80211 = in;
 	scan_id = l_genl_family_register(nl80211, "scan", scan_notify,
 						NULL, NULL);
@@ -1720,6 +1724,10 @@ bool scan_init(struct l_genl_family *in)
 	}
 
 	scan_contexts = l_queue_new();
+
+	if (!l_settings_get_double(config, "Rank", "rank_5g_factor",
+					&RANK_5G_FACTOR))
+		RANK_5G_FACTOR = 1.0;
 
 	return true;
 }
