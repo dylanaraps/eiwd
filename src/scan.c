@@ -233,7 +233,7 @@ static unsigned int scan_send_start(struct l_genl_msg **msg,
 	return id;
 }
 
-static void scan_triggered(struct l_genl_msg *msg, void *userdata)
+static void scan_request_triggered(struct l_genl_msg *msg, void *userdata)
 {
 	struct scan_context *sc = userdata;
 	struct scan_request *sr = sc->current_sr;
@@ -450,7 +450,7 @@ static int scan_request_send_next(struct scan_context *sc,
 	if (!cmd)
 		return -ENOMSG;
 
-	sc->start_cmd_id = scan_send_start(&cmd, scan_triggered, sc);
+	sc->start_cmd_id = scan_send_start(&cmd, scan_request_triggered, sc);
 	if (sc->start_cmd_id) {
 		sc->triggered = false;
 		sc->current_sr = sr;
