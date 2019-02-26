@@ -1026,8 +1026,8 @@ static void scan_bss_compute_rank(struct scan_bss *bss)
 	static const double RANK_NO_PRIVACY_FACTOR = 0.5;
 	static const double RANK_HIGH_UTILIZATION_FACTOR = 0.8;
 	static const double RANK_LOW_UTILIZATION_FACTOR = 1.2;
-	static const double RANK_MIN_SUPPORTED_RATE_FACTOR = 0.8;
-	static const double RANK_MAX_SUPPORTED_RATE_FACTOR = 1.1;
+	static const double RANK_MIN_SUPPORTED_RATE_FACTOR = 0.6;
+	static const double RANK_MAX_SUPPORTED_RATE_FACTOR = 1.3;
 	double rank;
 	uint32_t irank;
 
