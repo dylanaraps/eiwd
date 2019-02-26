@@ -262,7 +262,9 @@ static void scan_request_triggered(struct l_genl_msg *msg, void *userdata)
 	sc->state = sr->passive ? SCAN_STATE_PASSIVE : SCAN_STATE_ACTIVE;
 	l_debug("%s scan triggered for ifindex: %u",
 		sr->passive ? "Passive" : "Active", sc->ifindex);
+
 	sc->triggered = true;
+	l_genl_msg_unref(l_queue_pop_head(sr->cmds));
 
 	if (sr->trigger) {
 		sr->trigger(0, sr->userdata);
@@ -446,7 +448,7 @@ static void scan_cmds_add(struct l_queue *cmds, struct scan_context *sc,
 static int scan_request_send_next(struct scan_context *sc,
 					struct scan_request *sr)
 {
-	struct l_genl_msg *cmd = l_queue_pop_head(sr->cmds);
+	struct l_genl_msg *cmd = l_queue_peek_head(sr->cmds);
 	if (!cmd)
 		return -ENOMSG;
 
@@ -457,7 +459,6 @@ static int scan_request_send_next(struct scan_context *sc,
 		return 0;
 	}
 
-	l_genl_msg_unref(cmd);
 	return -EIO;
 }
 
