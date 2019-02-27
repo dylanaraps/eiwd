@@ -627,7 +627,9 @@ static void netdev_disconnect_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
 
-	netdev_connect_failed(netdev, netdev->result, netdev->last_status_code);
+	/* FIXME: This should be a status code */
+	netdev_connect_failed(netdev, netdev->result,
+					MMPDU_REASON_CODE_UNSPECIFIED);
 }
 
 static void netdev_free(void *data)
@@ -1062,7 +1064,7 @@ static void netdev_connect_ok(struct netdev *netdev)
 }
 
 static void netdev_setting_keys_failed(struct netdev_handshake_state *nhs,
-							uint16_t reason_code)
+						int err)
 {
 	struct netdev *netdev = nhs->netdev;
 	struct l_genl_msg *msg;
@@ -1090,20 +1092,19 @@ static void netdev_setting_keys_failed(struct netdev_handshake_state *nhs,
 	}
 
 	netdev->result = NETDEV_RESULT_KEY_SETTING_FAILED;
-	netdev->last_status_code = reason_code;
-
-	handshake_event(&nhs->super, HANDSHAKE_EVENT_SETTING_KEYS_FAILED, NULL);
+	handshake_event(&nhs->super, HANDSHAKE_EVENT_SETTING_KEYS_FAILED, &err);
 
 	switch (netdev->type) {
 	case NL80211_IFTYPE_STATION:
-		msg = netdev_build_cmd_disconnect(netdev, reason_code);
+		msg = netdev_build_cmd_disconnect(netdev,
+						MMPDU_REASON_CODE_UNSPECIFIED);
 		netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
 							netdev_disconnect_cb,
 							netdev, NULL);
 		break;
 	case NL80211_IFTYPE_AP:
 		msg = netdev_build_cmd_del_station(netdev, nhs->super.spa,
-				reason_code, false);
+				MMPDU_REASON_CODE_UNSPECIFIED, false);
 		if (!l_genl_family_send(nl80211, msg, NULL, NULL, NULL))
 			l_error("error sending DEL_STATION");
 	}
@@ -1138,8 +1139,7 @@ static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
 
 	if (err < 0) {
 		l_error("Set Station failed for ifindex %d", netdev->index);
-		netdev_setting_keys_failed(nhs,
-						MMPDU_REASON_CODE_UNSPECIFIED);
+		netdev_setting_keys_failed(nhs, err);
 		return;
 	}
 
@@ -1151,18 +1151,18 @@ static void netdev_new_group_key_cb(struct l_genl_msg *msg, void *data)
 {
 	struct netdev_handshake_state *nhs = data;
 	struct netdev *netdev = nhs->netdev;
+	int err = l_genl_msg_get_error(msg);
 
 	nhs->group_new_key_cmd_id = 0;
 
-	if (l_genl_msg_get_error(msg) < 0) {
+	if (err < 0) {
 		l_error("New Key for Group Key failed for ifindex: %d",
 				netdev->index);
-		netdev_setting_keys_failed(nhs, MMPDU_REASON_CODE_UNSPECIFIED);
+		netdev_setting_keys_failed(nhs, err);
 		return;
 	}
 
 	nhs->gtk_installed = true;
-
 	try_handshake_complete(nhs);
 }
 
@@ -1171,18 +1171,18 @@ static void netdev_new_group_management_key_cb(struct l_genl_msg *msg,
 {
 	struct netdev_handshake_state *nhs = data;
 	struct netdev *netdev = nhs->netdev;
+	int err = l_genl_msg_get_error(msg);
 
 	nhs->group_management_new_key_cmd_id = 0;
 
-	if (l_genl_msg_get_error(msg) < 0) {
+	if (err < 0) {
 		l_error("New Key for Group Mgmt failed for ifindex: %d",
 				netdev->index);
-		netdev_setting_keys_failed(nhs, MMPDU_REASON_CODE_UNSPECIFIED);
+		netdev_setting_keys_failed(nhs, err);
 		return;
 	}
 
 	nhs->igtk_installed = true;
-
 	try_handshake_complete(nhs);
 }
 
@@ -1261,14 +1261,12 @@ static void netdev_set_gtk(struct handshake_state *hs, uint8_t key_index,
 
 	if (crypto_cipher_key_len(cipher) != gtk_len) {
 		l_error("Unexpected key length: %d", gtk_len);
-		netdev_setting_keys_failed(nhs,
-					MMPDU_REASON_CODE_INVALID_GROUP_CIPHER);
+		netdev_setting_keys_failed(nhs, -ERANGE);
 		return;
 	}
 
 	if (!netdev_copy_tk(gtk_buf, gtk, cipher, false)) {
-		netdev_setting_keys_failed(nhs,
-					MMPDU_REASON_CODE_INVALID_GROUP_CIPHER);
+		netdev_setting_keys_failed(nhs, -ENOENT);
 		return;
 	}
 
@@ -1288,7 +1286,7 @@ static void netdev_set_gtk(struct handshake_state *hs, uint8_t key_index,
 		return;
 
 	l_genl_msg_unref(msg);
-	netdev_setting_keys_failed(nhs, MMPDU_REASON_CODE_UNSPECIFIED);
+	netdev_setting_keys_failed(nhs, -EIO);
 }
 
 static void netdev_set_igtk(struct handshake_state *hs, uint8_t key_index,
@@ -1308,8 +1306,7 @@ static void netdev_set_igtk(struct handshake_state *hs, uint8_t key_index,
 
 	if (crypto_cipher_key_len(cipher) != igtk_len) {
 		l_error("Unexpected key length: %d", igtk_len);
-		netdev_setting_keys_failed(nhs,
-					MMPDU_REASON_CODE_INVALID_GROUP_CIPHER);
+		netdev_setting_keys_failed(nhs, -ERANGE);
 		return;
 	}
 
@@ -1319,8 +1316,7 @@ static void netdev_set_igtk(struct handshake_state *hs, uint8_t key_index,
 		break;
 	default:
 		l_error("Unexpected cipher: %x", cipher);
-		netdev_setting_keys_failed(nhs,
-					MMPDU_REASON_CODE_INVALID_GROUP_CIPHER);
+		netdev_setting_keys_failed(nhs, -ENOENT);
 		return;
 	}
 
@@ -1336,7 +1332,7 @@ static void netdev_set_igtk(struct handshake_state *hs, uint8_t key_index,
 		return;
 
 	l_genl_msg_unref(msg);
-	netdev_setting_keys_failed(nhs, MMPDU_REASON_CODE_UNSPECIFIED);
+	netdev_setting_keys_failed(nhs, -EIO);
 }
 
 static void netdev_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
@@ -1344,10 +1340,11 @@ static void netdev_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 	struct netdev_handshake_state *nhs = data;
 	struct netdev *netdev = nhs->netdev;
 	const uint8_t *addr = netdev_choose_key_address(nhs);
+	int err = l_genl_msg_get_error(msg);
 
 	nhs->pairwise_new_key_cmd_id = 0;
 
-	if (l_genl_msg_get_error(msg) < 0) {
+	if (err < 0) {
 		l_error("New Key for Pairwise Key failed for ifindex: %d",
 					netdev->index);
 		goto error;
@@ -1367,8 +1364,9 @@ static void netdev_new_pairwise_key_cb(struct l_genl_msg *msg, void *data)
 		return;
 
 	l_genl_msg_unref(msg);
+	err = -EIO;
 error:
-	netdev_setting_keys_failed(nhs, MMPDU_REASON_CODE_UNSPECIFIED);
+	netdev_setting_keys_failed(nhs, err);
 }
 
 static struct l_genl_msg *netdev_build_cmd_new_key_pairwise(
@@ -1424,8 +1422,8 @@ static void netdev_set_tk(struct handshake_state *hs,
 	uint8_t tk_buf[32];
 	struct netdev *netdev = nhs->netdev;
 	struct l_genl_msg *msg;
-	enum mmpdu_reason_code rc;
 	const uint8_t *addr = netdev_choose_key_address(nhs);
+	int err;
 
 	/*
 	 * WPA1 does the group handshake after the 4-way finishes so we can't
@@ -1459,11 +1457,10 @@ static void netdev_set_tk(struct handshake_state *hs,
 
 	l_debug("%d", netdev->index);
 
-	rc = MMPDU_REASON_CODE_INVALID_PAIRWISE_CIPHER;
+	err = -ENOENT;
 	if (!netdev_copy_tk(tk_buf, tk, cipher, false))
 		goto invalid_key;
 
-	rc = MMPDU_REASON_CODE_UNSPECIFIED;
 	msg = netdev_build_cmd_new_key_pairwise(netdev, cipher, addr, tk_buf,
 						crypto_cipher_key_len(cipher));
 	nhs->pairwise_new_key_cmd_id =
@@ -1472,9 +1469,10 @@ static void netdev_set_tk(struct handshake_state *hs,
 	if (nhs->pairwise_new_key_cmd_id > 0)
 		return;
 
+	err = -EIO;
 	l_genl_msg_unref(msg);
 invalid_key:
-	netdev_setting_keys_failed(nhs, rc);
+	netdev_setting_keys_failed(nhs, err);
 }
 
 void netdev_handshake_failed(struct handshake_state *hs, uint16_t reason_code)
