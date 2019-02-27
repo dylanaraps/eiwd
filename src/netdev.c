@@ -1857,7 +1857,7 @@ error:
 	 * response and will handle it.
 	 */
 	if (netdev->owe && *status_code ==
-				MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP)
+				MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP)
 		return;
 
 	netdev_connect_failed(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,

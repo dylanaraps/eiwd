@@ -169,7 +169,7 @@ static void sae_reject_authentication(struct sae_sm *sm, uint16_t reason)
 	l_put_u16(reason, ptr);
 	ptr += 2;
 
-	if (reason == MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP) {
+	if (reason == MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP) {
 		l_put_u16(sm->group, ptr);
 		ptr += 2;
 	}
@@ -446,7 +446,7 @@ static void sae_process_commit(struct sae_sm *sm, const uint8_t *from,
 
 	if (group != sm->group) {
 		l_error("unsupported group: %u", group);
-		reason =  MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP;
+		reason =  MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP;
 		goto reject;
 	}
 
@@ -678,7 +678,7 @@ static bool sae_verify_nothing(struct sae_sm *sm, uint16_t transaction,
 	/* reject with unsupported group */
 	if (l_get_le16(frame) != sm->group) {
 		sae_reject_authentication(sm,
-				MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP);
+				MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP);
 		return false;
 	}
 
@@ -735,10 +735,10 @@ static bool sae_verify_committed(struct sae_sm *sm, uint16_t transaction,
 	}
 
 	switch (status) {
-	case MMPDU_REASON_CODE_ANTI_CLOGGING_TOKEN_REQ:
+	case MMPDU_STATUS_CODE_ANTI_CLOGGING_TOKEN_REQ:
 		sae_process_anti_clogging(sm, frame, len);
 		return false;
-	case MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP:
+	case MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP:
 		/*
 		 * TODO: hostapd in its current state does not include the
 		 * group number as it should. This is a violation of the spec,
@@ -874,7 +874,7 @@ static bool sae_verify_committed(struct sae_sm *sm, uint16_t transaction,
 
 reject_unsupp_group:
 	sae_reject_authentication(sm,
-			MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP);
+			MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP);
 	return false;
 }
 
@@ -1024,7 +1024,7 @@ void sae_rx_packet(struct sae_sm *sm, const uint8_t *from, const uint8_t *frame,
 	 * this missing group number.
 	 */
 	if (len == 4 && status !=
-				MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP) {
+				MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP) {
 		sae_authentication_failed(sm, status);
 		return;
 	}
