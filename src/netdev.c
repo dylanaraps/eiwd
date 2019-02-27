@@ -2600,19 +2600,14 @@ static void netdev_owe_tx_associate(struct iovec *ie_iov, size_t iov_len,
 static void netdev_owe_complete(uint16_t status, void *user_data)
 {
 	struct netdev *netdev = user_data;
-	struct l_genl_msg *msg;
 
 	if (status) {
 		/*
 		 * OWE will never fail during authenticate, at least internally,
 		 * so we can always assume its association that failed.
 		 */
-		netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
-		netdev->last_status_code = status;
-		msg = netdev_build_cmd_disconnect(netdev, status);
-		netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
-							netdev_disconnect_cb,
-							netdev, NULL);
+		netdev_connect_failed(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
+					status);
 		return;
 	}
 
