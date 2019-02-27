@@ -245,7 +245,7 @@ static void test_clogging(const void *arg)
 	struct sae_sm *sm = test_initialize(td);
 
 	l_put_le16(1, frame);
-	l_put_le16(MMPDU_REASON_CODE_ANTI_CLOGGING_TOKEN_REQ, frame + 2);
+	l_put_le16(MMPDU_STATUS_CODE_ANTI_CLOGGING_TOKEN_REQ, frame + 2);
 	l_put_le16(19, frame + 4);
 	memcpy(frame + 6, td->test_clogging_token, 32);
 
@@ -352,7 +352,7 @@ static void test_bad_group(const void *arg)
 	sae_rx_packet(sm, aa, aa_commit_bad_group, sizeof(aa_commit_bad_group));
 
 	assert(td->tx_reject_occurred);
-	assert(td->status == MMPDU_REASON_CODE_UNSUPP_FINITE_CYCLIC_GROUP);
+	assert(td->status == MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP);
 
 	test_destruct(td);
 }
