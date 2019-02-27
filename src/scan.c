@@ -454,8 +454,11 @@ static int scan_request_send_next(struct scan_context *sc,
 
 	sc->start_cmd_id = scan_send_start(&cmd, scan_request_triggered, sc);
 	if (sc->start_cmd_id) {
+		l_genl_msg_ref(cmd);
+
 		sc->triggered = false;
 		sc->current_sr = sr;
+
 		return 0;
 	}
 
