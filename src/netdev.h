@@ -82,8 +82,22 @@ typedef void (*netdev_connect_cb_t)(struct netdev *netdev,
 					enum netdev_result result,
 					void *event_data,
 					void *user_data);
+/*
+ * Notify function for netdev events. Depending on the event type, event_data
+ * will have different meanings:
+ *
+ * NETDEV_EVENT_AUTHENTICATING - unsused
+ * NETDEV_EVENT_ASSOCIATING - unused
+ * NETDEV_EVENT_LOST_BEACON - unused
+ * NETDEV_EVENT_DISCONNECT_BY_AP - MMPDU_REASON_CODE
+ * NETDEV_EVENT_DISCONNECT_BY_SME - MMPDU_REASON_CODE
+ * NETDEV_EVENT_RSSI_THRESHOLD_LOW - unused
+ * NETDEV_EVENT_RSSI_THRESHOLD_HIGH - unused
+ * NETDEV_EVENT_RSSI_LEVEL_NOTIFY - rssi level index (uint8_t)
+ */
 typedef void (*netdev_event_func_t)(struct netdev *netdev,
 					enum netdev_event event,
+					void *event_data,
 					void *user_data);
 typedef void (*netdev_disconnect_cb_t)(struct netdev *netdev, bool result,
 					void *user_data);
@@ -168,7 +182,6 @@ int netdev_neighbor_report_req(struct netdev *netdev,
 
 int netdev_set_rssi_report_levels(struct netdev *netdev, const int8_t *levels,
 					size_t levels_num);
-int netdev_get_rssi_level(struct netdev *netdev);
 
 uint32_t netdev_frame_watch_add(struct netdev *netdev, uint16_t frame_type,
 				const uint8_t *prefix, size_t prefix_len,

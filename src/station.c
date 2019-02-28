@@ -796,20 +796,19 @@ static void station_disassociated(struct station *station)
 		station_enter_state(station, STATION_STATE_AUTOCONNECT);
 }
 
-static void station_disconnect_event(struct station *station)
+static void station_connect_cb(struct netdev *netdev, enum netdev_result result,
+					void *event_data, void *user_data);
+
+static void station_disconnect_event(struct station *station, void *event_data)
 {
 	l_debug("%u", netdev_get_ifindex(station->netdev));
 
-	if (station->connect_pending) {
-		struct network *network = station->connected_network;
-
-		dbus_pending_reply(&station->connect_pending,
-				dbus_error_failed(station->connect_pending));
-
-		network_connect_failed(network);
-	}
-
-	station_disassociated(station);
+	if (station->connect_pending)
+		station_connect_cb(station->netdev,
+					NETDEV_RESULT_HANDSHAKE_FAILED,
+					event_data, station);
+	else
+		station_disassociated(station);
 }
 
 static void station_roam_timeout_rearm(struct station *station, int seconds);
@@ -886,7 +885,7 @@ static void station_fast_transition_cb(struct netdev *netdev,
 }
 
 static void station_netdev_event(struct netdev *netdev, enum netdev_event event,
-					void *user_data);
+					void *event_data, void *user_data);
 
 static void station_transition_reassociate(struct station *station,
 						struct scan_bss *bss,
@@ -1579,10 +1578,11 @@ static void station_ok_rssi(struct station *station)
 	station->signal_low = false;
 }
 
-static void station_rssi_level_changed(struct station *station);
+static void station_rssi_level_changed(struct station *station,
+					uint8_t level_idx);
 
 static void station_netdev_event(struct netdev *netdev, enum netdev_event event,
-					void *user_data)
+					void *event_data, void *user_data)
 {
 	struct station *station = user_data;
 
@@ -1598,7 +1598,7 @@ static void station_netdev_event(struct netdev *netdev, enum netdev_event event,
 		break;
 	case NETDEV_EVENT_DISCONNECT_BY_AP:
 	case NETDEV_EVENT_DISCONNECT_BY_SME:
-		station_disconnect_event(station);
+		station_disconnect_event(station, event_data);
 		break;
 	case NETDEV_EVENT_RSSI_THRESHOLD_LOW:
 		station_low_rssi(station);
@@ -1607,7 +1607,7 @@ static void station_netdev_event(struct netdev *netdev, enum netdev_event event,
 		station_ok_rssi(station);
 		break;
 	case NETDEV_EVENT_RSSI_LEVEL_NOTIFY:
-		station_rssi_level_changed(station);
+		station_rssi_level_changed(station, l_get_u8(event_data));
 		break;
 	};
 }
@@ -2165,22 +2165,22 @@ struct signal_agent {
 };
 
 static void station_signal_agent_notify(struct signal_agent *agent,
-					const char *device_path, int level)
+					const char *device_path, uint8_t level)
 {
 	struct l_dbus_message *msg;
-	uint8_t value = level;
 
 	msg = l_dbus_message_new_method_call(dbus_get_bus(),
 						agent->owner, agent->path,
 						IWD_SIGNAL_AGENT_INTERFACE,
 						"Changed");
-	l_dbus_message_set_arguments(msg, "oy", device_path, value);
+	l_dbus_message_set_arguments(msg, "oy", device_path, level);
 	l_dbus_message_set_no_reply(msg, true);
 
 	l_dbus_send(dbus_get_bus(), msg);
 }
 
-static void station_rssi_level_changed(struct station *station)
+static void station_rssi_level_changed(struct station *station,
+					uint8_t level_idx)
 {
 	struct netdev *netdev = station->netdev;
 
@@ -2188,8 +2188,7 @@ static void station_rssi_level_changed(struct station *station)
 		return;
 
 	station_signal_agent_notify(station->signal_agent,
-					netdev_get_path(netdev),
-					netdev_get_rssi_level(netdev));
+					netdev_get_path(netdev), level_idx);
 }
 
 static void station_signal_agent_release(struct signal_agent *agent,

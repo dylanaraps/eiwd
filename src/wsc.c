@@ -359,7 +359,7 @@ static void wsc_eapol_event(uint32_t event, const void *event_data,
 }
 
 static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
-					void *user_data)
+					void *event_data, void *user_data)
 {
 	struct wsc *wsc = user_data;
 
@@ -372,8 +372,8 @@ static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
 		break;
 	case NETDEV_EVENT_DISCONNECT_BY_AP:
 		l_debug("Disconnect by AP");
-		wsc_connect_cb(wsc->netdev,
-				NETDEV_RESULT_HANDSHAKE_FAILED, NULL, wsc);
+		wsc_connect_cb(wsc->netdev, NETDEV_RESULT_HANDSHAKE_FAILED,
+				event_data, wsc);
 		break;
 	case NETDEV_EVENT_RSSI_THRESHOLD_LOW:
 	case NETDEV_EVENT_RSSI_THRESHOLD_HIGH:

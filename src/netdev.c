@@ -474,6 +474,7 @@ static void netdev_rssi_poll_cb(struct l_genl_msg *msg, void *user_data)
 	netdev_set_rssi_level_idx(netdev);
 	if (netdev->cur_rssi_level_idx != prev_rssi_level_idx)
 		netdev->event_filter(netdev, NETDEV_EVENT_RSSI_LEVEL_NOTIFY,
+					&netdev->cur_rssi_level_idx,
 					netdev->user_data);
 
 done:
@@ -612,6 +613,7 @@ static void netdev_connect_failed(struct netdev *netdev,
 		connect_cb(netdev, result, &status_or_reason, connect_data);
 	else if (event_filter)
 		event_filter(netdev, NETDEV_EVENT_DISCONNECT_BY_SME,
+				&status_or_reason,
 				connect_data);
 }
 
@@ -709,7 +711,7 @@ static void netdev_lost_beacon(struct netdev *netdev)
 		return;
 
 	if (netdev->event_filter)
-		netdev->event_filter(netdev, NETDEV_EVENT_LOST_BEACON,
+		netdev->event_filter(netdev, NETDEV_EVENT_LOST_BEACON, NULL,
 							netdev->user_data);
 }
 
@@ -736,7 +738,7 @@ static void netdev_cqm_event_rssi_threshold(struct netdev *netdev,
 	event = netdev->cur_rssi_low ? NETDEV_EVENT_RSSI_THRESHOLD_LOW :
 		NETDEV_EVENT_RSSI_THRESHOLD_HIGH;
 
-	netdev->event_filter(netdev, event, netdev->user_data);
+	netdev->event_filter(netdev, event, NULL, netdev->user_data);
 }
 
 static void netdev_rssi_level_init(struct netdev *netdev)
@@ -770,7 +772,7 @@ static void netdev_cqm_event_rssi_value(struct netdev *netdev, int rssi_val)
 			NETDEV_EVENT_RSSI_THRESHOLD_HIGH;
 
 		netdev->cur_rssi_low = new_rssi_low;
-		netdev->event_filter(netdev, event, netdev->user_data);
+		netdev->event_filter(netdev, event, NULL, netdev->user_data);
 	}
 
 	if (!netdev->rssi_levels_num)
@@ -779,6 +781,7 @@ static void netdev_cqm_event_rssi_value(struct netdev *netdev, int rssi_val)
 	netdev_set_rssi_level_idx(netdev);
 	if (netdev->cur_rssi_level_idx != prev_rssi_level_idx)
 		netdev->event_filter(netdev, NETDEV_EVENT_RSSI_LEVEL_NOTIFY,
+					&netdev->cur_rssi_level_idx,
 					netdev->user_data);
 }
 
@@ -922,10 +925,10 @@ static void netdev_disconnect_event(struct l_genl_msg *msg,
 
 	if (disconnect_by_ap)
 		event_filter(netdev, NETDEV_EVENT_DISCONNECT_BY_AP,
-							event_data);
+						&reason_code, event_data);
 	else
 		event_filter(netdev, NETDEV_EVENT_DISCONNECT_BY_SME,
-							event_data);
+						&reason_code, event_data);
 }
 
 static void netdev_cmd_disconnect_cb(struct l_genl_msg *msg, void *user_data)
@@ -2404,6 +2407,7 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 		if (netdev->event_filter)
 			netdev->event_filter(netdev,
 						NETDEV_EVENT_ASSOCIATING,
+						NULL,
 						netdev->user_data);
 
 		/* the SAE SM can be freed */
@@ -4082,11 +4086,6 @@ done:
 	netdev_rssi_polling_update(netdev);
 
 	return 0;
-}
-
-int netdev_get_rssi_level(struct netdev *netdev)
-{
-	return netdev->cur_rssi_level_idx;
 }
 
 static int netdev_cqm_rssi_update(struct netdev *netdev)
