@@ -1082,6 +1082,8 @@ static bool eap_ttls_settings_load(struct eap_state *eap,
 	snprintf(setting, sizeof(setting), "%sTTLS-Phase2-Method", prefix);
 	phase2_method_name = l_settings_get_value(settings, "Security",
 								setting);
+	if (!phase2_method_name)
+		return false;
 
 	snprintf(setting, sizeof(setting), "%sTTLS-Phase2-", prefix);
 
