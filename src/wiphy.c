@@ -235,6 +235,12 @@ uint32_t wiphy_get_supported_bands(struct wiphy *wiphy)
 	return scan_freq_set_get_bands(wiphy->supported_freqs);
 }
 
+const struct scan_freq_set *wiphy_get_supported_freqs(
+						const struct wiphy *wiphy)
+{
+	return wiphy->supported_freqs;
+}
+
 bool wiphy_can_connect(struct wiphy *wiphy, struct scan_bss *bss)
 {
 	struct ie_rsn_info rsn_info;
