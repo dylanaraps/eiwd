@@ -310,6 +310,14 @@ Example:
 0x1 << y	// Wrong
 
 
+M17: Avoid forward-declaration of static functions
+==================================================
+
+Functions that are static should not be forward-declared.  The only exception
+to this rule is if a circular dependency condition exists, and the forward
+declaration cannot be avoided.
+
+
 O1: Shorten the name
 ====================
 Better to use abbreviation, rather than full name, to name a variable,
