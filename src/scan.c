@@ -219,20 +219,6 @@ bool scan_ifindex_remove(uint32_t ifindex)
 	return true;
 }
 
-static unsigned int scan_send_start(struct l_genl_msg **msg,
-			scan_func_t callback, void *user_data)
-{
-	unsigned int id = l_genl_family_send(nl80211, *msg, callback,
-						user_data, NULL);
-
-	if (id)
-		*msg = NULL;
-	else
-		l_error("Sending NL80211_CMD_TRIGGER_SCAN failed");
-
-	return id;
-}
-
 static void scan_request_triggered(struct l_genl_msg *msg, void *userdata)
 {
 	struct scan_context *sc = userdata;
@@ -438,7 +424,9 @@ static int scan_request_send_next(struct scan_context *sc,
 	if (!cmd)
 		return -ENOMSG;
 
-	sc->start_cmd_id = scan_send_start(&cmd, scan_request_triggered, sc);
+	sc->start_cmd_id = l_genl_family_send(nl80211, cmd,
+						scan_request_triggered, sc,
+									NULL);
 	if (sc->start_cmd_id) {
 		l_genl_msg_ref(cmd);
 
@@ -447,6 +435,8 @@ static int scan_request_send_next(struct scan_context *sc,
 
 		return 0;
 	}
+
+	l_error("Scan request: failed to trigger scan.");
 
 	return -EIO;
 }
@@ -640,7 +630,9 @@ static bool scan_periodic_send_start(struct scan_context *sc)
 	if (!cmd)
 		return false;
 
-	sc->start_cmd_id = scan_send_start(&cmd, scan_periodic_triggered, sc);
+	sc->start_cmd_id = l_genl_family_send(nl80211, cmd,
+						scan_periodic_triggered, sc,
+									NULL);
 	if (!sc->start_cmd_id) {
 		l_genl_msg_unref(cmd);
 		return false;
@@ -1294,8 +1286,9 @@ static bool scan_send_next_cmd(struct scan_context *sc)
 
 		sc->triggered = false;
 
-		sc->start_cmd_id = scan_send_start(&cmd,
-						scan_periodic_triggered, sc);
+		sc->start_cmd_id = l_genl_family_send(nl80211, cmd,
+							scan_periodic_triggered,
+								sc, NULL);
 
 		if (!sc->start_cmd_id) {
 			l_genl_msg_unref(cmd);
