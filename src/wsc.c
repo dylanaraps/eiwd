@@ -204,7 +204,7 @@ static void wsc_disconnect_cb(struct netdev *netdev, bool success,
 }
 
 static void wsc_connect_cb(struct netdev *netdev, enum netdev_result result,
-					void *user_data)
+					void *event_data, void *user_data)
 {
 	struct wsc *wsc = user_data;
 
@@ -373,7 +373,7 @@ static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
 	case NETDEV_EVENT_DISCONNECT_BY_AP:
 		l_debug("Disconnect by AP");
 		wsc_connect_cb(wsc->netdev,
-				NETDEV_RESULT_HANDSHAKE_FAILED, wsc);
+				NETDEV_RESULT_HANDSHAKE_FAILED, NULL, wsc);
 		break;
 	case NETDEV_EVENT_RSSI_THRESHOLD_LOW:
 	case NETDEV_EVENT_RSSI_THRESHOLD_HIGH:

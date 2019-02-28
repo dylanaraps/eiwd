@@ -104,7 +104,7 @@ struct netdev {
 	uint32_t set_interface_cmd_id;
 	uint32_t rekey_offload_cmd_id;
 	enum netdev_result result;
-	uint16_t last_status_code;
+	uint16_t last_code; /* reason or status, depending on result */
 	struct l_timeout *neighbor_report_timeout;
 	struct l_timeout *sa_query_timeout;
 	struct l_timeout *group_handshake_timeout;
@@ -337,11 +337,6 @@ const char *netdev_get_path(struct netdev *netdev)
 	snprintf(path, sizeof(path), "%s/%u", wiphy_get_path(netdev->wiphy),
 			netdev->index);
 	return path;
-}
-
-uint16_t netdev_get_last_status_code(struct netdev *netdev)
-{
-	return netdev->last_status_code;
 }
 
 static void netdev_set_powered_result(int error, uint16_t type,
@@ -586,7 +581,7 @@ static void netdev_connect_free(struct netdev *netdev)
 	netdev->event_filter = NULL;
 	netdev->user_data = NULL;
 	netdev->result = NETDEV_RESULT_OK;
-	netdev->last_status_code = 0;
+	netdev->last_code = 0;
 	netdev->in_ft = false;
 
 	netdev_rssi_polling_update(netdev);
@@ -602,14 +597,11 @@ static void netdev_connect_free(struct netdev *netdev)
 
 static void netdev_connect_failed(struct netdev *netdev,
 					enum netdev_result result,
-					uint16_t status_code)
+					uint16_t status_or_reason)
 {
 	netdev_connect_cb_t connect_cb = netdev->connect_cb;
 	netdev_event_func_t event_filter = netdev->event_filter;
 	void *connect_data = netdev->user_data;
-
-	netdev->result = result;
-	netdev->last_status_code = status_code;
 
 	netdev->disconnect_cmd_id = 0;
 
@@ -617,7 +609,7 @@ static void netdev_connect_failed(struct netdev *netdev,
 	netdev_connect_free(netdev);
 
 	if (connect_cb)
-		connect_cb(netdev, result, connect_data);
+		connect_cb(netdev, result, &status_or_reason, connect_data);
 	else if (event_filter)
 		event_filter(netdev, NETDEV_EVENT_DISCONNECT_BY_SME,
 				connect_data);
@@ -627,9 +619,7 @@ static void netdev_disconnect_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct netdev *netdev = user_data;
 
-	/* FIXME: This should be a status code */
-	netdev_connect_failed(netdev, netdev->result,
-					MMPDU_REASON_CODE_UNSPECIFIED);
+	netdev_connect_failed(netdev, netdev->result, netdev->last_code);
 }
 
 static void netdev_free(void *data)
@@ -1056,7 +1046,8 @@ static void netdev_connect_ok(struct netdev *netdev)
 	netdev->operational = true;
 
 	if (netdev->connect_cb) {
-		netdev->connect_cb(netdev, NETDEV_RESULT_OK, netdev->user_data);
+		netdev->connect_cb(netdev, NETDEV_RESULT_OK, NULL,
+					netdev->user_data);
 		netdev->connect_cb = NULL;
 	}
 
@@ -1488,7 +1479,7 @@ void netdev_handshake_failed(struct handshake_state *hs, uint16_t reason_code)
 	netdev->sm = NULL;
 
 	netdev->result = NETDEV_RESULT_HANDSHAKE_FAILED;
-	netdev->last_status_code = reason_code;
+	netdev->last_code = reason_code;
 
 	switch (netdev->type) {
 	case NL80211_IFTYPE_STATION:
@@ -2081,7 +2072,7 @@ static void netdev_cmd_ft_reassociate_cb(struct l_genl_msg *msg,
 		struct l_genl_msg *cmd_deauth;
 
 		netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
-		netdev->last_status_code = MMPDU_REASON_CODE_UNSPECIFIED;
+		netdev->last_code = MMPDU_STATUS_CODE_UNSPECIFIED;
 		cmd_deauth = netdev_build_cmd_deauthenticate(netdev,
 						MMPDU_REASON_CODE_UNSPECIFIED);
 		netdev->disconnect_cmd_id = l_genl_family_send(nl80211,
@@ -2274,7 +2265,7 @@ auth_error:
 
 ft_error:
 	netdev->result = NETDEV_RESULT_AUTHENTICATION_FAILED;
-	netdev->last_status_code = MMPDU_REASON_CODE_UNSPECIFIED;
+	netdev->last_code = MMPDU_STATUS_CODE_UNSPECIFIED;
 	cmd_deauth = netdev_build_cmd_deauthenticate(netdev,
 						MMPDU_REASON_CODE_UNSPECIFIED);
 	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, cmd_deauth,
@@ -2360,7 +2351,7 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 
 auth_error:
 	netdev_connect_failed(netdev, NETDEV_RESULT_AUTHENTICATION_FAILED,
-				MMPDU_REASON_CODE_UNSPECIFIED);
+				MMPDU_STATUS_CODE_UNSPECIFIED);
 }
 
 static void netdev_associate_event(struct l_genl_msg *msg,
@@ -2399,7 +2390,7 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 
 assoc_failed:
 	netdev_connect_failed(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
-				MMPDU_REASON_CODE_UNSPECIFIED);
+				MMPDU_STATUS_CODE_UNSPECIFIED);
 }
 
 static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
@@ -2435,7 +2426,7 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 	}
 
 	netdev_connect_failed(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
-				MMPDU_REASON_CODE_UNSPECIFIED);
+				MMPDU_STATUS_CODE_UNSPECIFIED);
 }
 
 static struct l_genl_msg *netdev_build_cmd_authenticate(struct netdev *netdev,
@@ -2504,7 +2495,7 @@ static void netdev_sae_complete(uint16_t status, void *user_data)
 
 auth_failed:
 	netdev_connect_failed(netdev, NETDEV_RESULT_AUTHENTICATION_FAILED,
-				MMPDU_REASON_CODE_UNSPECIFIED);
+				MMPDU_STATUS_CODE_UNSPECIFIED);
 }
 
 static void netdev_tx_sae_frame_cb(struct l_genl_msg *msg,
@@ -2544,7 +2535,7 @@ static void netdev_owe_auth_cb(struct l_genl_msg *msg, void *user_data)
 
 		netdev_connect_failed(netdev,
 					NETDEV_RESULT_AUTHENTICATION_FAILED,
-					MMPDU_REASON_CODE_UNSPECIFIED);
+					MMPDU_STATUS_CODE_UNSPECIFIED);
 		return;
 	}
 }
@@ -2563,7 +2554,7 @@ static void netdev_owe_tx_authenticate(void *user_data)
 		l_genl_msg_unref(msg);
 		netdev_connect_failed(netdev,
 					NETDEV_RESULT_AUTHENTICATION_FAILED,
-					MMPDU_REASON_CODE_UNSPECIFIED);
+					MMPDU_STATUS_CODE_UNSPECIFIED);
 	}
 }
 
@@ -2575,7 +2566,7 @@ static void netdev_owe_assoc_cb(struct l_genl_msg *msg, void *user_data)
 		l_error("Error sending CMD_ASSOCIATE");
 
 		netdev_connect_failed(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
-					MMPDU_REASON_CODE_UNSPECIFIED);
+					MMPDU_STATUS_CODE_UNSPECIFIED);
 	}
 }
 
@@ -2593,7 +2584,7 @@ static void netdev_owe_tx_associate(struct iovec *ie_iov, size_t iov_len,
 							netdev, NULL)) {
 		l_genl_msg_unref(msg);
 		netdev_connect_failed(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
-					MMPDU_REASON_CODE_UNSPECIFIED);
+					MMPDU_STATUS_CODE_UNSPECIFIED);
 	}
 }
 
@@ -3151,7 +3142,7 @@ static void netdev_cmd_authenticate_ft_cb(struct l_genl_msg *msg,
 	if (l_genl_msg_get_error(msg) < 0)
 		netdev_connect_failed(netdev,
 					NETDEV_RESULT_AUTHENTICATION_FAILED,
-					MMPDU_REASON_CODE_UNSPECIFIED);
+					MMPDU_STATUS_CODE_UNSPECIFIED);
 }
 
 int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,

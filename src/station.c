@@ -849,6 +849,7 @@ static void station_roam_failed(struct station *station)
 
 static void station_reassociate_cb(struct netdev *netdev,
 					enum netdev_result result,
+					void *event_data,
 					void *user_data)
 {
 	struct station *station = user_data;
@@ -867,6 +868,7 @@ static void station_reassociate_cb(struct netdev *netdev,
 
 static void station_fast_transition_cb(struct netdev *netdev,
 					enum netdev_result result,
+					void *event_data,
 					void *user_data)
 {
 	struct station *station = user_data;
@@ -1670,10 +1672,9 @@ static void station_connect_dbus_reply(struct station *station,
 }
 
 static void station_connect_cb(struct netdev *netdev, enum netdev_result result,
-					void *user_data)
+					void *event_data, void *user_data)
 {
 	struct station *station = user_data;
-	uint16_t status_code = netdev_get_last_status_code(netdev);
 
 	l_debug("%u, result: %d", netdev_get_ifindex(station->netdev), result);
 
@@ -1682,7 +1683,8 @@ static void station_connect_cb(struct netdev *netdev, enum netdev_result result,
 		blacklist_remove_bss(station->connected_bss->addr);
 		break;
 	case NETDEV_RESULT_HANDSHAKE_FAILED:
-		if (!station_can_retry(status_code))
+		/* reason code in this case */
+		if (!station_can_retry(l_get_u16(event_data)))
 			break;
 		/* fall through */
 	case NETDEV_RESULT_AUTHENTICATION_FAILED:

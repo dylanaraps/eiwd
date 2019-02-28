@@ -66,8 +66,21 @@ enum netdev_iftype {
 
 typedef void (*netdev_command_cb_t)(struct netdev *netdev, int result,
 						void *user_data);
+/*
+ * Callback for a connection attempt. This callback is called on both success
+ * and failure. Depending on result, the event_data will have different
+ * meanings:
+ *
+ * NETDEV_RESULT_OK - unused
+ * NETDEV_RESULT_AUTHENTICATION_FAILED - MMPDU_STATUS_CODE
+ * NETDEV_RESULT_ASSOCIATION_FAILED - MMPDU_STATUS_CODE
+ * NETDEV_RESULT_HANDSHAKE_FAILED - MMPDU_REASON_CODE
+ * NETDEV_RESULT_KEY_SETTINGS_FAILED - unused
+ * NETDEV_RESULT_ABORTED - unused.
+ */
 typedef void (*netdev_connect_cb_t)(struct netdev *netdev,
 					enum netdev_result result,
+					void *event_data,
 					void *user_data);
 typedef void (*netdev_event_func_t)(struct netdev *netdev,
 					enum netdev_event event,
@@ -110,7 +123,6 @@ const char *netdev_get_name(struct netdev *netdev);
 bool netdev_get_is_up(struct netdev *netdev);
 struct device *netdev_get_device(struct netdev *netdev);
 const char *netdev_get_path(struct netdev *netdev);
-uint16_t netdev_get_last_status_code(struct netdev *netdev);
 
 struct handshake_state *netdev_handshake_state_new(struct netdev *netdev);
 struct handshake_state *netdev_get_handshake(struct netdev *netdev);
