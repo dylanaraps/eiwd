@@ -417,7 +417,7 @@ static void scan_cmds_add(struct l_queue *cmds, struct scan_context *sc,
 	l_queue_push_tail(cmds, cmd);
 }
 
-static int scan_request_send_next(struct scan_context *sc,
+static int scan_request_send_trigger(struct scan_context *sc,
 					struct scan_request *sr)
 {
 	struct l_genl_msg *cmd = l_queue_peek_head(sr->cmds);
@@ -473,7 +473,7 @@ static uint32_t scan_common(uint32_t ifindex, bool passive,
 	if (sc->state != SCAN_STATE_NOT_RUNNING || sc->start_cmd_id)
 		goto done;
 
-	if (!scan_request_send_next(sc, sr))
+	if (!scan_request_send_trigger(sc, sr))
 		goto done;
 
 	sr->destroy = NULL;	/* Don't call destroy when returning error */
@@ -610,7 +610,7 @@ static void scan_periodic_triggered(struct l_genl_msg *msg, void *user_data)
 		sc->sp.trigger(0, sc->sp.userdata);
 }
 
-static bool scan_periodic_send_start(struct scan_context *sc)
+static bool scan_periodic_send_trigger(struct scan_context *sc)
 {
 	struct l_genl_msg *cmd;
 	struct scan_parameters params = {};
@@ -754,14 +754,14 @@ static bool start_next_scan_request(struct scan_context *sc)
 	while (!l_queue_isempty(sc->requests)) {
 		sr = l_queue_peek_head(sc->requests);
 
-		if (!scan_request_send_next(sc, sr))
+		if (!scan_request_send_trigger(sc, sr))
 			return true;
 
 		scan_request_failed(sc, sr, -EIO);
 	}
 
 	if (sc->sp.retry) {
-		if (scan_periodic_send_start(sc)) {
+		if (scan_periodic_send_trigger(sc)) {
 			sc->sp.retry = false;
 			return true;
 		}
@@ -1264,7 +1264,7 @@ static bool scan_send_next_cmd(struct scan_context *sc)
 		return false;
 
 	if (sr) {
-		err = scan_request_send_next(sc, sr);
+		err = scan_request_send_trigger(sc, sr);
 		if (!err)
 			return true;
 
