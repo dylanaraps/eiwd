@@ -301,13 +301,6 @@ static void scan_build_attr_scan_frequencies(struct l_genl_msg *msg,
 	l_genl_msg_leave_nested(msg);
 }
 
-static void scan_freq_count(uint32_t freq, void *user_data)
-{
-	int *count = user_data;
-
-	*count += 1;
-}
-
 static bool scan_mac_address_randomization_is_disabled(void)
 {
 	const struct l_settings *config = iwd_get_config();
@@ -326,16 +319,9 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 					const struct scan_parameters *params)
 {
 	struct l_genl_msg *msg;
-	int n_channels = 0;
 	uint32_t flags = 0;
 
-	if (params->freqs)
-		scan_freq_set_foreach(params->freqs, scan_freq_count,
-					&n_channels);
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_TRIGGER_SCAN,
-						64 + params->extra_ie_size +
-						4 * n_channels);
+	msg = l_genl_msg_new(NL80211_CMD_TRIGGER_SCAN);
 
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &sc->ifindex);
 
