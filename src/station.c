@@ -1617,8 +1617,6 @@ static bool station_try_next_bss(struct station *station)
 	struct scan_bss *next;
 	int ret;
 
-	blacklist_add_bss(station->connected_bss->addr);
-
 	next = network_bss_select(station->connected_network, false);
 
 	if (!next)
@@ -1634,20 +1632,52 @@ static bool station_try_next_bss(struct station *station)
 	return true;
 }
 
-static bool station_can_retry(uint16_t status_code)
+static bool station_retry_with_reason(struct station *station,
+					uint16_t reason_code)
 {
 	/*
 	 * We dont want to cause a retry and blacklist if the password was
 	 * incorrect. Otherwise we would just continue to fail.
 	 *
-	 * Other status codes can be added here if its decided we want to
+	 * Other reason codes can be added here if its decided we want to
 	 * fail in those cases.
 	 */
-	if (status_code != MMPDU_REASON_CODE_PREV_AUTH_NOT_VALID &&
-			status_code != MMPDU_REASON_CODE_IEEE8021X_FAILED)
-		return true;
+	if (reason_code == MMPDU_REASON_CODE_PREV_AUTH_NOT_VALID ||
+			reason_code == MMPDU_REASON_CODE_IEEE8021X_FAILED)
+		return false;
 
-	return false;
+	blacklist_add_bss(station->connected_bss->addr);
+
+	return station_try_next_bss(station);
+}
+
+/* A bit more consise for trying to fit these into 80 characters */
+#define IS_TEMPORARY_STATUS(code) \
+	((code) == MMPDU_STATUS_CODE_DENIED_UNSUFFICIENT_BANDWIDTH || \
+	(code) == MMPDU_STATUS_CODE_DENIED_POOR_CHAN_CONDITIONS || \
+	(code) == MMPDU_STATUS_CODE_REJECTED_WITH_SUGG_BSS_TRANS || \
+	(code) == MMPDU_STATUS_CODE_DENIED_NO_MORE_STAS)
+
+static bool station_retry_with_status(struct station *station,
+					uint16_t status_code)
+{
+	/*
+	 * Certain Auth/Assoc failures should not cause a timeout blacklist.
+	 * In these cases we want to only temporarily blacklist the BSS until
+	 * the connection is complete.
+	 *
+	 * TODO: The WITH_SUGG_BSS_TRANS case should also include a neighbor
+	 *       report IE in the frame. This would allow us to target a
+	 *       specific BSS on our next attempt. There is currently no way to
+	 *       obtain that IE, but this should be done in the future.
+	 */
+	if (IS_TEMPORARY_STATUS(status_code))
+		network_blacklist_add(station->connected_network,
+						station->connected_bss);
+	else
+		blacklist_add_bss(station->connected_bss->addr);
+
+	return station_try_next_bss(station);
 }
 
 static void station_connect_dbus_reply(struct station *station,
@@ -1684,15 +1714,17 @@ static void station_connect_cb(struct netdev *netdev, enum netdev_result result,
 		break;
 	case NETDEV_RESULT_HANDSHAKE_FAILED:
 		/* reason code in this case */
-		if (!station_can_retry(l_get_u16(event_data)))
-			break;
-		/* fall through */
+		if (station_retry_with_reason(station, l_get_u16(event_data)))
+			return;
+
+		break;
 	case NETDEV_RESULT_AUTHENTICATION_FAILED:
 	case NETDEV_RESULT_ASSOCIATION_FAILED:
-		/* Maybe there is another BSS under the same network? */
-		if (station_try_next_bss(station))
+		/* status code in this case */
+		if (station_retry_with_status(station, l_get_u16(event_data)))
 			return;
-		/* fall through */
+
+		break;
 	default:
 		break;
 	}
