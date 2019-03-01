@@ -1739,6 +1739,9 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 
 	l_debug("");
 
+	if (netdev->owe)
+		return;
+
 	if (!netdev->connected) {
 		l_warn("Unexpected connection related event -- "
 				"is another supplicant running?");
@@ -1803,9 +1806,7 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 		}
 	}
 
-	/* OWE can skip this since it handles associate itself */
-	if (!netdev->owe && !netdev_handle_associate_resp_ies(netdev->handshake,
-								rsne, mde, fte,
+	if (!netdev_handle_associate_resp_ies(netdev->handshake, rsne, mde, fte,
 								netdev->in_ft))
 		goto error;
 
@@ -1832,28 +1833,11 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 		}
 	}
 
-	/* OWE must have failed, this is handled inside netdev_owe_complete */
-	if (netdev->owe && !netdev->sm)
-		return;
-
 	netdev_connect_ok(netdev);
 
 	return;
 
 error:
-	/*
-	 * RFC 8110 Section 4.3 - OWE Association
-	 * A client that receives an 802.11 association response with a status
-	 * code of seventy-seven SHOULD retry OWE with a different supported
-	 * group...
-	 *
-	 * Note: OWE (should have) received this already in an associate
-	 * response and will handle it.
-	 */
-	if (netdev->owe && *status_code ==
-				MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP)
-		return;
-
 	netdev_connect_failed(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
 				*status_code);
 }
@@ -2608,6 +2592,7 @@ static void netdev_owe_complete(uint16_t status, void *user_data)
 
 	netdev->sm = eapol_sm_new(netdev->handshake);
 	eapol_register(netdev->sm);
+	eapol_start(netdev->sm);
 }
 
 static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
