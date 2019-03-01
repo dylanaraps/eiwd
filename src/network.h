@@ -68,6 +68,8 @@ void network_rank_update(struct network *network, bool connected);
 void network_connect_new_hidden_network(struct network *network,
 						struct l_dbus_message *message);
 
+void network_blacklist_add(struct network *network, struct scan_bss *bss);
+
 struct network_info {
 	char ssid[33];
 	enum security type;

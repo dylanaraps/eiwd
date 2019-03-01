@@ -59,6 +59,7 @@ struct network {
 	struct l_queue *bss_list;
 	struct l_settings *settings;
 	struct l_queue *secrets;
+	struct l_queue *blacklist; /* temporary blacklist for BSS's */
 	bool update_psk:1;  /* Whether PSK should be written to storage */
 	bool ask_passphrase:1; /* Whether we should force-ask agent */
 	int rank;
@@ -153,6 +154,8 @@ void network_connected(struct network *network)
 
 	l_queue_foreach_remove(network->secrets,
 				network_secret_check_cacheable, network);
+
+	l_queue_clear(network->blacklist, NULL);
 }
 
 void network_disconnected(struct network *network)
@@ -294,6 +297,7 @@ struct network *network_create(struct station *station, const char *ssid,
 	network->info = network_info_get(ssid, security);
 
 	network->bss_list = l_queue_new();
+	network->blacklist = l_queue_new();
 
 	return network;
 }
@@ -614,6 +618,8 @@ void network_connect_failed(struct network *network)
 
 	l_queue_destroy(network->secrets, eap_secret_info_free);
 	network->secrets = NULL;
+
+	l_queue_clear(network->blacklist, NULL);
 }
 
 bool network_bss_add(struct network *network, struct scan_bss *bss)
@@ -649,6 +655,11 @@ struct scan_bss *network_bss_find_by_addr(struct network *network,
 	return NULL;
 }
 
+static bool match_bss(const void *a, const void *b)
+{
+	return a == b;
+}
+
 struct scan_bss *network_bss_select(struct network *network,
 						bool fallback_to_blacklist)
 {
@@ -680,6 +691,10 @@ struct scan_bss *network_bss_select(struct network *network,
 		 */
 		if (!candidate)
 			candidate = bss;
+
+		/* check if temporarily blacklisted */
+		if (l_queue_find(network->blacklist, match_bss, bss))
+			continue;
 
 		if (!blacklist_contains_bss(bss->addr))
 			return bss;
@@ -1145,6 +1160,11 @@ reply_error:
 	dbus_pending_reply(&message, error);
 }
 
+void network_blacklist_add(struct network *network, struct scan_bss *bss)
+{
+	l_queue_push_head(network->blacklist, bss);
+}
+
 static bool network_property_get_name(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -1281,6 +1301,8 @@ void network_remove(struct network *network, int reason)
 
 	l_queue_destroy(network->bss_list, NULL);
 	network_info_put(network->info);
+
+	l_queue_destroy(network->blacklist, NULL);
 
 	l_free(network);
 }
