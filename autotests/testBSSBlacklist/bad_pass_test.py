@@ -22,8 +22,8 @@ class Test(unittest.TestCase):
     def test_connection_success(self):
         hwsim = Hwsim()
 
-        bss_radio = [None, None]
-        bss_hostapd = [None, None]
+        bss_radio = [None, None, None]
+        bss_hostapd = [None, None, None]
 
         for wname in wiphy_map:
             wiphy = wiphy_map[wname]
@@ -33,6 +33,8 @@ class Test(unittest.TestCase):
                 bss_idx = 0
             elif intf.config and '2' in intf.config:
                 bss_idx = 1
+            elif intf.config and '3' in intf.config:
+                bss_idx = 2
             else:
                 continue
 
@@ -53,6 +55,11 @@ class Test(unittest.TestCase):
         rule1.source = bss_radio[1].addresses[0]
         rule1.bidirectional = True
         rule1.signal = -8000
+
+        rule2 = hwsim.rules.create()
+        rule2.source = bss_radio[2].addresses[0]
+        rule2.bidirectional = True
+        rule2.signal = -10000
 
         wd = IWD(True, '/tmp')
 

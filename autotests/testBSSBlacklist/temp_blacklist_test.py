@@ -49,59 +49,91 @@ class Test(unittest.TestCase):
         rule0 = hwsim.rules.create()
         rule0.source = bss_radio[0].addresses[0]
         rule0.bidirectional = True
-        rule0.signal = -2000
+        rule0.signal = -8000
 
         rule1 = hwsim.rules.create()
         rule1.source = bss_radio[1].addresses[0]
         rule1.bidirectional = True
-        rule1.signal = -8000
+        rule1.signal = -2500
 
         rule2 = hwsim.rules.create()
         rule2.source = bss_radio[2].addresses[0]
         rule2.bidirectional = True
-        rule2.signal = -10000
+        rule2.signal = -2000
 
-        wd = IWD(True)
+        wd = IWD(True, '/tmp')
 
-        psk_agent = PSKAgent(["secret123", 'secret123'])
+        psk_agent = PSKAgent("secret123")
         wd.register_psk_agent(psk_agent)
 
-        devices = wd.list_devices(1)
-        device = devices[0]
+        dev1, dev2 = wd.list_devices(2)
 
         condition = 'not obj.scanning'
-        wd.wait_for_object_condition(device, condition)
+        wd.wait_for_object_condition(dev1, condition)
 
-        device.scan()
+        dev1.scan()
 
         condition = 'not obj.scanning'
-        wd.wait_for_object_condition(device, condition)
+        wd.wait_for_object_condition(dev1, condition)
 
-        ordered_network = device.get_ordered_network("TestBlacklist")
+        ordered_network = dev1.get_ordered_network("TestBlacklist")
 
         self.assertEqual(ordered_network.type, NetworkType.psk)
 
         condition = 'not obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
 
-        # Have both APs drop all packets, both should get blacklisted
-        rule0.drop = True
-        rule1.drop = True
-        rule2.drop = True
-
-        with self.assertRaises(iwd.FailedEx):
-            ordered_network.network_object.connect()
-
-        rule0.drop = False
-        rule1.drop = False
-
-        # This connect should work
         ordered_network.network_object.connect()
 
-        condition = 'obj.connected'
+        self.assertIn(dev1.address, bss_hostapd[2].list_sta())
+
+        # dev1 now connected, this should max out the first AP, causing the next
+        # connection to fail to this AP.
+
+        condition = 'not obj.scanning'
+        wd.wait_for_object_condition(dev2, condition)
+
+        dev2.scan()
+
+        condition = 'not obj.scanning'
+        wd.wait_for_object_condition(dev2, condition)
+
+        ordered_network = dev2.get_ordered_network("TestBlacklist")
+
+        self.assertEqual(ordered_network.type, NetworkType.psk)
+
+        condition = 'not obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
 
-        self.assertIn(device.address, bss_hostapd[0].list_sta())
+        ordered_network.network_object.connect()
+
+        # We should have temporarily blacklisted the first BSS, and connected
+        # to this one.
+        self.assertIn(dev2.address, bss_hostapd[1].list_sta())
+
+        # Now check that the first BSS is still not blacklisted. We can
+        # disconnect dev1, opening up the AP for more connections
+        dev1.disconnect()
+        dev2.disconnect()
+
+        condition = 'not obj.scanning'
+        wd.wait_for_object_condition(dev2, condition)
+
+        dev2.scan()
+
+        condition = 'not obj.scanning'
+        wd.wait_for_object_condition(dev2, condition)
+
+        ordered_network = dev2.get_ordered_network("TestBlacklist")
+
+        self.assertEqual(ordered_network.type, NetworkType.psk)
+
+        condition = 'not obj.connected'
+        wd.wait_for_object_condition(ordered_network.network_object, condition)
+
+        ordered_network.network_object.connect()
+
+        self.assertIn(dev2.address, bss_hostapd[2].list_sta())
 
         wd.unregister_psk_agent(psk_agent)
 
@@ -109,7 +141,7 @@ class Test(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        pass
+        IWD.copy_to_storage('main.conf')
 
     @classmethod
     def tearDownClass(cls):
