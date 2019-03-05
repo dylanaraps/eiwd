@@ -245,18 +245,7 @@ void owe_rx_associate(struct owe_sm *owe, const uint8_t *frame, size_t len)
 	body = mmpdu_body(mpdu);
 
 	if (body->status_code == MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP) {
-		/* retry with another group, if possible */
-		owe->retry++;
-
-		if (!owe_reset(owe)) {
-			owe->complete(body->status_code, owe->user_data);
-			return;
-		}
-
-		l_debug("OWE retrying with group %u", owe->group);
-
-		owe_start(owe);
-
+		owe->complete(body->status_code, owe->user_data);
 		return;
 	}
 
@@ -322,4 +311,19 @@ void owe_rx_associate(struct owe_sm *owe, const uint8_t *frame, size_t len)
 
 owe_failed:
 	owe->complete(MMPDU_REASON_CODE_UNSPECIFIED, owe->user_data);
+}
+
+bool owe_retry(struct owe_sm *owe)
+{
+	/* retry with another group, if possible */
+	owe->retry++;
+
+	if (!owe_reset(owe))
+		return false;
+
+	l_debug("OWE retrying with group %u", owe->group);
+
+	owe_start(owe);
+
+	return true;
 }

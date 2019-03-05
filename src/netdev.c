@@ -135,6 +135,8 @@ struct netdev {
 	bool in_ft : 1;
 	bool cur_rssi_low : 1;
 	bool use_4addr : 1;
+	bool ignore_connect_event : 1;
+	bool expect_connect_failure : 1;
 };
 
 struct netdev_preauth_state {
@@ -584,6 +586,8 @@ static void netdev_connect_free(struct netdev *netdev)
 	netdev->result = NETDEV_RESULT_OK;
 	netdev->last_code = 0;
 	netdev->in_ft = false;
+	netdev->ignore_connect_event = false;
+	netdev->expect_connect_failure = false;
 
 	netdev_rssi_polling_update(netdev);
 
@@ -1575,12 +1579,21 @@ static void netdev_set_rekey_offload(uint32_t ifindex,
  * FT initial Mobility Domain association (12.4) or a Fast Transition
  * (12.8.5).
  */
-static bool netdev_handle_associate_resp_ies(struct handshake_state *hs,
-					const uint8_t *rsne, const uint8_t *mde,
-					const uint8_t *fte, bool transition)
+static bool netdev_ft_process_associate(struct netdev *netdev,
+					const uint8_t *frame, size_t frame_len,
+					uint16_t *out_status)
 {
+	struct handshake_state *hs = netdev->handshake;
+	const uint8_t *rsne = NULL;
+	const uint8_t *mde = NULL;
+	const uint8_t *fte = NULL;
+	bool transition = netdev->in_ft;
 	const uint8_t *sent_mde = hs->mde;
 	bool is_rsn = hs->supplicant_ie != NULL;
+
+	if (!ft_parse_associate_resp_frame(frame, frame_len, out_status, &rsne,
+					&mde, &fte))
+		return false;
 
 	/*
 	 * During a transition in an RSN, check for an RSNE containing the
@@ -1731,15 +1744,10 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 	uint16_t type, len;
 	const void *data;
 	const uint16_t *status_code = NULL;
-	const uint8_t *ies = NULL;
-	size_t ies_len;
-	const uint8_t *rsne = NULL;
-	const uint8_t *mde = NULL;
-	const uint8_t *fte = NULL;
 
 	l_debug("");
 
-	if (netdev->owe)
+	if (netdev->ignore_connect_event)
 		return;
 
 	if (!netdev->connected) {
@@ -1761,53 +1769,25 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 		case NL80211_ATTR_STATUS_CODE:
 			if (len == sizeof(uint16_t))
 				status_code = data;
-
-			break;
-		case NL80211_ATTR_RESP_IE:
-			ies = data;
-			ies_len = len;
 			break;
 		}
+	}
+
+	if (netdev->expect_connect_failure) {
+		/*
+		 * The kernel may think we are connected when we are actually
+		 * expecting a failure here, e.g. if Authenticate/Associate had
+		 * previously failed. If so we need to deauth to let the kernel
+		 * know.
+		 */
+		if (status_code && *status_code == 0)
+			goto deauth;
+		else
+			goto error;
 	}
 
 	/* AP Rejected the authenticate / associate */
 	if (!status_code || *status_code != 0)
-		goto error;
-
-	/* Check 802.11r IEs */
-	if (ies) {
-		struct ie_tlv_iter iter;
-
-		ie_tlv_iter_init(&iter, ies, ies_len);
-
-		while (ie_tlv_iter_next(&iter)) {
-			switch (ie_tlv_iter_get_tag(&iter)) {
-			case IE_TYPE_RSN:
-				if (rsne)
-					goto error;
-
-				rsne = ie_tlv_iter_get_data(&iter) - 2;
-				break;
-
-			case IE_TYPE_MOBILITY_DOMAIN:
-				if (mde)
-					goto error;
-
-				mde = ie_tlv_iter_get_data(&iter) - 2;
-				break;
-
-			case IE_TYPE_FAST_BSS_TRANSITION:
-				if (fte)
-					goto error;
-
-				fte = ie_tlv_iter_get_data(&iter) - 2;
-				break;
-			}
-		}
-	}
-
-	if (!netdev_handle_associate_resp_ies(netdev->handshake, rsne, mde, fte,
-								netdev->in_ft))
 		goto error;
 
 	if (netdev->sm) {
@@ -1818,19 +1798,7 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 		if (!eapol_start(netdev->sm))
 			goto error;
 
-		if (!netdev->in_ft)
-			return;
-	}
-
-	if (netdev->in_ft) {
-		bool is_rsn = netdev->handshake->supplicant_ie != NULL;
-
-		netdev->in_ft = false;
-
-		if (is_rsn) {
-			handshake_state_install_ptk(netdev->handshake);
-			return;
-		}
+		return;
 	}
 
 	netdev_connect_ok(netdev);
@@ -1839,7 +1807,17 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 
 error:
 	netdev_connect_failed(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
-				*status_code);
+			(status_code) ? *status_code :
+			MMPDU_STATUS_CODE_UNSPECIFIED);
+	return;
+
+deauth:
+	msg = netdev_build_cmd_deauthenticate(netdev,
+						MMPDU_REASON_CODE_UNSPECIFIED);
+	netdev->disconnect_cmd_id = l_genl_family_send(nl80211,
+							msg,
+							netdev_disconnect_cb,
+							netdev, NULL);
 }
 
 static unsigned int ie_rsn_akm_suite_to_nl80211(enum ie_rsn_akm_suite akm)
@@ -2069,8 +2047,8 @@ static void netdev_cmd_ft_reassociate_cb(struct l_genl_msg *msg,
 	}
 }
 
-static void netdev_ft_process(struct netdev *netdev, const uint8_t *frame,
-				size_t frame_len)
+static void netdev_ft_process_authenticate(struct netdev *netdev,
+					const uint8_t *frame, size_t frame_len)
 {
 	struct l_genl_msg *cmd_associate, *cmd_deauth;
 	uint16_t status_code;
@@ -2324,7 +2302,7 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 		goto auth_error;
 
 	if (netdev->in_ft)
-		netdev_ft_process(netdev, frame, frame_len);
+		netdev_ft_process_authenticate(netdev, frame, frame_len);
 	else if (netdev->sae_sm)
 		netdev_sae_process(netdev,
 				((struct mmpdu_header *)frame)->address_2,
@@ -2348,12 +2326,10 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 	uint16_t type, len;
 	const void *data;
 	size_t frame_len = 0;
-	const uint8_t *frame;
+	const uint8_t *frame = NULL;
+	uint16_t status_code = MMPDU_STATUS_CODE_UNSPECIFIED;
 
 	l_debug("");
-
-	if (!netdev->owe)
-		return;
 
 	if (!l_genl_attr_init(&attr, msg)) {
 		l_debug("attr init failed");
@@ -2370,14 +2346,59 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 			frame = data;
 			frame_len = len;
 
-			owe_rx_associate(netdev->owe, frame, frame_len);
+			break;
+		}
+	}
+
+	if (!frame)
+		goto assoc_failed;
+
+	if (netdev->owe) {
+		owe_rx_associate(netdev->owe, frame, frame_len);
+		return;
+	}
+
+	if (!netdev_ft_process_associate(netdev, frame, frame_len,
+						&status_code))
+		goto assoc_failed;
+
+	if (status_code != 0)
+		goto assoc_failed;
+
+	/* Connection can be fully handled here, not in connect event */
+	netdev->ignore_connect_event = true;
+
+	if (netdev->sm) {
+		/*
+		 * Start processing EAPoL frames now that the state machine
+		 * has all the input data even in FT mode.
+		 */
+		if (!eapol_start(netdev->sm))
+			goto assoc_failed;
+
+		if (!netdev->in_ft)
+			return;
+	}
+
+	if (netdev->in_ft) {
+		bool is_rsn = netdev->handshake->supplicant_ie != NULL;
+
+		netdev->in_ft = false;
+
+		if (is_rsn) {
+			handshake_state_install_ptk(netdev->handshake);
 			return;
 		}
 	}
 
+	netdev_connect_ok(netdev);
+
+	return;
+
 assoc_failed:
-	netdev_connect_failed(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
-				MMPDU_STATUS_CODE_UNSPECIFIED);
+	netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
+	netdev->last_code = status_code;
+	netdev->expect_connect_failure = true;
 }
 
 static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
@@ -2580,15 +2601,23 @@ static void netdev_owe_complete(uint16_t status, void *user_data)
 {
 	struct netdev *netdev = user_data;
 
-	if (status) {
-		/*
-		 * OWE will never fail during authenticate, at least internally,
-		 * so we can always assume its association that failed.
-		 */
-		netdev_connect_failed(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
-					status);
+	switch (status) {
+	case 0: /* success */
+		break;
+	case MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP:
+		if (owe_retry(netdev->owe)) {
+			netdev->ignore_connect_event = true;
+			return;
+		}
+		/* fall through */
+	default:
+		netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
+		netdev->last_code = status;
+		netdev->expect_connect_failure = true;
 		return;
 	}
+
+	netdev->ignore_connect_event = true;
 
 	netdev->sm = eapol_sm_new(netdev->handshake);
 	eapol_register(netdev->sm);

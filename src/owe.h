@@ -35,5 +35,6 @@ struct owe_sm *owe_sm_new(struct handshake_state *hs,
 void owe_sm_free(struct owe_sm *owe);
 
 void owe_start(struct owe_sm *owe);
+bool owe_retry(struct owe_sm *owe);
 void owe_rx_authenticate(struct owe_sm *owe);
 void owe_rx_associate(struct owe_sm *owe, const uint8_t *frame, size_t len);
