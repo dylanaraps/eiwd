@@ -32,6 +32,7 @@
 #include "src/handshake.h"
 #include "src/crypto.h"
 #include "src/ftutil.h"
+#include "src/mpdu.h"
 
 /*
  * Calculate the MIC field of the FTE and write it directly to that FTE,
@@ -137,6 +138,53 @@ bool ft_parse_authentication_resp_frame(const uint8_t *data, size_t len,
 		*out_ies = data + 28;
 		*out_ies_len = len - 28;
 	}
+
+	return true;
+}
+
+bool ft_parse_associate_resp_frame(const uint8_t *frame, size_t frame_len,
+				uint16_t *out_status, const uint8_t **rsne,
+				const uint8_t **mde, const uint8_t **fte)
+{
+	const struct mmpdu_header *mpdu;
+	const struct mmpdu_association_response *body;
+	struct ie_tlv_iter iter;
+
+	mpdu = mpdu_validate(frame, frame_len);
+	if (!mpdu)
+		return false;
+
+	body = mmpdu_body(mpdu);
+
+	ie_tlv_iter_init(&iter, body->ies, (const uint8_t *) mpdu + frame_len -
+				body->ies);
+
+	while (ie_tlv_iter_next(&iter)) {
+		switch (ie_tlv_iter_get_tag(&iter)) {
+		case IE_TYPE_RSN:
+			if (*rsne)
+				return false;
+
+			*rsne = ie_tlv_iter_get_data(&iter) - 2;
+			break;
+
+		case IE_TYPE_MOBILITY_DOMAIN:
+			if (*mde)
+				return false;
+
+			*mde = ie_tlv_iter_get_data(&iter) - 2;
+			break;
+
+		case IE_TYPE_FAST_BSS_TRANSITION:
+			if (*fte)
+				return false;
+
+			*fte = ie_tlv_iter_get_data(&iter) - 2;
+			break;
+		}
+	}
+
+	*out_status = body->status_code;
 
 	return true;
 }

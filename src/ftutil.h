@@ -33,3 +33,7 @@ bool ft_parse_authentication_resp_frame(const uint8_t *data, size_t len,
 				const uint8_t *addr3, uint16_t auth_seq,
 				uint16_t *out_status, const uint8_t **out_ies,
 				size_t *out_ies_len);
+
+bool ft_parse_associate_resp_frame(const uint8_t *frame, size_t frame_len,
+				uint16_t *out_status, const uint8_t **rsne,
+				const uint8_t **mde, const uint8_t **fte);
