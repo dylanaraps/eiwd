@@ -244,7 +244,7 @@ void owe_rx_associate(struct owe_sm *owe, const uint8_t *frame, size_t len)
 
 	body = mmpdu_body(mpdu);
 
-	if (body->status_code == MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP) {
+	if (body->status_code) {
 		owe->complete(body->status_code, owe->user_data);
 		return;
 	}
