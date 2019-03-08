@@ -137,6 +137,7 @@ struct netdev {
 	bool use_4addr : 1;
 	bool ignore_connect_event : 1;
 	bool expect_connect_failure : 1;
+	bool aborting : 1;
 };
 
 struct netdev_preauth_state {
@@ -943,6 +944,7 @@ static void netdev_cmd_disconnect_cb(struct l_genl_msg *msg, void *user_data)
 	bool r;
 
 	netdev->disconnect_cmd_id = 0;
+	netdev->aborting = false;
 
 	if (!netdev->disconnect_cb) {
 		netdev->user_data = NULL;
@@ -1747,6 +1749,9 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 
 	l_debug("");
 
+	if (netdev->aborting)
+		return;
+
 	if (netdev->ignore_connect_event)
 		return;
 
@@ -2255,6 +2260,9 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 
 	l_debug("");
 
+	if (netdev->aborting)
+		return;
+
 	if (!netdev->connected) {
 		l_warn("Unexpected connection related event -- "
 				"is another supplicant running?");
@@ -2330,6 +2338,9 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 	uint16_t status_code = MMPDU_STATUS_CODE_UNSPECIFIED;
 
 	l_debug("");
+
+	if (netdev->aborting)
+		return;
 
 	if (!l_genl_attr_init(&attr, msg)) {
 		l_debug("attr init failed");
@@ -2872,6 +2883,11 @@ int netdev_disconnect(struct netdev *netdev,
 
 	/* Only perform this if we haven't successfully fully associated yet */
 	if (!netdev->operational) {
+		if (netdev->connect_cmd_id) {
+			l_genl_family_cancel(nl80211, netdev->connect_cmd_id);
+			netdev->connect_cmd_id = 0;
+		}
+
 		netdev_connect_failed(netdev, NETDEV_RESULT_ABORTED,
 					MMPDU_REASON_CODE_UNSPECIFIED);
 	} else {
@@ -2890,6 +2906,7 @@ int netdev_disconnect(struct netdev *netdev,
 
 	netdev->disconnect_cb = cb;
 	netdev->user_data = user_data;
+	netdev->aborting = true;
 
 	return 0;
 }
