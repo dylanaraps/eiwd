@@ -310,10 +310,14 @@ static char **wiphy_get_supported_iftypes(struct wiphy *wiphy)
 	unsigned int j;
 
 	for (j = 0, i = 0; i < sizeof(wiphy->supported_iftypes) * 8; i++) {
+		const char *str;
+
 		if (!(wiphy->supported_iftypes & (1 << i)))
 			continue;
 
-		ret[j++] = l_strdup(dbus_iftype_to_string(i + 1));
+		str = dbus_iftype_to_string(i + 1);
+		if (str)
+			ret[j++] = l_strdup(str);
 	}
 
 	return ret;
