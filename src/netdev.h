@@ -62,6 +62,8 @@ enum netdev_iftype {
 	NETDEV_IFTYPE_ADHOC = 1,
 	NETDEV_IFTYPE_STATION = 2,
 	NETDEV_IFTYPE_AP = 3,
+	NETDEV_IFTYPE_P2P_CLIENT,
+	NETDEV_IFTYPE_P2P_GO,
 };
 
 typedef void (*netdev_command_cb_t)(struct netdev *netdev, int result,

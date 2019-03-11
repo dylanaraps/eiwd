@@ -306,9 +306,13 @@ enum netdev_iftype netdev_get_iftype(struct netdev *netdev)
 		return NETDEV_IFTYPE_AP;
 	case NL80211_IFTYPE_ADHOC:
 		return NETDEV_IFTYPE_ADHOC;
+	case NL80211_IFTYPE_P2P_CLIENT:
+		return NETDEV_IFTYPE_P2P_CLIENT;
+	case NL80211_IFTYPE_P2P_GO:
+		return NETDEV_IFTYPE_P2P_GO;
 	default:
-		/* cant really do much here */
-		l_error("invalid iftype %u", netdev->type);
+		/* can't really do much here */
+		l_error("unknown iftype %u", netdev->type);
 		return NETDEV_IFTYPE_STATION;
 	}
 }

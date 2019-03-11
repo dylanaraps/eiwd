@@ -302,17 +302,17 @@ bool wiphy_supports_adhoc_rsn(struct wiphy *wiphy)
 	return wiphy->support_adhoc_rsn;
 }
 
-static char **wiphy_get_supported_iftypes(struct wiphy *wiphy)
+static char **wiphy_get_supported_iftypes(struct wiphy *wiphy, uint16_t mask)
 {
-	char **ret = l_new(char *,
-			__builtin_popcount(wiphy->supported_iftypes) + 1);
+	uint16_t supported_mask = wiphy->supported_iftypes & mask;
+	char **ret = l_new(char *, __builtin_popcount(supported_mask) + 1);
 	unsigned int i;
 	unsigned int j;
 
-	for (j = 0, i = 0; i < sizeof(wiphy->supported_iftypes) * 8; i++) {
+	for (j = 0, i = 0; i < sizeof(supported_mask) * 8; i++) {
 		const char *str;
 
-		if (!(wiphy->supported_iftypes & (1 << i)))
+		if (!(supported_mask & (1 << i)))
 			continue;
 
 		str = dbus_iftype_to_string(i + 1);
@@ -384,7 +384,7 @@ static void wiphy_print_basic_info(struct wiphy *wiphy)
 	}
 
 	if (wiphy->supported_iftypes) {
-		char **iftypes = wiphy_get_supported_iftypes(wiphy);
+		char **iftypes = wiphy_get_supported_iftypes(wiphy, ~0);
 		char *joined = l_strjoinv(iftypes, ' ');
 
 		l_info("\tSupported iftypes: %s", joined);
@@ -1019,6 +1019,11 @@ static bool wiphy_property_get_name(struct l_dbus *dbus,
 	return true;
 }
 
+#define WIPHY_MODE_MASK	( \
+	(1 << (NL80211_IFTYPE_STATION - 1)) | \
+	(1 << (NL80211_IFTYPE_AP - 1)) | \
+	(1 << (NL80211_IFTYPE_ADHOC - 1)))
+
 static bool wiphy_property_get_supported_modes(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -1026,7 +1031,7 @@ static bool wiphy_property_get_supported_modes(struct l_dbus *dbus,
 {
 	struct wiphy *wiphy = user_data;
 	unsigned int j = 0;
-	char **iftypes = wiphy_get_supported_iftypes(wiphy);
+	char **iftypes = wiphy_get_supported_iftypes(wiphy, WIPHY_MODE_MASK);
 
 	l_dbus_message_builder_enter_array(builder, "s");
 
