@@ -133,7 +133,6 @@ static void scan_request_failed(struct scan_context *sc,
 	sc->current_sr = NULL;
 	sc->triggered = false;
 	sc->start_cmd_id = 0;
-	sc->state = SCAN_STATE_NOT_RUNNING;
 	l_queue_remove(sc->requests, sr);
 
 	if (sr->trigger)
@@ -470,7 +469,8 @@ static uint32_t scan_common(uint32_t ifindex, bool passive,
 	if (l_queue_length(sc->requests) > 0)
 		goto done;
 
-	if (sc->state != SCAN_STATE_NOT_RUNNING || sc->start_cmd_id)
+	if (sc->state != SCAN_STATE_NOT_RUNNING ||
+					sc->start_cmd_id || sc->triggered)
 		goto done;
 
 	if (!scan_request_send_trigger(sc, sr))
@@ -748,7 +748,8 @@ static bool start_next_scan_request(struct scan_context *sc)
 {
 	struct scan_request *sr;
 
-	if (sc->state != SCAN_STATE_NOT_RUNNING || sc->start_cmd_id)
+	if (sc->state != SCAN_STATE_NOT_RUNNING ||
+					sc->start_cmd_id || sc->triggered)
 		return true;
 
 	while (!l_queue_isempty(sc->requests)) {
@@ -1199,7 +1200,6 @@ static void scan_finished(struct scan_context *sc, uint32_t wiphy,
 		scan_request_free(sr);
 
 	sc->triggered = false;
-	sc->state = SCAN_STATE_NOT_RUNNING;
 
 	if (!start_next_scan_request(sc) && sc->sp.rearm)
 		scan_periodic_rearm(sc);
@@ -1370,6 +1370,8 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		struct l_genl_msg *scan_msg;
 		struct scan_results *results;
 
+		sc->state = SCAN_STATE_NOT_RUNNING;
+
 		if (scan_send_next_cmd(sc))
 			return;
 
@@ -1397,6 +1399,8 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 
 	case NL80211_CMD_SCAN_ABORTED:
+		sc->state = SCAN_STATE_NOT_RUNNING;
+
 		scan_finished(sc, attr_wiphy, -ECANCELED, NULL);
 
 		break;
