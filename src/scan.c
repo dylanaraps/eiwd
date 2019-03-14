@@ -1662,9 +1662,12 @@ struct channels_5ghz_foreach_data {
 	void *user_data;
 };
 
-static void scan_channels_5ghz_frequency(uint32_t freq, void *user_data)
+static void scan_channels_5ghz_frequency(uint32_t channel, void *user_data)
 {
 	const struct channels_5ghz_foreach_data *channels_5ghz_data = user_data;
+	uint32_t freq;
+
+	freq = scan_channel_to_freq(channel, SCAN_BAND_5_GHZ);
 
 	channels_5ghz_data->func(freq, channels_5ghz_data->user_data);
 }
