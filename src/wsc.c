@@ -560,8 +560,7 @@ static void pin_timeout(struct l_timeout *timeout, void *user_data)
 					wsc_error_time_expired(wsc->pending));
 }
 
-static bool push_button_scan_results(uint32_t ifindex, int err,
-					struct l_queue *bss_list,
+static bool push_button_scan_results(int err, struct l_queue *bss_list,
 					void *userdata)
 {
 	struct wsc *wsc = userdata;
@@ -718,8 +717,7 @@ static bool authorized_macs_contains(const uint8_t *authorized_macs,
 	return false;
 }
 
-static bool pin_scan_results(uint32_t ifindex, int err,
-				struct l_queue *bss_list, void *userdata)
+static bool pin_scan_results(int err, struct l_queue *bss_list, void *userdata)
 {
 	static const uint8_t wildcard_address[] =
 					{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };

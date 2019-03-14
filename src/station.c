@@ -592,8 +592,7 @@ not_supported:
 	return NULL;
 }
 
-static bool new_scan_results(uint32_t ifindex, int err,
-				struct l_queue *bss_list, void *userdata)
+static bool new_scan_results(int err, struct l_queue *bss_list, void *userdata)
 {
 	struct station *station = userdata;
 	struct l_dbus *dbus = dbus_get_bus();
@@ -1076,8 +1075,7 @@ static void station_roam_scan_triggered(int err, void *user_data)
 	 */
 }
 
-static bool station_roam_scan_notify(uint32_t ifindex, int err,
-					struct l_queue *bss_list,
+static bool station_roam_scan_notify(int err, struct l_queue *bss_list,
 					void *userdata)
 {
 	struct station *station = userdata;
@@ -1808,7 +1806,7 @@ static void station_hidden_network_scan_triggered(int err, void *user_data)
 				dbus_error_failed(station->connect_pending));
 }
 
-static bool station_hidden_network_scan_results(uint32_t ifindex, int err,
+static bool station_hidden_network_scan_results(int err,
 						struct l_queue *bss_list,
 						void *userdata)
 {
