@@ -15,7 +15,7 @@ from hostapd import hostapd_map
 
 class Test(unittest.TestCase):
 
-    def test_connection_failure(self):
+    def validate_connection(self, wd):
         hostapd = None
 
         for hostapd_if in list(hostapd_map.values()):
@@ -25,8 +25,6 @@ class Test(unittest.TestCase):
                 break
 
         self.assertIsNotNone(hostapd)
-
-        wd = IWD(True)
 
         psk_agent = PSKAgent('abc', ('user', 'incorrect_password'))
         wd.register_psk_agent(psk_agent)
@@ -55,7 +53,13 @@ class Test(unittest.TestCase):
 
         wd.unregister_psk_agent(psk_agent)
 
-        del wd
+    def test_connection_success(self):
+        wd = IWD(True)
+
+        try:
+            self.validate_connection(wd)
+        finally:
+            del wd
 
     @classmethod
     def setUpClass(cls):
