@@ -11,8 +11,7 @@ from iwd import NetworkType
 
 class Test(unittest.TestCase):
 
-    def test_connection_success(self):
-        wd = IWD(True)
+    def validate_connection(self, wd):
 
         psk_agent = PSKAgent("InvalidSecret")
         wd.register_psk_agent(psk_agent)
@@ -41,7 +40,13 @@ class Test(unittest.TestCase):
 
         wd.unregister_psk_agent(psk_agent)
 
-        del wd
+    def test_connection_success(self):
+        wd = IWD(True)
+
+        try:
+            self.validate_connection(wd)
+        finally:
+            del wd
 
     @classmethod
     def setUpClass(cls):

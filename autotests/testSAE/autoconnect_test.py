@@ -11,8 +11,7 @@ from iwd import NetworkType
 
 class Test(unittest.TestCase):
 
-    def test_connection_success(self):
-        wd = IWD(True)
+    def validate_connection(self, wd):
 
         devices = wd.list_devices(4)
         self.assertIsNotNone(devices)
@@ -46,7 +45,13 @@ class Test(unittest.TestCase):
         condition = 'not obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
 
-        del wd
+    def test_connection_success(self):
+        wd = IWD(True)
+
+        try:
+            self.validate_connection(wd)
+        finally:
+            del wd
 
     @classmethod
     def setUpClass(cls):

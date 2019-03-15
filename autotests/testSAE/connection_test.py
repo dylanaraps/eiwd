@@ -13,14 +13,12 @@ import testutil
 
 class Test(unittest.TestCase):
 
-    def test_connection_success(self):
+    def validate_connection(self, wd):
         hostapd_if = None
 
         for hostapd in list(hostapd_map.values()):
             if hostapd.config == 'ssidSAE.conf':
                 hostapd_if = hostapd.name
-
-        wd = IWD(True)
 
         psk_agent = PSKAgent("secret123")
         wd.register_psk_agent(psk_agent)
@@ -67,7 +65,13 @@ class Test(unittest.TestCase):
 
         wd.unregister_psk_agent(psk_agent)
 
-        del wd
+    def test_connection_success(self):
+        wd = IWD(True)
+
+        try:
+            self.validate_connection(wd)
+        finally:
+            del wd
 
     @classmethod
     def setUpClass(cls):
