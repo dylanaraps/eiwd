@@ -343,3 +343,33 @@ int storage_network_remove(enum security type, const char *ssid)
 
 	return ret < 0 ? -errno : 0;
 }
+
+static const char *known_freq_file_path =
+				DAEMON_STORAGEDIR "/.known_network.freq";
+
+struct l_settings *storage_known_frequencies_load(void)
+{
+	struct l_settings *known_freqs;
+
+	known_freqs = l_settings_new();
+
+	if (!l_settings_load_from_file(known_freqs, known_freq_file_path)) {
+		l_settings_free(known_freqs);
+		known_freqs = NULL;
+	}
+
+	return known_freqs;
+}
+
+void storage_known_frequencies_sync(struct l_settings *known_freqs)
+{
+	char *data;
+	size_t len;
+
+	if (!known_freqs)
+		return;
+
+	data = l_settings_to_data(known_freqs, &len);
+	write_file(data, len, "%s", known_freq_file_path);
+	l_free(data);
+}

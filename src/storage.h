@@ -44,3 +44,6 @@ int storage_network_get_mtime(enum security type, const char *ssid,
 void storage_network_sync(enum security type, const char *ssid,
 				struct l_settings *settings);
 int storage_network_remove(enum security type, const char *ssid);
+
+struct l_settings *storage_known_frequencies_load(void);
+void storage_known_frequencies_sync(struct l_settings *known_freqs);
