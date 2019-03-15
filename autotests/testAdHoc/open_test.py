@@ -12,9 +12,7 @@ import testutil
 
 class Test(unittest.TestCase):
 
-    def test_connection_success(self):
-        wd = IWD(True)
-
+    def validate_connection(self, wd):
         dev1, dev2 = wd.list_devices(2)
 
         self.assertIsNotNone(dev1)
@@ -31,7 +29,13 @@ class Test(unittest.TestCase):
         #testutil.test_iface_operstate(dev2.name)
         #testutil.test_ifaces_connected(dev1.name, dev2.name)
 
-        del wd
+    def test_connection_success(self):
+        wd = IWD(True)
+
+        try:
+            self.validate_connection(wd)
+        finally:
+            del wd
 
     @classmethod
     def setUpClass(cls):
