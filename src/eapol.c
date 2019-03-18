@@ -27,6 +27,7 @@
 #include <string.h>
 #include <alloca.h>
 #include <linux/if_ether.h>
+#include <errno.h>
 #include <ell/ell.h>
 
 #include "src/crypto.h"
@@ -312,14 +313,14 @@ error:
  * Note that for efficiency @key_data is being modified, including in
  * case of failure, so it must be sufficiently larger than @key_data_len.
  */
-static bool eapol_encrypt_key_data(const uint8_t *kek, uint8_t *key_data,
+static int eapol_encrypt_key_data(const uint8_t *kek, uint8_t *key_data,
 				size_t key_data_len,
 				struct eapol_key *out_frame, size_t mic_len)
 {
 	switch (out_frame->key_descriptor_version) {
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_MD5_ARC4:
 		/* Not supported */
-		return false;
+		return -ENOTSUP;
 
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
@@ -330,7 +331,7 @@ static bool eapol_encrypt_key_data(const uint8_t *kek, uint8_t *key_data,
 
 		if (!aes_wrap(kek, key_data, key_data_len,
 					EAPOL_KEY_DATA(out_frame, mic_len)))
-			return false;
+			return -ENOPROTOOPT;
 
 		key_data_len += 8;
 
@@ -339,7 +340,7 @@ static bool eapol_encrypt_key_data(const uint8_t *kek, uint8_t *key_data,
 
 	l_put_be16(key_data_len, EAPOL_KEY_DATA(out_frame, mic_len) - 2);
 
-	return true;
+	return key_data_len;
 }
 
 static void eapol_key_data_append(struct eapol_key *ek,
@@ -1188,7 +1189,7 @@ static void eapol_send_ptk_3_of_4(struct eapol_sm *sm)
 	uint8_t frame_buf[512];
 	uint8_t key_data_buf[128];
 	struct eapol_key *ek = (struct eapol_key *) frame_buf;
-	size_t key_data_len;
+	int key_data_len;
 	enum crypto_cipher cipher = ie_rsn_cipher_suite_to_cipher(
 				sm->handshake->pairwise_cipher);
 	enum crypto_cipher group_cipher = ie_rsn_cipher_suite_to_cipher(
@@ -1247,11 +1248,10 @@ static void eapol_send_ptk_3_of_4(struct eapol_sm *sm)
 
 	kek = handshake_state_get_kek(sm->handshake);
 
-	if (!eapol_encrypt_key_data(kek, key_data_buf,
-					key_data_len, ek, sm->mic_len))
+	key_data_len = eapol_encrypt_key_data(kek, key_data_buf,
+					key_data_len, ek, sm->mic_len);
+	if (key_data_len < 0)
 		return;
-
-	key_data_len = EAPOL_KEY_DATA_LEN(ek, sm->mic_len);
 
 	ek->header.packet_len = L_CPU_TO_BE16(EAPOL_FRAME_LEN(sm->mic_len) +
 				key_data_len - 4);
