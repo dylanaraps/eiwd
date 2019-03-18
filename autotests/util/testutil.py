@@ -50,7 +50,7 @@ def tx(fromsock, tosock, src, dst):
 
     return (frame, fromsock, tosock, src, dst)
 
-def test_ifaces_connected(if0=None, if1=None):
+def test_connected(if0=None, if1=None):
     for wname in wiphy.wiphy_map:
         for intf in wiphy.wiphy_map[wname]:
             if if0 is None:
@@ -100,6 +100,20 @@ def test_ifaces_connected(if0=None, if1=None):
     finally:
         sock0.close()
         sock1.close()
+
+def test_ifaces_connected(if0=None, if1=None):
+    retry = 0
+    while True:
+        try:
+            test_connected(if0, if1)
+            break
+
+        except Exception as e:
+            if retry < 3:
+                print('retrying connection test: %i' % retry)
+                retry += 1
+                continue
+            raise e
 
 SIOCGIFFLAGS = 0x8913
 IFF_UP = 1 << 0
