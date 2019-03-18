@@ -229,12 +229,13 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 	uint8_t rand_fn;
 	uint8_t prf;
 	uint32_t token;
-	uint8_t counter = 1;
+	uint8_t counter = 0;
 	uint8_t resp[15 + strlen(pwd->identity)];
 	uint8_t *pos;
 	uint8_t pwd_seed[32];
 	uint8_t pwd_value[L_ECC_SCALAR_MAX_BYTES];	/* used as X value */
 	size_t nbytes;
+	bool found = false;
 
 	/*
 	 * Group desc (2) + Random func (1) + prf (1) + token (4) + prep (1) +
@@ -292,6 +293,10 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 	nbytes = l_ecc_curve_get_scalar_bytes(pwd->curve);
 
 	while (counter < 20) {
+		struct l_ecc_point *pwe = NULL;
+
+		counter++;
+
 		/* pwd-seed = H(token|peer-ID|server-ID|password|counter) */
 		hkdf_extract(L_CHECKSUM_SHA256, NULL, 0, 5, pwd_seed, &token, 4,
 				pwd->identity, strlen(pwd->identity), pkt + 9,
@@ -307,18 +312,22 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 				pwd_value, nbytes);
 
 		if (!(pwd_seed[31] & 1))
-			pwd->pwe = l_ecc_point_from_data(pwd->curve,
+			pwe = l_ecc_point_from_data(pwd->curve,
 					L_ECC_POINT_TYPE_COMPRESSED_BIT1,
 					pwd_value, nbytes);
 		else
-			pwd->pwe = l_ecc_point_from_data(pwd->curve,
+			pwe = l_ecc_point_from_data(pwd->curve,
 					L_ECC_POINT_TYPE_COMPRESSED_BIT0,
 					pwd_value, nbytes);
 
-		if (pwd->pwe)
-			break;
+		if (!pwe)
+			continue;
 
-		counter++;
+		if (!found) {
+			found = true;
+			pwd->pwe = pwe;
+		} else
+			l_ecc_point_free(pwe);
 	}
 
 	pos = resp + 5; /* header */
