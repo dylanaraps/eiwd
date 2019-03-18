@@ -6,7 +6,8 @@ scripts/config --enable CONFIG_VLAN_8021Q
 
 scripts/config --enable CONFIG_EXPERT
 scripts/config --enable CONFIG_CFG80211_CERTIFICATION_ONUS
-scripts/config --enable CONFIG_EXTRA_FIRMWARE="regulatory.db"
+scripts/config --set-str CONFIG_EXTRA_FIRMWARE regulatory.db
+scripts/config --disable CONFIG_CFG80211_REQUIRE_SIGNED_REGDB
 
 scripts/config --enable CONFIG_CRYPTO_USER_API_SKCIPHER
 scripts/config --enable CONFIG_CRYPTO_USER_API_AEAD
