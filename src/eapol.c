@@ -258,7 +258,7 @@ uint8_t *eapol_decrypt_key_data(enum ie_rsn_akm_suite akm, const uint8_t *kek,
 		memcpy(key + 16, kek, 16);
 
 		ret = arc4_skip(key, 32, 256, key_data, key_data_len, buf);
-		memset(key, 0, sizeof(key));
+		explicit_bzero(key, sizeof(key));
 
 		if (!ret)
 			goto error;
@@ -795,9 +795,9 @@ static void eapol_sm_destroy(void *value)
 	eapol_frame_watch_remove(sm->watch_id);
 
 	sm->installed_gtk_len = 0;
-	memset(sm->installed_gtk, 0, sizeof(sm->installed_gtk));
+	explicit_bzero(sm->installed_gtk, sizeof(sm->installed_gtk));
 	sm->installed_igtk_len = 0;
-	memset(sm->installed_igtk, 0, sizeof(sm->installed_igtk));
+	explicit_bzero(sm->installed_igtk, sizeof(sm->installed_igtk));
 
 	l_free(sm);
 
