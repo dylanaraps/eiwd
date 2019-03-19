@@ -161,6 +161,8 @@ bool eap_aka_derive_primes(const uint8_t *ck, const uint8_t *ik,
 	memcpy(key + EAP_AKA_CK_LEN, ik, EAP_AKA_IK_LEN);
 
 	hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, key, 32);
+	explicit_bzero(key, sizeof(key));
+
 	if (!hmac)
 		return false;
 
@@ -181,6 +183,7 @@ bool eap_aka_derive_primes(const uint8_t *ck, const uint8_t *ik,
 
 	memcpy(ck_p, digest, EAP_AKA_CK_LEN);
 	memcpy(ik_p, digest + EAP_AKA_CK_LEN, EAP_AKA_IK_LEN);
+	explicit_bzero(digest, sizeof(digest));
 
 	return true;
 }
@@ -204,6 +207,8 @@ bool eap_aka_prf_prime(const uint8_t *ik_p, const uint8_t *ck_p,
 	memcpy(key + EAP_AKA_IK_LEN, ck_p, EAP_AKA_CK_LEN);
 
 	hmac = l_checksum_new_hmac(L_CHECKSUM_SHA256, key, 32);
+	explicit_bzero(key, sizeof(key));
+
 	if (!hmac)
 		return false;
 
@@ -229,6 +234,7 @@ bool eap_aka_prf_prime(const uint8_t *ik_p, const uint8_t *ck_p,
 		iov[0].iov_len = 32;
 	}
 
+	explicit_bzero(digest, sizeof(digest));
 	l_checksum_free(hmac);
 
 	pos = out;
@@ -242,6 +248,7 @@ bool eap_aka_prf_prime(const uint8_t *ik_p, const uint8_t *ck_p,
 	pos += EAP_SIM_MSK_LEN;
 	memcpy(emsk, pos, EAP_SIM_EMSK_LEN);
 
+	explicit_bzero(out, sizeof(out));
 	return true;
 }
 
