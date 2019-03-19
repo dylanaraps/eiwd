@@ -758,6 +758,8 @@ static bool sae_verify_committed(struct sae_sm *sm, uint16_t transaction,
 		 */
 		if (len == 0)
 			l_warn("AP did not include group number in response!");
+		else if (len >= 2 && (l_get_le16(frame) != sm->group))
+			return false;
 
 		sm->group_retry++;
 
