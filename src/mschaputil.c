@@ -51,6 +51,8 @@ static bool mschap_des_encrypt(const uint8_t challenge[static 8],
 	pkey[i] = next | 1;
 
 	cipher = l_cipher_new(L_CIPHER_DES, pkey, 8);
+	explicit_bzero(pkey, 8);
+
 	if (!cipher)
 		return false;
 
@@ -64,20 +66,17 @@ bool mschap_challenge_response(const uint8_t *challenge,
 				const uint8_t *password_hash, uint8_t *response)
 {
 	uint8_t buf[21];
+	bool r;
 
 	memset(buf, 0, sizeof(buf));
 	memcpy(buf, password_hash, 16);
 
-	if (!mschap_des_encrypt(challenge, buf + 0, response + 0))
-		return false;
+	r = mschap_des_encrypt(challenge, buf + 0, response + 0) &&
+		mschap_des_encrypt(challenge, buf + 7, response + 8) &&
+		mschap_des_encrypt(challenge, buf + 14, response + 16);
 
-	if (!mschap_des_encrypt(challenge, buf + 7, response + 8))
-		return false;
-
-	if (!mschap_des_encrypt(challenge, buf + 14, response + 16))
-		return false;
-
-	return true;
+	explicit_bzero(buf, sizeof(buf));
+	return r;
 }
 
 /**
@@ -95,6 +94,7 @@ bool mschap_nt_password_hash(const char *password, uint8_t *password_hash)
 	uint16_t buffer[size];
 	unsigned int i, pos;
 	struct l_checksum *check;
+	bool r = false;
 
 	for (i = 0, pos = 0; i < size; ++i) {
 		wchar_t val;
@@ -104,7 +104,7 @@ bool mschap_nt_password_hash(const char *password, uint8_t *password_hash)
 		if (val > 0xFFFF) {
 			l_error("Encountered password with value not valid in "
 								"ucs-2");
-			return false;
+			goto cleanup;
 		}
 
 		buffer[i] = L_CPU_TO_LE16(val);
@@ -112,13 +112,16 @@ bool mschap_nt_password_hash(const char *password, uint8_t *password_hash)
 
 	check = l_checksum_new(L_CHECKSUM_MD4);
 	if (!check)
-		return false;
+		goto cleanup;
 
 	l_checksum_update(check, (uint8_t *) buffer, size * 2);
 	l_checksum_get_digest(check, password_hash, 16);
 	l_checksum_free(check);
+	r = true;
 
-	return true;
+cleanup:
+	explicit_bzero(buffer, size * 2);
+	return r;
 }
 
 static const char *mschapv2_exlude_domain_name(const char *username)
@@ -189,6 +192,7 @@ bool mschapv2_generate_nt_response(const uint8_t password_hash[static 16],
 {
 	uint8_t challenge[8];
 	uint8_t buffer[21];
+	bool r;
 
 	if (!mschapv2_challenge_hash(peer_challenge, server_challenge, user,
 								challenge))
@@ -197,16 +201,12 @@ bool mschapv2_generate_nt_response(const uint8_t password_hash[static 16],
 	memset(buffer, 0, sizeof(buffer));
 	memcpy(buffer, password_hash, 16);
 
-	if (!mschap_des_encrypt(challenge, buffer + 0, response + 0))
-		return false;
+	r = mschap_des_encrypt(challenge, buffer + 0, response + 0) &&
+		mschap_des_encrypt(challenge, buffer + 7, response + 8) &&
+		mschap_des_encrypt(challenge, buffer + 14, response + 16);
 
-	if (!mschap_des_encrypt(challenge, buffer + 7, response + 8))
-		return false;
-
-	if (!mschap_des_encrypt(challenge, buffer + 14, response + 16))
-		return false;
-
-	return true;
+	explicit_bzero(buffer, sizeof(buffer));
+	return r;
 }
 
 /**
