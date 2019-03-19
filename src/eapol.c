@@ -1247,9 +1247,10 @@ static void eapol_send_ptk_3_of_4(struct eapol_sm *sm)
 	}
 
 	kek = handshake_state_get_kek(sm->handshake);
-
 	key_data_len = eapol_encrypt_key_data(kek, key_data_buf,
-					key_data_len, ek, sm->mic_len);
+						key_data_len, ek, sm->mic_len);
+	explicit_bzero(key_data_buf, sizeof(key_data_buf));
+
 	if (key_data_len < 0)
 		return;
 
@@ -1900,6 +1901,9 @@ static void eapol_key_handle(struct eapol_sm *sm,
 	}
 
 done:
+	if (decrypted_key_data)
+		explicit_bzero(decrypted_key_data, key_data_len);
+
 	l_free(decrypted_key_data);
 }
 

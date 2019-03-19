@@ -79,9 +79,13 @@ void handshake_state_free(struct handshake_state *s)
 	l_free(s->supplicant_ie);
 	l_free(s->mde);
 	l_free(s->fte);
-	l_free(s->passphrase);
 
-	memset(s, 0, sizeof(*s));
+	if (s->passphrase) {
+		explicit_bzero(s->passphrase, strlen(s->passphrase));
+		l_free(s->passphrase);
+	}
+
+	explicit_bzero(s, sizeof(*s));
 
 	if (destroy)
 		destroy(s);
