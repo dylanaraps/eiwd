@@ -1750,6 +1750,9 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 	uint16_t type, len;
 	const void *data;
 	const uint16_t *status_code = NULL;
+	const uint8_t *ies = NULL;
+	size_t ies_len = 0;
+	struct ie_tlv_iter iter;
 
 	l_debug("");
 
@@ -1779,6 +1782,10 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 			if (len == sizeof(uint16_t))
 				status_code = data;
 			break;
+		case NL80211_ATTR_REQ_IE:
+			ies = data;
+			ies_len = len;
+			break;
 		}
 	}
 
@@ -1798,6 +1805,34 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 	/* AP Rejected the authenticate / associate */
 	if (!status_code || *status_code != 0)
 		goto error;
+
+	/*
+	 * The driver may have modified the IEs we passed to CMD_CONNECT
+	 * before sending them out, the actual IE sent is reflected in the
+	 * ATTR_REQ_IE sequence.  These are the values EAPoL will need to use.
+	 */
+	ie_tlv_iter_init(&iter, ies, ies_len);
+
+	while (ie_tlv_iter_next(&iter)) {
+		data = ie_tlv_iter_get_data(&iter);
+
+		switch (ie_tlv_iter_get_tag(&iter)) {
+		case IE_TYPE_RSN:
+			handshake_state_set_supplicant_rsn(netdev->handshake,
+								data - 2);
+			break;
+		case IE_TYPE_VENDOR_SPECIFIC:
+			if (!is_ie_wpa_ie(data, ie_tlv_iter_get_length(&iter)))
+				break;
+
+			handshake_state_set_supplicant_wpa(netdev->handshake,
+								data - 2);
+			break;
+		case IE_TYPE_MOBILITY_DOMAIN:
+			handshake_state_set_mde(netdev->handshake, data - 2);
+			break;
+		}
+	}
 
 	if (netdev->sm) {
 		/*
