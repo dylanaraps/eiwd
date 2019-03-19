@@ -89,7 +89,7 @@ static void test_nt_password_hash(const void *data)
 {
 	uint8_t hash[16];
 
-	assert(mschapv2_nt_password_hash(nt_password, hash));
+	assert(mschap_nt_password_hash(nt_password, hash));
 	assert(!memcmp(hash, password_hash, sizeof(password_hash)));
 }
 
