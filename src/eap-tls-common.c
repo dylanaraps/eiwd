@@ -912,6 +912,10 @@ done:
 			(l_queue_destroy_func_t) l_cert_free);
 	l_certchain_free(cert);
 	l_key_free(priv_key);
+
+	if (passphrase)
+		explicit_bzero(passphrase, strlen(passphrase));
+
 	return ret;
 }
 

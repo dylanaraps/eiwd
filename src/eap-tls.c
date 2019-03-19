@@ -49,6 +49,8 @@ static bool eap_tls_tunnel_ready(struct eap_state *eap,
 									iv, 64);
 
 	eap_set_key_material(eap, msk_emsk + 0, 64, msk_emsk + 64, 64, iv, 64);
+	explicit_bzero(msk_emsk, sizeof(msk_emsk));
+	explicit_bzero(iv, sizeof(iv));
 
 	eap_tls_common_send_empty_response(eap);
 
