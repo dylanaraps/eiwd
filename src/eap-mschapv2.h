@@ -36,5 +36,3 @@ bool mschapv2_get_asymmetric_start_key(const uint8_t master_key[static 16],
 bool mschapv2_get_master_key(const uint8_t pw_hash_hash[static 16],
 					const uint8_t nt_response[static 24],
 					uint8_t master_key[static 16]);
-
-bool mschapv2_nt_password_hash(const char *password, uint8_t hash[16]);

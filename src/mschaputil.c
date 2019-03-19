@@ -80,6 +80,14 @@ bool mschap_challenge_response(const uint8_t *challenge,
 	return true;
 }
 
+/**
+ * Hash the utf8 encoded nt password.
+ * It is asumed, that the password is valid utf8!
+ * The rfc says "unicode-char", but never specifies which encoding.
+ * This function converts the password to ucs-2.
+ * The example in the code uses LE for the unicode chars, so it is forced here.
+ * https://tools.ietf.org/html/draft-ietf-pppext-mschap-00#ref-8
+ */
 bool mschap_nt_password_hash(const char *password, uint8_t *password_hash)
 {
 	size_t size = l_utf8_strlen(password);

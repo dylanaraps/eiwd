@@ -182,45 +182,6 @@ bool mschapv2_get_master_key(const uint8_t pw_hash_hash[static 16],
 	return true;
 }
 
-/**
- * Hash the utf8 encoded nt password.
- * It is asumed, that the password is valid utf8!
- * The rfc says "unicode-char", but never specifies which encoding.
- * This function converts the password to ucs-2.
- * The example in the code uses LE for the unicode chars, so it is forced here.
- * https://tools.ietf.org/html/draft-ietf-pppext-mschap-00#ref-8
- */
-bool mschapv2_nt_password_hash(const char *password, uint8_t hash[static 16])
-{
-	size_t size = l_utf8_strlen(password);
-	size_t bsize = strlen(password);
-	uint16_t buffer[size];
-	unsigned int i, pos;
-	struct l_checksum *check;
-
-	for (i = 0, pos = 0; i < size; ++i) {
-		wchar_t val;
-		pos += l_utf8_get_codepoint(password + pos, bsize - pos, &val);
-
-		if (val > 0xFFFF) {
-			l_error("Encountered password with value not valid in ucs-2");
-			return false;
-		}
-
-		buffer[i] = L_CPU_TO_LE16(val);
-	}
-
-	check = l_checksum_new(L_CHECKSUM_MD4);
-	if (!check)
-		return false;
-
-	l_checksum_update(check, (uint8_t *) buffer, size * 2);
-	l_checksum_get_digest(check, hash, 16);
-	l_checksum_free(check);
-
-	return true;
-}
-
 static bool eap_mschapv2_reset_state(struct eap_state *eap)
 {
 	struct eap_mschapv2_state *state = eap_get_data(eap);
@@ -451,7 +412,7 @@ err:
 static bool set_password_from_string(struct eap_mschapv2_state *state,
 						const char *password)
 {
-	return mschapv2_nt_password_hash(password, state->password_hash);
+	return mschap_nt_password_hash(password, state->password_hash);
 }
 
 static int eap_mschapv2_check_settings(struct l_settings *settings,
@@ -527,7 +488,7 @@ static int eap_mschapv2_check_settings(struct l_settings *settings,
 	password = l_strdup(secret->value);
 
 validate:
-	if (!mschapv2_nt_password_hash(password, hash))
+	if (!mschap_nt_password_hash(password, hash))
 		return -EINVAL;
 
 	return 0;
