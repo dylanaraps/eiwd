@@ -107,12 +107,24 @@ struct eap_aka_handle {
 	unsigned int auth_watch;
 };
 
+static void eap_aka_clear_secrets(struct eap_aka_handle *aka)
+{
+	explicit_bzero(aka->mk, sizeof(aka->mk));
+	explicit_bzero(aka->k_encr, sizeof(aka->k_encr));
+	explicit_bzero(aka->k_aut, sizeof(aka->k_aut));
+	explicit_bzero(aka->k_re, sizeof(aka->k_re));
+	explicit_bzero(aka->msk, sizeof(aka->msk));
+	explicit_bzero(aka->emsk, sizeof(aka->emsk));
+}
+
 static void eap_aka_free(struct eap_state *eap)
 {
 	struct eap_aka_handle *aka = eap_get_data(eap);
 
 	if (aka->auth)
 		sim_auth_unregistered_watch_remove(aka->auth, aka->auth_watch);
+
+	eap_aka_clear_secrets(aka);
 
 	l_free(aka->identity);
 	l_free(aka->kdf_in);
@@ -160,12 +172,9 @@ static void check_milenage_cb(const uint8_t *res, const uint8_t *ck,
 	struct eap_state *eap = data;
 	struct eap_aka_handle *aka = eap_get_data(eap);
 
-	uint8_t prng_buf[160];
 	size_t resp_len = aka->protected ? 44 : 40;
 	uint8_t response[resp_len + 4];
 	uint8_t *pos = response;
-	uint8_t ik_p[EAP_AKA_IK_LEN];
-	uint8_t ck_p[EAP_AKA_CK_LEN];
 
 	if (auts) {
 		/*
@@ -190,6 +199,10 @@ static void check_milenage_cb(const uint8_t *res, const uint8_t *ck,
 		goto chal_error;
 
 	if (aka->type == EAP_TYPE_AKA_PRIME) {
+		bool r;
+		uint8_t ik_p[EAP_AKA_IK_LEN];
+		uint8_t ck_p[EAP_AKA_CK_LEN];
+
 		if (!eap_aka_derive_primes(ck, ik, aka->autn,
 				(uint8_t *)aka->kdf_in, strlen(aka->kdf_in),
 				ck_p, ik_p)) {
@@ -197,12 +210,19 @@ static void check_milenage_cb(const uint8_t *res, const uint8_t *ck,
 			goto chal_fatal;
 		}
 
-		if (!eap_aka_prf_prime(ik_p, ck_p, aka->identity, aka->k_encr,
-				aka->k_aut, aka->k_re, aka->msk, aka->emsk)) {
+		r = eap_aka_prf_prime(ik_p, ck_p, aka->identity, aka->k_encr,
+				aka->k_aut, aka->k_re, aka->msk, aka->emsk);
+		explicit_bzero(ik_p, sizeof(ik_p));
+		explicit_bzero(ck_p, sizeof(ck_p));
+
+		if (!r) {
 			l_error("could not derive encryption keys");
 			goto chal_fatal;
 		}
 	} else {
+		uint8_t prng_buf[160];
+		bool r;
+
 		if (!derive_aka_mk(aka->identity, ik, ck, aka->mk)) {
 			l_error("error deriving MK");
 			goto chal_fatal;
@@ -210,8 +230,11 @@ static void check_milenage_cb(const uint8_t *res, const uint8_t *ck,
 
 		eap_sim_fips_prf(aka->mk, 20, prng_buf, 160);
 
-		if (!eap_sim_get_encryption_keys(prng_buf, aka->k_encr,
-				aka->k_aut, aka->msk, aka->emsk)) {
+		r = eap_sim_get_encryption_keys(prng_buf, aka->k_encr,
+					aka->k_aut, aka->msk, aka->emsk);
+		explicit_bzero(prng_buf, sizeof(prng_buf));
+
+		if (!r) {
 			l_error("could not derive encryption keys");
 			goto chal_fatal;
 		}
@@ -695,12 +718,7 @@ static bool eap_aka_reset_state(struct eap_state *eap)
 	l_free(aka->chal_pkt);
 	aka->chal_pkt = NULL;
 
-	memset(aka->mk, 0, sizeof(aka->mk));
-	memset(aka->k_encr, 0, sizeof(aka->k_encr));
-	memset(aka->k_aut, 0, sizeof(aka->k_aut));
-	memset(aka->msk, 0, sizeof(aka->msk));
-	memset(aka->emsk, 0, sizeof(aka->emsk));
-	memset(aka->k_re, 0, sizeof(aka->k_re));
+	eap_aka_clear_secrets(aka);
 	memset(aka->autn, 0, sizeof(aka->autn));
 
 	return true;
