@@ -169,6 +169,7 @@ static void wsc_store_credentials(struct wsc *wsc)
 
 			l_settings_set_value(settings, "Security",
 							"PreSharedKey", hex);
+			explicit_bzero(hex, strlen(hex));
 			l_free(hex);
 		}
 
@@ -252,7 +253,8 @@ static void wsc_credential_obtained(struct wsc *wsc,
 	l_debug("auth_type: %02x, encryption_type: %02x",
 			cred->auth_type, cred->encryption_type);
 
-	l_debug("Key (%u): %.*s", cred->network_key_len,
+	if (getenv("IWD_WSC_DEBUG_KEYS"))
+		l_debug("Key (%u): %.*s", cred->network_key_len,
 				cred->network_key_len, cred->network_key);
 
 	if (wsc->n_creds == L_ARRAY_SIZE(wsc->creds)) {
@@ -309,6 +311,7 @@ static void wsc_credential_obtained(struct wsc *wsc,
 			}
 
 			memcpy(wsc->creds[wsc->n_creds].psk, decoded, 32);
+			explicit_bzero(decoded, 32);
 			l_free(decoded);
 		} else {
 			const char *passphrase =
@@ -336,6 +339,8 @@ static void wsc_credential_obtained(struct wsc *wsc,
 
 		l_warn("Found duplicate credentials for SSID: %s",
 				wsc->creds[i].ssid);
+		explicit_bzero(&wsc->creds[wsc->n_creds],
+				sizeof(wsc->creds[wsc->n_creds]));
 		return;
 	}
 

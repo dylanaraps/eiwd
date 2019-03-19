@@ -236,6 +236,7 @@ static uint8_t *encrypted_settings_decrypt(struct eap_wsc_state *wsc,
 	return decrypted;
 
 fail:
+	explicit_bzero(decrypted, encrypted_len);
 	l_free(decrypted);
 	return NULL;
 }
@@ -263,8 +264,10 @@ static bool encrypted_settings_encrypt(struct eap_wsc_state *wsc,
 	for (i = 0; i < pad; i++)
 		out[len++] = pad;
 
-	if (!l_cipher_encrypt(wsc->aes_cbc_128, out + 16, out + 16, len - 16))
+	if (!l_cipher_encrypt(wsc->aes_cbc_128, out + 16, out + 16, len - 16)) {
+		explicit_bzero(out + 16, len - 16);
 		return false;
+	}
 
 	*out_len = len;
 	return true;
@@ -276,7 +279,12 @@ static void eap_wsc_free(struct eap_state *eap)
 
 	eap_set_data(eap, NULL);
 
-	l_free(wsc->device_password);
+	if (wsc->device_password) {
+		explicit_bzero(wsc->device_password,
+				strlen(wsc->device_password));
+		l_free(wsc->device_password);
+	}
+
 	l_key_free(wsc->private);
 
 	l_free(wsc->sent_pdu);
@@ -295,6 +303,11 @@ static void eap_wsc_free(struct eap_state *eap)
 
 	l_free(wsc->m1);
 	l_free(wsc->m2);
+
+	explicit_bzero(wsc->e_snonce1, 16);
+	explicit_bzero(wsc->e_snonce2, 16);
+	explicit_bzero(wsc->psk1, 16);
+	explicit_bzero(wsc->psk2, 16);
 
 	l_free(wsc);
 }
@@ -458,6 +471,7 @@ static void eap_wsc_handle_m8(struct eap_state *eap,
 	struct iovec creds[3];
 	size_t n_creds;
 	size_t i;
+	bool nack = true;
 
 	/* Spec unclear what to do here, see comments in eap_wsc_send_nack */
 	if (wsc_parse_m8(pdu, len, &m8, &encrypted) != 0) {
@@ -478,29 +492,34 @@ static void eap_wsc_handle_m8(struct eap_state *eap,
 
 	if (wsc_parse_m8_encrypted_settings(decrypted, decrypted_len,
 						&m8es, creds, &n_creds))
-		goto invalid_settings;
+		goto cleanup;
 
 	if (!keywrap_authenticator_check(wsc, decrypted, decrypted_len))
-		goto invalid_settings;
+		goto cleanup;
 
 	for (i = 0; i < n_creds; i++) {
 		struct wsc_credential cred;
 
 		if (wsc_parse_credential(creds[i].iov_base, creds[i].iov_len,
-						&cred) != 0)
-			continue;
+						&cred) == 0)
+			eap_method_event(eap, EAP_WSC_EVENT_CREDENTIAL_OBTAINED,
+						&cred);
 
-		eap_method_event(eap, EAP_WSC_EVENT_CREDENTIAL_OBTAINED, &cred);
+		explicit_bzero(&cred, sizeof(cred));
 	}
-
-	l_free(decrypted);
 
 	eap_wsc_send_done(eap);
 	wsc->state = STATE_FINISHED;
-	return;
+	nack = false;
 
-invalid_settings:
+cleanup:
+	explicit_bzero(&m8es, sizeof(m8es));
+	explicit_bzero(decrypted, decrypted_len);
 	l_free(decrypted);
+
+	if (!nack)
+		return;
+
 send_nack:
 	eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_DECRYPTION_CRC_FAILURE);
 }
@@ -520,12 +539,14 @@ static void eap_wsc_send_m7(struct eap_state *eap,
 
 	memcpy(m7es.e_snonce2, wsc->e_snonce2, sizeof(wsc->e_snonce2));
 	pdu = wsc_build_m7_encrypted_settings(&m7es, &pdu_len);
+	explicit_bzero(m7es.e_snonce2, sizeof(wsc->e_snonce2));
 	if (!pdu)
 		return;
 
 	keywrap_authenticator_put(wsc, pdu, pdu_len);
 	r = encrypted_settings_encrypt(wsc, wsc->iv2, pdu, pdu_len,
 						encrypted, &encrypted_len);
+	explicit_bzero(pdu, pdu_len);
 	l_free(pdu);
 
 	if (!r)
@@ -553,12 +574,11 @@ static void eap_wsc_handle_m6(struct eap_state *eap,
 	uint8_t *decrypted;
 	size_t decrypted_len;
 	struct wsc_m6_encrypted_settings m6es;
+	enum wsc_configuration_error error = WSC_CONFIGURATION_ERROR_NO_ERROR;
 
 	/* Spec unclear what to do here, see comments in eap_wsc_send_nack */
-	if (wsc_parse_m6(pdu, len, &m6, &encrypted) != 0) {
-		eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_NO_ERROR);
-		return;
-	}
+	if (wsc_parse_m6(pdu, len, &m6, &encrypted) != 0)
+		goto send_nack;
 
 	if (!authenticator_check(wsc, pdu, len))
 		return;
@@ -566,31 +586,39 @@ static void eap_wsc_handle_m6(struct eap_state *eap,
 	decrypted = encrypted_settings_decrypt(wsc, encrypted.iov_base,
 							encrypted.iov_len,
 							&decrypted_len);
-	if (!decrypted)
+	if (!decrypted) {
+		error = WSC_CONFIGURATION_ERROR_DECRYPTION_CRC_FAILURE;
 		goto send_nack;
+	}
 
-	if (wsc_parse_m6_encrypted_settings(decrypted, decrypted_len, &m6es))
-		goto invalid_settings;
+	if (wsc_parse_m6_encrypted_settings(decrypted, decrypted_len, &m6es)) {
+		error = WSC_CONFIGURATION_ERROR_DECRYPTION_CRC_FAILURE;
+		goto cleanup;
+	}
 
-	if (!keywrap_authenticator_check(wsc, decrypted, decrypted_len))
-		goto invalid_settings;
-
-	l_free(decrypted);
+	if (!keywrap_authenticator_check(wsc, decrypted, decrypted_len)) {
+		error = WSC_CONFIGURATION_ERROR_DECRYPTION_CRC_FAILURE;
+		goto cleanup;
+	}
 
 	/* We now have R-SNonce2, verify R-Hash2 stored in eap_wsc_handle_m4 */
 	if (!r_hash_check(wsc, m6es.r_snonce2, wsc->psk2, wsc->r_hash2)) {
-		eap_wsc_send_nack(eap,
-			WSC_CONFIGURATION_ERROR_DEVICE_PASSWORD_AUTH_FAILURE);
-		return;
+		error = WSC_CONFIGURATION_ERROR_DEVICE_PASSWORD_AUTH_FAILURE;
+		goto cleanup;
 	}
 
 	eap_wsc_send_m7(eap, pdu, len);
-	return;
 
-invalid_settings:
+cleanup:
+	explicit_bzero(&m6es, sizeof(m6es));
+	explicit_bzero(decrypted, decrypted_len);
 	l_free(decrypted);
+
+	if (!error)
+		return;
+
 send_nack:
-	eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_DECRYPTION_CRC_FAILURE);
+	eap_wsc_send_nack(eap, error);
 }
 
 static void eap_wsc_send_m5(struct eap_state *eap,
@@ -608,12 +636,14 @@ static void eap_wsc_send_m5(struct eap_state *eap,
 
 	memcpy(m5es.e_snonce1, wsc->e_snonce1, sizeof(wsc->e_snonce1));
 	pdu = wsc_build_m5_encrypted_settings(&m5es, &pdu_len);
+	explicit_bzero(m5es.e_snonce1, sizeof(wsc->e_snonce1));
 	if (!pdu)
 		return;
 
 	keywrap_authenticator_put(wsc, pdu, pdu_len);
 	r = encrypted_settings_encrypt(wsc, wsc->iv1, pdu, pdu_len,
 						encrypted, &encrypted_len);
+	explicit_bzero(pdu, pdu_len);
 	l_free(pdu);
 
 	if (!r)
@@ -641,12 +671,11 @@ static void eap_wsc_handle_m4(struct eap_state *eap,
 	uint8_t *decrypted;
 	size_t decrypted_len;
 	struct wsc_m4_encrypted_settings m4es;
+	enum wsc_configuration_error error = WSC_CONFIGURATION_ERROR_NO_ERROR;
 
 	/* Spec unclear what to do here, see comments in eap_wsc_send_nack */
-	if (wsc_parse_m4(pdu, len, &m4, &encrypted) != 0) {
-		eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_NO_ERROR);
-		return;
-	}
+	if (wsc_parse_m4(pdu, len, &m4, &encrypted) != 0)
+		goto send_nack;
 
 	if (!authenticator_check(wsc, pdu, len))
 		return;
@@ -654,33 +683,41 @@ static void eap_wsc_handle_m4(struct eap_state *eap,
 	decrypted = encrypted_settings_decrypt(wsc, encrypted.iov_base,
 							encrypted.iov_len,
 							&decrypted_len);
-	if (!decrypted)
+	if (!decrypted) {
+		error = WSC_CONFIGURATION_ERROR_DECRYPTION_CRC_FAILURE;
 		goto send_nack;
+	}
 
-	if (wsc_parse_m4_encrypted_settings(decrypted, decrypted_len, &m4es))
-		goto invalid_settings;
+	if (wsc_parse_m4_encrypted_settings(decrypted, decrypted_len, &m4es)) {
+		error = WSC_CONFIGURATION_ERROR_DECRYPTION_CRC_FAILURE;
+		goto cleanup;
+	}
 
-	if (!keywrap_authenticator_check(wsc, decrypted, decrypted_len))
-		goto invalid_settings;
-
-	l_free(decrypted);
+	if (!keywrap_authenticator_check(wsc, decrypted, decrypted_len)) {
+		error = WSC_CONFIGURATION_ERROR_DECRYPTION_CRC_FAILURE;
+		goto cleanup;
+	}
 
 	/* Since we have obtained R-SNonce1, we can now verify R-Hash1. */
 	if (!r_hash_check(wsc, m4es.r_snonce1, wsc->psk1, m4.r_hash1)) {
-		eap_wsc_send_nack(eap,
-			WSC_CONFIGURATION_ERROR_DEVICE_PASSWORD_AUTH_FAILURE);
-		return;
+		error = WSC_CONFIGURATION_ERROR_DEVICE_PASSWORD_AUTH_FAILURE;
+		goto cleanup;
 	}
 
 	/* Now store R_Hash2 so we can verify it when we receive M6 */
 	memcpy(wsc->r_hash2, m4.r_hash2, sizeof(m4.r_hash2));
 	eap_wsc_send_m5(eap, pdu, len);
-	return;
 
-invalid_settings:
+cleanup:
+	explicit_bzero(&m4es, sizeof(m4es));
+	explicit_bzero(decrypted, decrypted_len);
 	l_free(decrypted);
+
+	if (!error)
+		return;
+
 send_nack:
-	eap_wsc_send_nack(eap, WSC_CONFIGURATION_ERROR_DECRYPTION_CRC_FAILURE);
+	eap_wsc_send_nack(eap, error);
 }
 
 static void eap_wsc_send_m3(struct eap_state *eap,
@@ -1323,7 +1360,11 @@ static bool eap_wsc_load_settings(struct eap_state *eap,
 	return true;
 
 err:
-	l_free(wsc->device_password);
+	if (wsc->device_password) {
+		explicit_bzero(wsc->device_password,
+				strlen(wsc->device_password));
+		l_free(wsc->device_password);
+	}
 
 	if (wsc->private)
 		l_key_free(wsc->private);
