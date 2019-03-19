@@ -41,6 +41,9 @@ static void eap_md5_free(struct eap_state *eap)
 
 	eap_set_data(eap, NULL);
 
+	if (md5->secret)
+		explicit_bzero(md5->secret, strlen(md5->secret));
+
 	l_free(md5->secret);
 	l_free(md5);
 }
@@ -126,6 +129,7 @@ static int eap_md5_check_settings(struct l_settings *settings,
 		password = l_settings_get_string(settings, "Security",
 							password_key_old);
 		if (password) {
+			explicit_bzero(password, strlen(password));
 			l_warn("Setting '%s' is deprecated, use '%s' instead",
 					password_key_old, password_key);
 			return 0;
@@ -139,7 +143,8 @@ static int eap_md5_check_settings(struct l_settings *settings,
 		eap_append_secret(out_missing, EAP_SECRET_REMOTE_PASSWORD,
 					password_key, NULL, identity,
 					EAP_CACHE_TEMPORARY);
-	}
+	} else
+		explicit_bzero(password, strlen(password));
 
 	return 0;
 }
