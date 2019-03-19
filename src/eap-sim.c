@@ -124,12 +124,23 @@ struct eap_sim_handle {
 	unsigned int auth_watch;
 };
 
+static void eap_sim_clear_secrets(struct eap_sim_handle *sim)
+{
+	explicit_bzero(sim->mk, sizeof(sim->mk));
+	explicit_bzero(sim->k_encr, sizeof(sim->k_encr));
+	explicit_bzero(sim->k_aut, sizeof(sim->k_aut));
+	explicit_bzero(sim->msk, sizeof(sim->msk));
+	explicit_bzero(sim->emsk, sizeof(sim->emsk));
+}
+
 static void eap_sim_free(struct eap_state *eap)
 {
 	struct eap_sim_handle *sim = eap_get_data(eap);
 
 	if (sim->auth)
 		sim_auth_unregistered_watch_remove(sim->auth, sim->auth_watch);
+
+	eap_sim_clear_secrets(sim);
 
 	l_free(sim->identity);
 	l_free(sim->vlist);
@@ -294,6 +305,7 @@ static void gsm_callback(const uint8_t *sres, const uint8_t *kc,
 	uint8_t *pos = response;
 	uint8_t prng_buf[160];
 	uint8_t *mac_pos;
+	bool r;
 
 	if (!sres || !kc)
 		goto chal_error;
@@ -309,8 +321,11 @@ static void gsm_callback(const uint8_t *sres, const uint8_t *kc,
 
 	eap_sim_fips_prf(sim->mk, 20, prng_buf, 160);
 
-	if (!eap_sim_get_encryption_keys(prng_buf, sim->k_encr, sim->k_aut,
-			sim->msk, sim->emsk)) {
+	r = eap_sim_get_encryption_keys(prng_buf, sim->k_encr, sim->k_aut,
+					sim->msk, sim->emsk);
+	explicit_bzero(prng_buf, sizeof(prng_buf));
+
+	if (!r) {
 		l_error("could not derive encryption keys");
 		goto chal_fatal;
 	}
@@ -647,11 +662,7 @@ static bool eap_sim_reset_state(struct eap_state *eap)
 	sim->chal_pkt = NULL;
 
 	memset(sim->nonce, 0, sizeof(sim->nonce));
-	memset(sim->mk, 0, sizeof(sim->mk));
-	memset(sim->k_encr, 0, sizeof(sim->k_encr));
-	memset(sim->k_aut, 0, sizeof(sim->k_aut));
-	memset(sim->msk, 0, sizeof(sim->msk));
-	memset(sim->emsk, 0, sizeof(sim->emsk));
+	eap_sim_clear_secrets(sim);
 
 	return true;
 }
