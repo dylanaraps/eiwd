@@ -2745,15 +2745,15 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 
 		l_genl_msg_append_attr(msg, NL80211_ATTR_CONTROL_PORT, 0, NULL);
 
-		if (netdev->pae_over_nl80211)
-			l_genl_msg_append_attr(msg,
-					NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
-					0, NULL);
-
 		iov[iov_elems].iov_base = (void *) hs->supplicant_ie;
 		iov[iov_elems].iov_len = hs->supplicant_ie[1] + 2;
 		iov_elems += 1;
 	}
+
+	if (netdev->pae_over_nl80211)
+		l_genl_msg_append_attr(msg,
+				NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
+				0, NULL);
 
 	if (hs->mde) {
 		iov[iov_elems].iov_base = (void *) hs->mde;
