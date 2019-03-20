@@ -11,7 +11,8 @@ In order to ease the inclusion of your patch, it's important to follow
 some rules, otherwise it will likely be rejected by maintainers.
 
 iwd rules for submitting patches follow most of the rules used by Linux kernel
-(https://www.kernel.org/doc/Documentation/SubmittingPatches) with some remarks:
+(https://www.kernel.org/doc/Documentation/process/submitting-patches.rst) with
+some remarks:
 
 1) Do *not* add "Signed-off-by" lines in your commit messages. iwd does not
 use them, so including them is actually an error.

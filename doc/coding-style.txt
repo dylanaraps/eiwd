@@ -9,8 +9,8 @@ to help your code survive under maintainer's fastidious eyes so that you
 can get a passport for your patch ASAP.
 
 First of all, the Wireless daemon coding style must follow every rule for
-Linux kernel (http://www.kernel.org/doc/Documentation/CodingStyle).  There
-also exists a tool named checkpatch.pl to help you check the compliance
+Linux kernel (http://www.kernel.org/doc/Documentation/process/coding-style.rst).
+There also exists a tool named checkpatch.pl to help you check the compliance
 with it. Just type "checkpatch.pl --no-tree --no-signoff patch_name" to
 check your patch.
 
