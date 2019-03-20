@@ -311,10 +311,10 @@ bool agent_prompt(const char *prompt)
 		process_input_username_password(prompt);
 		break;
 	case AGENT_OP_TYPE_PASSPHRASE:
-		process_input_password(prompt);
+		process_input_passphrase(prompt);
 		break;
 	case AGENT_OP_TYPE_PASSWORD:
-		process_input_passphrase(prompt);
+		process_input_password(prompt);
 		break;
 	}
 
