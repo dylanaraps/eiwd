@@ -404,12 +404,17 @@ void eap_secret_info_free(void *data)
 		return;
 
 	if (info->value) {
-		memset(info->value, 0, strlen(info->value));
+		size_t value_len = strlen(info->value) + 1;
+
+		if (info->type == EAP_SECRET_REMOTE_USER_PASSWORD)
+			value_len += strlen(info->value + value_len);
+
+		explicit_bzero(info->value, value_len);
 		l_free(info->value);
 	}
 
 	if (info->parameter) {
-		memset(info->parameter, 0, strlen(info->parameter));
+		explicit_bzero(info->parameter, strlen(info->parameter));
 		l_free(info->parameter);
 	}
 

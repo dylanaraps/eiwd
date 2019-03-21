@@ -635,8 +635,8 @@ bool crypto_derive_pmk_r0(const uint8_t *xxkey,
 	r = true;
 
 exit:
-	memset(context, 0, pos);
-	memset(output, 0, 48);
+	explicit_bzero(context, pos);
+	explicit_bzero(output, 48);
 
 	return r;
 }
@@ -667,7 +667,7 @@ bool crypto_derive_pmk_r1(const uint8_t *pmk_r0,
 
 	sha256 = l_checksum_new(L_CHECKSUM_SHA256);
 	if (!sha256) {
-		memset(out_pmk_r1, 0, 32);
+		explicit_bzero(out_pmk_r1, 32);
 		goto exit;
 	}
 
@@ -679,7 +679,7 @@ bool crypto_derive_pmk_r1(const uint8_t *pmk_r0,
 	r = true;
 
 exit:
-	memset(context, 0, sizeof(context));
+	explicit_bzero(context, sizeof(context));
 
 	return r;
 }
@@ -714,7 +714,7 @@ bool crypto_derive_ft_ptk(const uint8_t *pmk_r1, const uint8_t *pmk_r1_name,
 
 	sha256 = l_checksum_new(L_CHECKSUM_SHA256);
 	if (!sha256) {
-		memset(out_ptk, 0, ptk_len);
+		explicit_bzero(out_ptk, ptk_len);
 		goto exit;
 	}
 
@@ -726,7 +726,7 @@ bool crypto_derive_ft_ptk(const uint8_t *pmk_r1, const uint8_t *pmk_r1_name,
 	r = true;
 
 exit:
-	memset(context, 0, sizeof(context));
+	explicit_bzero(context, sizeof(context));
 
 	return r;
 }

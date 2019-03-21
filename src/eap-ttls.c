@@ -430,7 +430,8 @@ static void eap_ttls_phase2_credentials_destroy(
 		return;
 
 	if (credentials->password)
-		memset(credentials->password, 0, strlen(credentials->password));
+		explicit_bzero(credentials->password,
+				strlen(credentials->password));
 
 	l_free(credentials->username);
 	l_free(credentials->password);
@@ -587,10 +588,10 @@ static void mschapv2_state_destroy(struct phase2_method *phase2)
 	if (!state)
 		return;
 
-	memset(state->server_challenge, 0, MSCHAPV2_CHALLENGE_LEN +
+	explicit_bzero(state->server_challenge, MSCHAPV2_CHALLENGE_LEN +
 							CHAP_IDENT_LEN);
-	memset(state->peer_challenge, 0, MSCHAPV2_CHALLENGE_LEN);
-	memset(state->password_hash, 0, 16);
+	explicit_bzero(state->peer_challenge, MSCHAPV2_CHALLENGE_LEN);
+	explicit_bzero(state->password_hash, 16);
 
 	l_free(state);
 	phase2->state = NULL;

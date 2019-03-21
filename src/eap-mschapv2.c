@@ -194,9 +194,9 @@ static bool eap_mschapv2_reset_state(struct eap_state *eap)
 
 static void eap_mschapv2_state_free(struct eap_mschapv2_state *state)
 {
-	memset(state->password_hash, 0, sizeof(state->password_hash));
+	explicit_bzero(state->password_hash, sizeof(state->password_hash));
 
-	memset(state->user, 0, state->user_len);
+	explicit_bzero(state->user, state->user_len);
 	l_free(state->user);
 	state->user_len = 0;
 

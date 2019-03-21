@@ -180,7 +180,8 @@ void eap_tls_common_state_free(struct eap_state *eap)
 	l_free(eap_tls->client_key);
 
 	if (eap_tls->passphrase) {
-		memset(eap_tls->passphrase, 0, strlen(eap_tls->passphrase));
+		explicit_bzero(eap_tls->passphrase,
+				strlen(eap_tls->passphrase));
 		l_free(eap_tls->passphrase);
 	}
 
