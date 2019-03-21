@@ -539,7 +539,10 @@ static bool eap_mschapv2_load_settings(struct eap_state *eap,
 			goto error;
 
 		tmp = l_util_from_hexstring(hash_str, &len);
-		memcpy(state->password_hash, tmp, 16);
+		if (!tmp)
+			goto error;
+
+		memcpy(state->password_hash, tmp, len);
 		explicit_bzero(tmp, len);
 		l_free(tmp);
 	}
