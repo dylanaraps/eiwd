@@ -216,7 +216,6 @@ static char *connect_cmd_arg_completion(const char *text, int state)
 static enum cmd_status cmd_connect(const char *device_name,
 						char **argv, int argc)
 {
-	const struct proxy_interface *station_i;
 	struct network_args network_args;
 	struct l_queue *match;
 	const struct proxy_interface *network_proxy;
@@ -225,13 +224,10 @@ static enum cmd_status cmd_connect(const char *device_name,
 	if (argc < 1)
 		return CMD_STATUS_INVALID_ARGS;
 
-	station_i = device_proxy_find(device_name, IWD_STATION_INTERFACE);
-	if (!station_i) {
-		display("No station on device: '%s'\n", device_name);
-		return CMD_STATUS_INVALID_VALUE;
-	}
-
 	device_proxy = device_proxy_find_by_name(device_name);
+	if (!device_proxy)
+		return CMD_STATUS_INVALID_VALUE;
+
 	network_args.name = argv[0];
 	network_args.type = argc >= 2 ? argv[1] : NULL;
 
