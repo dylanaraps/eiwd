@@ -724,8 +724,8 @@ static void netdev_lost_beacon(struct netdev *netdev)
 							netdev->user_data);
 }
 
-/* -70 dBm is a popular choice for low signal threshold for roaming */
-#define LOW_SIGNAL_THRESHOLD	-70
+/* Threshold RSSI for roaming to trigger, configurable in main.conf */
+static int LOW_SIGNAL_THRESHOLD;
 
 static void netdev_cqm_event_rssi_threshold(struct netdev *netdev,
 						uint32_t rssi_event)
@@ -5054,6 +5054,8 @@ bool netdev_watch_remove(uint32_t id)
 
 bool netdev_init(const char *whitelist, const char *blacklist)
 {
+	const struct l_settings *settings = iwd_get_config();
+
 	if (rtnl)
 		return false;
 
@@ -5074,6 +5076,10 @@ bool netdev_init(const char *whitelist, const char *blacklist)
 		l_netlink_destroy(rtnl);
 		return false;
 	}
+
+	if (!l_settings_get_int(settings, "General", "roam_rssi_threshold",
+					&LOW_SIGNAL_THRESHOLD))
+		LOW_SIGNAL_THRESHOLD = -70;
 
 	watchlist_init(&netdev_watches, NULL);
 	netdev_list = l_queue_new();
