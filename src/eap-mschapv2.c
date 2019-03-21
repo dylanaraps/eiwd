@@ -305,7 +305,7 @@ static void eap_mschapv2_handle_success(struct eap_state *eap,
 						state->user, nt_response);
 
 	if (!ret)
-		goto err;
+		goto done;
 
 	ret = mschapv2_generate_authenticator_response(password_hash_hash,
 						nt_response,
@@ -315,18 +315,18 @@ static void eap_mschapv2_handle_success(struct eap_state *eap,
 						authenticator_resp);
 
 	if (!ret)
-		goto err;
+		goto done;
 
 	/*
-	 * For iwd timing attacks are unlikly because media access will
+	 * For iwd timing attacks are unlikely because media access will
 	 * influence timing. If this code is ever taken out of iwd, memcmp
 	 * should be replaced by a constant time memcmp
 	 */
 	if (len < 42 || memcmp(authenticator_resp, pkt, 42)) {
 		l_warn("Authenticator response didn't match");
-		goto err;
+		ret = false;
+		goto done;
 	}
-
 
 	ret = mschapv2_get_master_key(password_hash_hash, nt_response,
 								master_key);
@@ -336,7 +336,7 @@ static void eap_mschapv2_handle_success(struct eap_state *eap,
 							16, false, false);
 
 	if (!ret)
-		goto err;
+		goto done;
 
 	eap_method_success(eap);
 
@@ -346,10 +346,13 @@ static void eap_mschapv2_handle_success(struct eap_state *eap,
 	/* The eapol set_key_material only needs msk, and that's all we got */
 	eap_set_key_material(eap, session_key, 32, NULL, 0, NULL, 0);
 
-	return;
+done:
+	if (!ret)
+		eap_method_error(eap);
 
-err:
-	eap_method_error(eap);
+	explicit_bzero(master_key, sizeof(master_key));
+	explicit_bzero(session_key, sizeof(session_key));
+	explicit_bzero(password_hash_hash, sizeof(password_hash_hash));
 }
 
 static void eap_mschapv2_handle_failure(struct eap_state *eap,
@@ -426,6 +429,7 @@ static int eap_mschapv2_check_settings(struct l_settings *settings,
 	const struct eap_secret_info *secret;
 	char setting[64], setting2[64];
 	uint8_t hash[16];
+	int r = 0;
 
 	snprintf(setting, sizeof(setting), "%sIdentity", prefix);
 	identity = l_settings_get_string(settings, "Security", setting);
@@ -457,7 +461,8 @@ static int eap_mschapv2_check_settings(struct l_settings *settings,
 	if (password && password_hash) {
 		l_error("Exactly one of (%s, %s) must be present",
 			setting, setting2);
-		return -EEXIST;
+		r = -EEXIST;
+		goto cleanup;
 	}
 
 	if (password_hash) {
@@ -465,6 +470,9 @@ static int eap_mschapv2_check_settings(struct l_settings *settings,
 		size_t len;
 
 		tmp = l_util_from_hexstring(password_hash, &len);
+		if (tmp)
+			explicit_bzero(tmp, len);
+
 		l_free(tmp);
 
 		if (!tmp || len != 16) {
@@ -489,9 +497,11 @@ static int eap_mschapv2_check_settings(struct l_settings *settings,
 
 validate:
 	if (!mschap_nt_password_hash(password, hash))
-		return -EINVAL;
+		r = -EINVAL;
 
-	return 0;
+cleanup:
+	explicit_bzero(password, strlen(password));
+	return r;
 }
 
 static bool eap_mschapv2_load_settings(struct eap_state *eap,
@@ -517,6 +527,7 @@ static bool eap_mschapv2_load_settings(struct eap_state *eap,
 
 	if (password) {
 		set_password_from_string(state, password);
+		explicit_bzero(password, strlen(password));
 	} else {
 		unsigned char *tmp;
 		size_t len;
@@ -529,6 +540,7 @@ static bool eap_mschapv2_load_settings(struct eap_state *eap,
 
 		tmp = l_util_from_hexstring(hash_str, &len);
 		memcpy(state->password_hash, tmp, 16);
+		explicit_bzero(tmp, len);
 		l_free(tmp);
 	}
 
