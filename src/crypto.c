@@ -161,6 +161,7 @@ bool aes_unwrap(const uint8_t *kek, size_t kek_len, const uint8_t *in, size_t le
 	}
 
 	l_cipher_free(cipher);
+	explicit_bzero(&b[1], 8);
 
 	/* Check IV */
 	if (b[0] != 0xa6a6a6a6a6a6a6a6)
@@ -325,6 +326,7 @@ int crypto_psk_from_passphrase(const char *passphrase,
 	if (out_psk)
 		memcpy(out_psk, psk, sizeof(psk));
 
+	explicit_bzero(psk, sizeof(psk));
 	return 0;
 }
 
