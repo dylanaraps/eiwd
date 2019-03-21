@@ -427,8 +427,6 @@ static void mask_input(void)
 		masked_input.mask[len - 1] = '*';
 	}
 
-	rl_replace_line("", 0);
-	rl_redisplay();
 	rl_replace_line(masked_input.mask, 0);
 	rl_point = point;
 	rl_redisplay();
