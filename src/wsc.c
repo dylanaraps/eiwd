@@ -517,7 +517,8 @@ static void wsc_check_can_connect(struct wsc *wsc, struct scan_bss *target)
 						station_state_watch,
 						wsc, NULL);
 		return;
-	case STATION_STATE_AUTOCONNECT:
+	case STATION_STATE_AUTOCONNECT_QUICK:
+	case STATION_STATE_AUTOCONNECT_FULL:
 	case STATION_STATE_ROAMING:
 		l_warn("wsc_check_can_connect: invalid station state");
 		break;

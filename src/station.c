@@ -105,10 +105,17 @@ struct network *station_get_connected_network(struct station *station)
 bool station_is_busy(struct station *station)
 {
 	if (station->state != STATION_STATE_DISCONNECTED &&
-			station->state != STATION_STATE_AUTOCONNECT)
+			station->state != STATION_STATE_AUTOCONNECT_FULL &&
+			station->state != STATION_STATE_AUTOCONNECT_QUICK)
 		return true;
 
 	return false;
+}
+
+static bool station_is_autoconnecting(struct station *station)
+{
+	return station->state == STATION_STATE_AUTOCONNECT_FULL ||
+			station->state == STATION_STATE_AUTOCONNECT_QUICK;
 }
 
 struct autoconnect_entry {
@@ -615,7 +622,7 @@ static bool new_scan_results(int err, struct l_queue *bss_list, void *userdata)
 	if (err)
 		return false;
 
-	autoconnect = station_get_state(station) == STATION_STATE_AUTOCONNECT;
+	autoconnect = station_is_autoconnecting(station);
 	station_set_scan_results(station, bss_list, autoconnect);
 
 	if (autoconnect)
@@ -679,8 +686,10 @@ static const char *station_state_to_string(enum station_state state)
 	switch (state) {
 	case STATION_STATE_DISCONNECTED:
 		return "disconnected";
-	case STATION_STATE_AUTOCONNECT:
-		return "autoconnect";
+	case STATION_STATE_AUTOCONNECT_QUICK:
+		return "autoconnect_quick";
+	case STATION_STATE_AUTOCONNECT_FULL:
+		return "autoconnect_full";
 	case STATION_STATE_CONNECTING:
 		return "connecting";
 	case STATION_STATE_CONNECTED:
@@ -705,15 +714,16 @@ static void station_enter_state(struct station *station,
 			station_state_to_string(station->state),
 			station_state_to_string(state));
 
-	disconnected = station->state <= STATION_STATE_AUTOCONNECT;
+	disconnected = !station_is_busy(station);
 
-	if ((disconnected && state > STATION_STATE_AUTOCONNECT) ||
+	if ((disconnected && state > STATION_STATE_AUTOCONNECT_FULL) ||
 			(!disconnected && state != station->state))
 		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
 					IWD_STATION_INTERFACE, "State");
 
 	switch (state) {
-	case STATION_STATE_AUTOCONNECT:
+	case STATION_STATE_AUTOCONNECT_QUICK:
+	case STATION_STATE_AUTOCONNECT_FULL:
 		scan_periodic_start(index, periodic_scan_trigger,
 					new_scan_results, station);
 		break;
@@ -765,9 +775,9 @@ bool station_set_autoconnect(struct station *station, bool autoconnect)
 	station->autoconnect = autoconnect;
 
 	if (station->state == STATION_STATE_DISCONNECTED && autoconnect)
-		station_enter_state(station, STATION_STATE_AUTOCONNECT);
+		station_enter_state(station, STATION_STATE_AUTOCONNECT_QUICK);
 
-	if (station->state == STATION_STATE_AUTOCONNECT && !autoconnect)
+	if (station_is_autoconnecting(station) && !autoconnect)
 		station_enter_state(station, STATION_STATE_DISCONNECTED);
 
 	return true;
@@ -819,7 +829,7 @@ static void station_disassociated(struct station *station)
 	station_enter_state(station, STATION_STATE_DISCONNECTED);
 
 	if (station->autoconnect)
-		station_enter_state(station, STATION_STATE_AUTOCONNECT);
+		station_enter_state(station, STATION_STATE_AUTOCONNECT_QUICK);
 }
 
 static void station_connect_cb(struct netdev *netdev, enum netdev_result result,
@@ -2002,7 +2012,7 @@ static void station_disconnect_cb(struct netdev *netdev, bool success,
 	station_enter_state(station, STATION_STATE_DISCONNECTED);
 
 	if (station->autoconnect)
-		station_enter_state(station, STATION_STATE_AUTOCONNECT);
+		station_enter_state(station, STATION_STATE_AUTOCONNECT_QUICK);
 }
 
 int station_disconnect(struct station *station)
@@ -2044,8 +2054,7 @@ static struct l_dbus_message *station_dbus_disconnect(struct l_dbus *dbus,
 	 */
 	station_set_autoconnect(station, false);
 
-	if (station->state == STATION_STATE_AUTOCONNECT ||
-			station->state == STATION_STATE_DISCONNECTED)
+	if (!station_is_busy(station))
 		return l_dbus_message_new_method_return(message);
 
 	result = station_disconnect(station);
@@ -2389,11 +2398,13 @@ static bool station_property_get_state(struct l_dbus *dbus,
 					void *user_data)
 {
 	struct station *station = user_data;
-	const char *statestr = station_state_to_string(station->state);
+	const char *statestr;
 
-	/* Special case.  For now we treat AUTOCONNECT as disconnected */
-	if (station->state == STATION_STATE_AUTOCONNECT)
+	if (!station_is_busy(station))
+		/* Special case. For now we treat AUTOCONNECT as disconnected */
 		statestr = "disconnected";
+	else
+		statestr = station_state_to_string(station->state);
 
 	l_dbus_message_builder_append_basic(builder, 's', statestr);
 	return true;

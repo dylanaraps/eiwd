@@ -30,9 +30,14 @@ struct scan_bss;
 struct network;
 
 enum station_state {
-	STATION_STATE_DISCONNECTED,	/* Disconnected, no auto-connect */
-	STATION_STATE_AUTOCONNECT,	/* Disconnected, try auto-connect */
-	STATION_STATE_CONNECTING,	/* Connecting */
+	/* Disconnected, no auto-connect */
+	STATION_STATE_DISCONNECTED,
+	/* Disconnected, try auto-connect with quick scan */
+	STATION_STATE_AUTOCONNECT_QUICK,
+	/* Disconnected, try auto-connect with full scan */
+	STATION_STATE_AUTOCONNECT_FULL,
+	/* Connecting */
+	STATION_STATE_CONNECTING,
 	STATION_STATE_CONNECTED,
 	STATION_STATE_DISCONNECTING,
 	STATION_STATE_ROAMING
