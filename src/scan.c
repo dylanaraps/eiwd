@@ -1672,7 +1672,7 @@ static void scan_channels_5ghz_frequency(uint32_t channel, void *user_data)
 	channels_5ghz_data->func(freq, channels_5ghz_data->user_data);
 }
 
-void scan_freq_set_foreach(struct scan_freq_set *freqs,
+void scan_freq_set_foreach(const struct scan_freq_set *freqs,
 				scan_freq_set_func_t func, void *user_data)
 {
 	struct channels_5ghz_foreach_data data = { };
