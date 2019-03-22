@@ -640,13 +640,6 @@ static void periodic_scan_stop(struct station *station)
 	}
 }
 
-static void station_scan_destroy(void *userdata)
-{
-	struct station *station = userdata;
-
-	station->scan_id = 0;
-}
-
 static bool station_needs_hidden_network_scan(struct station *station)
 {
 	return !l_queue_isempty(station->hidden_bss_list_sorted) &&
@@ -2174,6 +2167,13 @@ static void station_dbus_scan_triggered(int err, void *user_data)
 				IWD_STATION_INTERFACE, "Scanning");
 }
 
+static void station_dbus_scan_destroy(void *userdata)
+{
+	struct station *station = userdata;
+
+	station->scan_id = 0;
+}
+
 static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -2188,7 +2188,7 @@ static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 	station->scan_id = station_scan_trigger(station, NULL,
 						station_dbus_scan_triggered,
 						new_scan_results,
-						station_scan_destroy);
+						station_dbus_scan_destroy);
 
 	if (!station->scan_id)
 		return dbus_error_failed(message);
