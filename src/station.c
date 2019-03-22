@@ -647,6 +647,40 @@ static void station_scan_destroy(void *userdata)
 	station->scan_id = 0;
 }
 
+static bool station_needs_hidden_network_scan(struct station *station)
+{
+	return !l_queue_isempty(station->hidden_bss_list_sorted) &&
+						known_networks_has_hidden();
+}
+
+static uint32_t station_scan_trigger(struct station *station,
+					struct scan_freq_set *freqs,
+					scan_trigger_func_t triggered,
+					scan_notify_func_t notify,
+					scan_destroy_func_t destroy)
+{
+	uint32_t index = netdev_get_ifindex(station->netdev);
+
+	if (wiphy_can_randomize_mac_addr(station->wiphy) ||
+				station_needs_hidden_network_scan(station) ||
+						station->connected_bss) {
+		struct scan_parameters params;
+
+		memset(&params, 0, sizeof(params));
+
+		/* If we're connected, HW cannot randomize our MAC */
+		if (!station->connected_bss)
+			params.randomize_mac_addr_hint = true;
+
+		params.freqs = freqs;
+
+		return scan_active_full(index, &params, triggered, notify,
+							station, destroy);
+	}
+
+	return scan_passive(index, freqs, triggered, notify, station, destroy);
+}
+
 static const char *station_state_to_string(enum station_state state)
 {
 	switch (state) {
@@ -2140,45 +2174,21 @@ static void station_dbus_scan_triggered(int err, void *user_data)
 				IWD_STATION_INTERFACE, "Scanning");
 }
 
-static bool station_needs_hidden_network_scan(struct station *station)
-{
-	return !l_queue_isempty(station->hidden_bss_list_sorted) &&
-						known_networks_has_hidden();
-}
-
 static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
 {
 	struct station *station = user_data;
-	uint32_t index = netdev_get_ifindex(station->netdev);
 
 	l_debug("Scan called from DBus");
 
 	if (station->scan_id)
 		return dbus_error_busy(message);
 
-	if (wiphy_can_randomize_mac_addr(station->wiphy) ||
-				station_needs_hidden_network_scan(station) ||
-						station->connected_bss) {
-		struct scan_parameters params;
-
-		memset(&params, 0, sizeof(params));
-
-		/* If we're connected, HW cannot randomize our MAC */
-		if (!station->connected_bss)
-			params.randomize_mac_addr_hint = true;
-
-		station->scan_id = scan_active_full(index, &params,
+	station->scan_id = station_scan_trigger(station, NULL,
 						station_dbus_scan_triggered,
-						new_scan_results, station,
+						new_scan_results,
 						station_scan_destroy);
-	} else {
-		station->scan_id = scan_passive(index,
-						station_dbus_scan_triggered,
-						new_scan_results, station,
-						station_scan_destroy);
-	}
 
 	if (!station->scan_id)
 		return dbus_error_failed(message);
