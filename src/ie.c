@@ -1676,10 +1676,10 @@ static int ie_parse_ht_capability_from_data(const uint8_t *data, uint8_t len,
  * This also allows us to group the 160/80+80 widths together, since they are
  * the same when Extended NSS BW is zero.
  */
-static const uint8_t vht_width_map[3][5] = {
-	[0] = { 1, 1, 1, 0, 0 },
-	[1] = { 1, 1, 1, 1, 0 },
-	[2] = { 1, 1, 1, 1, 1 },
+static const uint8_t vht_width_map[3][4] = {
+	[0] = { 1, 1, 1, 0 },
+	[1] = { 1, 1, 1, 1 },
+	[2] = { 1, 1, 1, 1 },
 };
 
 static int ie_parse_vht_capability(struct ie_tlv_iter *vht_iter,
