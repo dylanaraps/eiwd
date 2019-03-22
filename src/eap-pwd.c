@@ -168,7 +168,12 @@ static void eap_pwd_free(struct eap_state *eap)
 
 	eap_pwd_reset_state(eap);
 	l_free(pwd->identity);
-	l_free(pwd->password);
+
+	if (pwd->password) {
+		explicit_bzero(pwd->password, strlen(pwd->password));
+		l_free(pwd->password);
+	}
+
 	l_free(pwd);
 
 	eap_set_data(eap, NULL);
@@ -329,6 +334,9 @@ static void eap_pwd_handle_id(struct eap_state *eap,
 		} else
 			l_ecc_point_free(pwe);
 	}
+
+	explicit_bzero(pwd_seed, sizeof(pwd_seed));
+	explicit_bzero(pwd_value, sizeof(pwd_value));
 
 	pos = resp + 5; /* header */
 	*pos++ = EAP_PWD_EXCH_ID;
@@ -532,6 +540,10 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 	kdf(mk, 32, (const char *) session_id, 33, msk_emsk, 128);
 	eap_set_key_material(eap, msk_emsk, 64, msk_emsk + 64, 64, NULL, 0);
 
+	explicit_bzero(mk, sizeof(mk));
+	explicit_bzero(msk_emsk, sizeof(msk_emsk));
+	explicit_bzero(kpx, sizeof(kpx));
+
 	return;
 
 invalid_point:
@@ -539,6 +551,8 @@ invalid_point:
 
 	l_error("invalid point during confirm exchange");
 error:
+	explicit_bzero(kpx, sizeof(kpx));
+
 	eap_method_error(eap);
 }
 
@@ -735,6 +749,7 @@ static int eap_pwd_check_settings(struct l_settings *settings,
 		password = l_settings_get_string(settings, "Security",
 							password_key_old);
 		if (password) {
+			explicit_bzero(password, strlen(password));
 			l_warn("Setting '%s' is deprecated, use '%s' instead",
 					password_key_old, password_key);
 			return 0;
@@ -748,7 +763,8 @@ static int eap_pwd_check_settings(struct l_settings *settings,
 		eap_append_secret(out_missing, EAP_SECRET_REMOTE_PASSWORD,
 					password_key, NULL, identity,
 					EAP_CACHE_TEMPORARY);
-	}
+	} else
+		explicit_bzero(password, strlen(password));
 
 	return 0;
 }
@@ -796,8 +812,12 @@ static bool eap_pwd_load_settings(struct eap_state *eap,
 	return true;
 
 error:
+	if (pwd->password) {
+		explicit_bzero(pwd->password, strlen(pwd->password));
+		l_free(pwd->password);
+	}
+
 	l_free(pwd->identity);
-	l_free(pwd->password);
 	l_free(pwd);
 
 	return false;
