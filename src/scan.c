@@ -485,11 +485,11 @@ done:
 	return sr->id;
 }
 
-uint32_t scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
-			scan_notify_func_t notify, void *userdata,
-			scan_destroy_func_t destroy)
+uint32_t scan_passive(uint32_t ifindex, struct scan_freq_set *freqs,
+			scan_trigger_func_t trigger, scan_notify_func_t notify,
+			void *userdata, scan_destroy_func_t destroy)
 {
-	struct scan_parameters params = {};
+	struct scan_parameters params = { .freqs = freqs };
 
 	return scan_common(ifindex, true, &params, trigger, notify,
 							userdata, destroy);

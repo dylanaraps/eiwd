@@ -89,9 +89,9 @@ static inline bool scan_bss_addr_eq(const struct scan_bss *a1,
         return !memcmp(a1->addr, a2->addr, sizeof(a1->addr));
 }
 
-uint32_t scan_passive(uint32_t ifindex, scan_trigger_func_t trigger,
-			scan_notify_func_t notify, void *userdata,
-			scan_destroy_func_t destroy);
+uint32_t scan_passive(uint32_t ifindex, struct scan_freq_set *freqs,
+			scan_trigger_func_t trigger, scan_notify_func_t notify,
+			void *userdata, scan_destroy_func_t destroy);
 uint32_t scan_active(uint32_t ifindex, uint8_t *extra_ie, size_t extra_ie_size,
 			scan_trigger_func_t trigger,
 			scan_notify_func_t notify, void *userdata,
