@@ -122,16 +122,20 @@ enum ie_rsn_akm_suite wiphy_select_akm(struct wiphy *wiphy,
 	} else if (security == SECURITY_PSK) {
 		/*
 		 * Prefer connecting to SAE/WPA3 network, but only if SAE is
-		 * supported. This allows us to connect to a hybrid WPA2/WPA3
-		 * AP even if SAE/WPA3 is not supported.
+		 * supported, we are MFP capable, and the AP has set the MFPR
+		 * bit. If any of these conditions are not met, we can fallback
+		 * to WPA2 (if the AKM is present).
 		 */
-		if (info.akm_suites & IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256 &&
-				wiphy_has_feature(wiphy, NL80211_FEATURE_SAE))
-			return IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256;
+		if (wiphy->supported_ciphers & IE_RSN_CIPHER_SUITE_BIP &&
+				wiphy_has_feature(wiphy, NL80211_FEATURE_SAE) &&
+				info.mfpr) {
+			if (info.akm_suites &
+					IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256)
+				return IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256;
 
-		if (info.akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256 &&
-				wiphy_has_feature(wiphy, NL80211_FEATURE_SAE))
-			return IE_RSN_AKM_SUITE_SAE_SHA256;
+			if (info.akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256)
+				return IE_RSN_AKM_SUITE_SAE_SHA256;
+		}
 
 		if ((info.akm_suites & IE_RSN_AKM_SUITE_FT_USING_PSK) &&
 				bss->rsne && bss->mde_present)
