@@ -31,30 +31,8 @@
 #include "device.h"
 #include "display.h"
 
-struct wsc {
-	/* TODO: Add status */
-};
-
-static void *wsc_create(void)
-{
-	return l_new(struct wsc, 1);
-}
-
-static void wsc_destroy(void *data)
-{
-	struct wsc *wsc = data;
-
-	l_free(wsc);
-}
-
-static const struct proxy_interface_type_ops wsc_ops = {
-	.create = wsc_create,
-	.destroy = wsc_destroy,
-};
-
 static struct proxy_interface_type wsc_interface_type = {
 	.interface = IWD_WSC_INTERFACE,
-	.ops = &wsc_ops,
 };
 
 static void check_errors_method_callback(struct l_dbus_message *message,
