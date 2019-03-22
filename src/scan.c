@@ -1657,6 +1657,22 @@ uint32_t scan_freq_set_get_bands(struct scan_freq_set *freqs)
 	return bands;
 }
 
+static void scan_channels_5ghz_add(uint32_t channel, void *user_data)
+{
+	struct l_uintset *to = user_data;
+
+	l_uintset_put(to, channel);
+}
+
+void scan_freq_set_merge(struct scan_freq_set *to,
+					const struct scan_freq_set *from)
+{
+	to->channels_2ghz |= from->channels_2ghz;
+
+	l_uintset_foreach(from->channels_5ghz, scan_channels_5ghz_add,
+							to->channels_5ghz);
+}
+
 struct channels_5ghz_foreach_data {
 	scan_freq_set_func_t func;
 	void *user_data;
