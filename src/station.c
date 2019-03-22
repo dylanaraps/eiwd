@@ -67,7 +67,7 @@ struct station {
 	struct l_dbus_message *disconnect_pending;
 	struct l_dbus_message *scan_pending;
 	struct signal_agent *signal_agent;
-	uint32_t scan_id;
+	uint32_t dbus_scan_id;
 	uint32_t hidden_network_scan_id;
 
 	/* Roaming related members */
@@ -2171,7 +2171,7 @@ static void station_dbus_scan_destroy(void *userdata)
 {
 	struct station *station = userdata;
 
-	station->scan_id = 0;
+	station->dbus_scan_id = 0;
 }
 
 static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
@@ -2182,15 +2182,15 @@ static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 
 	l_debug("Scan called from DBus");
 
-	if (station->scan_id)
+	if (station->dbus_scan_id)
 		return dbus_error_busy(message);
 
-	station->scan_id = station_scan_trigger(station, NULL,
+	station->dbus_scan_id = station_scan_trigger(station, NULL,
 						station_dbus_scan_triggered,
 						new_scan_results,
 						station_dbus_scan_destroy);
 
-	if (!station->scan_id)
+	if (!station->dbus_scan_id)
 		return dbus_error_failed(message);
 
 	station->scan_pending = l_dbus_message_ref(message);
@@ -2488,9 +2488,9 @@ static void station_free(struct station *station)
 		dbus_pending_reply(&station->scan_pending,
 			dbus_error_aborted(station->scan_pending));
 
-	if (station->scan_id)
+	if (station->dbus_scan_id)
 		scan_cancel(netdev_get_ifindex(station->netdev),
-				station->scan_id);
+				station->dbus_scan_id);
 
 	if (station->hidden_network_scan_id)
 		scan_cancel(netdev_get_ifindex(station->netdev),
