@@ -78,16 +78,32 @@ static bool network_settings_load(struct network *network)
 	return network->settings != NULL;
 }
 
+static void network_reset_psk(struct network *network)
+{
+	if (network->psk)
+		explicit_bzero(network->psk, 32);
+
+	l_free(network->psk);
+	network->psk = NULL;
+}
+
+static void network_reset_passphrase(struct network *network)
+{
+	if (network->passphrase)
+		explicit_bzero(network->passphrase,
+				strlen(network->passphrase));
+
+	l_free(network->passphrase);
+	network->passphrase = NULL;
+}
+
 static void network_settings_close(struct network *network)
 {
 	if (!network->settings)
 		return;
 
-	l_free(network->psk);
-	network->psk = NULL;
-
-	l_free(network->passphrase);
-	network->passphrase = NULL;
+	network_reset_psk(network);
+	network_reset_passphrase(network);
 
 	l_settings_free(network->settings);
 	network->settings = NULL;
@@ -340,7 +356,7 @@ bool network_set_psk(struct network *network, const uint8_t *psk)
 	if (!network_settings_load(network))
 		return false;
 
-	l_free(network->psk);
+	network_reset_psk(network);
 	network->psk = l_memdup(psk, 32);
 	return true;
 }
@@ -418,9 +434,9 @@ static int network_load_psk(struct network *network, bool need_passphrase)
 	if ((!psk || need_passphrase) && !passphrase)
 		return -ENOKEY;
 
-	l_free(network->passphrase);
+	network_reset_passphrase(network);
+	network_reset_psk(network);
 	network->passphrase = passphrase;
-	l_free(network->psk);
 
 	if (psk) {
 		char *path;
@@ -429,14 +445,14 @@ static int network_load_psk(struct network *network, bool need_passphrase)
 		if (network->psk && len == 32)
 			return 0;
 
+		network_reset_psk(network);
+
 		path = storage_get_network_file_path(info->type, info->ssid);
 		l_error("%s: invalid PreSharedKey format", path);
 		l_free(path);
 
 		if (!passphrase)
-			goto reset_psk;
-
-		l_free(network->psk);
+			return -EINVAL;
 	}
 
 	network->psk = l_malloc(32);
@@ -454,11 +470,8 @@ static int network_load_psk(struct network *network, bool need_passphrase)
 			"Ensure Crypto Engine is properly configured",
 			strerror(-r));
 
-	l_free(network->passphrase);
-	network->passphrase = NULL;
-reset_psk:
-	l_free(network->psk);
-	network->psk = NULL;
+	network_reset_passphrase(network);
+	network_reset_psk(network);
 	return -EINVAL;
 }
 
@@ -744,7 +757,7 @@ static void passphrase_callback(enum agent_result result,
 		goto err;
 	}
 
-	l_free(network->psk);
+	network_reset_psk(network);
 	network->psk = l_malloc(32);
 	r = crypto_psk_from_passphrase(passphrase,
 					(uint8_t *) network->info->ssid,
@@ -769,7 +782,7 @@ static void passphrase_callback(enum agent_result result,
 		goto err;
 	}
 
-	l_free(network->passphrase);
+	network_reset_passphrase(network);
 	network->passphrase = l_strdup(passphrase);
 
 	/*
