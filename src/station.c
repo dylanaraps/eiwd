@@ -117,6 +117,19 @@ struct autoconnect_entry {
 	struct scan_bss *bss;
 };
 
+static void station_property_set_scanning(struct station *station,
+								bool scanning)
+{
+	if (station->scanning == scanning)
+		return;
+
+	station->scanning = scanning;
+
+	l_dbus_property_changed(dbus_get_bus(),
+				netdev_get_path(station->netdev),
+					IWD_STATION_INTERFACE, "Scanning");
+}
+
 static void station_enter_state(struct station *station,
 						enum station_state state);
 
@@ -595,14 +608,9 @@ not_supported:
 static bool new_scan_results(int err, struct l_queue *bss_list, void *userdata)
 {
 	struct station *station = userdata;
-	struct l_dbus *dbus = dbus_get_bus();
 	bool autoconnect;
 
-	if (station->scanning) {
-		station->scanning = false;
-		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
-					IWD_STATION_INTERFACE, "Scanning");
-	}
+	station_property_set_scanning(station, false);
 
 	if (err)
 		return false;
@@ -619,25 +627,17 @@ static bool new_scan_results(int err, struct l_queue *bss_list, void *userdata)
 static void periodic_scan_trigger(int err, void *user_data)
 {
 	struct station *station = user_data;
-	struct l_dbus *dbus = dbus_get_bus();
 
-	station->scanning = true;
-	l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
-				IWD_STATION_INTERFACE, "Scanning");
+	station_property_set_scanning(station, true);
 }
 
 static void periodic_scan_stop(struct station *station)
 {
-	struct l_dbus *dbus = dbus_get_bus();
 	uint32_t index = netdev_get_ifindex(station->netdev);
 
 	scan_periodic_stop(index);
 
-	if (station->scanning) {
-		station->scanning = false;
-		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
-					IWD_STATION_INTERFACE, "Scanning");
-	}
+	station_property_set_scanning(station, false);
 }
 
 static bool station_needs_hidden_network_scan(struct station *station)
@@ -2146,7 +2146,6 @@ static void station_dbus_scan_triggered(int err, void *user_data)
 {
 	struct station *station = user_data;
 	struct l_dbus_message *reply;
-	struct l_dbus *dbus = dbus_get_bus();
 
 	l_debug("station_scan_triggered: %i", err);
 
@@ -2162,9 +2161,7 @@ static void station_dbus_scan_triggered(int err, void *user_data)
 	l_dbus_message_set_arguments(reply, "");
 	dbus_pending_reply(&station->scan_pending, reply);
 
-	station->scanning = true;
-	l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
-				IWD_STATION_INTERFACE, "Scanning");
+	station_property_set_scanning(station, true);
 }
 
 static void station_dbus_scan_destroy(void *userdata)
