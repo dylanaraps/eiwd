@@ -124,6 +124,8 @@ AC_DEFINE_UNQUOTED(DAEMON_CONFIGDIR, "/etc/iwd",
 AC_DEFINE_UNQUOTED(WIRED_STORAGEDIR, "${wired_storagedir}",
 			[Directory for Ethernet daemon storage files])
 
+AC_CHECK_FUNCS(explicit_bzero)
+
 AC_CHECK_HEADERS(linux/types.h linux/if_alg.h)
 
 # In maintainer mode: try to build with application backtrace and disable PIE.
