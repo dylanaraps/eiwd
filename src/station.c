@@ -1484,6 +1484,19 @@ static void station_roam_timeout_rearm(struct station *station, int seconds)
 								station, NULL);
 }
 
+static bool station_cannot_roam(struct station *station)
+{
+	const struct l_settings *config = iwd_get_config();
+	bool disabled;
+
+	if (!l_settings_get_bool(config, "Scan", "disable_roaming_scan",
+								&disabled))
+		disabled = false;
+
+	return disabled || station->preparing_roam ||
+					station->state == STATION_STATE_ROAMING;
+}
+
 static void station_lost_beacon(struct station *station)
 {
 	l_debug("%u", netdev_get_ifindex(station->netdev));
@@ -1501,7 +1514,7 @@ static void station_lost_beacon(struct station *station)
 	 */
 	station->roam_no_orig_ap = true;
 
-	if (station->preparing_roam || station->state == STATION_STATE_ROAMING)
+	if (station_cannot_roam(station))
 		return;
 
 	station_roam_trigger_cb(NULL, station);
@@ -1520,7 +1533,7 @@ void station_ap_directed_roam(struct station *station,
 	uint16_t dtimer;
 	uint8_t valid_interval;
 
-	if (station->preparing_roam || station->state == STATION_STATE_ROAMING)
+	if (station_cannot_roam(station))
 		return;
 
 	if (body_len < 7)
@@ -1597,8 +1610,7 @@ static void station_low_rssi(struct station *station)
 
 	station->signal_low = true;
 
-	if (station->preparing_roam ||
-			station->state == STATION_STATE_ROAMING)
+	if (station_cannot_roam(station))
 		return;
 
 	/* Set a 5-second initial timeout */
