@@ -3121,7 +3121,7 @@ static void eapol_sm_test_eap_tls(const void *data)
 	s.app_data_cb = eapol_sm_test_tls_new_data;
 	s.ready_cb = eapol_sm_test_tls_test_ready;
 	s.disconnect_cb = eapol_sm_test_tls_test_disconnected;
-	s.method = EAP_TYPE_TLS_EAP;
+	s.method = EAP_TYPE_TLS;
 
 	eapol_sm_test_tls(&s, eapol_8021x_config);
 }
