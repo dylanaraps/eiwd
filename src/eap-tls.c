@@ -91,7 +91,7 @@ static bool eap_tls_settings_load(struct eap_state *eap,
 }
 
 static struct eap_method eap_tls = {
-	.request_type = EAP_TYPE_TLS_EAP,
+	.request_type = EAP_TYPE_TLS,
 	.exports_msk = true,
 	.name = "TLS",
 
