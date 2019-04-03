@@ -20,13 +20,17 @@
  *
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <ell/ell.h>
 
-#include "crypto.h"
-#include "ie.h"
-#include "handshake.h"
-#include "owe.h"
-#include "mpdu.h"
+#include "src/crypto.h"
+#include "src/ie.h"
+#include "src/handshake.h"
+#include "src/owe.h"
+#include "src/mpdu.h"
 
 struct owe_sm {
 	struct handshake_state *hs;
