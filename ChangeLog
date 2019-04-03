@@ -1,3 +1,13 @@
+ver 0.15:
+	Fix issue with handling RSSI thresholds.
+	Fix issue with handling abort for a connection.
+	Fix issue with stopping Access Point operation.
+	Add support for individual BSS blacklisting.
+	Add support for utilizing MAC randomization.
+	Add support for utilizing different key lengths.
+	Add support for 16, 24 and 32 byte MIC lengths.
+	Add support for handling driver rekying feature.
+
 ver 0.14:
 	Add support for tunneled MSCHAPv2 authentication.
 
