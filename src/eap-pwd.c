@@ -28,10 +28,11 @@
 
 #include <ell/ell.h>
 
-#include "eap.h"
-#include "eap-private.h"
-#include "crypto.h"
-#include "util.h"
+#include "src/missing.h"
+#include "src/eap.h"
+#include "src/eap-private.h"
+#include "src/crypto.h"
+#include "src/util.h"
 
 #define EAP_PWD_GROUP_DESC	19
 #define EAP_PWD_RAND_FN		0x01

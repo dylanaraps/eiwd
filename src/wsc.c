@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <ell/ell.h>
 
+#include "src/missing.h"
 #include "src/dbus.h"
 #include "src/netdev.h"
 #include "src/wiphy.h"

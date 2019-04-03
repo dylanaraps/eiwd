@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <ell/ell.h>
 
+#include "src/missing.h"
 #include "src/util.h"
 #include "src/mschaputil.h"
 #include "src/eap.h"

@@ -28,8 +28,9 @@
 #include <errno.h>
 #include <ell/ell.h>
 
-#include "eap.h"
-#include "eap-private.h"
+#include "src/missing.h"
+#include "src/eap.h"
+#include "src/eap-private.h"
 
 struct eap_md5_state {
 	char *secret;

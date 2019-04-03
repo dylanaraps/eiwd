@@ -31,6 +31,7 @@
 
 #include <ell/ell.h>
 
+#include "src/missing.h"
 #include "src/crypto.h"
 
 /* RFC 3526, Section 2 */

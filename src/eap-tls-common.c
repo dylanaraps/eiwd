@@ -28,6 +28,7 @@
 #include <errno.h>
 #include <ell/ell.h>
 
+#include "src/missing.h"
 #include "src/eap.h"
 #include "src/eap-private.h"
 #include "src/eap-tls-common.h"

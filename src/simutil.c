@@ -25,8 +25,8 @@
 #include <errno.h>
 #include <ell/ell.h>
 
+#include "src/missing.h"
 #include "src/eap-private.h"
-
 #include "src/crypto.h"
 #include "src/simutil.h"
 

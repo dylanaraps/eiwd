@@ -29,12 +29,13 @@
 #include <errno.h>
 #include <ell/ell.h>
 
-#include "crypto.h"
-#include "eap.h"
-#include "eap-private.h"
-#include "wscutil.h"
-#include "util.h"
-#include "eap-wsc.h"
+#include "src/missing.h"
+#include "src/crypto.h"
+#include "src/eap.h"
+#include "src/eap-private.h"
+#include "src/wscutil.h"
+#include "src/util.h"
+#include "src/eap-wsc.h"
 
 #define EAP_WSC_HEADER_LEN	14
 #define EAP_WSC_PDU_MAX_LEN	4096

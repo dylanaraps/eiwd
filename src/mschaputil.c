@@ -26,6 +26,7 @@
 
 #include <ell/ell.h>
 
+#include "src/missing.h"
 #include "src/mschaputil.h"
 
 /**

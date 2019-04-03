@@ -29,12 +29,12 @@
 #include <errno.h>
 #include <ell/ell.h>
 
-#include "eap.h"
-#include "eap-private.h"
-
-#include "crypto.h"
-#include "simutil.h"
-#include "simauth.h"
+#include "src/missing.h"
+#include "src/eap.h"
+#include "src/eap-private.h"
+#include "src/crypto.h"
+#include "src/simutil.h"
+#include "src/simauth.h"
 
 /*
  * EAP-AKA specific values
