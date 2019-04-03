@@ -1045,7 +1045,7 @@ static void scan_bss_compute_rank(struct scan_bss *bss)
 			/*
 			 * Maximum rate is 2340Mbps (VHT)
 			 */
-			factor = factor * data_rate / 2340000000 +
+			factor = factor * data_rate / 2340000000U +
 						RANK_MIN_SUPPORTED_RATE_FACTOR;
 			rank *= factor;
 		} else
