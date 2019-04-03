@@ -81,7 +81,7 @@ struct test_handshake_state {
 static void test_handshake_state_free(struct handshake_state *hs)
 {
 	struct test_handshake_state *ths =
-			container_of(hs, struct test_handshake_state, super);
+			l_container_of(hs, struct test_handshake_state, super);
 
 	l_free(ths);
 }
@@ -2474,7 +2474,7 @@ static void verify_install_tk(struct handshake_state *hs,
 				const uint8_t *tk, uint32_t cipher)
 {
 	struct test_handshake_state *ths =
-			container_of(hs, struct test_handshake_state, super);
+			l_container_of(hs, struct test_handshake_state, super);
 
 	assert(hs->ifindex == 1);
 	assert(!memcmp(hs->aa, aa, 6));
@@ -3094,7 +3094,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__handshake_set_install_tk_func(verify_install_tk);
-	ths = container_of(hs, struct test_handshake_state, super);
+	ths = l_container_of(hs, struct test_handshake_state, super);
 	ths->tk = ptk + 16 + 16;
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
 				step3_buf, sizeof(eapol_key_data_15), false);
@@ -3211,7 +3211,7 @@ static void test_handshake_event(struct handshake_state *hs,
 					void *user_data)
 {
 	struct test_handshake_state *ths =
-			container_of(hs, struct test_handshake_state, super);
+			l_container_of(hs, struct test_handshake_state, super);
 
 	switch (event) {
 	case HANDSHAKE_EVENT_FAILED:
@@ -3283,7 +3283,7 @@ static void eapol_sm_test_eap_nak(const void *data)
 	__handshake_set_get_nonce_func(test_nonce);
 
 	hs = test_handshake_state_new(1);
-	ths = container_of(hs, struct test_handshake_state, super);
+	ths = l_container_of(hs, struct test_handshake_state, super);
 
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);

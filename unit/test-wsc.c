@@ -48,7 +48,7 @@ struct test_handshake_state {
 static void test_handshake_state_free(struct handshake_state *hs)
 {
 	struct test_handshake_state *ths =
-			container_of(hs, struct test_handshake_state, super);
+			l_container_of(hs, struct test_handshake_state, super);
 
 	l_free(ths);
 }
