@@ -172,7 +172,7 @@ eap_sources = src/eap.c src/eap.h src/eap-private.h \
 if DAEMON
 libexec_PROGRAMS += src/iwd
 
-src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h \
+src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h src/missing.h \
 					src/plugin.h src/plugin.c \
 					src/netdev.h src/netdev.c \
 					src/wiphy.h src/wiphy.c \
