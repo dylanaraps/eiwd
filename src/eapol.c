@@ -729,7 +729,7 @@ struct eapol_frame_watch {
 static void eapol_frame_watch_free(struct watchlist_item *item)
 {
 	struct eapol_frame_watch *efw =
-		container_of(item, struct eapol_frame_watch, super);
+		l_container_of(item, struct eapol_frame_watch, super);
 
 	l_free(efw);
 }
@@ -2475,7 +2475,7 @@ void eapol_preauth_cancel(uint32_t ifindex)
 static bool eapol_frame_watch_match_ifindex(const void *a, const void *b)
 {
 	struct eapol_frame_watch *efw =
-		container_of(a, struct eapol_frame_watch, super);
+		l_container_of(a, struct eapol_frame_watch, super);
 
 	return efw->ifindex == L_PTR_TO_UINT(b);
 }
