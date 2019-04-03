@@ -208,7 +208,7 @@ static void netdev_handshake_state_cancel_all(
 static void netdev_handshake_state_free(struct handshake_state *hs)
 {
 	struct netdev_handshake_state *nhs =
-			container_of(hs, struct netdev_handshake_state, super);
+		l_container_of(hs, struct netdev_handshake_state, super);
 
 	netdev_handshake_state_cancel_all(nhs);
 	l_free(nhs);
@@ -1252,7 +1252,7 @@ static void netdev_set_gtk(struct handshake_state *hs, uint8_t key_index,
 				uint32_t cipher)
 {
 	struct netdev_handshake_state *nhs =
-			container_of(hs, struct netdev_handshake_state, super);
+		l_container_of(hs, struct netdev_handshake_state, super);
 	struct netdev *netdev = nhs->netdev;
 	uint8_t gtk_buf[32];
 	struct l_genl_msg *msg;
@@ -1299,7 +1299,7 @@ static void netdev_set_igtk(struct handshake_state *hs, uint8_t key_index,
 				uint32_t cipher)
 {
 	struct netdev_handshake_state *nhs =
-			container_of(hs, struct netdev_handshake_state, super);
+		l_container_of(hs, struct netdev_handshake_state, super);
 	uint8_t igtk_buf[16];
 	struct netdev *netdev = nhs->netdev;
 	struct l_genl_msg *msg;
@@ -1422,7 +1422,7 @@ static void netdev_set_tk(struct handshake_state *hs,
 				const uint8_t *tk, uint32_t cipher)
 {
 	struct netdev_handshake_state *nhs =
-			container_of(hs, struct netdev_handshake_state, super);
+		l_container_of(hs, struct netdev_handshake_state, super);
 	uint8_t tk_buf[32];
 	struct netdev *netdev = nhs->netdev;
 	struct l_genl_msg *msg;
@@ -1482,7 +1482,7 @@ invalid_key:
 void netdev_handshake_failed(struct handshake_state *hs, uint16_t reason_code)
 {
 	struct netdev_handshake_state *nhs =
-			container_of(hs, struct netdev_handshake_state, super);
+		l_container_of(hs, struct netdev_handshake_state, super);
 	struct netdev *netdev = nhs->netdev;
 	struct l_genl_msg *msg;
 
@@ -3286,7 +3286,7 @@ int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 	 * like re-keying, this way the callbacks for those commands don't
 	 * have to check if failures resulted from the transition.
 	 */
-	nhs = container_of(netdev->handshake,
+	nhs = l_container_of(netdev->handshake,
 				struct netdev_handshake_state, super);
 
 	/* reset key states just as we do in initialization */
@@ -3770,7 +3770,7 @@ static bool netdev_frame_watch_match_prefix(const void *a, const void *b)
 {
 	const struct watchlist_item *item = a;
 	const struct netdev_frame_watch *fw =
-		container_of(item, struct netdev_frame_watch, super);
+		l_container_of(item, struct netdev_frame_watch, super);
 	const struct frame_prefix_info *info = b;
 
 	return fw->frame_type == info->frame_type &&
@@ -4657,7 +4657,7 @@ check_blacklist:
 static void netdev_frame_watch_free(struct watchlist_item *item)
 {
 	struct netdev_frame_watch *fw =
-		container_of(item, struct netdev_frame_watch, super);
+		l_container_of(item, struct netdev_frame_watch, super);
 
 	l_free(fw->prefix);
 	l_free(fw);
