@@ -327,7 +327,6 @@ ell_pem_files = cert-ca-key.pem cert-client-key.pem cert-client-key-pkcs8.pem \
 
 if MAINTAINER_MODE
 noinst_PROGRAMS += $(unit_tests)
-noinst_DATA = ell/unit/test_data
 endif
 
 unit_test_eap_sim_SOURCES = unit/test-eap-sim.c \
@@ -398,6 +397,7 @@ unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/eap-tls-common.h src/eap-tls-common.c \
 				src/mschaputil.h src/mschaputil.c
 unit_test_eapol_LDADD = $(ell_ldadd)
+unit_test_eapol_DEPENDENCIES = ell/unit/test_data
 
 unit_test_ssid_to_utf8_SOURCES = src/util.h src/util.c \
 				unit/test-ssid-to-utf8.c
@@ -458,7 +458,8 @@ EXTRA_DIST = src/genbuiltin src/iwd.service.in src/net.connman.iwd.service \
 			wired/ead.service.in wired/net.connman.ead.service \
 			doc/main.conf $(manual_pages:.1=.txt)
 
-AM_CFLAGS = $(ell_cflags) -fvisibility=hidden
+AM_CFLAGS = $(ell_cflags) -fvisibility=hidden \
+			-DELL_UNIT_TEST_DATA=\"$(abs_builddir)/ell/unit/\"
 
 CLEANFILES = src/iwd.service wired/ead.service
 
@@ -490,10 +491,10 @@ ell/ell.h: Makefile
 	done
 
 ell/unit/test_data: Makefile
-	$(AM_V_at)$(MKDIR_P) ell/unit
+	$(AM_V_at)$(MKDIR_P) $(abs_builddir)/ell/unit
 	$(AM_V_GEN)for f in $(ell_pem_files) ; do \
 		if [ ! -f $$f ] ; then \
-			$(LN_S) -t ell/unit -f $(abs_srcdir)/../ell/unit/$$f ; \
+			$(LN_S) -t $(abs_builddir)/ell/unit -f $(abs_srcdir)/../ell/unit/$$f ; \
 		fi \
 	done > $@
 
@@ -506,6 +507,9 @@ SED_PROCESS = $(AM_V_GEN)$(MKDIR_P) $(dir $@) && \
 
 %.1: %.txt
 	$(AM_V_GEN)$(A2X) --doctype manpage --format manpage $(srcdir)/$<
+
+clean-local:
+	-rm -rf $(abs_builddir)/ell/unit/*.pem $(abs_builddir)/ell/unit/test_data
 
 maintainer-clean-local:
 	-rm -rf build-aux ell
