@@ -91,7 +91,7 @@ static bool sae_pwd_seed(const uint8_t *addr1, const uint8_t *addr2,
 	}
 
 	return hkdf_extract(L_CHECKSUM_SHA256, key, 12, 2, out, base, base_len,
-					&counter, 1);
+					&counter, (size_t) 1);
 }
 
 static struct l_ecc_scalar *sae_pwd_value(const struct l_ecc_curve *curve,
