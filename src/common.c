@@ -64,19 +64,33 @@ bool security_from_str(const char *str, enum security *security)
 	return true;
 }
 
+#define AKM_IS_PSK(akm)							\
+(									\
+	akm & (IE_RSN_AKM_SUITE_PSK |					\
+		IE_RSN_AKM_SUITE_FT_USING_PSK |				\
+		IE_RSN_AKM_SUITE_FT_USING_PSK |				\
+		IE_RSN_AKM_SUITE_SAE_SHA256 |				\
+		IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256)			\
+)
+
+#define AKM_IS_8021X(akm) \
+(									\
+	akm & (IE_RSN_AKM_SUITE_8021X |					\
+		IE_RSN_AKM_SUITE_8021X_SHA256 |				\
+		IE_RSN_AKM_SUITE_FT_OVER_8021X |			\
+		IE_RSN_AKM_SUITE_FILS_SHA256 |				\
+		IE_RSN_AKM_SUITE_FILS_SHA384 |				\
+		IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256 |			\
+		IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384)			\
+)
+
 enum security security_determine(uint16_t bss_capability,
 					const struct ie_rsn_info *info)
 {
-	if (info && (info->akm_suites & IE_RSN_AKM_SUITE_PSK ||
-			info->akm_suites & IE_RSN_AKM_SUITE_PSK_SHA256 ||
-			info->akm_suites & IE_RSN_AKM_SUITE_FT_USING_PSK ||
-			info->akm_suites & IE_RSN_AKM_SUITE_SAE_SHA256 ||
-			info->akm_suites & IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256))
+	if (info && AKM_IS_PSK(info->akm_suites))
 		return SECURITY_PSK;
 
-	if (info && (info->akm_suites & IE_RSN_AKM_SUITE_8021X ||
-			info->akm_suites & IE_RSN_AKM_SUITE_8021X_SHA256 ||
-			info->akm_suites & IE_RSN_AKM_SUITE_FT_OVER_8021X))
+	if (info && AKM_IS_8021X(info->akm_suites))
 		return SECURITY_8021X;
 
 	if (info && (info->akm_suites & IE_RSN_AKM_SUITE_OWE))
