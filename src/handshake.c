@@ -337,6 +337,16 @@ static bool handshake_get_key_sizes(struct handshake_state *s, size_t *ptk_size,
 		}
 
 		break;
+	case IE_RSN_AKM_SUITE_FILS_SHA256:
+	case IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256:
+		kck = 0;
+		kek = 32;
+		break;
+	case IE_RSN_AKM_SUITE_FILS_SHA384:
+	case IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384:
+		kck = 0;
+		kek = 64;
+		break;
 	default:
 		kck = 16;
 		kek = 16;
