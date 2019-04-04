@@ -251,8 +251,7 @@ static bool sae_compute_pwe(struct sae_sm *sm, char *password,
 				const uint8_t *addr1, const uint8_t *addr2)
 {
 	bool found = false;
-	uint8_t counter = 1;
-	uint8_t k = 20;
+	uint8_t counter;
 	uint8_t pwd_seed[32];
 	struct l_ecc_scalar *pwd_value;
 	uint8_t random[32];
@@ -267,7 +266,7 @@ static bool sae_compute_pwe(struct sae_sm *sm, char *password,
 	qr = sae_new_residue(sm->curve, true);
 	qnr = sae_new_residue(sm->curve, false);
 
-	do {
+	for (counter = 1; counter <= 20; counter++) {
 		/* pwd-seed = H(max(addr1, addr2) || min(addr1, addr2),
 		 *                base || counter)
 		 * pwd-value = KDF-256(pwd-seed, "SAE Hunting and Pecking", p)
@@ -291,10 +290,7 @@ static bool sae_compute_pwe(struct sae_sm *sm, char *password,
 		}
 
 		l_ecc_scalar_free(pwd_value);
-
-		counter++;
-
-	} while ((counter <= k) || (found == false));
+	}
 
 	l_ecc_scalar_free(qr);
 	l_ecc_scalar_free(qnr);
