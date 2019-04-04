@@ -53,6 +53,8 @@ enum eap_code {
 	EAP_CODE_RESPONSE	= 2,
 	EAP_CODE_SUCCESS	= 3,
 	EAP_CODE_FAILURE	= 4,
+	EAP_CODE_INITIATE	= 5,
+	EAP_CODE_FINISH		= 6,
 };
 
 struct eap_method {
