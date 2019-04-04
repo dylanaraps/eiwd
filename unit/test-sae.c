@@ -550,6 +550,11 @@ int main(int argc, char *argv[])
 		goto done;
 	}
 
+	if (!l_checksum_is_supported(L_CHECKSUM_SHA256, true)) {
+		l_info("SHA256/HMAC_SHA256 not supported, skipping...");
+		goto done;
+	}
+
 	l_test_add("SAE commit timeout", test_commit_timeout, NULL);
 	l_test_add("SAE confirm timeout", test_confirm_timeout, NULL);
 	l_test_add("SAE anti-clogging", test_clogging, NULL);
