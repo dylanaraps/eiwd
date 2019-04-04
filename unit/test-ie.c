@@ -314,7 +314,7 @@ struct ie_rsne_info_test {
 	size_t data_len;
 	enum ie_rsn_cipher_suite group_cipher;
 	uint16_t pairwise_ciphers;
-	uint16_t akm_suites;
+	uint32_t akm_suites;
 	bool preauthentication:1;
 	bool no_pairwise:1;
 	uint8_t ptksa_replay_counter:2;
@@ -476,7 +476,7 @@ struct ie_wpa_info_test {
 	size_t data_len;
 	enum ie_rsn_cipher_suite group_cipher;
 	uint16_t pairwise_ciphers;
-	uint16_t akm_suites;
+	uint32_t akm_suites;
 };
 
 static const unsigned char wpa_data_1[] = {
