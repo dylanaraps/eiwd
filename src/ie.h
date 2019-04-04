@@ -261,6 +261,10 @@ enum ie_rsn_akm_suite {
 	IE_RSN_AKM_SUITE_8021X_SUITE_B_SHA384	= 0x0800,
 	IE_RSN_AKM_SUITE_FT_OVER_8021X_SHA384	= 0x1000,
 	IE_RSN_AKM_SUITE_OWE			= 0x2000,
+	IE_RSN_AKM_SUITE_FILS_SHA256		= 0x4000,
+	IE_RSN_AKM_SUITE_FILS_SHA384		= 0x8000,
+	IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256	= 0x10000,
+	IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384	= 0x20000,
 };
 
 #define IE_AKM_IS_SAE(akm) \
@@ -296,7 +300,7 @@ struct ie_tlv_builder {
 struct ie_rsn_info {
 	enum ie_rsn_cipher_suite group_cipher;
 	uint16_t pairwise_ciphers;
-	uint16_t akm_suites;
+	uint32_t akm_suites;
 	bool preauthentication:1;
 	bool no_pairwise:1;
 	uint8_t ptksa_replay_counter:2;
