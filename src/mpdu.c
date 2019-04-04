@@ -598,6 +598,10 @@ static bool validate_authentication_mmpdu(const struct mmpdu_header *mpdu,
 		IE_TYPE_NEIGHBOR_REPORT,
 		IE_TYPE_VENDOR_SPECIFIC,
 	};
+	static const enum ie_type ie_order_fils[] = {
+		IE_TYPE_FILS_SESSION,
+		IE_TYPE_FILS_WRAPPED_DATA,
+	};
 
 	if (len < *offset + 6)
 		return false;
@@ -630,6 +634,12 @@ static bool validate_authentication_mmpdu(const struct mmpdu_header *mpdu,
 						false);
 	case MMPDU_AUTH_ALGO_SAE:
 		return *offset <= len;
+	case MMPDU_AUTH_ALGO_FILS_SK:
+	case MMPDU_AUTH_ALGO_FILS_SK_PFS:
+		return validate_mgmt_ies(body->ies, len - *offset,
+						ie_order_fils,
+						L_ARRAY_SIZE(ie_order_fils),
+						false);
 	default:
 		return false;
 	}
