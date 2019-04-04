@@ -456,7 +456,7 @@ endif
 
 EXTRA_DIST = src/genbuiltin src/iwd.service.in src/net.connman.iwd.service \
 			wired/ead.service.in wired/net.connman.ead.service \
-			doc/main.conf $(manual_pages:.1=.txt)
+			src/pkcs8.conf doc/main.conf $(manual_pages:.1=.txt)
 
 AM_CFLAGS = $(ell_cflags) -fvisibility=hidden \
 			-DELL_UNIT_TEST_DATA=\"$(abs_builddir)/ell/unit/\"
