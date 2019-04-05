@@ -2423,9 +2423,6 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 	if (status_code != 0)
 		goto assoc_failed;
 
-	/* Connection can be fully handled here, not in connect event */
-	netdev->ignore_connect_event = true;
-
 	if (netdev->sm) {
 		/*
 		 * Start processing EAPoL frames now that the state machine
@@ -2433,10 +2430,10 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 		 */
 		if (!eapol_start(netdev->sm))
 			goto assoc_failed;
-
-		if (!netdev->in_ft)
-			return;
 	}
+
+	/* Connection can be fully handled here, not in connect event */
+	netdev->ignore_connect_event = true;
 
 	if (netdev->in_ft) {
 		bool is_rsn = netdev->handshake->supplicant_ie != NULL;
@@ -2447,7 +2444,8 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 			handshake_state_install_ptk(netdev->handshake);
 			return;
 		}
-	}
+	} else if (netdev->sm)
+		return;
 
 	netdev_connect_ok(netdev);
 
