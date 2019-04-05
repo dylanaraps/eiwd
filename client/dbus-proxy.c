@@ -175,11 +175,11 @@ char *proxy_property_str_completion(const struct proxy_interface_type *type,
 
 		str = proxy_interface_property_tostr(proxy, property_name);
 		if (!str)
-			return NULL;
+			goto done;
 
 		return l_strdup(str);
 	}
-
+done:
 	l_queue_destroy(match, NULL);
 	match = NULL;
 	entry = NULL;
