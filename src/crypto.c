@@ -416,6 +416,51 @@ bool kdf_sha256(const void *key, size_t key_len,
 	return true;
 }
 
+bool kdf_sha384(const void *key, size_t key_len,
+		const void *prefix, size_t prefix_len,
+		const void *data, size_t data_len, void *output, size_t size)
+{
+	struct l_checksum *hmac;
+	unsigned int i, offset = 0;
+	unsigned int counter;
+	uint8_t counter_le[2];
+	uint8_t length_le[2];
+	struct iovec iov[4] = {
+		[0] = { .iov_base = counter_le, .iov_len = 2 },
+		[1] = { .iov_base = (void *) prefix, .iov_len = prefix_len },
+		[2] = { .iov_base = (void *) data, .iov_len = data_len },
+		[3] = { .iov_base = length_le, .iov_len = 2 },
+	};
+
+	hmac = l_checksum_new_hmac(L_CHECKSUM_SHA384, key, key_len);
+	if (!hmac)
+		return false;
+
+	/* Length is denominated in bits, not bytes */
+	l_put_le16(size * 8, length_le);
+
+	/* KDF processes in 384-bit chunks (48 bytes) */
+	for (i = 0, counter = 1; i < (size + 47) / 48; i++, counter++) {
+		size_t len;
+
+		if (size - offset > 48)
+			len = 48;
+		else
+			len = size - offset;
+
+		l_put_le16(counter, counter_le);
+
+		l_checksum_updatev(hmac, iov, 4);
+		l_checksum_get_digest(hmac, output + offset, len);
+
+		offset += len;
+	}
+
+	l_checksum_free(hmac);
+
+	return true;
+}
+
 /*
  * Defined in RFC 5869 - HMAC-based Extract-and-Expand Key Derivation Function
  *

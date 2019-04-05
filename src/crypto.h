@@ -90,6 +90,9 @@ int crypto_psk_from_passphrase(const char *passphrase,
 bool kdf_sha256(const void *key, size_t key_len,
 		const void *prefix, size_t prefix_len,
 		const void *data, size_t data_len, void *output, size_t size);
+bool kdf_sha384(const void *key, size_t key_len,
+		const void *prefix, size_t prefix_len,
+		const void *data, size_t data_len, void *output, size_t size);
 bool prf_sha1(const void *key, size_t key_len,
 		const void *prefix, size_t prefix_len,
 		const void *data, size_t data_len, void *output, size_t size);
