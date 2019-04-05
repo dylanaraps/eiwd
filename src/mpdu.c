@@ -50,7 +50,7 @@ static bool validate_mgmt_header(const struct mmpdu_header *mpdu,
 }
 
 /* 802.11-2016 13.11.2 */
-static bool skip_resource_req_resp(struct ie_tlv_iter *iter, bool response)
+static bool skip_resource_req_resp(struct ie_tlv_iter *iter)
 {
 	struct ie_tlv_iter tmp;
 
@@ -121,7 +121,7 @@ static bool validate_mgmt_ies(const uint8_t *ies, size_t ies_len,
 			last_idx++;
 
 		if (tag == IE_TYPE_RIC_DATA &&
-				!skip_resource_req_resp(&iter, response))
+				!skip_resource_req_resp(&iter))
 			return false;
 
 		new_idx = last_idx;
