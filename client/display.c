@@ -585,8 +585,6 @@ void display_agent_prompt_release(const char *label)
 
 void display_quit(void)
 {
-	rl_insert_text("quit");
-	rl_redisplay();
 	rl_crlf();
 }
 
