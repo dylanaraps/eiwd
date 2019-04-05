@@ -2389,6 +2389,9 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 	if (netdev->aborting)
 		return;
 
+	if (!netdev->owe && !netdev->in_ft && !netdev->handshake->mde)
+		return;
+
 	if (!l_genl_attr_init(&attr, msg)) {
 		l_debug("attr init failed");
 		return;
