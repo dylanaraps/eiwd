@@ -37,7 +37,7 @@ static void signal_handler(uint32_t signo, void *user_data)
 	switch (signo) {
 	case SIGINT:
 	case SIGTERM:
-		l_info("Terminate");
+		display("Terminate\n");
 		l_main_quit();
 		break;
 	}
