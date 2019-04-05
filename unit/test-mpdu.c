@@ -139,7 +139,7 @@ static const struct test_frame_data probe_req_ie_out_of_order1_data = {
 	probe_req_ie_out_of_order1, sizeof(probe_req_ie_out_of_order1), true
 };
 
-static const uint8_t probe_req_ie_out_of_order2[] = {
+static const uint8_t probe_req_ie_duplicate1[] = {
 	/* Header */
 	0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x02, 0x00,
 	0x00, 0x00, 0x03, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x50, 0x64,
@@ -149,11 +149,11 @@ static const uint8_t probe_req_ie_out_of_order2[] = {
 	0x32, 0x04, 0x30, 0x48, 0x60, 0x6c,
 };
 
-static const struct test_frame_data probe_req_ie_out_of_order2_data = {
-	probe_req_ie_out_of_order2, sizeof(probe_req_ie_out_of_order2), true
+static const struct test_frame_data probe_req_ie_duplicate1_data = {
+	probe_req_ie_duplicate1, sizeof(probe_req_ie_duplicate1), false
 };
 
-static const uint8_t probe_req_ie_out_of_order3[] = {
+static const uint8_t probe_req_ie_out_of_order2[] = {
 	0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xda, 0xa1,
 	0x19, 0x11, 0xec, 0x70, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x50, 0x25,
 	0x00, 0x00, 0x01, 0x04, 0x02, 0x04, 0x0b, 0x16, 0x32, 0x08, 0x0c, 0x12,
@@ -164,8 +164,8 @@ static const uint8_t probe_req_ie_out_of_order3[] = {
 	0x00, 0x00, 0x0a, 0x02, 0x01,
 };
 
-static const struct test_frame_data probe_req_ie_out_of_order3_data = {
-	probe_req_ie_out_of_order3, sizeof(probe_req_ie_out_of_order3), true
+static const struct test_frame_data probe_req_ie_out_of_order2_data = {
+	probe_req_ie_out_of_order2, sizeof(probe_req_ie_out_of_order2), true
 };
 
 static void ie_order_test(const void *data)
@@ -186,10 +186,11 @@ int main(int argc, char *argv[])
 	l_test_add("/IE order/Good 2", ie_order_test, &probe_req_good2_data);
 	l_test_add("/IE order/Good (Out of Order IE) 1", ie_order_test,
 				&probe_req_ie_out_of_order1_data);
+	l_test_add("/IE order/Bad (Duplicate + Out of Order IE) 1",
+				ie_order_test,
+				&probe_req_ie_duplicate1_data);
 	l_test_add("/IE order/Good (Out of Order IE) 2", ie_order_test,
 				&probe_req_ie_out_of_order2_data);
-	l_test_add("/IE order/Good 3", ie_order_test,
-				&probe_req_ie_out_of_order3_data);
 
 	return l_test_run();
 }
