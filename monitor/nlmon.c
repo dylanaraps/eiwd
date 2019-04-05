@@ -573,6 +573,10 @@ static const struct cipher_suites rsn_akm_selectors[] = {
 	{ 0x000fac07, "TDLS; TPK"                                                                 },
 	{ 0x000fac08, "SAE/PMKSA caching SHA256; RSNA PMKSA caching SHA256/mesh peering exchange" },
 	{ 0x000fac09, "FT SAE SHA256; FT"                                                         },
+	{ 0x000fac0e, "FILS SHA256"                                                               },
+	{ 0x000fac0f, "FILS SHA384"                                                               },
+	{ 0x000fac10, "FILS FT SHA256"                                                            },
+	{ 0x000fac11, "FILS FT SHA3854"                                                           },
 	{ 0x000fac12, "OWE"                                                                       },
 	{ }
 };
@@ -1421,6 +1425,48 @@ static void print_ie_owe(unsigned int level,
 	print_hexdump(level + 2, data + 2, size - 2);
 }
 
+static void print_fils_indication(unsigned int level,
+					const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	print_attr(level, "FILS Indication: len %u", size);
+
+	print_attr(level + 1, "Num Public Key Identifiers: %u",
+				util_bit_field(*bytes, 0, 3));
+	print_attr(level + 1, "Num Realm Identifiers: %u",
+				util_bit_field(*bytes, 3, 3));
+	print_attr(level + 1, "IP configuration: %u", util_is_bit_set(*bytes, 6));
+	print_attr(level + 1, "Cache Identifier Included: %u",
+				util_is_bit_set(*bytes, 7));
+
+	bytes++;
+
+	print_attr(level + 1, "HES-SID Included: %u", util_is_bit_set(*bytes, 0));
+	print_attr(level + 1, "SK Auth without PFS supported: %u",
+				util_is_bit_set(*bytes, 1));
+	print_attr(level + 1, "SK Auth with PFS supported: %u",
+				util_is_bit_set(*bytes, 2));
+	print_attr(level + 1, "PK Auth supported: %u", util_is_bit_set(*bytes, 3));
+
+	bytes++;
+
+	print_hexdump(level + 1, bytes, size - 2);
+}
+
+static void print_fils_key_confirmation(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	print_attr(level, "FILS Key Confirmation (KeyAuth): len %u", size);
+}
+
+static void print_fils_session(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	print_attr(level, "FILS Session: len %u", size);
+}
+
 static struct attr_entry ie_entry[] = {
 	{ IE_TYPE_SSID,				"SSID",
 		ATTR_CUSTOM,	{ .function = print_ie_ssid } },
@@ -1456,6 +1502,12 @@ static struct attr_entry ie_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_ie_rm_enabled_caps } },
 	{ IE_TYPE_OWE_DH_PARAM,			"OWE Diffie-Hellman Parameter",
 		ATTR_CUSTOM,	{ .function = print_ie_owe } },
+	{ IE_TYPE_FILS_INDICATION,		"FILS Indication",
+		ATTR_CUSTOM,	{ .function = print_fils_indication } },
+	{ IE_TYPE_FILS_KEY_CONFIRMATION,	"FILS Key Confirmation",
+		ATTR_CUSTOM,	{ .function = print_fils_key_confirmation } },
+	{ IE_TYPE_FILS_SESSION,			"FILS Session",
+		ATTR_CUSTOM,	{ .function = print_fils_session } },
 	{ },
 };
 
@@ -3525,8 +3577,8 @@ static const struct attr_entry attr_table[] = {
 			"User Regulatroy Hint Type", ATTR_U32 },
 	{ NL80211_ATTR_CONN_FAILED_REASON,
 			"Connection Failed Reason" },
-	{ NL80211_ATTR_SAE_DATA,
-			"SAE Data" },
+	{ NL80211_ATTR_AUTH_DATA,
+			"Auth Data" },
 	{ NL80211_ATTR_VHT_CAPABILITY,
 			"VHT Capability" },
 	{ NL80211_ATTR_SCAN_FLAGS,
@@ -3628,6 +3680,10 @@ static const struct attr_entry attr_table[] = {
 			"CSA C Offsets TX" },
 	{ NL80211_ATTR_MAX_CSA_COUNTERS,
 			"Max CSA Counters" },
+	{ NL80211_ATTR_FILS_KEK,
+			"FILS KEK" },
+	{ NL80211_ATTR_FILS_NONCES,
+			"FILS Nonces" },
 	{ }
 };
 
