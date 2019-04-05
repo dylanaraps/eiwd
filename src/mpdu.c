@@ -92,52 +92,23 @@ static bool skip_resource_req_resp(struct ie_tlv_iter *iter)
 }
 
 static bool validate_mgmt_ies(const uint8_t *ies, size_t ies_len,
-				const enum ie_type tag_order[], int tag_count,
-				bool response)
+				const enum ie_type tag_order[], int tag_count)
 {
 	struct ie_tlv_iter iter;
-	int last_idx = -1;
 	enum ie_type tag;
 
 	ie_tlv_iter_init(&iter, ies, ies_len);
 
 	while (ie_tlv_iter_next(&iter)) {
-		int new_idx, i;
-
+		int i = 0;
 		tag = ie_tlv_iter_get_tag(&iter);
 
-		/*
-		 * Only some element IDs including the final Vendor Specific
-		 * element are allowed to repeat.
-		 */
-		if (last_idx == -1 || (tag != IE_TYPE_VENDOR_SPECIFIC &&
-				tag != IE_TYPE_RIC_DATA &&
-				tag != IE_TYPE_TRANSMIT_POWER_ENVELOPE &&
-				tag != IE_TYPE_MCCAOP_ADVERTISEMENT &&
-				tag != IE_TYPE_EMERGENCY_ALERT_IDENTIFIER &&
-				tag != IE_TYPE_MULTIPLE_BSSID &&
-				tag != IE_TYPE_NEIGHBOR_REPORT &&
-				tag != IE_TYPE_QUIET_CHANNEL))
-			last_idx++;
-
-		if (tag == IE_TYPE_RIC_DATA &&
-				!skip_resource_req_resp(&iter))
-			return false;
-
-		new_idx = last_idx;
-		while (new_idx < tag_count && tag != tag_order[new_idx])
-			new_idx++;
-
-		if (new_idx < tag_count) {
-			last_idx = new_idx;
-			continue;
-		}
+		/* Check that the tag is part of the valid set */
+		while (i < tag_count && tag_order[i] != tag)
+			i += 1;
 
 		/*
-		 * Tag not found in the remaining part of the array, check
-		 * if it is anywhere else in the array and only then report
-		 * error since we have to ignore unknown tags.  802.11-2016
-		 * section 9.3.3.2:
+		 * 802.11-2016 section 9.3.3.2:
 		 * "All fields and elements are mandatory unless stated
 		 * otherwise and appear in the specified, relative order.
 		 * STAs that encounter an element ID they do not recognize
@@ -146,36 +117,32 @@ static bool validate_mgmt_ies(const uint8_t *ies, size_t ies_len,
 		 * management frame body (if any) for additional elements
 		 * with recognizable element IDs."
 		 */
-		for (i = 0; i < last_idx; i++)
-			if (tag == tag_order[i]) {
-				if (response)
-					goto check_request_response;
+		if (i == tag_count)
+			continue;
 
-				/* Tag is out of order, but ignore this */
+		/* Tag found, make sure no duplicates present unless allowed */
+		if (tag != IE_TYPE_VENDOR_SPECIFIC &&
+				tag != IE_TYPE_RIC_DATA &&
+				tag != IE_TYPE_TRANSMIT_POWER_ENVELOPE &&
+				tag != IE_TYPE_MCCAOP_ADVERTISEMENT &&
+				tag != IE_TYPE_EMERGENCY_ALERT_IDENTIFIER &&
+				tag != IE_TYPE_MULTIPLE_BSSID &&
+				tag != IE_TYPE_NEIGHBOR_REPORT &&
+				tag != IE_TYPE_QUIET_CHANNEL) {
+			struct ie_tlv_iter clone;
+
+			memcpy(&clone, &iter, sizeof(clone));
+
+			while (ie_tlv_iter_next(&clone)) {
+				if (ie_tlv_iter_get_tag(&clone) != tag)
+					continue;
+
+				return false;
 			}
-	}
+		}
 
-	return true;
-
-check_request_response:
-	/*
-	 * If this is a response to a frame that could have contained a
-	 * Request or an Extended Request element, then, after all of the
-	 * "Elements that would have been included even in the absence of
-	 * the Request element or Extended Request element" (802.11-2016
-	 * section 11.1.4.3.5) basically any Element ID may appear with the
-	 * only requirement being an ascending order of the numerical values
-	 * of the IDs.
-	 */
-	tag = ie_tlv_iter_get_tag(&iter);
-
-	while (ie_tlv_iter_next(&iter)) {
-		enum ie_type next_tag = ie_tlv_iter_get_tag(&iter);
-
-		if (next_tag < tag)
+		if (tag == IE_TYPE_RIC_DATA && !skip_resource_req_resp(&iter))
 			return false;
-
-		tag = next_tag;
 	}
 
 	return true;
@@ -213,7 +180,7 @@ static bool validate_association_request_mmpdu(const struct mmpdu_header *mpdu,
 	*offset += sizeof(struct mmpdu_association_request);
 
 	return validate_mgmt_ies(body->ies, len - *offset, ie_order,
-					L_ARRAY_SIZE(ie_order), false);
+					L_ARRAY_SIZE(ie_order));
 }
 
 /* 802.11-2016 section 9.3.3.7 */
@@ -250,7 +217,7 @@ static bool validate_association_response_mmpdu(const struct mmpdu_header *mpdu,
 	*offset += sizeof(struct mmpdu_association_response);
 
 	return validate_mgmt_ies(body->ies, len - *offset, ie_order,
-					L_ARRAY_SIZE(ie_order), true);
+					L_ARRAY_SIZE(ie_order));
 }
 
 /* 802.11-2016 section 9.3.3.8 */
@@ -290,7 +257,7 @@ static bool validate_reassociation_request_mmpdu(
 	*offset += sizeof(struct mmpdu_reassociation_request);
 
 	return validate_mgmt_ies(body->ies, len - *offset, ie_order,
-					L_ARRAY_SIZE(ie_order), false);
+					L_ARRAY_SIZE(ie_order));
 }
 
 /* 802.11-2016 section 9.3.3.9 */
@@ -332,7 +299,7 @@ static bool validate_reassociation_response_mmpdu(
 	*offset += sizeof(struct mmpdu_reassociation_response);
 
 	return validate_mgmt_ies(body->ies, len - *offset, ie_order,
-					L_ARRAY_SIZE(ie_order), true);
+					L_ARRAY_SIZE(ie_order));
 }
 
 /* 802.11-2016 section 9.3.3.10 */
@@ -369,91 +336,28 @@ static bool validate_probe_request_mmpdu(const struct mmpdu_header *mpdu,
 	*offset += sizeof(struct mmpdu_probe_request);
 
 	return validate_mgmt_ies(body->ies, len - *offset, ie_order,
-					L_ARRAY_SIZE(ie_order), false);
+					L_ARRAY_SIZE(ie_order));
 }
 
 /* 802.11-2016 section 9.3.3.11 */
 static bool validate_probe_response_mmpdu(const struct mmpdu_header *mpdu,
 						int len, int *offset)
 {
-	const struct mmpdu_probe_response *body = (const void *) mpdu + *offset;
-	static const enum ie_type ie_order[] = {
-		IE_TYPE_SSID,
-		IE_TYPE_SUPPORTED_RATES,
-		IE_TYPE_DSSS_PARAMETER_SET,
-		IE_TYPE_CF_PARAMETER_SET,
-		IE_TYPE_IBSS_PARAMETER_SET,
-		IE_TYPE_COUNTRY,
-		IE_TYPE_POWER_CONSTRAINT,
-		IE_TYPE_CHANNEL_SWITCH_ANNOUNCEMENT,
-		IE_TYPE_QUIET,
-		IE_TYPE_IBSS_DFS,
-		IE_TYPE_TPC_REPORT,
-		IE_TYPE_ERP,
-		IE_TYPE_EXTENDED_SUPPORTED_RATES,
-		IE_TYPE_RSN,
-		IE_TYPE_BSS_LOAD,
-		IE_TYPE_EDCA_PARAMETER_SET,
-		IE_TYPE_MEASUREMENT_PILOT_TRANSMISSION,
-		IE_TYPE_MULTIPLE_BSSID,
-		IE_TYPE_RM_ENABLED_CAPABILITIES,
-		IE_TYPE_AP_CHANNEL_REPORT,
-		IE_TYPE_BSS_AVERAGE_ACCESS_DELAY,
-		IE_TYPE_ANTENNA,
-		IE_TYPE_BSS_AVAILABLE_ADMISSION_CAPACITY,
-		IE_TYPE_BSS_AC_ACCESS_DELAY,
-		IE_TYPE_MOBILITY_DOMAIN,
-		IE_TYPE_DSE_REGISTERED_LOCATION,
-		IE_TYPE_EXTENDED_CHANNEL_SWITCH_ANNOUNCEMENT,
-		IE_TYPE_SUPPORTED_OPERATING_CLASSES,
-		IE_TYPE_HT_CAPABILITIES,
-		IE_TYPE_HT_OPERATION,
-		IE_TYPE_BSS_COEXISTENCE,
-		IE_TYPE_OVERLAPPING_BSS_SCAN_PARAMETERS,
-		IE_TYPE_EXTENDED_CAPABILITIES,
-		IE_TYPE_QOS_TRAFFIC_CAPABILITY,
-		IE_TYPE_CHANNEL_USAGE,
-		IE_TYPE_TIME_ADVERTISEMENT,
-		IE_TYPE_TIME_ZONE,
-		IE_TYPE_INTERWORKING,
-		IE_TYPE_ADVERTISEMENT_PROTOCOL,
-		IE_TYPE_ROAMING_CONSORTIUM,
-		IE_TYPE_EMERGENCY_ALERT_IDENTIFIER,
-		IE_TYPE_MESH_ID,
-		IE_TYPE_MESH_CONFIGURATION,
-		IE_TYPE_MESH_AWAKE_WINDOW,
-		IE_TYPE_BEACON_TIMING,
-		IE_TYPE_MCCAOP_ADVERTISEMENT_OVERVIEW,
-		IE_TYPE_MCCAOP_ADVERTISEMENT,
-		IE_TYPE_MESH_CHANNEL_SWITCH_PARAMETERS,
-		IE_TYPE_QMF_POLICY,
-		IE_TYPE_QLOAD_REPORT,
-		IE_TYPE_MULTIBAND,
-		IE_TYPE_DMG_CAPABILITIES,
-		IE_TYPE_DMG_OPERATION,
-		IE_TYPE_MULTIPLE_MAC_SUBLAYERS,
-		IE_TYPE_ANTENNA_SECTOR_ID_PATTERN,
-		IE_TYPE_VHT_CAPABILITIES,
-		IE_TYPE_VHT_OPERATION,
-		IE_TYPE_TRANSMIT_POWER_ENVELOPE,
-		IE_TYPE_CHANNEL_SWITCH_WRAPPER,
-		IE_TYPE_EXTENDED_BSS_LOAD,
-		IE_TYPE_QUIET_CHANNEL,
-		IE_TYPE_OPERATING_MODE_NOTIFICATION,
-		IE_TYPE_REDUCED_NEIGHBOR_REPORT,
-		IE_TYPE_TVHT_OPERATION,
-		IE_TYPE_ESTIMATED_SERVICE_PARAMETERS,
-		IE_TYPE_RELAY_CAPABILITIES,
-		IE_TYPE_VENDOR_SPECIFIC,
-	};
+	/*
+	 * If this is a response to a frame that could have contained a
+	 * Request or an Extended Request element, then, after all of the
+	 * "Elements that would have been included even in the absence of
+	 * the Request element or Extended Request element" (802.11-2016
+	 * section 11.1.4.3.5) basically any Element ID may appear with the
+	 * only requirement being an ascending order of the numerical values
+	 * of the IDs.
+	 *
+	 * Given the above, and the fact that nobody on the planet seems
+	 * to order IEs properly inside the Management frames, we simply skip
+	 * any checking here and return true.
+	 */
 
-	if (len < *offset + (int) sizeof(struct mmpdu_probe_response))
-		return false;
-
-	*offset += sizeof(struct mmpdu_probe_response);
-
-	return validate_mgmt_ies(body->ies, len - *offset, ie_order,
-					L_ARRAY_SIZE(ie_order), true);
+	return true;
 }
 
 /* 802.11-2016 section 9.3.3.16 */
@@ -476,7 +380,7 @@ static bool validate_timing_advertisement_mmpdu(const struct mmpdu_header *mpdu,
 	*offset += sizeof(struct mmpdu_timing_advertisement);
 
 	return validate_mgmt_ies(body->ies, len - *offset, ie_order,
-					L_ARRAY_SIZE(ie_order), false);
+					L_ARRAY_SIZE(ie_order));
 }
 
 /* 802.11-2016 section 9.3.3.3 */
@@ -558,7 +462,7 @@ static bool validate_beacon_mmpdu(const struct mmpdu_header *mpdu,
 	*offset += sizeof(struct mmpdu_beacon);
 
 	return validate_mgmt_ies(body->ies, len - *offset, ie_order,
-					L_ARRAY_SIZE(ie_order), false);
+					L_ARRAY_SIZE(ie_order));
 }
 
 static bool validate_atim_mmpdu(const struct mmpdu_header *mpdu,
@@ -611,8 +515,7 @@ static bool validate_authentication_mmpdu(const struct mmpdu_header *mpdu,
 	if (L_LE16_TO_CPU(L_LE16_TO_CPU(body->status)) != 0)
 		return validate_mgmt_ies(body->ies, len - *offset,
 						ie_order_error,
-						L_ARRAY_SIZE(ie_order_error),
-						false);
+						L_ARRAY_SIZE(ie_order_error));
 
 	switch (L_LE16_TO_CPU(body->algorithm)) {
 	case MMPDU_AUTH_ALGO_OPEN_SYSTEM:
@@ -626,20 +529,17 @@ static bool validate_authentication_mmpdu(const struct mmpdu_header *mpdu,
 
 		return validate_mgmt_ies(body->ies, len - *offset,
 					ie_order_shared_key,
-					L_ARRAY_SIZE(ie_order_shared_key),
-					false);
+					L_ARRAY_SIZE(ie_order_shared_key));
 	case MMPDU_AUTH_ALGO_FT:
 		return validate_mgmt_ies(body->ies, len - *offset, ie_order_ft,
-						L_ARRAY_SIZE(ie_order_ft),
-						false);
+						L_ARRAY_SIZE(ie_order_ft));
 	case MMPDU_AUTH_ALGO_SAE:
 		return *offset <= len;
 	case MMPDU_AUTH_ALGO_FILS_SK:
 	case MMPDU_AUTH_ALGO_FILS_SK_PFS:
 		return validate_mgmt_ies(body->ies, len - *offset,
 						ie_order_fils,
-						L_ARRAY_SIZE(ie_order_fils),
-						false);
+						L_ARRAY_SIZE(ie_order_fils));
 	default:
 		return false;
 	}
