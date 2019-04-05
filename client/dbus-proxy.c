@@ -742,8 +742,6 @@ static void dbus_disconnect_callback(void *user_data)
 	if (!command_is_interactive_mode())
 		return;
 
-	display("D-Bus disconnected, quitting...\n");
-
 	l_main_quit();
 }
 
