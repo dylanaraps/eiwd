@@ -67,6 +67,7 @@ bool security_from_str(const char *str, enum security *security)
 #define AKM_IS_PSK(akm)							\
 (									\
 	akm & (IE_RSN_AKM_SUITE_PSK |					\
+		IE_RSN_AKM_SUITE_PSK_SHA256 |				\
 		IE_RSN_AKM_SUITE_FT_USING_PSK |				\
 		IE_RSN_AKM_SUITE_FT_USING_PSK |				\
 		IE_RSN_AKM_SUITE_SAE_SHA256 |				\
