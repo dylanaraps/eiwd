@@ -161,6 +161,7 @@ bool util_is_broadcast_address(const uint8_t *addr)
 	return !memcmp(addr, bcast_addr, 6);
 }
 
+/* This function assumes that identity is not bigger than 253 bytes */
 const char *util_get_domain(const char *identity)
 {
 	static char domain[256];
@@ -184,6 +185,7 @@ const char *util_get_domain(const char *identity)
 	return identity;
 }
 
+/* This function assumes that identity is not bigger than 253 bytes */
 const char *util_get_username(const char *identity)
 {
 	static char username[256];
