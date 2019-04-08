@@ -110,14 +110,22 @@ bool eap_reset(struct eap_state *eap)
 	return true;
 }
 
-void eap_free(struct eap_state *eap)
+static void eap_free_common(struct eap_state *eap)
 {
 	if (eap->method_state && eap->method->free)
 		eap->method->free(eap);
 
-	if (eap->identity)
-		l_free(eap->identity);
+	eap->method = NULL;
 
+	if (eap->identity) {
+		l_free(eap->identity);
+		eap->identity = NULL;
+	}
+}
+
+void eap_free(struct eap_state *eap)
+{
+	eap_free_common(eap);
 	l_timeout_remove(eap->complete_timeout);
 
 	l_free(eap);
@@ -562,10 +570,7 @@ bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
 	return true;
 
 err:
-	if (eap->method_state && eap->method->free)
-		eap->method->free(eap);
-
-	eap->method = NULL;
+	eap_free_common(eap);
 
 	return false;
 }
