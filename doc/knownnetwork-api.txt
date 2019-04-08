@@ -26,7 +26,7 @@ Properties	string Name [readonly]
 			True if this is a hidden network.  The existence of
 			an object with this property set to True -- either
 			preprovisioned or created after a successful
-			net.connman.iwd.Device.ConnectHiddenNetwork() --
+			net.connman.iwd.Station.ConnectHiddenNetwork() --
 			enables IWD to scan for and show this network in
 			the scan results.
 
