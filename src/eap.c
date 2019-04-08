@@ -562,7 +562,7 @@ bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
 	 * ...
 	 * RADIUS is unable to support NAI lengths beyond 253 octets
 	 */
-	if (strlen(eap->identity) > 253) {
+	if (eap->identity && strlen(eap->identity) > 253) {
 		l_error("Identity is too long");
 		goto err;
 	}
