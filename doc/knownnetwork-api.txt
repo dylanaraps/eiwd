@@ -37,3 +37,10 @@ Properties	string Name [readonly]
 			ISO 8601-formatted string.  If the network is known
 			but has never been successfully connected to,
 			this property is not visible.
+
+		boolean Autoconnect [readwrite]
+
+			Setting 'Autoconnect' to False prevents this network
+			from being considered as a candidate for the automatic
+			connection when its BSSIDs are observed in the scan
+			results. The default value is True.
