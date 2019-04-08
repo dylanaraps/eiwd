@@ -312,7 +312,7 @@ unit_tests = unit/test-cmac-aes \
 		unit/test-hmac-md5 unit/test-hmac-sha1 unit/test-hmac-sha256 \
 		unit/test-prf-sha1 unit/test-kdf-sha256 \
 		unit/test-crypto unit/test-eapol unit/test-mpdu \
-		unit/test-ie unit/test-ssid-to-utf8 unit/test-ssid-security \
+		unit/test-ie unit/test-util unit/test-ssid-security \
 		unit/test-arc4 unit/test-wsc unit/test-eap-mschapv2 \
 		unit/test-eap-sim unit/test-sae
 
@@ -399,9 +399,9 @@ unit_test_eapol_SOURCES = unit/test-eapol.c \
 unit_test_eapol_LDADD = $(ell_ldadd)
 unit_test_eapol_DEPENDENCIES = ell/unit/test_data
 
-unit_test_ssid_to_utf8_SOURCES = src/util.h src/util.c \
-				unit/test-ssid-to-utf8.c
-unit_test_ssid_to_utf8_LDADD = $(ell_ldadd)
+unit_test_util_SOURCES = src/util.h src/util.c \
+				unit/test-util.c
+unit_test_util_LDADD = $(ell_ldadd)
 
 unit_test_ssid_security_SOURCES = unit/test-ssid-security.c src/ie.h src/ie.c \
 				src/common.h src/common.c

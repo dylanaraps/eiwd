@@ -77,11 +77,51 @@ static void ssid_to_utf8(const void *data)
 
 }
 
+static const char ms_id[] = "domain\\user";
+static const char id[] = "user@domain";
+static const char no_separator[] = "username";
+
+static void get_domain_test(const void *data)
+{
+	const char *test;
+
+	test = util_get_domain(ms_id);
+
+	assert(strcmp(test, "domain") == 0);
+
+	test = util_get_domain(id);
+
+	assert(strcmp(test, "domain") == 0);
+
+	test = util_get_domain(no_separator);
+
+	assert(strcmp(test, "username") == 0);
+}
+
+static void get_username_test(const void *data)
+{
+	const char *test;
+
+	test = util_get_username(ms_id);
+
+	assert(strcmp(test, "user") == 0);
+
+	test = util_get_username(id);
+
+	assert(strcmp(test, "user") == 0);
+
+	test = util_get_username(no_separator);
+
+	assert(strcmp(test, "username") == 0);
+}
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
 
 	l_test_add("/util/ssid_to_utf8/", ssid_to_utf8, ssid_samples);
+	l_test_add("/util/get_domain/", get_domain_test, NULL);
+	l_test_add("/util/get_username/", get_username_test, NULL);
 
 	return l_test_run();
 }
