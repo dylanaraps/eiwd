@@ -160,3 +160,49 @@ bool util_is_broadcast_address(const uint8_t *addr)
 
 	return !memcmp(addr, bcast_addr, 6);
 }
+
+const char *util_get_domain(const char *identity)
+{
+	static char domain[256];
+	const char *c;
+
+	memset(domain, 0, sizeof(domain));
+
+	for (c = identity; *c; c++) {
+		switch (*c) {
+		case '\\':
+			strncpy(domain, identity, c - identity);
+			return domain;
+		case '@':
+			strcpy(domain, c + 1);
+			return domain;
+		default:
+			continue;
+		}
+	}
+
+	return identity;
+}
+
+const char *util_get_username(const char *identity)
+{
+	static char username[256];
+	const char *c;
+
+	memset(username, 0, sizeof(username));
+
+	for (c = identity; *c; c++) {
+		switch (*c) {
+		case '\\':
+			strcpy(username, c + 1);
+			return username;
+		case '@':
+			strncpy(username, identity, c - identity);
+			return username;
+		default:
+			continue;
+		}
+	}
+
+	return identity;
+}

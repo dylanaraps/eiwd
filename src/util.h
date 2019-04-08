@@ -39,6 +39,9 @@ bool util_string_to_address(const char *str, uint8_t *addr);
 bool util_is_group_address(const uint8_t *addr);
 bool util_is_broadcast_address(const uint8_t *addr);
 
+const char *util_get_domain(const char *identity);
+const char *util_get_username(const char *identity);
+
 static inline uint8_t util_bit_field(const uint8_t oct, int start, int num)
 {
 	unsigned char mask = (1 << num) - 1;
