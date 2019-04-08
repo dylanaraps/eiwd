@@ -546,6 +546,19 @@ bool eap_load_settings(struct eap_state *eap, struct l_settings *settings,
 		eap->identity = l_strdup(eap->method->get_identity(eap));
 	}
 
+	/*
+	 * RFC 4282 Section 2.2 - NAI Length Considerations
+	 *
+	 * Devices handling NAIs MUST support an NAI length of at least 72
+	 * octets. Support for an NAI length of 253 octets is RECOMMENDED.
+	 * ...
+	 * RADIUS is unable to support NAI lengths beyond 253 octets
+	 */
+	if (strlen(eap->identity) > 253) {
+		l_error("Identity is too long");
+		goto err;
+	}
+
 	return true;
 
 err:
