@@ -28,6 +28,7 @@
 
 #include "src/missing.h"
 #include "src/mschaputil.h"
+#include "src/util.h"
 
 /**
  * Internal function for generate_nt_response.
@@ -125,20 +126,6 @@ cleanup:
 	return r;
 }
 
-static const char *mschapv2_exlude_domain_name(const char *username)
-{
-	const char *c;
-
-	for (c = username; *c; c++) {
-		if (*c != '\\')
-			continue;
-
-		return c + 1;
-	}
-
-	return username;
-}
-
 /**
  * Internal function to generate the challenge used in nt_response
  * https://tools.ietf.org/html/rfc2759
@@ -161,7 +148,7 @@ static bool mschapv2_challenge_hash(const uint8_t *peer_challenge,
 	if (!check)
 		return false;
 
-	username = mschapv2_exlude_domain_name(username);
+	username = util_get_username(username);
 
 	l_checksum_update(check, peer_challenge, 16);
 	l_checksum_update(check, server_challenge, 16);
