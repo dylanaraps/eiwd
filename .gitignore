@@ -41,7 +41,7 @@ unit/test-ie
 unit/test-crypto
 unit/test-mpdu
 unit/test-eapol
-unit/test-ssid-to-utf8
+unit/test-util
 unit/test-ssid-security
 unit/test-wsc
 unit/test-sae
