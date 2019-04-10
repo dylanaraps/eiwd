@@ -78,6 +78,13 @@ static void update_name(void *data, struct l_dbus_message_iter *variant)
 	network->name = l_strdup(value);
 }
 
+static const char *get_name(const void *data)
+{
+	const struct known_network *network = data;
+
+	return network->name;
+}
+
 static void update_type(void *data, struct l_dbus_message_iter *variant)
 {
 	struct known_network *network = data;
@@ -132,7 +139,7 @@ static const char *get_hidden_tostr(const void *data)
 }
 
 static const struct proxy_interface_property known_network_properties[] = {
-	{ "Name",              "s", update_name           },
+	{ "Name",              "s", update_name, get_name },
 	{ "Type",              "s", update_type           },
 	{ "LastConnectedTime", "s", update_last_connected },
 	{ "Hidden",            "b", update_hidden, get_hidden_tostr },
@@ -267,6 +274,14 @@ static enum cmd_status cmd_forget(const char *entity, char **argv, int argc)
 	return CMD_STATUS_TRIGGERED;
 }
 
+static bool match_by_partial_name(const void *a, const void *b)
+{
+	const struct known_network *network = a;
+	const char *text = b;
+
+	return !strncmp(network->name, text, strlen(text));
+}
+
 static const struct command known_networks_commands[] = {
 	{ NULL, "list",   NULL, cmd_list,   "List known networks", true },
 	{ NULL, "forget", "<\"network name\"> [security]",
@@ -276,6 +291,7 @@ static const struct command known_networks_commands[] = {
 
 static char *family_arg_completion(const char *text, int state)
 {
+	static bool first_pass;
 	static size_t index;
 	static size_t len;
 	const char *cmd;
@@ -283,19 +299,31 @@ static char *family_arg_completion(const char *text, int state)
 	if (!state) {
 		index = 0;
 		len = strlen(text);
+		first_pass = true;
 	}
 
 	while ((cmd = known_networks_commands[index].cmd)) {
 		if (known_networks_commands[index++].entity)
 			continue;
 
-		if (strncmp(cmd, text, len))
-			continue;
-
-		return l_strdup(cmd);
+		if (!strncmp(cmd, text, len))
+			return l_strdup(cmd);
 	}
 
-	return NULL;
+	if (first_pass) {
+		state = 0;
+		first_pass = false;
+	}
+
+	return proxy_property_str_completion(&known_network_interface_type,
+						match_by_partial_name, "Name",
+						text, state, NULL);
+}
+
+static char *entity_arg_completion(const char *text, int state)
+{
+	return command_entity_arg_completion(text, state,
+						known_networks_commands);
 }
 
 static struct command_family known_networks_command_family = {
@@ -303,6 +331,7 @@ static struct command_family known_networks_command_family = {
 	.name = "known-networks",
 	.command_list = known_networks_commands,
 	.family_arg_completion = family_arg_completion,
+	.entity_arg_completion = entity_arg_completion,
 };
 
 static int known_networks_command_family_init(void)
