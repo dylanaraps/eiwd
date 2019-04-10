@@ -77,6 +77,7 @@ struct network_info {
 	int seen_count;			/* Ref count for network.info */
 	bool is_hidden:1;
 	bool is_known:1;
+	bool is_autoconnectable:1;
 };
 
 struct network_info *network_info_add_known(const char *ssid,

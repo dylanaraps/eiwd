@@ -103,6 +103,18 @@ static void known_network_register_dbus(struct network_info *network)
 						L_DBUS_INTERFACE_PROPERTIES);
 }
 
+static void known_network_set_autoconnect(struct network_info *network,
+							bool autoconnect)
+{
+	if (network->is_autoconnectable == autoconnect)
+		return;
+
+	network->is_autoconnectable = autoconnect;
+
+	l_dbus_property_changed(dbus_get_bus(), known_network_get_path(network),
+				IWD_KNOWN_NETWORK_INTERFACE, "Autoconnect");
+}
+
 static void known_network_update(struct network_info *orig_network,
 					const char *ssid,
 					enum security security,
@@ -111,6 +123,7 @@ static void known_network_update(struct network_info *orig_network,
 {
 	struct network_info *network;
 	bool is_hidden = false;
+	bool is_autoconnectable;
 
 	if (orig_network)
 		network = orig_network;
@@ -147,6 +160,13 @@ static void known_network_update(struct network_info *orig_network,
 
 	if (network->is_hidden)
 		num_known_hidden_networks++;
+
+	if (!l_settings_get_bool(settings, "Settings", "Autoconnect",
+							&is_autoconnectable))
+		/* If no entry, default to Autoconnectable=True */
+		is_autoconnectable = true;
+
+	known_network_set_autoconnect(network, is_autoconnectable);
 
 	if (orig_network)
 		return;

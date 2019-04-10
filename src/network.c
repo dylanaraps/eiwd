@@ -543,7 +543,6 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 	struct wiphy *wiphy = station_get_wiphy(station);
 	enum security security = network_get_security(network);
 	struct ie_rsn_info rsn;
-	bool is_autoconnectable;
 	bool is_rsn;
 	int ret;
 
@@ -566,13 +565,8 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 	if (!network_settings_load(network))
 		return -ENOKEY;
 
-	/* If no entry, default to Autoconnectable=True */
-	if (!l_settings_get_bool(network->settings, "Settings",
-					"Autoconnect", &is_autoconnectable))
-		is_autoconnectable = true;
-
 	ret = -EPERM;
-	if (!is_autoconnectable)
+	if (!network->info->is_autoconnectable)
 		goto close_settings;
 
 	if (!is_rsn)
