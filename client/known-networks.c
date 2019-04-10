@@ -234,17 +234,36 @@ static enum cmd_status cmd_list(const char *entity, char **args, int argc)
 	return CMD_STATUS_DONE;
 }
 
-static enum cmd_status cmd_forget(const char *entity, char **argv, int argc)
+static const struct proxy_interface *known_network_proxy_find_by_name(
+							const char *name)
 {
 	struct network_args network_args;
 	struct l_queue *match;
-	const struct proxy_interface *known_network_proxy;
+	const struct proxy_interface *proxy;
 
-	if (argc < 1)
-		return CMD_STATUS_INVALID_ARGS;
+	if (!name)
+		return NULL;
 
-	network_args.name = argv[0];
-	network_args.type = argc >= 2 ? argv[1] : NULL;
+	if (l_str_has_suffix(name, ".psk"))
+		network_args.type = "psk";
+	else if (l_str_has_suffix(name, ".8021x"))
+		network_args.type = "8021x";
+	else if (l_str_has_suffix(name, ".open"))
+		network_args.type = "open";
+	else
+		network_args.type = NULL;
+
+	if (network_args.type) {
+		char *dot = strrchr(name, '.');
+
+		if (!dot)
+			/* This shouldn't ever be the case */
+			return NULL;
+
+		*dot = '\0';
+	}
+
+	network_args.name = name;
 
 	match = proxy_interface_find_all(known_network_interface_type.interface,
 						known_network_match,
@@ -252,24 +271,40 @@ static enum cmd_status cmd_forget(const char *entity, char **argv, int argc)
 
 	if (!match) {
 		display("No network with specified parameters was found\n");
-		return CMD_STATUS_INVALID_VALUE;
+		return NULL;
 	}
 
 	if (l_queue_length(match) > 1) {
 		if (!network_args.type) {
 			display("Provided network name is ambiguous. "
-				"Please specify security type.\n");
+				"Specify network security type as follows:\n");
+			display("<\"network name" COLOR_BOLDGRAY ".security"
+							COLOR_OFF "\">\n");
+			display("\twhere '.security' is [.psk | .8021x | "
+								".open]\n");
 		}
 
 		l_queue_destroy(match, NULL);
-		return CMD_STATUS_INVALID_VALUE;
+		return NULL;
 	}
 
-	known_network_proxy = l_queue_pop_head(match);
+	proxy = l_queue_pop_head(match);
 	l_queue_destroy(match, NULL);
 
-	proxy_interface_method_call(known_network_proxy, "Forget", "",
-					check_errors_method_callback);
+	return proxy;
+}
+
+static enum cmd_status cmd_forget(const char *network_name, char **argv,
+								int argc)
+{
+	const struct proxy_interface *proxy =
+				known_network_proxy_find_by_name(network_name);
+
+	if (!proxy)
+		return CMD_STATUS_INVALID_ARGS;
+
+	proxy_interface_method_call(proxy, "Forget", "",
+						check_errors_method_callback);
 
 	return CMD_STATUS_TRIGGERED;
 }
@@ -284,8 +319,8 @@ static bool match_by_partial_name(const void *a, const void *b)
 
 static const struct command known_networks_commands[] = {
 	{ NULL, "list",   NULL, cmd_list,   "List known networks", true },
-	{ NULL, "forget", "<\"network name\"> [security]",
-				cmd_forget, "Forget known network" },
+	{ "<\"network name\">", "forget", NULL, cmd_forget,
+						"Forget known network" },
 	{ }
 };
 
