@@ -29,6 +29,7 @@
 #include "properties.h"
 
 const char *properties_on_off_opts[3] = { "on", "off", NULL };
+const char *properties_yes_no_opts[3] = { "yes", "no", NULL };
 
 bool properties_builder_append_on_off_variant(
 					struct l_dbus_message_builder *builder,
@@ -42,6 +43,25 @@ bool properties_builder_append_on_off_variant(
 	if (!strcmp(value_str, "on"))
 		value = true;
 	else if (!strcmp(value_str, "off"))
+		value = false;
+	else
+		return false;
+
+	return l_dbus_message_builder_append_basic(builder, 'b', &value);
+}
+
+bool properties_builder_append_yes_no_variant(
+					struct l_dbus_message_builder *builder,
+					const char *value_str)
+{
+	bool value;
+
+	if (!builder || !value_str)
+		return false;
+
+	if (!strcmp(value_str, "yes"))
+		value = true;
+	else if (!strcmp(value_str, "no"))
 		value = false;
 	else
 		return false;
