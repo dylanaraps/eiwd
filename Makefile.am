@@ -167,7 +167,8 @@ eap_sources = src/eap.c src/eap.h src/eap-private.h \
 				src/simauth.h src/simauth.c \
 				src/watchlist.h src/watchlist.c \
 				src/eap-tls-common.h src/eap-tls-common.c \
-				src/mschaputil.h src/mschaputil.c
+				src/mschaputil.h src/mschaputil.c \
+				src/erpcache.h src/erpcache.c
 
 if DAEMON
 libexec_PROGRAMS += src/iwd
