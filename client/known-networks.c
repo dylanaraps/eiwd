@@ -32,6 +32,7 @@
 #include "command.h"
 #include "dbus-proxy.h"
 #include "display.h"
+#include "properties.h"
 #include "network.h"
 
 struct known_network {
@@ -40,6 +41,7 @@ struct known_network {
 	char *type;
 	char *last_connected;
 	bool hidden;
+	bool autoconnect;
 };
 
 static const char *format_iso8601(const char *time_str, const char *format)
@@ -138,11 +140,35 @@ static const char *get_hidden_tostr(const void *data)
 	return network->hidden ? "yes" : "";
 }
 
+static void update_autoconnect(void *data, struct l_dbus_message_iter *variant)
+{
+	struct known_network *network = data;
+	bool value;
+
+	if (!l_dbus_message_iter_get_variant(variant, "b", &value)) {
+		network->autoconnect = false;
+
+		return;
+	}
+
+	network->autoconnect = value;
+}
+
+static const char *get_autoconnect_tostr(const void *data)
+{
+	const struct known_network *network = data;
+
+	return network->autoconnect ? "yes" : "no";
+}
+
 static const struct proxy_interface_property known_network_properties[] = {
 	{ "Name",              "s", update_name, get_name },
 	{ "Type",              "s", update_type           },
 	{ "LastConnectedTime", "s", update_last_connected },
 	{ "Hidden",            "b", update_hidden, get_hidden_tostr },
+	{ "Autoconnect",       "b", update_autoconnect, get_autoconnect_tostr,
+		true, properties_builder_append_yes_no_variant,
+		properties_yes_no_opts },
 	{ },
 };
 
@@ -162,7 +188,6 @@ static void known_network_destroy(void *data)
 
 	l_free(network);
 }
-
 
 static void known_network_display(const struct proxy_interface *proxy)
 {
