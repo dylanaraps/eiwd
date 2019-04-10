@@ -362,6 +362,36 @@ static enum cmd_status cmd_show(const char *network_name, char **argv, int argc)
 	return CMD_STATUS_DONE;
 }
 
+static void property_set_callback(struct l_dbus_message *message,
+								void *user_data)
+{
+	dbus_message_has_error(message);
+}
+
+static enum cmd_status cmd_set_property(const char *network_name,
+							char **argv, int argc)
+{
+	const struct proxy_interface *proxy =
+				known_network_proxy_find_by_name(network_name);
+
+	if (!proxy)
+		return CMD_STATUS_INVALID_VALUE;
+
+	if (argc != 2)
+		return CMD_STATUS_INVALID_ARGS;
+
+	if (!proxy_property_set(proxy, argv[0], argv[1],
+						property_set_callback))
+		return CMD_STATUS_INVALID_VALUE;
+
+	return CMD_STATUS_TRIGGERED;
+}
+
+static char *set_property_cmd_arg_completion(const char *text, int state)
+{
+	return proxy_property_completion(known_network_properties, text, state);
+}
+
 static bool match_by_partial_name(const void *a, const void *b)
 {
 	const struct known_network *network = a;
@@ -376,9 +406,11 @@ static const struct command known_networks_commands[] = {
 						"Forget known network" },
 	{ "<\"network name\">", "show", NULL, cmd_show, "Show known network",
 		true },
+	{ "<\"network name\">", "set-property", "<name> <value>",
+		cmd_set_property, "Set property", false,
+		set_property_cmd_arg_completion },
 	{ }
 };
-
 static char *family_arg_completion(const char *text, int state)
 {
 	static bool first_pass;
