@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2017  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2017-2019  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -163,6 +163,21 @@ static void known_network_destroy(void *data)
 	l_free(network);
 }
 
+
+static void known_network_display(const struct proxy_interface *proxy)
+{
+	const struct known_network *known_network =
+						proxy_interface_get_data(proxy);
+	char *caption = l_strdup_printf("%s: %s", "Known Network",
+							known_network->name);
+
+	proxy_properties_display(proxy, caption, MARGIN, 18, 50);
+
+	l_free(caption);
+
+	display_table_footer();
+}
+
 static void known_network_display_inline(const char *margin, const void *data)
 {
 	const struct known_network *network = data;
@@ -309,6 +324,19 @@ static enum cmd_status cmd_forget(const char *network_name, char **argv,
 	return CMD_STATUS_TRIGGERED;
 }
 
+static enum cmd_status cmd_show(const char *network_name, char **argv, int argc)
+{
+	const struct proxy_interface *proxy =
+				known_network_proxy_find_by_name(network_name);
+
+	if (!proxy)
+		return CMD_STATUS_INVALID_ARGS;
+
+	known_network_display(proxy);
+
+	return CMD_STATUS_DONE;
+}
+
 static bool match_by_partial_name(const void *a, const void *b)
 {
 	const struct known_network *network = a;
@@ -321,6 +349,8 @@ static const struct command known_networks_commands[] = {
 	{ NULL, "list",   NULL, cmd_list,   "List known networks", true },
 	{ "<\"network name\">", "forget", NULL, cmd_forget,
 						"Forget known network" },
+	{ "<\"network name\">", "show", NULL, cmd_show, "Show known network",
+		true },
 	{ }
 };
 
