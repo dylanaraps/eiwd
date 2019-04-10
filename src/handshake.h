@@ -108,6 +108,7 @@ struct handshake_state {
 	bool authenticator : 1;
 	bool wait_for_gtk : 1;
 	bool no_rekey : 1;
+	bool support_fils : 1;
 	uint8_t ssid[32];
 	size_t ssid_len;
 	char *passphrase;
