@@ -187,9 +187,9 @@ done:
 	return NULL;
 }
 
-static char *proxy_property_completion_value_options(
-				const struct property_value_options *options,
-				const char *text, int state)
+static char *proxy_property_completion_value_options(const char **options,
+							const char *text,
+							int state)
 {
 	static int index;
 	static int len;
@@ -200,7 +200,7 @@ static char *proxy_property_completion_value_options(
 		len = strlen(text);
 	}
 
-	while ((opt = options[index++].value_str)) {
+	while ((opt = options[index++])) {
 		if (strncmp(opt, text, len))
 			continue;
 

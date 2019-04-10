@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2018  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2018-2019  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -28,20 +28,23 @@
 
 #include "properties.h"
 
+const char *properties_on_off_opts[3] = { "on", "off", NULL };
+
 bool properties_builder_append_on_off_variant(
 					struct l_dbus_message_builder *builder,
 					const char *value_str)
 {
+	bool value;
+
 	if (!builder || !value_str)
 		return false;
 
 	if (!strcmp(value_str, "on"))
-		return l_dbus_message_builder_append_basic(builder, 'b',
-					&properties_on_off_opts[0].value);
+		value = true;
+	else if (!strcmp(value_str, "off"))
+		value = false;
+	else
+		return false;
 
-	if (!strcmp(value_str, "off"))
-		return l_dbus_message_builder_append_basic(builder, 'b',
-					&properties_on_off_opts[1].value);
-
-	return false;
+	return l_dbus_message_builder_append_basic(builder, 'b', &value);
 }

@@ -23,7 +23,6 @@
 #include <stdio.h>
 
 struct proxy_interface;
-struct property_value_options;
 
 #define IWD_ADAPTER_INTERFACE          "net.connman.iwd.Adapter"
 #define IWD_ACCESS_POINT_INTERFACE     "net.connman.iwd.AccessPoint"
@@ -44,7 +43,7 @@ struct proxy_interface_property {
 	const bool is_read_write;
 	bool (*append)(struct l_dbus_message_builder *builder,
 							const char *value_str);
-	const struct property_value_options *options;
+	const char **options;
 };
 
 struct proxy_interface_type_ops {

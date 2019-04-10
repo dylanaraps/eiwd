@@ -85,12 +85,7 @@ static void update_name(void *data, struct l_dbus_message_iter *variant)
 	device->name = l_strdup(value);
 }
 
-static const struct property_value_options device_mode_opts[] = {
-	{ "ad-hoc",  (void *) "ad-hoc" },
-	{ "ap",      (void *) "ap" },
-	{ "station", (void *) "station" },
-	{ }
-};
+static const char *device_mode_opts[] = { "ad-hoc", "ap", "station", NULL };
 
 static const char *get_mode(const void *data)
 {
