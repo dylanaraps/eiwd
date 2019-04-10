@@ -142,6 +142,11 @@ size_t eap_get_mtu(struct eap_state *eap)
 	return eap->mtu;
 }
 
+const char *eap_get_identity(struct eap_state *eap)
+{
+	return eap->identity;
+}
+
 /**
  * eap_send_response:
  * @eap: EAP state
