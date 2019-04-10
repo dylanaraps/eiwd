@@ -379,7 +379,9 @@ static void gsm_callback(const uint8_t *sres, const uint8_t *kc,
 		 * Result indication not required, we must accept success.
 		 */
 		eap_method_success(eap);
-		eap_set_key_material(eap, sim->msk, 32, NULL, 0, NULL, 0);
+		/* TODO: Derive Session-ID */
+		eap_set_key_material(eap, sim->msk, 32, NULL, 0, NULL, 0,
+					NULL, 0);
 
 		sim->state = EAP_SIM_STATE_SUCCESS;
 	}
@@ -532,7 +534,9 @@ static void handle_notification(struct eap_state *eap, const uint8_t *pkt,
 		 * Server sent successful result indication
 		 */
 		eap_method_success(eap);
-		eap_set_key_material(eap, sim->msk, 32, NULL, 0, NULL, 0);
+		/* TODO: Derive Session-ID */
+		eap_set_key_material(eap, sim->msk, 32, NULL, 0, NULL, 0,
+					NULL, 0);
 
 		/*
 		 * Build response packet

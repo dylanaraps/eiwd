@@ -183,6 +183,7 @@ static void eap_complete(enum eap_result result, void *user_data)
 static void eap_key_material(const uint8_t *msk_data, size_t msk_len,
 				const uint8_t *emsk_data, size_t emsk_len,
 				const uint8_t *iv, size_t iv_len,
+				const uint8_t *session_id, size_t session_len,
 				void *user_data)
 {
 	l_debug("EAP key material received");

@@ -541,7 +541,8 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 			scalar_s, clen);
 
 	kdf(mk, 32, (const char *) session_id, 33, msk_emsk, 128);
-	eap_set_key_material(eap, msk_emsk, 64, msk_emsk + 64, 64, NULL, 0);
+	eap_set_key_material(eap, msk_emsk, 64, msk_emsk + 64, 64, NULL, 0,
+				session_id, sizeof(session_id));
 
 	explicit_bzero(mk, sizeof(mk));
 	explicit_bzero(msk_emsk, sizeof(msk_emsk));

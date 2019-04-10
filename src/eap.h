@@ -58,6 +58,7 @@ typedef void (*eap_tx_packet_func_t)(const uint8_t *eap_data, size_t len,
 typedef void (*eap_key_material_func_t)(const uint8_t *msk_data, size_t msk_len,
 				const uint8_t *emsk_data, size_t emsk_len,
 				const uint8_t *iv, size_t iv_len,
+				const uint8_t *session_id, size_t session_len,
 				void *user_data);
 typedef void (*eap_complete_func_t)(enum eap_result result, void *user_data);
 typedef void (*eap_event_func_t)(unsigned int event, const void *event_data,

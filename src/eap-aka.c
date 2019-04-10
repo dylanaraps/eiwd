@@ -273,7 +273,8 @@ static void check_milenage_cb(const uint8_t *res, const uint8_t *ck,
 
 	if (!aka->protected) {
 		eap_method_success(eap);
-		eap_set_key_material(eap, aka->msk, 32, NULL, 0, NULL, 0);
+		eap_set_key_material(eap, aka->msk, 32, NULL, 0, NULL, 0,
+					NULL, 0);
 
 		aka->state = EAP_AKA_STATE_SUCCESS;
 	}
@@ -502,7 +503,8 @@ static void handle_notification(struct eap_state *eap, const uint8_t *pkt,
 		 * Server sent successful result indication
 		 */
 		eap_method_success(eap);
-		eap_set_key_material(eap, aka->msk, 32, NULL, 0, NULL, 0);
+		eap_set_key_material(eap, aka->msk, 32, NULL, 0, NULL, 0,
+					NULL, 0);
 
 		/*
 		 * Build response packet

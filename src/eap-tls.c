@@ -49,7 +49,9 @@ static bool eap_tls_tunnel_ready(struct eap_state *eap,
 	eap_tls_common_tunnel_prf_get_bytes(eap, false, "client EAP encryption",
 									iv, 64);
 
-	eap_set_key_material(eap, msk_emsk + 0, 64, msk_emsk + 64, 64, iv, 64);
+	/* TODO: Derive Session-ID */
+	eap_set_key_material(eap, msk_emsk + 0, 64, msk_emsk + 64, 64, iv, 64,
+				NULL, 0);
 	explicit_bzero(msk_emsk, sizeof(msk_emsk));
 	explicit_bzero(iv, sizeof(iv));
 

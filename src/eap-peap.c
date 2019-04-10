@@ -201,7 +201,7 @@ static bool eap_peap_tunnel_ready(struct eap_state *eap,
 	eap_tls_common_tunnel_prf_get_bytes(eap, true, "client EAP encryption",
 								msk_emsk, 128);
 
-	eap_set_key_material(eap, msk_emsk + 0, 64, NULL, 0, NULL, 0);
+	eap_set_key_material(eap, msk_emsk + 0, 64, NULL, 0, NULL, 0, NULL, 0);
 	explicit_bzero(msk_emsk, sizeof(msk_emsk));
 
 	eap_tls_common_send_empty_response(eap);

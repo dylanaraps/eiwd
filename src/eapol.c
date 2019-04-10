@@ -1948,6 +1948,7 @@ static void eapol_eap_complete_cb(enum eap_result result, void *user_data)
 static void eapol_eap_results_cb(const uint8_t *msk_data, size_t msk_len,
 				const uint8_t *emsk_data, size_t emsk_len,
 				const uint8_t *iv, size_t iv_len,
+				const uint8_t *session_id, size_t session_len,
 				void *user_data)
 {
 	struct eapol_sm *sm = user_data;
@@ -2372,6 +2373,7 @@ static void preauth_eap_complete_cb(enum eap_result result, void *user_data)
 static void preauth_eap_results_cb(const uint8_t *msk_data, size_t msk_len,
 				const uint8_t *emsk_data, size_t emsk_len,
 				const uint8_t *iv, size_t iv_len,
+				const uint8_t *session_id, size_t session_len,
 				void *user_data)
 {
 	struct preauth_sm *sm = user_data;

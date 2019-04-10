@@ -598,13 +598,15 @@ const char *eap_get_method_name(struct eap_state *eap)
 void eap_set_key_material(struct eap_state *eap,
 				const uint8_t *msk_data, size_t msk_len,
 				const uint8_t *emsk_data, size_t emsk_len,
-				const uint8_t *iv, size_t iv_len)
+				const uint8_t *iv, size_t iv_len,
+				const uint8_t *session_id, size_t session_len)
 {
 	if (!eap->set_key_material)
 		return;
 
 	eap->set_key_material(msk_data, msk_len, emsk_data, emsk_len,
-				iv, iv_len, eap->user_data);
+				iv, iv_len, session_id, session_len,
+				eap->user_data);
 }
 
 void eap_method_event(struct eap_state *eap, unsigned int id, const void *data)
