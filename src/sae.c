@@ -274,6 +274,8 @@ static bool sae_compute_pwe(struct sae_sm *sm, char *password,
 		sae_pwd_seed(addr1, addr2, base, base_len, counter, pwd_seed);
 
 		pwd_value = sae_pwd_value(sm->curve, pwd_seed);
+		if (!pwd_value)
+			continue;
 
 		if (sae_is_quadradic_residue(sm->curve, pwd_value, qr, qnr)) {
 			if (found == false) {
@@ -451,11 +453,18 @@ static void sae_process_commit(struct sae_sm *sm, const uint8_t *from,
 	}
 
 	sm->p_scalar = l_ecc_scalar_new(sm->curve, ptr, nbytes);
+	if (!sm->p_scalar) {
+		l_error("Server sent invalid P_Scalar during commit");
+		reason = MMPDU_REASON_CODE_UNSPECIFIED;
+		goto reject;
+	}
+
 	ptr += nbytes;
 
 	sm->p_element = l_ecc_point_from_data(sm->curve, L_ECC_POINT_TYPE_FULL,
 						ptr, nbytes * 2);
 	if (!sm->p_element) {
+		l_error("Server sent invalid P_Element during commit");
 		reason = MMPDU_REASON_CODE_UNSPECIFIED;
 		goto reject;
 	}
