@@ -48,3 +48,6 @@ void device_exit(void);
 
 bool station_init(void);
 void station_exit(void);
+
+bool manager_init(struct l_genl_family *in);
+void manager_exit(void);

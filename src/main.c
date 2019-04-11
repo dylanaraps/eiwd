@@ -161,12 +161,14 @@ static void nl80211_appeared(void *user_data)
 
 	ap_init(nl80211);
 	adhoc_init(nl80211);
+	manager_init(nl80211);
 }
 
 static void nl80211_vanished(void *user_data)
 {
 	l_debug("Lost nl80211 interface");
 
+	manager_exit();
 	ap_exit();
 	adhoc_exit();
 	scan_exit();
