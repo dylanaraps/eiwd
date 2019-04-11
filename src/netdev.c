@@ -5011,68 +5011,6 @@ bool netdev_destroy(struct netdev *netdev)
 	return true;
 }
 
-static void netdev_get_interface_callback(struct l_genl_msg *msg,
-								void *user_data)
-{
-	netdev_create_from_genl(msg);
-}
-
-static void netdev_config_notify(struct l_genl_msg *msg, void *user_data)
-{
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-	uint8_t cmd;
-	const uint32_t *wiphy_id = NULL;
-	const uint32_t *ifindex = NULL;
-	struct netdev *netdev;
-
-	cmd = l_genl_msg_get_command(msg);
-
-	if (cmd == NL80211_CMD_NEW_INTERFACE) {
-		netdev_create_from_genl(msg);
-		return;
-	}
-
-	if (cmd != NL80211_CMD_DEL_INTERFACE)
-		return;
-
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_WIPHY:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid wiphy attribute");
-				return;
-			}
-
-			wiphy_id = data;
-			break;
-
-		case NL80211_ATTR_IFINDEX:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid ifindex attribute");
-				return;
-			}
-
-			ifindex = data;
-			break;
-		}
-	}
-
-	if (!wiphy_id || !ifindex)
-		return;
-
-	netdev = l_queue_remove_if(netdev_list, netdev_match,
-						L_UINT_TO_PTR(*ifindex));
-	if (!netdev)
-		return;
-
-	netdev_free(netdev);
-}
-
 static void netdev_link_notify(uint16_t type, const void *data, uint32_t len,
 							void *user_data)
 {
@@ -5166,18 +5104,7 @@ bool netdev_init(const char *whitelist, const char *blacklist)
 
 void netdev_set_nl80211(struct l_genl_family *in)
 {
-	struct l_genl_msg *msg;
-
 	nl80211 = in;
-
-	if (!l_genl_family_register(nl80211, "config", netdev_config_notify,
-								NULL, NULL))
-		l_error("Registering for config notification failed");
-
-	msg = l_genl_msg_new(NL80211_CMD_GET_INTERFACE);
-	if (!l_genl_family_dump(nl80211, msg, netdev_get_interface_callback,
-								NULL, NULL))
-		l_error("Getting all interface information failed");
 
 	if (!l_genl_family_register(nl80211, "mlme", netdev_mlme_notify,
 								NULL, NULL))
