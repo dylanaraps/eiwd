@@ -48,6 +48,14 @@ struct wiphy_setup_state {
 	struct l_timeout *setup_timeout;
 	unsigned int pending_cmd_count;
 	bool aborted;
+
+	/*
+	 * Data we may need if the driver does not seem to support interface
+	 * manipulation and we fall back to using the driver-created default
+	 * interface.
+	 */
+	bool use_default;
+	struct l_genl_msg *default_if_msg;
 };
 
 static struct l_queue *pending_wiphys;
@@ -61,8 +69,27 @@ static void wiphy_setup_state_free(void *data)
 	if (state->setup_timeout)
 		l_timeout_remove(state->setup_timeout);
 
+	if (state->default_if_msg)
+		l_genl_msg_unref(state->default_if_msg);
+
 	L_WARN_ON(state->pending_cmd_count);
 	l_free(state);
+}
+
+static bool manager_use_default(struct wiphy_setup_state *state)
+{
+	l_debug("");
+
+	if (!state->default_if_msg) {
+		l_error("No default interface for wiphy %u",
+			(unsigned int) state->id);
+		wiphy_setup_state_free(state);
+		return false;
+	}
+
+	netdev_create_from_genl(state->default_if_msg);
+	wiphy_setup_state_free(state);
+	return true;
 }
 
 static void manager_new_interface_cb(struct l_genl_msg *msg, void *user_data)
@@ -105,6 +132,11 @@ static void manager_create_interfaces(struct wiphy_setup_state *state)
 
 	if (state->aborted) {
 		wiphy_setup_state_free(state);
+		return;
+	}
+
+	if (state->use_default) {
+		manager_use_default(state);
 		return;
 	}
 
@@ -158,9 +190,11 @@ static void manager_del_interface_cb(struct l_genl_msg *msg, void *user_data)
 	if (state->aborted)
 		return;
 
-	if (l_genl_msg_get_error(msg) < 0)
+	if (l_genl_msg_get_error(msg) < 0) {
 		l_error("DEL_INTERFACE failed: %s",
 			strerror(-l_genl_msg_get_error(msg)));
+		state->use_default = true;
+	}
 }
 
 static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
@@ -236,6 +270,21 @@ static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 	if (!ifindex || !wdev_idx || !iftype || !ifname)
 		return;
 
+	/*
+	 * If this interface is usable as our default netdev in case the
+	 * driver does not support interface manipulation, save the message
+	 * just in case.
+	 */
+	if ((*iftype == NL80211_IFTYPE_ADHOC ||
+				*iftype == NL80211_IFTYPE_STATION ||
+				*iftype == NL80211_IFTYPE_AP) &&
+			ifindex && *ifindex != 0 &&
+			!state->default_if_msg)
+		state->default_if_msg = l_genl_msg_ref(msg);
+
+	if (state->use_default)
+		return;
+
 	del_msg = l_genl_msg_new(NL80211_CMD_DEL_INTERFACE);
 	l_genl_msg_append_attr(del_msg, NL80211_ATTR_IFINDEX, 4, ifindex);
 	l_genl_msg_append_attr(del_msg, NL80211_ATTR_WDEV, 8, wdev_idx);
@@ -246,6 +295,7 @@ static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 
 	if (!cmd_id) {
 		l_error("Sending DEL_INTERFACE for %s failed", ifname);
+		state->use_default = true;
 		return;
 	}
 
