@@ -300,7 +300,7 @@ static bool scan_mac_address_randomization_is_disabled(void)
 }
 
 static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
-					bool ignore_flush_flag,
+					bool ignore_flush_flag, bool is_passive,
 					const struct scan_parameters *params)
 {
 	struct l_genl_msg *msg;
@@ -321,7 +321,7 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 	if (params->flush && !ignore_flush_flag)
 		flags |= NL80211_SCAN_FLAG_FLUSH;
 
-	if (params->randomize_mac_addr_hint &&
+	if (!is_passive && params->randomize_mac_addr_hint &&
 			wiphy_can_randomize_mac_addr(sc->wiphy) &&
 				!scan_mac_address_randomization_is_disabled())
 		/*
@@ -368,7 +368,8 @@ static bool scan_cmds_add_hidden(const struct network_info *network,
 		 * The 'flush' flag is ignored, this allows to get the results
 		 * of all scans in the batch after the last scan is finished.
 		 */
-		*data->cmd = scan_build_cmd(data->sc, true, data->params);
+		*data->cmd = scan_build_cmd(data->sc, true, false,
+								data->params);
 		l_genl_msg_enter_nested(*data->cmd, NL80211_ATTR_SCAN_SSIDS);
 	}
 
@@ -388,7 +389,7 @@ static void scan_cmds_add(struct l_queue *cmds, struct scan_context *sc,
 		wiphy_get_max_num_ssids_per_scan(sc->wiphy),
 	};
 
-	cmd = scan_build_cmd(sc, false, params);
+	cmd = scan_build_cmd(sc, false, passive, params);
 
 	if (passive) {
 		/* passive scan */
