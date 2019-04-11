@@ -41,6 +41,8 @@
 #include "src/common.h"
 
 static struct l_genl_family *nl80211 = NULL;
+static char **whitelist_filter;
+static char **blacklist_filter;
 
 struct wiphy_setup_state {
 	uint32_t id;
@@ -208,6 +210,9 @@ static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 	const char *ifname = NULL;
 	struct l_genl_msg *del_msg;
 	unsigned cmd_id;
+	char *pattern;
+	unsigned int i;
+	bool whitelisted = false, blacklisted = false;
 
 	l_debug("");
 
@@ -270,6 +275,26 @@ static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 	if (!ifindex || !wdev_idx || !iftype || !ifname)
 		return;
 
+	if (whitelist_filter) {
+		for (i = 0; (pattern = whitelist_filter[i]); i++) {
+			if (fnmatch(pattern, ifname, 0) != 0)
+				continue;
+
+			whitelisted = true;
+			break;
+		}
+	}
+
+	if (blacklist_filter) {
+		for (i = 0; (pattern = blacklist_filter[i]); i++) {
+			if (fnmatch(pattern, ifname, 0) != 0)
+				continue;
+
+			blacklisted = true;
+			break;
+		}
+	}
+
 	/*
 	 * If this interface is usable as our default netdev in case the
 	 * driver does not support interface manipulation, save the message
@@ -279,7 +304,9 @@ static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 				*iftype == NL80211_IFTYPE_STATION ||
 				*iftype == NL80211_IFTYPE_AP) &&
 			ifindex && *ifindex != 0 &&
-			!state->default_if_msg)
+			!state->default_if_msg &&
+			(!whitelist_filter || whitelisted) &&
+			!blacklisted)
 		state->default_if_msg = l_genl_msg_ref(msg);
 
 	if (state->use_default)
@@ -342,6 +369,16 @@ static void manager_wiphy_dump_interfaces(struct wiphy_setup_state *state)
 
 	l_debug("");
 	state->pending_cmd_count++;
+
+	/*
+	 * If whitelist/blacklist were given only try to use existing
+	 * interfaces same as when the driver does not support NEW_INTERFACE
+	 * or DEL_INTERFACE, otherwise the interface names will become
+	 * meaningless after we've created our own interface(s).  Optimally
+	 * phy name white/blacklists should be used.
+	 */
+	if (whitelist_filter || blacklist_filter)
+		state->use_default = true;
 }
 
 static void manager_wiphy_setup_timeout(struct l_timeout *timeout,
@@ -529,7 +566,8 @@ static void manager_wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 	manager_new_wiphy_event(msg);
 }
 
-bool manager_init(struct l_genl_family *in)
+bool manager_init(struct l_genl_family *in,
+			const char *if_whitelist, const char *if_blacklist)
 {
 	nl80211 = in;
 
@@ -543,6 +581,12 @@ bool manager_init(struct l_genl_family *in)
 				NULL, NULL))
 		l_error("Initial wiphy information dump failed");
 
+	if (if_whitelist)
+		whitelist_filter = l_strsplit(if_whitelist, ',');
+
+	if (if_blacklist)
+		blacklist_filter = l_strsplit(if_blacklist, ',');
+
 	pending_wiphys = l_queue_new();
 
 	return true;
@@ -550,6 +594,9 @@ bool manager_init(struct l_genl_family *in)
 
 void manager_exit(void)
 {
+	l_strfreev(whitelist_filter);
+	l_strfreev(blacklist_filter);
+
 	l_queue_destroy(pending_wiphys, NULL);
 	pending_wiphys = NULL;
 
