@@ -55,14 +55,12 @@ static void manager_new_wiphy_event(struct l_genl_msg *msg)
 		return;
 
 	wiphy = wiphy_find(id);
-	if (wiphy) {
-		wiphy_update_from_genl(wiphy, msg);
-		return;
-	}
+	if (!wiphy) {
+		wiphy = wiphy_create(id, name);
 
-	wiphy = wiphy_create(id, name);
-	if (!wiphy)	/* Possibly blacklisted */
-		return;
+		if (!wiphy)
+			return;
+	}
 
 	wiphy_update_from_genl(wiphy, msg);
 }
