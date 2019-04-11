@@ -94,6 +94,7 @@ struct scan_results {
 	uint32_t ifindex;
 	struct l_queue *bss_list;
 	struct scan_freq_set *freqs;
+	uint64_t time_stamp;
 };
 
 static bool start_next_scan_request(struct scan_context *sc);
@@ -1130,6 +1131,8 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
+	bss->time_stamp = results->time_stamp;
+
 	scan_bss_compute_rank(bss);
 	l_queue_insert(results->bss_list, bss, scan_bss_rank_compare, NULL);
 }
@@ -1364,6 +1367,7 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		results = l_new(struct scan_results, 1);
 		results->wiphy = attr_wiphy;
 		results->ifindex = attr_ifindex;
+		results->time_stamp = l_time_now();
 
 		scan_parse_new_scan_results(msg, results);
 

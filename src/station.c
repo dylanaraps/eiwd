@@ -287,7 +287,7 @@ static struct network *station_add_seen_bss(struct station *station,
 	const char *path;
 	char ssid[33];
 
-	l_debug("Found BSS '%s' with SSID: %s, freq: %u, rank: %u, "
+	l_debug("Processing BSS '%s' with SSID: %s, freq: %u, rank: %u, "
 			"strength: %i",
 			util_address_to_string(bss->addr),
 			util_ssid_to_utf8(bss->ssid_len, bss->ssid),
@@ -354,58 +354,101 @@ static bool bss_match(const void *a, const void *b)
 	return !memcmp(bss_a->addr, bss_b->addr, sizeof(bss_a->addr));
 }
 
-/*
- * Used when scan results were obtained; either from passive scan running
- * inside station module or active scans running in other state machines, e.g.
- * wsc
- */
-void station_set_scan_results(struct station *station, struct l_queue *bss_list,
-					bool add_to_autoconnect)
+struct bss_expiration_data {
+	struct scan_bss *connected_bss;
+	uint64_t now;
+};
+
+#define SCAN_RESULT_BSS_RETENTION_TIME (30 * 1000000)
+
+static bool bss_free_if_expired(void *data, void *user_data)
 {
-	struct l_queue *old_bss_list = station->bss_list;
-	struct network *network;
+	struct scan_bss *bss = data;
+	struct bss_expiration_data *expiration_data = user_data;
+
+	if (bss == expiration_data->connected_bss)
+		/* Do not expire the currently connected BSS. */
+		return false;
+
+	if (l_time_before(expiration_data->now,
+			bss->time_stamp + SCAN_RESULT_BSS_RETENTION_TIME))
+		return false;
+
+	bss_free(bss);
+
+	return true;
+}
+
+static void station_bss_list_remove_expired_bsses(struct station *station)
+{
+	struct bss_expiration_data data = {
+		.now = l_time_now(),
+		.connected_bss = station->connected_bss,
+	};
+
+	l_queue_foreach_remove(station->bss_list, bss_free_if_expired, &data);
+}
+
+/*
+ * Used when scan results were obtained; either from scan running
+ * inside station module or scans running in other state machines, e.g. wsc
+ */
+void station_set_scan_results(struct station *station,
+						struct l_queue *new_bss_list,
+						bool add_to_autoconnect)
+{
 	const struct l_queue_entry *bss_entry;
-
-	station->bss_list = bss_list;
-
-	l_queue_clear(station->hidden_bss_list_sorted, NULL);
+	struct network *network;
 
 	while ((network = l_queue_pop_head(station->networks_sorted)))
 		network_bss_list_clear(network);
 
+	l_queue_clear(station->hidden_bss_list_sorted, NULL);
+
 	l_queue_destroy(station->autoconnect_list, l_free);
 	station->autoconnect_list = l_queue_new();
 
-	for (bss_entry = l_queue_get_entries(bss_list); bss_entry;
-				bss_entry = bss_entry->next) {
+	station_bss_list_remove_expired_bsses(station);
+
+	for (bss_entry = l_queue_get_entries(station->bss_list); bss_entry;
+						bss_entry = bss_entry->next) {
+		struct scan_bss *old_bss = bss_entry->data;
+		struct scan_bss *new_bss;
+
+		new_bss = l_queue_find(new_bss_list, bss_match, old_bss);
+		if (new_bss) {
+			if (old_bss == station->connected_bss)
+				station->connected_bss = new_bss;
+
+			bss_free(old_bss);
+
+			continue;
+		}
+
+		if (old_bss == station->connected_bss) {
+			l_warn("Connected BSS not in scan results");
+			station->connected_bss->rank = 0;
+		}
+
+		l_queue_push_tail(new_bss_list, old_bss);
+	}
+
+	l_queue_destroy(station->bss_list, NULL);
+
+	for (bss_entry = l_queue_get_entries(new_bss_list); bss_entry;
+						bss_entry = bss_entry->next) {
 		struct scan_bss *bss = bss_entry->data;
 		struct network *network = station_add_seen_bss(station, bss);
 
-		if (network && add_to_autoconnect)
-			station_add_autoconnect_bss(station, network, bss);
+		if (!network || !add_to_autoconnect)
+			continue;
+
+		station_add_autoconnect_bss(station, network, bss);
 	}
 
-	if (station->connected_bss) {
-		struct scan_bss *bss;
-
-		bss = l_queue_find(station->bss_list, bss_match,
-						station->connected_bss);
-
-		if (!bss) {
-			l_warn("Connected BSS not in scan results!");
-			station->connected_bss->rank = 0;
-			l_queue_push_tail(station->bss_list,
-						station->connected_bss);
-			network_bss_add(station->connected_network,
-						station->connected_bss);
-			l_queue_remove(old_bss_list, station->connected_bss);
-		} else
-			station->connected_bss = bss;
-	}
+	station->bss_list = new_bss_list;
 
 	l_hashmap_foreach_remove(station->networks, process_network, station);
-
-	l_queue_destroy(old_bss_list, bss_free);
 }
 
 static void station_reconnect(struct station *station);

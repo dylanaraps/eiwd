@@ -60,6 +60,7 @@ struct scan_bss {
 	uint16_t rank;
 	uint8_t ht_ie[28];
 	uint8_t vht_ie[14];
+	uint64_t time_stamp;
 	bool mde_present : 1;
 	bool cc_present : 1;
 	bool cap_rm_neighbor_report : 1;
