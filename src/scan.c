@@ -330,6 +330,10 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 		 */
 		flags |= NL80211_SCAN_FLAG_RANDOM_ADDR;
 
+	if (!is_passive && wiphy_has_ext_feature(sc->wiphy,
+					NL80211_EXT_FEATURE_SCAN_RANDOM_SN))
+		flags |= NL80211_SCAN_FLAG_RANDOM_SN;
+
 	if (flags)
 		l_genl_msg_append_attr(msg, NL80211_ATTR_SCAN_FLAGS, 4, &flags);
 
