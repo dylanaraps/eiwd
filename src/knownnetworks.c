@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2016  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2016-2019  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -420,6 +420,153 @@ static void known_networks_watch_destroy(void *user_data)
 	storage_dir_watch = NULL;
 }
 
+static struct l_queue *known_frequencies_from_string(char *freq_set_str)
+{
+	struct l_queue *known_frequencies;
+	struct known_frequency *known_freq;
+	uint16_t t;
+
+	if (!freq_set_str)
+		return NULL;
+
+	if (*freq_set_str == '\0')
+		return NULL;
+
+	known_frequencies = l_queue_new();
+
+	while (*freq_set_str != '\0') {
+		errno = 0;
+
+		t = strtoul(freq_set_str, &freq_set_str, 10);
+
+		if (unlikely(errno == ERANGE || !t || t > 6000))
+			goto error;
+
+		known_freq = l_new(struct known_frequency, 1);
+		known_freq->frequency = t;
+
+		l_queue_push_tail(known_frequencies, known_freq);
+	}
+
+	if (l_queue_isempty(known_frequencies))
+		goto error;
+
+	return known_frequencies;
+
+error:
+	l_queue_destroy(known_frequencies, l_free);
+
+	return NULL;
+}
+
+static void known_frequency_to_string(void *data, void *user_data)
+{
+	struct known_frequency *known_freq = data;
+	struct l_string *str = user_data;
+
+	l_string_append_printf(str, " %u", known_freq->frequency);
+}
+
+static char *known_frequencies_to_string(struct l_queue *known_frequencies)
+{
+	struct l_string *str;
+
+	str = l_string_new(100);
+
+	l_queue_foreach(known_frequencies, known_frequency_to_string, str);
+
+	return l_string_unwrap(str);
+}
+
+static void known_network_frequencies_load(void)
+{
+	char **network_names;
+	struct l_settings *known_freqs;
+	struct l_queue *known_frequencies;
+	uint32_t i;
+
+	known_freqs = storage_known_frequencies_load();
+	if (!known_freqs) {
+		l_debug("No known frequency file found.");
+		return;
+	}
+
+	network_names = l_settings_get_groups(known_freqs);
+	if (!network_names[0])
+		goto done;
+
+	for (i = 0; network_names[i]; i++) {
+		struct network_info *network_info;
+		enum security security;
+		const char *ssid;
+		char *freq_list;
+
+		ssid = storage_network_ssid_from_path(network_names[i],
+								&security);
+		if (!ssid)
+			continue;
+
+		freq_list = l_settings_get_string(known_freqs, network_names[i],
+									"list");
+		if (!freq_list)
+			continue;
+
+		network_info = known_networks_find(ssid, security);
+		if (!network_info)
+			goto next;
+
+		known_frequencies = known_frequencies_from_string(freq_list);
+		if (!known_frequencies)
+			goto next;
+
+		network_info->known_frequencies = known_frequencies;
+next:
+		l_free(freq_list);
+	}
+
+done:
+	l_strv_free(network_names);
+	l_settings_free(known_freqs);
+}
+
+static bool known_network_frequencies_to_settings(
+					const struct network_info *network_info,
+					void *user_data)
+{
+	struct l_settings *known_freqs = user_data;
+	char *freq_list_str;
+	char *network_path;
+
+	if (!network_info->known_frequencies)
+		return true;
+
+	freq_list_str = known_frequencies_to_string(
+					network_info->known_frequencies);
+
+	network_path = storage_get_network_file_path(network_info->type,
+							network_info->ssid);
+
+	l_settings_set_value(known_freqs, network_path, "list", freq_list_str);
+	l_free(network_path);
+	l_free(freq_list_str);
+
+	return true;
+}
+
+static void known_network_frequencies_sync(void)
+{
+	struct l_settings *known_freqs;
+
+	known_freqs = l_settings_new();
+
+	known_networks_foreach(known_network_frequencies_to_settings,
+								known_freqs);
+
+	storage_known_frequencies_sync(known_freqs);
+
+	l_settings_free(known_freqs);
+}
+
 bool known_networks_init(void)
 {
 	struct l_dbus *dbus = dbus_get_bus();
@@ -470,6 +617,8 @@ bool known_networks_init(void)
 
 	closedir(dir);
 
+	known_network_frequencies_load();
+
 	storage_dir_watch = l_dir_watch_new(DAEMON_STORAGEDIR,
 						known_networks_watch_cb, NULL,
 						known_networks_watch_destroy);
@@ -482,6 +631,8 @@ void known_networks_exit(void)
 	struct l_dbus *dbus = dbus_get_bus();
 
 	l_dir_watch_destroy(storage_dir_watch);
+
+	known_network_frequencies_sync();
 
 	l_queue_destroy(known_networks, network_info_free);
 	known_networks = NULL;
