@@ -46,6 +46,10 @@ bool wiphy_parse_id_and_name(struct l_genl_attr *attr, uint32_t *out_id,
 
 struct wiphy *wiphy_find(int wiphy_id);
 
+struct wiphy *wiphy_create(uint32_t wiphy_id, const char *name);
+bool wiphy_destroy(struct wiphy *wiphy);
+void wiphy_update_from_genl(struct wiphy *wiphy, struct l_genl_msg *msg);
+
 const char *wiphy_get_path(struct wiphy *wiphy);
 uint32_t wiphy_get_supported_bands(struct wiphy *wiphy);
 const struct scan_freq_set *wiphy_get_supported_freqs(

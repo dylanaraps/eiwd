@@ -781,6 +781,53 @@ static void wiphy_new_wiphy_event(struct l_genl_msg *msg)
 	wiphy_register(wiphy);
 }
 
+struct wiphy *wiphy_create(uint32_t wiphy_id, const char *name)
+{
+	struct wiphy *wiphy;
+
+	if (!wiphy_is_managed(name))
+		return NULL;
+
+	wiphy = wiphy_new(wiphy_id);
+	l_strlcpy(wiphy->name, name, sizeof(wiphy->name));
+	l_queue_push_head(wiphy_list, wiphy);
+
+	wiphy_register(wiphy);
+	return wiphy;
+}
+
+void wiphy_update_from_genl(struct wiphy *wiphy, struct l_genl_msg *msg)
+{
+	struct l_genl_attr attr;
+	const char *name;
+
+	l_debug("");
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	if (!wiphy_parse_id_and_name(&attr, NULL, &name))
+		return;
+
+	/*
+	 * WIPHY_NAME is a NLA_NUL_STRING, so the kernel
+	 * enforces the data to be null terminated.
+	 */
+	if (strncmp(wiphy->name, name, sizeof(wiphy->name))) {
+		struct l_dbus *dbus = dbus_get_bus();
+
+		l_strlcpy(wiphy->name, name, sizeof(wiphy->name));
+		l_dbus_property_changed(dbus, wiphy_get_path(wiphy),
+					IWD_WIPHY_INTERFACE, "Name");
+	}
+
+	if (!wiphy->supported_iftypes) {
+		/* Most likely a new wiphy, set all the parameters */
+		wiphy_parse_attributes(wiphy, &attr);
+		wiphy_print_basic_info(wiphy);
+	}
+}
+
 static void wiphy_del_wiphy_event(struct l_genl_msg *msg)
 {
 	struct wiphy *wiphy;
@@ -802,6 +849,19 @@ static void wiphy_del_wiphy_event(struct l_genl_msg *msg)
 	l_dbus_unregister_object(dbus_get_bus(), wiphy_get_path(wiphy));
 
 	wiphy_free(wiphy);
+}
+
+bool wiphy_destroy(struct wiphy *wiphy)
+{
+	l_debug("");
+
+	if (!l_queue_remove(wiphy_list, wiphy))
+		return false;
+
+	l_dbus_unregister_object(dbus_get_bus(), wiphy_get_path(wiphy));
+
+	wiphy_free(wiphy);
+	return true;
 }
 
 static void wiphy_config_notify(struct l_genl_msg *msg, void *user_data)
