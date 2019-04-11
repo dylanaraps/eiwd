@@ -1725,6 +1725,23 @@ void scan_freq_set_foreach(const struct scan_freq_set *freqs,
 	}
 }
 
+void scan_freq_set_constrain(struct scan_freq_set *set,
+					const struct scan_freq_set *constraint)
+{
+	struct l_uintset *intersection;
+
+	intersection = l_uintset_intersect(constraint->channels_5ghz,
+							set->channels_5ghz);
+	if (!intersection)
+		/* This shouldn't ever be the case. */
+		return;
+
+	l_uintset_free(set->channels_5ghz);
+	set->channels_5ghz = intersection;
+
+	set->channels_2ghz &= constraint->channels_2ghz;
+}
+
 bool scan_init(struct l_genl_family *in)
 {
 	const struct l_settings *config = iwd_get_config();

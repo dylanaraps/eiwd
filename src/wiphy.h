@@ -25,6 +25,7 @@
 
 struct wiphy;
 struct scan_bss;
+struct scan_freq_set;
 
 enum wiphy_state_watch_event {
 	WIPHY_STATE_WATCH_EVENT_POWERED,
@@ -49,6 +50,9 @@ struct wiphy *wiphy_find(int wiphy_id);
 struct wiphy *wiphy_create(uint32_t wiphy_id, const char *name);
 bool wiphy_destroy(struct wiphy *wiphy);
 void wiphy_update_from_genl(struct wiphy *wiphy, struct l_genl_msg *msg);
+
+bool wiphy_constrain_freq_set(const struct wiphy *wiphy,
+						struct scan_freq_set *set);
 
 const char *wiphy_get_path(struct wiphy *wiphy);
 uint32_t wiphy_get_supported_bands(struct wiphy *wiphy);

@@ -306,6 +306,18 @@ bool wiphy_supports_adhoc_rsn(struct wiphy *wiphy)
 	return wiphy->support_adhoc_rsn;
 }
 
+bool wiphy_constrain_freq_set(const struct wiphy *wiphy,
+						struct scan_freq_set *set)
+{
+	scan_freq_set_constrain(set, wiphy->supported_freqs);
+
+	if (!scan_freq_set_get_bands(set))
+		/* The set is empty. */
+		return false;
+
+	return true;
+}
+
 static char **wiphy_get_supported_iftypes(struct wiphy *wiphy, uint16_t mask)
 {
 	uint16_t supported_mask = wiphy->supported_iftypes & mask;
