@@ -41,6 +41,9 @@ enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy,
 enum ie_rsn_akm_suite wiphy_select_akm(struct wiphy *wiphy,
 					struct scan_bss *bss);
 
+bool wiphy_parse_id_and_name(struct l_genl_attr *attr, uint32_t *out_id,
+				const char **out_name);
+
 struct wiphy *wiphy_find(int wiphy_id);
 
 const char *wiphy_get_path(struct wiphy *wiphy);

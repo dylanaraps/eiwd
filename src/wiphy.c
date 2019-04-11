@@ -573,11 +573,10 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 			break;
 		}
 	}
-
 }
 
-static bool wiphy_parse_id_and_name(struct l_genl_attr *attr, uint32_t *out_id,
-					const char **out_name)
+bool wiphy_parse_id_and_name(struct l_genl_attr *attr, uint32_t *out_id,
+				const char **out_name)
 {
 	uint16_t type, len;
 	const void *data;
