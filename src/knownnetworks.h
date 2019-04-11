@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2016  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2016-2019  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -25,6 +25,10 @@ struct network_info;
 
 typedef bool (*known_networks_foreach_func_t)(const struct network_info *info,
 						void *user_data);
+
+struct known_frequency {
+	uint32_t frequency;
+};
 
 bool known_networks_foreach(known_networks_foreach_func_t function,
 				void *user_data);
