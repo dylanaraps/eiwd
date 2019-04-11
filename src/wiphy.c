@@ -577,14 +577,12 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 }
 
 static bool wiphy_parse_id_and_name(struct l_genl_attr *attr, uint32_t *out_id,
-					const char **out_name,
-					uint32_t *out_name_len)
+					const char **out_name)
 {
 	uint16_t type, len;
 	const void *data;
 	uint32_t id;
 	const char *name;
-	uint32_t name_len;
 
 	/*
 	 * The wiphy attribute, name and generation are always the first
@@ -613,7 +611,9 @@ static bool wiphy_parse_id_and_name(struct l_genl_attr *attr, uint32_t *out_id,
 		return false;
 
 	name = data;
-	name_len = len;
+
+	if (len < 1 || !memchr(name + 1, 0, len - 1))
+		return false;
 
 	if (!l_genl_attr_next(attr, &type, &len, &data))
 		return false;
@@ -635,9 +635,6 @@ static bool wiphy_parse_id_and_name(struct l_genl_attr *attr, uint32_t *out_id,
 	if (out_name)
 		*out_name = name;
 
-	if (out_name_len)
-		*out_name_len = name_len;
-
 	return true;
 }
 
@@ -647,7 +644,6 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 	struct l_genl_attr attr;
 	uint32_t id;
 	const char *name;
-	uint32_t name_len;
 
 	l_debug("");
 
@@ -659,7 +655,7 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 	 * since the information included can not fit into a single
 	 * message.
 	 */
-	if (!wiphy_parse_id_and_name(&attr, &id, &name, &name_len))
+	if (!wiphy_parse_id_and_name(&attr, &id, &name))
 		return;
 
 	wiphy = l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(id));
@@ -671,7 +667,7 @@ static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 		l_queue_push_head(wiphy_list, wiphy);
 	}
 
-	memcpy(wiphy->name, name, name_len);
+	l_strlcpy(wiphy->name, name, sizeof(wiphy->name));
 	wiphy_parse_attributes(wiphy, &attr);
 }
 
@@ -747,14 +743,13 @@ static void wiphy_new_wiphy_event(struct l_genl_msg *msg)
 	struct l_genl_attr attr;
 	uint32_t id;
 	const char *name;
-	uint32_t name_len;
 
 	l_debug("");
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
 
-	if (!wiphy_parse_id_and_name(&attr, &id, &name, &name_len))
+	if (!wiphy_parse_id_and_name(&attr, &id, &name))
 		return;
 
 	wiphy = l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(id));
@@ -766,7 +761,7 @@ static void wiphy_new_wiphy_event(struct l_genl_msg *msg)
 		if (strcmp(wiphy->name, name)) {
 			struct l_dbus *dbus = dbus_get_bus();
 
-			memcpy(wiphy->name, name, name_len);
+			l_strlcpy(wiphy->name, name, sizeof(wiphy->name));
 			l_dbus_property_changed(dbus, wiphy_get_path(wiphy),
 						IWD_WIPHY_INTERFACE, "Name");
 		}
@@ -778,7 +773,7 @@ static void wiphy_new_wiphy_event(struct l_genl_msg *msg)
 		return;
 
 	wiphy = wiphy_new(id);
-	memcpy(wiphy->name, name, name_len);
+	l_strlcpy(wiphy->name, name, sizeof(wiphy->name));
 	l_queue_push_head(wiphy_list, wiphy);
 
 	wiphy_parse_attributes(wiphy, &attr);
@@ -798,7 +793,7 @@ static void wiphy_del_wiphy_event(struct l_genl_msg *msg)
 	if (!l_genl_attr_init(&attr, msg))
 		return;
 
-	if (!wiphy_parse_id_and_name(&attr, &id, NULL, NULL))
+	if (!wiphy_parse_id_and_name(&attr, &id, NULL))
 		return;
 
 	wiphy = l_queue_remove_if(wiphy_list, wiphy_match, L_UINT_TO_PTR(id));
