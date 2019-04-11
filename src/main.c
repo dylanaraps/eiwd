@@ -151,6 +151,8 @@ static void nl80211_appeared(void *user_data)
 
 	l_debug("Found nl80211 interface");
 
+	manager_init(nl80211);
+
 	if (!wiphy_init(nl80211, phys, nophys))
 		l_error("Unable to init wiphy functionality");
 
@@ -161,7 +163,6 @@ static void nl80211_appeared(void *user_data)
 
 	ap_init(nl80211);
 	adhoc_init(nl80211);
-	manager_init(nl80211);
 }
 
 static void nl80211_vanished(void *user_data)
