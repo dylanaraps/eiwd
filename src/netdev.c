@@ -4785,7 +4785,7 @@ error:
 	return NULL;
 }
 
-static void netdev_create_from_genl(struct l_genl_msg *msg)
+struct netdev *netdev_create_from_genl(struct l_genl_msg *msg)
 {
 	struct l_genl_attr attr;
 	uint16_t type, len;
@@ -4806,14 +4806,14 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	bool pae_over_nl80211;
 
 	if (!l_genl_attr_init(&attr, msg))
-		return;
+		return NULL;
 
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 		switch (type) {
 		case NL80211_ATTR_IFINDEX:
 			if (len != sizeof(uint32_t)) {
 				l_warn("Invalid interface index attribute");
-				return;
+				return NULL;
 			}
 
 			ifindex = data;
@@ -4822,7 +4822,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 		case NL80211_ATTR_IFNAME:
 			if (len > IFNAMSIZ) {
 				l_warn("Invalid interface name attribute");
-				return;
+				return NULL;
 			}
 
 			ifname = data;
@@ -4832,7 +4832,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 		case NL80211_ATTR_WIPHY:
 			if (len != sizeof(uint32_t)) {
 				l_warn("Invalid wiphy attribute");
-				return;
+				return NULL;
 			}
 
 			wiphy = wiphy_find(*((uint32_t *) data));
@@ -4841,7 +4841,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 		case NL80211_ATTR_IFTYPE:
 			if (len != sizeof(uint32_t)) {
 				l_warn("Invalid interface type attribute");
-				return;
+				return NULL;
 			}
 
 			iftype = data;
@@ -4850,7 +4850,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 		case NL80211_ATTR_MAC:
 			if (len != ETH_ALEN) {
 				l_warn("Invalid interface address attribute");
-				return;
+				return NULL;
 			}
 
 			ifaddr = data;
@@ -4859,26 +4859,26 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	}
 
 	if (!wiphy)
-		return;
+		return NULL;
 
 	if (!iftype) {
 		l_warn("Missing iftype attribute");
-		return;
+		return NULL;
 	}
 
 	if (!ifindex || !ifaddr | !ifname) {
 		l_warn("Unable to parse interface information");
-		return;
+		return NULL;
 	}
 
 	if (netdev_find(*ifindex)) {
 		l_debug("Skipping duplicate netdev %s[%d]", ifname, *ifindex);
-		return;
+		return NULL;
 	}
 
 	if (!netdev_is_managed(ifname)) {
 		l_debug("interface %s filtered out", ifname);
-		return;
+		return NULL;
 	}
 
 	if (!l_settings_get_bool(settings, "General",
@@ -4899,7 +4899,7 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 		pae_io = pae_open(*ifindex);
 		if (!pae_io) {
 			l_error("Unable to open PAE interface");
-			return;
+			return NULL;
 		}
 	}
 
@@ -4954,6 +4954,17 @@ static void netdev_create_from_genl(struct l_genl_msg *msg)
 	/* Set RSSI threshold for CQM notifications */
 	if (netdev->type == NL80211_IFTYPE_STATION)
 		netdev_cqm_rssi_update(netdev);
+
+	return netdev;
+}
+
+bool netdev_destroy(struct netdev *netdev)
+{
+	if (!l_queue_remove(netdev_list, netdev))
+		return false;
+
+	netdev_free(netdev);
+	return true;
 }
 
 static void netdev_get_interface_callback(struct l_genl_msg *msg,

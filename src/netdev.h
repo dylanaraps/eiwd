@@ -203,3 +203,6 @@ uint32_t netdev_station_watch_add(struct netdev *netdev,
 		netdev_station_watch_func_t func, void *user_data);
 
 bool netdev_station_watch_remove(struct netdev *netdev, uint32_t id);
+
+struct netdev *netdev_create_from_genl(struct l_genl_msg *msg);
+bool netdev_destroy(struct netdev *netdev);
