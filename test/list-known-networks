@@ -5,17 +5,31 @@ import dbus
 
 bus = dbus.SystemBus()
 
-kn = dbus.Interface(bus.get_object("net.connman.iwd", "/"),
-                    "net.connman.iwd.KnownNetworks")
+manager = dbus.Interface(bus.get_object('net.connman.iwd', '/'),
+                         'org.freedesktop.DBus.ObjectManager')
 
+forget = None
 if len(sys.argv) >= 4 and sys.argv[1] == 'forget':
-    kn.ForgetNetwork(sys.argv[2], sys.argv[3])
+    forget = (sys.argv[2], sys.argv[3])
 
 print('Known Networks:')
 
-for network in kn.ListKnownNetworks():
+for path, interfaces in manager.GetManagedObjects().items():
+    if 'net.connman.iwd.KnownNetwork' not in interfaces:
+        continue
+
+    network = interfaces['net.connman.iwd.KnownNetwork']
+
+    if (network['Name'], network['Type']) == forget:
+        obj = dbus.Interface(bus.get_object('net.connman.iwd', path),
+                             'net.connman.iwd.KnownNetwork')
+        obj.Forget()
+        continue
+
     print("[ %s ]" % network['Name'])
 
     for key in network:
         val = network[key]
+        if type(val) == dbus.Boolean:
+            val = 'True' if val else 'False'
         print("    %s = %s" % (key, val))
