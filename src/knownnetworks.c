@@ -259,6 +259,48 @@ static bool known_network_property_get_hidden(struct l_dbus *dbus,
 	return true;
 }
 
+static bool known_network_property_get_autoconnect(struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_builder *builder,
+					void *user_data)
+{
+	struct network_info *network = user_data;
+	bool autoconnect = network->is_autoconnectable;
+
+	l_dbus_message_builder_append_basic(builder, 'b', &autoconnect);
+
+	return true;
+}
+
+static struct l_dbus_message *known_network_property_set_autoconnect(
+					struct l_dbus *dbus,
+					struct l_dbus_message *message,
+					struct l_dbus_message_iter *new_value,
+					l_dbus_property_complete_cb_t complete,
+					void *user_data)
+{
+	struct network_info *network = user_data;
+	struct l_settings *settings;
+	bool autoconnect;
+
+	if (!l_dbus_message_iter_get_variant(new_value, "b", &autoconnect))
+		return dbus_error_invalid_args(message);
+
+	if (network->is_autoconnectable == autoconnect)
+		return l_dbus_message_new_method_return(message);
+
+	settings = storage_network_open(network->type, network->ssid);
+	if (!settings)
+		return dbus_error_failed(message);
+
+	l_settings_set_bool(settings, "Settings", "Autoconnect", autoconnect);
+
+	storage_network_sync(network->type, network->ssid, settings);
+	l_settings_free(settings);
+
+	return l_dbus_message_new_method_return(message);
+}
+
 static bool known_network_property_get_last_connected(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -293,6 +335,9 @@ static void setup_known_network_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_property(interface, "Hidden", 0, "b",
 					known_network_property_get_hidden,
 					NULL);
+	l_dbus_interface_property(interface, "Autoconnect", 0, "b",
+					known_network_property_get_autoconnect,
+					known_network_property_set_autoconnect);
 	l_dbus_interface_property(interface, "LastConnectedTime", 0, "s",
 				known_network_property_get_last_connected,
 				NULL);
