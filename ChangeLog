@@ -1,3 +1,12 @@
+ver 0.17:
+	Fix issue with handling association failure path.
+	Fix issue with handling checks for valid ECC point/scalar.
+	Fix issue with handling potential infinite loop and SAE.
+	Fix issue with handling randomization for passive scans.
+	Add support for randomization of SN for probe requests.
+	Add support for handling the FILS cipher suites.
+	Add support for ERP key caching feature.
+
 ver 0.16:
 	Add missing pkcs8.conf for module loading.
 
