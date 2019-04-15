@@ -1753,6 +1753,8 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 	const uint8_t *ies = NULL;
 	size_t ies_len = 0;
 	struct ie_tlv_iter iter;
+	const uint8_t *resp_ies = NULL;
+	size_t resp_ies_len;
 
 	l_debug("");
 
@@ -1785,6 +1787,10 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 		case NL80211_ATTR_REQ_IE:
 			ies = data;
 			ies_len = len;
+			break;
+		case NL80211_ATTR_RESP_IE:
+			resp_ies = data;
+			resp_ies_len = len;
 			break;
 		}
 	}
@@ -1831,6 +1837,44 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 		case IE_TYPE_MOBILITY_DOMAIN:
 			handshake_state_set_mde(netdev->handshake, data - 2);
 			break;
+		}
+	}
+
+	if (resp_ies) {
+		const uint8_t *fte = NULL;
+		struct ie_ft_info ft_info;
+
+		ie_tlv_iter_init(&iter, resp_ies, resp_ies_len);
+
+		while (ie_tlv_iter_next(&iter)) {
+			data = ie_tlv_iter_get_data(&iter);
+
+			switch (ie_tlv_iter_get_tag(&iter)) {
+			case IE_TYPE_FAST_BSS_TRANSITION:
+				fte = data - 2;
+				break;
+			}
+		}
+
+		if (fte) {
+			/*
+			 * If we are here, then most likely we have a FullMac
+			 * hw performing initial mobility association.  We need
+			 * to set the FTE element or the handshake will fail
+			 * The firmware accepted the FTE element, so do not
+			 * sanitize the contents and just assume they're okay.
+			 */
+			if (ie_parse_fast_bss_transition_from_data(fte,
+						fte[1] + 2, &ft_info) >= 0) {
+				handshake_state_set_fte(netdev->handshake, fte);
+				handshake_state_set_kh_ids(netdev->handshake,
+							ft_info.r0khid,
+							ft_info.r0khid_len,
+							ft_info.r1khid);
+			} else {
+				l_info("CMD_CONNECT Succeeded, but parsing FTE"
+					" failed.  Expect handshake failure");
+			}
 		}
 	}
 
