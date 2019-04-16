@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2018  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2018-2019  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -68,6 +68,7 @@ struct station {
 	struct l_dbus_message *scan_pending;
 	struct signal_agent *signal_agent;
 	uint32_t dbus_scan_id;
+	uint32_t quick_scan_id;
 	uint32_t hidden_network_scan_id;
 
 	/* Roaming related members */
@@ -724,6 +725,87 @@ static uint32_t station_scan_trigger(struct station *station,
 	return scan_passive(index, freqs, triggered, notify, station, destroy);
 }
 
+static bool station_quick_scan_results(int err, struct l_queue *bss_list,
+								void *userdata)
+{
+	struct station *station = userdata;
+	bool autoconnect;
+
+	station_property_set_scanning(station, false);
+
+	if (err) {
+		station_enter_state(station, STATION_STATE_AUTOCONNECT_FULL);
+
+		return false;
+	}
+
+	autoconnect = station_is_autoconnecting(station);
+	station_set_scan_results(station, bss_list, autoconnect);
+
+	if (autoconnect)
+		station_autoconnect_next(station);
+
+	if (station->state == STATION_STATE_AUTOCONNECT_QUICK)
+		/*
+		 * If we're still in AUTOCONNECT_QUICK state, then autoconnect
+		 * failed to find any candidates. Transition to AUTOCONNECT_FULL
+		 */
+		station_enter_state(station, STATION_STATE_AUTOCONNECT_FULL);
+
+	return true;
+}
+
+static void station_quick_scan_triggered(int err, void *user_data)
+{
+	struct station *station = user_data;
+
+	if (err < 0) {
+		l_debug("Quick scan trigger failed: %i", err);
+
+		station_enter_state(station, STATION_STATE_AUTOCONNECT_FULL);
+
+		return;
+	}
+
+	l_debug("Quick scan triggered for %s",
+					netdev_get_name(station->netdev));
+
+	station_property_set_scanning(station, true);
+}
+
+static void station_quick_scan_destroy(void *userdata)
+{
+	struct station *station = userdata;
+
+	station->quick_scan_id = 0;
+}
+
+static void station_quick_scan_trigger(struct station *station)
+{
+	struct scan_freq_set *known_freq_set;
+
+	known_freq_set = known_networks_get_recent_frequencies(5);
+	if (!known_freq_set)
+		goto autoconnect_full;
+
+	if (!wiphy_constrain_freq_set(station->wiphy, known_freq_set))
+		goto skip_scan;
+
+	station->quick_scan_id = station_scan_trigger(station,
+						known_freq_set,
+						station_quick_scan_triggered,
+						station_quick_scan_results,
+						station_quick_scan_destroy);
+skip_scan:
+	scan_freq_set_free(known_freq_set);
+
+	if (station->quick_scan_id)
+		return;
+
+autoconnect_full:
+	station_enter_state(station, STATION_STATE_AUTOCONNECT_FULL);
+}
+
 static const char *station_state_to_string(enum station_state state)
 {
 	switch (state) {
@@ -766,6 +848,8 @@ static void station_enter_state(struct station *station,
 
 	switch (state) {
 	case STATION_STATE_AUTOCONNECT_QUICK:
+		station_quick_scan_trigger(station);
+		break;
 	case STATION_STATE_AUTOCONNECT_FULL:
 		scan_periodic_start(index, periodic_scan_trigger,
 					new_scan_results, station);
@@ -2554,6 +2638,10 @@ static void station_free(struct station *station)
 	if (station->dbus_scan_id)
 		scan_cancel(netdev_get_ifindex(station->netdev),
 				station->dbus_scan_id);
+
+	if (station->quick_scan_id)
+		scan_cancel(netdev_get_ifindex(station->netdev),
+				station->quick_scan_id);
 
 	if (station->hidden_network_scan_id)
 		scan_cancel(netdev_get_ifindex(station->netdev),
