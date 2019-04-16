@@ -1,0 +1,5 @@
+[/var/lib/iwd/ssid_open_1.open]
+list= 5180
+
+[/var/lib/iwd/ssid_open_2.open]
+list= 2412 2437
