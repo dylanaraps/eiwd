@@ -578,18 +578,54 @@ static void manager_config_notify(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
+static void manager_interface_dump_callback(struct l_genl_msg *msg,
+						void *user_data)
+{
+	struct wiphy_setup_state *state;
+	struct l_genl_attr attr;
+
+	l_debug("");
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	state = manager_find_pending(manager_parse_wiphy_id(&attr));
+	if (!state || state->setup_timeout)
+		return;
+
+	manager_get_interface_cb(msg, state);
+}
+
+static void manager_interface_dump_done(void *user_data)
+{
+	const struct l_queue_entry *entry;
+
+	for (entry = l_queue_get_entries(pending_wiphys);
+					entry; entry = entry->next) {
+		struct wiphy_setup_state *state = entry->data;
+
+		/* phy might have been detected after the initial dump */
+		if (state->setup_timeout || state->pending_cmd_count)
+			continue;
+
+		/* If we are here, then there are no interfaces for this phy */
+		manager_create_interfaces(state);
+	}
+}
+
 static void manager_wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 {
 	l_debug("");
 
-	manager_new_wiphy_event(msg);
+	manager_rx_cmd_new_wiphy(msg);
 }
 
 bool manager_init(struct l_genl_family *in,
 			const char *if_whitelist, const char *if_blacklist)
 {
 	struct l_genl_msg *msg;
-	unsigned int id;
+	unsigned int wiphy_dump;
+	unsigned int interface_dump;
 
 	nl80211 = in;
 
@@ -608,11 +644,24 @@ bool manager_init(struct l_genl_family *in,
 	}
 
 	msg = l_genl_msg_new(NL80211_CMD_GET_WIPHY);
-	id = l_genl_family_dump(nl80211, msg,
-				manager_wiphy_dump_callback, NULL, NULL);
-	if (!id) {
+	wiphy_dump = l_genl_family_dump(nl80211, msg,
+						manager_wiphy_dump_callback,
+						NULL, NULL);
+	if (!wiphy_dump) {
 		l_error("Initial wiphy information dump failed");
 		l_genl_msg_unref(msg);
+		return false;
+	}
+
+	msg = l_genl_msg_new(NL80211_CMD_GET_INTERFACE);
+	interface_dump = l_genl_family_dump(nl80211, msg,
+						manager_interface_dump_callback,
+						NULL,
+						manager_interface_dump_done);
+	if (!interface_dump) {
+		l_error("Initial interface information dump failed");
+		l_genl_msg_unref(msg);
+		l_genl_family_cancel(nl80211, wiphy_dump);
 		return false;
 	}
 
