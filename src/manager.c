@@ -575,17 +575,10 @@ static void manager_wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 bool manager_init(struct l_genl_family *in,
 			const char *if_whitelist, const char *if_blacklist)
 {
+	struct l_genl_msg *msg;
+	unsigned int id;
+
 	nl80211 = in;
-
-	if (!l_genl_family_register(nl80211, "config", manager_config_notify,
-					NULL, NULL))
-		l_error("Registering for config notifications failed");
-
-	if (!l_genl_family_dump(nl80211,
-				l_genl_msg_new(NL80211_CMD_GET_WIPHY),
-				manager_wiphy_dump_callback,
-				NULL, NULL))
-		l_error("Initial wiphy information dump failed");
 
 	if (if_whitelist)
 		whitelist_filter = l_strsplit(if_whitelist, ',');
@@ -594,6 +587,21 @@ bool manager_init(struct l_genl_family *in,
 		blacklist_filter = l_strsplit(if_blacklist, ',');
 
 	pending_wiphys = l_queue_new();
+
+	if (!l_genl_family_register(nl80211, "config", manager_config_notify,
+					NULL, NULL)) {
+		l_error("Registering for config notifications failed");
+		return false;
+	}
+
+	msg = l_genl_msg_new(NL80211_CMD_GET_WIPHY);
+	id = l_genl_family_dump(nl80211, msg,
+				manager_wiphy_dump_callback, NULL, NULL);
+	if (!id) {
+		l_error("Initial wiphy information dump failed");
+		l_genl_msg_unref(msg);
+		return false;
+	}
 
 	return true;
 }
