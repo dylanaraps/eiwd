@@ -4649,10 +4649,14 @@ static void netdev_getlink_cb(int error, uint16_t type, const void *data,
 	l_netlink_command_func_t cb;
 	bool powered;
 
-	if (error != 0 || ifi->ifi_type != ARPHRD_ETHER ||
-			type != RTM_NEWLINK) {
-		l_error("RTM_GETLINK error %i ifi_type %i type %i",
-				error, (int) ifi->ifi_type, (int) type);
+	if (error != 0) {
+		l_error("RTM_GETLINK error %i: %s", error, strerror(-error));
+		return;
+	}
+
+	if (ifi->ifi_type != ARPHRD_ETHER || type != RTM_NEWLINK) {
+		l_debug("Non-ethernet address or not newlink message -- "
+			"ifi_type: %i, type: %i", ifi->ifi_type, type);
 		return;
 	}
 
