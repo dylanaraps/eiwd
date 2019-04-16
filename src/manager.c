@@ -406,15 +406,18 @@ static void manager_new_wiphy_event(struct l_genl_msg *msg)
 	if (!wiphy_parse_id_and_name(&attr, &id, &name))
 		return;
 
+	/*
+	 * A Wiphy split dump can generate many (6+) NEW_WIPHY messages
+	 * We need to parse attributes from all of them, but only perform
+	 * initialization steps once for each new wiphy detected
+	 */
 	wiphy = wiphy_find(id);
-	if (!wiphy) {
-		wiphy = wiphy_create(id, name);
+	if (wiphy)
+		goto done;
 
-		if (!wiphy)
-			return;
-	}
-
-	wiphy_update_from_genl(wiphy, msg);
+	wiphy = wiphy_create(id, name);
+	if (!wiphy)
+		return;
 
 	/*
 	 * We've got a new wiphy, flag it as new and wait for a
@@ -433,6 +436,9 @@ static void manager_new_wiphy_event(struct l_genl_msg *msg)
 	state->setup_timeout = l_timeout_create(1, manager_wiphy_setup_timeout,
 						state, NULL);
 	l_queue_push_tail(pending_wiphys, state);
+
+done:
+	wiphy_update_from_genl(wiphy, msg);
 }
 
 static bool manager_wiphy_state_match(const void *a, const void *b)
