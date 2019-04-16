@@ -381,30 +381,20 @@ static void manager_wiphy_dump_interfaces(struct wiphy_setup_state *state)
 		state->use_default = true;
 }
 
-static void manager_wiphy_setup_timeout(struct l_timeout *timeout,
-					void *user_data)
+static struct wiphy_setup_state *manager_rx_cmd_new_wiphy(
+							struct l_genl_msg *msg)
 {
-	struct wiphy_setup_state *state = user_data;
-
-	manager_wiphy_dump_interfaces(state);
-}
-
-static void manager_new_wiphy_event(struct l_genl_msg *msg)
-{
-	struct wiphy_setup_state *state;
+	struct wiphy_setup_state *state = NULL;
 	struct wiphy *wiphy;
 	struct l_genl_attr attr;
 	uint32_t id;
 	const char *name;
 
-	if (!pending_wiphys)
-		return;
-
 	if (!l_genl_attr_init(&attr, msg))
-		return;
+		return NULL;
 
 	if (!wiphy_parse_id_and_name(&attr, &id, &name))
-		return;
+		return NULL;
 
 	/*
 	 * A Wiphy split dump can generate many (6+) NEW_WIPHY messages
@@ -417,7 +407,7 @@ static void manager_new_wiphy_event(struct l_genl_msg *msg)
 
 	wiphy = wiphy_create(id, name);
 	if (!wiphy)
-		return;
+		return NULL;
 
 	/*
 	 * We've got a new wiphy, flag it as new and wait for a
@@ -433,12 +423,35 @@ static void manager_new_wiphy_event(struct l_genl_msg *msg)
 	state = l_new(struct wiphy_setup_state, 1);
 	state->id = id;
 	state->wiphy = wiphy;
-	state->setup_timeout = l_timeout_create(1, manager_wiphy_setup_timeout,
-						state, NULL);
 	l_queue_push_tail(pending_wiphys, state);
 
 done:
 	wiphy_update_from_genl(wiphy, msg);
+	return state;
+}
+
+static void manager_wiphy_setup_timeout(struct l_timeout *timeout,
+					void *user_data)
+{
+	struct wiphy_setup_state *state = user_data;
+
+	manager_wiphy_dump_interfaces(state);
+}
+
+static void manager_new_wiphy_event(struct l_genl_msg *msg)
+{
+	struct wiphy_setup_state *state;
+
+	if (!pending_wiphys)
+		return;
+
+	state = manager_rx_cmd_new_wiphy(msg);
+	if (!state)
+		return;
+
+	/* Setup a timer just in case a default interface is not created */
+	state->setup_timeout = l_timeout_create(1, manager_wiphy_setup_timeout,
+						state, NULL);
 }
 
 static bool manager_wiphy_state_match(const void *a, const void *b)
