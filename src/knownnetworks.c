@@ -39,6 +39,7 @@
 #include "src/network.h"
 #include "src/dbus.h"
 #include "src/knownnetworks.h"
+#include "src/scan.h"
 
 static struct l_queue *known_networks;
 static size_t num_known_hidden_networks;
@@ -203,6 +204,43 @@ struct network_info *known_networks_find(const char *ssid,
 	strcpy(query.ssid, ssid);
 
 	return l_queue_find(known_networks, network_info_match, &query);
+}
+
+struct scan_freq_set *known_networks_get_recent_frequencies(
+						uint8_t num_networks_tosearch)
+{
+	/*
+	 * This search function assumes that the known networks are always
+	 * sorted by the last connection time with the most recent ones being on
+	 * top. Therefore, we just need to get the top NUM of networks from the
+	 * list.
+	 */
+	const struct l_queue_entry *network_entry;
+	const struct l_queue_entry *freq_entry;
+	struct scan_freq_set *set;
+
+	if (!num_networks_tosearch)
+		return NULL;
+
+	set = scan_freq_set_new();
+
+	for (network_entry = l_queue_get_entries(known_networks);
+				network_entry && num_networks_tosearch;
+				network_entry = network_entry->next,
+						num_networks_tosearch--) {
+		const struct network_info *network = network_entry->data;
+
+		for (freq_entry = l_queue_get_entries(
+						network->known_frequencies);
+				freq_entry; freq_entry = freq_entry->next) {
+			const struct known_frequency *known_freq =
+							freq_entry->data;
+
+			scan_freq_set_add(set, known_freq->frequency);
+		}
+	}
+
+	return set;
 }
 
 static struct l_dbus_message *known_network_forget(struct l_dbus *dbus,

@@ -22,6 +22,7 @@
 
 enum security;
 struct network_info;
+struct scan_freq_set;
 
 typedef bool (*known_networks_foreach_func_t)(const struct network_info *info,
 						void *user_data);
@@ -37,3 +38,6 @@ struct network_info *known_networks_find(const char *ssid,
 						enum security security);
 
 const char *known_network_get_path(const struct network_info *network);
+
+struct scan_freq_set *known_networks_get_recent_frequencies(
+						uint8_t num_networks_tosearch);
