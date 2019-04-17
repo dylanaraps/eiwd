@@ -643,11 +643,11 @@ static struct eapol_key *eapol_create_common(
 	out_frame->key_type = key_type;
 	out_frame->install = false;
 	out_frame->key_ack = false;
-	out_frame->key_mic = true;
+	out_frame->key_mic = (mic_len) ? true : false;
 	out_frame->secure = secure;
 	out_frame->error = false;
 	out_frame->request = false;
-	out_frame->encrypted_key_data = false;
+	out_frame->encrypted_key_data = (mic_len) ? false : true;
 	out_frame->smk_message = false;
 	out_frame->key_length = 0;
 	out_frame->key_replay_counter = L_CPU_TO_BE64(key_replay_counter);
