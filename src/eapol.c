@@ -227,16 +227,27 @@ uint8_t *eapol_decrypt_key_data(enum ie_rsn_akm_suite akm, const uint8_t *kek,
 		expected_len = key_data_len;
 		break;
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AKM_DEFINED:
-		/*
-		 * TODO: for now, only SAE/OWE (group 19) is supported under the
-		 * AKM_DEFINED key descriptor version. Once 8021x suites are
-		 * added for this type this will need to be expanded to handle
-		 * the AKM types in its own switch.
-		 */
-		if (!IE_AKM_IS_SAE(akm) && akm != IE_RSN_AKM_SUITE_OWE)
-			return NULL;
+		switch (akm) {
+		case IE_RSN_AKM_SUITE_FILS_SHA256:
+		case IE_RSN_AKM_SUITE_FILS_SHA384:
+			if (key_data_len < 16)
+				return NULL;
 
-		/* Fall through */
+			expected_len = key_data_len - 16;
+			break;
+		case IE_RSN_AKM_SUITE_SAE_SHA256:
+		case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
+		case IE_RSN_AKM_SUITE_OWE:
+			if (key_data_len < 24 || key_data_len % 8)
+				return NULL;
+
+			expected_len = key_data_len - 8;
+			break;
+		default:
+			return NULL;
+		}
+
+		break;
 	case EAPOL_KEY_DESCRIPTOR_VERSION_HMAC_SHA1_AES:
 	case EAPOL_KEY_DESCRIPTOR_VERSION_AES_128_CMAC_AES:
 		if (key_data_len < 24 || key_data_len % 8)
@@ -286,13 +297,38 @@ uint8_t *eapol_decrypt_key_data(enum ie_rsn_akm_suite akm, const uint8_t *kek,
 				goto error;
 			}
 
+			if (!aes_unwrap(kek, kek_len, key_data,
+						key_data_len, buf))
+				goto error;
+
 			break;
+		case IE_RSN_AKM_SUITE_FILS_SHA256:
+		case IE_RSN_AKM_SUITE_FILS_SHA384:
+		{
+			struct iovec ad[1];
+
+			ad[0].iov_base = (void *)frame;
+			ad[0].iov_len = key_data - (const uint8_t *)frame;
+
+			if (akm == IE_RSN_AKM_SUITE_FILS_SHA256)
+				kek_len = 32;
+			else
+				kek_len = 48;
+
+			if (!aes_siv_decrypt(kek, kek_len, key_data,
+						key_data_len, ad, 1, buf))
+				goto error;
+
+			break;
+		}
 		default:
 			kek_len = 16;
-		}
 
-		if (!aes_unwrap(kek, kek_len, key_data, key_data_len, buf))
-			goto error;
+			if (!aes_unwrap(kek, kek_len, key_data,
+						key_data_len, buf))
+				goto error;
+			break;
+		}
 
 		break;
 	}
