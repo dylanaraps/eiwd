@@ -341,6 +341,7 @@ unit_test_eap_sim_SOURCES = unit/test-eap-sim.c \
 		src/eap.h src/eap.c src/eap-private.h \
 		src/util.h src/util.c \
 		src/simauth.h src/simauth.c \
+		src/erp.h src/erp.c \
 		src/eap-sim.c
 
 unit_test_eap_sim_LDADD = $(ell_ldadd)
@@ -397,6 +398,7 @@ unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/eap-tls.c src/eap-ttls.c \
 				src/eap-md5.c src/util.c \
 				src/eap-tls-common.h src/eap-tls-common.c \
+				src/erp.h src/erp.c \
 				src/mschaputil.h src/mschaputil.c
 unit_test_eapol_LDADD = $(ell_ldadd)
 unit_test_eapol_DEPENDENCIES = ell/unit/test_data
@@ -418,6 +420,7 @@ unit_test_wsc_SOURCES = unit/test-wsc.c src/wscutil.h src/wscutil.c \
 				src/handshake.h src/handshake.c \
 				src/eap.h src/eap.c src/eap-private.h \
 				src/util.h src/util.c \
+				src/erp.h src/erp.c \
 				src/eap-wsc.h src/eap-wsc.c
 unit_test_wsc_LDADD = $(ell_ldadd)
 
