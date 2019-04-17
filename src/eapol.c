@@ -39,6 +39,7 @@
 #include "src/eap.h"
 #include "src/handshake.h"
 #include "src/watchlist.h"
+#include "src/erp.h"
 
 struct l_queue *state_machines;
 struct l_queue *preauths;
@@ -2005,6 +2006,11 @@ static void eapol_eap_results_cb(const uint8_t *msk_data, size_t msk_len,
 	}
 
 	handshake_state_set_pmk(sm->handshake, msk_data, msk_len);
+
+	if (sm->handshake->support_fils && emsk_data && session_id)
+		erp_cache_add(eap_get_identity(sm->eap), session_id,
+				session_len, emsk_data, emsk_len,
+				(const char *)sm->handshake->ssid);
 
 	return;
 
