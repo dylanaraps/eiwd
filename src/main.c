@@ -46,6 +46,7 @@
 #include "src/adhoc.h"
 #include "src/blacklist.h"
 #include "src/storage.h"
+#include "src/erp.h"
 
 #include "src/backtrace.h"
 
@@ -509,9 +510,11 @@ int main(int argc, char *argv[])
 	sim_auth_init();
 	plugin_init(plugins, noplugins);
 	blacklist_init();
+	erp_init();
 
 	exit_status = l_main_run_with_signal(signal_handler, NULL);
 
+	erp_exit();
 	blacklist_exit();
 	plugin_exit();
 	sim_auth_exit();
