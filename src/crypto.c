@@ -213,6 +213,201 @@ bool aes_wrap(const uint8_t *kek, const uint8_t *in, size_t len, uint8_t *out)
 	return true;
 }
 
+/*
+ * RFC 5297 Section 2.3 - Doubling
+ */
+static void dbl(uint8_t *val)
+{
+	int i;
+	int c = val[0] & (1 << 7);
+
+	/* shift all but last byte (since i + 1 would overflow) */
+	for (i = 0; i < 15; i++)
+		val[i] = (val[i] << 1) | (val[i + 1] >> 7);
+
+	val[15] <<= 1;
+
+	/*
+	 * "The condition under which the xor operation is performed is when the
+	 * bit being shifted off is one."
+	 */
+	if (c)
+		val[15] ^= 0x87;
+}
+
+static void xor(uint8_t *a, uint8_t *b, size_t len)
+{
+	size_t i;
+
+	for (i = 0; i < len; i++)
+		a[i] ^= b[i];
+}
+
+/*
+ * RFC 5297 Section 2.4 - S2V
+ */
+static bool s2v(struct l_checksum *cmac, struct iovec *iov, size_t iov_len,
+		uint8_t *v)
+{
+	uint8_t zero[16] = { 0 };
+	uint8_t d[16];
+	uint8_t tmp[16];
+	size_t i;
+
+	/* AES-CMAC(K, <zero>) */
+	if (!l_checksum_update(cmac, zero, sizeof(zero)))
+		return false;
+
+	l_checksum_get_digest(cmac, d, sizeof(d));
+
+	/* Last element is treated special */
+	for (i = 0; i < iov_len - 1; i++) {
+		/* D = dbl(D) */
+		dbl(d);
+
+		/* AES-CMAC(K, Si) */
+		if (!l_checksum_update(cmac, iov[i].iov_base, iov[i].iov_len))
+			return false;
+
+		l_checksum_get_digest(cmac, tmp, sizeof(tmp));
+		/* D = D xor AES-CMAC(K, Si) */
+		xor(d, tmp, sizeof(tmp));
+	}
+
+	if (iov[i].iov_len >= 16) {
+		if (!l_checksum_update(cmac, iov[i].iov_base,
+					iov[i].iov_len - 16))
+			return false;
+		/* xorend(d) */
+		xor(d, iov[i].iov_base + iov[i].iov_len - 16, 16);
+	} else {
+		dbl(d);
+		xor(d, iov[i].iov_base, iov[i].iov_len);
+		/*
+		 * pad(X) indicates padding of string X, len(X) < 128, out to
+		 * 128 bits by the concatenation of a single bit of 1 followed
+		 * by as many 0 bits as are necessary.
+		 */
+		d[iov[i].iov_len] ^= 0x80;
+	}
+
+	if (!l_checksum_update(cmac, d, 16))
+		return false;
+
+	l_checksum_get_digest(cmac, v, 16);
+
+	return true;
+}
+
+/*
+ * RFC 5297 Section 2.6 - SIV Encrypt
+ */
+bool aes_siv_encrypt(const uint8_t *key, size_t key_len, const uint8_t *in,
+			size_t in_len, struct iovec *ad, size_t num_ad,
+			uint8_t *out)
+{
+	struct l_checksum *cmac;
+	struct l_cipher *ctr;
+	struct iovec iov[num_ad + 1];
+	uint8_t v[16];
+
+	memcpy(iov, ad, sizeof(iov) * num_ad);
+	iov[num_ad].iov_base = (void *)in;
+	iov[num_ad].iov_len = in_len;
+	num_ad++;
+
+	/*
+	 * key is split into two equal halves... K1 is used for S2V and K2 is
+	 * used for CTR
+	 */
+	cmac = l_checksum_new_cmac_aes(key, key_len / 2);
+	if (!cmac)
+		return false;
+
+	if (!s2v(cmac, iov, num_ad, v)) {
+		l_checksum_free(cmac);
+		return false;
+	}
+
+	l_checksum_free(cmac);
+
+	memcpy(out, v, 16);
+
+	v[8] &= 0x7f;
+	v[12] &= 0x7f;
+
+	ctr = l_cipher_new(L_CIPHER_AES_CTR, key + (key_len / 2), key_len / 2);
+	if (!ctr)
+		return false;
+
+	if (!l_cipher_set_iv(ctr, v, 16))
+		goto free_ctr;
+
+	if (!l_cipher_encrypt(ctr, in, out + 16, in_len))
+		goto free_ctr;
+
+	l_cipher_free(ctr);
+
+	return true;
+
+free_ctr:
+	l_cipher_free(ctr);
+	return false;
+}
+
+bool aes_siv_decrypt(const uint8_t *key, size_t key_len, const uint8_t *in,
+			size_t in_len, struct iovec *ad, size_t num_ad,
+			uint8_t *out)
+{
+	struct l_checksum *cmac;
+	struct l_cipher *ctr;
+	struct iovec iov[num_ad + 1];
+	uint8_t iv[16];
+	uint8_t v[16];
+
+	memcpy(iov, ad, sizeof(iov) * num_ad);
+	iov[num_ad].iov_base = (void *)out;
+	iov[num_ad].iov_len = in_len - 16;
+	num_ad++;
+
+	memcpy(iv, in, 16);
+
+	iv[8] &= 0x7f;
+	iv[12] &= 0x7f;
+
+	ctr = l_cipher_new(L_CIPHER_AES_CTR, key + (key_len / 2), key_len / 2);
+	if (!ctr)
+		return false;
+
+	if (!l_cipher_set_iv(ctr, iv, 16))
+		goto free_ctr;
+
+	if (!l_cipher_decrypt(ctr, in + 16, out, in_len - 16))
+		goto free_ctr;
+
+	l_cipher_free(ctr);
+
+	cmac = l_checksum_new_cmac_aes(key, key_len / 2);
+	if (!cmac)
+		return false;
+
+	if (!s2v(cmac, iov, num_ad, v)) {
+		l_checksum_free(cmac);
+		return false;
+	}
+
+	l_checksum_free(cmac);
+
+	if (memcmp(v, in, 16))
+		return false;
+
+	return true;
+
+free_ctr:
+	l_cipher_free(ctr);
+	return false;
+}
+
 bool arc4_skip(const uint8_t *key, size_t key_len, size_t skip,
 		const uint8_t *in, size_t len, uint8_t *out)
 {
