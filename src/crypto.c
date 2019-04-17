@@ -365,10 +365,16 @@ bool aes_siv_decrypt(const uint8_t *key, size_t key_len, const uint8_t *in,
 	uint8_t iv[16];
 	uint8_t v[16];
 
+	if (in_len < 16)
+		return false;
+
 	memcpy(iov, ad, sizeof(iov) * num_ad);
 	iov[num_ad].iov_base = (void *)out;
 	iov[num_ad].iov_len = in_len - 16;
 	num_ad++;
+
+	if (in_len == 16)
+		goto check_cmac;
 
 	memcpy(iv, in, 16);
 
@@ -387,6 +393,7 @@ bool aes_siv_decrypt(const uint8_t *key, size_t key_len, const uint8_t *in,
 
 	l_cipher_free(ctr);
 
+check_cmac:
 	cmac = l_checksum_new_cmac_aes(key, key_len / 2);
 	if (!cmac)
 		return false;
