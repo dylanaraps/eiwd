@@ -1918,8 +1918,11 @@ static void eapol_key_handle(struct eapol_sm *sm,
 
 	if ((ek->encrypted_key_data && !sm->handshake->wpa_ie) ||
 			(ek->key_type == 0 && sm->handshake->wpa_ie)) {
-		/* Haven't received step 1 yet, so no ptk */
-		if (!sm->handshake->have_snonce)
+		/*
+		 * If using a MIC (non-FILS) but haven't received step 1 yet
+		 * we disregard since there will be no ptk
+		 */
+		if (sm->mic_len && !sm->handshake->have_snonce)
 			return;
 
 		kek = handshake_state_get_kek(sm->handshake);
