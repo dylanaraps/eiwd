@@ -1788,14 +1788,34 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 
 	kck = handshake_state_get_kck(sm->handshake);
 
-	if (!eapol_calculate_mic(sm->handshake->akm_suite, kck,
-			step2, mic, sm->mic_len)) {
-		l_free(step2);
-		handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
-		return;
+	if (sm->mic_len) {
+		if (!eapol_calculate_mic(sm->handshake->akm_suite, kck,
+				step2, mic, sm->mic_len)) {
+			l_debug("MIC calculation failed");
+			l_free(step2);
+			handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
+			return;
+		}
+
+		memcpy(EAPOL_KEY_MIC(step2), mic, sm->mic_len);
+	} else {
+		uint8_t encr[16];
+		struct iovec ad[1];
+
+		ad[0].iov_base = step2;
+		ad[0].iov_len = EAPOL_KEY_DATA(step2, 0) - (uint8_t *)step2;
+
+		if (!aes_siv_encrypt(handshake_state_get_kek(sm->handshake), 32,
+				EAPOL_KEY_DATA(step2, 0), 0, ad, 1, encr)) {
+			l_debug("AES-SIV encryption failed");
+			l_free(step2);
+			handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
+			return;
+		}
+
+		memcpy(EAPOL_KEY_DATA(step2, 0), encr, 16);
 	}
 
-	memcpy(EAPOL_KEY_MIC(step2), mic, sm->mic_len);
 	eapol_sm_write(sm, (struct eapol_frame *) step2, false);
 	l_free(step2);
 
