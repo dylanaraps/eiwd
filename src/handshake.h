@@ -134,6 +134,8 @@ void handshake_state_set_authenticator_address(struct handshake_state *s,
 void handshake_state_set_authenticator(struct handshake_state *s, bool auth);
 void handshake_state_set_pmk(struct handshake_state *s, const uint8_t *pmk,
 				size_t pmk_len);
+void handshake_state_set_ptk(struct handshake_state *s, const uint8_t *ptk,
+				size_t ptk_len);
 void handshake_state_set_8021x_config(struct handshake_state *s,
 					struct l_settings *settings);
 bool handshake_state_set_supplicant_rsn(struct handshake_state *s,

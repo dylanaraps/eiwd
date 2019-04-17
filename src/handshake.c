@@ -117,6 +117,13 @@ void handshake_state_set_pmk(struct handshake_state *s, const uint8_t *pmk,
 	s->have_pmk = true;
 }
 
+void handshake_state_set_ptk(struct handshake_state *s, const uint8_t *ptk,
+				size_t ptk_len)
+{
+	memcpy(s->ptk, ptk, ptk_len);
+	s->ptk_complete = true;
+}
+
 void handshake_state_set_8021x_config(struct handshake_state *s,
 					struct l_settings *settings)
 {
