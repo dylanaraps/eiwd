@@ -1920,7 +1920,7 @@ static void eapol_wpa2_handshake_test(const void *data)
 	gtk_step1 = eapol_key_validate(eapol_key_data_11,
 					sizeof(eapol_key_data_11), 16);
 	assert(gtk_step1);
-	assert(eapol_verify_gtk_1_of_2(gtk_step1, false));
+	assert(eapol_verify_gtk_1_of_2(gtk_step1, false, 16));
 
 	decrypted_key_data = eapol_decrypt_key_data(IE_RSN_AKM_SUITE_PSK,
 						ptk + 16, gtk_step1,
@@ -2046,7 +2046,7 @@ static void eapol_wpa_handshake_test(const void *data)
 	gtk_step1 = eapol_key_validate(eapol_key_data_17,
 					sizeof(eapol_key_data_17), 16);
 	assert(gtk_step1);
-	assert(eapol_verify_gtk_1_of_2(gtk_step1, true));
+	assert(eapol_verify_gtk_1_of_2(gtk_step1, true, 16));
 
 	decrypted_key_data = eapol_decrypt_key_data(IE_RSN_AKM_SUITE_PSK,
 						ptk + 16, gtk_step1,

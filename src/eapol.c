@@ -534,7 +534,8 @@ bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek, bool is_wpa)
 	if (ek->install)	\
 		return false	\
 
-bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa)
+bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa,
+				size_t mic_len)
 {
 	uint16_t key_len;
 
@@ -543,7 +544,7 @@ bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa)
 	if (!ek->key_ack)
 		return false;
 
-	if (!ek->key_mic)
+	if (mic_len && !ek->key_mic)
 		return false;
 
 	if (!ek->secure)
@@ -1683,7 +1684,7 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 	size_t igtk_len;
 	uint8_t igtk_key_index;
 
-	if (!eapol_verify_gtk_1_of_2(ek, sm->handshake->wpa_ie)) {
+	if (!eapol_verify_gtk_1_of_2(ek, sm->handshake->wpa_ie, sm->mic_len)) {
 		handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 		return;
 	}

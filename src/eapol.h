@@ -65,7 +65,8 @@ bool eapol_verify_ptk_1_of_4(const struct eapol_key *ek, size_t mic_len);
 bool eapol_verify_ptk_2_of_4(const struct eapol_key *ek);
 bool eapol_verify_ptk_3_of_4(const struct eapol_key *ek, bool is_wpa);
 bool eapol_verify_ptk_4_of_4(const struct eapol_key *ek, bool is_wpa);
-bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa);
+bool eapol_verify_gtk_1_of_2(const struct eapol_key *ek, bool is_wpa,
+				size_t mic_len);
 bool eapol_verify_gtk_2_of_2(const struct eapol_key *ek, bool is_wpa);
 
 struct eapol_key *eapol_create_ptk_2_of_4(
