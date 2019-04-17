@@ -700,11 +700,14 @@ struct eapol_key *eapol_create_gtk_2_of_2(
 				bool is_wpa, uint8_t wpa_key_id, size_t mic_len)
 {
 	uint8_t snonce[32];
+	uint8_t extra[16] = { 0 };
 	struct eapol_key *step2;
 
 	memset(snonce, 0, sizeof(snonce));
 	step2 = eapol_create_common(protocol, version, true,
-					key_replay_counter, snonce, 0, NULL,
+					key_replay_counter, snonce,
+					(mic_len) ? 0 : 16,
+					(mic_len) ? NULL : extra,
 					0, is_wpa, mic_len);
 
 	if (!step2)
