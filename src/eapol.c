@@ -313,7 +313,7 @@ uint8_t *eapol_decrypt_key_data(enum ie_rsn_akm_suite akm, const uint8_t *kek,
 			if (akm == IE_RSN_AKM_SUITE_FILS_SHA256)
 				kek_len = 32;
 			else
-				kek_len = 48;
+				kek_len = 64;
 
 			if (!aes_siv_decrypt(kek, kek_len, key_data,
 						key_data_len, ad, 1, buf))
@@ -1805,7 +1805,8 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 		ad[0].iov_base = step2;
 		ad[0].iov_len = EAPOL_KEY_DATA(step2, 0) - (uint8_t *)step2;
 
-		if (!aes_siv_encrypt(handshake_state_get_kek(sm->handshake), 32,
+		if (!aes_siv_encrypt(handshake_state_get_kek(sm->handshake),
+				handshake_state_get_kek_len(sm->handshake),
 				EAPOL_KEY_DATA(step2, 0), 0, ad, 1, encr)) {
 			l_debug("AES-SIV encryption failed");
 			l_free(step2);
