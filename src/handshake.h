@@ -169,6 +169,7 @@ void handshake_state_set_pmkid(struct handshake_state *s, const uint8_t *pmkid);
 bool handshake_state_derive_ptk(struct handshake_state *s);
 size_t handshake_state_get_ptk_size(struct handshake_state *s);
 const uint8_t *handshake_state_get_kck(struct handshake_state *s);
+size_t handshake_state_get_kek_len(struct handshake_state *s);
 const uint8_t *handshake_state_get_kek(struct handshake_state *s);
 void handshake_state_install_ptk(struct handshake_state *s);
 

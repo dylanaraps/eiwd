@@ -453,6 +453,16 @@ const uint8_t *handshake_state_get_kck(struct handshake_state *s)
 	return s->ptk;
 }
 
+size_t handshake_state_get_kek_len(struct handshake_state *s)
+{
+	size_t kek_size;
+
+	if (!handshake_get_key_sizes(s, NULL, NULL, &kek_size))
+		return 0;
+
+	return kek_size;
+}
+
 const uint8_t *handshake_state_get_kek(struct handshake_state *s)
 {
 	size_t kck_size;
