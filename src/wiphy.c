@@ -95,7 +95,8 @@ enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy, uint16_t mask)
 }
 
 enum ie_rsn_akm_suite wiphy_select_akm(struct wiphy *wiphy,
-					struct scan_bss *bss)
+					struct scan_bss *bss,
+					bool fils_capable_hint)
 {
 	struct ie_rsn_info info;
 	enum security security;
@@ -110,6 +111,15 @@ enum ie_rsn_akm_suite wiphy_select_akm(struct wiphy *wiphy,
 	 * for fast transitions.  Otherwise use SHA256 version if present.
 	 */
 	if (security == SECURITY_8021X) {
+		if (wiphy_has_feature(wiphy, NL80211_EXT_FEATURE_FILS_STA) &&
+				fils_capable_hint) {
+			if (info.akm_suites & IE_RSN_AKM_SUITE_FILS_SHA384)
+				return IE_RSN_AKM_SUITE_FILS_SHA384;
+
+			if (info.akm_suites & IE_RSN_AKM_SUITE_FILS_SHA256)
+				return IE_RSN_AKM_SUITE_FILS_SHA256;
+		}
+
 		if ((info.akm_suites & IE_RSN_AKM_SUITE_FT_OVER_8021X) &&
 				bss->rsne && bss->mde_present)
 			return IE_RSN_AKM_SUITE_FT_OVER_8021X;

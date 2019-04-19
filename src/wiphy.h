@@ -40,7 +40,8 @@ typedef void (*wiphy_destroy_func_t)(void *user_data);
 enum ie_rsn_cipher_suite wiphy_select_cipher(struct wiphy *wiphy,
 							uint16_t mask);
 enum ie_rsn_akm_suite wiphy_select_akm(struct wiphy *wiphy,
-					struct scan_bss *bss);
+					struct scan_bss *bss,
+					bool fils_capable_hint);
 
 bool wiphy_parse_id_and_name(struct l_genl_attr *attr, uint32_t *out_id,
 				const char **out_name);

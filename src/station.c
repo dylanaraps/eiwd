@@ -507,7 +507,7 @@ static int station_build_handshake_rsn(struct handshake_state *hs,
 	memset(&bss_info, 0, sizeof(bss_info));
 	scan_bss_get_rsn_info(bss, &bss_info);
 
-	info.akm_suites = wiphy_select_akm(wiphy, bss);
+	info.akm_suites = wiphy_select_akm(wiphy, bss, false);
 
 	/*
 	 * Special case for OWE. With OWE we still need to build up the
