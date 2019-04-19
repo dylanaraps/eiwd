@@ -327,7 +327,7 @@ bool owe_retry(struct owe_sm *owe)
 
 	l_debug("OWE retrying with group %u", owe->group);
 
-	owe_start(owe);
+	owe_rx_authenticate(owe);
 
 	return true;
 }
