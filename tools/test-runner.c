@@ -1116,22 +1116,7 @@ configure:
 			goto exit;
 		}
 
-		l_queue_push_head(wiphy_list, wiphy);
-
-		wiphy->interface_name = l_strdup_printf("%s%d",
-							HW_INTERFACE_PREFIX,
-							num_radios_created);
-		if (!create_interface(wiphy->interface_name, wiphy->name))
-			goto exit;
-
-		wiphy->interface_created = true;
-		l_info("Created interface %s on %s radio",
-			wiphy->interface_name, wiphy->name);
-
-		if (!set_interface_state(wiphy->interface_name,
-						HW_INTERFACE_STATE_UP))
-			goto exit;
-
+		l_queue_push_tail(wiphy_list, wiphy);
 		num_radios_created++;
 	}
 
@@ -1197,6 +1182,7 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 	for (i = 0; hostap_keys[i]; i++) {
 		const struct l_queue_entry *wiphy_entry;
 		const char *hostapd_config_file;
+		unsigned wiphy_idx = 0;
 
 		hostapd_config_file =
 			l_settings_get_value(hw_settings,
@@ -1216,7 +1202,8 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 
 		for (wiphy_entry = l_queue_get_entries(wiphy_list);
 					wiphy_entry;
-					wiphy_entry = wiphy_entry->next) {
+					wiphy_entry = wiphy_entry->next,
+					wiphy_idx++) {
 			struct wiphy *wiphy = wiphy_entry->data;
 
 			if (strcmp(wiphy->name, hostap_keys[i]))
@@ -1233,7 +1220,29 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 		}
 
 		if (!wiphy_entry) {
-			l_error("Failed to find available interface.");
+			l_error("Failed to find available wiphy.");
+			goto done;
+		}
+
+		wiphys[i]->interface_name = l_strdup_printf("%s%d",
+							HW_INTERFACE_PREFIX,
+							wiphy_idx);
+		if (!create_interface(wiphys[i]->interface_name,
+					wiphys[i]->name)) {
+			l_error("Failed to create hostapd interface %s on "
+				"radio %s",
+				wiphys[i]->interface_name, wiphys[i]->name);
+			goto done;
+		}
+
+		wiphys[i]->interface_created = true;
+		l_info("Created hostapd interface %s on %s radio",
+			wiphys[i]->interface_name, wiphys[i]->name);
+
+		if (!set_interface_state(wiphys[i]->interface_name,
+						HW_INTERFACE_STATE_UP)) {
+			l_error("Failed to set %s state UP",
+				wiphys[i]->interface_name);
 			goto done;
 		}
 
@@ -1292,9 +1301,6 @@ static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 					wiphy_entry;
 					wiphy_entry = wiphy_entry->next) {
 			struct wiphy *wiphy = wiphy_entry->data;
-
-			if (!wiphy->interface_created)
-				continue;
 
 			if (wiphy->used_by_hostapd)
 				continue;
@@ -1665,10 +1671,9 @@ static void set_wiphy_list(struct l_queue *wiphy_list)
 		struct wiphy *wiphy = wiphy_entry->data;
 
 		size += 32 + strlen(wiphy->name);
-		if (wiphy->interface_created)
-			size += 32 + strlen(wiphy->interface_name);
 		if (wiphy->used_by_hostapd) {
-			size += 32 + strlen(wiphy->hostapd_ctrl_interface) +
+			size += 32 + strlen(wiphy->interface_name) +
+				strlen(wiphy->hostapd_ctrl_interface) +
 				strlen(wiphy->hostapd_config);
 		}
 	}
@@ -1683,12 +1688,13 @@ static void set_wiphy_list(struct l_queue *wiphy_list)
 		if (size)
 			var[size++] = '\n';
 
-		size += sprintf(var + size, "%s=%s=", wiphy->name,
-				wiphy->interface_name);
+		size += sprintf(var + size, "%s=", wiphy->name);
 
 		if (wiphy->used_by_hostapd)
 			size += sprintf(var + size,
-					"hostapd,ctrl_interface=%s,config=%s",
+					"hostapd,name=%s,ctrl_interface=%s,"
+					"config=%s",
+					wiphy->interface_name,
 					wiphy->hostapd_ctrl_interface,
 					wiphy->hostapd_config);
 		else
