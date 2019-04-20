@@ -148,7 +148,6 @@ static const char * const qemu_table[] = { NULL };
 struct wiphy {
 	char name[20];
 	int id;
-	unsigned int interface_index;
 	bool interface_created : 1;
 	bool used_by_hostapd : 1;
 	char *interface_name;
@@ -1123,7 +1122,6 @@ configure:
 			goto exit;
 
 		wiphy->interface_created = true;
-		wiphy->interface_index = num_radios_created;
 		l_info("Created interface %s on %s radio",
 			wiphy->interface_name, wiphy->name);
 
