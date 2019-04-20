@@ -18,7 +18,7 @@ class Test(unittest.TestCase):
     def test_connection_success(self):
         hostapd = None
 
-        for hostapd_if in list(hostapd_map.values()):
+        for hostapd_if in hostapd_map.values():
             hpd = HostapdCLI(hostapd_if)
             if hpd.get_config_value('ssid') == 'ssidEAP-TTLS-MSCHAP':
                 hostapd = hpd

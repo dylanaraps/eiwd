@@ -8,20 +8,12 @@ import iwd
 from iwd import IWD
 from iwd import PSKAgent
 from iwd import NetworkType
-from hostapd import HostapdCLI
-from wiphy import wiphy_map
+from hostapd import HostapdCLI, hostapd_map
 
 class Test(unittest.TestCase):
 
     def test_connection_success(self):
-        hostapd = None
-
-        for wname in wiphy_map:
-            wiphy = wiphy_map[wname]
-            intf = list(wiphy.values())[0]
-            if intf.use == 'hostapd':
-                hostapd = HostapdCLI(intf)
-                break
+        hostapd = HostapdCLI(list(hostapd_map.values())[0])
 
         wd = IWD()
 

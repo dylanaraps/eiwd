@@ -9,8 +9,7 @@ from iwd import IWD
 from iwd import PSKAgent
 from iwd import NetworkType
 from hwsim import Hwsim
-from hostapd import HostapdCLI
-from wiphy import wiphy_map
+from hostapd import HostapdCLI, hostapd_map
 import testutil
 
 class Test(unittest.TestCase):
@@ -154,9 +153,7 @@ class Test(unittest.TestCase):
 
         cls.bss_hostapd = [None, None, None]
         cls.bss_radio = [None, None, None]
-        for wname in wiphy_map:
-            wiphy = wiphy_map[wname]
-            intf = list(wiphy.values())[0]
+        for intf in hostapd_map.values():
             if intf.config and '1' in intf.config:
                 bss_idx = 0
             elif intf.config and '2' in intf.config:
@@ -168,7 +165,7 @@ class Test(unittest.TestCase):
 
             for path in hwsim.radios:
                 radio = hwsim.radios[path]
-                if radio.name == wname:
+                if radio.name == intf.wiphy.name:
                     break
 
             cls.bss_hostapd[bss_idx] = HostapdCLI(intf)

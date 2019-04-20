@@ -9,7 +9,7 @@ from iwd import IWD
 from iwd import NetworkType
 import testutil
 
-from wiphy import wiphy_map
+import hostapd
 from hwsim import Hwsim
 
 class Test(unittest.TestCase):
@@ -19,16 +19,11 @@ class Test(unittest.TestCase):
 
         bss_radio = None
 
-        for wname in wiphy_map:
-            wiphy = wiphy_map[wname]
-            intf = list(wiphy.values())[0]
-            if intf.config == 'ssidOWE.conf':
-                for path in hwsim.radios:
-                    radio = hwsim.radios[path]
-                    if radio.name == wname:
-                        bss_radio = radio
-            else:
-                continue
+        intf = list(hostapd.hostapd_map.values())[0]
+        for path in hwsim.radios:
+            radio = hwsim.radios[path]
+            if radio.name == intf.wiphy.name:
+                bss_radio = radio
 
         self.assertIsNotNone(bss_radio)
 

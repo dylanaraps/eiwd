@@ -9,8 +9,7 @@ from iwd import IWD
 from iwd import PSKAgent
 from iwd import NetworkType
 from hwsim import Hwsim
-from hostapd import HostapdCLI
-from wiphy import wiphy_map
+from hostapd import HostapdCLI, hostapd_map
 import testutil
 from time import sleep
 
@@ -57,31 +56,21 @@ class Test(unittest.TestCase):
         ht_radio = None
         vht_radio = None
 
-        for wname in wiphy_map:
-            wiphy = wiphy_map[wname]
-            intf = list(wiphy.values())[0]
-            if intf.config and intf.config == 'non-ht-vht.conf':
+        for intf in hostapd_map.values():
+            for path in hwsim.radios:
+                radio = hwsim.radios[path]
+                if radio.name == intf.wiphy.name:
+                    break
+
+            if intf.config == 'non-ht-vht.conf':
                 non_ht_hostapd = HostapdCLI(intf)
-
-                for path in hwsim.radios:
-                    radio = hwsim.radios[path]
-                    if radio.name == wname:
-                        non_ht_radio = radio
-
-            elif intf.config and intf.config == 'ht.conf':
+                non_ht_radio = radio
+            elif intf.config == 'ht.conf':
                 ht_hostapd = HostapdCLI(intf)
-
-                for path in hwsim.radios:
-                    radio = hwsim.radios[path]
-                    if radio.name == wname:
-                        ht_radio = radio
-            elif intf.config and intf.config == 'vht.conf':
+                ht_radio = radio
+            elif intf.config == 'vht.conf':
                 vht_hostapd = HostapdCLI(intf)
-
-                for path in hwsim.radios:
-                    radio = hwsim.radios[path]
-                    if radio.name == wname:
-                        vht_radio = radio
+                vht_radio = radio
             else:
                 continue
 

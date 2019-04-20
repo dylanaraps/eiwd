@@ -12,7 +12,6 @@ from iwd import NetworkType
 from hostapd import HostapdCLI
 from hostapd import hostapd_map
 
-from wiphy import wiphy_map
 from hwsim import Hwsim
 
 import time
@@ -25,10 +24,7 @@ class Test(unittest.TestCase):
         bss_radio = [None, None, None]
         bss_hostapd = [None, None, None]
 
-        for wname in wiphy_map:
-            wiphy = wiphy_map[wname]
-            intf = list(wiphy.values())[0]
-
+        for intf in hostapd_map.values():
             if intf.config and '1' in intf.config:
                 bss_idx = 0
             elif intf.config and '2' in intf.config:
@@ -40,7 +36,7 @@ class Test(unittest.TestCase):
 
             for path in hwsim.radios:
                 radio = hwsim.radios[path]
-                if radio.name == wname:
+                if radio.name == intf.wiphy.name:
                     break
 
             bss_radio[bss_idx] = radio

@@ -16,7 +16,7 @@ class Test(unittest.TestCase):
     def validate_connection(self, wd):
         hostapd_if = None
 
-        for hostapd in list(hostapd_map.values()):
+        for hostapd in hostapd_map.values():
             if hostapd.config == 'ssidSAE.conf':
                 hostapd_if = hostapd.name
 
