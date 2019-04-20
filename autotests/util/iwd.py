@@ -843,8 +843,7 @@ class IWD(AsyncOpAbstract):
         if start_iwd_daemon:
             args = []
             iwd_wiphys = [wname for wname, wiphy in wiphy.wiphy_map.items()
-                          if any(intf for intf in wiphy.values()
-                                 if intf.use == 'iwd')]
+                          if wiphy.use == 'iwd']
             whitelist = ','.join(iwd_wiphys)
 
             if os.environ.get('IWD_TEST_VALGRIND', None) == 'on':

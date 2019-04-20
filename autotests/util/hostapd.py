@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 import os, os.path
-import wiphy
+from wiphy import wiphy_map
 import re
 import socket
 
@@ -22,8 +22,9 @@ chan_freq_map = [
     2484
 ]
 
-hostapd_map = {ifname: intf for wname, wiphy in wiphy.wiphy_map.items()
-        for ifname, intf in wiphy.items() if intf.use == 'hostapd'}
+hostapd_map = {ifname: intf for wname, wiphy in wiphy_map.items()
+        for ifname, intf in wiphy.interface_map.items()
+        if wiphy.use == 'hostapd'}
 
 class HostapdCLI:
     def __init__(self, interface):

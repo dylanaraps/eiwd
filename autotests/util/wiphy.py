@@ -4,26 +4,29 @@ import collections
 
 wiphy_map = {}
 
+Wiphy = collections.namedtuple('Wiphy', ['name', 'use', 'interface_map'])
+
 Intf = collections.namedtuple('Intf',
-        ['name', 'use', 'ctrl_interface', 'config'])
+        ['name', 'wiphy', 'ctrl_interface', 'config'])
 
 def parse_list():
     for entry in os.environ['TEST_WIPHY_LIST'].split('\n'):
-        wname, ifname, use_str = entry.split('=', 2)
-
-        if wname not in wiphy_map:
-            wiphy_map[wname] = {}
-        wiphy = wiphy_map[wname]
-
+        wname, use_str = entry.split('=', 1)
         use = use_str.split(',')
 
+        if wname not in wiphy_map:
+            wiphy_map[wname] = Wiphy(use=use[0], name=wname, interface_map={})
+
+        if len(use) <= 1:
+            continue
+
         intf = {}
-        intf['name'] = ifname
-        intf['use'] = use[0]
+        intf['name'] = None
+        intf['wiphy'] = wiphy_map[wname]
         intf['ctrl_interface'] = None
         intf['config'] = None
         intf.update(dict([param.split('=', 1) for param in use[1:]]))
 
-        wiphy[ifname] = Intf(**intf)
+        wiphy_map[wname].interface_map[intf['name']] = Intf(**intf)
 
 parse_list()
