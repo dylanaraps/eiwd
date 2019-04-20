@@ -52,7 +52,7 @@ class Test(unittest.TestCase):
         wd.wait_for_object_condition(ordered_network.network_object, condition)
 
         testutil.test_iface_operstate()
-        testutil.test_ifaces_connected(hostapd_ifname, 'wln3')
+        testutil.test_ifaces_connected(hostapd_ifname, device.name)
 
         device.disconnect()
 
