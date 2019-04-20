@@ -10,6 +10,7 @@ import threading
 import time
 import collections
 import datetime
+import weakref
 
 from abc import ABCMeta, abstractmethod
 from enum import Enum
@@ -834,6 +835,7 @@ class IWD(AsyncOpAbstract):
     _agent_manager_if = None
     _iwd_proc = None
     _devices = None
+    _instance = None
 
     def __init__(self, start_iwd_daemon = False,
                                                iwd_config_dir = IWD_CONFIG_DIR):
@@ -874,6 +876,10 @@ class IWD(AsyncOpAbstract):
             time.sleep(0.1)
 
         self._devices = DeviceList(self)
+
+        # Weak to make sure the test's reference to @self is the only counted
+        # reference so that __del__ gets called when it's released
+        IWD._instance = weakref.ref(self)
 
     def __del__(self):
         if self._iwd_proc is None:
@@ -1004,3 +1010,7 @@ class IWD(AsyncOpAbstract):
                                      reply_handler=self._success,
                                      error_handler=self._failure)
         self._wait_for_async_op()
+
+    @staticmethod
+    def get_instance():
+        return IWD._instance()

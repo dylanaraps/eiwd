@@ -6,6 +6,7 @@ import struct
 import select
 
 import wiphy
+import iwd
 
 HWSIM_ETHERTYPE = 0x0800
 HWSIM_PACKETLEN = 250
@@ -51,8 +52,11 @@ def tx(fromsock, tosock, src, dst):
     return (frame, fromsock, tosock, src, dst)
 
 def test_connected(if0=None, if1=None):
-    for wname in wiphy.wiphy_map:
-        for intf in wiphy.wiphy_map[wname]:
+    if if0 is None or if1 is None:
+        iwd_list = [dev.name for dev in iwd.IWD.get_instance().list_devices()]
+        non_iwd_list = [ifname for w in wiphy.wiphy_map.values()
+                for ifname in w.interface_map]
+        for intf in iwd_list + non_iwd_list:
             if if0 is None:
                 if0 = intf
             elif if1 is None and intf != if0:
@@ -120,11 +124,8 @@ IFF_UP = 1 << 0
 IFF_RUNNING = 1 << 6
 
 def test_iface_operstate(intf=None):
-    for wname in wiphy.wiphy_map:
-        w = wiphy.wiphy_map[wname]
-        for ifname in w:
-            if intf is None and w[ifname].use == 'iwd':
-                intf = ifname
+    if not intf:
+        intf = iwd.IWD.get_instance().list_devices()[0].name
 
     sock = socket.socket(socket.PF_PACKET, socket.SOCK_RAW)
 
