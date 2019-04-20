@@ -1014,7 +1014,7 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 						struct l_queue *wiphy_list)
 {
 	char **radio_conf_list;
-	int i, num_radios_requested, num_radios_created;
+	int num_radios_requested, num_radios_created;
 	bool status = false;
 	bool has_hw_conf;
 
@@ -1041,6 +1041,8 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 	}
 
 	if (has_hw_conf) {
+		int i;
+
 		for (i = 0; radio_conf_list[i]; i++) {
 			size_t len = strlen(radio_conf_list[i]);
 
@@ -1072,7 +1074,6 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 	}
 
 	num_radios_created = 0;
-	i = 0;
 
 	while (num_radios_requested > num_radios_created) {
 		struct wiphy *wiphy;
@@ -1088,13 +1089,11 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 			p2p_device = true;
 			use_chanctx = true;
 
-			has_hw_conf = false;
-
 			sprintf(wiphy->name, "rad%d", num_radios_created);
 			goto configure;
 		}
 
-		strcpy(wiphy->name, radio_conf_list[i]);
+		strcpy(wiphy->name, radio_conf_list[num_radios_created]);
 
 		if (!l_settings_get_uint(hw_settings, wiphy->name,
 					HW_CONFIG_PHY_CHANNELS, &channels))
