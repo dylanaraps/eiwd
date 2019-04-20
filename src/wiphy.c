@@ -751,11 +751,12 @@ void wiphy_update_from_genl(struct wiphy *wiphy, struct l_genl_msg *msg)
 					IWD_WIPHY_INTERFACE, "Name");
 	}
 
-	if (!wiphy->supported_iftypes) {
-		/* Most likely a new wiphy, set all the parameters */
-		wiphy_parse_attributes(wiphy, &attr);
-		wiphy_print_basic_info(wiphy);
-	}
+	wiphy_parse_attributes(wiphy, &attr);
+}
+
+void wiphy_create_complete(struct wiphy *wiphy)
+{
+	wiphy_print_basic_info(wiphy);
 }
 
 bool wiphy_destroy(struct wiphy *wiphy)

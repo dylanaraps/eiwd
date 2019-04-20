@@ -449,6 +449,8 @@ static void manager_new_wiphy_event(struct l_genl_msg *msg)
 	if (!state)
 		return;
 
+	wiphy_create_complete(state->wiphy);
+
 	/* Setup a timer just in case a default interface is not created */
 	state->setup_timeout = l_timeout_create(1, manager_wiphy_setup_timeout,
 						state, NULL);
@@ -605,7 +607,12 @@ static void manager_interface_dump_done(void *user_data)
 		struct wiphy_setup_state *state = entry->data;
 
 		/* phy might have been detected after the initial dump */
-		if (state->setup_timeout || state->pending_cmd_count)
+		if (state->setup_timeout)
+			continue;
+
+		wiphy_create_complete(state->wiphy);
+
+		if (state->pending_cmd_count)
 			continue;
 
 		/* If we are here, then there are no interfaces for this phy */
