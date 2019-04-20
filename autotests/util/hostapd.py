@@ -29,9 +29,7 @@ hostapd_map = {ifname: intf for wname, wiphy in wiphy_map.items()
 class HostapdCLI:
     def __init__(self, interface):
         self.ifname = interface.name
-        self.ctrl_interface = interface.ctrl_interface
-
-        self.socket_path = os.path.dirname(self.ctrl_interface)
+        self.socket_path = os.path.dirname(interface.ctrl_interface)
 
         self.cmdline = 'hostapd_cli -p"' + self.socket_path + '" -i"' + \
                 self.ifname + '"'
@@ -106,14 +104,12 @@ class HostapdCLI:
 
     def get_config_value(self, key):
         # first find the right config file
-        for wname in hostapd_map:
-            if wname == self.ifname:
-                with open(hostapd_map[wname].config, 'r') as f:
-                    # read in config file and search for key
-                    cfg = f.read()
-                    match = re.search(r'%s=.*' % key, cfg)
-                    if match:
-                        return match.group(0).split('=')[1]
+        with open(hostapd_map[self.ifname].config, 'r') as f:
+            # read in config file and search for key
+            cfg = f.read()
+            match = re.search(r'%s=.*' % key, cfg)
+            if match:
+                return match.group(0).split('=')[1]
         return None
 
     def get_freq(self):
@@ -123,16 +119,12 @@ class HostapdCLI:
         '''
             Ungracefully kill and restart hostapd
         '''
-        for wname in wiphy.wiphy_map:
-            name = wiphy.wiphy_map[wname]
-            intf = list(name.values())[0]
-            if intf.use == 'hostapd':
-                os.system('killall -9 hostapd')
-                os.system('ifconfig %s down' % intf.name)
-                os.system('ifconfig %s up' % intf.name)
-                os.system('hostapd -g %s -i %s %s &' %
-                          (intf.ctrl_interface, intf.name, intf.config))
-                break
+        intf = hostapd_map[self.ifname]
+        os.system('killall -9 hostapd')
+        os.system('ifconfig %s down' % intf.name)
+        os.system('ifconfig %s up' % intf.name)
+        os.system('hostapd -g %s -i %s %s &' %
+                  (intf.ctrl_interface, intf.name, intf.config))
 
         # set flag so hostapd can be killed after the test
         self._hostapd_restarted = True
