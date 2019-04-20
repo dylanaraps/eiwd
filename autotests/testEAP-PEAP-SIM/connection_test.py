@@ -48,13 +48,8 @@ class Test(unittest.TestCase):
 
         try:
             self.validate_connection(wd)
-        except:
-            del wd
+        finally:
             auth.stop()
-            raise
-
-        del wd
-        auth.stop()
 
     @classmethod
     def setUpClass(cls):

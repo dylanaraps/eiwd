@@ -40,10 +40,7 @@ class Test(unittest.TestCase):
     def test_scan(self):
         wd = IWD(True)
 
-        try:
-            self.validate_quick_scan(wd)
-        finally:
-            del wd
+        self.validate_quick_scan(wd)
 
         # Only ssid_open_1 and ssid_open_2 should be discovered.
         self.assertEqual(self.dict['ssid_open_1'], True)

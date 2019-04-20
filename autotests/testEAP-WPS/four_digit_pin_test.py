@@ -31,13 +31,9 @@ class Test(unittest.TestCase):
         wd.wait_for_object_condition(device, condition)
 
     def test_connection_success(self):
-
         wd = IWD(True)
 
-        try:
-            self.four_digit_pin_success(wd)
-        finally:
-            del wd
+        self.four_digit_pin_success(wd)
 
     @classmethod
     def setUpClass(cls):

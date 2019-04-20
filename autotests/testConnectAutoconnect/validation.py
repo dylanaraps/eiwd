@@ -71,10 +71,4 @@ class TestConnectAutoconnect(unittest.TestCase):
     def validate(self, ssid, autoconnect, throws = None, use_agent = False):
         wd = IWD(True)
 
-        try:
-            self.validate_connection(wd, ssid, autoconnect, throws, use_agent)
-        except:
-            del wd
-            raise
-
-        del wd
+        self.validate_connection(wd, ssid, autoconnect, throws, use_agent)

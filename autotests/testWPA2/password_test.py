@@ -60,8 +60,6 @@ class Test(unittest.TestCase):
         self.assertRaises(iwd.InvalidFormatEx, network.connect)
         wd.unregister_psk_agent(psk_agent)
 
-        del wd
-
     @classmethod
     def tearDownClass(cls):
         IWD.clear_storage()

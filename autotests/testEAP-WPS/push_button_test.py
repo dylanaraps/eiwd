@@ -32,10 +32,7 @@ class Test(unittest.TestCase):
     def test_connection_success(self):
         wd = IWD(True)
 
-        try:
-            self.push_button_success(wd)
-        finally:
-            del wd
+        self.push_button_success(wd)
 
     @classmethod
     def setUpClass(cls):

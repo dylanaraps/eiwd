@@ -52,13 +52,8 @@ class Test(unittest.TestCase):
 
         try:
             self.validate_connection(wd)
-        except:
-            del wd
-            raise
-
-        wd.unregister_psk_agent(psk_agent)
-
-        del wd
+        finally:
+            wd.unregister_psk_agent(psk_agent)
 
     @classmethod
     def setUpClass(cls):

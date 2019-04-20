@@ -133,8 +133,6 @@ class Test(unittest.TestCase):
 
         wd.unregister_psk_agent(psk_agent)
 
-        del wd
-
     @classmethod
     def setUpClass(cls):
         IWD.copy_to_storage('main.conf')

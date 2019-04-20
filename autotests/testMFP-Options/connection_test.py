@@ -86,35 +86,17 @@ class TestMFP(unittest.TestCase):
     def test_iwd_mfp0(self):
         wd = IWD(True, '/tmp/IWD-MFP0')
 
-        try:
-            self.stage_iwd(wd, '/tmp/IWD-MFP0')
-        except:
-            del wd
-            raise
-
-        del wd
+        self.stage_iwd(wd, '/tmp/IWD-MFP0')
 
     def test_iwd_mfp1(self):
         wd = IWD(True, '/tmp/IWD-MFP1')
 
-        try:
-            self.stage_iwd(wd, '/tmp/IWD-MFP1')
-        except:
-            del wd
-            raise
-
-        del wd
+        self.stage_iwd(wd, '/tmp/IWD-MFP1')
 
     def test_iwd_mfp2(self):
         wd = IWD(True, '/tmp/IWD-MFP2')
 
-        try:
-            self.stage_iwd(wd, '/tmp/IWD-MFP2')
-        except:
-            del wd
-            raise
-
-        del wd
+        self.stage_iwd(wd, '/tmp/IWD-MFP2')
 
 if __name__ == '__main__':
     unittest.main(exit=True)

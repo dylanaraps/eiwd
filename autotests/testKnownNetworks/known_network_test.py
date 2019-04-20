@@ -75,13 +75,7 @@ class Test(unittest.TestCase):
     def test_known_networks(self):
         wd = IWD(True)
 
-        try:
-            self.list_removal_and_addition(wd)
-        except:
-            del wd
-            raise
-
-        del wd
+        self.list_removal_and_addition(wd)
 
     @classmethod
     def setUpClass(cls):

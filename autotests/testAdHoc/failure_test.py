@@ -33,10 +33,7 @@ class Test(unittest.TestCase):
     def test_connection_failure(self):
         wd = IWD(True)
 
-        try:
-            self.validate_connection(wd)
-        finally:
-            del wd
+        self.validate_connection(wd)
 
     @classmethod
     def setUpClass(cls):

@@ -98,8 +98,6 @@ class Test(unittest.TestCase):
         condition = 'obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
 
-        del wd
-
     @classmethod
     def setUpClass(cls):
         pass

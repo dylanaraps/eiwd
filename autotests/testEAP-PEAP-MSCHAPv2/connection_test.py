@@ -46,14 +46,7 @@ class Test(unittest.TestCase):
     def test_connection_success(self):
         wd = IWD(True)
 
-        try:
-            self.validate_connection(wd)
-        except:
-            del wd
-            raise
-
-        del wd
-
+        self.validate_connection(wd)
 
     @classmethod
     def setUpClass(cls):

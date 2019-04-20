@@ -73,11 +73,5 @@ class TestConnectAutoconnect(unittest.TestCase):
                                                     wait_periodic_scan = False):
         wd = IWD(True, '/tmp')
 
-        try:
-            self.validate_connection(wd, ssid, autoconnect, throws, use_agent,
-                                                            wait_periodic_scan)
-        except:
-            del wd
-            raise
-
-        del wd
+        self.validate_connection(wd, ssid, autoconnect, throws, use_agent,
+                                                        wait_periodic_scan)

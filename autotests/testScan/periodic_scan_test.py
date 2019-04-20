@@ -54,13 +54,7 @@ class Test(unittest.TestCase):
     def test_scan(self):
         wd = IWD(True, '/tmp')
 
-        try:
-            self.validate_scan(wd)
-        except:
-            del wd
-            raise
-
-        del wd
+        self.validate_scan(wd)
 
         for ssid, seen in self.dict.items():
             self.assertEqual(seen, True)
