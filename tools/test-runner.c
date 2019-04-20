@@ -1035,6 +1035,10 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 		l_settings_get_string_list(hw_settings, HW_CONFIG_GROUP_SETUP,
 						HW_CONFIG_SETUP_RADIO_CONFS,
 									':');
+	if (has_hw_conf && !radio_conf_list) {
+		l_error("%s doesn't parse", HW_CONFIG_SETUP_RADIO_CONFS);
+		return false;
+	}
 
 	if (has_hw_conf) {
 		for (i = 0; radio_conf_list[i]; i++) {
