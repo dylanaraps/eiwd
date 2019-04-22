@@ -118,6 +118,7 @@ struct handshake_state {
 	uint8_t gtk[32];
 	uint8_t gtk_rsc[6];
 	unsigned int gtk_index;
+	struct erp_cache_entry *erp_cache;
 	void *user_data;
 
 	void (*free)(struct handshake_state *s);
