@@ -49,6 +49,7 @@
 #include "src/station.h"
 #include "src/blacklist.h"
 #include "src/mpdu.h"
+#include "src/erp.h"
 
 static struct l_queue *station_list;
 static uint32_t netdev_watch;
@@ -488,6 +489,46 @@ static void station_handshake_event(struct handshake_state *hs,
 	}
 }
 
+static bool station_has_erp_identity(struct network *network)
+{
+	struct erp_cache_entry *cache;
+	struct l_settings *settings;
+	char *check_id;
+	const char *identity;
+	bool ret;
+
+	settings = network_get_settings(network);
+	if (!settings)
+		return false;
+
+	check_id = l_settings_get_string(settings, "Security", "EAP-Identity");
+	if (!check_id)
+		return false;
+
+	cache = erp_cache_get(network_get_ssid(network));
+	if (!cache) {
+		l_free(check_id);
+		return false;
+	}
+
+	identity = erp_cache_entry_get_identity(cache);
+
+	ret = strcmp(check_id, identity) == 0;
+
+	l_free(check_id);
+	erp_cache_put(cache);
+
+	/*
+	 * The settings file must have change out from under us. In this
+	 * case we want to remove the ERP entry because it is no longer
+	 * valid.
+	 */
+	if (!ret)
+		erp_cache_remove(identity);
+
+	return ret;
+}
+
 static int station_build_handshake_rsn(struct handshake_state *hs,
 					struct wiphy *wiphy,
 					struct network *network,
@@ -495,6 +536,7 @@ static int station_build_handshake_rsn(struct handshake_state *hs,
 {
 	enum security security = network_get_security(network);
 	bool add_mde = false;
+	bool fils_hint = false;
 
 	const struct l_settings *settings = iwd_get_config();
 	struct ie_rsn_info bss_info;
@@ -507,7 +549,18 @@ static int station_build_handshake_rsn(struct handshake_state *hs,
 	memset(&bss_info, 0, sizeof(bss_info));
 	scan_bss_get_rsn_info(bss, &bss_info);
 
-	info.akm_suites = wiphy_select_akm(wiphy, bss, false);
+	if (bss_info.akm_suites & (IE_RSN_AKM_SUITE_FILS_SHA256 |
+				IE_RSN_AKM_SUITE_FILS_SHA384))
+		hs->support_fils = true;
+
+	/*
+	 * If this network 8021x we might have a set of cached EAP keys. If so
+	 * wiphy may select FILS if supported by the AP.
+	 */
+	if (security == SECURITY_8021X && hs->support_fils)
+		fils_hint = station_has_erp_identity(network);
+
+	info.akm_suites = wiphy_select_akm(wiphy, bss, fils_hint);
 
 	/*
 	 * Special case for OWE. With OWE we still need to build up the
@@ -645,6 +698,15 @@ static struct handshake_state *station_handshake_setup(struct station *station,
 	} else if (security == SECURITY_8021X)
 		handshake_state_set_8021x_config(hs,
 					network_get_settings(network));
+
+	/*
+	 * If FILS was chosen, the ERP cache has been verified to exist. We
+	 * wait to get it until here because at this point so there are no
+	 * failure paths before fils_sm_new
+	 */
+	if (hs->akm_suite == IE_RSN_AKM_SUITE_FILS_SHA256 ||
+			hs->akm_suite == IE_RSN_AKM_SUITE_FILS_SHA384)
+		hs->erp_cache = erp_cache_get(network_get_ssid(network));
 
 	return hs;
 
