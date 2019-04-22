@@ -111,6 +111,9 @@ struct eap_sim_handle {
 	/* Derived EMSK from PRNG */
 	uint8_t emsk[EAP_SIM_EMSK_LEN];
 
+	/* Save RANDS from AT_RAND attribute for session ID derivation */
+	uint8_t rands[EAP_SIM_RAND_LEN * 3];
+
 	/* Flag set if AT_ANY_ID_REQ was present */
 	bool any_id_req : 1;
 
@@ -295,6 +298,22 @@ start_error:
 	eap_sim_client_error(eap, EAP_TYPE_SIM, EAP_SIM_ERROR_PROCESS);
 }
 
+static void eap_sim_finish(struct eap_state *eap)
+{
+	struct eap_sim_handle *sim = eap_get_data(eap);
+	uint8_t session_id[1 + sizeof(sim->rands) + EAP_SIM_NONCE_LEN];
+
+	session_id[0] = EAP_TYPE_SIM;
+
+	memcpy(session_id + 1, sim->rands, sizeof(sim->rands));
+	memcpy(session_id + 1 + sizeof(sim->rands), sim->nonce,
+				EAP_SIM_NONCE_LEN);
+
+	eap_method_success(eap);
+	eap_set_key_material(eap, sim->msk, 32, sim->emsk, 32, NULL, 0,
+					session_id, sizeof(session_id));
+}
+
 static void gsm_callback(const uint8_t *sres, const uint8_t *kc,
 		void *user_data)
 {
@@ -378,10 +397,7 @@ static void gsm_callback(const uint8_t *sres, const uint8_t *kc,
 		/*
 		 * Result indication not required, we must accept success.
 		 */
-		eap_method_success(eap);
-		/* TODO: Derive Session-ID */
-		eap_set_key_material(eap, sim->msk, 32, NULL, 0, NULL, 0,
-					NULL, 0);
+		eap_sim_finish(eap);
 
 		sim->state = EAP_SIM_STATE_SUCCESS;
 	}
@@ -412,8 +428,6 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 	struct eap_sim_tlv_iter iter;
 	enum eap_sim_error code = EAP_SIM_ERROR_PROCESS;
 
-	const uint8_t *rands = NULL;
-
 	if (sim->state != EAP_SIM_STATE_START) {
 		l_error("invalid packet for EAP-SIM state");
 		goto chal_error;
@@ -443,7 +457,7 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 			 * should only exist if we are re-authenticating to the
 			 * server, which is currently not implemented.
 			 */
-			rands = contents + 2;
+			memcpy(sim->rands, contents + 2, EAP_SIM_RAND_LEN * 3);
 			break;
 
 		case EAP_SIM_AT_RESULT_IND:
@@ -466,7 +480,7 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 	sim->chal_pkt = l_memdup(pkt, len);
 	sim->pkt_len = len;
 
-	if (sim_auth_run_gsm(sim->auth, rands, 3, gsm_callback, eap) < 0) {
+	if (sim_auth_run_gsm(sim->auth, sim->rands, 3, gsm_callback, eap) < 0) {
 		l_free(sim->chal_pkt);
 		sim->chal_pkt = NULL;
 		goto chal_error;
@@ -533,10 +547,7 @@ static void handle_notification(struct eap_state *eap, const uint8_t *pkt,
 		/*
 		 * Server sent successful result indication
 		 */
-		eap_method_success(eap);
-		/* TODO: Derive Session-ID */
-		eap_set_key_material(eap, sim->msk, 32, NULL, 0, NULL, 0,
-					NULL, 0);
+		eap_sim_finish(eap);
 
 		/*
 		 * Build response packet
