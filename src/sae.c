@@ -157,8 +157,6 @@ static bool sae_cn(const uint8_t *kck, uint16_t send_confirm,
 static void sae_authentication_failed(struct sae_sm *sm, uint16_t reason)
 {
 	sm->complete(reason, sm->user_data);
-
-	sae_sm_free(sm);
 }
 
 static void sae_reject_authentication(struct sae_sm *sm, uint16_t reason)

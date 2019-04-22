@@ -2577,10 +2577,12 @@ static void netdev_sae_complete(uint16_t status, void *user_data)
 	struct iovec iov[3];
 	int iov_elems = 0;
 
+	sae_sm_free(netdev->sae_sm);
+	netdev->sae_sm = NULL;
+
 	if (status != 0) {
 		l_error("SAE exchange failed on %u result %u",
 				netdev->index, status);
-		netdev->sae_sm = NULL;
 		goto auth_failed;
 	}
 
