@@ -2725,7 +2725,8 @@ static void netdev_owe_complete(uint16_t status, void *user_data)
 		netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
 		netdev->last_code = status;
 		netdev->expect_connect_failure = true;
-		return;
+
+		goto free_owe;
 	}
 
 	netdev->ignore_connect_event = true;
@@ -2733,6 +2734,10 @@ static void netdev_owe_complete(uint16_t status, void *user_data)
 	netdev->sm = eapol_sm_new(netdev->handshake);
 	eapol_register(netdev->sm);
 	eapol_start(netdev->sm);
+
+free_owe:
+	owe_sm_free(netdev->owe);
+	netdev->owe = NULL;
 }
 
 static void netdev_fils_tx_authenticate(const uint8_t *body,
