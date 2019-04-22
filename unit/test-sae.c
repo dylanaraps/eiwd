@@ -212,6 +212,7 @@ static void test_confirm_timeout(const void *arg)
 	assert(td->status != 0);
 
 	test_destruct(td);
+	sae_sm_free(sm);
 }
 
 static void test_commit_timeout(const void *arg)
@@ -236,6 +237,7 @@ static void test_commit_timeout(const void *arg)
 	assert(td->status != 0);
 
 	test_destruct(td);
+	sae_sm_free(sm);
 }
 
 static void test_clogging(const void *arg)
@@ -313,6 +315,7 @@ static void test_malformed_commit(const void *arg)
 	assert(td->status != 0);
 
 	test_destruct(td);
+	sae_sm_free(sm);
 }
 
 static void test_malformed_confirm(const void *arg)
@@ -330,6 +333,7 @@ static void test_malformed_confirm(const void *arg)
 	assert(td->status != 0);
 
 	test_destruct(td);
+	sae_sm_free(sm);
 }
 
 static uint8_t aa_commit_bad_group[] = {
@@ -355,6 +359,7 @@ static void test_bad_group(const void *arg)
 	assert(td->status == MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP);
 
 	test_destruct(td);
+	sae_sm_free(sm);
 }
 
 static int end_to_end_tx_func(const uint8_t *dest, const uint8_t *frame,
@@ -419,6 +424,8 @@ static void test_bad_confirm(const void *arg)
 	handshake_state_free(hs1);
 	handshake_state_free(hs2);
 	sae_sm_free(sm1);
+	sae_sm_free(sm2);
+
 	/* sm2 gets freed by sae since it failed */
 	l_free(td1);
 	l_free(td2);
