@@ -36,7 +36,7 @@
 struct test_data {
 	unsigned int num_ie;
 	unsigned int len;
-	unsigned char *buf;
+	const unsigned char *buf;
 };
 
 struct ie {
@@ -72,7 +72,7 @@ static void ie_test_reader(const void *data)
 	assert(count == test->num_ie);
 }
 
-static unsigned char beacon_frame[] = {
+static const unsigned char beacon_frame[] = {
 	/* IEEE 802.11 Beacon frame */
 	0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
 	0xff, 0xff, 0xc8, 0xd7, 0x19, 0x39, 0xbe, 0x77,
@@ -158,11 +158,11 @@ static void ie_test_writer(const void *data)
 	struct test_data *test = (struct test_data *)data;
 	struct ie_tlv_builder builder;
 	unsigned int final_len = 0, builder_len, expected_len = test->len;
-	unsigned char *expected_buf = test->buf;
+	const unsigned char *expected_buf = test->buf;
 	unsigned int ie_count = 0;
 	char *str;
 
-	assert(ie_tlv_builder_init(&builder));
+	assert(ie_tlv_builder_init(&builder, NULL, 0));
 
 	test->buf = builder.buf;
 	test->len = builder.max;
@@ -257,7 +257,7 @@ static void ie_test_writer_invalid_tag(const void *data)
 {
 	struct ie_tlv_builder builder;
 
-	assert(ie_tlv_builder_init(&builder));
+	assert(ie_tlv_builder_init(&builder, NULL, 0));
 	assert(!ie_tlv_builder_next(&builder, 512));
 }
 
@@ -265,7 +265,7 @@ static void ie_test_writer_invalid_len(const void *data)
 {
 	struct ie_tlv_builder builder;
 
-	assert(ie_tlv_builder_init(&builder));
+	assert(ie_tlv_builder_init(&builder, NULL, 0));
 	assert(ie_tlv_builder_next(&builder, 255));
 	assert(!ie_tlv_builder_set_length(&builder, MAX_BUILDER_SIZE));
 }
@@ -296,7 +296,7 @@ static void ie_test_writer_extended(const void *data)
 		0xff, 0x05, 0x0a, 0xff, 0x01, 0x02, 0x03,
 	};
 
-	assert(ie_tlv_builder_init(&builder));
+	assert(ie_tlv_builder_init(&builder, NULL, 0));
 
 	assert(ie_tlv_builder_next(&builder, IE_TYPE_EXTENDED_REQUEST));
 	assert(ie_tlv_builder_set_length(&builder, 4));
