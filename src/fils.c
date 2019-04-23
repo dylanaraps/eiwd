@@ -88,18 +88,13 @@ static void fils_erp_tx_func(const uint8_t *eap_data, size_t len,
 	ie_tlv_builder_init(&builder, ptr, sizeof(data) - 4);
 
 	ie_tlv_builder_next(&builder, IE_TYPE_FILS_NONCE);
-	ie_tlv_builder_set_length(&builder, sizeof(fils->nonce));
-	memcpy(ie_tlv_builder_get_data(&builder), fils->nonce,
-					sizeof(fils->nonce));
+	ie_tlv_builder_set_data(&builder, fils->nonce, sizeof(fils->nonce));
 
 	ie_tlv_builder_next(&builder, IE_TYPE_FILS_SESSION);
-	ie_tlv_builder_set_length(&builder, sizeof(fils->session));
-	memcpy(ie_tlv_builder_get_data(&builder), fils->session,
-					sizeof(fils->session));
+	ie_tlv_builder_set_data(&builder, fils->session, sizeof(fils->session));
 
 	ie_tlv_builder_next(&builder, IE_TYPE_FILS_WRAPPED_DATA);
-	ie_tlv_builder_set_length(&builder, len);
-	memcpy(ie_tlv_builder_get_data(&builder), eap_data, len);
+	ie_tlv_builder_set_data(&builder, eap_data, len);
 
 	ie_tlv_builder_finalize(&builder, &tlv_len);
 
@@ -209,17 +204,12 @@ static void fils_erp_complete(enum erp_result result, const void *rmsk,
 	ie_tlv_builder_init(&builder, NULL, 0);
 
 	ie_tlv_builder_next(&builder, IE_TYPE_FILS_KEY_CONFIRMATION);
-	ie_tlv_builder_set_length(&builder, hash_len);
-	memcpy(ie_tlv_builder_get_data(&builder), key_auth, hash_len);
+	ie_tlv_builder_set_data(&builder, key_auth, hash_len);
 
 	ie_tlv_builder_next(&builder, IE_TYPE_FILS_SESSION);
-	ie_tlv_builder_set_length(&builder, sizeof(fils->session));
-	memcpy(ie_tlv_builder_get_data(&builder), fils->session,
-					sizeof(fils->session));
+	ie_tlv_builder_set_data(&builder, fils->session, sizeof(fils->session));
 
-	ie_tlv_builder_finalize(&builder, &ie_len);
-
-	iov[0].iov_base = builder.tlv;
+	iov[0].iov_base = ie_tlv_builder_finalize(&builder, &ie_len);
 	iov[0].iov_len = ie_len;
 	iov[1].iov_base = fils->hs->supplicant_ie;
 	iov[1].iov_len = fils->hs->supplicant_ie[1] + 2;
