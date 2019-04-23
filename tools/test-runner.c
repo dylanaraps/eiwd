@@ -46,6 +46,8 @@
 #include <glob.h>
 #include <ell/ell.h>
 
+#include "linux/nl80211.h"
+
 #ifndef WAIT_ANY
 #define WAIT_ANY (-1)
 #endif
@@ -76,11 +78,14 @@ static bool valgrind;
 static char *gdb_opt;
 static bool enable_debug;
 const char *debug_filter;
+static struct l_settings *hw_config;
+static bool native_hw;
 static const char *qemu_binary;
 static const char *kernel_image;
 static const char *exec_home;
 static const char *test_action_params;
 static char top_level_path[PATH_MAX];
+struct l_queue *wiphy_list;
 
 #if defined(__i386__)
 /*
@@ -147,7 +152,8 @@ static const char * const qemu_table[] = { NULL };
 
 struct wiphy {
 	char name[20];
-	int id;
+	uint32_t id;
+	unsigned int interface_index;
 	bool interface_created : 1;
 	bool used_by_hostapd : 1;
 	char *interface_name;
@@ -341,13 +347,16 @@ static bool check_virtualization(void)
 	return false;
 }
 
-static void start_qemu(void)
+static bool start_qemu(void)
 {
 	char cwd[PATH_MAX], testargs[PATH_MAX];
 	char *initcmd, *cmdline;
 	char **argv;
 	int i, pos;
 	bool has_virt;
+	int num_pci = 0, num_usb = 0;
+	char **pci_keys = NULL;
+	char **usb_keys = NULL;
 
 	has_virt = check_virtualization();
 
@@ -378,7 +387,7 @@ static void start_qemu(void)
 			"TESTVERBOUT=\'%s\' DEBUG_FILTER=\'%s\'"
 			"TEST_ACTION=%u TEST_ACTION_PARAMS=\'%s\' "
 			"TESTARGS=\'%s\' PATH=\'%s\' VALGRIND=%u"
-			"GDB=\'%s\'",
+			"GDB=\'%s\' HW=\'%s\'",
 			check_verbosity("kernel") ? "ignore_loglevel" : "quiet",
 			initcmd, cwd, verbose_opt ? verbose_opt : "none",
 			enable_debug ? debug_filter : "",
@@ -387,9 +396,40 @@ static void start_qemu(void)
 			testargs,
 			getenv("PATH"),
 			valgrind,
-			gdb_opt ? gdb_opt : "none");
+			gdb_opt ? gdb_opt : "none",
+			hw_config ? "real" : "virtual");
 
-	argv = alloca(sizeof(qemu_argv) + sizeof(char *) * 7);
+	if (hw_config) {
+		if (l_settings_has_group(hw_config, "PCIAdapters")) {
+			pci_keys = l_settings_get_keys(hw_config, "PCIAdapters");
+
+			for (num_pci = 0; pci_keys[num_pci]; num_pci++);
+		}
+
+		if (l_settings_has_group(hw_config, "USBAdapters")) {
+			usb_keys = l_settings_get_keys(hw_config, "USBAdapters");
+
+			for (num_usb = 0; usb_keys[num_usb]; num_usb++);
+		}
+
+		if (!pci_keys && !usb_keys) {
+			l_error("hs config had no PCIAdapters or USBAdapters");
+			l_free(initcmd);
+			l_free(cmdline);
+			return false;
+		}
+	}
+
+	/*
+	 * This got quite confusing. We need enough room for:
+	 *
+	 * qemu_argv (static list above with default parameters)
+	 * -kernel,-append,-cpu,-host parameters (7)
+	 * -enable-kvm and/or -usb (2)
+	 * PCI and/or USB parameters (num_pci * 2) (num_usb * 2)
+	 */
+	argv = alloca(sizeof(qemu_argv) + sizeof(char *) *
+				(7 + (2 + (num_pci * 2) + (num_usb * 2))));
 	memcpy(argv, qemu_argv, sizeof(qemu_argv));
 
 	pos = (sizeof(qemu_argv) / sizeof(char *)) - 1;
@@ -403,6 +443,41 @@ static void start_qemu(void)
 	argv[pos++] = "-cpu";
 	argv[pos++] = has_virt ? "host" : "max";
 
+	if (pci_keys) {
+		argv[pos++] = "-enable-kvm";
+		for (i = 0; pci_keys[i]; i++) {
+			argv[pos++] = "-device";
+			argv[pos] = alloca(22);
+			sprintf(argv[pos], "vfio-pci,host=%s",
+					l_settings_get_value(hw_config,
+					"PCIAdapters", pci_keys[i]));
+			pos++;
+		}
+	}
+
+	if (usb_keys) {
+		argv[pos++] = "-usb";
+		for (i = 0; usb_keys[i]; i++) {
+			const char *value = l_settings_get_value(hw_config,
+						"USBAdapters", usb_keys[i]);
+			char **info = l_strsplit(value, ',');
+
+			if (l_strv_length(info) != 2) {
+				l_error("hw config formatting error");
+				l_strv_free(info);
+				return false;
+			}
+
+			argv[pos++] = "-device";
+			argv[pos] = alloca(32);
+			sprintf(argv[pos], "usb-host,hostbus=%s,hostaddr=%s",
+						info[0], info[1]);
+			pos++;
+
+			l_strv_free(info);
+		}
+	}
+
 	argv[pos] = NULL;
 
 	execve(argv[0], argv, qemu_envp);
@@ -410,6 +485,8 @@ static void start_qemu(void)
 	/* Don't expect to reach here */
 	free(initcmd);
 	free(cmdline);
+
+	return true;
 }
 
 static pid_t execute_program(char *argv[], bool wait, bool verbose)
@@ -667,14 +744,14 @@ static bool list_hwsim_radios(void)
 	return true;
 }
 
-static int read_radio_id(void)
+static uint32_t read_radio_id(void)
 {
 	static int current_radio_id;
 
-	return current_radio_id++;
+	return ++current_radio_id;
 }
 
-static int create_hwsim_radio(const char *radio_name,
+static uint32_t create_hwsim_radio(const char *radio_name,
 				const unsigned int channels, bool p2p_device,
 							bool use_chanctx)
 {
@@ -691,7 +768,7 @@ static int create_hwsim_radio(const char *radio_name,
 
 	pid = execute_program(argv, true, check_verbosity(BIN_HWSIM));
 	if (pid < 0)
-		return -1;
+		return 0;
 
 	return read_radio_id();
 }
@@ -970,6 +1047,7 @@ static bool find_test_configuration(const char *path, int level,
 #define HW_CONFIG_SETUP_START_IWD	"start_iwd"
 #define HW_CONFIG_SETUP_IWD_CONF_DIR	"iwd_config_dir"
 #define HW_CONFIG_SETUP_REG_DOMAIN	"reg_domain"
+#define HW_CONFIG_SETUP_NEEDS_HWSIM	"needs_hwsim"
 
 static struct l_settings *read_hw_config(const char *test_dir_path)
 {
@@ -1111,7 +1189,7 @@ configure:
 		wiphy->id = create_hwsim_radio(wiphy->name, channels,
 						p2p_device, use_chanctx);
 
-		if (wiphy->id < 0) {
+		if (wiphy->id == 0) {
 			l_free(wiphy);
 			goto exit;
 		}
@@ -1140,15 +1218,20 @@ static void wiphy_free(void *data)
 		else
 			l_error("Failed to remove interface %s",
 				wiphy->interface_name);
-
-		l_free(wiphy->interface_name);
 	}
 
-	destroy_hwsim_radio(wiphy->id);
-	l_debug("Removed radio id %d", wiphy->id);
+	/* Native interfaces cannot be destroyed */
+	if (native_hw) {
+		set_interface_state(wiphy->interface_name,
+					HW_INTERFACE_STATE_DOWN);
+	} else {
+		destroy_hwsim_radio(wiphy->id);
+		l_debug("Removed radio id %d", wiphy->id);
+	}
 
 	l_free(wiphy->hostapd_config);
 	l_free(wiphy->hostapd_ctrl_interface);
+	l_free(wiphy->interface_name);
 
 	l_free(wiphy);
 }
@@ -1156,12 +1239,15 @@ static void wiphy_free(void *data)
 static bool configure_hostapd_instances(struct l_settings *hw_settings,
 						char *config_dir_path,
 						struct l_queue *wiphy_list,
-						pid_t hostapd_pids_out[])
+						pid_t hostapd_pids_out[],
+						int *phys_used)
 {
 	char **hostap_keys;
 	int i;
 	char **hostapd_config_file_paths;
 	struct wiphy **wiphys;
+
+	*phys_used = 0;
 
 	if (!l_settings_has_group(hw_settings, HW_CONFIG_GROUP_HOSTAPD)) {
 		l_info("No hostapd instances to create");
@@ -1206,10 +1292,24 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 					wiphy_idx++) {
 			struct wiphy *wiphy = wiphy_entry->data;
 
-			if (strcmp(wiphy->name, hostap_keys[i]))
+			/*
+			 * We can skip this check in native mode since we have
+			 * no control over the phy name. Any test requiring a
+			 * "special" radio should not be ran in native mode.
+			 */
+			if (!native_hw && strcmp(wiphy->name, hostap_keys[i]))
 				continue;
 
 			if (wiphy->used_by_hostapd) {
+				/*
+				 * Since we bypass the above check in native
+				 * mode we could still get here. We can just
+				 * continue searching for more adapters if this
+				 * one is already in use.
+				 */
+				if (native_hw)
+					continue;
+
 				l_error("Wiphy %s already used by hostapd",
 					wiphy->name);
 				goto done;
@@ -1239,7 +1339,7 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 		l_info("Created hostapd interface %s on %s radio",
 			wiphys[i]->interface_name, wiphys[i]->name);
 
-		if (!set_interface_state(wiphys[i]->interface_name,
+		if (!native_hw && !set_interface_state(wiphys[i]->interface_name,
 						HW_INTERFACE_STATE_UP)) {
 			l_error("Failed to set %s state UP",
 				wiphys[i]->interface_name);
@@ -1251,6 +1351,8 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 			l_strdup_printf("%s/%s", HOSTAPD_CTRL_INTERFACE_PREFIX,
 					wiphys[0]->interface_name);
 		wiphys[i]->hostapd_config = l_strdup(hostapd_config_file);
+
+		(*phys_used)++;
 	}
 
 	hostapd_pids_out[0] = start_hostapd(hostapd_config_file_paths, wiphys);
@@ -1266,7 +1368,7 @@ done:
 }
 
 static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
-		const char *ext_options)
+		const char *ext_options, int num_phys)
 {
 	char *argv[13];
 	char *iwd_phys = NULL;
@@ -1305,7 +1407,16 @@ static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 			if (wiphy->used_by_hostapd)
 				continue;
 
+			/*
+			 * Break out, only adding the required number of phys
+			 * for this test.
+			 */
+			if (num_phys == 0)
+				break;
+
 			l_string_append_printf(list, "%s,", wiphy->name);
+
+			num_phys--;
 		}
 
 		iwd_phys = l_string_unwrap(list);
@@ -1719,6 +1830,25 @@ static void set_reg_domain(const char *domain)
 	execute_program(argv, false, false);
 }
 
+static void wiphy_up(void *data, void *user_data)
+{
+	struct wiphy *wiphy = data;
+
+	set_interface_state(wiphy->interface_name, true);
+}
+
+static void wiphy_reset(void *data, void *user_data)
+{
+	struct wiphy *wiphy = data;
+
+	wiphy->used_by_hostapd = false;
+
+	l_free(wiphy->hostapd_config);
+	wiphy->hostapd_config = NULL;
+	l_free(wiphy->hostapd_ctrl_interface);
+	wiphy->hostapd_ctrl_interface = NULL;
+}
+
 static void create_network_and_run_tests(const void *key, void *value,
 								void *data)
 {
@@ -1731,14 +1861,16 @@ static void create_network_and_run_tests(const void *key, void *value,
 	char *iwd_config_dir;
 	char **tmpfs_extra_stuff = NULL;
 	struct l_settings *hw_settings;
-	struct l_queue *wiphy_list;
 	struct l_queue *test_queue;
 	struct l_queue *test_stats_queue;
 	bool start_iwd_daemon = true;
+	bool needs_hwsim = false;
 	bool ofono_req = false;
 	const char *sim_keys;
 	const char *iwd_ext_options = NULL;
 	const char *reg_domain;
+	int phys_used;
+	int num_radios;
 
 	memset(hostapd_pids, -1, sizeof(hostapd_pids));
 
@@ -1758,7 +1890,6 @@ static void create_network_and_run_tests(const void *key, void *value,
 	if (!hw_settings)
 		return;
 
-	wiphy_list = l_queue_new();
 	l_info("Configuring network...");
 
 	if (chdir(config_dir_path) < 0) {
@@ -1808,34 +1939,75 @@ static void create_network_and_run_tests(const void *key, void *value,
 	if (!create_tmpfs_extra_stuff(tmpfs_extra_stuff))
 		goto remove_abs_paths;
 
-	reg_domain = l_settings_get_value(hw_settings, HW_CONFIG_GROUP_SETUP,
+	l_settings_get_int(hw_settings, HW_CONFIG_GROUP_SETUP,
+					HW_CONFIG_SETUP_NUM_RADIOS,
+					&num_radios);
+
+	if (!native_hw) {
+		reg_domain = l_settings_get_value(hw_settings,
+						HW_CONFIG_GROUP_SETUP,
 						HW_CONFIG_SETUP_REG_DOMAIN);
-	if (reg_domain)
-		set_reg_domain(reg_domain);
+		if (reg_domain)
+			set_reg_domain(reg_domain);
 
-	if (!configure_hw_radios(hw_settings, wiphy_list))
-		goto remove_abs_paths;
+		wiphy_list = l_queue_new();
 
-	medium_pid = register_hwsim_as_trans_medium();
-	if (medium_pid < 0)
-		goto remove_abs_paths;
+		if (!configure_hw_radios(hw_settings, wiphy_list))
+			goto remove_abs_paths;
 
-	if (check_verbosity("hwsim")) {
-		list_hwsim_radios();
-		list_interfaces();
+		medium_pid = register_hwsim_as_trans_medium();
+		if (medium_pid < 0)
+			goto remove_abs_paths;
+
+		if (check_verbosity("hwsim")) {
+			list_hwsim_radios();
+			list_interfaces();
+		}
+	} else {
+		int len;
+
+		l_settings_get_bool(hw_settings, HW_CONFIG_GROUP_SETUP,
+				HW_CONFIG_SETUP_NEEDS_HWSIM, &needs_hwsim);
+
+		/* Skip test that require hwsim dbus APIs (hwsim not running) */
+		if (needs_hwsim) {
+			l_error("test requires hwsim, skipping");
+			goto remove_abs_paths;
+		}
+
+		len = l_queue_length(wiphy_list);
+
+		/* Skip tests that need more radios than we have */
+		if (num_radios > len) {
+			l_error("test requires %d radios, only %d found",
+					num_radios, len);
+			goto remove_abs_paths;
+		}
+
+		l_queue_foreach(wiphy_list, wiphy_up, NULL);
 	}
 
 	if (check_verbosity("tls"))
 		setenv("IWD_TLS_DEBUG", "on", true);
 
 	if (!configure_hostapd_instances(hw_settings, config_dir_path,
-						wiphy_list, hostapd_pids))
+						wiphy_list, hostapd_pids,
+						&phys_used))
 		goto exit_hostapd;
 
 	l_settings_get_bool(hw_settings, HW_CONFIG_GROUP_SETUP,
 				HW_CONFIG_SETUP_START_IWD, &start_iwd_daemon);
 
 	if (start_iwd_daemon) {
+		/*
+		 * In native mode we may have more radios than a test actually
+		 * needs. This would result in IWD managing all phys that
+		 * hostapd wasn't using, which could throw off test results.
+		 * By passing the number of phys the test expects IWD to have
+		 * we can leave the remaining (unneeded) phys unmanaged.
+		 */
+		int iwd_phys = num_radios - phys_used;
+
 		iwd_config_dir =
 			l_settings_get_string(hw_settings,
 						HW_CONFIG_GROUP_SETUP,
@@ -1844,7 +2016,7 @@ static void create_network_and_run_tests(const void *key, void *value,
 			iwd_config_dir = DAEMON_CONFIGDIR;
 
 		iwd_pid = start_iwd(iwd_config_dir, wiphy_list,
-				iwd_ext_options);
+				iwd_ext_options, iwd_phys);
 
 		if (iwd_pid == -1)
 			goto exit_hostapd;
@@ -1882,13 +2054,23 @@ static void create_network_and_run_tests(const void *key, void *value,
 exit_hostapd:
 	destroy_hostapd_instances(hostapd_pids);
 
-	terminate_medium(medium_pid);
+	if (!native_hw)
+		terminate_medium(medium_pid);
 
 remove_abs_paths:
 	remove_absolute_path_dirs(tmpfs_extra_stuff);
 
 exit_hwsim:
-	l_queue_destroy(wiphy_list, wiphy_free);
+	/*
+	 * If running in hwsim mode, we want to completely free/destroy the
+	 * wiphy list since it will be re-populated on the next test. For the
+	 * native case we want to reset the list as if it was freshly
+	 * discovered. This ensures that all the hostapd flags get reset.
+	 */
+	if (!native_hw)
+		l_queue_destroy(wiphy_list, wiphy_free);
+	else
+		l_queue_foreach(wiphy_list, wiphy_reset, NULL);
 
 	l_settings_free(hw_settings);
 	l_strfreev(tmpfs_extra_stuff);
@@ -2118,6 +2300,200 @@ exit:
 	l_strfreev(unit_tests);
 }
 
+static bool wiphy_match(const void *a, const void *b)
+{
+	const struct wiphy *wiphy = a;
+	uint32_t id = L_PTR_TO_UINT(b);
+
+	return (wiphy->id == id);
+}
+
+static struct wiphy *wiphy_find(int wiphy_id)
+{
+	return l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(wiphy_id));
+}
+
+static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
+{
+	struct wiphy *wiphy;
+	struct l_genl_attr attr;
+	uint32_t id;
+	uint16_t type, len;
+	const void *data;
+	const char *name;
+	uint32_t name_len;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	/*
+	 * The wiphy attribute, name and generation are always the first
+	 * three attributes (in that order) in every NEW_WIPHY & DEL_WIPHY
+	 * message.  If not, then error out with a warning and ignore the
+	 * whole message.
+	 */
+	if (!l_genl_attr_next(&attr, &type, &len, &data))
+		return;
+
+	if (type != NL80211_ATTR_WIPHY)
+		return;
+
+	if (len != sizeof(uint32_t))
+		return;
+
+	id = *((uint32_t *) data);
+
+	if (wiphy_find(id))
+		return;
+
+	if (!l_genl_attr_next(&attr, &type, &len, &data))
+		return;
+
+	if (type != NL80211_ATTR_WIPHY_NAME)
+		return;
+
+	if (len > sizeof(((struct wiphy *) 0)->name))
+		return;
+
+	name = data;
+	name_len = len;
+
+	wiphy = l_new(struct wiphy, 1);
+	strncpy(wiphy->name, name, name_len);
+	wiphy->id = id;
+
+	l_queue_push_tail(wiphy_list, wiphy);
+}
+
+static void iface_dump_callback(struct l_genl_msg *msg, void *user_data)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	const char *ifname = NULL;
+	struct wiphy *wiphy = NULL;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+
+		case NL80211_ATTR_IFNAME:
+			if (len > 16) {
+				l_warn("Invalid interface name attribute");
+				return;
+			}
+
+			ifname = data;
+			break;
+
+		case NL80211_ATTR_WIPHY:
+			if (len != sizeof(uint32_t)) {
+				l_warn("Invalid wiphy attribute");
+				return;
+			}
+
+			wiphy = wiphy_find(*((uint32_t *) data));
+			break;
+		}
+	}
+
+	if (!ifname || !wiphy)
+		return;
+
+	wiphy->interface_name = l_strdup(ifname);
+	wiphy->interface_created = false;
+
+	l_info("Discovered interface %s", wiphy->interface_name);
+}
+
+struct nl_data {
+	struct l_genl *genl;
+	struct l_genl_family *nl80211;
+};
+
+static void iface_dump_done(void *user_data)
+{
+	struct nl_data *data = user_data;
+
+	l_debug("Interface discovery complete, running tests");
+
+	list_interfaces();
+
+	run_auto_tests();
+
+	l_queue_destroy(wiphy_list, wiphy_free);
+
+	l_genl_family_unref(data->nl80211);
+	l_genl_unref(data->genl);
+	l_free(data);
+
+	l_main_quit();
+}
+
+static void wiphy_dump_done(void *user_data)
+{
+	struct nl_data *data = user_data;
+	struct l_genl_msg *msg;
+
+	l_debug("Wiphy discovery complete, discovering interfaces");
+
+	msg = l_genl_msg_new(NL80211_CMD_GET_INTERFACE);
+	if (!l_genl_family_dump(data->nl80211, msg, iface_dump_callback,
+						data, iface_dump_done))
+		l_error("Getting all interface information failed");
+}
+
+static void nl80211_appeared(void *user_data)
+{
+	struct nl_data *data = user_data;
+	struct l_genl_msg *msg;
+
+	wiphy_list = l_queue_new();
+
+	l_debug("Found nl80211 interface");
+
+	msg = l_genl_msg_new(NL80211_CMD_GET_WIPHY);
+	if (!l_genl_family_dump(data->nl80211, msg, wiphy_dump_callback,
+						data, wiphy_dump_done))
+		l_error("Getting all wiphy devices failed");
+}
+
+static void nl80211_vanished(void *user_data)
+{
+	l_debug("Lost nl80211 interface");
+
+	l_main_quit();
+}
+
+static void start_hw_discovery(void)
+{
+	struct nl_data *data = l_new(struct nl_data, 1);
+
+	data->genl = l_genl_new_default();
+	data->nl80211 = l_genl_family_new(data->genl, NL80211_GENL_NAME);
+
+	l_genl_family_set_watches(data->nl80211, nl80211_appeared,
+					nl80211_vanished, data, NULL);
+
+	/*
+	 * This is somewhat of a mystery, but it appears that
+	 * calling lshw causes the OS to re-enumerate the USB
+	 * bus. Without this no USB adapters are found when
+	 * doing the wiphy/iface dump from nl80211.
+	 *
+	 * This also conveniently prints all the network
+	 * adapters and their iface name, so its much easier
+	 * to know which adapter are being used by iwd/hostapd
+	 * after the test.
+	 */
+	if (system("lshw -C network"))
+		l_info("lshw failed");
+
+	l_main_run();
+}
+
 static void run_tests(void)
 {
 	char cmdline[CMDLINE_MAX], *ptr, *cmds;
@@ -2138,6 +2514,20 @@ static void run_tests(void)
 	if (!ptr) {
 		l_error("Failed to read kernel command line");
 		return;
+	}
+
+	ptr = strstr(cmdline, "HW=");
+	if (ptr) {
+		*ptr = '\0';
+		test_action_str = ptr + 4;
+
+		ptr = strchr(test_action_str, '\'');
+		*ptr = '\0';
+
+		if (!strcmp(test_action_str, "virtual"))
+			native_hw = false;
+		else
+			native_hw = true;
 	}
 
 	ptr = strstr(cmdline, "GDB=");
@@ -2287,7 +2677,10 @@ static void run_tests(void)
 
 	switch (test_action) {
 	case ACTION_AUTO_TEST:
-		run_auto_tests();
+		if (native_hw)
+			start_hw_discovery();
+		else
+			run_auto_tests();
 		break;
 	case ACTION_UNIT_TEST:
 		run_unit_tests();
@@ -2312,7 +2705,9 @@ static void usage(void)
 						"\t\t\t\tto see valgrind"
 						" output\n"
 		"\t-g, --gdb <iwd|hostapd>	Run gdb on the specified"
-						" executable");
+						" executable\n"
+		"\t-w, --hw <config>	Run using a physical hardware "
+					"configuration");
 	l_info("Commands:\n"
 		"\t-A, --auto-tests <dirs>	Comma separated list of the "
 						"test configuration\n\t\t\t\t"
@@ -2330,6 +2725,7 @@ static const struct option main_options[] = {
 	{ "debug",	optional_argument, NULL, 'd' },
 	{ "gdb",	required_argument, NULL, 'g' },
 	{ "valgrind",	no_argument,       NULL, 'V' },
+	{ "hw",		required_argument, NULL, 'w' },
 	{ "help",	no_argument,       NULL, 'h' },
 	{ }
 };
@@ -2341,6 +2737,9 @@ int main(int argc, char *argv[])
 	l_log_set_stderr();
 
 	if (getpid() == 1 && getppid() == 0) {
+		if (!l_main_init())
+			return EXIT_FAILURE;
+
 		prepare_sandbox();
 
 		run_tests();
@@ -2404,6 +2803,15 @@ int main(int argc, char *argv[])
 				return EXIT_FAILURE;
 			}
 			break;
+		case 'w':
+			hw_config = l_settings_new();
+			if (!l_settings_load_from_file(hw_config, optarg)) {
+				l_error("could not read hw config from %s",
+						optarg);
+				l_settings_free(hw_config);
+				return EXIT_FAILURE;
+			}
+			break;
 		case 'h':
 			usage();
 			return EXIT_SUCCESS;
@@ -2448,7 +2856,8 @@ int main(int argc, char *argv[])
 	l_info("Using QEMU binary %s", qemu_binary);
 	l_info("Using kernel image %s", kernel_image);
 
-	start_qemu();
+	if (!start_qemu())
+		return EXIT_FAILURE;
 
 	return EXIT_SUCCESS;
 }
