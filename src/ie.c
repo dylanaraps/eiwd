@@ -255,9 +255,10 @@ static bool ie_tlv_builder_init_recurse(struct ie_tlv_builder *builder,
 	return true;
 }
 
-bool ie_tlv_builder_init(struct ie_tlv_builder *builder)
+bool ie_tlv_builder_init(struct ie_tlv_builder *builder, unsigned char *buf,
+				size_t len)
 {
-	return ie_tlv_builder_init_recurse(builder, NULL, 0);
+	return ie_tlv_builder_init_recurse(builder, buf, len);
 }
 
 static void ie_tlv_builder_write_header(struct ie_tlv_builder *builder)
@@ -314,6 +315,17 @@ unsigned char *ie_tlv_builder_get_data(struct ie_tlv_builder *builder)
 		(builder->tag >= 256 ? 1 : 0);
 }
 
+bool ie_tlv_builder_set_data(struct ie_tlv_builder *builder,
+				const void *data, size_t len)
+{
+	if (!ie_tlv_builder_set_length(builder, len))
+		return false;
+
+	memcpy(ie_tlv_builder_get_data(builder), data, len);
+
+	return true;
+}
+
 bool ie_tlv_builder_recurse(struct ie_tlv_builder *builder,
 					struct ie_tlv_builder *recurse)
 {
@@ -328,7 +340,7 @@ bool ie_tlv_builder_recurse(struct ie_tlv_builder *builder,
 	return true;
 }
 
-void ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
+unsigned char *ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
 			unsigned int *out_len)
 {
 	unsigned int len = 0;
@@ -342,6 +354,8 @@ void ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
 
 	if (out_len)
 		*out_len = len;
+
+	return builder->tlv;
 }
 
 /*

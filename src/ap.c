@@ -297,7 +297,7 @@ static size_t ap_build_beacon_pr_head(struct ap_state *ap,
 	l_put_le16(ap->beacon_interval, out_buf + 32);	/* Beacon Interval */
 	l_put_le16(capability, out_buf + 34);		/* Capability Info */
 
-	ie_tlv_builder_init(&builder);
+	ie_tlv_builder_init(&builder, NULL, 0);
 	builder.tlv = out_buf + 36;
 
 	/* SSID IE */

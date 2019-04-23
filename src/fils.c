@@ -85,8 +85,7 @@ static void fils_erp_tx_func(const uint8_t *eap_data, size_t len,
 	l_put_le16(0, ptr);
 	ptr += 2;
 
-	ie_tlv_builder_init(&builder);
-	builder.tlv = ptr;
+	ie_tlv_builder_init(&builder, ptr, sizeof(data) - 4);
 
 	ie_tlv_builder_next(&builder, IE_TYPE_FILS_NONCE);
 	ie_tlv_builder_set_length(&builder, sizeof(fils->nonce));
@@ -207,7 +206,7 @@ static void fils_erp_complete(enum erp_result result, const void *rmsk,
 		hmac_sha256(fils->ick, hash_len, data, ptr - data,
 				key_auth, hash_len);
 
-	ie_tlv_builder_init(&builder);
+	ie_tlv_builder_init(&builder, NULL, 0);
 
 	ie_tlv_builder_next(&builder, IE_TYPE_FILS_KEY_CONFIRMATION);
 	ie_tlv_builder_set_length(&builder, hash_len);

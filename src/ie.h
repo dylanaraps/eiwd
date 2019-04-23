@@ -395,14 +395,17 @@ void *ie_tlv_extract_wsc_payload(const uint8_t *ies, size_t len,
 void *ie_tlv_encapsulate_wsc_payload(const uint8_t *data, size_t len,
 							size_t *out_len);
 
-bool ie_tlv_builder_init(struct ie_tlv_builder *builder);
+bool ie_tlv_builder_init(struct ie_tlv_builder *builder, unsigned char *buf,
+				size_t len);
 bool ie_tlv_builder_set_length(struct ie_tlv_builder *builder,
 			unsigned int new_len);
 bool ie_tlv_builder_next(struct ie_tlv_builder *builder, unsigned int new_tag);
 unsigned char *ie_tlv_builder_get_data(struct ie_tlv_builder *builder);
+bool ie_tlv_builder_set_data(struct ie_tlv_builder *builder,
+				const void *data, size_t len);
 bool ie_tlv_builder_recurse(struct ie_tlv_builder *builder,
 			struct ie_tlv_builder *recurse);
-void ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
+unsigned char *ie_tlv_builder_finalize(struct ie_tlv_builder *builder,
 			unsigned int *out_len);
 
 uint32_t ie_rsn_cipher_suite_to_cipher(enum ie_rsn_cipher_suite suite);
