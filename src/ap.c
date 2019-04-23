@@ -49,7 +49,7 @@
 struct ap_state {
 	struct netdev *netdev;
 	char *ssid;
-	int channel;
+	uint8_t channel;
 	unsigned int ciphers;
 	enum ie_rsn_cipher_suite group_cipher;
 	uint32_t beacon_interval;
@@ -273,7 +273,8 @@ static void ap_set_rsn_info(struct ap_state *ap, struct ie_rsn_info *rsn)
  */
 static size_t ap_build_beacon_pr_head(struct ap_state *ap,
 					enum mpdu_management_subtype stype,
-					const uint8_t *dest, uint8_t *out_buf)
+					const uint8_t *dest, uint8_t *out_buf,
+					size_t out_len)
 {
 	struct mmpdu_header *mpdu = (void *) out_buf;
 	unsigned int len;
@@ -297,13 +298,11 @@ static size_t ap_build_beacon_pr_head(struct ap_state *ap,
 	l_put_le16(ap->beacon_interval, out_buf + 32);	/* Beacon Interval */
 	l_put_le16(capability, out_buf + 34);		/* Capability Info */
 
-	ie_tlv_builder_init(&builder, NULL, 0);
-	builder.tlv = out_buf + 36;
+	ie_tlv_builder_init(&builder, out_buf + 36, out_len - 36);
 
 	/* SSID IE */
 	ie_tlv_builder_next(&builder, IE_TYPE_SSID);
-	ie_tlv_builder_set_length(&builder, strlen(ap->ssid));
-	memcpy(ie_tlv_builder_get_data(&builder), ap->ssid, strlen(ap->ssid));
+	ie_tlv_builder_set_data(&builder, ap->ssid, strlen(ap->ssid));
 
 	/* Supported Rates IE */
 	ie_tlv_builder_next(&builder, IE_TYPE_SUPPORTED_RATES);
@@ -328,8 +327,7 @@ static size_t ap_build_beacon_pr_head(struct ap_state *ap,
 
 	/* DSSS Parameter Set IE for DSSS, HR, ERP and HT PHY rates */
 	ie_tlv_builder_next(&builder, IE_TYPE_DSSS_PARAMETER_SET);
-	ie_tlv_builder_set_length(&builder, 1);
-	((uint8_t *) ie_tlv_builder_get_data(&builder))[0] = ap->channel;
+	ie_tlv_builder_set_data(&builder, &ap->channel, 1);
 
 	ie_tlv_builder_finalize(&builder, &len);
 	return 36 + len;
@@ -1060,7 +1058,7 @@ static void ap_probe_req_cb(struct netdev *netdev,
 	const char *ssid = NULL;
 	const uint8_t *ssid_list = NULL;
 	size_t ssid_len = 0, ssid_list_len = 0, len;
-	int dsss_channel = -1;
+	uint8_t dsss_channel = 0;
 	struct ie_tlv_iter iter;
 	const uint8_t *bssid = netdev_get_address(ap->netdev);
 	bool match = false;
@@ -1127,7 +1125,7 @@ static void ap_probe_req_cb(struct netdev *netdev,
 		}
 	}
 
-	if (dsss_channel != -1 && dsss_channel != ap->channel)
+	if (dsss_channel != 0 && dsss_channel != ap->channel)
 		match = false;
 
 	if (!match)
@@ -1135,7 +1133,7 @@ static void ap_probe_req_cb(struct netdev *netdev,
 
 	len = ap_build_beacon_pr_head(ap,
 					MPDU_MANAGEMENT_SUBTYPE_PROBE_RESPONSE,
-					hdr->address_2, resp);
+					hdr->address_2, resp, sizeof(resp));
 	len += ap_build_beacon_pr_tail(ap, resp + len);
 
 	ap_send_mgmt_frame(ap, (struct mmpdu_header *) resp, len, false,
@@ -1361,7 +1359,7 @@ static struct l_genl_msg *ap_build_cmd_start_ap(struct ap_state *ap)
 	};
 
 	head_len = ap_build_beacon_pr_head(ap, MPDU_MANAGEMENT_SUBTYPE_BEACON,
-						bcast_addr, head);
+						bcast_addr, head, sizeof(head));
 	tail_len = ap_build_beacon_pr_tail(ap, tail);
 
 	if (!head_len || !tail_len)
