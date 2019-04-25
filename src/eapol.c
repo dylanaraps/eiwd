@@ -61,6 +61,25 @@ uint32_t next_frame_watch_id;
 
 #define MIC_MAXLEN	32
 
+static bool eapol_aes_siv_encrypt(const uint8_t *kek, size_t kek_len,
+				struct eapol_key *frame,
+				const uint8_t *data, size_t len)
+{
+	uint8_t encr[16 + len];
+	struct iovec ad[1];
+
+	ad[0].iov_base = frame;
+	ad[0].iov_len = EAPOL_KEY_DATA(frame, 0) - (uint8_t *)frame;
+
+	if (!aes_siv_encrypt(kek, kek_len, EAPOL_KEY_DATA(frame, 0),
+				len, ad, 1, encr))
+		return false;
+
+	memcpy(EAPOL_KEY_DATA(frame, 0), encr, sizeof(encr));
+
+	return true;
+}
+
 /*
  * MIC calculation depends on the selected hash function.  The has function
  * is given in the EAPoL Key Descriptor Version field.
@@ -1801,22 +1820,15 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 
 		memcpy(EAPOL_KEY_MIC(step2), mic, sm->mic_len);
 	} else {
-		uint8_t encr[16];
-		struct iovec ad[1];
-
-		ad[0].iov_base = step2;
-		ad[0].iov_len = EAPOL_KEY_DATA(step2, 0) - (uint8_t *)step2;
-
-		if (!aes_siv_encrypt(handshake_state_get_kek(sm->handshake),
+		if (!eapol_aes_siv_encrypt(
+				handshake_state_get_kek(sm->handshake),
 				handshake_state_get_kek_len(sm->handshake),
-				EAPOL_KEY_DATA(step2, 0), 0, ad, 1, encr)) {
+				step2, NULL, 0)) {
 			l_debug("AES-SIV encryption failed");
 			l_free(step2);
 			handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 			return;
 		}
-
-		memcpy(EAPOL_KEY_DATA(step2, 0), encr, 16);
 	}
 
 	eapol_sm_write(sm, (struct eapol_frame *) step2, false);
