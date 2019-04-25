@@ -1804,7 +1804,7 @@ static void eapol_4way_test(const void *data)
 	step3 = eapol_key_validate(eapol_key_data_5,
 					sizeof(eapol_key_data_5), 16);
 	assert(step3);
-	assert(eapol_verify_ptk_3_of_4(step3, false));
+	assert(eapol_verify_ptk_3_of_4(step3, false, 16));
 	assert(!memcmp(anonce, step3->key_nonce, sizeof(step3->key_nonce)));
 
 	assert(eapol_verify_mic(IE_RSN_AKM_SUITE_PSK, ptk, step3, 16));
@@ -1889,7 +1889,7 @@ static void eapol_wpa2_handshake_test(const void *data)
 	ptk_step3 = eapol_key_validate(eapol_key_data_9,
 					sizeof(eapol_key_data_9), 16);
 	assert(ptk_step3);
-	assert(eapol_verify_ptk_3_of_4(ptk_step3, false));
+	assert(eapol_verify_ptk_3_of_4(ptk_step3, false, 16));
 	assert(!memcmp(anonce, ptk_step3->key_nonce,
 				sizeof(ptk_step3->key_nonce)));
 
@@ -2018,7 +2018,7 @@ static void eapol_wpa_handshake_test(const void *data)
 	ptk_step3 = eapol_key_validate(eapol_key_data_15,
 					sizeof(eapol_key_data_15), 16);
 	assert(ptk_step3);
-	assert(eapol_verify_ptk_3_of_4(ptk_step3, true));
+	assert(eapol_verify_ptk_3_of_4(ptk_step3, true, 16));
 	assert(!memcmp(anonce, ptk_step3->key_nonce,
 				sizeof(ptk_step3->key_nonce)));
 
