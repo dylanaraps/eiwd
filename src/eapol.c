@@ -1956,7 +1956,7 @@ static void eapol_key_handle(struct eapol_sm *sm,
 	}
 
 	/* If no MIC, then assume packet 1, otherwise packet 3 */
-	if (!ek->key_mic)
+	if (!ek->key_mic && !ek->encrypted_key_data)
 		eapol_handle_ptk_1_of_4(sm, ek);
 	else {
 		if (!key_data_len)
