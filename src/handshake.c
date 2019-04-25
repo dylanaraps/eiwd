@@ -375,7 +375,7 @@ static bool handshake_get_key_sizes(struct handshake_state *s, size_t *ptk_size,
 bool handshake_state_derive_ptk(struct handshake_state *s)
 {
 	size_t ptk_size;
-	bool use_sha256;
+	enum l_checksum_type type;
 
 	if (!s->have_snonce || !s->have_pmk)
 		return false;
@@ -393,9 +393,9 @@ bool handshake_state_derive_ptk(struct handshake_state *s)
 			IE_RSN_AKM_SUITE_SAE_SHA256 |
 			IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256 |
 			IE_RSN_AKM_SUITE_OWE))
-		use_sha256 = true;
+		type = L_CHECKSUM_SHA256;
 	else
-		use_sha256 = false;
+		type = L_CHECKSUM_SHA1;
 
 	ptk_size = handshake_state_get_ptk_size(s);
 
@@ -439,7 +439,7 @@ bool handshake_state_derive_ptk(struct handshake_state *s)
 	} else
 		if (!crypto_derive_pairwise_ptk(s->pmk, s->pmk_len, s->spa,
 						s->aa, s->anonce, s->snonce,
-						s->ptk, ptk_size, use_sha256))
+						s->ptk, ptk_size, type))
 			return false;
 
 	return true;

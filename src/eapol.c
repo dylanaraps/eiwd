@@ -1379,7 +1379,8 @@ static void eapol_handle_ptk_2_of_4(struct eapol_sm *sm,
 					sm->handshake->pmk_len,
 					sm->handshake->spa, aa,
 					sm->handshake->anonce, ek->key_nonce,
-					sm->handshake->ptk, ptk_size, false))
+					sm->handshake->ptk, ptk_size,
+					L_CHECKSUM_SHA1))
 		return;
 
 	kck = handshake_state_get_kck(sm->handshake);

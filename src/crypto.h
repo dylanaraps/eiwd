@@ -114,7 +114,7 @@ bool crypto_derive_pairwise_ptk(const uint8_t *pmk, size_t pmk_len,
 				const uint8_t *addr1, const uint8_t *addr2,
 				const uint8_t *nonce1, const uint8_t *nonce2,
 				uint8_t *out_ptk, size_t ptk_len,
-				bool use_sha256);
+				enum l_checksum_type type);
 
 bool crypto_derive_pmk_r0(const uint8_t *xxkey,
 				const uint8_t *ssid, size_t ssid_len,
