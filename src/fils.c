@@ -57,6 +57,7 @@ struct fils_sm {
 	size_t kek_len;
 	uint8_t pmk[48];
 	size_t pmk_len;
+	uint8_t pmkid[16];
 
 	bool in_auth : 1;
 };
@@ -64,6 +65,21 @@ struct fils_sm {
 static void fils_failed(struct fils_sm *fils, uint16_t status, bool ap_reject)
 {
 	fils->complete(status, fils->in_auth, ap_reject, fils->user_data);
+}
+
+static void fils_derive_pmkid(struct fils_sm *fils, const uint8_t *erp_data,
+				size_t len)
+{
+	struct l_checksum *sha;
+	enum l_checksum_type type;
+
+	type = (fils->hs->akm_suite == IE_RSN_AKM_SUITE_FILS_SHA256) ?
+				L_CHECKSUM_SHA256 : L_CHECKSUM_SHA384;
+
+	sha = l_checksum_new(type);
+	l_checksum_update(sha, erp_data, len);
+	l_checksum_get_digest(sha, fils->pmkid, sizeof(fils->pmkid));
+	l_checksum_free(sha);
 }
 
 static void fils_erp_tx_func(const uint8_t *eap_data, size_t len,
@@ -77,6 +93,8 @@ static void fils_erp_tx_func(const uint8_t *eap_data, size_t len,
 
 	l_getrandom(fils->nonce, 16);
 	l_getrandom(fils->session, 8);
+
+	fils_derive_pmkid(fils, eap_data, len);
 
 	/* transaction */
 	l_put_le16(1, ptr);
@@ -254,6 +272,7 @@ void fils_sm_free(struct fils_sm *fils)
 	explicit_bzero(fils->ick, sizeof(fils->ick));
 	explicit_bzero(fils->kek_and_tk, sizeof(fils->kek_and_tk));
 	explicit_bzero(fils->pmk, fils->pmk_len);
+	explicit_bzero(fils->pmkid, sizeof(fils->pmkid));
 
 	l_free(fils);
 }
@@ -453,6 +472,7 @@ void fils_rx_associate(struct fils_sm *fils, const uint8_t *frame, size_t len)
 	}
 
 	handshake_state_set_pmk(fils->hs, fils->pmk, fils->pmk_len);
+	handshake_state_set_pmkid(fils->hs, fils->pmkid);
 
 	if (gtk)
 		handshake_state_install_gtk(fils->hs, gtk_key_index, gtk,
