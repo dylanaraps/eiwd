@@ -1219,17 +1219,30 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 
 	kck = handshake_state_get_kck(sm->handshake);
 
-	if (!eapol_calculate_mic(sm->handshake->akm_suite, kck,
-			step2, mic, sm->mic_len)) {
-		l_info("MIC calculation failed. "
-			"Ensure Kernel Crypto is available.");
-		l_free(step2);
-		handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
+	if (sm->mic_len) {
+		if (!eapol_calculate_mic(sm->handshake->akm_suite, kck,
+				step2, mic, sm->mic_len)) {
+			l_info("MIC calculation failed. "
+				"Ensure Kernel Crypto is available.");
+			l_free(step2);
+			handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
 
-		return;
+			return;
+		}
+
+		memcpy(EAPOL_KEY_MIC(step2), mic, sm->mic_len);
+	} else {
+		if (!eapol_aes_siv_encrypt(
+				handshake_state_get_kek(sm->handshake),
+				handshake_state_get_kek_len(sm->handshake),
+				step2, ies, ies_len)) {
+			l_debug("AES-SIV encryption failed");
+			l_free(step2);
+			handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
+			return;
+		}
 	}
 
-	memcpy(EAPOL_KEY_MIC(step2), mic, sm->mic_len);
 	eapol_sm_write(sm, (struct eapol_frame *) step2, false);
 	l_free(step2);
 
@@ -1659,14 +1672,28 @@ retransmit:
 	kck = handshake_state_get_kck(sm->handshake);
 	kek = handshake_state_get_kek(sm->handshake);
 
-	if (!eapol_calculate_mic(sm->handshake->akm_suite, kck,
-			step4, mic, sm->mic_len)) {
-		l_free(step4);
-		handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
-		return;
+	if (sm->mic_len) {
+		if (!eapol_calculate_mic(sm->handshake->akm_suite, kck,
+				step4, mic, sm->mic_len)) {
+			l_debug("MIC Calculation failed");
+			l_free(step4);
+			handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
+			return;
+		}
+
+		memcpy(EAPOL_KEY_MIC(step4), mic, sm->mic_len);
+	} else {
+		if (!eapol_aes_siv_encrypt(
+				handshake_state_get_kek(sm->handshake),
+				handshake_state_get_kek_len(sm->handshake),
+				step4, NULL, 0)) {
+			l_debug("AES-SIV encryption failed");
+			l_free(step4);
+			handshake_failed(sm, MMPDU_REASON_CODE_UNSPECIFIED);
+			return;
+		}
 	}
 
-	memcpy(EAPOL_KEY_MIC(step4), mic, sm->mic_len);
 	eapol_sm_write(sm, (struct eapol_frame *) step4, false);
 	l_free(step4);
 
