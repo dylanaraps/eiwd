@@ -684,15 +684,18 @@ static struct eapol_key *eapol_create_common(
 				bool is_wpa,
 				size_t mic_len)
 {
+	size_t extra_key_len = (mic_len == 0) ? 16 : 0;
 	size_t to_alloc = EAPOL_FRAME_LEN(mic_len);
 
-	struct eapol_key *out_frame = l_malloc(to_alloc + extra_len);
+	struct eapol_key *out_frame = l_malloc(to_alloc + extra_len +
+						extra_key_len);
 
 	memset(out_frame, 0, to_alloc + extra_len);
 
 	out_frame->header.protocol_version = protocol;
 	out_frame->header.packet_type = 0x3;
-	out_frame->header.packet_len = L_CPU_TO_BE16(to_alloc + extra_len - 4);
+	out_frame->header.packet_len = L_CPU_TO_BE16(to_alloc + extra_len +
+							extra_key_len - 4);
 	out_frame->descriptor_type = is_wpa ? EAPOL_DESCRIPTOR_TYPE_WPA :
 		EAPOL_DESCRIPTOR_TYPE_80211;
 	out_frame->key_descriptor_version = version;
@@ -709,7 +712,7 @@ static struct eapol_key *eapol_create_common(
 	out_frame->key_replay_counter = L_CPU_TO_BE64(key_replay_counter);
 	memcpy(out_frame->key_nonce, snonce, sizeof(out_frame->key_nonce));
 
-	l_put_be16(extra_len, out_frame->key_data + mic_len);
+	l_put_be16(extra_len + extra_key_len, out_frame->key_data + mic_len);
 
 	if (extra_len)
 		memcpy(EAPOL_KEY_DATA(out_frame, mic_len), extra_data,
@@ -756,15 +759,12 @@ struct eapol_key *eapol_create_gtk_2_of_2(
 				bool is_wpa, uint8_t wpa_key_id, size_t mic_len)
 {
 	uint8_t snonce[32];
-	uint8_t extra[16] = { 0 };
 	struct eapol_key *step2;
 
 	memset(snonce, 0, sizeof(snonce));
 	step2 = eapol_create_common(protocol, version, true,
 					key_replay_counter, snonce,
-					(mic_len) ? 0 : 16,
-					(mic_len) ? NULL : extra,
-					0, is_wpa, mic_len);
+					0, NULL, 0, is_wpa, mic_len);
 
 	if (!step2)
 		return step2;
