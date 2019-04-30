@@ -320,12 +320,13 @@ static void eap_tls_send_response(struct eap_state *eap,
 	size_t msg_len = EAP_TLS_HEADER_LEN + pdu_len;
 
 	if (msg_len <= eap_get_mtu(eap)) {
-		uint8_t buf[msg_len];
+		uint8_t *buf = l_malloc(msg_len);
 
 		buf[EAP_TLS_HEADER_OCTET_FLAGS] = eap_tls->version_negotiated;
 		memcpy(buf + EAP_TLS_HEADER_LEN, pdu, pdu_len);
 
 		eap_send_response(eap, eap_get_method_type(eap), buf, msg_len);
+		l_free(buf);
 		return;
 	}
 

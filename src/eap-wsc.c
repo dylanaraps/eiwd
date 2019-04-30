@@ -353,13 +353,14 @@ static void eap_wsc_send_response(struct eap_state *eap,
 	eap_wsc_state_set_sent_pdu(wsc, pdu, pdu_len);
 
 	if (msg_len <= eap_get_mtu(eap)) {
-		uint8_t buf[msg_len];
+		uint8_t *buf = l_malloc(msg_len);
 
 		buf[12] = WSC_OP_MSG;
 		buf[13] = 0;
 		memcpy(buf + EAP_WSC_HEADER_LEN, pdu, pdu_len);
 
 		eap_send_response(eap, EAP_TYPE_EXPANDED, buf, msg_len);
+		l_free(buf);
 		return;
 	}
 
