@@ -4322,7 +4322,7 @@ static void genl_ctrl(struct nlmon *nlmon, const void *data, uint32_t len)
 			id = *((uint16_t *) NLA_DATA(nla));
 			break;
 		case CTRL_ATTR_FAMILY_NAME:
-			strncpy(name, NLA_DATA(nla), GENL_NAMSIZ);
+			strncpy(name, NLA_DATA(nla), GENL_NAMSIZ - 1);
 			break;
 		}
 	}
@@ -5055,7 +5055,7 @@ static struct l_io *open_packet(const char *name)
 		return NULL;
 	}
 
-	strncpy(ifr.ifr_name, name, IFNAMSIZ);
+	strncpy(ifr.ifr_name, name, IFNAMSIZ - 1);
 
 	if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0) {
 		perror("Failed to get monitor index");

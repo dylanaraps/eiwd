@@ -101,7 +101,7 @@ static void genl_parse(uint16_t type, const void *data, uint32_t len,
 			id = *((uint16_t *) NLA_DATA(nla));
 			break;
 		case CTRL_ATTR_FAMILY_NAME:
-			strncpy(name, NLA_DATA(nla), GENL_NAMSIZ);
+			strncpy(name, NLA_DATA(nla), GENL_NAMSIZ - 1);
 			break;
 		}
 	}
