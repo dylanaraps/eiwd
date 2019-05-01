@@ -472,11 +472,11 @@ static uint32_t scan_common(uint32_t ifindex, bool passive,
 
 	scan_cmds_add(sr->cmds, sc, passive, params);
 
-	if (l_queue_length(sc->requests) > 0)
+	/* Queue empty implies !sc->triggered && !sc->start_cmd_id */
+	if (!l_queue_isempty(sc->requests))
 		goto done;
 
-	if (sc->state != SCAN_STATE_NOT_RUNNING ||
-					sc->start_cmd_id || sc->triggered)
+	if (sc->state != SCAN_STATE_NOT_RUNNING)
 		goto done;
 
 	if (!scan_request_send_trigger(sc, sr))
@@ -736,8 +736,7 @@ static bool start_next_scan_request(struct scan_context *sc)
 {
 	struct scan_request *sr;
 
-	if (sc->state != SCAN_STATE_NOT_RUNNING ||
-					sc->start_cmd_id || sc->triggered)
+	if (sc->state != SCAN_STATE_NOT_RUNNING)
 		return true;
 
 	while (!l_queue_isempty(sc->requests)) {
