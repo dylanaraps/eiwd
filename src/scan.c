@@ -49,11 +49,11 @@
 #define SCAN_MAX_INTERVAL 320
 #define SCAN_INIT_INTERVAL 10
 
-struct l_queue *scan_contexts = NULL;
+static struct l_queue *scan_contexts;
 
-static struct l_genl_family *nl80211 = NULL;
-uint32_t scan_id = 0;
-uint32_t next_scan_request_id = 0;
+static struct l_genl_family *nl80211;
+static uint32_t scan_id;
+static uint32_t next_scan_request_id;
 
 struct scan_periodic {
 	struct l_timeout *timeout;
