@@ -690,7 +690,6 @@ bool scan_periodic_stop(uint32_t ifindex)
 
 	if (sc->sp.timeout) {
 		l_timeout_remove(sc->sp.timeout);
-		sc->sp.timeout = NULL;
 	}
 
 	sc->sp.interval = 0;
@@ -719,6 +718,13 @@ static void scan_periodic_timeout(struct l_timeout *timeout, void *user_data)
 	start_next_scan_request(sc);
 }
 
+static void scan_periodic_timeout_destroy(void *user_data)
+{
+	struct scan_context *sc = user_data;
+
+	sc->sp.timeout = NULL;
+}
+
 static void scan_periodic_rearm(struct scan_context *sc)
 {
 	l_debug("Arming periodic scan timer: %u", sc->sp.interval);
@@ -727,8 +733,8 @@ static void scan_periodic_rearm(struct scan_context *sc)
 		l_timeout_modify(sc->sp.timeout, sc->sp.interval);
 	else
 		sc->sp.timeout = l_timeout_create(sc->sp.interval,
-					scan_periodic_timeout, sc, NULL);
-
+						scan_periodic_timeout, sc,
+						scan_periodic_timeout_destroy);
 	sc->sp.rearm = false;
 }
 
