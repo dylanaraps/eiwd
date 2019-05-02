@@ -2434,7 +2434,7 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 
 	l_debug("");
 
-	if (netdev->aborting)
+	if (!netdev->connected || netdev->aborting)
 		return;
 
 	if (!netdev->owe && !netdev->in_ft && !netdev->handshake->mde &&
