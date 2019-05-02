@@ -7,11 +7,18 @@ sys.path.append('../util')
 import iwd
 from iwd import IWD
 from iwd import NetworkType
+from hostapd import hostapd_map
+from hostapd import HostapdCLI
 import testutil
 
 class Test(unittest.TestCase):
 
     def test_connection_success(self):
+        for intf in hostapd_map.values():
+            if intf.config == 'ssidOWE.conf':
+                hapd = HostapdCLI(intf)
+                break
+
         wd = IWD()
 
         devices = wd.list_devices(1)
@@ -38,7 +45,7 @@ class Test(unittest.TestCase):
         wd.wait_for_object_condition(ordered_network.network_object, condition)
 
         testutil.test_iface_operstate()
-        testutil.test_ifaces_connected()
+        testutil.test_ifaces_connected(device.name, hapd.ifname)
 
         device.disconnect()
 
