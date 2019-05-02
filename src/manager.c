@@ -369,16 +369,6 @@ static void manager_wiphy_dump_interfaces(struct wiphy_setup_state *state)
 
 	l_debug("");
 	state->pending_cmd_count++;
-
-	/*
-	 * If whitelist/blacklist were given only try to use existing
-	 * interfaces same as when the driver does not support NEW_INTERFACE
-	 * or DEL_INTERFACE, otherwise the interface names will become
-	 * meaningless after we've created our own interface(s).  Optimally
-	 * phy name white/blacklists should be used.
-	 */
-	if (whitelist_filter || blacklist_filter)
-		state->use_default = true;
 }
 
 static struct wiphy_setup_state *manager_rx_cmd_new_wiphy(
@@ -424,6 +414,16 @@ static struct wiphy_setup_state *manager_rx_cmd_new_wiphy(
 	state->id = id;
 	state->wiphy = wiphy;
 	l_queue_push_tail(pending_wiphys, state);
+
+	/*
+	 * If whitelist/blacklist were given only try to use existing
+	 * interfaces same as when the driver does not support NEW_INTERFACE
+	 * or DEL_INTERFACE, otherwise the interface names will become
+	 * meaningless after we've created our own interface(s).  Optimally
+	 * phy name white/blacklists should be used.
+	 */
+	if (whitelist_filter || blacklist_filter)
+		state->use_default = true;
 
 done:
 	wiphy_update_from_genl(wiphy, msg);
