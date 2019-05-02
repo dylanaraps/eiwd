@@ -379,6 +379,8 @@ static struct wiphy_setup_state *manager_rx_cmd_new_wiphy(
 	struct l_genl_attr attr;
 	uint32_t id;
 	const char *name;
+	bool use_default;
+	const struct l_settings *settings = iwd_get_config();
 
 	if (!l_genl_attr_init(&attr, msg))
 		return NULL;
@@ -424,6 +426,14 @@ static struct wiphy_setup_state *manager_rx_cmd_new_wiphy(
 	 */
 	if (whitelist_filter || blacklist_filter)
 		state->use_default = true;
+
+	/* The setting overrides our attempts to ensure things work */
+	if (l_settings_get_bool(settings, "General",
+				"use_default_interface", &use_default))
+		state->use_default = use_default;
+
+	if (state->use_default)
+		l_info("Wiphy %s will only use the default interface", name);
 
 done:
 	wiphy_update_from_genl(wiphy, msg);
