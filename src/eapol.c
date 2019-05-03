@@ -2352,6 +2352,14 @@ bool eapol_start(struct eapol_sm *sm)
 
 	sm->started = true;
 
+	/*
+	 * FILS only uses the 4-way for rekeys, so only started needs to be set,
+	 * then we wait for a rekey.
+	 */
+	if (sm->handshake->akm_suite & (IE_RSN_AKM_SUITE_FILS_SHA256 |
+			IE_RSN_AKM_SUITE_FILS_SHA384))
+		return true;
+
 	if (sm->require_handshake)
 		sm->timeout = l_timeout_create(eapol_4way_handshake_time,
 				eapol_timeout, sm, NULL);
