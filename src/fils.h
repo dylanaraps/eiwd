@@ -30,18 +30,8 @@ typedef void (*fils_tx_associate_func_t)(struct iovec *iov, size_t iov_len,
 					const uint8_t *kek, size_t kek_len,
 					const uint8_t *nonces, size_t nonces_len,
 					void *user_data);
-typedef void (*fils_complete_func_t)(uint16_t status, bool in_auth,
-					bool ap_reject, void *user_data);
 
-struct fils_sm *fils_sm_new(struct handshake_state *hs,
+struct auth_proto *fils_sm_new(struct handshake_state *hs,
 				fils_tx_authenticate_func_t auth,
 				fils_tx_associate_func_t assoc,
-				fils_complete_func_t complete, void *user_data);
-
-void fils_sm_free(struct fils_sm *fils);
-
-void fils_start(struct fils_sm *fils);
-
-void fils_rx_authenticate(struct fils_sm *fils, const uint8_t *frame,
-				size_t len);
-void fils_rx_associate(struct fils_sm *fils, const uint8_t *frame, size_t len);
+				void *user_data);

@@ -60,6 +60,7 @@
 #include "src/nl80211util.h"
 #include "src/owe.h"
 #include "src/fils.h"
+#include "src/auth-proto.h"
 
 #ifndef ENOTSUPP
 #define ENOTSUPP 524
@@ -97,7 +98,7 @@ struct netdev {
 	struct eapol_sm *sm;
 	struct sae_sm *sae_sm;
 	struct owe_sm *owe;
-	struct fils_sm *fils;
+	struct auth_proto *ap;
 	struct handshake_state *handshake;
 	uint32_t connect_cmd_id;
 	uint32_t disconnect_cmd_id;
@@ -559,6 +560,11 @@ static void netdev_connect_free(struct netdev *netdev)
 	if (netdev->owe) {
 		owe_sm_free(netdev->owe);
 		netdev->owe = NULL;
+	}
+
+	if (netdev->ap) {
+		auth_proto_free(netdev->ap);
+		netdev->ap = NULL;
 	}
 
 	eapol_preauth_cancel(netdev->index);
@@ -2350,6 +2356,8 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 	const void *data;
 	const uint8_t *frame = NULL;
 	size_t frame_len = 0;
+	int ret;
+	uint16_t status_code = MMPDU_STATUS_CODE_UNSPECIFIED;
 
 	l_debug("");
 
@@ -2368,7 +2376,7 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 	 * the FT Associate command is included in the attached frame and is
 	 * not available in the Authenticate command callback.
 	 */
-	if (!netdev->in_ft && !netdev->sae_sm && !netdev->owe && !netdev->fils)
+	if (!netdev->in_ft && !netdev->sae_sm && !netdev->owe && !netdev->ap)
 		return;
 
 	if (!l_genl_attr_init(&attr, msg)) {
@@ -2385,7 +2393,8 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 			if (netdev->sae_sm) {
 				sae_timeout(netdev->sae_sm);
 				return;
-			}
+			} else if (auth_proto_auth_timeout(netdev->ap))
+				return;
 
 			goto auth_error;
 
@@ -2410,16 +2419,22 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 				frame + 26, frame_len - 26);
 	else if (netdev->owe)
 		owe_rx_authenticate(netdev->owe);
-	else if (netdev->fils)
-		fils_rx_authenticate(netdev->fils, frame, frame_len);
-	else
+	else if (netdev->ap) {
+		ret = auth_proto_rx_authenticate(netdev->ap, frame, frame_len);
+		if (ret == 0 || ret == -EAGAIN)
+			return;
+		else if (ret > 0)
+			status_code = (uint16_t)ret;
+
+		goto auth_error;
+	} else
 		goto auth_error;
 
 	return;
 
 auth_error:
 	netdev_connect_failed(netdev, NETDEV_RESULT_AUTHENTICATION_FAILED,
-				MMPDU_STATUS_CODE_UNSPECIFIED);
+				status_code);
 }
 
 static void netdev_associate_event(struct l_genl_msg *msg,
@@ -2431,6 +2446,7 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 	size_t frame_len = 0;
 	const uint8_t *frame = NULL;
 	uint16_t status_code = MMPDU_STATUS_CODE_UNSPECIFIED;
+	int ret;
 
 	l_debug("");
 
@@ -2438,7 +2454,7 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 		return;
 
 	if (!netdev->owe && !netdev->in_ft && !netdev->handshake->mde &&
-				!netdev->fils)
+				!netdev->ap)
 		return;
 
 	if (!l_genl_attr_init(&attr, msg)) {
@@ -2450,6 +2466,10 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 		switch (type) {
 		case NL80211_ATTR_TIMED_OUT:
 			l_warn("association timed out");
+
+			if (auth_proto_assoc_timeout(netdev->ap))
+				return;
+
 			goto assoc_failed;
 
 		case NL80211_ATTR_FRAME:
@@ -2466,9 +2486,27 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 	if (netdev->owe) {
 		owe_rx_associate(netdev->owe, frame, frame_len);
 		return;
-	} else if (netdev->fils) {
-		fils_rx_associate(netdev->fils, frame, frame_len);
-		return;
+	} else if (netdev->ap) {
+		ret = auth_proto_rx_associate(netdev->ap, frame, frame_len);
+		if (ret == 0) {
+			auth_proto_free(netdev->ap);
+			netdev->ap = NULL;
+
+			netdev->sm = eapol_sm_new(netdev->handshake);
+			eapol_register(netdev->sm);
+
+			goto auth_complete;
+		} else if (ret == -EAGAIN) {
+			/*
+			 * Here to support OWE retries. OWE will retry
+			 * internally, but a connect even will still be emitted.
+			 */
+			netdev->ignore_connect_event = true;
+			return;
+		} else if (ret > 0)
+			status_code = (uint16_t)ret;
+
+		goto assoc_failed;
 	}
 
 	if (!netdev_ft_process_associate(netdev, frame, frame_len,
@@ -2478,6 +2516,7 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 	if (status_code != 0)
 		goto assoc_failed;
 
+auth_complete:
 	if (netdev->sm) {
 		/*
 		 * Start processing EAPoL frames now that the state machine
@@ -2786,44 +2825,6 @@ static void netdev_fils_tx_associate(struct iovec *iov, size_t iov_len,
 	}
 }
 
-static void netdev_fils_complete(uint16_t status, bool in_auth, bool ap_reject,
-					void *user_data)
-{
-	struct netdev *netdev = user_data;
-
-	fils_sm_free(netdev->fils);
-	netdev->fils = NULL;
-
-	if (status == 0) {
-		netdev->ignore_connect_event = true;
-
-		/* Register SM for rekeying */
-		netdev->sm = eapol_sm_new(netdev->handshake);
-		eapol_register(netdev->sm);
-		eapol_set_started(netdev->sm);
-
-		return;
-	}
-
-	/*
-	 * There are a few scenarios here:
-	 *
-	 * 1. AP rejected authentication, this case we are done.
-	 * 2. AP accepted either authentication or association where status was
-	 *    zero, but we failed for some other reason. In these cases we
-	 *    should set expect_connect_failure which causes a deauth.
-	 * 3. AP rejected association. This will be a non zero status code, so
-	 *    the kernel should know that we have failed the connection.
-	 */
-
-	if (!ap_reject)
-		netdev->expect_connect_failure = true;
-
-	netdev->result = (in_auth) ? NETDEV_RESULT_AUTHENTICATION_FAILED :
-			NETDEV_RESULT_ASSOCIATION_FAILED;
-	netdev->last_code = status;
-}
-
 static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 						struct scan_bss *bss,
 						struct handshake_state *hs,
@@ -2958,8 +2959,8 @@ static int netdev_connect_common(struct netdev *netdev,
 		sae_start(netdev->sae_sm);
 	else if (netdev->owe)
 		owe_start(netdev->owe);
-	else if (netdev->fils)
-		fils_start(netdev->fils);
+	else
+		auth_proto_start(netdev->ap);
 
 	return 0;
 }
@@ -2993,9 +2994,9 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 		break;
 	case IE_RSN_AKM_SUITE_FILS_SHA256:
 	case IE_RSN_AKM_SUITE_FILS_SHA384:
-		netdev->fils = fils_sm_new(hs, netdev_fils_tx_authenticate,
+		netdev->ap = fils_sm_new(hs, netdev_fils_tx_authenticate,
 						netdev_fils_tx_associate,
-						netdev_fils_complete, netdev);
+						netdev);
 		break;
 	default:
 		cmd_connect = netdev_build_cmd_connect(netdev, bss, hs, NULL);

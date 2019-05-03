@@ -34,18 +34,19 @@
 #include "src/util.h"
 #include "src/missing.h"
 #include "src/erp.h"
+#include "src/auth-proto.h"
 
 #define FILS_NONCE_LEN		16
 #define FILS_SESSION_LEN	8
 
 struct fils_sm {
+	struct auth_proto ap;
 	struct erp_state *erp;
 	struct handshake_state *hs;
 	void *user_data;
 
 	fils_tx_authenticate_func_t auth;
 	fils_tx_associate_func_t assoc;
-	fils_complete_func_t complete;
 
 	uint8_t nonce[FILS_NONCE_LEN];
 	uint8_t anonce[FILS_NONCE_LEN];
@@ -58,14 +59,7 @@ struct fils_sm {
 	uint8_t pmk[48];
 	size_t pmk_len;
 	uint8_t pmkid[16];
-
-	bool in_auth : 1;
 };
-
-static void fils_failed(struct fils_sm *fils, uint16_t status, bool ap_reject)
-{
-	fils->complete(status, fils->in_auth, ap_reject, fils->user_data);
-}
 
 static void fils_derive_pmkid(struct fils_sm *fils, const uint8_t *erp_data,
 				size_t len)
@@ -237,34 +231,20 @@ static int fils_derive_key_data(struct fils_sm *fils)
 	fils->assoc(iov, 2, fils->kek_and_tk, fils->kek_len, data,
 			FILS_NONCE_LEN * 2, fils->user_data);
 
-	fils->in_auth = false;
-
 	return 0;
 }
 
-struct fils_sm *fils_sm_new(struct handshake_state *hs,
-				fils_tx_authenticate_func_t auth,
-				fils_tx_associate_func_t assoc,
-				fils_complete_func_t complete, void *user_data)
+static bool fils_start(struct auth_proto *driver)
 {
-	struct fils_sm *fils;
+	struct fils_sm *fils = l_container_of(driver, struct fils_sm, ap);
 
-	fils = l_new(struct fils_sm, 1);
-
-	fils->auth = auth;
-	fils->assoc = assoc;
-	fils->complete = complete;
-	fils->user_data = user_data;
-	fils->hs = hs;
-	fils->in_auth = true;
-
-	fils->erp = erp_new(hs->erp_cache, fils_erp_tx_func, fils);
-
-	return fils;
+	return erp_start(fils->erp);
 }
 
-void fils_sm_free(struct fils_sm *fils)
+static void fils_free(struct auth_proto *driver)
 {
+	struct fils_sm *fils = l_container_of(driver, struct fils_sm, ap);
+
 	erp_free(fils->erp);
 
 	explicit_bzero(fils->ick, sizeof(fils->ick));
@@ -275,16 +255,10 @@ void fils_sm_free(struct fils_sm *fils)
 	l_free(fils);
 }
 
-void fils_start(struct fils_sm *fils)
-{
-	if (!erp_start(fils->erp))
-		fils->complete(MMPDU_STATUS_CODE_UNSPECIFIED, fils->in_auth,
-				false, fils->user_data);
-}
-
-void fils_rx_authenticate(struct fils_sm *fils, const uint8_t *frame,
+static int fils_rx_authenticate(struct auth_proto *driver, const uint8_t *frame,
 				size_t len)
 {
+	struct fils_sm *fils = l_container_of(driver, struct fils_sm, ap);
 	const struct mmpdu_header *hdr = mpdu_validate(frame, len);
 	const struct mmpdu_authentication *auth;
 	struct ie_tlv_iter iter;
@@ -295,27 +269,25 @@ void fils_rx_authenticate(struct fils_sm *fils, const uint8_t *frame,
 
 	if (!hdr) {
 		l_debug("Auth frame header did not validate");
-		goto auth_failed;
+		return -EBADMSG;
 	}
 
 	auth = mmpdu_body(hdr);
 
 	if (!auth) {
 		l_debug("Auth frame body did not validate");
-		goto auth_failed;
+		return -EBADMSG;
 	}
 
 	if (auth->status != 0) {
 		l_debug("invalid status %u", auth->status);
-		fils_failed(fils, auth->status, true);
-		return;
+		return (int)auth->status;
 	}
 
 	if (auth->algorithm != MMPDU_AUTH_ALGO_FILS_SK &&
 			auth->algorithm != MMPDU_AUTH_ALGO_FILS_SK_PFS) {
 		l_debug("invalid auth algorithm %u", auth->algorithm);
-		fils_failed(fils, MMPDU_STATUS_CODE_UNSUP_AUTH_ALG, false);
-		return;
+		return MMPDU_STATUS_CODE_UNSUP_AUTH_ALG;
 	}
 
 	ie_tlv_iter_init(&iter, auth->ies, (const uint8_t *) hdr + len -
@@ -324,13 +296,13 @@ void fils_rx_authenticate(struct fils_sm *fils, const uint8_t *frame,
 		switch (iter.tag) {
 		case IE_TYPE_FILS_NONCE:
 			if (iter.len != FILS_NONCE_LEN)
-				goto auth_failed;
+				goto invalid_ies;
 
 			anonce = iter.data;
 			break;
 		case IE_TYPE_FILS_SESSION:
 			if (iter.len != FILS_SESSION_LEN)
-				goto auth_failed;
+				goto invalid_ies;
 
 			session = iter.data;
 			break;
@@ -345,24 +317,24 @@ void fils_rx_authenticate(struct fils_sm *fils, const uint8_t *frame,
 
 	if (!anonce || !session || !wrapped) {
 		l_debug("Auth did not include required IEs");
-		fils_failed(fils, MMPDU_STATUS_CODE_INVALID_ELEMENT, false);
-		return;
+		goto invalid_ies;
 	}
 
 	memcpy(fils->anonce, anonce, FILS_NONCE_LEN);
 
 	if (erp_rx_packet(fils->erp, wrapped, wrapped_len) < 0)
-		goto auth_failed;
+		goto invalid_ies;
 
-	fils_derive_key_data(fils);
-	return;
+	return fils_derive_key_data(fils);
 
-auth_failed:
-	fils_failed(fils, MMPDU_REASON_CODE_UNSPECIFIED, false);
+invalid_ies:
+	return MMPDU_STATUS_CODE_INVALID_ELEMENT;
 }
 
-void fils_rx_associate(struct fils_sm *fils, const uint8_t *frame, size_t len)
+static int fils_rx_associate(struct auth_proto *driver, const uint8_t *frame,
+				size_t len)
 {
+	struct fils_sm *fils = l_container_of(driver, struct fils_sm, ap);
 	const struct mmpdu_header *hdr = mpdu_validate(frame, len);
 	const struct mmpdu_association_response *assoc;
 	struct ie_tlv_iter iter;
@@ -381,20 +353,18 @@ void fils_rx_associate(struct fils_sm *fils, const uint8_t *frame, size_t len)
 
 	if (!hdr) {
 		l_debug("Assoc frame header did not validate");
-		goto assoc_failed;
+		return -EBADMSG;
 	}
 
 	assoc = mmpdu_body(hdr);
 
 	if (!assoc) {
 		l_debug("Assoc frame body did not validate");
-		goto assoc_failed;;
+		return -EBADMSG;
 	}
 
-	if (assoc->status_code != 0) {
-		fils_failed(fils, assoc->status_code, true);
-		return;
-	}
+	if (assoc->status_code != 0)
+		return (int)assoc->status_code;
 
 	ie_tlv_iter_init(&iter, assoc->ies, (const uint8_t *) hdr + len -
 				assoc->ies);
@@ -467,7 +437,7 @@ void fils_rx_associate(struct fils_sm *fils, const uint8_t *frame, size_t len)
 
 	if (memcmp(ap_key_auth, expected_key_auth, fils->ick_len)) {
 		l_error("AP KeyAuth did not verify");
-		goto assoc_failed;
+		return -EBADMSG;
 	}
 
 	handshake_state_set_pmk(fils->hs, fils->pmk, fils->pmk_len);
@@ -484,14 +454,32 @@ void fils_rx_associate(struct fils_sm *fils, const uint8_t *frame, size_t len)
 	handshake_state_set_ptk(fils->hs, fils->kek_and_tk, fils->kek_len + 16);
 	handshake_state_install_ptk(fils->hs);
 
-	fils->complete(0, fils->in_auth, false, fils->user_data);
-
-	return;
-
-assoc_failed:
-	fils_failed(fils, MMPDU_STATUS_CODE_UNSPECIFIED, false);
-	return;
+	return 0;
 
 invalid_ies:
-	fils_failed(fils, MMPDU_STATUS_CODE_INVALID_ELEMENT, false);
+	return MMPDU_STATUS_CODE_INVALID_ELEMENT;
+}
+
+struct auth_proto *fils_sm_new(struct handshake_state *hs,
+				fils_tx_authenticate_func_t auth,
+				fils_tx_associate_func_t assoc,
+				void *user_data)
+{
+	struct fils_sm *fils;
+
+	fils = l_new(struct fils_sm, 1);
+
+	fils->auth = auth;
+	fils->assoc = assoc;
+	fils->user_data = user_data;
+	fils->hs = hs;
+
+	fils->ap.start = fils_start;
+	fils->ap.free = fils_free;
+	fils->ap.rx_authenticate = fils_rx_authenticate;
+	fils->ap.rx_associate = fils_rx_associate;
+
+	fils->erp = erp_new(hs->erp_cache, fils_erp_tx_func, fils);
+
+	return &fils->ap;
 }
