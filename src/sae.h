@@ -23,17 +23,12 @@
 struct sae_sm;
 struct handshake_state;
 
-typedef int (*sae_tx_packet_func_t)(const uint8_t *dest, const uint8_t *frame,
-					size_t len, void *user_data);
+typedef void (*sae_tx_authenticate_func_t)(const uint8_t *data, size_t len,
+						void *user_data);
+typedef void (*sae_tx_associate_func_t)(void *user_data);
 
-typedef void (*sae_complete_func_t)(uint16_t status, void *user_data);
+struct auth_proto *sae_sm_new(struct handshake_state *hs,
+				sae_tx_authenticate_func_t tx_auth,
+				sae_tx_associate_func_t tx_assoc,
+				void *user_data);
 
-struct sae_sm *sae_sm_new(struct handshake_state *hs, sae_tx_packet_func_t tx,
-				sae_complete_func_t complete, void *user_data);
-void sae_sm_free(struct sae_sm *sm);
-
-void sae_rx_packet(struct sae_sm *sm, const uint8_t *src,
-				const uint8_t *frame, size_t len);
-void sae_timeout(struct sae_sm *sm);
-
-void sae_start(struct sae_sm *sm);
