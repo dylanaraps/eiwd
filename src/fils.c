@@ -119,9 +119,10 @@ static void fils_erp_tx_func(const uint8_t *eap_data, size_t len,
 	fils->auth(data, ptr - data + tlv_len, fils->user_data);
 }
 
-static int fils_derive_key_data(struct fils_sm *fils, const void *rmsk,
-				size_t rmsk_len)
+static int fils_derive_key_data(struct fils_sm *fils)
 {
+	const void *rmsk;
+	size_t rmsk_len;
 	struct ie_tlv_builder builder;
 	uint8_t key[FILS_NONCE_LEN * 2];
 	uint8_t key_data[64 + 48 + 16]; /* largest ICK, KEK, TK */
@@ -132,6 +133,8 @@ static int fils_derive_key_data(struct fils_sm *fils, const void *rmsk,
 	struct iovec iov[2];
 	bool sha384;
 	unsigned int ie_len;
+
+	rmsk = erp_get_rmsk(fils->erp, &rmsk_len);
 
 	/*
 	 * IEEE 802.11ai - Section 12.12.2.5.3
@@ -289,8 +292,6 @@ void fils_rx_authenticate(struct fils_sm *fils, const uint8_t *frame,
 	const uint8_t *session = NULL;
 	const uint8_t *wrapped = NULL;
 	size_t wrapped_len = 0;
-	void *rmsk;
-	size_t rmsk_len;
 
 	if (!hdr) {
 		l_debug("Auth frame header did not validate");
@@ -353,10 +354,7 @@ void fils_rx_authenticate(struct fils_sm *fils, const uint8_t *frame,
 	if (erp_rx_packet(fils->erp, wrapped, wrapped_len) < 0)
 		goto auth_failed;
 
-	erp_get_rmsk(fils->erp, &rmsk, &rmsk_len);
-
-	fils_derive_key_data(fils, rmsk, rmsk_len);
-
+	fils_derive_key_data(fils);
 	return;
 
 auth_failed:

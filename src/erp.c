@@ -512,10 +512,12 @@ eap_failed:
 	return -EINVAL;
 }
 
-void erp_get_rmsk(struct erp_state *erp, void **rmsk, size_t *rmsk_len)
+const void *erp_get_rmsk(struct erp_state *erp, size_t *rmsk_len)
 {
-	*rmsk = erp->rmsk;
-	*rmsk_len = erp->cache->emsk_len;
+	if (rmsk_len)
+		*rmsk_len = erp->cache->emsk_len;
+
+	return erp->rmsk;
 }
 
 void erp_init(void)
