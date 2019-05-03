@@ -30,16 +30,16 @@ enum erp_result {
 
 typedef void (*erp_tx_packet_func_t)(const uint8_t *erp_data, size_t len,
 					void *user_data);
-typedef void (*erp_complete_func_t)(enum erp_result result, const void *rmsk,
-					size_t rmsk_len, void *user_data);
 
 struct erp_state *erp_new(struct erp_cache_entry *cache,
 				erp_tx_packet_func_t tx_packet,
-				erp_complete_func_t complete, void *user_data);
+				void *user_data);
 void erp_free(struct erp_state *erp);
 
 bool erp_start(struct erp_state *erp);
-void erp_rx_packet(struct erp_state *erp, const uint8_t *erp_data, size_t len);
+int erp_rx_packet(struct erp_state *erp, const uint8_t *erp_data, size_t len);
+
+void erp_get_rmsk(struct erp_state *erp, void **rmsk, size_t *rmsk_len);
 
 void erp_cache_add(const char *id, const void *session_id, size_t session_len,
 			const void *emsk, size_t emsk_len,

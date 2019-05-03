@@ -26,6 +26,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <errno.h>
 
 #include <ell/ell.h>
 
@@ -50,11 +51,11 @@ struct erp_cache_entry {
 
 struct erp_state {
 	erp_tx_packet_func_t tx_packet;
-	erp_complete_func_t complete;
 	void *user_data;
 
 	struct erp_cache_entry *cache;
 
+	uint8_t rmsk[64];
 	uint8_t r_rk[64];
 	uint8_t r_ik[64];
 	char keyname_nai[254];
@@ -330,7 +331,7 @@ static bool erp_derive_reauth_keys(const uint8_t *emsk, size_t emsk_len,
 
 struct erp_state *erp_new(struct erp_cache_entry *cache,
 				erp_tx_packet_func_t tx_packet,
-				erp_complete_func_t complete, void *user_data)
+				void *user_data)
 {
 	struct erp_state *erp;
 
@@ -340,7 +341,6 @@ struct erp_state *erp_new(struct erp_cache_entry *cache,
 	erp = l_new(struct erp_state, 1);
 
 	erp->tx_packet = tx_packet;
-	erp->complete = complete;
 	erp->user_data = user_data;
 	erp->cache = cache;
 
@@ -398,12 +398,11 @@ bool erp_start(struct erp_state *erp)
 	return true;
 }
 
-void erp_rx_packet(struct erp_state *erp, const uint8_t *pkt, size_t len)
+int erp_rx_packet(struct erp_state *erp, const uint8_t *pkt, size_t len)
 {
 	struct erp_tlv_iter iter;
 	enum eap_erp_cryptosuite cs;
 	uint8_t hash[16];
-	uint8_t rmsk[64];
 	char info[256];
 	char *ptr = info;
 	const uint8_t *nai = NULL;
@@ -425,7 +424,7 @@ void erp_rx_packet(struct erp_state *erp, const uint8_t *pkt, size_t len)
 	type = pkt[4];
 
 	if (type != ERP_TYPE_REAUTH)
-		return;
+		goto eap_failed;
 
 	r = util_is_bit_set(pkt[5], 0);
 	if (r)
@@ -505,15 +504,18 @@ void erp_rx_packet(struct erp_state *erp, const uint8_t *pkt, size_t len)
 	ptr += 2;
 
 	hkdf_expand(L_CHECKSUM_SHA256, erp->r_rk, erp->cache->emsk_len,
-			info, ptr - info, rmsk, erp->cache->emsk_len);
+			info, ptr - info, erp->rmsk, erp->cache->emsk_len);
 
-	erp->complete(ERP_RESULT_SUCCESS, rmsk, erp->cache->emsk_len,
-			erp->user_data);
-
-	return;
+	return 0;
 
 eap_failed:
-	erp->complete(ERP_RESULT_FAIL, NULL, 0, erp->user_data);
+	return -EINVAL;
+}
+
+void erp_get_rmsk(struct erp_state *erp, void **rmsk, size_t *rmsk_len)
+{
+	*rmsk = erp->rmsk;
+	*rmsk_len = erp->cache->emsk_len;
 }
 
 void erp_init(void)
