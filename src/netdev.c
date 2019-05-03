@@ -97,7 +97,6 @@ struct netdev {
 	void *user_data;
 	struct eapol_sm *sm;
 	struct sae_sm *sae_sm;
-	struct owe_sm *owe;
 	struct auth_proto *ap;
 	struct handshake_state *handshake;
 	uint32_t connect_cmd_id;
@@ -555,11 +554,6 @@ static void netdev_connect_free(struct netdev *netdev)
 	if (netdev->sae_sm) {
 		sae_sm_free(netdev->sae_sm);
 		netdev->sae_sm = NULL;
-	}
-
-	if (netdev->owe) {
-		owe_sm_free(netdev->owe);
-		netdev->owe = NULL;
 	}
 
 	if (netdev->ap) {
@@ -2376,7 +2370,7 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 	 * the FT Associate command is included in the attached frame and is
 	 * not available in the Authenticate command callback.
 	 */
-	if (!netdev->in_ft && !netdev->sae_sm && !netdev->owe && !netdev->ap)
+	if (!netdev->in_ft && !netdev->sae_sm && !netdev->ap)
 		return;
 
 	if (!l_genl_attr_init(&attr, msg)) {
@@ -2417,8 +2411,6 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 		netdev_sae_process(netdev,
 				((struct mmpdu_header *)frame)->address_2,
 				frame + 26, frame_len - 26);
-	else if (netdev->owe)
-		owe_rx_authenticate(netdev->owe);
 	else if (netdev->ap) {
 		ret = auth_proto_rx_authenticate(netdev->ap, frame, frame_len);
 		if (ret == 0 || ret == -EAGAIN)
@@ -2453,8 +2445,7 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 	if (!netdev->connected || netdev->aborting)
 		return;
 
-	if (!netdev->owe && !netdev->in_ft && !netdev->handshake->mde &&
-				!netdev->ap)
+	if (!netdev->in_ft && !netdev->handshake->mde && !netdev->ap)
 		return;
 
 	if (!l_genl_attr_init(&attr, msg)) {
@@ -2483,10 +2474,7 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 	if (!frame)
 		goto assoc_failed;
 
-	if (netdev->owe) {
-		owe_rx_associate(netdev->owe, frame, frame_len);
-		return;
-	} else if (netdev->ap) {
+	if (netdev->ap) {
 		ret = auth_proto_rx_associate(netdev->ap, frame, frame_len);
 		if (ret == 0) {
 			auth_proto_free(netdev->ap);
@@ -2749,38 +2737,6 @@ static void netdev_owe_tx_associate(struct iovec *ie_iov, size_t iov_len,
 	}
 }
 
-static void netdev_owe_complete(uint16_t status, void *user_data)
-{
-	struct netdev *netdev = user_data;
-
-	switch (status) {
-	case 0: /* success */
-		break;
-	case MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP:
-		if (owe_retry(netdev->owe)) {
-			netdev->ignore_connect_event = true;
-			return;
-		}
-		/* fall through */
-	default:
-		netdev->result = NETDEV_RESULT_ASSOCIATION_FAILED;
-		netdev->last_code = status;
-		netdev->expect_connect_failure = true;
-
-		goto free_owe;
-	}
-
-	netdev->ignore_connect_event = true;
-
-	netdev->sm = eapol_sm_new(netdev->handshake);
-	eapol_register(netdev->sm);
-	eapol_start(netdev->sm);
-
-free_owe:
-	owe_sm_free(netdev->owe);
-	netdev->owe = NULL;
-}
-
 static void netdev_fils_tx_authenticate(const uint8_t *body,
 					size_t body_len,
 					void *user_data)
@@ -2957,8 +2913,6 @@ static int netdev_connect_common(struct netdev *netdev,
 
 	if (netdev->sae_sm)
 		sae_start(netdev->sae_sm);
-	else if (netdev->owe)
-		owe_start(netdev->owe);
 	else
 		auth_proto_start(netdev->ap);
 
@@ -2987,9 +2941,8 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 						netdev_sae_complete, netdev);
 		break;
 	case IE_RSN_AKM_SUITE_OWE:
-		netdev->owe = owe_sm_new(hs, netdev_owe_tx_authenticate,
+		netdev->ap = owe_sm_new(hs, netdev_owe_tx_authenticate,
 						netdev_owe_tx_associate,
-						netdev_owe_complete,
 						netdev);
 		break;
 	case IE_RSN_AKM_SUITE_FILS_SHA256:

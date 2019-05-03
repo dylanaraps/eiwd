@@ -26,15 +26,8 @@ struct handshake_state;
 typedef void (*owe_tx_authenticate_func_t)(void *user_data);
 typedef void (*owe_tx_associate_func_t)(struct iovec *ie_iov, size_t iov_len,
 					void *user_data);
-typedef void (*owe_complete_func_t)(uint16_t status, void *user_data);
 
-struct owe_sm *owe_sm_new(struct handshake_state *hs,
+struct auth_proto *owe_sm_new(struct handshake_state *hs,
 				owe_tx_authenticate_func_t auth,
 				owe_tx_associate_func_t assoc,
-				owe_complete_func_t complete, void *user_data);
-void owe_sm_free(struct owe_sm *owe);
-
-void owe_start(struct owe_sm *owe);
-bool owe_retry(struct owe_sm *owe);
-void owe_rx_authenticate(struct owe_sm *owe);
-void owe_rx_associate(struct owe_sm *owe, const uint8_t *frame, size_t len);
+				void *user_data);
