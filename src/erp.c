@@ -351,6 +351,10 @@ void erp_free(struct erp_state *erp)
 {
 	erp_cache_put(erp->cache);
 
+	explicit_bzero(erp->rmsk, sizeof(erp->rmsk));
+	explicit_bzero(erp->r_ik, sizeof(erp->r_ik));
+	explicit_bzero(erp->r_rk, sizeof(erp->r_rk));
+
 	l_free(erp);
 }
 
