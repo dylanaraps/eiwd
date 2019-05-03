@@ -2306,11 +2306,6 @@ void __eapol_set_rekey_offload_func(eapol_rekey_offload_func_t func)
 	rekey_offload = func;
 }
 
-void eapol_set_started(struct eapol_sm *sm)
-{
-	sm->started = true;
-}
-
 void eapol_register(struct eapol_sm *sm)
 {
 	l_queue_push_head(state_machines, sm);
