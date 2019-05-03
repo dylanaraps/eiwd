@@ -449,7 +449,8 @@ unit_test_sae_SOURCES = unit/test-sae.c \
 				src/crypto.h src/crypto.c \
 				src/ie.h src/ie.c \
 				src/handshake.h src/handshake.c \
-				src/util.h src/util.c
+				src/util.h src/util.c \
+				src/mpdu.h src/mpdu.c
 unit_test_sae_LDADD = $(ell_ldadd)
 
 TESTS = $(unit_tests)
