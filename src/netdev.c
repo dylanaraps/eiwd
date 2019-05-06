@@ -61,6 +61,7 @@
 #include "src/owe.h"
 #include "src/fils.h"
 #include "src/auth-proto.h"
+#include "src/rtnlutil.h"
 
 #ifndef ENOTSUPP
 #define ENOTSUPP 524
@@ -243,50 +244,6 @@ struct handshake_state *netdev_handshake_state_new(struct netdev *netdev)
 struct wiphy *netdev_get_wiphy(struct netdev *netdev)
 {
 	return netdev->wiphy;
-}
-
-static size_t rta_add_u8(void *rta_buf, unsigned short type, uint8_t value)
-{
-	struct rtattr *rta = rta_buf;
-
-	rta->rta_len = RTA_LENGTH(sizeof(uint8_t));
-	rta->rta_type = type;
-	*((uint8_t *) RTA_DATA(rta)) = value;
-
-	return RTA_SPACE(sizeof(uint8_t));
-}
-
-static uint32_t rtnl_set_linkmode_and_operstate(int ifindex,
-					uint8_t linkmode, uint8_t operstate,
-					l_netlink_command_func_t cb,
-					void *user_data,
-					l_netlink_destroy_func_t destroy)
-{
-	struct ifinfomsg *rtmmsg;
-	void *rta_buf;
-	size_t bufsize;
-	uint32_t id;
-
-	bufsize = NLMSG_ALIGN(sizeof(struct ifinfomsg)) +
-		RTA_SPACE(sizeof(uint8_t)) + RTA_SPACE(sizeof(uint8_t));
-
-	rtmmsg = l_malloc(bufsize);
-	memset(rtmmsg, 0, bufsize);
-
-	rtmmsg->ifi_family = AF_UNSPEC;
-	rtmmsg->ifi_index = ifindex;
-
-	rta_buf = (void *) rtmmsg + NLMSG_ALIGN(sizeof(struct ifinfomsg));
-
-	rta_buf += rta_add_u8(rta_buf, IFLA_LINKMODE, linkmode);
-	rta_buf += rta_add_u8(rta_buf, IFLA_OPERSTATE, operstate);
-
-	id = l_netlink_send(rtnl, RTM_SETLINK, 0, rtmmsg,
-					rta_buf - (void *) rtmmsg,
-					cb, user_data, destroy);
-	l_free(rtmmsg);
-
-	return id;
 }
 
 const uint8_t *netdev_get_address(struct netdev *netdev)
@@ -1049,8 +1006,9 @@ static void netdev_operstate_cb(int error, uint16_t type,
 
 static void netdev_connect_ok(struct netdev *netdev)
 {
-	rtnl_set_linkmode_and_operstate(netdev->index, IF_LINK_MODE_DORMANT,
-					IF_OPER_UP, netdev_operstate_cb,
+	rtnl_set_linkmode_and_operstate(rtnl, netdev->index,
+					IF_LINK_MODE_DORMANT, IF_OPER_UP,
+					netdev_operstate_cb,
 					L_UINT_TO_PTR(netdev->index), NULL);
 
 	netdev->operational = true;
@@ -4605,8 +4563,9 @@ static void netdev_initial_up_cb(int error, uint16_t type, const void *data,
 			return;
 	}
 
-	rtnl_set_linkmode_and_operstate(netdev->index, IF_LINK_MODE_DORMANT,
-					IF_OPER_DOWN, netdev_operstate_cb,
+	rtnl_set_linkmode_and_operstate(rtnl, netdev->index,
+					IF_LINK_MODE_DORMANT, IF_OPER_DOWN,
+					netdev_operstate_cb,
 					L_UINT_TO_PTR(netdev->index), NULL);
 
 	/*
