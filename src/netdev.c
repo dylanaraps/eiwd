@@ -113,6 +113,7 @@ struct netdev {
 	struct l_timeout *group_handshake_timeout;
 	uint16_t sa_query_id;
 	uint8_t prev_bssid[ETH_ALEN];
+	uint8_t prev_snonce[32];
 	int8_t rssi_levels[16];
 	uint8_t rssi_levels_num;
 	uint8_t cur_rssi_level_idx;
@@ -1535,145 +1536,6 @@ static void netdev_set_rekey_offload(uint32_t ifindex,
 							netdev, NULL);
 }
 
-/*
- * Handle the Association Response IE contents either as part of an
- * FT initial Mobility Domain association (12.4) or a Fast Transition
- * (12.8.5).
- */
-static bool netdev_ft_process_associate(struct netdev *netdev,
-					const uint8_t *frame, size_t frame_len,
-					uint16_t *out_status)
-{
-	struct handshake_state *hs = netdev->handshake;
-	const uint8_t *rsne = NULL;
-	const uint8_t *mde = NULL;
-	const uint8_t *fte = NULL;
-	const uint8_t *sent_mde = hs->mde;
-	bool is_rsn = hs->supplicant_ie != NULL;
-
-	if (!ft_parse_associate_resp_frame(frame, frame_len, out_status, &rsne,
-					&mde, &fte))
-		return false;
-
-	/*
-	 * During a transition in an RSN, check for an RSNE containing the
-	 * PMK-R1-Name and the remaining fields same as in the advertised
-	 * RSNE.
-	 *
-	 * 12.8.5: "The RSNE shall be present only if dot11RSNAActivated is
-	 * true. If present, the RSNE shall be set as follows:
-	 * — Version field shall be set to 1.
-	 * — PMKID Count field shall be set to 1.
-	 * — PMKID field shall contain the PMKR1Name
-	 * — All other fields shall be identical to the contents of the RSNE
-	 *   advertised by the target AP in Beacon and Probe Response frames."
-	 */
-	if (is_rsn) {
-		struct ie_rsn_info msg4_rsne;
-
-		if (!rsne)
-			return false;
-
-		if (ie_parse_rsne_from_data(rsne, rsne[1] + 2,
-						&msg4_rsne) < 0)
-			return false;
-
-		if (msg4_rsne.num_pmkids != 1 ||
-				memcmp(msg4_rsne.pmkids, hs->pmk_r1_name, 16))
-			return false;
-
-		if (!handshake_util_ap_ie_matches(rsne, hs->authenticator_ie,
-							false))
-			return false;
-	} else {
-		if (rsne)
-			return false;
-	}
-
-	/* An MD IE identical to the one we sent must be present */
-	if (sent_mde && (!mde || memcmp(sent_mde, mde, sent_mde[1] + 2)))
-		return false;
-
-	/*
-	 * An FT IE is required in an initial mobility domain
-	 * association and re-associations in an RSN but not present
-	 * in a non-RSN (12.4.2 vs. 12.4.3).
-	 */
-	if (sent_mde && is_rsn && !fte)
-		return false;
-	if (!(sent_mde && is_rsn) && fte)
-		return false;
-
-	if (fte) {
-		struct ie_ft_info ft_info;
-		uint8_t mic[16];
-
-		if (ie_parse_fast_bss_transition_from_data(fte, fte[1] + 2,
-								&ft_info) < 0)
-			return false;
-
-		/*
-		 * In an RSN, check for an FT IE with the same
-		 * R0KH-ID, R1KH-ID, ANonce and SNonce that we
-		 * received in message 2, MIC Element Count
-		 * of 6 and the correct MIC.
-		 */
-
-		if (!ft_calculate_fte_mic(hs, 6, rsne, fte, NULL, mic))
-			return false;
-
-		if (ft_info.mic_element_count != 3 ||
-				memcmp(ft_info.mic, mic, 16))
-			return false;
-
-		if (hs->r0khid_len != ft_info.r0khid_len ||
-				memcmp(hs->r0khid, ft_info.r0khid,
-					hs->r0khid_len) ||
-				!ft_info.r1khid_present ||
-				memcmp(hs->r1khid, ft_info.r1khid, 6))
-			return false;
-
-		if (memcmp(ft_info.anonce, hs->anonce, 32))
-			return false;
-
-		if (memcmp(ft_info.snonce, hs->snonce, 32))
-			return false;
-
-		if (ft_info.gtk_len) {
-			uint8_t gtk[32];
-
-			if (!handshake_decode_fte_key(hs, ft_info.gtk,
-							ft_info.gtk_len,
-							gtk))
-				return false;
-
-			if (ft_info.gtk_rsc[6] != 0x00 ||
-					ft_info.gtk_rsc[7] != 0x00)
-				return false;
-
-			handshake_state_install_gtk(hs,
-						ft_info.gtk_key_id,
-						gtk, ft_info.gtk_len,
-						ft_info.gtk_rsc, 6);
-		}
-
-		if (ft_info.igtk_len) {
-			uint8_t igtk[16];
-
-			if (!handshake_decode_fte_key(hs, ft_info.igtk,
-						ft_info.igtk_len, igtk))
-				return false;
-
-			handshake_state_install_igtk(hs,
-						ft_info.igtk_key_id,
-						igtk, ft_info.igtk_len,
-						ft_info.igtk_ipn);
-		}
-	}
-
-	return true;
-}
-
 static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 {
 	struct l_genl_attr attr;
@@ -1948,110 +1810,6 @@ static struct l_genl_msg *netdev_build_cmd_associate_common(
 	return msg;
 }
 
-/*
- * Build an FT Reassociation Request frame according to 12.5.2 / 12.5.4:
- * RSN or non-RSN Over-the-air FT Protocol, and with the IE contents
- * according to 12.8.4: FT authentication sequence: contents of third message.
- */
-static struct l_genl_msg *netdev_build_cmd_ft_reassociate(struct netdev *netdev)
-{
-	struct l_genl_msg *msg;
-	struct iovec iov[3];
-	int iov_elems = 0;
-	struct handshake_state *hs = netdev_get_handshake(netdev);
-	bool is_rsn = hs->supplicant_ie != NULL;
-	uint8_t *rsne = NULL;
-
-	msg = netdev_build_cmd_associate_common(netdev);
-
-	l_genl_msg_append_attr(msg, NL80211_ATTR_PREV_BSSID, ETH_ALEN,
-				netdev->prev_bssid);
-
-	if (is_rsn) {
-		struct ie_rsn_info rsn_info;
-
-		/*
-		 * Rebuild the RSNE to include the PMKR1Name and append
-		 * MDE + FTE.
-		 *
-		 * 12.8.4: "If present, the RSNE shall be set as follows:
-		 * — Version field shall be set to 1.
-		 * — PMKID Count field shall be set to 1.
-		 * — PMKID field shall contain the PMKR1Name.
-		 * — All other fields shall be as specified in 8.4.2.27
-		 *   and 11.5.3."
-		 */
-		if (ie_parse_rsne_from_data(hs->supplicant_ie,
-						hs->supplicant_ie[1] + 2,
-						&rsn_info) < 0)
-			goto error;
-
-		rsn_info.num_pmkids = 1;
-		rsn_info.pmkids = hs->pmk_r1_name;
-
-		rsne = alloca(256);
-		ie_build_rsne(&rsn_info, rsne);
-
-		iov[iov_elems].iov_base = rsne;
-		iov[iov_elems].iov_len = rsne[1] + 2;
-		iov_elems += 1;
-	}
-
-	/* The MDE advertised by the BSS must be passed verbatim */
-	iov[iov_elems].iov_base = (void *) hs->mde;
-	iov[iov_elems].iov_len = hs->mde[1] + 2;
-	iov_elems += 1;
-
-	if (is_rsn) {
-		struct ie_ft_info ft_info;
-		uint8_t *fte;
-
-		/*
-		 * 12.8.4: "If present, the FTE shall be set as follows:
-		 * — ANonce, SNonce, R0KH-ID, and R1KH-ID shall be set to
-		 *   the values contained in the second message of this
-		 *   sequence.
-		 * — The Element Count field of the MIC Control field shall
-		 *   be set to the number of elements protected in this
-		 *   frame (variable).
-		 * [...]
-		 * — All other fields shall be set to 0."
-		 */
-
-		memset(&ft_info, 0, sizeof(ft_info));
-
-		ft_info.mic_element_count = 3;
-		memcpy(ft_info.r0khid, hs->r0khid, hs->r0khid_len);
-		ft_info.r0khid_len = hs->r0khid_len;
-		memcpy(ft_info.r1khid, hs->r1khid, 6);
-		ft_info.r1khid_present = true;
-		memcpy(ft_info.anonce, hs->anonce, 32);
-		memcpy(ft_info.snonce, hs->snonce, 32);
-
-		fte = alloca(256);
-		ie_build_fast_bss_transition(&ft_info, fte);
-
-		if (!ft_calculate_fte_mic(hs, 5, rsne, fte, NULL, ft_info.mic))
-			goto error;
-
-		/* Rebuild the FT IE now with the MIC included */
-		ie_build_fast_bss_transition(&ft_info, fte);
-
-		iov[iov_elems].iov_base = fte;
-		iov[iov_elems].iov_len = fte[1] + 2;
-		iov_elems += 1;
-	}
-
-	l_genl_msg_append_attrv(msg, NL80211_ATTR_IE, iov, iov_elems);
-
-	return msg;
-
-error:
-	l_genl_msg_unref(msg);
-
-	return NULL;
-}
-
 static void netdev_cmd_ft_reassociate_cb(struct l_genl_msg *msg,
 						void *user_data)
 {
@@ -2071,197 +1829,6 @@ static void netdev_cmd_ft_reassociate_cb(struct l_genl_msg *msg,
 							netdev_disconnect_cb,
 							netdev, NULL);
 	}
-}
-
-static void netdev_ft_process_authenticate(struct netdev *netdev,
-					const uint8_t *frame, size_t frame_len)
-{
-	struct l_genl_msg *cmd_associate, *cmd_deauth;
-	uint16_t status_code;
-	const uint8_t *ies = NULL;
-	size_t ies_len;
-	struct ie_tlv_iter iter;
-	const uint8_t *rsne = NULL;
-	const uint8_t *mde = NULL;
-	const uint8_t *fte = NULL;
-	struct handshake_state *hs = netdev->handshake;
-	bool is_rsn;
-	/*
-	 * Parse the Authentication Response and validate the contents
-	 * according to 12.5.2 / 12.5.4: RSN or non-RSN Over-the-air
-	 * FT Protocol.
-	 */
-	if (!ft_parse_authentication_resp_frame(frame, frame_len,
-					netdev->addr, hs->aa, hs->aa, 2,
-					&status_code, &ies, &ies_len))
-		goto auth_error;
-
-	/* AP Rejected the authenticate / associate */
-	if (status_code != 0)
-		goto auth_error;
-
-	/* Check 802.11r IEs */
-	if (!ies)
-		goto ft_error;
-
-	ie_tlv_iter_init(&iter, ies, ies_len);
-
-	while (ie_tlv_iter_next(&iter)) {
-		switch (ie_tlv_iter_get_tag(&iter)) {
-		case IE_TYPE_RSN:
-			if (rsne)
-				goto ft_error;
-
-			rsne = ie_tlv_iter_get_data(&iter) - 2;
-			break;
-
-		case IE_TYPE_MOBILITY_DOMAIN:
-			if (mde)
-				goto ft_error;
-
-			mde = ie_tlv_iter_get_data(&iter) - 2;
-			break;
-
-		case IE_TYPE_FAST_BSS_TRANSITION:
-			if (fte)
-				goto ft_error;
-
-			fte = ie_tlv_iter_get_data(&iter) - 2;
-			break;
-		}
-	}
-
-	is_rsn = hs->supplicant_ie != NULL;
-
-	/*
-	 * In an RSN, check for an RSNE containing the PMK-R0-Name and
-	 * the remaining fields same as in the advertised RSNE.
-	 *
-	 * 12.8.3: "The RSNE shall be present only if dot11RSNAActivated
-	 * is true. If present, the RSNE shall be set as follows:
-	 * — Version field shall be set to 1.
-	 * — PMKID Count field shall be set to 1.
-	 * — PMKID List field shall be set to the value contained in the
-	 *   first message of this sequence.
-	 * — All other fields shall be identical to the contents of the
-	 *   RSNE advertised by the AP in Beacon and Probe Response frames."
-	 */
-	if (is_rsn) {
-		struct ie_rsn_info msg2_rsne;
-
-		if (!rsne)
-			goto ft_error;
-
-		if (ie_parse_rsne_from_data(rsne, rsne[1] + 2,
-						&msg2_rsne) < 0)
-			goto ft_error;
-
-		if (msg2_rsne.num_pmkids != 1 ||
-				memcmp(msg2_rsne.pmkids, hs->pmk_r0_name, 16))
-			goto ft_error;
-
-		if (!handshake_util_ap_ie_matches(rsne, hs->authenticator_ie,
-							false))
-			goto ft_error;
-	} else if (rsne)
-		goto ft_error;
-
-	/*
-	 * Check for an MD IE identical to the one we sent in message 1
-	 *
-	 * 12.8.3: "The MDE shall contain the MDID and FT Capability and
-	 * Policy fields. This element shall be the same as the MDE
-	 * advertised by the target AP in Beacon and Probe Response frames."
-	 */
-	if (!mde || memcmp(hs->mde, mde, hs->mde[1] + 2))
-		goto ft_error;
-
-	/*
-	 * In an RSN, check for an FT IE with the same R0KH-ID and the same
-	 * SNonce that we sent, and check that the R1KH-ID and the ANonce
-	 * are present.  Use them to generate new PMK-R1, PMK-R1-Name and PTK
-	 * in handshake.c.
-	 *
-	 * 12.8.3: "The FTE shall be present only if dot11RSNAActivated is
-	 * true. If present, the FTE shall be set as follows:
-	 * — R0KH-ID shall be identical to the R0KH-ID provided by the FTO
-	 *   in the first message.
-	 * — R1KH-ID shall be set to the R1KH-ID of the target AP, from
-	 *   dot11FTR1KeyHolderID.
-	 * — ANonce shall be set to a value chosen randomly by the target AP,
-	 *   following the recommendations of 11.6.5.
-	 * — SNonce shall be set to the value contained in the first message
-	 *   of this sequence.
-	 * — All other fields shall be set to 0."
-	 */
-	if (is_rsn) {
-		struct ie_ft_info ft_info;
-		uint8_t zeros[16] = {};
-
-		if (!fte)
-			goto ft_error;
-
-		if (ie_parse_fast_bss_transition_from_data(fte, fte[1] + 2,
-								&ft_info) < 0)
-			goto ft_error;
-
-		if (ft_info.mic_element_count != 0 ||
-				memcmp(ft_info.mic, zeros, 16))
-			goto ft_error;
-
-		if (hs->r0khid_len != ft_info.r0khid_len ||
-				memcmp(hs->r0khid, ft_info.r0khid,
-					hs->r0khid_len) ||
-				!ft_info.r1khid_present)
-			goto ft_error;
-
-		if (memcmp(ft_info.snonce, hs->snonce, 32))
-			goto ft_error;
-
-		handshake_state_set_fte(hs, fte);
-
-		handshake_state_set_anonce(hs, ft_info.anonce);
-
-		handshake_state_set_kh_ids(hs, ft_info.r0khid,
-						ft_info.r0khid_len,
-						ft_info.r1khid);
-
-		handshake_state_derive_ptk(hs);
-	} else if (fte)
-		goto ft_error;
-
-	cmd_associate = netdev_build_cmd_ft_reassociate(netdev);
-	if (!cmd_associate)
-		goto ft_error;
-
-	netdev->connect_cmd_id = l_genl_family_send(nl80211,
-						cmd_associate,
-						netdev_cmd_ft_reassociate_cb,
-						netdev, NULL);
-	if (!netdev->connect_cmd_id) {
-		l_genl_msg_unref(cmd_associate);
-
-		goto ft_error;
-	}
-
-	if (netdev->sm)
-		eapol_register(netdev->sm); /* See netdev_cmd_connect_cb */
-
-	return;
-
-auth_error:
-	netdev_connect_failed(netdev, NETDEV_RESULT_AUTHENTICATION_FAILED,
-				status_code);
-	return;
-
-ft_error:
-	netdev->result = NETDEV_RESULT_AUTHENTICATION_FAILED;
-	netdev->last_code = MMPDU_STATUS_CODE_UNSPECIFIED;
-	cmd_deauth = netdev_build_cmd_deauthenticate(netdev,
-						MMPDU_REASON_CODE_UNSPECIFIED);
-	netdev->disconnect_cmd_id = l_genl_family_send(nl80211, cmd_deauth,
-							netdev_disconnect_cb,
-							netdev, NULL);
 }
 
 static void netdev_authenticate_event(struct l_genl_msg *msg,
@@ -2324,9 +1891,7 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 	if (!frame)
 		goto auth_error;
 
-	if (netdev->in_ft)
-		netdev_ft_process_authenticate(netdev, frame, frame_len);
-	else if (netdev->ap) {
+	if (netdev->ap) {
 		ret = auth_proto_rx_authenticate(netdev->ap, frame, frame_len);
 		if (ret == 0 || ret == -EAGAIN)
 			return;
@@ -2401,6 +1966,17 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 			/* Just in case this was a retry */
 			netdev->ignore_connect_event = false;
 
+			/*
+			 * If in FT we need to prevent the 4-way handshake from
+			 * happening, and instead just wait for rekeys
+			 */
+			if (netdev->in_ft) {
+				eapol_sm_set_require_handshake(netdev->sm,
+								false);
+				eapol_sm_set_use_eapol_start(netdev->sm, false);
+				netdev->in_ft = false;
+			}
+
 			return;
 		} else if (ret == -EAGAIN) {
 			/*
@@ -2413,22 +1989,6 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 			status_code = (uint16_t)ret;
 
 		goto assoc_failed;
-	}
-
-	if (netdev->in_ft) {
-		bool is_rsn = netdev->handshake->supplicant_ie != NULL;
-
-		if (!netdev_ft_process_associate(netdev, frame, frame_len,
-							&status_code))
-			goto assoc_failed;
-
-		if (status_code != 0)
-			goto assoc_failed;
-
-		netdev->in_ft = false;
-
-		if (is_rsn)
-			handshake_state_install_ptk(netdev->handshake);
 	}
 
 	return;
@@ -3081,7 +2641,6 @@ int netdev_leave_adhoc(struct netdev *netdev, netdev_command_cb_t cb,
  */
 static struct l_genl_msg *netdev_build_cmd_ft_authenticate(
 					struct netdev *netdev,
-					const struct scan_bss *bss,
 					const struct handshake_state *hs)
 {
 	uint32_t auth_type = NL80211_AUTHTYPE_FT;
@@ -3094,10 +2653,9 @@ static struct l_genl_msg *netdev_build_cmd_ft_authenticate(
 	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ,
-						4, &bss->frequency);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, bss->addr);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID,
-						bss->ssid_len, bss->ssid);
+						4, &netdev->frequency);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, ETH_ALEN, hs->aa);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, hs->ssid_len, hs->ssid);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
 
 	if (is_rsn) {
@@ -3134,7 +2692,7 @@ static struct l_genl_msg *netdev_build_cmd_ft_authenticate(
 	/* The MDE advertised by the BSS must be passed verbatim */
 	mde[0] = IE_TYPE_MOBILITY_DOMAIN;
 	mde[1] = 3;
-	memcpy(mde + 2, bss->mde, 3);
+	memcpy(mde + 2, hs->mde + 2, 3);
 
 	iov[iov_elems].iov_base = mde;
 	iov[iov_elems].iov_len = 5;
@@ -3192,13 +2750,63 @@ static void netdev_cmd_authenticate_ft_cb(struct l_genl_msg *msg,
 					MMPDU_STATUS_CODE_UNSPECIFIED);
 }
 
+static void netdev_ft_tx_authenticate(void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct l_genl_msg *cmd_authenticate;
+
+	cmd_authenticate = netdev_build_cmd_ft_authenticate(netdev,
+							netdev->handshake);
+	if (!cmd_authenticate)
+		goto restore_snonce;
+
+	netdev->connect_cmd_id = l_genl_family_send(nl80211,
+						cmd_authenticate,
+						netdev_cmd_authenticate_ft_cb,
+						netdev, NULL);
+	if (!netdev->connect_cmd_id) {
+		l_genl_msg_unref(cmd_authenticate);
+		goto restore_snonce;
+	}
+
+	return;
+
+restore_snonce:
+	memcpy(netdev->handshake->snonce, netdev->prev_snonce, 32);
+
+	netdev_connect_failed(netdev, NETDEV_RESULT_AUTHENTICATION_FAILED,
+					MMPDU_STATUS_CODE_UNSPECIFIED);
+}
+
+static void netdev_ft_tx_associate(struct iovec *ie_iov, size_t iov_len,
+					void *user_data)
+{
+	struct netdev *netdev = user_data;
+	struct l_genl_msg *msg;
+
+	msg = netdev_build_cmd_associate_common(netdev);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_PREV_BSSID, ETH_ALEN,
+				netdev->prev_bssid);
+	l_genl_msg_append_attrv(msg, NL80211_ATTR_IE, ie_iov, iov_len);
+
+	netdev->connect_cmd_id = l_genl_family_send(nl80211, msg,
+						netdev_cmd_ft_reassociate_cb,
+						netdev, NULL);
+	if (!netdev->connect_cmd_id) {
+		l_genl_msg_unref(msg);
+
+		netdev_connect_failed(netdev, NETDEV_RESULT_ASSOCIATION_FAILED,
+					MMPDU_STATUS_CODE_UNSPECIFIED);
+		return;
+	}
+}
+
 int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 				netdev_connect_cb_t cb)
 {
-	struct l_genl_msg *cmd_authenticate;
 	struct netdev_handshake_state *nhs;
-	uint8_t orig_snonce[32];
-	int err;
+	int err = -EINVAL;
 
 	if (!netdev->operational)
 		return -ENOTCONN;
@@ -3213,46 +2821,25 @@ int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 	 * Could also create a new object and copy most of the state but
 	 * we would end up doing more work.
 	 */
+	memcpy(netdev->prev_bssid, netdev->handshake->aa, ETH_ALEN);
+	memcpy(netdev->prev_snonce, netdev->handshake->snonce, 32);
 
-	memcpy(orig_snonce, netdev->handshake->snonce, 32);
 	handshake_state_new_snonce(netdev->handshake);
 
-	cmd_authenticate = netdev_build_cmd_ft_authenticate(netdev, target_bss,
-							netdev->handshake);
-	if (!cmd_authenticate) {
-		err = -EINVAL;
-		goto restore_snonce;
-	}
+	netdev->frequency = target_bss->frequency;
 
-	netdev->connect_cmd_id = l_genl_family_send(nl80211,
-						cmd_authenticate,
-						netdev_cmd_authenticate_ft_cb,
-						netdev, NULL);
-	if (!netdev->connect_cmd_id) {
-		l_genl_msg_unref(cmd_authenticate);
-		err = -EIO;
-		goto restore_snonce;
-	}
-
-	memcpy(netdev->prev_bssid, netdev->handshake->aa, ETH_ALEN);
 	handshake_state_set_authenticator_address(netdev->handshake,
 							target_bss->addr);
 	handshake_state_set_authenticator_rsn(netdev->handshake,
 							target_bss->rsne);
 	memcpy(netdev->handshake->mde + 2, target_bss->mde, 3);
 
-	if (netdev->sm) {
-		eapol_sm_free(netdev->sm);
-
-		netdev->sm = eapol_sm_new(netdev->handshake);
-		eapol_sm_set_require_handshake(netdev->sm, false);
-	}
+	netdev->ap = ft_sm_new(netdev->handshake, netdev_ft_tx_authenticate,
+				netdev_ft_tx_associate, netdev);
 
 	netdev->operational = false;
 	netdev->in_ft = true;
-
 	netdev->connect_cb = cb;
-	netdev->frequency = target_bss->frequency;
 
 	/*
 	 * Cancel commands that could be running because of EAPoL activity
@@ -3286,10 +2873,18 @@ int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 
 	netdev_rssi_polling_update(netdev);
 
+	if (!auth_proto_start(netdev->ap))
+		goto restore_snonce;
+
+	if (netdev->sm) {
+		eapol_sm_free(netdev->sm);
+		netdev->sm = NULL;
+	}
+
 	return 0;
 
 restore_snonce:
-	memcpy(netdev->handshake->snonce, orig_snonce, 32);
+	memcpy(netdev->handshake->snonce, netdev->prev_snonce, 32);
 
 	return err;
 }

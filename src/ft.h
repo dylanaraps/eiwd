@@ -20,20 +20,11 @@
  *
  */
 
-#include <stdbool.h>
+typedef void (*ft_tx_authenticate_func_t)(void *user_data);
+typedef void (*ft_tx_associate_func_t)(struct iovec *ie_iov, size_t iov_len,
+					void *user_data);
 
-struct handshake_state;
-
-bool ft_calculate_fte_mic(struct handshake_state *hs, uint8_t seq_num,
-				const uint8_t *rsne, const uint8_t *fte,
-				const uint8_t *ric, uint8_t *out_mic);
-
-bool ft_parse_authentication_resp_frame(const uint8_t *data, size_t len,
-				const uint8_t *addr1, const uint8_t *addr2,
-				const uint8_t *addr3, uint16_t auth_seq,
-				uint16_t *out_status, const uint8_t **out_ies,
-				size_t *out_ies_len);
-
-bool ft_parse_associate_resp_frame(const uint8_t *frame, size_t frame_len,
-				uint16_t *out_status, const uint8_t **rsne,
-				const uint8_t **mde, const uint8_t **fte);
+struct auth_proto *ft_sm_new(struct handshake_state *hs,
+				ft_tx_authenticate_func_t tx_auth,
+				ft_tx_associate_func_t tx_assoc,
+				void *user_data);
