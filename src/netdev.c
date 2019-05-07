@@ -1548,7 +1548,6 @@ static bool netdev_ft_process_associate(struct netdev *netdev,
 	const uint8_t *rsne = NULL;
 	const uint8_t *mde = NULL;
 	const uint8_t *fte = NULL;
-	bool transition = netdev->in_ft;
 	const uint8_t *sent_mde = hs->mde;
 	bool is_rsn = hs->supplicant_ie != NULL;
 
@@ -1569,7 +1568,7 @@ static bool netdev_ft_process_associate(struct netdev *netdev,
 	 * — All other fields shall be identical to the contents of the RSNE
 	 *   advertised by the target AP in Beacon and Probe Response frames."
 	 */
-	if (transition && is_rsn) {
+	if (is_rsn) {
 		struct ie_rsn_info msg4_rsne;
 
 		if (!rsne)
@@ -1607,92 +1606,68 @@ static bool netdev_ft_process_associate(struct netdev *netdev,
 
 	if (fte) {
 		struct ie_ft_info ft_info;
+		uint8_t mic[16];
 
 		if (ie_parse_fast_bss_transition_from_data(fte, fte[1] + 2,
 								&ft_info) < 0)
 			return false;
 
-		/* Validate the FTE contents */
-		if (transition) {
-			/*
-			 * In an RSN, check for an FT IE with the same
-			 * R0KH-ID, R1KH-ID, ANonce and SNonce that we
-			 * received in message 2, MIC Element Count
-			 * of 6 and the correct MIC.
-			 */
-			uint8_t mic[16];
+		/*
+		 * In an RSN, check for an FT IE with the same
+		 * R0KH-ID, R1KH-ID, ANonce and SNonce that we
+		 * received in message 2, MIC Element Count
+		 * of 6 and the correct MIC.
+		 */
 
-			if (!ft_calculate_fte_mic(hs, 6, rsne, fte, NULL, mic))
+		if (!ft_calculate_fte_mic(hs, 6, rsne, fte, NULL, mic))
+			return false;
+
+		if (ft_info.mic_element_count != 3 ||
+				memcmp(ft_info.mic, mic, 16))
+			return false;
+
+		if (hs->r0khid_len != ft_info.r0khid_len ||
+				memcmp(hs->r0khid, ft_info.r0khid,
+					hs->r0khid_len) ||
+				!ft_info.r1khid_present ||
+				memcmp(hs->r1khid, ft_info.r1khid, 6))
+			return false;
+
+		if (memcmp(ft_info.anonce, hs->anonce, 32))
+			return false;
+
+		if (memcmp(ft_info.snonce, hs->snonce, 32))
+			return false;
+
+		if (ft_info.gtk_len) {
+			uint8_t gtk[32];
+
+			if (!handshake_decode_fte_key(hs, ft_info.gtk,
+							ft_info.gtk_len,
+							gtk))
 				return false;
 
-			if (ft_info.mic_element_count != 3 ||
-					memcmp(ft_info.mic, mic, 16))
+			if (ft_info.gtk_rsc[6] != 0x00 ||
+					ft_info.gtk_rsc[7] != 0x00)
 				return false;
 
-			if (hs->r0khid_len != ft_info.r0khid_len ||
-					memcmp(hs->r0khid, ft_info.r0khid,
-						hs->r0khid_len) ||
-					!ft_info.r1khid_present ||
-					memcmp(hs->r1khid, ft_info.r1khid, 6))
+			handshake_state_install_gtk(hs,
+						ft_info.gtk_key_id,
+						gtk, ft_info.gtk_len,
+						ft_info.gtk_rsc, 6);
+		}
+
+		if (ft_info.igtk_len) {
+			uint8_t igtk[16];
+
+			if (!handshake_decode_fte_key(hs, ft_info.igtk,
+						ft_info.igtk_len, igtk))
 				return false;
 
-			if (memcmp(ft_info.anonce, hs->anonce, 32))
-				return false;
-
-			if (memcmp(ft_info.snonce, hs->snonce, 32))
-				return false;
-
-			if (ft_info.gtk_len) {
-				uint8_t gtk[32];
-
-				if (!handshake_decode_fte_key(hs, ft_info.gtk,
-								ft_info.gtk_len,
-								gtk))
-					return false;
-
-				if (ft_info.gtk_rsc[6] != 0x00 ||
-						ft_info.gtk_rsc[7] != 0x00)
-					return false;
-
-				handshake_state_install_gtk(hs,
-							ft_info.gtk_key_id,
-							gtk, ft_info.gtk_len,
-							ft_info.gtk_rsc, 6);
-			}
-
-			if (ft_info.igtk_len) {
-				uint8_t igtk[16];
-
-				if (!handshake_decode_fte_key(hs, ft_info.igtk,
-							ft_info.igtk_len, igtk))
-					return false;
-
-				handshake_state_install_igtk(hs,
-							ft_info.igtk_key_id,
-							igtk, ft_info.igtk_len,
-							ft_info.igtk_ipn);
-			}
-		} else {
-			/* Initial MD association */
-
-			uint8_t zeros[32] = {};
-
-			handshake_state_set_fte(hs, fte);
-
-			/*
-			 * 12.4.2: "The FTE shall have a MIC information
-			 * element count of zero (i.e., no MIC present)
-			 * and have ANonce, SNonce, and MIC fields set to 0."
-			 */
-			if (ft_info.mic_element_count != 0 ||
-					memcmp(ft_info.mic, zeros, 16) ||
-					memcmp(ft_info.anonce, zeros, 32) ||
-					memcmp(ft_info.snonce, zeros, 32))
-				return false;
-
-			handshake_state_set_kh_ids(hs, ft_info.r0khid,
-							ft_info.r0khid_len,
-							ft_info.r1khid);
+			handshake_state_install_igtk(hs,
+						ft_info.igtk_key_id,
+						igtk, ft_info.igtk_len,
+						ft_info.igtk_ipn);
 		}
 	}
 
@@ -2423,7 +2398,10 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 			netdev->sm = eapol_sm_new(netdev->handshake);
 			eapol_register(netdev->sm);
 
-			goto auth_complete;
+			/* Just in case this was a retry */
+			netdev->ignore_connect_event = false;
+
+			return;
 		} else if (ret == -EAGAIN) {
 			/*
 			 * Here to support OWE retries. OWE will retry
@@ -2437,39 +2415,21 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 		goto assoc_failed;
 	}
 
-	if (!netdev_ft_process_associate(netdev, frame, frame_len,
-						&status_code))
-		goto assoc_failed;
-
-	if (status_code != 0)
-		goto assoc_failed;
-
-auth_complete:
-	if (netdev->sm) {
-		/*
-		 * Start processing EAPoL frames now that the state machine
-		 * has all the input data even in FT mode.
-		 */
-		if (!eapol_start(netdev->sm))
-			goto assoc_failed;
-	}
-
-	/* Connection can be fully handled here, not in connect event */
-	netdev->ignore_connect_event = true;
-
 	if (netdev->in_ft) {
 		bool is_rsn = netdev->handshake->supplicant_ie != NULL;
 
+		if (!netdev_ft_process_associate(netdev, frame, frame_len,
+							&status_code))
+			goto assoc_failed;
+
+		if (status_code != 0)
+			goto assoc_failed;
+
 		netdev->in_ft = false;
 
-		if (is_rsn) {
+		if (is_rsn)
 			handshake_state_install_ptk(netdev->handshake);
-			return;
-		}
-	} else if (netdev->sm)
-		return;
-
-	netdev_connect_ok(netdev);
+	}
 
 	return;
 
