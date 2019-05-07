@@ -1859,7 +1859,7 @@ static void netdev_authenticate_event(struct l_genl_msg *msg,
 	 * the FT Associate command is included in the attached frame and is
 	 * not available in the Authenticate command callback.
 	 */
-	if (!netdev->in_ft && !netdev->ap)
+	if (!netdev->ap)
 		return;
 
 	if (!l_genl_attr_init(&attr, msg)) {
@@ -1925,7 +1925,7 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 	if (!netdev->connected || netdev->aborting)
 		return;
 
-	if (!netdev->in_ft && !netdev->handshake->mde && !netdev->ap)
+	if (!netdev->ap)
 		return;
 
 	if (!l_genl_attr_init(&attr, msg)) {
@@ -1973,7 +1973,6 @@ static void netdev_associate_event(struct l_genl_msg *msg,
 			if (netdev->in_ft) {
 				eapol_sm_set_require_handshake(netdev->sm,
 								false);
-				eapol_sm_set_use_eapol_start(netdev->sm, false);
 				netdev->in_ft = false;
 			}
 
