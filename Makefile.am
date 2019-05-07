@@ -194,7 +194,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h src/missing.h \
 					src/knownnetworks.h \
 					src/knownnetworks.c \
 					src/rfkill.h src/rfkill.c \
-					src/ftutil.h src/ftutil.c \
+					src/ft.h src/ft.c \
 					src/ap.h src/ap.c \
 					src/adhoc.h src/adhoc.c \
 					src/sae.h src/sae.c \

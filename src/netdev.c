@@ -53,7 +53,7 @@
 #include "src/scan.h"
 #include "src/netdev.h"
 #include "src/wscutil.h"
-#include "src/ftutil.h"
+#include "src/ft.h"
 #include "src/util.h"
 #include "src/watchlist.h"
 #include "src/sae.h"

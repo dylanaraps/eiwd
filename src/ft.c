@@ -31,7 +31,7 @@
 #include "src/ie.h"
 #include "src/handshake.h"
 #include "src/crypto.h"
-#include "src/ftutil.h"
+#include "src/ft.h"
 #include "src/mpdu.h"
 
 /*
