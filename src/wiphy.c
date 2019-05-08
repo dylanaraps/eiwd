@@ -24,11 +24,14 @@
 #include <config.h>
 #endif
 
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
 #include <linux/if_ether.h>
 #include <fnmatch.h>
+#include <unistd.h>
+#include <string.h>
 
 #include <ell/ell.h>
 
@@ -63,6 +66,7 @@ struct wiphy {
 	struct scan_freq_set *supported_freqs;
 	char *model_str;
 	char *vendor_str;
+	char *driver_str;
 	struct watchlist state_watches;
 
 	bool support_scheduled_scan:1;
@@ -185,6 +189,7 @@ static void wiphy_free(void *data)
 	watchlist_destroy(&wiphy->state_watches);
 	l_free(wiphy->model_str);
 	l_free(wiphy->vendor_str);
+	l_free(wiphy->driver_str);
 	l_free(wiphy);
 }
 
@@ -314,6 +319,11 @@ uint8_t wiphy_get_max_num_ssids_per_scan(struct wiphy *wiphy)
 bool wiphy_supports_adhoc_rsn(struct wiphy *wiphy)
 {
 	return wiphy->support_adhoc_rsn;
+}
+
+const char *wiphy_get_driver(struct wiphy *wiphy)
+{
+	return wiphy->driver_str;
 }
 
 bool wiphy_constrain_freq_set(const struct wiphy *wiphy,
@@ -659,6 +669,26 @@ bool wiphy_parse_id_and_name(struct l_genl_attr *attr, uint32_t *out_id,
 	return true;
 }
 
+static bool wiphy_get_driver_name(struct wiphy *wiphy)
+{
+	L_AUTO_FREE_VAR(char *, driver_link) = NULL;
+	char driver_path[256];
+	ssize_t len;
+
+	driver_link = l_strdup_printf("/sys/class/ieee80211/%s/device/driver",
+					wiphy->name);
+	len = readlink(driver_link, driver_path, sizeof(driver_path) - 1);
+
+	if (len == -1) {
+		l_error("Can't read %s: %s", driver_link, strerror(errno));
+		return false;
+	}
+
+	driver_path[len] = '\0';
+	wiphy->driver_str = l_strdup(basename(driver_path));
+	return true;
+}
+
 static void wiphy_register(struct wiphy *wiphy)
 {
 	struct l_dbus *dbus = dbus_get_bus();
@@ -698,6 +728,8 @@ static void wiphy_register(struct wiphy *wiphy)
 
 		l_hwdb_lookup_free(entries);
 	}
+
+	wiphy_get_driver_name(wiphy);
 
 	if (!l_dbus_object_add_interface(dbus, wiphy_get_path(wiphy),
 					IWD_WIPHY_INTERFACE, wiphy))
