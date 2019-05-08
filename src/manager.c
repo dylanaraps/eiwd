@@ -66,8 +66,6 @@ static void wiphy_setup_state_free(void *data)
 {
 	struct wiphy_setup_state *state = data;
 
-	l_queue_remove(pending_wiphys, state);
-
 	if (state->setup_timeout)
 		l_timeout_remove(state->setup_timeout);
 
@@ -78,6 +76,12 @@ static void wiphy_setup_state_free(void *data)
 	l_free(state);
 }
 
+static void wiphy_setup_state_destroy(struct wiphy_setup_state *state)
+{
+	l_queue_remove(pending_wiphys, state);
+	wiphy_setup_state_free(state);
+}
+
 static bool manager_use_default(struct wiphy_setup_state *state)
 {
 	l_debug("");
@@ -85,12 +89,10 @@ static bool manager_use_default(struct wiphy_setup_state *state)
 	if (!state->default_if_msg) {
 		l_error("No default interface for wiphy %u",
 			(unsigned int) state->id);
-		wiphy_setup_state_free(state);
 		return false;
 	}
 
 	netdev_create_from_genl(state->default_if_msg);
-	wiphy_setup_state_free(state);
 	return true;
 }
 
@@ -122,7 +124,7 @@ static void manager_new_interface_done(void *user_data)
 	struct wiphy_setup_state *state = user_data;
 
 	state->pending_cmd_count--;
-	wiphy_setup_state_free(state);
+	wiphy_setup_state_destroy(state);
 }
 
 static void manager_create_interfaces(struct wiphy_setup_state *state)
@@ -132,10 +134,8 @@ static void manager_create_interfaces(struct wiphy_setup_state *state)
 	uint32_t iftype = NL80211_IFTYPE_STATION;
 	unsigned cmd_id;
 
-	if (state->aborted) {
-		wiphy_setup_state_free(state);
+	if (state->aborted)
 		return;
-	}
 
 	if (state->use_default) {
 		manager_use_default(state);
@@ -166,7 +166,6 @@ static void manager_create_interfaces(struct wiphy_setup_state *state)
 
 	if (!cmd_id) {
 		l_error("Sending NEW_INTERFACE for %s", ifname);
-		wiphy_setup_state_free(state);
 		return;
 	}
 
@@ -179,8 +178,13 @@ static void manager_setup_cmd_done(void *user_data)
 
 	state->pending_cmd_count--;
 
+	if (state->pending_cmd_count)
+		return;
+
+	manager_create_interfaces(state);
+
 	if (!state->pending_cmd_count)
-		manager_create_interfaces(state);
+		wiphy_setup_state_destroy(state);
 }
 
 static void manager_del_interface_cb(struct l_genl_msg *msg, void *user_data)
@@ -363,7 +367,7 @@ static void manager_wiphy_dump_interfaces(struct wiphy_setup_state *state)
 	if (!cmd_id) {
 		l_error("Querying interface information for wiphy %u failed",
 			(unsigned int) state->id);
-		wiphy_setup_state_free(state);
+		wiphy_setup_state_destroy(state);
 		return;
 	}
 
@@ -533,7 +537,7 @@ static void manager_del_wiphy_event(struct l_genl_msg *msg)
 		if (state->pending_cmd_count)
 			state->aborted = true;
 		else
-			wiphy_setup_state_free(state);
+			wiphy_setup_state_destroy(state);
 	}
 
 	wiphy = wiphy_find(id);
@@ -608,26 +612,33 @@ static void manager_interface_dump_callback(struct l_genl_msg *msg,
 	manager_get_interface_cb(msg, state);
 }
 
+static bool manager_check_create_interfaces(const void *a, const void *b)
+{
+	struct wiphy_setup_state *state = (void *) a;
+
+	/* phy might have been detected after the initial dump */
+	if (state->setup_timeout)
+		return false;
+
+	wiphy_create_complete(state->wiphy);
+
+	if (state->pending_cmd_count)
+		return false;
+
+	/* If we are here, then there are no interfaces for this phy */
+	manager_create_interfaces(state);
+
+	if (state->pending_cmd_count)
+		return false;
+
+	wiphy_setup_state_free(state);
+	return true;
+}
+
 static void manager_interface_dump_done(void *user_data)
 {
-	const struct l_queue_entry *entry;
-
-	for (entry = l_queue_get_entries(pending_wiphys);
-					entry; entry = entry->next) {
-		struct wiphy_setup_state *state = entry->data;
-
-		/* phy might have been detected after the initial dump */
-		if (state->setup_timeout)
-			continue;
-
-		wiphy_create_complete(state->wiphy);
-
-		if (state->pending_cmd_count)
-			continue;
-
-		/* If we are here, then there are no interfaces for this phy */
-		manager_create_interfaces(state);
-	}
+	l_queue_remove_if(pending_wiphys,
+				manager_check_create_interfaces, NULL);
 }
 
 static void manager_wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
