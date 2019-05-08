@@ -76,11 +76,6 @@ class Test(unittest.TestCase):
         testutil.test_iface_operstate()
         testutil.test_ifaces_connected(device.name, hapd.ifname)
 
-        sleep(5)
-
-        testutil.test_iface_operstate()
-        testutil.test_ifaces_connected(device.name, hapd.ifname)
-
         device.disconnect()
 
         wd.unregister_psk_agent(psk_agent)
