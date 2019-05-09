@@ -1231,10 +1231,20 @@ static void station_transition_start(struct station *station,
 			return;
 		}
 
-		if (netdev_fast_transition(station->netdev, bss,
+		/* FT-over-DS can be better suited for these situations */
+		if ((hs->mde[4] & 1) && (station->ap_directed_roaming ||
+				station->signal_low)) {
+			if (netdev_fast_transition_over_ds(station->netdev, bss,
 					station_fast_transition_cb) < 0) {
-			station_roam_failed(station);
-			return;
+				station_roam_failed(station);
+				return;
+			}
+		} else {
+			if (netdev_fast_transition(station->netdev, bss,
+					station_fast_transition_cb) < 0) {
+				station_roam_failed(station);
+				return;
+			}
 		}
 
 		station->connected_bss = bss;

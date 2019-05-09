@@ -89,6 +89,7 @@ struct netdev {
 	struct wiphy *wiphy;
 	unsigned int ifi_flags;
 	uint32_t frequency;
+	uint32_t prev_frequency;
 
 	netdev_event_func_t event_filter;
 	netdev_connect_cb_t connect_cb;
@@ -2777,7 +2778,69 @@ static void netdev_ft_tx_associate(struct iovec *ie_iov, size_t iov_len,
 	}
 }
 
-int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
+static void netdev_ft_request_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	if (l_genl_msg_get_error(msg) < 0) {
+		l_error("Could not send CMD_FRAME");
+		netdev_connect_failed(netdev,
+					NETDEV_RESULT_AUTHENTICATION_FAILED,
+					MMPDU_STATUS_CODE_UNSPECIFIED);
+	}
+}
+
+static void netdev_ft_response_frame_event(struct netdev *netdev,
+					const struct mmpdu_header *hdr,
+					const void *body, size_t body_len,
+					void *user_data)
+{
+	int ret;
+	uint16_t status_code = MMPDU_STATUS_CODE_UNSPECIFIED;
+
+	if (!netdev->ap || !netdev->in_ft)
+		return;
+
+	ret = auth_proto_rx_authenticate(netdev->ap, body, body_len);
+	if (ret < 0)
+		goto ft_error;
+	else if (ret > 0) {
+		status_code = (uint16_t)ret;
+		goto ft_error;
+	}
+
+	return;
+
+ft_error:
+	netdev_connect_failed(netdev, NETDEV_RESULT_AUTHENTICATION_FAILED,
+				status_code);
+	return;
+}
+
+static void netdev_ft_over_ds_tx_authenticate(struct iovec *iov,
+					size_t iov_len, void *user_data)
+{
+	struct netdev *netdev = user_data;
+	uint8_t ft_req[14];
+	struct handshake_state *hs = netdev->handshake;
+	struct iovec iovs[iov_len + 1];
+
+	ft_req[0] = 6; /* FT category */
+	ft_req[1] = 1; /* FT Request action */
+	memcpy(ft_req + 2, netdev->addr, 6);
+	memcpy(ft_req + 8, hs->aa, 6);
+
+	iovs[0].iov_base = ft_req;
+	iovs[0].iov_len = sizeof(ft_req);
+	memcpy(iovs + 1, iov, sizeof(*iov) * iov_len);
+
+	netdev_send_action_framev(netdev, netdev->prev_bssid, iovs, iov_len + 1,
+					netdev->prev_frequency,
+					netdev_ft_request_cb);
+}
+
+static int fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
+				bool over_air,
 				netdev_connect_cb_t cb)
 {
 	struct netdev_handshake_state *nhs;
@@ -2801,16 +2864,15 @@ int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 
 	handshake_state_new_snonce(netdev->handshake);
 
+	netdev->prev_frequency = netdev->frequency;
 	netdev->frequency = target_bss->frequency;
 
 	handshake_state_set_authenticator_address(netdev->handshake,
 							target_bss->addr);
+
 	handshake_state_set_authenticator_rsn(netdev->handshake,
 							target_bss->rsne);
 	memcpy(netdev->handshake->mde + 2, target_bss->mde, 3);
-
-	netdev->ap = ft_sm_new(netdev->handshake, netdev_ft_tx_authenticate,
-				netdev_ft_tx_associate, netdev);
 
 	netdev->operational = false;
 	netdev->in_ft = true;
@@ -2848,13 +2910,22 @@ int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 
 	netdev_rssi_polling_update(netdev);
 
-	if (!auth_proto_start(netdev->ap))
-		goto restore_snonce;
-
 	if (netdev->sm) {
 		eapol_sm_free(netdev->sm);
 		netdev->sm = NULL;
 	}
+
+	if (over_air)
+		netdev->ap = ft_over_air_sm_new(netdev->handshake,
+					netdev_ft_tx_authenticate,
+					netdev_ft_tx_associate, netdev);
+	else
+		netdev->ap = ft_over_ds_sm_new(netdev->handshake,
+					netdev_ft_over_ds_tx_authenticate,
+					netdev_ft_tx_associate, netdev);
+
+	if (!auth_proto_start(netdev->ap))
+		goto restore_snonce;
 
 	return 0;
 
@@ -2862,6 +2933,19 @@ restore_snonce:
 	memcpy(netdev->handshake->snonce, netdev->prev_snonce, 32);
 
 	return err;
+}
+
+int netdev_fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
+				netdev_connect_cb_t cb)
+{
+	return fast_transition(netdev, target_bss, true, cb);
+}
+
+int netdev_fast_transition_over_ds(struct netdev *netdev,
+					struct scan_bss *target_bss,
+					netdev_connect_cb_t cb)
+{
+	return fast_transition(netdev, target_bss, false, cb);
 }
 
 static void netdev_preauth_cb(const uint8_t *pmk, void *user_data)
@@ -4309,6 +4393,7 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg)
 	const uint8_t action_neighbor_report_prefix[2] = { 0x05, 0x05 };
 	const uint8_t action_sa_query_resp_prefix[2] = { 0x08, 0x01 };
 	const uint8_t action_sa_query_req_prefix[2] = { 0x08, 0x00 };
+	const uint8_t action_ft_response_prefix[] =  { 0x06, 0x02 };
 	struct l_io *pae_io = NULL;
 	const struct l_settings *settings = iwd_get_config();
 	bool pae_over_nl80211;
@@ -4458,6 +4543,10 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg)
 	netdev_frame_watch_add(netdev, 0x00d0, action_sa_query_req_prefix,
 				sizeof(action_sa_query_req_prefix),
 				netdev_sa_query_req_frame_event, NULL);
+
+	netdev_frame_watch_add(netdev, 0x00d0, action_ft_response_prefix,
+				sizeof(action_ft_response_prefix),
+				netdev_ft_response_frame_event, NULL);
 
 	/* Set RSSI threshold for CQM notifications */
 	if (netdev->type == NL80211_IFTYPE_STATION)
