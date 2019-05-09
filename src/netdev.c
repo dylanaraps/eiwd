@@ -2633,6 +2633,57 @@ int netdev_leave_adhoc(struct netdev *netdev, netdev_command_cb_t cb,
 	return 0;
 }
 
+static uint32_t netdev_send_action_framev(struct netdev *netdev,
+					const uint8_t *to,
+					struct iovec *iov, size_t iov_len,
+					uint32_t freq,
+					l_genl_msg_func_t callback)
+{
+	struct l_genl_msg *msg;
+	struct iovec iovs[iov_len + 1];
+	const uint16_t frame_type = 0x00d0;
+	uint8_t action_frame[24];
+	uint32_t id;
+
+	memset(action_frame, 0, 24);
+
+	l_put_le16(frame_type, action_frame + 0);
+	memcpy(action_frame + 4, to, 6);
+	memcpy(action_frame + 10, netdev->addr, 6);
+	memcpy(action_frame + 16, to, 6);
+
+	iovs[0].iov_base = action_frame;
+	iovs[0].iov_len = sizeof(action_frame);
+	memcpy(iovs + 1, iov, sizeof(*iov) * iov_len);
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_FRAME, 128 + 512);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &freq);
+	l_genl_msg_append_attrv(msg, NL80211_ATTR_FRAME, iovs, iov_len + 1);
+
+	id = l_genl_family_send(nl80211, msg, callback, netdev, NULL);
+
+	if (!id)
+		l_genl_msg_unref(msg);
+
+	return id;
+}
+
+static uint32_t netdev_send_action_frame(struct netdev *netdev,
+					const uint8_t *to,
+					const uint8_t *body, size_t body_len,
+					uint32_t freq,
+					l_genl_msg_func_t callback)
+{
+	struct iovec iov[1];
+
+	iov[0].iov_base = (void *)body;
+	iov[0].iov_len = body_len;
+
+	return netdev_send_action_framev(netdev, to, iov, 1, freq, callback);
+}
+
 /*
  * Build an FT Authentication Request frame according to 12.5.2 / 12.5.4:
  * RSN or non-RSN Over-the-air FT Protocol, with the IE contents
@@ -2850,40 +2901,6 @@ int netdev_preauthenticate(struct netdev *netdev, struct scan_bss *target_bss,
 	return 0;
 }
 
-static uint32_t netdev_send_action_frame(struct netdev *netdev,
-					const uint8_t *to,
-					const uint8_t *body, size_t body_len,
-					l_genl_msg_func_t callback)
-{
-	struct l_genl_msg *msg;
-	const uint16_t frame_type = 0x00d0;
-	uint8_t action_frame[24 + body_len];
-	uint32_t id;
-
-	memset(action_frame, 0, 24);
-
-	l_put_le16(frame_type, action_frame + 0);
-	memcpy(action_frame + 4, to, 6);
-	memcpy(action_frame + 10, netdev->addr, 6);
-	memcpy(action_frame + 16, netdev->handshake->aa, 6);
-	memcpy(action_frame + 24, body, body_len);
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_FRAME, 128 + body_len);
-
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4,
-				&netdev->frequency);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_FRAME, sizeof(action_frame),
-				action_frame);
-
-	id = l_genl_family_send(nl80211, msg, callback, netdev, NULL);
-
-	if (!id)
-		l_genl_msg_unref(msg);
-
-	return id;
-}
-
 static void netdev_neighbor_report_req_cb(struct l_genl_msg *msg,
 						void *user_data)
 {
@@ -2929,6 +2946,7 @@ int netdev_neighbor_report_req(struct netdev *netdev,
 
 	if (!netdev_send_action_frame(netdev, netdev->handshake->aa,
 					action_frame, sizeof(action_frame),
+					netdev->frequency,
 					netdev_neighbor_report_req_cb))
 		return -EIO;
 
@@ -3008,6 +3026,7 @@ static void netdev_sa_query_req_frame_event(struct netdev *netdev,
 
 	if (!netdev_send_action_frame(netdev, netdev->handshake->aa,
 			sa_resp, sizeof(sa_resp),
+			netdev->frequency,
 			netdev_sa_query_resp_cb)) {
 		l_error("error sending SA Query response");
 		return;
@@ -3141,6 +3160,7 @@ static void netdev_unprot_disconnect_event(struct l_genl_msg *msg,
 
 	if (!netdev_send_action_frame(netdev, netdev->handshake->aa,
 			action_frame, sizeof(action_frame),
+			netdev->frequency,
 			netdev_sa_query_req_cb)) {
 		l_error("error sending SA Query action frame");
 		return;
