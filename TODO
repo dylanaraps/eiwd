@@ -218,14 +218,6 @@ Wireless daemon
   Priority: Low
   Complexity: C4
 
-- Add support for Fast BSS Transition (FT) from 802.11r.  FT over air is
-  already supported by iwd.  Add support for 'FT over DS'. In FT over DS,
-  action frames can be used to perform a 4-way handshake to the target AP
-  while still connected to the current AP.
-
-  Priority: Low
-  Complexity: C4
-
 - Add support for 802.11u.  This is required for Passpoint 2.0 support.
 
   Priority: Low
