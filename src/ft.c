@@ -601,8 +601,82 @@ static void ft_sm_free(struct auth_proto *ap)
 static bool ft_start(struct auth_proto *ap)
 {
 	struct ft_sm *ft = l_container_of(ap, struct ft_sm, ap);
+	struct handshake_state *hs = ft->hs;
+	bool is_rsn = hs->supplicant_ie != NULL;
+	uint8_t mde[5];
+	struct iovec iov[3];
+	size_t iov_elems = 0;
 
-	ft->tx_auth(ft->user_data);
+	if (is_rsn) {
+		struct ie_rsn_info rsn_info;
+		uint8_t *rsne;
+
+		/*
+		 * Rebuild the RSNE to include the PMKR0Name and append
+		 * MDE + FTE.
+		 *
+		 * 12.8.2: "If present, the RSNE shall be set as follows:
+		 * — Version field shall be set to 1.
+		 * — PMKID Count field shall be set to 1.
+		 * — PMKID List field shall contain the PMKR0Name.
+		 * — All other fields shall be as specified in 8.4.2.27
+		 *   and 11.5.3."
+		 */
+		if (ie_parse_rsne_from_data(hs->supplicant_ie,
+						hs->supplicant_ie[1] + 2,
+						&rsn_info) < 0)
+			return false;
+
+		rsn_info.num_pmkids = 1;
+		rsn_info.pmkids = hs->pmk_r0_name;
+
+		rsne = alloca(256);
+		ie_build_rsne(&rsn_info, rsne);
+
+		iov[iov_elems].iov_base = rsne;
+		iov[iov_elems].iov_len = rsne[1] + 2;
+		iov_elems += 1;
+	}
+
+	/* The MDE advertised by the BSS must be passed verbatim */
+	mde[0] = IE_TYPE_MOBILITY_DOMAIN;
+	mde[1] = 3;
+	memcpy(mde + 2, hs->mde + 2, 3);
+
+	iov[iov_elems].iov_base = mde;
+	iov[iov_elems].iov_len = 5;
+	iov_elems += 1;
+
+	if (is_rsn) {
+		struct ie_ft_info ft_info;
+		uint8_t *fte;
+
+		/*
+		 * 12.8.2: "If present, the FTE shall be set as follows:
+		 * — R0KH-ID shall be the value of R0KH-ID obtained by the
+		 *   FTO during its FT initial mobility domain association
+		 *   exchange.
+		 * — SNonce shall be set to a value chosen randomly by the
+		 *   FTO, following the recommendations of 11.6.5.
+		 * — All other fields shall be set to 0."
+		 */
+
+		memset(&ft_info, 0, sizeof(ft_info));
+
+		memcpy(ft_info.r0khid, hs->r0khid, hs->r0khid_len);
+		ft_info.r0khid_len = hs->r0khid_len;
+
+		memcpy(ft_info.snonce, hs->snonce, 32);
+
+		fte = alloca(256);
+		ie_build_fast_bss_transition(&ft_info, fte);
+
+		iov[iov_elems].iov_base = fte;
+		iov[iov_elems].iov_len = fte[1] + 2;
+		iov_elems += 1;
+	}
+
+	ft->tx_auth(iov, iov_elems, ft->user_data);
 
 	return true;
 }

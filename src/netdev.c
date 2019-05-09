@@ -2644,10 +2644,6 @@ static struct l_genl_msg *netdev_build_cmd_ft_authenticate(
 {
 	uint32_t auth_type = NL80211_AUTHTYPE_FT;
 	struct l_genl_msg *msg;
-	struct iovec iov[3];
-	int iov_elems = 0;
-	bool is_rsn = hs->supplicant_ie != NULL;
-	uint8_t mde[5];
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_AUTHENTICATE, 512);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
@@ -2657,83 +2653,8 @@ static struct l_genl_msg *netdev_build_cmd_ft_authenticate(
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SSID, hs->ssid_len, hs->ssid);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_AUTH_TYPE, 4, &auth_type);
 
-	if (is_rsn) {
-		struct ie_rsn_info rsn_info;
-		uint8_t *rsne;
-
-		/*
-		 * Rebuild the RSNE to include the PMKR0Name and append
-		 * MDE + FTE.
-		 *
-		 * 12.8.2: "If present, the RSNE shall be set as follows:
-		 * — Version field shall be set to 1.
-		 * — PMKID Count field shall be set to 1.
-		 * — PMKID List field shall contain the PMKR0Name.
-		 * — All other fields shall be as specified in 8.4.2.27
-		 *   and 11.5.3."
-		 */
-		if (ie_parse_rsne_from_data(hs->supplicant_ie,
-						hs->supplicant_ie[1] + 2,
-						&rsn_info) < 0)
-			goto error;
-
-		rsn_info.num_pmkids = 1;
-		rsn_info.pmkids = hs->pmk_r0_name;
-
-		rsne = alloca(256);
-		ie_build_rsne(&rsn_info, rsne);
-
-		iov[iov_elems].iov_base = rsne;
-		iov[iov_elems].iov_len = rsne[1] + 2;
-		iov_elems += 1;
-	}
-
-	/* The MDE advertised by the BSS must be passed verbatim */
-	mde[0] = IE_TYPE_MOBILITY_DOMAIN;
-	mde[1] = 3;
-	memcpy(mde + 2, hs->mde + 2, 3);
-
-	iov[iov_elems].iov_base = mde;
-	iov[iov_elems].iov_len = 5;
-	iov_elems += 1;
-
-	if (is_rsn) {
-		struct ie_ft_info ft_info;
-		uint8_t *fte;
-
-		/*
-		 * 12.8.2: "If present, the FTE shall be set as follows:
-		 * — R0KH-ID shall be the value of R0KH-ID obtained by the
-		 *   FTO during its FT initial mobility domain association
-		 *   exchange.
-		 * — SNonce shall be set to a value chosen randomly by the
-		 *   FTO, following the recommendations of 11.6.5.
-		 * — All other fields shall be set to 0."
-		 */
-
-		memset(&ft_info, 0, sizeof(ft_info));
-
-		memcpy(ft_info.r0khid, hs->r0khid, hs->r0khid_len);
-		ft_info.r0khid_len = hs->r0khid_len;
-
-		memcpy(ft_info.snonce, hs->snonce, 32);
-
-		fte = alloca(256);
-		ie_build_fast_bss_transition(&ft_info, fte);
-
-		iov[iov_elems].iov_base = fte;
-		iov[iov_elems].iov_len = fte[1] + 2;
-		iov_elems += 1;
-	}
-
-	l_genl_msg_append_attrv(msg, NL80211_ATTR_IE, iov, iov_elems);
-
 	return msg;
 
-error:
-	l_genl_msg_unref(msg);
-
-	return NULL;
 }
 
 static void netdev_cmd_authenticate_ft_cb(struct l_genl_msg *msg,
@@ -2749,7 +2670,8 @@ static void netdev_cmd_authenticate_ft_cb(struct l_genl_msg *msg,
 					MMPDU_STATUS_CODE_UNSPECIFIED);
 }
 
-static void netdev_ft_tx_authenticate(void *user_data)
+static void netdev_ft_tx_authenticate(struct iovec *iov,
+					size_t iov_len, void *user_data)
 {
 	struct netdev *netdev = user_data;
 	struct l_genl_msg *cmd_authenticate;
@@ -2758,6 +2680,9 @@ static void netdev_ft_tx_authenticate(void *user_data)
 							netdev->handshake);
 	if (!cmd_authenticate)
 		goto restore_snonce;
+
+	l_genl_msg_append_attrv(cmd_authenticate, NL80211_ATTR_IE, iov,
+					iov_len);
 
 	netdev->connect_cmd_id = l_genl_family_send(nl80211,
 						cmd_authenticate,
