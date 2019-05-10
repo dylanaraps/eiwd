@@ -270,6 +270,14 @@ void handshake_state_set_no_rekey(struct handshake_state *s, bool no_rekey)
 	s->no_rekey = no_rekey;
 }
 
+void handshake_state_set_fils_ft(struct handshake_state *s,
+					const uint8_t *fils_ft,
+					size_t fils_ft_len)
+{
+	memcpy(s->fils_ft, fils_ft, fils_ft_len);
+	s->fils_ft_len = fils_ft_len;
+}
+
 void handshake_state_new_snonce(struct handshake_state *s)
 {
 	get_nonce(s->snonce);

@@ -97,6 +97,8 @@ struct handshake_state {
 	uint8_t pmk_r1[32];
 	uint8_t pmk_r1_name[16];
 	uint8_t pmkid[16];
+	uint8_t fils_ft[48];
+	uint8_t fils_ft_len;
 	struct l_settings *settings_8021x;
 	bool have_snonce : 1;
 	bool ptk_complete : 1;
@@ -163,6 +165,10 @@ void handshake_state_set_event_func(struct handshake_state *s,
 void handshake_state_set_passphrase(struct handshake_state *s,
 					const char *passphrase);
 void handshake_state_set_no_rekey(struct handshake_state *s, bool no_rekey);
+
+void handshake_state_set_fils_ft(struct handshake_state *s,
+					const uint8_t *fils_ft,
+					size_t fils_ft_len);
 
 void handshake_state_new_snonce(struct handshake_state *s);
 void handshake_state_new_anonce(struct handshake_state *s);
