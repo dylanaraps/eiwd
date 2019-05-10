@@ -578,7 +578,8 @@ bool scan_cancel(uint32_t ifindex, uint32_t id)
 		l_queue_remove(sc->requests, sr);
 		sc->started = false;
 		start_next_scan_request(sc);
-	}
+	} else
+		l_queue_remove(sc->requests, sr);
 
 	scan_request_free(sr);
 	return true;
