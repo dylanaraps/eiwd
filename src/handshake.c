@@ -434,18 +434,19 @@ bool handshake_state_derive_ptk(struct handshake_state *s)
 
 		if (!crypto_derive_pmk_r0(xxkey, 32, s->ssid, s->ssid_len, mdid,
 						s->r0khid, s->r0khid_len,
-						s->spa,
+						s->spa, false,
 						s->pmk_r0, s->pmk_r0_name))
 			return false;
 
 		if (!crypto_derive_pmk_r1(s->pmk_r0, s->r1khid, s->spa,
-						s->pmk_r0_name,
+						s->pmk_r0_name, false,
 						s->pmk_r1, s->pmk_r1_name))
 			return false;
 
 		if (!crypto_derive_ft_ptk(s->pmk_r1, s->pmk_r1_name, s->aa,
 						s->spa, s->snonce, s->anonce,
-						s->ptk, ptk_size, ptk_name))
+						false, s->ptk, ptk_size,
+						ptk_name))
 			return false;
 	} else
 		if (!crypto_derive_pairwise_ptk(s->pmk, s->pmk_len, s->spa,

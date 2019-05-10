@@ -840,17 +840,18 @@ bool crypto_derive_pmk_r0(const uint8_t *xxkey, size_t xxkey_len,
 				const uint8_t *ssid, size_t ssid_len,
 				uint16_t mdid,
 				const uint8_t *r0khid, size_t r0kh_len,
-				const uint8_t *s0khid, uint8_t *out_pmk_r0,
-				uint8_t *out_pmk_r0_name)
+				const uint8_t *s0khid, bool sha384,
+				uint8_t *out_pmk_r0, uint8_t *out_pmk_r0_name)
 {
 	uint8_t context[512];
 	size_t pos = 0;
-	uint8_t output[48];
-	struct l_checksum *sha256;
+	uint8_t output[64];
+	size_t offset = sha384 ? 48 : 32;
+	struct l_checksum *sha;
 	bool r = false;
 	struct iovec iov[2] = {
 		[0] = { .iov_base = "FT-R0N", .iov_len = 6 },
-		[1] = { .iov_base = output + 32, .iov_len = 16 },
+		[1] = { .iov_base = output + offset, .iov_len = 16 },
 	};
 
 	context[pos++] = ssid_len;
@@ -869,25 +870,32 @@ bool crypto_derive_pmk_r0(const uint8_t *xxkey, size_t xxkey_len,
 	memcpy(context + pos, s0khid, ETH_ALEN);
 	pos += ETH_ALEN;
 
-	if (!kdf_sha256(xxkey, xxkey_len, "FT-R0", 5, context, pos, output, 48))
+	if (sha384) {
+		if (!kdf_sha384(xxkey, xxkey_len, "FT-R0", 5, context, pos,
+					output, 64))
+			goto exit;
+	} else {
+		if (!kdf_sha256(xxkey, xxkey_len, "FT-R0", 5, context, pos,
+					output, 48))
+			goto exit;
+	}
+
+	sha = l_checksum_new((sha384) ? L_CHECKSUM_SHA384 : L_CHECKSUM_SHA256);
+	if (!sha)
 		goto exit;
 
-	sha256 = l_checksum_new(L_CHECKSUM_SHA256);
-	if (!sha256)
-		goto exit;
+	l_checksum_updatev(sha, iov, 2);
+	l_checksum_get_digest(sha, out_pmk_r0_name, 16);
 
-	l_checksum_updatev(sha256, iov, 2);
-	l_checksum_get_digest(sha256, out_pmk_r0_name, 16);
+	l_checksum_free(sha);
 
-	l_checksum_free(sha256);
-
-	memcpy(out_pmk_r0, output, 32);
+	memcpy(out_pmk_r0, output, offset);
 
 	r = true;
 
 exit:
 	explicit_bzero(context, pos);
-	explicit_bzero(output, 48);
+	explicit_bzero(output, 64);
 
 	return r;
 }
@@ -895,12 +903,12 @@ exit:
 /* Defined in 802.11-2012, Section 11.6.1.7.4 PMK-R1 */
 bool crypto_derive_pmk_r1(const uint8_t *pmk_r0,
 				const uint8_t *r1khid, const uint8_t *s1khid,
-				const uint8_t *pmk_r0_name,
+				const uint8_t *pmk_r0_name, bool sha384,
 				uint8_t *out_pmk_r1,
 				uint8_t *out_pmk_r1_name)
 {
 	uint8_t context[2 * ETH_ALEN];
-	struct l_checksum *sha256;
+	struct l_checksum *sha;
 	bool r = false;
 	struct iovec iov[3] = {
 		[0] = { .iov_base = "FT-R1N", .iov_len = 6 },
@@ -912,20 +920,26 @@ bool crypto_derive_pmk_r1(const uint8_t *pmk_r0,
 
 	memcpy(context + ETH_ALEN, s1khid, ETH_ALEN);
 
-	if (!kdf_sha256(pmk_r0, 32, "FT-R1", 5, context, sizeof(context),
-				out_pmk_r1, 32))
-		goto exit;
+	if (sha384) {
+		if (!kdf_sha384(pmk_r0, 48, "FT-R1", 5, context,
+					sizeof(context), out_pmk_r1, 48))
+			goto exit;
+	} else {
+		if (!kdf_sha256(pmk_r0, 32, "FT-R1", 5, context,
+					sizeof(context), out_pmk_r1, 32))
+			goto exit;
+	}
 
-	sha256 = l_checksum_new(L_CHECKSUM_SHA256);
-	if (!sha256) {
-		explicit_bzero(out_pmk_r1, 32);
+	sha = l_checksum_new((sha384) ? L_CHECKSUM_SHA384 : L_CHECKSUM_SHA256);
+	if (!sha) {
+		explicit_bzero(out_pmk_r1, 48);
 		goto exit;
 	}
 
-	l_checksum_updatev(sha256, iov, 3);
-	l_checksum_get_digest(sha256, out_pmk_r1_name, 16);
+	l_checksum_updatev(sha, iov, 3);
+	l_checksum_get_digest(sha, out_pmk_r1_name, 16);
 
-	l_checksum_free(sha256);
+	l_checksum_free(sha);
 
 	r = true;
 
@@ -939,11 +953,11 @@ exit:
 bool crypto_derive_ft_ptk(const uint8_t *pmk_r1, const uint8_t *pmk_r1_name,
 				const uint8_t *addr1, const uint8_t *addr2,
 				const uint8_t *nonce1, const uint8_t *nonce2,
-				uint8_t *out_ptk, size_t ptk_len,
+				bool sha384, uint8_t *out_ptk, size_t ptk_len,
 				uint8_t *out_ptk_name)
 {
 	uint8_t context[ETH_ALEN * 2 + 64];
-	struct l_checksum *sha256;
+	struct l_checksum *sha;
 	bool r = false;
 	struct iovec iov[3] = {
 		[0] = { .iov_base = (uint8_t *) pmk_r1_name, .iov_len = 16 },
@@ -959,20 +973,26 @@ bool crypto_derive_ft_ptk(const uint8_t *pmk_r1, const uint8_t *pmk_r1_name,
 
 	memcpy(context + 64 + ETH_ALEN, addr2, ETH_ALEN);
 
-	if (!kdf_sha256(pmk_r1, 32, "FT-PTK", 6, context, sizeof(context),
-				out_ptk, ptk_len))
-		goto exit;
+	if (sha384) {
+		if (!kdf_sha384(pmk_r1, 48, "FT-PTK", 6, context,
+					sizeof(context), out_ptk, ptk_len))
+			goto exit;
+	} else {
+		if (!kdf_sha256(pmk_r1, 32, "FT-PTK", 6, context,
+					sizeof(context), out_ptk, ptk_len))
+			goto exit;
+	}
 
-	sha256 = l_checksum_new(L_CHECKSUM_SHA256);
-	if (!sha256) {
+	sha = l_checksum_new((sha384) ? L_CHECKSUM_SHA384 : L_CHECKSUM_SHA256);
+	if (!sha) {
 		explicit_bzero(out_ptk, ptk_len);
 		goto exit;
 	}
 
-	l_checksum_updatev(sha256, iov, 3);
-	l_checksum_get_digest(sha256, out_ptk_name, 16);
+	l_checksum_updatev(sha, iov, 3);
+	l_checksum_get_digest(sha, out_ptk_name, 16);
 
-	l_checksum_free(sha256);
+	l_checksum_free(sha);
 
 	r = true;
 
