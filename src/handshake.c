@@ -368,8 +368,13 @@ static bool handshake_get_key_sizes(struct handshake_state *s, size_t *ptk_size,
 		break;
 	}
 
-	if (ptk_size)
+	if (ptk_size) {
 		*ptk_size = kck + kek + tk;
+		if (s->akm_suite == IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256)
+			*ptk_size += 32;
+		else if (s->akm_suite == IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384)
+			*ptk_size += 56;
+	}
 
 	if (kck_size)
 		*kck_size = kck;
@@ -469,7 +474,27 @@ size_t handshake_state_get_ptk_size(struct handshake_state *s)
 
 const uint8_t *handshake_state_get_kck(struct handshake_state *s)
 {
+	/*
+	 * FILS itself does not derive a KCK, but FILS-FT derives additional
+	 * key bytes at the end of the PTK, which contains a special KCK used
+	 * for fast transition. Since the normal FILS protocol will never call
+	 * this, we can assume that its only being called for FILS-FT and is
+	 * requesting this special KCK.
+	 */
+	if (s->akm_suite & IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256)
+		return s->ptk + 48;
+	else if (s->akm_suite & IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384)
+		return s->ptk + 80;
+
 	return s->ptk;
+}
+
+size_t handshake_state_get_kck_len(struct handshake_state *s)
+{
+	if (s->akm_suite & IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384)
+		return 24;
+
+	return 16;
 }
 
 size_t handshake_state_get_kek_len(struct handshake_state *s)
