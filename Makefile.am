@@ -205,6 +205,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h src/missing.h \
 					src/erp.h src/erp.c \
 					src/fils.h src/fils.c \
 					src/rtnlutil.h src/rtnlutil.c \
+					src/auth-proto.h \
 					$(eap_sources) \
 					$(builtin_sources)
 src_iwd_LDADD = $(ell_ldadd) -ldl
