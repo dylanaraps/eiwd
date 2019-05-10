@@ -30,10 +30,11 @@
 
 #include <ell/ell.h>
 
-#include "eap-private.h"
-#include "erp.h"
-#include "crypto.h"
-#include "util.h"
+#include "src/missing.h"
+#include "src/eap-private.h"
+#include "src/erp.h"
+#include "src/crypto.h"
+#include "src/util.h"
 
 #define ERP_DEFAULT_KEY_LIFETIME_US 86400000000
 
