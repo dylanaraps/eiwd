@@ -2352,7 +2352,9 @@ bool eapol_start(struct eapol_sm *sm)
 	 * then we wait for a rekey.
 	 */
 	if (sm->handshake->akm_suite & (IE_RSN_AKM_SUITE_FILS_SHA256 |
-			IE_RSN_AKM_SUITE_FILS_SHA384))
+			IE_RSN_AKM_SUITE_FILS_SHA384 |
+			IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384 |
+			IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256))
 		return true;
 
 	if (sm->require_handshake)
