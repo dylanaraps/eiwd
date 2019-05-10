@@ -2719,7 +2719,7 @@ static void station_free(struct station *station)
 		scan_cancel(netdev_get_ifindex(station->netdev),
 				station->hidden_network_scan_id);
 
-	l_timeout_remove(station->roam_trigger_timeout);
+	station_roam_state_clear(station);
 
 	l_queue_destroy(station->networks_sorted, NULL);
 	l_hashmap_destroy(station->networks, network_free);
