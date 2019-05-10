@@ -409,6 +409,7 @@ static int fils_rx_associate(struct auth_proto *driver, const uint8_t *frame,
 				goto invalid_ies;
 
 			ap_key_auth = iter.data;
+			break;
 		}
 	}
 
