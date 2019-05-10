@@ -92,9 +92,9 @@ struct handshake_state {
 	uint8_t snonce[32];
 	uint8_t anonce[32];
 	uint8_t ptk[136];
-	uint8_t pmk_r0[32];
+	uint8_t pmk_r0[48];
 	uint8_t pmk_r0_name[16];
-	uint8_t pmk_r1[32];
+	uint8_t pmk_r1[48];
 	uint8_t pmk_r1_name[16];
 	uint8_t pmkid[16];
 	uint8_t fils_ft[48];

@@ -390,25 +390,31 @@ bool handshake_state_derive_ptk(struct handshake_state *s)
 	size_t ptk_size;
 	enum l_checksum_type type;
 
-	if (!s->have_snonce || !s->have_pmk)
-		return false;
+	if (!(s->akm_suite & (IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256 |
+			IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384)))
+		if (!s->have_snonce || !s->have_pmk)
+			return false;
 
 	if ((s->akm_suite & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
 				IE_RSN_AKM_SUITE_FT_USING_PSK |
-				IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256)) &&
+				IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256 |
+				IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256 |
+				IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384)) &&
 			(!s->mde || !s->fte))
 		return false;
 
 	s->ptk_complete = false;
 
-	if (s->akm_suite & IE_RSN_AKM_SUITE_FILS_SHA384)
+	if (s->akm_suite & (IE_RSN_AKM_SUITE_FILS_SHA384 |
+			IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384))
 		type = L_CHECKSUM_SHA384;
 	else if (s->akm_suite & (IE_RSN_AKM_SUITE_8021X_SHA256 |
 			IE_RSN_AKM_SUITE_PSK_SHA256 |
 			IE_RSN_AKM_SUITE_SAE_SHA256 |
 			IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256 |
 			IE_RSN_AKM_SUITE_OWE |
-			IE_RSN_AKM_SUITE_FILS_SHA256))
+			IE_RSN_AKM_SUITE_FILS_SHA256 |
+			IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256))
 		type = L_CHECKSUM_SHA256;
 	else
 		type = L_CHECKSUM_SHA1;
@@ -417,10 +423,15 @@ bool handshake_state_derive_ptk(struct handshake_state *s)
 
 	if (s->akm_suite & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
 				IE_RSN_AKM_SUITE_FT_USING_PSK |
-				IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256)) {
+				IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256 |
+				IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256 |
+				IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384)) {
 		uint16_t mdid;
 		uint8_t ptk_name[16];
 		const uint8_t *xxkey = s->pmk;
+		size_t xxkey_len = 32;
+		bool sha384 = (s->akm_suite &
+					IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384);
 
 		/*
 		 * In a Fast Transition initial mobility domain association
@@ -433,24 +444,30 @@ bool handshake_state_derive_ptk(struct handshake_state *s)
 		 */
 		if (s->akm_suite == IE_RSN_AKM_SUITE_FT_OVER_8021X)
 			xxkey = s->pmk + 32;
+		else if (s->akm_suite & (IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256 |
+				IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384)) {
+			xxkey = s->fils_ft;
+			xxkey_len = s->fils_ft_len;
+		}
 
 		ie_parse_mobility_domain_from_data(s->mde, s->mde[1] + 2,
 							&mdid, NULL, NULL);
 
-		if (!crypto_derive_pmk_r0(xxkey, 32, s->ssid, s->ssid_len, mdid,
+		if (!crypto_derive_pmk_r0(xxkey, xxkey_len, s->ssid,
+						s->ssid_len, mdid,
 						s->r0khid, s->r0khid_len,
-						s->spa, false,
+						s->spa, sha384,
 						s->pmk_r0, s->pmk_r0_name))
 			return false;
 
 		if (!crypto_derive_pmk_r1(s->pmk_r0, s->r1khid, s->spa,
-						s->pmk_r0_name, false,
+						s->pmk_r0_name, sha384,
 						s->pmk_r1, s->pmk_r1_name))
 			return false;
 
 		if (!crypto_derive_ft_ptk(s->pmk_r1, s->pmk_r1_name, s->aa,
 						s->spa, s->snonce, s->anonce,
-						false, s->ptk, ptk_size,
+						sha384, s->ptk, ptk_size,
 						ptk_name))
 			return false;
 	} else
@@ -833,6 +850,24 @@ void handshake_util_build_gtk_kde(enum crypto_cipher cipher, const uint8_t *key,
 	memcpy(to, key, key_len);
 }
 
+static const uint8_t *handshake_state_get_ft_fils_kek(struct handshake_state *s,
+						size_t *len)
+{
+	if (s->akm_suite & IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256) {
+		if (len)
+			*len = 16;
+
+		return s->ptk + 64;
+	} else if (s->akm_suite & IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384) {
+		if (len)
+			*len = 32;
+
+		return s->ptk + 104;
+	}
+
+	return NULL;
+}
+
 /*
  * Unwrap a GTK / IGTK included in an FTE following 802.11-2012, Section 12.8.5:
  *
@@ -849,10 +884,17 @@ void handshake_util_build_gtk_kde(enum crypto_cipher cipher, const uint8_t *key,
 bool handshake_decode_fte_key(struct handshake_state *s, const uint8_t *wrapped,
 				size_t key_len, uint8_t *key_out)
 {
-	const uint8_t *kek = handshake_state_get_kek(s);
+	const uint8_t *kek;
+	size_t kek_len = 16;
 	size_t padded_len = key_len < 16 ? 16 : align_len(key_len, 8);
 
-	if (!aes_unwrap(kek, 16, wrapped, padded_len + 8, key_out))
+	if (s->akm_suite & (IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256 |
+				IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384))
+		kek = handshake_state_get_ft_fils_kek(s, &kek_len);
+	else
+		kek = handshake_state_get_kek(s);
+
+	if (!aes_unwrap(kek, kek_len, wrapped, padded_len + 8, key_out))
 		return false;
 
 	if (key_len < padded_len && key_out[key_len++] != 0xdd)
