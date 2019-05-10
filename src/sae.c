@@ -26,6 +26,7 @@
 
 #include <ell/ell.h>
 
+#include "src/missing.h"
 #include "src/util.h"
 #include "src/ie.h"
 #include "src/handshake.h"
