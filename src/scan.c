@@ -99,6 +99,8 @@ struct scan_context {
 	 * is running.
 	 */
 	bool triggered:1;
+	/* Whether any commands from current request's queue have started */
+	bool started:1;
 	struct wiphy *wiphy;
 };
 
@@ -265,6 +267,7 @@ static void scan_request_triggered(struct l_genl_msg *msg, void *userdata)
 		sr->passive ? "Passive" : "Active", sc->ifindex);
 
 	sc->triggered = true;
+	sc->started = true;
 	l_genl_msg_unref(l_queue_pop_head(sr->cmds));
 
 	if (sr->trigger) {
@@ -573,6 +576,7 @@ bool scan_cancel(uint32_t ifindex, uint32_t id)
 		sc->start_cmd_id = 0;
 		sc->get_scan_cmd_id = 0;
 		l_queue_remove(sc->requests, sr);
+		sc->started = false;
 		start_next_scan_request(sc);
 	}
 
@@ -1167,6 +1171,7 @@ static void scan_finished(struct scan_context *sc, uint32_t wiphy,
 
 	if  (sr) {
 		l_queue_remove(sc->requests, sr);
+		sc->started = false;
 
 		/*
 		 * Can start a new scan now that we've removed this one from
@@ -1209,6 +1214,22 @@ static void get_scan_done(void *user)
 		scan_freq_set_free(results->freqs);
 
 	l_free(results);
+}
+
+static bool scan_parse_flush_flag_from_msg(struct l_genl_msg *msg)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return false;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data))
+		if (type == NL80211_SCAN_FLAG_FLUSH)
+			return true;
+
+	return false;
 }
 
 static void scan_parse_new_scan_results(struct l_genl_msg *msg,
@@ -1337,7 +1358,10 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 			if (sc->sp.callback)
 				get_results = true;
 
-			if (sr && !sc->start_cmd_id)
+			/* An external scan may have flushed our results */
+			if (sc->started && scan_parse_flush_flag_from_msg(msg))
+				scan_finished(sc, attr_wiphy, -EAGAIN, NULL, sr);
+			else if (sr && !sc->start_cmd_id)
 				send_next = true;
 
 			sr = NULL;
