@@ -424,7 +424,7 @@ bool handshake_state_derive_ptk(struct handshake_state *s)
 		ie_parse_mobility_domain_from_data(s->mde, s->mde[1] + 2,
 							&mdid, NULL, NULL);
 
-		if (!crypto_derive_pmk_r0(xxkey, s->ssid, s->ssid_len, mdid,
+		if (!crypto_derive_pmk_r0(xxkey, 32, s->ssid, s->ssid_len, mdid,
 						s->r0khid, s->r0khid_len,
 						s->spa,
 						s->pmk_r0, s->pmk_r0_name))

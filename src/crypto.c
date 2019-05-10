@@ -836,7 +836,7 @@ bool crypto_derive_pairwise_ptk(const uint8_t *pmk, size_t pmk_len,
 }
 
 /* Defined in 802.11-2012, Section 11.6.1.7.3 PMK-R0 */
-bool crypto_derive_pmk_r0(const uint8_t *xxkey,
+bool crypto_derive_pmk_r0(const uint8_t *xxkey, size_t xxkey_len,
 				const uint8_t *ssid, size_t ssid_len,
 				uint16_t mdid,
 				const uint8_t *r0khid, size_t r0kh_len,
@@ -869,7 +869,7 @@ bool crypto_derive_pmk_r0(const uint8_t *xxkey,
 	memcpy(context + pos, s0khid, ETH_ALEN);
 	pos += ETH_ALEN;
 
-	if (!kdf_sha256(xxkey, 32, "FT-R0", 5, context, pos, output, 48))
+	if (!kdf_sha256(xxkey, xxkey_len, "FT-R0", 5, context, pos, output, 48))
 		goto exit;
 
 	sha256 = l_checksum_new(L_CHECKSUM_SHA256);
