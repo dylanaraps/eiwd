@@ -1,0 +1,19 @@
+[ req ]
+distinguished_name = req_distinguished_name
+
+[ req_distinguished_name ]
+
+[ ca_ext ]
+basicConstraints = CA:TRUE,pathlen:0
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer:always
+
+[ int_ext ]
+basicConstraints = CA:TRUE
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer:always
+
+[ cert_ext ]
+basicConstraints = CA:FALSE
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer:always

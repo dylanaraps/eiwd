@@ -325,11 +325,6 @@ if CLIENT
 unit_tests += unit/test-client
 endif
 
-
-ell_pem_files = cert-ca-key.pem cert-client-key.pem cert-client-key-pkcs8.pem \
-		cert-server-key.pem cert-server-key-pkcs8.pem \
-		cert-ca.pem cert-client.pem cert-server.pem
-
 if MAINTAINER_MODE
 noinst_PROGRAMS += $(unit_tests)
 endif
@@ -404,7 +399,10 @@ unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/erp.h src/erp.c \
 				src/mschaputil.h src/mschaputil.c
 unit_test_eapol_LDADD = $(ell_ldadd)
-unit_test_eapol_DEPENDENCIES = ell/unit/test_data
+unit_test_eapol_DEPENDENCIES = unit/cert-server.pem \
+				unit/cert-server-key-pkcs8.pem \
+				unit/cert-client.pem \
+				unit/cert-client-key-pkcs8.pem
 
 unit_test_util_SOURCES = src/util.h src/util.c \
 				unit/test-util.c
@@ -465,10 +463,12 @@ endif
 
 EXTRA_DIST = src/genbuiltin src/iwd.service.in src/net.connman.iwd.service \
 			wired/ead.service.in wired/net.connman.ead.service \
-			src/pkcs8.conf doc/main.conf $(manual_pages:.1=.txt)
+			src/pkcs8.conf unit/gencerts.cnf \
+			doc/main.conf $(manual_pages:.1=.txt)
 
 AM_CFLAGS = $(ell_cflags) -fvisibility=hidden \
-			-DELL_UNIT_TEST_DATA=\"$(abs_builddir)/ell/unit/\"
+				-DUNITDIR=\""$(top_srcdir)/unit/"\" \
+				-DCERTDIR=\""$(top_builddir)/unit/"\"
 
 CLEANFILES = src/iwd.service wired/ead.service
 
@@ -482,6 +482,58 @@ DISTCHECK_CONFIGURE_FLAGS = --disable-dbus-policy --disable-systemd-service \
 DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests) $(manual_pages)
 
 MAINTAINERCLEANFILES = Makefile.in configure config.h.in aclocal.m4
+
+true_redirect_openssl = 2>&1
+false_redirect_openssl = 2>/dev/null
+
+unit/cert-ca-key.pem:
+	$(AM_V_GEN)openssl genrsa -out $@ 2048 $($(AM_V_P)_redirect_openssl)
+
+unit/cert-ca.pem: unit/cert-ca-key.pem unit/gencerts.cnf
+	$(AM_V_GEN)openssl req -x509 -new -nodes -extensions ca_ext \
+			-config $(srcdir)/unit/gencerts.cnf \
+			-subj '/O=International Union of Example Organizations/CN=Certificate issuer guy/emailAddress=ca@mail.example' \
+			-key $< -sha256 -days 10000 -out $@
+
+unit/cert-server-key.pem:
+	$(AM_V_GEN)openssl genrsa -out $@ $($(AM_V_P)_redirect_openssl)
+
+unit/cert-server-key-pkcs8.pem: unit/cert-server-key.pem
+	$(AM_V_GEN)openssl pkcs8 -topk8 -nocrypt -in $< -out $@
+
+unit/cert-server.csr: unit/cert-server-key.pem unit/gencerts.cnf
+	$(AM_V_GEN)openssl req -new -extensions cert_ext \
+			-config $(srcdir)/unit/gencerts.cnf \
+			-subj '/O=Foo Example Organization/CN=Foo Example Organization/emailAddress=foo@mail.example' \
+			-key $< -out $@
+
+unit/cert-server.pem: unit/cert-server.csr unit/cert-ca.pem unit/gencerts.cnf
+	$(AM_V_GEN)openssl x509 -req -extensions cert_ext \
+			-extfile $(srcdir)/unit/gencerts.cnf \
+			-in $< -CA $(builddir)/unit/cert-ca.pem \
+			-CAkey $(builddir)/unit/cert-ca-key.pem \
+			-CAserial $(builddir)/unit/cert-ca.srl \
+			-CAcreateserial -sha256 -days 10000 -out $@ $($(AM_V_P)_redirect_openssl)
+
+unit/cert-client-key.pem:
+	$(AM_V_GEN)openssl genrsa -out $@ $($(AM_V_P)_redirect_openssl)
+
+unit/cert-client-key-pkcs8.pem: unit/cert-client-key.pem
+	$(AM_V_GEN)openssl pkcs8 -topk8 -nocrypt -in $< -out $@
+
+unit/cert-client.csr: unit/cert-client-key.pem unit/gencerts.cnf
+	$(AM_V_GEN)openssl req -new -extensions cert_ext \
+			-config $(srcdir)/unit/gencerts.cnf \
+			-subj '/O=Bar Example Organization/CN=Bar Example Organization/emailAddress=bar@mail.example' \
+			-key $< -out $@
+
+unit/cert-client.pem: unit/cert-client.csr unit/cert-ca.pem unit/gencerts.cnf
+	$(AM_V_GEN)openssl x509 -req -extensions cert_ext \
+			-extfile $(srcdir)/unit/gencerts.cnf \
+			-in $< -CA $(builddir)/unit/cert-ca.pem \
+			-CAkey $(builddir)/unit/cert-ca-key.pem \
+			-CAserial $(builddir)/unit/cert-ca.srl \
+			-CAcreateserial -sha256 -days 10000 -out $@ $($(AM_V_P)_redirect_openssl)
 
 BUILT_SOURCES = $(ell_built_sources) src/builtin.h
 
@@ -499,14 +551,6 @@ ell/ell.h: Makefile
 		echo "#include <$$f>" >> $@ ; \
 	done
 
-ell/unit/test_data: Makefile
-	$(AM_V_at)$(MKDIR_P) $(abs_builddir)/ell/unit
-	$(AM_V_GEN)for f in $(ell_pem_files) ; do \
-		if [ ! -f $$f ] ; then \
-			$(LN_S) -t $(abs_builddir)/ell/unit -f $(abs_srcdir)/../ell/unit/$$f ; \
-		fi \
-	done > $@
-
 SED_PROCESS = $(AM_V_GEN)$(MKDIR_P) $(dir $@) && \
 		$(SED) -e 's,@libexecdir\@,$(libexecdir),g' \
 		< $< > $@
@@ -518,7 +562,7 @@ SED_PROCESS = $(AM_V_GEN)$(MKDIR_P) $(dir $@) && \
 	$(AM_V_GEN)$(A2X) --doctype manpage --format manpage $(srcdir)/$<
 
 clean-local:
-	-rm -rf $(abs_builddir)/ell/unit/*.pem $(abs_builddir)/ell/unit/test_data
+	-rm -f unit/cert-*.pem unit/cert-*.csr unit/cert-*.srl
 
 maintainer-clean-local:
 	-rm -rf build-aux ell

@@ -2947,9 +2947,9 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	s->tx_buf_len = 0;
 	s->tx_buf_offset = 0;
 
-	assert(l_tls_set_auth_data(s->tls, ELL_UNIT_TEST_DATA "cert-server.pem",
-			ELL_UNIT_TEST_DATA "cert-server-key-pkcs8.pem", NULL));
-	assert(l_tls_set_cacert(s->tls, ELL_UNIT_TEST_DATA "cert-ca.pem"));
+	assert(l_tls_set_auth_data(s->tls, CERTDIR "cert-server.pem",
+				CERTDIR "cert-server-key-pkcs8.pem", NULL));
+	assert(l_tls_set_cacert(s->tls, CERTDIR "cert-ca.pem"));
 	assert(l_tls_start(s->tls));
 
 	start = 1;
@@ -3113,9 +3113,9 @@ static void eapol_sm_test_eap_tls(const void *data)
 	static const char *eapol_8021x_config = "[Security]\n"
 		"EAP-Method=TLS\n"
 		"EAP-Identity=abc@example.com\n"
-		"EAP-TLS-CACert=" ELL_UNIT_TEST_DATA "cert-ca.pem\n"
-		"EAP-TLS-ClientCert=" ELL_UNIT_TEST_DATA "cert-client.pem\n"
-		"EAP-TLS-ClientKey=" ELL_UNIT_TEST_DATA "cert-client-key-pkcs8.pem";
+		"EAP-TLS-CACert=" CERTDIR "cert-ca.pem\n"
+		"EAP-TLS-ClientCert=" CERTDIR "cert-client.pem\n"
+		"EAP-TLS-ClientKey=" CERTDIR "cert-client-key-pkcs8.pem";
 	struct eapol_8021x_tls_test_state s;
 
 	s.app_data_cb = eapol_sm_test_tls_new_data;
@@ -3189,9 +3189,9 @@ static void eapol_sm_test_eap_ttls_md5(const void *data)
 	static const char *eapol_8021x_config = "[Security]\n"
 		"EAP-Method=TTLS\n"
 		"EAP-Identity=abc@example.com\n"
-		"EAP-TTLS-CACert=" ELL_UNIT_TEST_DATA "cert-ca.pem\n"
-		"EAP-TTLS-ClientCert=" ELL_UNIT_TEST_DATA "cert-client.pem\n"
-		"EAP-TTLS-ClientKey=" ELL_UNIT_TEST_DATA "cert-client-key-pkcs8.pem\n"
+		"EAP-TTLS-CACert=" CERTDIR "cert-ca.pem\n"
+		"EAP-TTLS-ClientCert=" CERTDIR "cert-client.pem\n"
+		"EAP-TTLS-ClientKey=" CERTDIR "cert-client-key-pkcs8.pem\n"
 		"EAP-TTLS-Phase2-Method=MD5\n"
 		"EAP-TTLS-Phase2-Identity=abc@example.com\n"
 		"EAP-TTLS-Phase2-Password=testpasswd";
@@ -3258,9 +3258,9 @@ static void eapol_sm_test_eap_nak(const void *data)
 	static const char *eapol_8021x_config = "[Security]\n"
 		"EAP-Method=TLS\n"
 		"EAP-Identity=abc@example.com\n"
-		"EAP-TLS-CACert=" ELL_UNIT_TEST_DATA "cert-ca.pem\n"
-		"EAP-TLS-ClientCert=" ELL_UNIT_TEST_DATA "cert-client.pem\n"
-		"EAP-TLS-ClientKey=" ELL_UNIT_TEST_DATA "cert-client-key-pkcs8.pem";
+		"EAP-TLS-CACert=" CERTDIR "cert-ca.pem\n"
+		"EAP-TLS-ClientCert=" CERTDIR "cert-client.pem\n"
+		"EAP-TLS-ClientKey=" CERTDIR "cert-client-key-pkcs8.pem";
 	static const unsigned char ap_wpa_ie[] = {
 		0xdd, 0x16, 0x00, 0x50, 0xf2, 0x01, 0x01, 0x00,
 		0x00, 0x50, 0xf2, 0x02, 0x01, 0x00, 0x00, 0x50,
