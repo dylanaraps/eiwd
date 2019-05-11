@@ -1,3 +1,9 @@
+ver 0.18:
+	Fix issue with handling stale scan results.
+	Fix issue with handling OWE group renegotiation.
+	Fix issue with handshake failures on FT-PSK.
+	Add support for FILS (Fast Initial Link Setup).
+
 ver 0.17:
 	Fix issue with handling association failure path.
 	Fix issue with handling checks for valid ECC point/scalar.
