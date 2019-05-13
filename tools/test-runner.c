@@ -152,7 +152,7 @@ static const char * const qemu_table[] = { NULL };
 
 struct wiphy {
 	char name[20];
-	uint32_t id;
+	int id;
 	unsigned int interface_index;
 	bool interface_created : 1;
 	bool used_by_hostapd : 1;
@@ -742,14 +742,14 @@ static bool list_hwsim_radios(void)
 	return true;
 }
 
-static uint32_t read_radio_id(void)
+static int read_radio_id(void)
 {
 	static int current_radio_id;
 
-	return ++current_radio_id;
+	return current_radio_id++;
 }
 
-static uint32_t create_hwsim_radio(const char *radio_name,
+static int create_hwsim_radio(const char *radio_name,
 				const unsigned int channels, bool p2p_device,
 							bool use_chanctx)
 {
@@ -766,7 +766,7 @@ static uint32_t create_hwsim_radio(const char *radio_name,
 
 	pid = execute_program(argv, true, check_verbosity(BIN_HWSIM));
 	if (pid < 0)
-		return 0;
+		return -1;
 
 	return read_radio_id();
 }
@@ -1187,7 +1187,7 @@ configure:
 		wiphy->id = create_hwsim_radio(wiphy->name, channels,
 						p2p_device, use_chanctx);
 
-		if (wiphy->id == 0) {
+		if (wiphy->id < 0) {
 			l_free(wiphy);
 			goto exit;
 		}
@@ -2301,14 +2301,14 @@ exit:
 static bool wiphy_match(const void *a, const void *b)
 {
 	const struct wiphy *wiphy = a;
-	uint32_t id = L_PTR_TO_UINT(b);
+	int id = L_PTR_TO_INT(b);
 
 	return (wiphy->id == id);
 }
 
 static struct wiphy *wiphy_find(int wiphy_id)
 {
-	return l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(wiphy_id));
+	return l_queue_find(wiphy_list, wiphy_match, L_INT_TO_PTR(wiphy_id));
 }
 
 static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
