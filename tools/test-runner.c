@@ -750,9 +750,14 @@ static int read_radio_id(void)
 	return current_radio_id++;
 }
 
+struct hwsim_radio_params {
+	unsigned int channels;
+	bool p2p_device;
+	bool use_chanctx;
+};
+
 static int create_hwsim_radio(const char *radio_name,
-				const unsigned int channels, bool p2p_device,
-							bool use_chanctx)
+				struct hwsim_radio_params *params)
 {
 	char *argv[7];
 	pid_t pid;
@@ -1110,9 +1115,7 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 									':');
 	for (i = 0; i < num_radios_requested; i++) {
 		struct wiphy *wiphy;
-		unsigned int channels;
-		bool p2p_device;
-		bool use_chanctx;
+		struct hwsim_radio_params params = { 0 };
 
 		wiphy = l_new(struct wiphy, 1);
 
@@ -1120,29 +1123,28 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 
 		/* radio not in radio_confs, use default parameters */
 		if (!l_strv_contains(radio_conf_list, wiphy->name)) {
-			channels = 1;
-			p2p_device = true;
-			use_chanctx = true;
+			params.channels = 1;
+			params.p2p_device = true;
+			params.use_chanctx = true;
 			goto create;
 		}
 
 		if (!l_settings_get_uint(hw_settings, wiphy->name,
 					HW_CONFIG_PHY_CHANNELS,
-					&channels))
-			channels = 1;
+					&params.channels))
+			params.channels = 1;
 
 		if (!l_settings_get_bool(hw_settings, wiphy->name,
-					HW_CONFIG_PHY_P2P, &p2p_device))
-			p2p_device = true;
+					HW_CONFIG_PHY_P2P, &params.p2p_device))
+			params.p2p_device = true;
 
 		if (!l_settings_get_bool(hw_settings, wiphy->name,
 					HW_CONFIG_PHY_CHANCTX,
-					&use_chanctx))
-			use_chanctx = true;
+					&params.use_chanctx))
+			params.use_chanctx = true;
 
 create:
-		wiphy->id = create_hwsim_radio(wiphy->name, channels,
-						p2p_device, use_chanctx);
+		wiphy->id = create_hwsim_radio(wiphy->name, &params);
 		wiphy->can_ap = true;
 
 		if (wiphy->id < 0) {
