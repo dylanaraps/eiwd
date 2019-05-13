@@ -3637,10 +3637,8 @@ static void netdev_unicast_notify(struct l_genl_msg *msg, void *user_data)
 		}
 	}
 
-	if (!netdev) {
-		l_warn("Unicast notification is missing ifindex attribute");
+	if (!netdev)
 		return;
-	}
 
 	switch (cmd) {
 	case NL80211_CMD_FRAME:
