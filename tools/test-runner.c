@@ -754,21 +754,35 @@ struct hwsim_radio_params {
 	unsigned int channels;
 	bool p2p_device;
 	bool use_chanctx;
+	char *iftype_disable;
+	char *cipher_disable;
 };
 
 static int create_hwsim_radio(const char *radio_name,
 				struct hwsim_radio_params *params)
 {
-	char *argv[7];
+	char *argv[10];
 	pid_t pid;
+	int idx = 0;
 
 	/*TODO add the rest of params*/
-	argv[0] = BIN_HWSIM;
-	argv[1] = "--create";
-	argv[2] = "--name";
-	argv[3] = (char *) radio_name;
-	argv[4] = "--nointerface";
-	argv[5] = NULL;
+	argv[idx++] = BIN_HWSIM;
+	argv[idx++] = "--create";
+	argv[idx++] = "--name";
+	argv[idx++] = (char *) radio_name;
+	argv[idx++] = "--nointerface";
+
+	if (params->iftype_disable) {
+		argv[idx++] = "--iftype-disable";
+		argv[idx++] = params->iftype_disable;
+	}
+
+	if (params->cipher_disable) {
+		argv[idx++] = "--cipher-disable";
+		argv[idx++] = params->cipher_disable;
+	}
+
+	argv[idx] = NULL;
 
 	pid = execute_program(argv, true, check_verbosity(BIN_HWSIM));
 	if (pid < 0)
@@ -1085,6 +1099,8 @@ error_exit:
 #define HW_CONFIG_PHY_CHANNELS	"channels"
 #define HW_CONFIG_PHY_CHANCTX	"use_chanctx"
 #define HW_CONFIG_PHY_P2P	"p2p_device"
+#define HW_CONFIG_PHY_IFTYPE_DISABLE "iftype_disable"
+#define HW_CONFIG_PHY_CIPHER_DISABLE "cipher_disable"
 
 #define HW_MIN_NUM_RADIOS	1
 
@@ -1142,6 +1158,13 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 					HW_CONFIG_PHY_CHANCTX,
 					&params.use_chanctx))
 			params.use_chanctx = true;
+
+		params.iftype_disable = l_settings_get_string(hw_settings,
+					wiphy->name,
+					HW_CONFIG_PHY_IFTYPE_DISABLE);
+		params.cipher_disable = l_settings_get_string(hw_settings,
+					wiphy->name,
+					HW_CONFIG_PHY_CIPHER_DISABLE);
 
 create:
 		wiphy->id = create_hwsim_radio(wiphy->name, &params);
