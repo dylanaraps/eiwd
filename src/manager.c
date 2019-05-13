@@ -182,7 +182,7 @@ static void manager_create_interfaces(struct wiphy_setup_state *state)
 					manager_new_interface_done);
 
 	if (!cmd_id) {
-		l_error("Sending NEW_INTERFACE for %s", ifname);
+		l_error("Error sending NEW_INTERFACE for %s", ifname);
 		return;
 	}
 
@@ -263,7 +263,6 @@ static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 			wdev_idx = data;
 			break;
 
-
 		case NL80211_ATTR_WIPHY:
 			if (len != sizeof(uint32_t) ||
 					*((uint32_t *) data) != state->id) {
@@ -293,26 +292,31 @@ static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 		}
 	}
 
-	if (!ifindex || !wdev_idx || !iftype || !ifname)
+	if (!wdev_idx || !iftype)
 		return;
 
-	if (whitelist_filter) {
-		for (i = 0; (pattern = whitelist_filter[i]); i++) {
-			if (fnmatch(pattern, ifname, 0) != 0)
-				continue;
+	if (ifindex) {
+		if (!ifname)
+			return;
 
-			whitelisted = true;
-			break;
+		if (whitelist_filter) {
+			for (i = 0; (pattern = whitelist_filter[i]); i++) {
+				if (fnmatch(pattern, ifname, 0) != 0)
+					continue;
+
+				whitelisted = true;
+				break;
+			}
 		}
-	}
 
-	if (blacklist_filter) {
-		for (i = 0; (pattern = blacklist_filter[i]); i++) {
-			if (fnmatch(pattern, ifname, 0) != 0)
-				continue;
+		if (blacklist_filter) {
+			for (i = 0; (pattern = blacklist_filter[i]); i++) {
+				if (fnmatch(pattern, ifname, 0) != 0)
+					continue;
 
-			blacklisted = true;
-			break;
+				blacklisted = true;
+				break;
+			}
 		}
 	}
 
@@ -334,7 +338,10 @@ static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 		return;
 
 	del_msg = l_genl_msg_new(NL80211_CMD_DEL_INTERFACE);
-	l_genl_msg_append_attr(del_msg, NL80211_ATTR_IFINDEX, 4, ifindex);
+
+	if (ifindex)
+		l_genl_msg_append_attr(del_msg, NL80211_ATTR_IFINDEX, 4, ifindex);
+
 	l_genl_msg_append_attr(del_msg, NL80211_ATTR_WDEV, 8, wdev_idx);
 	l_genl_msg_append_attr(del_msg, NL80211_ATTR_WIPHY, 4, &state->id);
 	cmd_id = l_genl_family_send(nl80211, del_msg,
@@ -342,7 +349,8 @@ static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 					manager_setup_cmd_done);
 
 	if (!cmd_id) {
-		l_error("Sending DEL_INTERFACE for %s failed", ifname);
+		l_error("Sending DEL_INTERFACE for %s failed",
+			ifname ?: "unnamed interface");
 		state->use_default = true;
 		return;
 	}
