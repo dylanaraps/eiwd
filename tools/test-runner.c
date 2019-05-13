@@ -1322,6 +1322,9 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 			goto done;
 		}
 
+		if (native_hw)
+			goto hostapd_done;
+
 		wiphys[i]->interface_name = l_strdup_printf("%s%d",
 							HW_INTERFACE_PREFIX,
 							wiphy_idx);
@@ -1344,6 +1347,7 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 			goto done;
 		}
 
+hostapd_done:
 		wiphys[i]->used_by_hostapd = true;
 		wiphys[i]->hostapd_ctrl_interface =
 			l_strdup_printf("%s/%s", HOSTAPD_CTRL_INTERFACE_PREFIX,
