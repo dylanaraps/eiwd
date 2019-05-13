@@ -1091,9 +1091,8 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 						struct l_queue *wiphy_list)
 {
 	char **radio_conf_list;
-	int num_radios_requested, num_radios_created;
+	int i, num_radios_requested;
 	bool status = false;
-	bool has_hw_conf;
 
 	l_settings_get_int(hw_settings, HW_CONFIG_GROUP_SETUP,
 						HW_CONFIG_SETUP_NUM_RADIOS,
@@ -1105,75 +1104,31 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 		return false;
 	}
 
-	has_hw_conf = l_settings_has_key(hw_settings, HW_CONFIG_GROUP_SETUP,
-						HW_CONFIG_SETUP_RADIO_CONFS);
-
 	radio_conf_list =
 		l_settings_get_string_list(hw_settings, HW_CONFIG_GROUP_SETUP,
 						HW_CONFIG_SETUP_RADIO_CONFS,
 									':');
-	if (has_hw_conf && !radio_conf_list) {
-		l_error("%s doesn't parse", HW_CONFIG_SETUP_RADIO_CONFS);
-		return false;
-	}
-
-	if (has_hw_conf) {
-		int i;
-
-		for (i = 0; radio_conf_list[i]; i++) {
-			size_t len = strlen(radio_conf_list[i]);
-
-			if (len >= sizeof(((struct wiphy *) 0)->name)) {
-				l_error("Radio name: '%s' is too big",
-						radio_conf_list[i]);
-				goto exit;
-			}
-
-			if (len == 0) {
-				l_error("Radio name cannot be empty");
-				goto exit;
-			}
-
-			if (!l_settings_has_group(hw_settings,
-							radio_conf_list[i])) {
-				l_error("No radio configuration group [%s]"
-						" found in config file.",
-						radio_conf_list[i]);
-				goto exit;
-			}
-		}
-
-		if (i != num_radios_requested) {
-			l_error(HW_CONFIG_SETUP_RADIO_CONFS "should contain"
-					" %d radios", num_radios_requested);
-			goto exit;
-		}
-	}
-
-	num_radios_created = 0;
-
-	while (num_radios_requested > num_radios_created) {
+	for (i = 0; i < num_radios_requested; i++) {
 		struct wiphy *wiphy;
-
 		unsigned int channels;
 		bool p2p_device;
 		bool use_chanctx;
 
 		wiphy = l_new(struct wiphy, 1);
 
-		if (!has_hw_conf) {
+		sprintf(wiphy->name, "rad%d", i);
+
+		/* radio not in radio_confs, use default parameters */
+		if (!l_strv_contains(radio_conf_list, wiphy->name)) {
 			channels = 1;
 			p2p_device = true;
 			use_chanctx = true;
-
-			sprintf(wiphy->name, "rad%d", num_radios_created);
-			goto configure;
+			goto create;
 		}
 
-		strcpy(wiphy->name, radio_conf_list[num_radios_created]);
-
 		if (!l_settings_get_uint(hw_settings, wiphy->name,
-					HW_CONFIG_PHY_CHANNELS, &channels))
+					HW_CONFIG_PHY_CHANNELS,
+					&channels))
 			channels = 1;
 
 		if (!l_settings_get_bool(hw_settings, wiphy->name,
@@ -1181,10 +1136,11 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 			p2p_device = true;
 
 		if (!l_settings_get_bool(hw_settings, wiphy->name,
-					HW_CONFIG_PHY_CHANCTX, &use_chanctx))
+					HW_CONFIG_PHY_CHANCTX,
+					&use_chanctx))
 			use_chanctx = true;
 
-configure:
+create:
 		wiphy->id = create_hwsim_radio(wiphy->name, channels,
 						p2p_device, use_chanctx);
 		wiphy->can_ap = true;
@@ -1195,7 +1151,6 @@ configure:
 		}
 
 		l_queue_push_tail(wiphy_list, wiphy);
-		num_radios_created++;
 	}
 
 	status = true;
