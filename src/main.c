@@ -497,7 +497,7 @@ int main(int argc, char *argv[])
 	eapol_init();
 	rfkill_init();
 
-	if (!netdev_init(interfaces, nointerfaces))
+	if (!netdev_init())
 		goto fail_netdev;
 
 	if (!device_init())

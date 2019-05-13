@@ -36,7 +36,6 @@
 #include <linux/filter.h>
 #include <sys/socket.h>
 #include <errno.h>
-#include <fnmatch.h>
 
 #include <ell/ell.h>
 
@@ -167,8 +166,6 @@ struct netdev_frame_watch {
 static struct l_netlink *rtnl = NULL;
 static struct l_genl_family *nl80211;
 static struct l_queue *netdev_list;
-static char **whitelist_filter;
-static char **blacklist_filter;
 static struct watchlist netdev_watches;
 
 static void do_debug(const char *str, void *user_data)
@@ -4223,38 +4220,6 @@ static void netdev_getlink_cb(int error, uint16_t type, const void *data,
 		rtnl_set_powered(ifi->ifi_index, !powered, cb, netdev, NULL);
 }
 
-static bool netdev_is_managed(const char *ifname)
-{
-	char *pattern;
-	unsigned int i;
-
-	if (!whitelist_filter)
-		goto check_blacklist;
-
-	for (i = 0; (pattern = whitelist_filter[i]); i++) {
-		if (fnmatch(pattern, ifname, 0) != 0)
-			continue;
-
-		goto check_blacklist;
-	}
-
-	l_debug("whitelist filtered ifname: %s", ifname);
-	return false;
-
-check_blacklist:
-	if (!blacklist_filter)
-		return true;
-
-	for (i = 0; (pattern = blacklist_filter[i]); i++) {
-		if (fnmatch(pattern, ifname, 0) == 0) {
-			l_debug("blacklist filtered ifname: %s", ifname);
-			return false;
-		}
-	}
-
-	return true;
-}
-
 static void netdev_frame_watch_free(struct watchlist_item *item)
 {
 	struct netdev_frame_watch *fw =
@@ -4469,11 +4434,6 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg)
 		return NULL;
 	}
 
-	if (!netdev_is_managed(ifname)) {
-		l_debug("interface %s filtered out", ifname);
-		return NULL;
-	}
-
 	if (!l_settings_get_bool(settings, "General",
 				"ControlPortOverNL80211", &pae_over_nl80211)) {
 		pae_over_nl80211 = true;
@@ -4607,7 +4567,7 @@ bool netdev_watch_remove(uint32_t id)
 	return watchlist_remove(&netdev_watches, id);
 }
 
-bool netdev_init(const char *whitelist, const char *blacklist)
+bool netdev_init(void)
 {
 	const struct l_settings *settings = iwd_get_config();
 
@@ -4646,12 +4606,6 @@ bool netdev_init(const char *whitelist, const char *blacklist)
 	__eapol_set_rekey_offload_func(netdev_set_rekey_offload);
 	__eapol_set_tx_packet_func(netdev_control_port_frame);
 
-	if (whitelist)
-		whitelist_filter = l_strsplit(whitelist, ',');
-
-	if (blacklist)
-		blacklist_filter = l_strsplit(blacklist, ',');
-
 	return true;
 }
 
@@ -4672,9 +4626,6 @@ void netdev_exit(void)
 {
 	if (!rtnl)
 		return;
-
-	l_strfreev(whitelist_filter);
-	l_strfreev(blacklist_filter);
 
 	watchlist_destroy(&netdev_watches);
 	nl80211 = NULL;
