@@ -4347,7 +4347,7 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg)
 	const void *data;
 	const char *ifname = NULL;
 	uint16_t ifname_len = 0;
-	const uint8_t *ifaddr;
+	const uint8_t *ifaddr = NULL;
 	const uint32_t *ifindex = NULL, *iftype = NULL;
 	struct netdev *netdev;
 	struct wiphy *wiphy = NULL;
@@ -4414,15 +4414,12 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg)
 		}
 	}
 
-	if (!wiphy)
-		return NULL;
-
 	if (!iftype) {
 		l_warn("Missing iftype attribute");
 		return NULL;
 	}
 
-	if (!ifindex || !ifaddr | !ifname) {
+	if (!wiphy || !ifindex || !ifaddr || !ifname) {
 		l_warn("Unable to parse interface information");
 		return NULL;
 	}
