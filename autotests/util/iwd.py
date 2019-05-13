@@ -425,7 +425,11 @@ class Device(IWDDBusAbstract):
         self._wait_for_async_op()
 
     def start_ap(self, ssid, psk):
-        self._prop_proxy.Set(IWD_DEVICE_INTERFACE, 'Mode', 'ap')
+        try:
+            self._prop_proxy.Set(IWD_DEVICE_INTERFACE, 'Mode', 'ap')
+        except Exception as e:
+            raise _convert_dbus_ex(e)
+
         self._ap_iface = dbus.Interface(self._bus.get_object(IWD_SERVICE,
                                             self.device_path),
                                             IWD_AP_INTERFACE)
