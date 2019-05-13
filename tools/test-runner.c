@@ -159,6 +159,7 @@ struct wiphy {
 	char *interface_name;
 	char *hostapd_ctrl_interface;
 	char *hostapd_config;
+	bool can_ap;
 };
 
 static bool check_verbosity(const char *app)
@@ -1186,6 +1187,7 @@ static bool configure_hw_radios(struct l_settings *hw_settings,
 configure:
 		wiphy->id = create_hwsim_radio(wiphy->name, channels,
 						p2p_device, use_chanctx);
+		wiphy->can_ap = true;
 
 		if (wiphy->id < 0) {
 			l_free(wiphy);
@@ -1312,6 +1314,9 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 					wiphy->name);
 				goto done;
 			}
+
+			if (!wiphy->can_ap)
+				continue;
 
 			wiphys[i] = wiphy;
 			break;
@@ -2315,54 +2320,76 @@ static struct wiphy *wiphy_find(int wiphy_id)
 	return l_queue_find(wiphy_list, wiphy_match, L_INT_TO_PTR(wiphy_id));
 }
 
+static void parse_supported_iftypes(uint16_t *iftypes,
+						struct l_genl_attr *attr)
+{
+	uint16_t type, len;
+	const void *data;
+
+	while (l_genl_attr_next(attr, &type, &len, &data)) {
+		/*
+		 * NL80211_IFTYPE_UNSPECIFIED can be ignored, so we start
+		 * at the first bit
+		 */
+		if (type > sizeof(uint16_t) * 8) {
+			l_warn("unsupported iftype: %u", type);
+			continue;
+		}
+
+		*iftypes |= 1 << (type - 1);
+	}
+}
+
 static void wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy *wiphy;
 	struct l_genl_attr attr;
-	uint32_t id;
+	struct l_genl_attr nested;
+	uint32_t id = UINT32_MAX;
 	uint16_t type, len;
 	const void *data;
-	const char *name;
-	uint32_t name_len;
+	const char *name = NULL;
+	uint32_t name_len = 0;
+	uint16_t iftypes = 0;
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;
 
-	/*
-	 * The wiphy attribute, name and generation are always the first
-	 * three attributes (in that order) in every NEW_WIPHY & DEL_WIPHY
-	 * message.  If not, then error out with a warning and ignore the
-	 * whole message.
-	 */
-	if (!l_genl_attr_next(&attr, &type, &len, &data))
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_WIPHY:
+			if (len != sizeof(uint32_t))
+				return;
+
+			id = *((uint32_t *) data);
+
+			if (wiphy_find(id))
+				return;
+
+			break;
+		case NL80211_ATTR_WIPHY_NAME:
+			if (len > sizeof(((struct wiphy *) 0)->name))
+				return;
+
+			name = data;
+			name_len = len;
+
+			break;
+		case NL80211_ATTR_SUPPORTED_IFTYPES:
+			if (l_genl_attr_recurse(&attr, &nested))
+				parse_supported_iftypes(&iftypes, &nested);
+
+			break;
+		}
+	}
+
+	if (id == UINT32_MAX || !name)
 		return;
-
-	if (type != NL80211_ATTR_WIPHY)
-		return;
-
-	if (len != sizeof(uint32_t))
-		return;
-
-	id = *((uint32_t *) data);
-
-	if (wiphy_find(id))
-		return;
-
-	if (!l_genl_attr_next(&attr, &type, &len, &data))
-		return;
-
-	if (type != NL80211_ATTR_WIPHY_NAME)
-		return;
-
-	if (len > sizeof(((struct wiphy *) 0)->name))
-		return;
-
-	name = data;
-	name_len = len;
 
 	wiphy = l_new(struct wiphy, 1);
 	strncpy(wiphy->name, name, name_len);
 	wiphy->id = id;
+	wiphy->can_ap = iftypes & (1 << NL80211_IFTYPE_AP);
 
 	l_queue_push_tail(wiphy_list, wiphy);
 }
