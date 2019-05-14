@@ -331,3 +331,84 @@ Wireless daemon
 
   Priority: Medium
   Complexity: C8
+
+- Support receiving OCE FILS Discovery Frames
+
+  When operating in station mode, we should support receiving of FILS
+  Discovery frames.
+
+  Priority: Medium
+  Complexity: C2
+
+- Support OCE Reduced Neighbor Reports
+
+  OCE specifies that the AP can send Reduced Neighbor Reports if the STA sets
+  the FILS Capability bit to true.  Reduced Neighbor Reports can be used to
+  replace the need to scan, particularly if the AP reports RNR Completeness
+  attribute.  RNRs can be sent in Probe Responses, Beacons and FILS Discovery
+  frames.
+
+  Priority: Medium
+  Complexity: C2
+
+- Support OCE Scanning
+
+  OCE Specifies various scanning optimizations.  When OCE scanning is enabled,
+  (e.g. when OCE APs are detected, or via some other means), enable the
+  relevant optimizations if driver support is present:
+    NL80211_SCAN_FLAG_FILS_MAX_CHANNEL_TIME
+    NL80211_SCAN_FLAG_ACCEPT_BCAST_PROBE_RESP
+    NL80211_SCAN_FLAG_OCE_PROBE_REQ_HIGH_TX_RATE
+    NL80211_SCAN_FLAG_OCE_PROBE_REQ_DEFERRAL_SUPPRESSION
+
+  Priority: Medium
+  Complexity: C2
+
+- Support OCE mutually non-overlapping channels optimization.
+
+  OCE Section 3.10 mandates that the STA should scan channels 1, 6 and 11 in
+  the 2.4Ghz band first, unless it expects to find an AP on a different
+  channel.
+
+  Priority: Low
+  Complexity: C1
+
+- Support OCE RSSI-based Association Rejection attribute
+
+  OCE APs can reject a Re(Association) request with Status Code 34 and
+  optionally include RSSI-based Association Rejection attribute.  This
+  attribute can either contain a time delay information or an RSSI delta
+  value.  If the time delay info is included, make sure that this particular
+  BSS is blacklisted only for the duration of the delay.  If RSSI delta
+  is included, make sure to handle that as well.
+
+  Priority: Low
+  Complexity: C1
+
+- Support additional metrics sent by OCE APs
+
+  OCE APs can send BSS Load and Extended BSS Load IEs.  iwd already takes the
+  BSS Load IE into account for ranking purposes.  If Extended BSS Load IE is
+  present, it should be taken into account as well.
+
+  Additionally, Estimated Service Parameter (ESP) and Reduced WAN Metrics
+  should be taken into account if available.
+
+  Priority: Low
+  Complexity: C4
+
+- Support OCE FILS Indication element
+
+  OCE APs that support FILS authentication can notify which domains they
+  support.  This information is made available using the FILS Indication
+  element as part of the Probe Response and Beacon frames.
+
+  Priority: Low
+  Complexity: C4
+
+- Support OCE Higher Layer Protocol Encapsulation
+
+  This can be used to obtain DHCPv4 address faster.
+
+  Priority: Medium
+  Complexity: C4
