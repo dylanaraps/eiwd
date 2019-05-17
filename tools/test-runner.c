@@ -2434,7 +2434,7 @@ static void iface_dump_done(void *user_data)
 
 	l_queue_destroy(wiphy_list, wiphy_free);
 
-	l_genl_family_unref(data->nl80211);
+	l_genl_family_free(data->nl80211);
 	l_genl_unref(data->genl);
 	l_free(data);
 
@@ -2454,25 +2454,29 @@ static void wiphy_dump_done(void *user_data)
 		l_error("Getting all interface information failed");
 }
 
-static void nl80211_appeared(void *user_data)
+static void nl80211_requested(const struct l_genl_family_info *info,
+							void *user_data)
 {
 	struct nl_data *data = user_data;
 	struct l_genl_msg *msg;
 
-	wiphy_list = l_queue_new();
+	if (info == NULL) {
+		l_info("No nl80211 family found");
+		goto done;
+	}
 
 	l_debug("Found nl80211 interface");
+
+	data->nl80211 = l_genl_family_new(data->genl, NL80211_GENL_NAME);
+	wiphy_list = l_queue_new();
 
 	msg = l_genl_msg_new(NL80211_CMD_GET_WIPHY);
 	if (!l_genl_family_dump(data->nl80211, msg, wiphy_dump_callback,
 						data, wiphy_dump_done))
 		l_error("Getting all wiphy devices failed");
-}
 
-static void nl80211_vanished(void *user_data)
-{
-	l_debug("Lost nl80211 interface");
-
+	return;
+done:
 	l_main_quit();
 }
 
@@ -2480,12 +2484,9 @@ static void start_hw_discovery(void)
 {
 	struct nl_data *data = l_new(struct nl_data, 1);
 
-	data->genl = l_genl_new_default();
-	data->nl80211 = l_genl_family_new(data->genl, NL80211_GENL_NAME);
-
-	l_genl_family_set_watches(data->nl80211, nl80211_appeared,
-					nl80211_vanished, data, NULL);
-
+	data->genl = l_genl_new();
+	l_genl_request_family(data->genl, NL80211_GENL_NAME,
+				nl80211_requested, data, NULL);
 	/*
 	 * This is somewhat of a mystery, but it appears that
 	 * calling lshw causes the OS to re-enumerate the USB
