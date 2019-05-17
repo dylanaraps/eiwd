@@ -103,6 +103,11 @@ const struct l_settings *iwd_get_config(void)
 	return iwd_config;
 }
 
+struct l_genl *iwd_get_genl(void)
+{
+	return genl;
+}
+
 static void usage(void)
 {
 	printf("iwd - Wireless daemon\n"
@@ -143,14 +148,11 @@ static void do_debug(const char *str, void *user_data)
 	l_info("%s%s", prefix, str);
 }
 
-static void nl80211_appeared(void *user_data)
+static void nl80211_appeared(const struct l_genl_family_info *info,
+							void *user_data)
 {
-	struct l_genl_family *nl80211 = user_data;
-
-	if (terminating)
-		return;
-
 	l_debug("Found nl80211 interface");
+	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
 
 	manager_init(nl80211, interfaces, nointerfaces);
 
@@ -166,17 +168,6 @@ static void nl80211_appeared(void *user_data)
 	adhoc_init(nl80211);
 }
 
-static void nl80211_vanished(void *user_data)
-{
-	l_debug("Lost nl80211 interface");
-
-	manager_exit();
-	ap_exit();
-	adhoc_exit();
-	scan_exit();
-	wiphy_exit();
-}
-
 static void request_name_callback(struct l_dbus *dbus, bool success,
 					bool queued, void *user_data)
 {
@@ -188,23 +179,9 @@ static void request_name_callback(struct l_dbus *dbus, bool success,
 	if (!l_dbus_object_manager_enable(dbus))
 		l_warn("Unable to register the ObjectManager");
 
-	genl = l_genl_new_default();
-	if (!genl) {
-		l_error("Failed to open generic netlink socket");
-		goto fail_exit;
-	}
-
-	if (getenv("IWD_GENL_DEBUG"))
-		l_genl_set_debug(genl, do_debug, "[GENL] ", NULL);
-
-	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
-	if (!nl80211) {
-		l_error("Failed to open nl80211 interface");
-		goto fail_exit;
-	}
-
-	l_genl_family_set_watches(nl80211, nl80211_appeared, nl80211_vanished,
-								nl80211, NULL);
+	/* TODO: Always request nl80211 for now, ignoring auto-loading */
+	l_genl_request_family(genl, NL80211_GENL_NAME, nl80211_appeared,
+				NULL, NULL);
 	return;
 
 fail_exit:
@@ -480,6 +457,15 @@ int main(int argc, char *argv[])
 		goto fail_dbus;
 	}
 
+	genl = l_genl_new();
+	if (!genl) {
+		l_error("Failed to open generic netlink socket");
+		goto fail_genl;
+	}
+
+	if (getenv("IWD_GENL_DEBUG"))
+		l_genl_set_debug(genl, do_debug, "[GENL] ", NULL);
+
 	dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
 	if (!dbus) {
 		l_error("Failed to initialize D-Bus");
@@ -530,11 +516,20 @@ fail_netdev:
 	eapol_exit();
 	eap_exit();
 
-	l_genl_family_unref(nl80211);
-	l_genl_unref(genl);
+	if (nl80211) {
+		manager_exit();
+		ap_exit();
+		adhoc_exit();
+		scan_exit();
+		wiphy_exit();
+		l_genl_family_free(nl80211);
+	}
+
 	dbus_exit();
 	l_dbus_destroy(dbus);
 fail_dbus:
+	l_genl_unref(genl);
+fail_genl:
 	l_settings_free(iwd_config);
 
 	l_timeout_remove(timeout);

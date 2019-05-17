@@ -66,6 +66,8 @@
 #define ENOTSUPP 524
 #endif
 
+static uint32_t unicast_watch;
+
 struct netdev_handshake_state {
 	struct handshake_state super;
 	uint32_t pairwise_new_key_cmd_id;
@@ -4564,6 +4566,7 @@ bool netdev_watch_remove(uint32_t id)
 
 bool netdev_init(void)
 {
+	struct l_genl *genl = iwd_get_genl();
 	const struct l_settings *settings = iwd_get_config();
 
 	if (rtnl)
@@ -4601,6 +4604,12 @@ bool netdev_init(void)
 	__eapol_set_rekey_offload_func(netdev_set_rekey_offload);
 	__eapol_set_tx_packet_func(netdev_control_port_frame);
 
+	unicast_watch = l_genl_add_unicast_watch(genl, NL80211_GENL_NAME,
+						netdev_unicast_notify,
+						NULL, NULL);
+	if (!unicast_watch)
+		l_error("Registering for unicast notification failed");
+
 	return true;
 }
 
@@ -4611,16 +4620,16 @@ void netdev_set_nl80211(struct l_genl_family *in)
 	if (!l_genl_family_register(nl80211, "mlme", netdev_mlme_notify,
 								NULL, NULL))
 		l_error("Registering for MLME notification failed");
-
-	if (!l_genl_family_set_unicast_handler(nl80211, netdev_unicast_notify,
-								NULL, NULL))
-		l_error("Registering for unicast notification failed");
 }
 
 void netdev_exit(void)
 {
+	struct l_genl *genl = iwd_get_genl();
+
 	if (!rtnl)
 		return;
+
+	l_genl_remove_unicast_watch(genl, unicast_watch);
 
 	watchlist_destroy(&netdev_watches);
 	nl80211 = NULL;

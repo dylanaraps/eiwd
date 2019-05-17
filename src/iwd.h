@@ -22,9 +22,11 @@
 
 #define uninitialized_var(x) x = x
 
+struct l_genl;
 struct l_genl_family;
 
 const struct l_settings *iwd_get_config(void);
+struct l_genl *iwd_get_genl(void);
 
 bool netdev_init(void);
 void netdev_exit(void);
