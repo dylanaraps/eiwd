@@ -2329,25 +2329,7 @@ error:
 	l_main_quit();
 }
 
-static void nl80211_ready(void *user_data)
-{
-	struct l_genl_msg *msg;
-
-	msg = l_genl_msg_new(HWSIM_CMD_GET_RADIO);
-	if (!l_genl_family_dump(hwsim, msg, get_radio_callback,
-				NULL, get_radio_done_initial)) {
-		l_error("Getting hwsim radio information failed");
-		goto error;
-	}
-
-	return;
-
-error:
-	exit_status = EXIT_FAILURE;
-	l_main_quit();
-}
-
-static void hwsim_ready(void *user_data)
+static void hwsim_ready(void)
 {
 	struct l_genl_msg *msg;
 	size_t msg_size;
@@ -2431,11 +2413,15 @@ static void hwsim_ready(void *user_data)
 			goto error;
 		}
 
-		l_genl_family_set_watches(nl80211, nl80211_ready, NULL,
-						NULL, NULL);
+		msg = l_genl_msg_new(HWSIM_CMD_GET_RADIO);
+		if (!l_genl_family_dump(hwsim, msg, get_radio_callback,
+					NULL, get_radio_done_initial)) {
+			l_error("Getting hwsim radio information failed");
+			goto error;
+		}
 
-		if (!l_genl_family_set_unicast_handler(hwsim, unicast_handler,
-						NULL, NULL)) {
+		if (!l_genl_add_unicast_watch(genl, "MAC80211_HWSIM",
+						unicast_handler, NULL, NULL)) {
 			l_error("Failed to set unicast handler");
 			goto error;
 		}
@@ -2506,8 +2492,35 @@ static void hwsim_disable_ciphers(char *disable)
 	}
 }
 
-static void hwsim_disappeared(void *user_data)
+static void family_discovered(const struct l_genl_family_info *info,
+							void *user_data)
 {
+	if (!strcmp(l_genl_family_info_get_name(info), "MAC80211_HWSIM"))
+		hwsim = l_genl_family_new(genl, "MAC80211_HWSIM");
+	else if (!strcmp(l_genl_family_info_get_name(info), NL80211_GENL_NAME))
+		nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
+}
+
+static void discovery_done(void *user_data)
+{
+	if (!hwsim) {
+		fprintf(stderr, "MAC80211_HWSIM doesn't exist.\n"
+			"Load it manually using modprobe mac80211_hwsim\n");
+		goto quit;
+	}
+
+	if (!nl80211) {
+		fprintf(stderr, "nl80211 doesn't exist.\n"
+			"Load it manually using modprobe cfg80211\n");
+		goto quit;
+	}
+
+	hwsim_ready();
+
+	return;
+
+quit:
+	exit_status = EXIT_FAILURE;
 	l_main_quit();
 }
 
@@ -2632,43 +2645,30 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 
 	l_log_set_stderr();
+	exit_status = EXIT_FAILURE;
 
 	printf("Wireless simulator ver %s\n", VERSION);
 
-	genl = l_genl_new_default();
+	genl = l_genl_new();
 	if (!genl) {
 		fprintf(stderr, "Failed to initialize generic netlink\n");
-		exit_status = EXIT_FAILURE;
 		goto done;
 	}
 
 	if (getenv("HWSIM_DEBUG"))
 		l_genl_set_debug(genl, do_debug, "[GENL] ", NULL);
 
-	hwsim = l_genl_family_new(genl, "MAC80211_HWSIM");
-	if (!hwsim) {
-		fprintf(stderr, "Failed to create generic netlink family\n");
+	if (!l_genl_discover_families(genl, family_discovered, NULL,
+						discovery_done)) {
+		fprintf(stderr, "Unable to start family discovery\n");
 		l_genl_unref(genl);
-		exit_status = EXIT_FAILURE;
 		goto done;
 	}
-
-	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
-	if (!nl80211) {
-		fprintf(stderr, "Failed to create nl80211 genl family\n");
-		l_genl_family_unref(hwsim);
-		l_genl_unref(genl);
-		exit_status = EXIT_FAILURE;
-		goto done;
-	}
-
-	l_genl_family_set_watches(hwsim, hwsim_ready, hwsim_disappeared,
-					NULL, NULL);
 
 	exit_status = l_main_run_with_signal(signal_handler, NULL);
 
-	l_genl_family_unref(hwsim);
-	l_genl_family_unref(nl80211);
+	l_genl_family_free(hwsim);
+	l_genl_family_free(nl80211);
 	l_genl_unref(genl);
 
 	if (pending_create_msg)
