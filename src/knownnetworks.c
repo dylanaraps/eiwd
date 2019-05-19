@@ -605,7 +605,7 @@ static void known_network_frequencies_sync(void)
 	l_settings_free(known_freqs);
 }
 
-bool known_networks_init(void)
+static int known_networks_init(void)
 {
 	struct l_dbus *dbus = dbus_get_bus();
 	DIR *dir;
@@ -616,7 +616,7 @@ bool known_networks_init(void)
 						NULL, false)) {
 		l_info("Unable to register %s interface",
 				IWD_KNOWN_NETWORK_INTERFACE);
-		return false;
+		return -EPERM;
 	}
 
 	dir = opendir(DAEMON_STORAGEDIR);
@@ -624,7 +624,7 @@ bool known_networks_init(void)
 		l_info("Unable to open %s: %s", DAEMON_STORAGEDIR,
 							strerror(errno));
 		l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE);
-		return false;
+		return -ENOENT;
 	}
 
 	known_networks = l_queue_new();
@@ -661,10 +661,10 @@ bool known_networks_init(void)
 						known_networks_watch_cb, NULL,
 						known_networks_watch_destroy);
 
-	return true;
+	return 0;
 }
 
-void known_networks_exit(void)
+static void known_networks_exit(void)
 {
 	struct l_dbus *dbus = dbus_get_bus();
 
@@ -677,3 +677,5 @@ void known_networks_exit(void)
 
 	l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE);
 }
+
+IWD_MODULE(known_networks, known_networks_init, known_networks_exit)

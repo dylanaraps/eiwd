@@ -39,9 +39,6 @@ void network_exit();
 bool wsc_init(void);
 bool wsc_exit();
 
-bool known_networks_init(void);
-void known_networks_exit(void);
-
 bool device_init(void);
 void device_exit(void);
 
