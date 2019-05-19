@@ -51,6 +51,3 @@ struct erp_cache_entry *erp_cache_get(const char *ssid);
 void erp_cache_put(struct erp_cache_entry *cache);
 
 const char *erp_cache_entry_get_identity(struct erp_cache_entry *cache);
-
-void erp_init(void);
-void erp_exit(void);

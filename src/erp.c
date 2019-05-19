@@ -31,6 +31,7 @@
 #include <ell/ell.h>
 
 #include "src/missing.h"
+#include "src/iwd.h"
 #include "src/eap-private.h"
 #include "src/erp.h"
 #include "src/crypto.h"
@@ -525,12 +526,16 @@ const void *erp_get_rmsk(struct erp_state *erp, size_t *rmsk_len)
 	return erp->rmsk;
 }
 
-void erp_init(void)
+static int erp_init(void)
 {
 	key_cache = l_queue_new();
+
+	return 0;
 }
 
-void erp_exit(void)
+static void erp_exit(void)
 {
 	l_queue_destroy(key_cache, erp_cache_entry_destroy);
 }
+
+IWD_MODULE(erp, erp_init, erp_exit)

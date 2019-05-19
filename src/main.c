@@ -46,7 +46,6 @@
 #include "src/adhoc.h"
 #include "src/blacklist.h"
 #include "src/storage.h"
-#include "src/erp.h"
 
 #include "src/backtrace.h"
 
@@ -533,7 +532,6 @@ int main(int argc, char *argv[])
 	known_networks_init();
 	sim_auth_init();
 	blacklist_init();
-	erp_init();
 
 	if (iwd_modules_init() < 0)
 		goto fail_modules;
@@ -545,7 +543,6 @@ int main(int argc, char *argv[])
 
 fail_modules:
 	iwd_modules_exit();
-	erp_exit();
 	blacklist_exit();
 	sim_auth_exit();
 	known_networks_exit();
