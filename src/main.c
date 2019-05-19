@@ -168,6 +168,44 @@ static void nl80211_appeared(const struct l_genl_family_info *info,
 	adhoc_init(nl80211);
 }
 
+extern struct iwd_module_desc __start___iwd_module[];
+extern struct iwd_module_desc __stop___iwd_module[];
+
+static int iwd_modules_init()
+{
+	struct iwd_module_desc *desc;
+	int r;
+
+	l_debug("");
+
+	for (desc = __start___iwd_module; desc < __stop___iwd_module; desc++) {
+		r = desc->init();
+		if (r < 0)
+			return r;
+
+		l_debug("Initialized module: %s", desc->name);
+		desc->active = true;
+	}
+
+	return 0;
+}
+
+static void iwd_modules_exit()
+{
+	struct iwd_module_desc *desc;
+
+	l_debug("");
+
+	for (desc = __stop___iwd_module - 1;
+			desc >= __start___iwd_module; desc--) {
+		if (!desc->active)
+			continue;
+		l_debug("Removing module: %s", desc->name);
+		desc->exit();
+		desc->active = false;
+	}
+}
+
 static void request_name_callback(struct l_dbus *dbus, bool success,
 					bool queued, void *user_data)
 {
@@ -494,15 +532,21 @@ int main(int argc, char *argv[])
 	network_init();
 	known_networks_init();
 	sim_auth_init();
-	plugin_init(plugins, noplugins);
 	blacklist_init();
 	erp_init();
 
+	if (iwd_modules_init() < 0)
+		goto fail_modules;
+
+	plugin_init(plugins, noplugins);
 	exit_status = l_main_run_with_signal(signal_handler, NULL);
 
+	plugin_exit();
+
+fail_modules:
+	iwd_modules_exit();
 	erp_exit();
 	blacklist_exit();
-	plugin_exit();
 	sim_auth_exit();
 	known_networks_exit();
 	network_exit();

@@ -54,3 +54,16 @@ void station_exit(void);
 bool manager_init(struct l_genl_family *in,
 			const char *if_whitelist, const char *if_blacklist);
 void manager_exit(void);
+
+struct iwd_module_desc {
+	const char *name;
+	int (*init)(void);
+	void (*exit)(void);
+	bool active;
+} __attribute__((aligned(8)));
+
+#define IWD_MODULE(name, init, exit)					\
+	static struct iwd_module_desc __iwd_module_ ## name		\
+		__attribute__((used, section("__iwd_module"), aligned(8))) = {\
+			#name, init, exit				\
+		};
