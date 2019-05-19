@@ -152,7 +152,7 @@ void blacklist_remove_bss(const uint8_t *addr)
 	l_free(entry);
 }
 
-void blacklist_init(void)
+static int blacklist_init(void)
 {
 	const struct l_settings *config = iwd_get_config();
 
@@ -168,16 +168,21 @@ void blacklist_init(void)
 					&blacklist_multiplier))
 		blacklist_multiplier = BLACKLIST_DEFAULT_MULTIPLIER;
 
-	if (!l_settings_get_uint64(config, "Blacklist", "bss_blacklist_max_time",
+	if (!l_settings_get_uint64(config, "Blacklist",
+					"bss_blacklist_max_time",
 					&blacklist_max_timeout))
 		blacklist_max_timeout = BLACKLIST_DEFAULT_MAX_TIMEOUT;
 
 	blacklist_max_timeout *= 1000000;
 
 	blacklist = l_queue_new();
+
+	return 0;
 }
 
-void blacklist_exit(void)
+static void blacklist_exit(void)
 {
 	l_queue_destroy(blacklist, l_free);
 }
+
+IWD_MODULE(blacklist, blacklist_init, blacklist_exit)

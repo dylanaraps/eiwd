@@ -23,6 +23,3 @@
 void blacklist_add_bss(const uint8_t *addr);
 bool blacklist_contains_bss(const uint8_t *addr);
 void blacklist_remove_bss(const uint8_t *addr);
-
-void blacklist_init(void);
-void blacklist_exit(void);
