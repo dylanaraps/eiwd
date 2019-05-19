@@ -42,7 +42,6 @@
 #include "src/rfkill.h"
 #include "src/ap.h"
 #include "src/plugin.h"
-#include "src/simauth.h"
 #include "src/adhoc.h"
 #include "src/storage.h"
 
@@ -529,7 +528,7 @@ int main(int argc, char *argv[])
 	wsc_init();
 	network_init();
 	known_networks_init();
-	sim_auth_init();
+
 	if (iwd_modules_init() < 0)
 		goto fail_modules;
 
@@ -540,7 +539,6 @@ int main(int argc, char *argv[])
 
 fail_modules:
 	iwd_modules_exit();
-	sim_auth_exit();
 	known_networks_exit();
 	network_exit();
 	wsc_exit();

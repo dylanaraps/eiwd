@@ -179,15 +179,18 @@ void sim_auth_cancel_request(struct iwd_sim_auth *auth, int id)
 		auth->driver->cancel_request(auth, id);
 }
 
-void sim_auth_init(void)
+static int sim_auth_init(void)
 {
 	auth_providers = l_queue_new();
+	return 0;
 }
 
-void sim_auth_exit(void)
+static void sim_auth_exit(void)
 {
 	if (l_queue_length(auth_providers) > 0)
 		l_warn("Auth provider queue was not empty on exit!");
 
 	l_queue_destroy(auth_providers, destroy_provider);
 }
+
+IWD_MODULE(simauth, sim_auth_init, sim_auth_exit)
