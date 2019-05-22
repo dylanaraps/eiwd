@@ -55,7 +55,8 @@ static bool ft_calculate_fte_mic(struct handshake_state *hs, uint8_t seq_num,
 	int iov_elems = 0;
 	struct l_checksum *checksum;
 	const uint8_t *kck = handshake_state_get_kck(hs);
-	uint8_t zero_mic[16] = {};
+	size_t kck_len = handshake_state_get_kck_len(hs);
+	uint8_t zero_mic[24] = {};
 
 	iov[iov_elems].iov_base = hs->spa;
 	iov[iov_elems++].iov_len = 6;
@@ -79,10 +80,10 @@ static bool ft_calculate_fte_mic(struct handshake_state *hs, uint8_t seq_num,
 		iov[iov_elems++].iov_len = 4;
 
 		iov[iov_elems].iov_base = zero_mic;
-		iov[iov_elems++].iov_len = 16;
+		iov[iov_elems++].iov_len = kck_len;
 
-		iov[iov_elems].iov_base = (void *) (fte + 20);
-		iov[iov_elems++].iov_len = fte[1] + 2 - 20;
+		iov[iov_elems].iov_base = (void *) (fte + 4 + kck_len);
+		iov[iov_elems++].iov_len = fte[1] + 2 - 4 - kck_len;
 	}
 
 	if (ric) {
@@ -90,12 +91,16 @@ static bool ft_calculate_fte_mic(struct handshake_state *hs, uint8_t seq_num,
 		iov[iov_elems++].iov_len = ric[1] + 2;
 	}
 
-	checksum = l_checksum_new_cmac_aes(kck, 16);
+	if (kck_len == 16)
+		checksum = l_checksum_new_cmac_aes(kck, kck_len);
+	else
+		checksum = l_checksum_new_hmac(L_CHECKSUM_SHA384, kck, kck_len);
+
 	if (!checksum)
 		return false;
 
 	l_checksum_updatev(checksum, iov, iov_elems);
-	l_checksum_get_digest(checksum, out_mic, 16);
+	l_checksum_get_digest(checksum, out_mic, kck_len);
 	l_checksum_free(checksum);
 
 	return true;
@@ -430,7 +435,7 @@ static int ft_process_ies(struct ft_sm *ft, const uint8_t *ies, size_t ies_len)
 	 */
 	if (is_rsn) {
 		struct ie_ft_info ft_info;
-		uint8_t zeros[16] = {};
+		uint8_t zeros[24] = {};
 
 		if (!fte)
 			goto ft_error;
@@ -440,7 +445,7 @@ static int ft_process_ies(struct ft_sm *ft, const uint8_t *ies, size_t ies_len)
 			goto ft_error;
 
 		if (ft_info.mic_element_count != 0 ||
-				memcmp(ft_info.mic, zeros, 16))
+				memcmp(ft_info.mic, zeros, kck_len))
 			goto ft_error;
 
 		if (hs->r0khid_len != ft_info.r0khid_len ||
@@ -589,7 +594,7 @@ static int ft_rx_associate(struct auth_proto *ap, const uint8_t *frame,
 
 	if (fte) {
 		struct ie_ft_info ft_info;
-		uint8_t mic[16];
+		uint8_t mic[24];
 
 		if (ie_parse_fast_bss_transition_from_data(fte, fte[1] + 2,
 						kck_len, &ft_info) < 0)
@@ -606,7 +611,7 @@ static int ft_rx_associate(struct auth_proto *ap, const uint8_t *frame,
 			return -EBADMSG;
 
 		if (ft_info.mic_element_count != 3 ||
-				memcmp(ft_info.mic, mic, 16))
+				memcmp(ft_info.mic, mic, kck_len))
 			return -EBADMSG;
 
 		if (hs->r0khid_len != ft_info.r0khid_len ||
