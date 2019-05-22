@@ -36,9 +36,6 @@ void netdev_shutdown(void);
 bool device_init(void);
 void device_exit(void);
 
-bool station_init(void);
-void station_exit(void);
-
 bool manager_init(struct l_genl_family *in,
 			const char *if_whitelist, const char *if_blacklist);
 void manager_exit(void);

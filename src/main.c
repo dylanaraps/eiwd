@@ -524,8 +524,6 @@ int main(int argc, char *argv[])
 	if (!device_init())
 		goto fail_device;
 
-	station_init();
-
 	if (iwd_modules_init() < 0)
 		goto fail_modules;
 
@@ -536,7 +534,6 @@ int main(int argc, char *argv[])
 
 fail_modules:
 	iwd_modules_exit();
-	station_exit();
 	device_exit();
 fail_device:
 	netdev_exit();

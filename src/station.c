@@ -2792,7 +2792,7 @@ static void station_netdev_watch(struct netdev *netdev,
 	}
 }
 
-bool station_init(void)
+static int station_init(void)
 {
 	station_list = l_queue_new();
 	netdev_watch = netdev_watch_add(station_netdev_watch, NULL, NULL);
@@ -2802,10 +2802,12 @@ bool station_init(void)
 	return true;
 }
 
-void station_exit(void)
+static void station_exit(void)
 {
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_STATION_INTERFACE);
 	netdev_watch_remove(netdev_watch);
 	l_queue_destroy(station_list, NULL);
 	station_list = NULL;
 }
+
+IWD_MODULE(station, station_init, station_exit)
