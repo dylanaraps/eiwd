@@ -59,6 +59,9 @@ struct fils_sm {
 	uint8_t pmk[48];
 	size_t pmk_len;
 	uint8_t pmkid[16];
+
+	uint8_t fils_ft[48];
+	size_t fils_ft_len;
 };
 
 static void fils_derive_pmkid(struct fils_sm *fils, const uint8_t *erp_data,
@@ -67,8 +70,11 @@ static void fils_derive_pmkid(struct fils_sm *fils, const uint8_t *erp_data,
 	struct l_checksum *sha;
 	enum l_checksum_type type;
 
-	type = (fils->hs->akm_suite == IE_RSN_AKM_SUITE_FILS_SHA256) ?
-				L_CHECKSUM_SHA256 : L_CHECKSUM_SHA384;
+	if (fils->hs->akm_suite & (IE_RSN_AKM_SUITE_FILS_SHA256 |
+			IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256))
+		type = L_CHECKSUM_SHA256;
+	else
+		type = L_CHECKSUM_SHA384;
 
 	sha = l_checksum_new(type);
 	l_checksum_update(sha, erp_data, len);
@@ -108,6 +114,12 @@ static void fils_erp_tx_func(const uint8_t *eap_data, size_t len,
 	ie_tlv_builder_next(&builder, IE_TYPE_FILS_WRAPPED_DATA);
 	ie_tlv_builder_set_data(&builder, eap_data, len);
 
+	if (fils->hs->mde) {
+		ie_tlv_builder_next(&builder, IE_TYPE_MOBILITY_DOMAIN);
+		ie_tlv_builder_set_data(&builder, fils->hs->mde + 2,
+						fils->hs->mde[1]);
+	}
+
 	ie_tlv_builder_finalize(&builder, &tlv_len);
 
 	fils->auth(data, ptr - data + tlv_len, fils->user_data);
@@ -119,21 +131,29 @@ static int fils_derive_key_data(struct fils_sm *fils)
 	size_t rmsk_len;
 	struct ie_tlv_builder builder;
 	uint8_t key[FILS_NONCE_LEN * 2];
-	uint8_t key_data[64 + 48 + 16]; /* largest ICK, KEK, TK */
+	uint8_t key_data[64 + 48 + 16 + 48]; /* largest ICK, KEK, TK, FILS-FT */
 	uint8_t key_auth[48];
 	uint8_t data[44];
 	uint8_t *ptr = data;
 	size_t hash_len;
-	struct iovec iov[2];
+	struct iovec iov[4];
+	size_t iov_elems = 0;
+	size_t fils_ft_len = 0;
 	bool sha384;
 	unsigned int ie_len;
+	uint8_t *rsne = NULL;
 
 	rmsk = erp_get_rmsk(fils->erp, &rmsk_len);
 
+	if (fils->hs->akm_suite == IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256)
+		fils_ft_len = 32;
+	else if (fils->hs->akm_suite == IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384)
+		fils_ft_len = 48;
 	/*
 	 * IEEE 802.11ai - Section 12.12.2.5.3
 	 */
-	if (fils->hs->akm_suite == IE_RSN_AKM_SUITE_FILS_SHA256) {
+	if (fils->hs->akm_suite & (IE_RSN_AKM_SUITE_FILS_SHA256 |
+				IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256)) {
 		sha384 = false;
 		hash_len = 32;
 	} else {
@@ -176,12 +196,12 @@ static int fils_derive_key_data(struct fils_sm *fils)
 		kdf_sha384(fils->pmk, hash_len, "FILS PTK Derivation",
 				strlen("FILS PTK Derivation"), data,
 				sizeof(data), key_data,
-				hash_len + fils->kek_len + 16);
+				hash_len + fils->kek_len + 16 + fils_ft_len);
 	else
 		kdf_sha256(fils->pmk, hash_len, "FILS PTK Derivation",
 				strlen("FILS PTK Derivation"), data,
 				sizeof(data), key_data,
-				hash_len + fils->kek_len + 16);
+				hash_len + fils->kek_len + 16 + fils_ft_len);
 
 	ptr = data;
 
@@ -203,6 +223,14 @@ static int fils_derive_key_data(struct fils_sm *fils)
 	memcpy(fils->ick, key_data, hash_len);
 	fils->ick_len = hash_len;
 
+	if (fils_ft_len) {
+		memcpy(fils->fils_ft, key_data + hash_len + fils->kek_len + 16,
+				fils_ft_len);
+		fils->fils_ft_len = fils_ft_len;
+	}
+
+	handshake_state_set_fils_ft(fils->hs, fils->fils_ft, fils->fils_ft_len);
+
 	if (sha384)
 		hmac_sha384(fils->ick, hash_len, data, ptr - data,
 				key_auth, hash_len);
@@ -218,17 +246,56 @@ static int fils_derive_key_data(struct fils_sm *fils)
 	ie_tlv_builder_next(&builder, IE_TYPE_FILS_SESSION);
 	ie_tlv_builder_set_data(&builder, fils->session, sizeof(fils->session));
 
-	iov[0].iov_base = ie_tlv_builder_finalize(&builder, &ie_len);
-	iov[0].iov_len = ie_len;
-	iov[1].iov_base = fils->hs->supplicant_ie;
-	iov[1].iov_len = fils->hs->supplicant_ie[1] + 2;
+	iov[iov_elems].iov_base = ie_tlv_builder_finalize(&builder, &ie_len);
+	iov[iov_elems].iov_len = ie_len;
+	iov_elems++;
+	iov[iov_elems].iov_base = fils->hs->supplicant_ie;
+	iov[iov_elems].iov_len = fils->hs->supplicant_ie[1] + 2;
+	iov_elems++;
+
+	if (fils->hs->mde) {
+		struct ie_rsn_info rsn_info;
+
+		/*
+		 * IEEE 8021.11ai Section 13.2.4:
+		 *
+		 * If a key hierarchy already exists for this STA belonging to
+		 * the same mobility domain (i.e., having the same MDID), the
+		 * R0KH shall delete the existing PMK-R0 security association
+		 * and PMK-R1 security associations.
+		 *
+		 * All this means is we need to re-derive the new FT keys. This
+		 * will rederive the PTK too, but it will be overwritten with
+		 * the FILS PTK after associate
+		 */
+		handshake_state_derive_ptk(fils->hs);
+
+		iov[iov_elems].iov_base = fils->hs->mde;
+		iov[iov_elems].iov_len = fils->hs->mde[1] + 2;
+		iov_elems++;
+
+		if (ie_parse_rsne_from_data(fils->hs->supplicant_ie,
+						fils->hs->supplicant_ie[1] + 2,
+						&rsn_info) < 0)
+			return -EBADMSG;
+
+		rsn_info.num_pmkids = 1;
+		rsn_info.pmkids = fils->hs->pmk_r1_name;
+
+		rsne = alloca(256);
+		ie_build_rsne(&rsn_info, rsne);
+
+		iov[iov_elems].iov_base = rsne;
+		iov[iov_elems].iov_len = rsne[1] + 2;
+		iov_elems += 1;
+	}
 
 	memcpy(data, fils->nonce, sizeof(fils->nonce));
 	memcpy(data + sizeof(fils->nonce), fils->anonce, sizeof(fils->anonce));
 
 	memcpy(fils->kek_and_tk, key_data + hash_len, fils->kek_len + 16);
 
-	fils->assoc(iov, 2, fils->kek_and_tk, fils->kek_len, data,
+	fils->assoc(iov, iov_elems, fils->kek_and_tk, fils->kek_len, data,
 			FILS_NONCE_LEN * 2, fils->user_data);
 
 	return 0;
@@ -266,6 +333,9 @@ static int fils_rx_authenticate(struct auth_proto *driver, const uint8_t *frame,
 	const uint8_t *session = NULL;
 	const uint8_t *wrapped = NULL;
 	size_t wrapped_len = 0;
+	const uint8_t *rsne = NULL;
+	const uint8_t *mde = NULL;
+	const uint8_t *fte = NULL;
 
 	if (!hdr) {
 		l_debug("Auth frame header did not validate");
@@ -310,6 +380,27 @@ static int fils_rx_authenticate(struct auth_proto *driver, const uint8_t *frame,
 			wrapped = iter.data;
 			wrapped_len = iter.len;
 			break;
+		case IE_TYPE_RSN:
+			if (rsne)
+				goto invalid_ies;
+
+			rsne = ie_tlv_iter_get_data(&iter) - 2;
+			break;
+
+		case IE_TYPE_MOBILITY_DOMAIN:
+			if (mde)
+				goto invalid_ies;
+
+			mde = ie_tlv_iter_get_data(&iter) - 2;
+			break;
+
+		case IE_TYPE_FAST_BSS_TRANSITION:
+			if (fte)
+				goto invalid_ies;
+
+			fte = ie_tlv_iter_get_data(&iter) - 2;
+			break;
+
 		default:
 			continue;
 		}
@@ -318,6 +409,24 @@ static int fils_rx_authenticate(struct auth_proto *driver, const uint8_t *frame,
 	if (!anonce || !session || !wrapped) {
 		l_debug("Auth did not include required IEs");
 		goto invalid_ies;
+	}
+
+	if (mde)
+		handshake_state_set_mde(fils->hs, mde);
+
+	if (fte) {
+		struct handshake_state *hs = fils->hs;
+		uint32_t kck_len = handshake_state_get_kck_len(hs);
+		struct ie_ft_info ft_info;
+
+		if (ie_parse_fast_bss_transition_from_data(fte, fte[1] + 2,
+					kck_len, &ft_info) < 0)
+			goto invalid_ies;
+
+		handshake_state_set_fte(fils->hs, fte);
+		handshake_state_set_kh_ids(fils->hs, ft_info.r0khid,
+							ft_info.r0khid_len,
+							ft_info.r1khid);
 	}
 
 	memcpy(fils->anonce, anonce, FILS_NONCE_LEN);
@@ -347,7 +456,8 @@ static int fils_rx_associate(struct auth_proto *driver, const uint8_t *frame,
 	uint8_t igtk_key_index;
 	const uint8_t *ap_key_auth = NULL;
 	uint8_t expected_key_auth[48];
-	bool sha384 = (fils->hs->akm_suite == IE_RSN_AKM_SUITE_FILS_SHA384);
+	bool sha384 = (fils->hs->akm_suite & (IE_RSN_AKM_SUITE_FILS_SHA384 |
+			IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384));
 	uint8_t data[44];
 	uint8_t *ptr = data;
 
