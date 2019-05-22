@@ -521,21 +521,15 @@ int main(int argc, char *argv[])
 	if (!netdev_init())
 		goto fail_netdev;
 
-	if (!device_init())
-		goto fail_device;
-
 	if (iwd_modules_init() < 0)
 		goto fail_modules;
 
 	plugin_init(plugins, noplugins);
 	exit_status = l_main_run_with_signal(signal_handler, NULL);
-
 	plugin_exit();
 
 fail_modules:
 	iwd_modules_exit();
-	device_exit();
-fail_device:
 	netdev_exit();
 fail_netdev:
 	rfkill_exit();
