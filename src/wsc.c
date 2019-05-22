@@ -1100,21 +1100,21 @@ static void wsc_netdev_watch(struct netdev *netdev,
 	}
 }
 
-bool wsc_init(void)
+static int wsc_init(void)
 {
 	l_debug("");
 	netdev_watch = netdev_watch_add(wsc_netdev_watch, NULL, NULL);
 	l_dbus_register_interface(dbus_get_bus(), IWD_WSC_INTERFACE,
 					setup_wsc_interface,
 					wsc_free, false);
-	return true;
+	return 0;
 }
 
-bool wsc_exit()
+static void wsc_exit(void)
 {
 	l_debug("");
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_WSC_INTERFACE);
 	netdev_watch_remove(netdev_watch);
-
-	return true;
 }
+
+IWD_MODULE(wsc, wsc_init, wsc_exit)
