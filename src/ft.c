@@ -237,6 +237,7 @@ static int ft_tx_reassociate(struct ft_sm *ft)
 	struct iovec iov[3];
 	int iov_elems = 0;
 	struct handshake_state *hs = ft->hs;
+	uint32_t kck_len = handshake_state_get_kck_len(hs);
 	bool is_rsn = hs->supplicant_ie != NULL;
 	uint8_t *rsne = NULL;
 
@@ -302,13 +303,13 @@ static int ft_tx_reassociate(struct ft_sm *ft)
 		memcpy(ft_info.snonce, hs->snonce, 32);
 
 		fte = alloca(256);
-		ie_build_fast_bss_transition(&ft_info, fte);
+		ie_build_fast_bss_transition(&ft_info, kck_len, fte);
 
 		if (!ft_calculate_fte_mic(hs, 5, rsne, fte, NULL, ft_info.mic))
 			goto error;
 
 		/* Rebuild the FT IE now with the MIC included */
-		ie_build_fast_bss_transition(&ft_info, fte);
+		ie_build_fast_bss_transition(&ft_info, kck_len, fte);
 
 		iov[iov_elems].iov_base = fte;
 		iov[iov_elems].iov_len = fte[1] + 2;
@@ -330,6 +331,7 @@ static int ft_process_ies(struct ft_sm *ft, const uint8_t *ies, size_t ies_len)
 	const uint8_t *mde = NULL;
 	const uint8_t *fte = NULL;
 	struct handshake_state *hs = ft->hs;
+	uint32_t kck_len = handshake_state_get_kck_len(hs);
 	bool is_rsn;
 
 	/* Check 802.11r IEs */
@@ -434,7 +436,7 @@ static int ft_process_ies(struct ft_sm *ft, const uint8_t *ies, size_t ies_len)
 			goto ft_error;
 
 		if (ie_parse_fast_bss_transition_from_data(fte, fte[1] + 2,
-								&ft_info) < 0)
+						kck_len, &ft_info) < 0)
 			goto ft_error;
 
 		if (ft_info.mic_element_count != 0 ||
@@ -524,6 +526,7 @@ static int ft_rx_associate(struct auth_proto *ap, const uint8_t *frame,
 {
 	struct ft_sm *ft = l_container_of(ap, struct ft_sm, ap);
 	struct handshake_state *hs = ft->hs;
+	uint32_t kck_len = handshake_state_get_kck_len(hs);
 	const uint8_t *rsne = NULL;
 	const uint8_t *mde = NULL;
 	const uint8_t *fte = NULL;
@@ -589,7 +592,7 @@ static int ft_rx_associate(struct auth_proto *ap, const uint8_t *frame,
 		uint8_t mic[16];
 
 		if (ie_parse_fast_bss_transition_from_data(fte, fte[1] + 2,
-								&ft_info) < 0)
+						kck_len, &ft_info) < 0)
 			return -EBADMSG;
 
 		/*
@@ -665,6 +668,7 @@ static bool ft_start(struct auth_proto *ap)
 {
 	struct ft_sm *ft = l_container_of(ap, struct ft_sm, ap);
 	struct handshake_state *hs = ft->hs;
+	uint32_t kck_len = handshake_state_get_kck_len(hs);
 	bool is_rsn = hs->supplicant_ie != NULL;
 	uint8_t mde[5];
 	struct iovec iov[3];
@@ -732,7 +736,7 @@ static bool ft_start(struct auth_proto *ap)
 		memcpy(ft_info.snonce, hs->snonce, 32);
 
 		fte = alloca(256);
-		ie_build_fast_bss_transition(&ft_info, fte);
+		ie_build_fast_bss_transition(&ft_info, kck_len, fte);
 
 		iov[iov_elems].iov_base = fte;
 		iov[iov_elems].iov_len = fte[1] + 2;

@@ -1649,6 +1649,8 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 		}
 
 		if (fte) {
+			uint32_t kck_len =
+				handshake_state_get_kck_len(netdev->handshake);
 			/*
 			 * If we are here, then most likely we have a FullMac
 			 * hw performing initial mobility association.  We need
@@ -1657,7 +1659,7 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 			 * sanitize the contents and just assume they're okay.
 			 */
 			if (ie_parse_fast_bss_transition_from_data(fte,
-						fte[1] + 2, &ft_info) >= 0) {
+					fte[1] + 2, kck_len, &ft_info) >= 0) {
 				handshake_state_set_fte(netdev->handshake, fte);
 				handshake_state_set_kh_ids(netdev->handshake,
 							ft_info.r0khid,

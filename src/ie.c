@@ -2010,14 +2010,14 @@ bool ie_build_mobility_domain(uint16_t mdid, bool ft_over_ds, bool resource_req,
 	return true;
 }
 
-int ie_parse_fast_bss_transition(struct ie_tlv_iter *iter,
-				struct ie_ft_info *info)
+int ie_parse_fast_bss_transition(struct ie_tlv_iter *iter, uint32_t mic_len,
+					struct ie_ft_info *info)
 {
 	const uint8_t *data;
 	uint8_t len, subelem_id, subelem_len;
 
 	len = ie_tlv_iter_get_length(iter);
-	if (len < 82)
+	if (len < 66 + mic_len)
 		return -EINVAL;
 
 	data = ie_tlv_iter_get_data(iter);
@@ -2026,14 +2026,14 @@ int ie_parse_fast_bss_transition(struct ie_tlv_iter *iter,
 
 	info->mic_element_count = data[1];
 
-	memcpy(info->mic, data + 2, 16);
+	memcpy(info->mic, data + 2, mic_len);
 
-	memcpy(info->anonce, data + 18, 32);
+	memcpy(info->anonce, data + mic_len + 2, 32);
 
-	memcpy(info->snonce, data + 50, 32);
+	memcpy(info->snonce, data + mic_len + 34, 32);
 
-	len -= 82;
-	data += 82;
+	len -= 66 + mic_len;
+	data += 66 + mic_len;
 
 	while (len >= 2) {
 		subelem_id = *data++;
@@ -2104,7 +2104,8 @@ int ie_parse_fast_bss_transition(struct ie_tlv_iter *iter,
 }
 
 int ie_parse_fast_bss_transition_from_data(const uint8_t *data, uint8_t len,
-				struct ie_ft_info *info)
+						uint32_t mic_len,
+						struct ie_ft_info *info)
 {
 	struct ie_tlv_iter iter;
 
@@ -2116,28 +2117,29 @@ int ie_parse_fast_bss_transition_from_data(const uint8_t *data, uint8_t len,
 	if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_FAST_BSS_TRANSITION)
 		return -EPROTOTYPE;
 
-	return ie_parse_fast_bss_transition(&iter, info);
+	return ie_parse_fast_bss_transition(&iter, mic_len, info);
 }
 
-bool ie_build_fast_bss_transition(const struct ie_ft_info *info, uint8_t *to)
+bool ie_build_fast_bss_transition(const struct ie_ft_info *info,
+					uint32_t mic_len, uint8_t *to)
 {
 	uint8_t *len;
 
 	*to++ = IE_TYPE_FAST_BSS_TRANSITION;
 
 	len = to++;
-	*len = 82;
+	*len = (mic_len == 16) ? 82 : 90;
 
 	to[0] = 0x00;
 	to[1] = info->mic_element_count;
 
-	memcpy(to + 2, info->mic, 16);
+	memcpy(to + 2, info->mic, mic_len);
 
-	memcpy(to + 18, info->anonce, 32);
+	memcpy(to + mic_len + 2, info->anonce, 32);
 
-	memcpy(to + 50, info->snonce, 32);
+	memcpy(to + mic_len + 34, info->snonce, 32);
 
-	to += 82;
+	to += (mic_len == 16) ? 82 : 90;
 
 	if (info->r1khid_present) {
 		to[0] = 1;

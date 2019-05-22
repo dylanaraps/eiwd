@@ -324,7 +324,7 @@ enum ie_bss_capability {
 
 struct ie_ft_info {
 	uint8_t mic_element_count;
-	uint8_t mic[16];
+	uint8_t mic[24];
 	uint8_t anonce[32];
 	uint8_t snonce[32];
 	uint8_t r0khid[48];
@@ -449,10 +449,13 @@ bool ie_build_mobility_domain(uint16_t mdid, bool ft_over_ds,
 				bool resource_req, uint8_t *to);
 
 int ie_parse_fast_bss_transition(struct ie_tlv_iter *iter,
-				struct ie_ft_info *info);
+					uint32_t mic_len,
+					struct ie_ft_info *info);
 int ie_parse_fast_bss_transition_from_data(const uint8_t *data, uint8_t len,
-				struct ie_ft_info *info);
-bool ie_build_fast_bss_transition(const struct ie_ft_info *info, uint8_t *to);
+						uint32_t mic_len,
+						struct ie_ft_info *info);
+bool ie_build_fast_bss_transition(const struct ie_ft_info *info,
+					uint32_t mic_len, uint8_t *to);
 
 int ie_parse_neighbor_report(struct ie_tlv_iter *iter,
 				struct ie_neighbor_report_info *info);
