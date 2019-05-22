@@ -526,7 +526,6 @@ int main(int argc, char *argv[])
 
 	station_init();
 	wsc_init();
-	network_init();
 
 	if (iwd_modules_init() < 0)
 		goto fail_modules;
@@ -538,7 +537,6 @@ int main(int argc, char *argv[])
 
 fail_modules:
 	iwd_modules_exit();
-	network_exit();
 	wsc_exit();
 	station_exit();
 	device_exit();

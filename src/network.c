@@ -1270,29 +1270,6 @@ static bool network_property_get_known_network(struct l_dbus *dbus,
 	return true;
 }
 
-static void setup_network_interface(struct l_dbus_interface *interface)
-{
-	l_dbus_interface_method(interface, "Connect", 0,
-				network_connect,
-				"", "");
-
-	l_dbus_interface_property(interface, "Name", 0, "s",
-					network_property_get_name, NULL);
-
-	l_dbus_interface_property(interface, "Connected", 0, "b",
-					network_property_is_connected,
-					NULL);
-
-	l_dbus_interface_property(interface, "Device", 0, "o",
-					network_property_get_device, NULL);
-
-	l_dbus_interface_property(interface, "Type", 0, "s",
-					network_property_get_type, NULL);
-
-	l_dbus_interface_property(interface, "KnownNetwork", 0, "o",
-				network_property_get_known_network, NULL);
-}
-
 bool network_register(struct network *network, const char *path)
 {
 	if (!l_dbus_object_add_interface(dbus_get_bus(), path,
@@ -1339,24 +1316,6 @@ void network_remove(struct network *network, int reason)
 	l_queue_destroy(network->blacklist, NULL);
 
 	l_free(network);
-}
-
-void network_init()
-{
-	if (!l_dbus_register_interface(dbus_get_bus(), IWD_NETWORK_INTERFACE,
-					setup_network_interface, NULL, false))
-		l_error("Unable to register %s interface",
-						IWD_NETWORK_INTERFACE);
-
-	networks = l_queue_new();
-}
-
-void network_exit()
-{
-	l_queue_destroy(networks, network_info_free);
-	networks = NULL;
-
-	l_dbus_unregister_interface(dbus_get_bus(), IWD_NETWORK_INTERFACE);
 }
 
 int network_rank_compare(const void *a, const void *b, void *user)
@@ -1473,3 +1432,47 @@ void network_info_forget_known(struct network_info *network)
 	else
 		network_info_free(network);
 }
+
+static void setup_network_interface(struct l_dbus_interface *interface)
+{
+	l_dbus_interface_method(interface, "Connect", 0,
+				network_connect,
+				"", "");
+
+	l_dbus_interface_property(interface, "Name", 0, "s",
+					network_property_get_name, NULL);
+
+	l_dbus_interface_property(interface, "Connected", 0, "b",
+					network_property_is_connected,
+					NULL);
+
+	l_dbus_interface_property(interface, "Device", 0, "o",
+					network_property_get_device, NULL);
+
+	l_dbus_interface_property(interface, "Type", 0, "s",
+					network_property_get_type, NULL);
+
+	l_dbus_interface_property(interface, "KnownNetwork", 0, "o",
+				network_property_get_known_network, NULL);
+}
+
+static int network_init(void)
+{
+	if (!l_dbus_register_interface(dbus_get_bus(), IWD_NETWORK_INTERFACE,
+					setup_network_interface, NULL, false))
+		l_error("Unable to register %s interface",
+						IWD_NETWORK_INTERFACE);
+
+	networks = l_queue_new();
+	return 0;
+}
+
+static void network_exit(void)
+{
+	l_queue_destroy(networks, network_info_free);
+	networks = NULL;
+
+	l_dbus_unregister_interface(dbus_get_bus(), IWD_NETWORK_INTERFACE);
+}
+
+IWD_MODULE(network, network_init, network_exit)

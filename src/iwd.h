@@ -33,9 +33,6 @@ void netdev_exit(void);
 void netdev_set_nl80211(struct l_genl_family *nl80211);
 void netdev_shutdown(void);
 
-void network_init();
-void network_exit();
-
 bool wsc_init(void);
 bool wsc_exit();
 
