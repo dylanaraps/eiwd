@@ -1632,7 +1632,10 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 		}
 	}
 
-	if (resp_ies) {
+	/* FILS handles its own FT key derivation */
+	if (resp_ies && !(netdev->handshake->akm_suite &
+			(IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256 |
+			IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384))) {
 		const uint8_t *fte = NULL;
 		struct ie_ft_info ft_info;
 
@@ -2369,6 +2372,8 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 		break;
 	case IE_RSN_AKM_SUITE_FILS_SHA256:
 	case IE_RSN_AKM_SUITE_FILS_SHA384:
+	case IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256:
+	case IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384:
 		netdev->ap = fils_sm_new(hs, netdev_fils_tx_authenticate,
 						netdev_fils_tx_associate,
 						netdev);

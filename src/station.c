@@ -633,7 +633,9 @@ static int station_build_handshake_rsn(struct handshake_state *hs,
 
 	if (info.akm_suites & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
 				IE_RSN_AKM_SUITE_FT_USING_PSK |
-				IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256))
+				IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256 |
+				IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256 |
+				IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384))
 		add_mde = true;
 
 open_network:
@@ -704,8 +706,10 @@ static struct handshake_state *station_handshake_setup(struct station *station,
 	 * wait to get it until here because at this point so there are no
 	 * failure paths before fils_sm_new
 	 */
-	if (hs->akm_suite == IE_RSN_AKM_SUITE_FILS_SHA256 ||
-			hs->akm_suite == IE_RSN_AKM_SUITE_FILS_SHA384)
+	if (hs->akm_suite & (IE_RSN_AKM_SUITE_FILS_SHA256 |
+				IE_RSN_AKM_SUITE_FILS_SHA384 |
+				IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256 |
+				IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384))
 		hs->erp_cache = erp_cache_get(network_get_ssid(network));
 
 	return hs;
