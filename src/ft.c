@@ -232,7 +232,7 @@ static bool ft_parse_associate_resp_frame(const uint8_t *frame, size_t frame_len
 		}
 	}
 
-	*out_status = body->status_code;
+	*out_status = L_LE16_TO_CPU(body->status_code);
 
 	return true;
 }
