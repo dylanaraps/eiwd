@@ -256,7 +256,8 @@ static int owe_rx_associate(struct auth_proto *ap, const uint8_t *frame,
 
 	body = mmpdu_body(mpdu);
 
-	if (body->status_code == MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP) {
+	if (L_LE16_TO_CPU(body->status_code) ==
+				MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP) {
 		if (!owe_retry(owe))
 			goto owe_bad_status;
 
@@ -326,7 +327,7 @@ invalid_ies:
 	return MMPDU_STATUS_CODE_INVALID_ELEMENT;
 
 owe_bad_status:
-	return (int)body->status_code;
+	return L_LE16_TO_CPU(body->status_code);
 }
 
 struct auth_proto *owe_sm_new(struct handshake_state *hs,
