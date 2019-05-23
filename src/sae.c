@@ -1031,16 +1031,17 @@ static int sae_rx_authenticate(struct auth_proto *ap,
 	 * code, as well as add the check in the verify function to allow for
 	 * this missing group number.
 	 */
-	if (len == 4 && auth->status !=
+	if (len == 4 && L_LE16_TO_CPU(auth->status) !=
 				MMPDU_STATUS_CODE_UNSUPP_FINITE_CYCLIC_GROUP)
 		goto reject;
 
-	ret = sae_verify_packet(sm, auth->transaction_sequence, auth->status,
+	ret = sae_verify_packet(sm, L_LE16_TO_CPU(auth->transaction_sequence),
+					L_LE16_TO_CPU(auth->status),
 					auth->ies, len - 6);
 	if (ret != 0)
 		return ret;
 
-	switch (auth->transaction_sequence) {
+	switch (L_LE16_TO_CPU(auth->transaction_sequence)) {
 	case SAE_STATE_COMMITTED:
 		return sae_process_commit(sm, hdr->address_2, auth->ies,
 						len - 2);
@@ -1049,7 +1050,7 @@ static int sae_rx_authenticate(struct auth_proto *ap,
 						len - 2);
 	default:
 		l_error("invalid transaction sequence %u",
-					auth->transaction_sequence);
+				L_LE16_TO_CPU(auth->transaction_sequence));
 	}
 
 reject:
@@ -1073,7 +1074,7 @@ static int sae_rx_associate(struct auth_proto *ap, const uint8_t *frame,
 	body = mmpdu_body(mpdu);
 
 	if (body->status_code != 0)
-		return (int) body->status_code;
+		return L_LE16_TO_CPU(body->status_code);
 
 	return 0;
 }
