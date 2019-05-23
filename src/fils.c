@@ -328,6 +328,7 @@ static int fils_rx_authenticate(struct auth_proto *driver, const uint8_t *frame,
 	struct fils_sm *fils = l_container_of(driver, struct fils_sm, ap);
 	const struct mmpdu_header *hdr = mpdu_validate(frame, len);
 	const struct mmpdu_authentication *auth;
+	uint16_t alg;
 	struct ie_tlv_iter iter;
 	const uint8_t *anonce = NULL;
 	const uint8_t *session = NULL;
@@ -351,11 +352,12 @@ static int fils_rx_authenticate(struct auth_proto *driver, const uint8_t *frame,
 
 	if (auth->status != 0) {
 		l_debug("invalid status %u", auth->status);
-		return (int)auth->status;
+		return L_LE16_TO_CPU(auth->status);
 	}
 
-	if (auth->algorithm != MMPDU_AUTH_ALGO_FILS_SK &&
-			auth->algorithm != MMPDU_AUTH_ALGO_FILS_SK_PFS) {
+	alg = L_LE16_TO_CPU(auth->algorithm);
+	if (alg != MMPDU_AUTH_ALGO_FILS_SK &&
+			alg != MMPDU_AUTH_ALGO_FILS_SK_PFS) {
 		l_debug("invalid auth algorithm %u", auth->algorithm);
 		return MMPDU_STATUS_CODE_UNSUP_AUTH_ALG;
 	}
@@ -474,7 +476,7 @@ static int fils_rx_associate(struct auth_proto *driver, const uint8_t *frame,
 	}
 
 	if (assoc->status_code != 0)
-		return (int)assoc->status_code;
+		return L_CPU_TO_LE16(assoc->status_code);
 
 	ie_tlv_iter_init(&iter, assoc->ies, (const uint8_t *) hdr + len -
 				assoc->ies);
