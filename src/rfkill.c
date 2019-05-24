@@ -38,12 +38,6 @@
 #include "src/common.h"
 #include "src/rfkill.h"
 
-#ifdef TEMP_FAILURE_RETRY
-#define TFR TEMP_FAILURE_RETRY
-#else
-#define TFR
-#endif
-
 struct rfkill_map_entry {
 	unsigned int wiphy_id;
 	unsigned int rfkill_id;
@@ -89,14 +83,14 @@ static struct rfkill_map_entry *map_wiphy(unsigned int rfkill_id)
 
 	path = l_strdup_printf("/sys/class/rfkill/rfkill%u/device/index", rfkill_id);
 
-	fd = TFR(open(path, O_RDONLY));
+	fd = L_TFR(open(path, O_RDONLY));
 
 	l_free(path);
 
 	if (fd < 0)
 		return NULL;
 
-	bytes = TFR(read(fd, buf, sizeof(buf) - 1));
+	bytes = L_TFR(read(fd, buf, sizeof(buf) - 1));
 
 	close(fd);
 
@@ -131,7 +125,7 @@ static bool rfkill_read(struct l_io *io, void *user_data)
 	int bytes;
 	struct rfkill_map_entry *entry;
 
-	bytes = TFR(read(fd, &e, sizeof(e)));
+	bytes = L_TFR(read(fd, &e, sizeof(e)));
 	if (bytes < (int) sizeof(e)) {
 		if (bytes <= 0)
 			l_error("rfkill read: %s", strerror(errno));
@@ -208,7 +202,7 @@ bool rfkill_set_soft_state(unsigned int wiphy_id, bool state)
 	e.op = RFKILL_OP_CHANGE;
 	e.soft = state ? 1 : 0;
 
-	bytes = TFR(write(fd, &e, sizeof(e)));
+	bytes = L_TFR(write(fd, &e, sizeof(e)));
 	if (bytes < (int) sizeof(e)) {
 		if (bytes <= 0)
 			l_error("rfkill write: %s", strerror(errno));
@@ -284,7 +278,7 @@ int rfkill_init(void)
 {
 	int fd;
 
-	fd = TFR(open("/dev/rfkill", O_RDWR | O_CLOEXEC));
+	fd = L_TFR(open("/dev/rfkill", O_RDWR | O_CLOEXEC));
 	if (fd < 0)
 		return -errno;
 

@@ -43,12 +43,6 @@
 #include "src/common.h"
 #include "src/storage.h"
 
-#ifdef TEMP_FAILURE_RETRY
-#define TFR TEMP_FAILURE_RETRY
-#else
-#define TFR
-#endif
-
 #define STORAGE_DIR_MODE (S_IRUSR | S_IWUSR | S_IXUSR)
 #define STORAGE_FILE_MODE (S_IRUSR | S_IWUSR)
 
@@ -97,16 +91,16 @@ ssize_t read_file(void *buffer, size_t len, const char *path_fmt, ...)
 	path = l_strdup_vprintf(path_fmt, ap);
 	va_end(ap);
 
-	fd = TFR(open(path, O_RDONLY));
+	fd = L_TFR(open(path, O_RDONLY));
 
 	l_free(path);
 
 	if (fd == -1)
 		return -1;
 
-	r = TFR(read(fd, buffer, len));
+	r = L_TFR(read(fd, buffer, len));
 
-	TFR(close(fd));
+	L_TFR(close(fd));
 
 	return r;
 }
