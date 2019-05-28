@@ -39,7 +39,6 @@
 #include "src/eap.h"
 #include "src/eapol.h"
 #include "src/rfkill.h"
-#include "src/ap.h"
 #include "src/plugin.h"
 #include "src/storage.h"
 
@@ -155,8 +154,6 @@ static void nl80211_appeared(const struct l_genl_family_info *info,
 		l_error("Unable to init wiphy functionality");
 
 	netdev_set_nl80211(nl80211);
-
-	ap_init(nl80211);
 }
 
 extern struct iwd_module_desc __start___iwd_module[];
@@ -532,7 +529,6 @@ fail_netdev:
 
 	if (nl80211) {
 		manager_exit();
-		ap_exit();
 		wiphy_exit();
 		l_genl_family_free(nl80211);
 	}

@@ -42,12 +42,12 @@
 #include "src/util.h"
 #include "src/eapol.h"
 #include "src/handshake.h"
-#include "src/ap.h"
 #include "src/dbus.h"
 #include "src/nl80211util.h"
 
 struct ap_state {
 	struct netdev *netdev;
+	struct l_genl_family *nl80211;
 	char *ssid;
 	uint8_t channel;
 	unsigned int ciphers;
@@ -84,21 +84,21 @@ struct sta_state {
 	uint32_t gtk_query_cmd_id;
 };
 
-static struct l_genl_family *nl80211 = NULL;
 static uint32_t netdev_watch;
 
 static void ap_sta_free(void *data)
 {
 	struct sta_state *sta = data;
+	struct ap_state *ap = sta->ap;
 
 	l_uintset_free(sta->rates);
 	l_free(sta->assoc_rsne);
 
 	if (sta->assoc_resp_cmd_id)
-		l_genl_family_cancel(nl80211, sta->assoc_resp_cmd_id);
+		l_genl_family_cancel(ap->nl80211, sta->assoc_resp_cmd_id);
 
 	if (sta->gtk_query_cmd_id)
-		l_genl_family_cancel(nl80211, sta->gtk_query_cmd_id);
+		l_genl_family_cancel(ap->nl80211, sta->gtk_query_cmd_id);
 
 	if (sta->sm)
 		eapol_sm_free(sta->sm);
@@ -136,7 +136,7 @@ static void ap_reset(struct ap_state *ap)
 	l_queue_destroy(ap->frame_watch_ids, NULL);
 
 	if (ap->start_stop_cmd_id)
-		l_genl_family_cancel(nl80211, ap->start_stop_cmd_id);
+		l_genl_family_cancel(ap->nl80211, ap->start_stop_cmd_id);
 
 	l_queue_destroy(ap->sta_states, ap_sta_free);
 
@@ -154,19 +154,21 @@ static void ap_free(void *data)
 	struct ap_state *ap = data;
 
 	ap_reset(ap);
-
+	l_genl_family_free(ap->nl80211);
 	l_free(ap);
 }
 
 static void ap_del_station(struct sta_state *sta, uint16_t reason,
 				bool disassociate)
 {
-	netdev_del_station(sta->ap->netdev, sta->addr, reason, disassociate);
+	struct ap_state *ap = sta->ap;
+
+	netdev_del_station(ap->netdev, sta->addr, reason, disassociate);
 	sta->associated = false;
 	sta->rsna = false;
 
 	if (sta->gtk_query_cmd_id) {
-		l_genl_family_cancel(nl80211, sta->gtk_query_cmd_id);
+		l_genl_family_cancel(ap->nl80211, sta->gtk_query_cmd_id);
 		sta->gtk_query_cmd_id = 0;
 	}
 
@@ -222,6 +224,7 @@ static void ap_new_rsna(struct sta_state *sta)
 
 static void ap_drop_rsna(struct sta_state *sta)
 {
+	struct ap_state *ap = sta->ap;
 	struct l_genl_msg *msg;
 	uint32_t ifindex = netdev_get_ifindex(sta->ap->netdev);
 	uint8_t key_id = 0;
@@ -232,7 +235,7 @@ static void ap_drop_rsna(struct sta_state *sta)
 
 	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_AID, 2, &sta->aid);
 
-	if (!l_genl_family_send(nl80211, msg, ap_set_sta_cb, NULL, NULL)) {
+	if (!l_genl_family_send(ap->nl80211, msg, ap_set_sta_cb, NULL, NULL)) {
 		l_genl_msg_unref(msg);
 		l_error("Issuing SET_STATION failed");
 	}
@@ -242,7 +245,7 @@ static void ap_drop_rsna(struct sta_state *sta)
 	l_genl_msg_append_attr(msg, NL80211_ATTR_KEY_IDX, 1, &key_id);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, sta->addr);
 
-	if (!l_genl_family_send(nl80211, msg, ap_del_key_cb, NULL, NULL)) {
+	if (!l_genl_family_send(ap->nl80211, msg, ap_del_key_cb, NULL, NULL)) {
 		l_genl_msg_unref(msg);
 		l_error("Issuing DEL_KEY failed");
 	}
@@ -370,7 +373,7 @@ static uint32_t ap_send_mgmt_frame(struct ap_state *ap,
 		l_genl_msg_append_attr(msg, NL80211_ATTR_DONT_WAIT_FOR_ACK,
 					0, NULL);
 
-	id = l_genl_family_send(nl80211, msg, callback, user_data, NULL);
+	id = l_genl_family_send(ap->nl80211, msg, callback, user_data, NULL);
 
 	if (!id)
 		l_genl_msg_unref(msg);
@@ -571,7 +574,7 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 						ap->gtk, gtk_len, NULL,
 						0, NULL);
 
-		if (!l_genl_family_send(nl80211, msg, ap_gtk_op_cb, NULL,
+		if (!l_genl_family_send(ap->nl80211, msg, ap_gtk_op_cb, NULL,
 					NULL)) {
 			l_genl_msg_unref(msg);
 			l_error("Issuing NEW_KEY failed");
@@ -580,7 +583,7 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 
 		msg = nl80211_build_set_key(netdev_get_ifindex(ap->netdev),
 						ap->gtk_index);
-		if (!l_genl_family_send(nl80211, msg, ap_gtk_op_cb, NULL,
+		if (!l_genl_family_send(ap->nl80211, msg, ap_gtk_op_cb, NULL,
 					NULL)) {
 			l_genl_msg_unref(msg);
 			l_error("Issuing SET_KEY failed");
@@ -599,7 +602,7 @@ static void ap_associate_sta_cb(struct l_genl_msg *msg, void *user_data)
 	else {
 		msg = nl80211_build_get_key(netdev_get_ifindex(ap->netdev),
 					ap->gtk_index);
-		sta->gtk_query_cmd_id = l_genl_family_send(nl80211, msg,
+		sta->gtk_query_cmd_id = l_genl_family_send(ap->nl80211, msg,
 								ap_gtk_query_cb,
 								sta, NULL);
 		if (!sta->gtk_query_cmd_id) {
@@ -647,7 +650,8 @@ static void ap_associate_sta(struct ap_state *ap, struct sta_state *sta)
 	l_genl_msg_append_attr(msg, NL80211_ATTR_STA_CAPABILITY, 2,
 				&capability);
 
-	if (!l_genl_family_send(nl80211, msg, ap_associate_sta_cb, sta, NULL)) {
+	if (!l_genl_family_send(ap->nl80211, msg, ap_associate_sta_cb,
+								sta, NULL)) {
 		l_genl_msg_unref(msg);
 		if (l_genl_msg_get_command(msg) == NL80211_CMD_NEW_STATION)
 			l_error("Issuing NEW_STATION failed");
@@ -1162,7 +1166,7 @@ static void ap_disassoc_cb(struct netdev *netdev,
 	sta = l_queue_find(ap->sta_states, ap_sta_match_addr, hdr->address_2);
 
 	if (sta && sta->assoc_resp_cmd_id) {
-		l_genl_family_cancel(nl80211, sta->assoc_resp_cmd_id);
+		l_genl_family_cancel(ap->nl80211, sta->assoc_resp_cmd_id);
 		sta->assoc_resp_cmd_id = 0;
 	}
 
@@ -1470,8 +1474,8 @@ static int ap_start(struct ap_state *ap, const char *ssid, const char *psk,
 	if (!cmd)
 		goto error;
 
-	ap->start_stop_cmd_id = l_genl_family_send(nl80211, cmd, ap_start_cb,
-							ap, NULL);
+	ap->start_stop_cmd_id = l_genl_family_send(ap->nl80211, cmd,
+							ap_start_cb, ap, NULL);
 	if (!ap->start_stop_cmd_id) {
 		l_genl_msg_unref(cmd);
 		goto error;
@@ -1530,9 +1534,9 @@ static int ap_stop(struct ap_state *ap, struct l_dbus_message *message)
 		return -ENOMEM;
 
 	if (ap->start_stop_cmd_id)
-		l_genl_family_cancel(nl80211, ap->start_stop_cmd_id);
+		l_genl_family_cancel(ap->nl80211, ap->start_stop_cmd_id);
 
-	ap->start_stop_cmd_id = l_genl_family_send(nl80211, cmd, ap_stop_cb,
+	ap->start_stop_cmd_id = l_genl_family_send(ap->nl80211, cmd, ap_stop_cb,
 							ap, NULL);
 	if (!ap->start_stop_cmd_id) {
 		l_genl_msg_unref(cmd);
@@ -1545,7 +1549,7 @@ static int ap_stop(struct ap_state *ap, struct l_dbus_message *message)
 		ap->gtk_set = false;
 
 		msg = ap_build_cmd_del_key(ap);
-		if (!l_genl_family_send(nl80211, msg, ap_gtk_op_cb, NULL,
+		if (!l_genl_family_send(ap->nl80211, msg, ap_gtk_op_cb, NULL,
 					NULL)) {
 			l_genl_msg_unref(msg);
 			l_error("Issuing DEL_KEY failed");
@@ -1630,9 +1634,14 @@ static void ap_add_interface(struct netdev *netdev)
 {
 	struct ap_state *ap;
 
+	/*
+	 * TODO: Check wiphy supported channels and NL80211_ATTR_TX_FRAME_TYPES
+	 */
+
 	/* just allocate/set device, Start method will complete setup */
 	ap = l_new(struct ap_state, 1);
 	ap->netdev = netdev;
+	ap->nl80211 = l_genl_family_new(iwd_get_genl(), NL80211_GENL_NAME);
 
 	/* setup ap dbus interface */
 	l_dbus_object_add_interface(dbus_get_bus(),
@@ -1664,21 +1673,20 @@ static void ap_netdev_watch(struct netdev *netdev,
 	}
 }
 
-bool ap_init(struct l_genl_family *in)
+static int ap_init(void)
 {
 	netdev_watch = netdev_watch_add(ap_netdev_watch, NULL, NULL);
-	nl80211 = in;
 
-	return l_dbus_register_interface(dbus_get_bus(), IWD_AP_INTERFACE,
+	l_dbus_register_interface(dbus_get_bus(), IWD_AP_INTERFACE,
 			ap_setup_interface, ap_destroy_interface, false);
-	/*
-	 * TODO: Check wiphy supports AP mode, supported channels,
-	 * check wiphy's NL80211_ATTR_TX_FRAME_TYPES.
-	 */
+
+	return 0;
 }
 
-void ap_exit(void)
+static void ap_exit(void)
 {
 	netdev_watch_remove(netdev_watch);
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_AP_INTERFACE);
 }
+
+IWD_MODULE(ap, ap_init, ap_exit)
