@@ -38,12 +38,12 @@
 #include "src/eapol.h"
 #include "src/handshake.h"
 #include "src/mpdu.h"
-#include "src/adhoc.h"
 #include "src/dbus.h"
 #include "src/nl80211util.h"
 
 struct adhoc_state {
 	struct netdev *netdev;
+	struct l_genl_family *nl80211;
 	char *ssid;
 	uint8_t pmk[32];
 	struct l_queue *sta_states;
@@ -72,7 +72,6 @@ struct sta_state {
 	bool authenticated : 1;
 };
 
-static struct l_genl_family *nl80211 = NULL;
 static uint32_t netdev_watch;
 
 static void adhoc_sta_free(void *data)
@@ -83,7 +82,8 @@ static void adhoc_sta_free(void *data)
 		goto end;
 
 	if (sta->gtk_query_cmd_id)
-		l_genl_family_cancel(nl80211, sta->gtk_query_cmd_id);
+		l_genl_family_cancel(sta->adhoc->nl80211,
+						sta->gtk_query_cmd_id);
 
 	if (sta->sm)
 		eapol_sm_free(sta->sm);
@@ -109,7 +109,8 @@ static void adhoc_remove_sta(struct sta_state *sta)
 	}
 
 	if (sta->gtk_query_cmd_id) {
-		l_genl_family_cancel(nl80211, sta->gtk_query_cmd_id);
+		l_genl_family_cancel(sta->adhoc->nl80211,
+						sta->gtk_query_cmd_id);
 		sta->gtk_query_cmd_id = 0;
 	}
 
@@ -264,6 +265,7 @@ static struct eapol_sm *adhoc_new_sm(struct sta_state *sta, bool authenticator,
 static void adhoc_free(struct adhoc_state *adhoc)
 {
 	adhoc_reset(adhoc);
+	l_genl_family_free(adhoc->nl80211);
 	l_free(adhoc);
 }
 
@@ -358,8 +360,8 @@ static void adhoc_new_station(struct adhoc_state *adhoc, const uint8_t *mac)
 					adhoc->gtk, gtk_len, NULL,
 					0, NULL);
 
-		if (!l_genl_family_send(nl80211, msg, adhoc_gtk_op_cb, NULL,
-					NULL)) {
+		if (!l_genl_family_send(adhoc->nl80211, msg, adhoc_gtk_op_cb,
+					NULL, NULL)) {
 			l_genl_msg_unref(msg);
 			l_error("Issuing NEW_KEY failed");
 			return;
@@ -367,8 +369,8 @@ static void adhoc_new_station(struct adhoc_state *adhoc, const uint8_t *mac)
 
 		msg = nl80211_build_set_key(netdev_get_ifindex(adhoc->netdev),
 						adhoc->gtk_index);
-		if (!l_genl_family_send(nl80211, msg, adhoc_gtk_op_cb, NULL,
-					NULL)) {
+		if (!l_genl_family_send(adhoc->nl80211, msg, adhoc_gtk_op_cb,
+					NULL, NULL)) {
 			l_genl_msg_unref(msg);
 			l_error("Issuing SET_KEY failed");
 			return;
@@ -406,7 +408,7 @@ static void adhoc_new_station(struct adhoc_state *adhoc, const uint8_t *mac)
 	else {
 		msg = nl80211_build_get_key(netdev_get_ifindex(adhoc->netdev),
 					adhoc->gtk_index);
-		sta->gtk_query_cmd_id = l_genl_family_send(nl80211, msg,
+		sta->gtk_query_cmd_id = l_genl_family_send(adhoc->nl80211, msg,
 							adhoc_gtk_query_cb,
 							sta, NULL);
 		if (!sta->gtk_query_cmd_id) {
@@ -651,6 +653,7 @@ static void adhoc_add_interface(struct netdev *netdev)
 	/* just allocate/set device, Start method will complete setup */
 	adhoc = l_new(struct adhoc_state, 1);
 	adhoc->netdev = netdev;
+	adhoc->nl80211 = l_genl_family_new(iwd_get_genl(), NL80211_GENL_NAME);
 
 	/* setup adhoc dbus interface */
 	l_dbus_object_add_interface(dbus_get_bus(),
@@ -682,19 +685,19 @@ static void adhoc_netdev_watch(struct netdev *netdev,
 	}
 }
 
-bool adhoc_init(struct l_genl_family *nl)
+static int adhoc_init(void)
 {
 	netdev_watch = netdev_watch_add(adhoc_netdev_watch, NULL, NULL);
 	l_dbus_register_interface(dbus_get_bus(), IWD_ADHOC_INTERFACE,
 			adhoc_setup_interface, adhoc_destroy_interface, false);
 
-	nl80211 = nl;
-
-	return true;
+	return 0;
 }
 
-void adhoc_exit(void)
+static void adhoc_exit(void)
 {
 	netdev_watch_remove(netdev_watch);
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_ADHOC_INTERFACE);
 }
+
+IWD_MODULE(adhoc, adhoc_init, adhoc_exit)

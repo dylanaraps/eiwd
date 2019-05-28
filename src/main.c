@@ -41,7 +41,6 @@
 #include "src/rfkill.h"
 #include "src/ap.h"
 #include "src/plugin.h"
-#include "src/adhoc.h"
 #include "src/storage.h"
 
 #include "src/backtrace.h"
@@ -158,7 +157,6 @@ static void nl80211_appeared(const struct l_genl_family_info *info,
 	netdev_set_nl80211(nl80211);
 
 	ap_init(nl80211);
-	adhoc_init(nl80211);
 }
 
 extern struct iwd_module_desc __start___iwd_module[];
@@ -535,7 +533,6 @@ fail_netdev:
 	if (nl80211) {
 		manager_exit();
 		ap_exit();
-		adhoc_exit();
 		wiphy_exit();
 		l_genl_family_free(nl80211);
 	}
