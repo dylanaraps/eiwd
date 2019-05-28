@@ -133,12 +133,12 @@ ssize_t write_file(const void *buffer, size_t len,
 	if (create_dirs(path) != 0)
 		goto error_create_dirs;
 
-	fd = TFR(mkostemps(tmp_path, 4, O_CLOEXEC));
+	fd = L_TFR(mkostemps(tmp_path, 4, O_CLOEXEC));
 	if (fd == -1)
 		goto error_mkostemps;
 
-	r = TFR(write(fd, buffer, len));
-	TFR(close(fd));
+	r = L_TFR(write(fd, buffer, len));
+	L_TFR(close(fd));
 
 	if (r != (ssize_t) len) {
 		r = -1;
