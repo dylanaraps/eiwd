@@ -52,7 +52,6 @@
 static struct l_queue *scan_contexts;
 
 static struct l_genl_family *nl80211;
-static uint32_t scan_id;
 static uint32_t next_scan_request_id;
 
 struct scan_periodic {
@@ -196,41 +195,6 @@ static void scan_context_free(struct scan_context *sc)
 		l_genl_family_cancel(nl80211, sc->get_scan_cmd_id);
 
 	l_free(sc);
-}
-
-bool scan_ifindex_add(uint32_t ifindex)
-{
-	struct scan_context *sc;
-
-	sc = l_queue_find(scan_contexts, scan_context_match,
-				L_UINT_TO_PTR(ifindex));
-
-	if (sc)
-		return false;
-
-	sc = scan_context_new(ifindex);
-	if (!sc)
-		return false;
-
-	l_queue_push_head(scan_contexts, sc);
-
-	return true;
-}
-
-bool scan_ifindex_remove(uint32_t ifindex)
-{
-	struct scan_context *sc;
-
-	sc = l_queue_remove_if(scan_contexts, scan_context_match,
-				L_UINT_TO_PTR(ifindex));
-
-	if (!sc)
-		return false;
-
-	l_info("Removing scan context for ifindex: %u", ifindex);
-	scan_context_free(sc);
-
-	return true;
 }
 
 static void scan_request_triggered(struct l_genl_msg *msg, void *userdata)
@@ -1775,18 +1739,56 @@ void scan_freq_set_constrain(struct scan_freq_set *set,
 	set->channels_2ghz &= constraint->channels_2ghz;
 }
 
-bool scan_init(struct l_genl_family *in)
+bool scan_ifindex_add(uint32_t ifindex)
+{
+	struct scan_context *sc;
+
+	sc = l_queue_find(scan_contexts, scan_context_match,
+				L_UINT_TO_PTR(ifindex));
+
+	if (sc)
+		return false;
+
+	sc = scan_context_new(ifindex);
+	if (!sc)
+		return false;
+
+	l_queue_push_head(scan_contexts, sc);
+
+	if (l_queue_length(scan_contexts) > 1)
+		goto done;
+
+	nl80211 = l_genl_family_new(iwd_get_genl(), NL80211_GENL_NAME);
+	l_genl_family_register(nl80211, "scan", scan_notify, NULL, NULL);
+
+done:
+	return true;
+}
+
+bool scan_ifindex_remove(uint32_t ifindex)
+{
+	struct scan_context *sc;
+
+	sc = l_queue_remove_if(scan_contexts, scan_context_match,
+				L_UINT_TO_PTR(ifindex));
+
+	if (!sc)
+		return false;
+
+	l_info("Removing scan context for ifindex: %u", ifindex);
+	scan_context_free(sc);
+
+	if (l_queue_isempty(scan_contexts)) {
+		l_genl_family_free(nl80211);
+		nl80211 = NULL;
+	}
+
+	return true;
+}
+
+static int scan_init(void)
 {
 	const struct l_settings *config = iwd_get_config();
-
-	nl80211 = in;
-	scan_id = l_genl_family_register(nl80211, "scan", scan_notify,
-						NULL, NULL);
-
-	if (!scan_id) {
-		l_error("Registering for scan notification failed");
-		return false;
-	}
 
 	scan_contexts = l_queue_new();
 
@@ -1794,26 +1796,16 @@ bool scan_init(struct l_genl_family *in)
 					&RANK_5G_FACTOR))
 		RANK_5G_FACTOR = 1.0;
 
-	return true;
+	return 0;
 }
 
-bool scan_exit()
+static void scan_exit()
 {
-	bool r;
-
-	l_debug("");
-
-	if (!nl80211)
-		return false;
-
 	l_queue_destroy(scan_contexts,
 				(l_queue_destroy_func_t) scan_context_free);
 	scan_contexts = NULL;
-
-	r = l_genl_family_unregister(nl80211, scan_id);
-	scan_id = 0;
-
-	nl80211 = 0;
-
-	return r;
+	l_genl_family_free(nl80211);
+	nl80211 = NULL;
 }
+
+IWD_MODULE(scan, scan_init, scan_exit)

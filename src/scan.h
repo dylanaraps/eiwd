@@ -131,6 +131,3 @@ void scan_freq_set_constrain(struct scan_freq_set *set,
 
 bool scan_ifindex_add(uint32_t ifindex);
 bool scan_ifindex_remove(uint32_t ifindex);
-
-bool scan_init(struct l_genl_family *in);
-bool scan_exit();

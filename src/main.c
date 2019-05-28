@@ -38,7 +38,6 @@
 #include "src/dbus.h"
 #include "src/eap.h"
 #include "src/eapol.h"
-#include "src/scan.h"
 #include "src/rfkill.h"
 #include "src/ap.h"
 #include "src/plugin.h"
@@ -157,9 +156,6 @@ static void nl80211_appeared(const struct l_genl_family_info *info,
 		l_error("Unable to init wiphy functionality");
 
 	netdev_set_nl80211(nl80211);
-
-	if (!scan_init(nl80211))
-		l_error("Unable to init scan functionality");
 
 	ap_init(nl80211);
 	adhoc_init(nl80211);
@@ -540,7 +536,6 @@ fail_netdev:
 		manager_exit();
 		ap_exit();
 		adhoc_exit();
-		scan_exit();
 		wiphy_exit();
 		l_genl_family_free(nl80211);
 	}
