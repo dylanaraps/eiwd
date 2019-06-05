@@ -884,7 +884,7 @@ end:
 static void print_ie_vendor(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
-	static const unsigned char wfa_oui[3] = { 0x00, 0x50, 0xf2 };
+	static const unsigned char msoft_oui[3] = { 0x00, 0x50, 0xf2 };
 	const uint8_t *oui = data;
 	const char *str = NULL;
 	unsigned int i;
@@ -915,9 +915,9 @@ static void print_ie_vendor(unsigned int level, const char *label,
 	data += 4;
 	size -= 4;
 
-	if (!memcmp(oui, wfa_oui, 3)) {
+	if (!memcmp(oui, msoft_oui, 3)) {
 		switch (oui[3]) {
-		case 1:		/* WFA WPA IE */
+		case 1:		/* MSoft WPA IE */
 			print_ie_wpa(level + 2, label, data, size);
 			return;
 		default:
