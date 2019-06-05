@@ -107,16 +107,37 @@ static struct eap_method eap_tls = {
 	.load_settings = eap_tls_settings_load,
 };
 
+static struct eap_method eap_wfa_tls = {
+	.request_type = EAP_TYPE_EXPANDED,
+	.exports_msk = true,
+	.name = "WFA-TLS",
+
+	.handle_request = eap_tls_common_handle_request,
+	.handle_retransmit = eap_tls_common_handle_retransmit,
+	.reset_state = eap_tls_common_state_reset,
+	.free = eap_tls_common_state_free,
+
+	.check_settings = eap_tls_settings_check,
+	.load_settings = eap_tls_settings_load,
+	.vendor_id = { 0x00, 0x9f, 0x68 },
+	.vendor_type = 0x0000000d,
+};
+
 static int eap_tls_init(void)
 {
 	l_debug("");
-	return eap_register_method(&eap_tls);
+
+	if (eap_register_method(&eap_tls) < 0)
+		return -EPERM;
+
+	return eap_register_method(&eap_wfa_tls);
 }
 
 static void eap_tls_exit(void)
 {
 	l_debug("");
 	eap_unregister_method(&eap_tls);
+	eap_unregister_method(&eap_wfa_tls);
 }
 
 EAP_METHOD_BUILTIN(eap_tls, eap_tls_init, eap_tls_exit)
