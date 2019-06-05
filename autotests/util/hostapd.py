@@ -27,7 +27,16 @@ hostapd_map = {ifname: intf for wname, wiphy in wiphy_map.items()
         if wiphy.use == 'hostapd'}
 
 class HostapdCLI:
-    def __init__(self, interface):
+    def __init__(self, interface=None, config=None):
+        if not interface and not config:
+            raise Exception('interface or config must be provided')
+
+        if not interface:
+            for intf in hostapd_map.values():
+                if intf.config == config:
+                    interface = intf
+                    break
+
         self.ifname = interface.name
         self.socket_path = os.path.dirname(interface.ctrl_interface)
 
