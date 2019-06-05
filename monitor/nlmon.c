@@ -578,6 +578,7 @@ static const struct cipher_suites rsn_akm_selectors[] = {
 	{ 0x000fac10, "FILS FT SHA256"                                                            },
 	{ 0x000fac11, "FILS FT SHA3854"                                                           },
 	{ 0x000fac12, "OWE"                                                                       },
+	{ 0x506f9a01, "WFA OSEN"                                                                  },
 	{ }
 };
 
@@ -700,6 +701,60 @@ static void print_ie_bitfield(unsigned int level, const char *label,
 	}
 }
 
+static size_t print_ie_rsn_suites(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	uint16_t count;
+	uint16_t orig_size = size;
+
+	print_ie_cipher_suites(level + 1, "Group Data Cipher Suite", data, 4,
+				rsn_cipher_selectors);
+
+	data += 4;
+	size -= 4;
+
+	if (size < 2)
+		goto end;
+
+	count = l_get_le16(data) * 4;
+	data += 2;
+	size -= 2;
+
+	if (size < count)
+		goto end;
+
+	print_ie_cipher_suites(level + 1, "Pairwise Cipher Suite", data,
+					count, rsn_cipher_selectors);
+	data += count;
+	size -= count;
+
+	if (size < 2)
+		goto end;
+
+	count = l_get_le16(data) * 4;
+	data += 2;
+	size -= 2;
+
+	if (size < count)
+		goto end;
+
+	print_ie_cipher_suites(level + 1, "AKM Suite", data, count,
+				rsn_akm_selectors);
+	data += count;
+	size -= count;
+
+	if (size < 2)
+		goto end;
+
+	return orig_size - size;
+
+end:
+	if (size)
+		print_ie_error(level, label, size, -EINVAL);
+
+	return orig_size - size;
+}
+
 static void print_ie_rsn(unsigned int level, const char *label,
 			const void *data, uint16_t size)
 {
@@ -733,39 +788,7 @@ static void print_ie_rsn(unsigned int level, const char *label,
 	if (end - data < 4)
 		goto end;
 
-	print_ie_cipher_suites(level + 1, "Group Data Cipher Suite", data, 4,
-				rsn_cipher_selectors);
-
-	data += 4;
-
-	if (end - data < 2)
-		goto end;
-
-	count = l_get_le16(data) * 4;
-	data += 2;
-
-	if (end - data < count)
-		goto end;
-
-	print_ie_cipher_suites(level + 1, "Pairwise Cipher Suite", data,
-					count, rsn_cipher_selectors);
-	data += count;
-
-	if (end - data < 2)
-		goto end;
-
-	count = l_get_le16(data) * 4;
-	data += 2;
-
-	if (end - data < count)
-		goto end;
-
-	print_ie_cipher_suites(level + 1, "AKM Suite", data, count,
-				rsn_akm_selectors);
-	data += count;
-
-	if (end - data < 2)
-		goto end;
+	data += print_ie_rsn_suites(level, label, data, size);
 
 	bytemask[0] = 0x03;
 	bytemask[1] = 0x00;
@@ -881,10 +904,63 @@ end:
 	print_ie_error(level, label, size, -EINVAL);
 }
 
+static void print_ie_wfa_hs20(unsigned int level, const char *label,
+						const void *data, uint16_t size)
+{
+	const uint8_t *ptr = data;
+	bool pps_mo_id_present;
+	bool anpq_domain_id_present;
+
+	if (size < 1)
+		return;
+
+	pps_mo_id_present = util_is_bit_set(ptr[0], 1);
+	anpq_domain_id_present = util_is_bit_set(ptr[0], 2);
+
+	print_attr(level + 1, "HS2.0 Indication Element:");
+	print_attr(level + 2, "DGAF Disabled: %u", util_is_bit_set(ptr[0], 0));
+	print_attr(level + 2, "PPS MO ID Present: %u", pps_mo_id_present);
+	print_attr(level + 2, "ANQP Domain ID Present: %u",
+				anpq_domain_id_present);
+
+	switch (util_bit_field(ptr[0], 4, 7)) {
+	case 0:
+		print_attr(level + 2, "Version Number: 1.x");
+		break;
+	case 1:
+		print_attr(level + 2, "Version Number: 2.x");
+		break;
+	case 2:
+		print_attr(level + 2, "Version Number: 3.x");
+		break;
+	}
+
+	ptr += 1;
+	size -= 1;
+
+	if (pps_mo_id_present) {
+		if (size < 2)
+			return;
+
+		print_attr(level + 2, "PPS MO ID: %02x %02x", ptr[0], ptr[1]);
+		ptr += 2;
+		size -= 2;
+	}
+
+	if (anpq_domain_id_present) {
+		if (size < 2)
+			return;
+
+		print_attr(level + 2, "ANQP Domain ID: %02x %02x",
+				ptr[0], ptr[1]);
+	}
+}
+
 static void print_ie_vendor(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
 	static const unsigned char msoft_oui[3] = { 0x00, 0x50, 0xf2 };
+	static const unsigned char wfa_oui[3] = { 0x50, 0x6f, 0x9a };
 	const uint8_t *oui = data;
 	const char *str = NULL;
 	unsigned int i;
@@ -919,6 +995,17 @@ static void print_ie_vendor(unsigned int level, const char *label,
 		switch (oui[3]) {
 		case 1:		/* MSoft WPA IE */
 			print_ie_wpa(level + 2, label, data, size);
+			return;
+		default:
+			return;
+		}
+	} else if (!memcmp(oui, wfa_oui, 3)) {
+		switch (oui[3]) {
+		case 0x10:
+			print_ie_wfa_hs20(level + 1, label, data, size);
+			return;
+		case 0x12:
+			print_ie_rsn_suites(level + 1, label, data, size);
 			return;
 		default:
 			return;
@@ -1410,6 +1497,177 @@ static void print_ie_rm_enabled_caps(unsigned int level,
 				bytemask2, sizeof(bytemask2), capabilities);
 }
 
+static void print_ie_interworking(unsigned int level,
+					const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *ptr = data;
+	const char *msg;
+	uint8_t type;
+	bool venue = false;
+	bool hessid = false;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	type = util_bit_field(ptr[0], 0, 3);
+
+	switch (type) {
+	case 0:
+		msg = "Private network";
+		break;
+	case 1:
+		msg = "Private network w/ guest access";
+		break;
+	case 2:
+		msg = "Chargeable public network";
+		break;
+	case 3:
+		msg = "Free public network";
+		break;
+	case 4:
+		msg = "Personal device network";
+		break;
+	case 5:
+		msg = "Emergency services only network";
+		break;
+	case 14:
+		msg = "Test/Experimental";
+		break;
+	case 15:
+		msg = "Wildcard";
+		break;
+	default:
+		return;
+	}
+
+	print_attr(level + 1, "Network Type: %s", msg);
+	print_attr(level + 1, "Internet: %u", util_is_bit_set(ptr[0], 4));
+	print_attr(level + 1, "ASRA: %u", util_is_bit_set(ptr[0], 5));
+	print_attr(level + 1, "ESR: %u", util_is_bit_set(ptr[0], 6));
+	print_attr(level + 1, "UESA: %u", util_is_bit_set(ptr[0], 7));
+
+	size--;
+	ptr++;
+
+	if (!size)
+		return;
+
+	/*
+	 * There is venue/hessid info optionally, and no way of determining if
+	 * they exist except looking at the length.
+	 */
+	if (size == 2)
+		venue = true;
+	else if (size == 6)
+		hessid = true;
+	else if (size == 8) {
+		venue = true;
+		hessid = true;
+	}
+
+	if (venue) {
+		switch (ptr[0]) {
+		case 0:
+			msg = "Unspecified";
+			break;
+		case 1:
+			msg = "Assembly";
+			break;
+		case 2:
+			msg = "Business";
+			break;
+		case 3:
+			msg = "Educational";
+			break;
+		case 5:
+			msg = "Factory and Industrial";
+			break;
+		case 6:
+			msg = "Institutional";
+			break;
+		case 7:
+			msg = "Mercantile";
+			break;
+		case 8:
+			msg = "Residential";
+			break;
+		case 9:
+			msg = "Utility and Miscellaneous";
+			break;
+		case 10:
+			msg = "Vehicular";
+			break;
+		case 11:
+			msg = "Outdoor";
+			break;
+		default:
+			return;
+		}
+
+		/*
+		 * Each of the above groups have many group types, but if
+		 * anyone really cares they can cross reference the integer
+		 * type with IEEE 802.11-2016 Table 9-62
+		 */
+		print_attr(level + 1, "Venue: %s, type: %u", msg, ptr[1]);
+
+		ptr += 2;
+		size -= 2;
+	}
+
+	if (hessid)
+		print_attr(level + 1, "HESSID: "MAC, MAC_STR(ptr));
+}
+
+static void print_ie_advertisement(unsigned int level,
+					const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *ptr = data;
+	const char *msg = NULL;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	while (size) {
+		uint8_t qr_len = util_bit_field(ptr[0], 0, 7);
+		uint8_t id = ptr[1];
+
+		switch (id) {
+		case IE_ADVERTISEMENT_ANQP:
+			msg = "ANQP";
+			break;
+		case IE_ADVERTISEMENT_MIH_SERVICE:
+			msg = "MIH Information Service";
+			break;
+		case IE_ADVERTISEMENT_MIH_DISCOVERY:
+			msg = "MIH Command and Event Services";
+			break;
+		case IE_ADVERTISEMENT_EAS:
+			msg = "EAS";
+			break;
+		case IE_ADVERTISEMENT_RLQP:
+			msg = "RLQP";
+			break;
+		case IE_ADVERTISEMENT_VENDOR_SPECIFIC:
+			msg = "Vendor Specific";
+			break;
+		default:
+			return;
+		}
+
+		if (id == IE_ADVERTISEMENT_VENDOR_SPECIFIC) {
+			size -= ptr[3];
+			ptr += ptr[3];
+		} else {
+			size -= 2;
+			ptr += 2;
+		}
+
+		print_attr(level + 1, "Protocol: %s, Query Resp Limit: %u",
+				msg, qr_len);
+	}
+}
+
 static void print_ie_owe(unsigned int level,
 					const char *label,
 					const void *data, uint16_t size)
@@ -1500,6 +1758,10 @@ static struct attr_entry ie_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_ie_ht_capabilities } },
 	{ IE_TYPE_RM_ENABLED_CAPABILITIES,	"RM Enabled Capabilities",
 		ATTR_CUSTOM,	{ .function = print_ie_rm_enabled_caps } },
+	{ IE_TYPE_INTERWORKING,			"Interworking",
+		ATTR_CUSTOM,	{ .function = print_ie_interworking } },
+	{ IE_TYPE_ADVERTISEMENT_PROTOCOL,	"Advertisement Protocol",
+		ATTR_CUSTOM,	{ .function = print_ie_advertisement } },
 	{ IE_TYPE_OWE_DH_PARAM,			"OWE Diffie-Hellman Parameter",
 		ATTR_CUSTOM,	{ .function = print_ie_owe } },
 	{ IE_TYPE_FILS_INDICATION,		"FILS Indication",
