@@ -17,12 +17,7 @@ import testutil
 
 class Test(unittest.TestCase):
     def test_connection_success(self):
-        hapd = None
-
-        for intf in hostapd_map.values():
-            if intf.config == 'ssidFILS-384.conf':
-                hapd = HostapdCLI(intf)
-                break
+        hapd = HostapdCLI(config='ssidFILS-384.conf')
 
         wd = IWD(True)
 
