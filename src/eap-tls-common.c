@@ -289,19 +289,26 @@ static void eap_tls_send_fragment(struct eap_state *eap)
 	uint8_t buf[mtu];
 	size_t len = eap_tls->tx_pdu_buf->len - eap_tls->tx_frag_offset;
 	size_t header_len = EAP_TLS_HEADER_LEN;
+	uint8_t position = 0;
 
-	buf[EAP_TLS_HEADER_OCTET_FLAGS] = eap_tls->version_negotiated;
+	if (eap_get_method_type(eap) == EAP_TYPE_EXPANDED) {
+		header_len += 7;
+		position += 7;
+	}
 
-	if (len > mtu - EAP_TLS_HEADER_LEN) {
-		len = mtu - EAP_TLS_HEADER_LEN;
-		buf[EAP_TLS_HEADER_OCTET_FLAGS] |= EAP_TLS_FLAG_M;
+	buf[EAP_TLS_HEADER_OCTET_FLAGS + position] =
+						eap_tls->version_negotiated;
+
+	if (len > mtu - EAP_TLS_HEADER_LEN - position) {
+		len = mtu - EAP_TLS_HEADER_LEN - position;
+		buf[EAP_TLS_HEADER_OCTET_FLAGS + position] |= EAP_TLS_FLAG_M;
 		eap_tls->expecting_frag_ack = true;
 	}
 
 	if (!eap_tls->tx_frag_offset) {
-		buf[EAP_TLS_HEADER_OCTET_FLAGS] |= EAP_TLS_FLAG_L;
+		buf[EAP_TLS_HEADER_OCTET_FLAGS + position] |= EAP_TLS_FLAG_L;
 		l_put_be32(eap_tls->tx_pdu_buf->len,
-					&buf[EAP_TLS_HEADER_OCTET_FRAG_LEN]);
+				&buf[EAP_TLS_HEADER_OCTET_FRAG_LEN + position]);
 		len -= 4;
 		header_len += 4;
 	}
@@ -320,10 +327,20 @@ static void eap_tls_send_response(struct eap_state *eap,
 	size_t msg_len = EAP_TLS_HEADER_LEN + pdu_len;
 
 	if (msg_len <= eap_get_mtu(eap)) {
-		uint8_t *buf = l_malloc(msg_len);
+		uint8_t *buf;
+		uint8_t extra = 0;
 
-		buf[EAP_TLS_HEADER_OCTET_FLAGS] = eap_tls->version_negotiated;
-		memcpy(buf + EAP_TLS_HEADER_LEN, pdu, pdu_len);
+		if (eap_get_method_type(eap) == EAP_TYPE_EXPANDED) {
+			extra += 7;
+			msg_len += 7;
+		}
+
+		buf = l_malloc(msg_len);
+
+		buf[EAP_TLS_HEADER_OCTET_FLAGS + extra] =
+						eap_tls->version_negotiated;
+
+		memcpy(buf + EAP_TLS_HEADER_LEN + extra, pdu, pdu_len);
 
 		eap_send_response(eap, eap_get_method_type(eap), buf, msg_len);
 		l_free(buf);
@@ -337,12 +354,16 @@ static void eap_tls_send_response(struct eap_state *eap,
 void eap_tls_common_send_empty_response(struct eap_state *eap)
 {
 	struct eap_tls_state *eap_tls = eap_get_data(eap);
-	uint8_t buf[EAP_TLS_HEADER_LEN];
+	uint8_t buf[EAP_TLS_HEADER_LEN + 7];
+	uint8_t position = 0;
 
-	buf[EAP_TLS_HEADER_OCTET_FLAGS] = eap_tls->version_negotiated;
+	if (eap_get_method_type(eap) == EAP_TYPE_EXPANDED)
+		position += 7;
+
+	buf[EAP_TLS_HEADER_OCTET_FLAGS + position] = eap_tls->version_negotiated;
 
 	eap_send_response(eap, eap_get_method_type(eap), buf,
-							EAP_TLS_HEADER_LEN);
+				EAP_TLS_HEADER_LEN + position);
 }
 
 static int eap_tls_init_request_assembly(struct eap_state *eap,
