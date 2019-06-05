@@ -1008,15 +1008,14 @@ static int is_test_dir(const char *dir)
 }
 
 static bool find_test_configuration(const char *path, int level,
-						struct l_hashmap *config_map)
+						struct l_hashmap *config_map);
+
+static bool add_path(const char *path, int level, struct l_hashmap *config_map)
 {
 	DIR *dir = NULL;
 	struct l_queue *py_test_queue = NULL;
 	struct dirent *entry;
 	char *npath;
-
-	if (!config_map)
-		return false;
 
 	dir = opendir(path);
 	if (!dir) {
@@ -1051,6 +1050,32 @@ static bool find_test_configuration(const char *path, int level,
 		l_hashmap_insert(config_map, path, py_test_queue);
 
 	closedir(dir);
+	return true;
+}
+
+static bool find_test_configuration(const char *path, int level,
+						struct l_hashmap *config_map)
+{
+	glob_t glist;
+	int i = 0;
+	int ret;
+
+	if (!config_map)
+		return false;
+
+	ret = glob(path, 0, NULL, &glist);
+	if (ret != 0) {
+		l_error("Could not match glob %s", path);
+		return false;
+	}
+
+	while (glist.gl_pathv[i]) {
+		if (!add_path(glist.gl_pathv[i], level, config_map))
+			return false;
+
+		i++;
+	}
+
 	return true;
 }
 
