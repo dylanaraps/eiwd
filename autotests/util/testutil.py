@@ -51,7 +51,7 @@ def tx(fromsock, tosock, src, dst):
 
     return (frame, fromsock, tosock, src, dst)
 
-def test_connected(if0=None, if1=None):
+def test_connected(if0=None, if1=None, group=True):
     if if0 is None or if1 is None:
         iwd_list = [dev.name for dev in iwd.IWD.get_instance().list_devices()]
         non_iwd_list = [ifname for w in wiphy.wiphy_map.values()
@@ -69,12 +69,16 @@ def test_connected(if0=None, if1=None):
     try:
         frames = [
             tx(sock0, sock1, addr0, addr1),
-            tx(sock0, sock1, addr0, bcast),
             tx(sock1, sock0, addr1, addr0),
-            tx(sock1, sock0, addr1, bcast),
         ]
 
-        rec = [False, False, False, False]
+        rec = [False, False]
+
+        if group:
+            frames.append(tx(sock0, sock1, addr0, bcast))
+            frames.append(tx(sock1, sock0, addr1, bcast))
+            rec.append(False)
+            rec.append(False)
 
         while not all(rec):
             r, w, x = select.select([sock0, sock1], [], [], 1.0)
@@ -105,11 +109,11 @@ def test_connected(if0=None, if1=None):
         sock0.close()
         sock1.close()
 
-def test_ifaces_connected(if0=None, if1=None):
+def test_ifaces_connected(if0=None, if1=None, group=True):
     retry = 0
     while True:
         try:
-            test_connected(if0, if1)
+            test_connected(if0, if1, group)
             break
 
         except Exception as e:
