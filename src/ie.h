@@ -234,6 +234,15 @@ enum ie_type {
 	IE_TYPE_OWE_DH_PARAM                         = 256 + 32,
 };
 
+/*
+ * WiFi Alliance Hotspot 2.0 Specification - Section 3.1 Elements Definitions
+ */
+enum ie_vendor_wfa_oi_type {
+	IE_WFA_OI_HS20_INDICATION = 0x10,
+	IE_WFA_OI_OSEN = 0x12,
+	IE_WFA_OI_ROAMING_SELECTION = 0x1d,
+};
+
 enum ie_advertisement_id {
 	IE_ADVERTISEMENT_ANQP			= 0,
 	IE_ADVERTISEMENT_MIH_SERVICE		= 1,
@@ -426,6 +435,7 @@ bool ie_build_rsne(const struct ie_rsn_info *info, uint8_t *to);
 int ie_parse_wpa(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info);
 int ie_parse_wpa_from_data(const uint8_t *data, size_t len,
 						struct ie_rsn_info *info);
+bool is_ie_wfa_ie(const uint8_t *data, uint8_t len, uint8_t oi_type);
 bool is_ie_wpa_ie(const uint8_t *data, uint8_t len);
 bool ie_build_wpa(const struct ie_rsn_info *info, uint8_t *to);
 

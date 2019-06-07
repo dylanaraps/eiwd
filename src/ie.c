@@ -1136,6 +1136,24 @@ static bool ie_parse_wpa_pairwise_cipher(const uint8_t *data,
 	return true;
 }
 
+bool is_ie_wfa_ie(const uint8_t *data, uint8_t len, uint8_t oi_type)
+{
+	if (!data)
+		return false;
+
+	if (oi_type == IE_WFA_OI_OSEN && len < 22)
+		return false;
+	else if (oi_type == IE_WFA_OI_HS20_INDICATION && len < 7)
+		return false;
+	else if (len < 4) /* OI not handled, but at least check length */
+		return false;
+
+	if (!memcmp(data, wifi_alliance_oui, 3) && data[3] == oi_type)
+		return true;
+
+	return false;
+}
+
 bool is_ie_wpa_ie(const uint8_t *data, uint8_t len)
 {
 	if (!data || len < 6)
