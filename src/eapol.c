@@ -104,6 +104,7 @@ bool eapol_calculate_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
 		switch (akm) {
 		case IE_RSN_AKM_SUITE_SAE_SHA256:
 		case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
+		case IE_RSN_AKM_SUITE_OSEN:
 			return cmac_aes(kck, 16, frame, frame_len,
 						mic, mic_len);
 		case IE_RSN_AKM_SUITE_OWE:
@@ -157,6 +158,7 @@ bool eapol_verify_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,
 		switch (akm) {
 		case IE_RSN_AKM_SUITE_SAE_SHA256:
 		case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
+		case IE_RSN_AKM_SUITE_OSEN:
 			checksum = l_checksum_new_cmac_aes(kck, 16);
 			break;
 		case IE_RSN_AKM_SUITE_OWE:
@@ -257,6 +259,7 @@ uint8_t *eapol_decrypt_key_data(enum ie_rsn_akm_suite akm, const uint8_t *kek,
 		case IE_RSN_AKM_SUITE_SAE_SHA256:
 		case IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256:
 		case IE_RSN_AKM_SUITE_OWE:
+		case IE_RSN_AKM_SUITE_OSEN:
 			if (key_data_len < 24 || key_data_len % 8)
 				return NULL;
 

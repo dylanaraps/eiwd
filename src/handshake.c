@@ -390,7 +390,8 @@ bool handshake_state_derive_ptk(struct handshake_state *s)
 			IE_RSN_AKM_SUITE_FT_OVER_SAE_SHA256 |
 			IE_RSN_AKM_SUITE_OWE |
 			IE_RSN_AKM_SUITE_FILS_SHA256 |
-			IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256))
+			IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256 |
+			IE_RSN_AKM_SUITE_OSEN))
 		type = L_CHECKSUM_SHA256;
 	else
 		type = L_CHECKSUM_SHA1;
