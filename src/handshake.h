@@ -141,14 +141,10 @@ void handshake_state_set_ptk(struct handshake_state *s, const uint8_t *ptk,
 				size_t ptk_len);
 void handshake_state_set_8021x_config(struct handshake_state *s,
 					struct l_settings *settings);
-bool handshake_state_set_supplicant_rsn(struct handshake_state *s,
-					const uint8_t *rsn_ie);
-bool handshake_state_set_authenticator_rsn(struct handshake_state *s,
-					const uint8_t *rsn_ie);
-bool handshake_state_set_supplicant_wpa(struct handshake_state *s,
-					const uint8_t *wpa_ie);
-bool handshake_state_set_authenticator_wpa(struct handshake_state *s,
-					const uint8_t *wpa_ie);
+bool handshake_state_set_authenticator_ie(struct handshake_state *s,
+						const uint8_t *ie);
+bool handshake_state_set_supplicant_ie(struct handshake_state *s,
+						const uint8_t *ie);
 void handshake_state_set_ssid(struct handshake_state *s,
 					const uint8_t *ssid, size_t ssid_len);
 void handshake_state_set_mde(struct handshake_state *s,

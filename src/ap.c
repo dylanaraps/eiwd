@@ -425,8 +425,8 @@ static void ap_start_rsna(struct sta_state *sta, const uint8_t *gtk_rsc)
 	handshake_state_set_event_func(sta->hs, ap_handshake_event, sta);
 	handshake_state_set_ssid(sta->hs, (void *)ap->ssid, strlen(ap->ssid));
 	handshake_state_set_authenticator(sta->hs, true);
-	handshake_state_set_authenticator_rsn(sta->hs, bss_rsne);
-	handshake_state_set_supplicant_rsn(sta->hs, sta->assoc_rsne);
+	handshake_state_set_authenticator_ie(sta->hs, bss_rsne);
+	handshake_state_set_supplicant_ie(sta->hs, sta->assoc_rsne);
 	handshake_state_set_pmk(sta->hs, ap->pmk, 32);
 	handshake_state_set_authenticator_address(sta->hs, own_addr);
 	handshake_state_set_supplicant_address(sta->hs, sta->addr);

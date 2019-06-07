@@ -148,19 +148,19 @@ static bool handshake_state_setup_own_ciphers(struct handshake_state *s,
 	return true;
 }
 
-static bool handshake_state_set_authenticator_ie(struct handshake_state *s,
-						const uint8_t *ie, bool is_wpa)
+bool handshake_state_set_authenticator_ie(struct handshake_state *s,
+						const uint8_t *ie)
 {
 	struct ie_rsn_info info;
 
 	l_free(s->authenticator_ie);
 	s->authenticator_ie = l_memdup(ie, ie[1] + 2u);
-	s->wpa_ie = is_wpa;
+	s->wpa_ie = is_ie_wpa_ie(ie + 2, ie[1]);
 
 	if (!s->authenticator)
 		return true;
 
-	if (is_wpa) {
+	if (s->wpa_ie) {
 		if (ie_parse_wpa_from_data(ie, ie[1] + 2, &info) < 0)
 			return false;
 	} else {
@@ -171,19 +171,19 @@ static bool handshake_state_set_authenticator_ie(struct handshake_state *s,
 	return handshake_state_setup_own_ciphers(s, &info);
 }
 
-static bool handshake_state_set_supplicant_ie(struct handshake_state *s,
-						const uint8_t *ie, bool is_wpa)
+bool handshake_state_set_supplicant_ie(struct handshake_state *s,
+						const uint8_t *ie)
 {
 	struct ie_rsn_info info;
 
 	l_free(s->supplicant_ie);
 	s->supplicant_ie = l_memdup(ie, ie[1] + 2u);
-	s->wpa_ie = is_wpa;
+	s->wpa_ie = is_ie_wpa_ie(ie + 2, ie[1]);
 
 	if (s->authenticator)
 		return true;
 
-	if (is_wpa) {
+	if (s->wpa_ie) {
 		if (ie_parse_wpa_from_data(ie, ie[1] + 2, &info) < 0)
 			return false;
 	} else {
@@ -192,30 +192,6 @@ static bool handshake_state_set_supplicant_ie(struct handshake_state *s,
 	}
 
 	return handshake_state_setup_own_ciphers(s, &info);
-}
-
-bool handshake_state_set_authenticator_rsn(struct handshake_state *s,
-						const uint8_t *rsn_ie)
-{
-	return handshake_state_set_authenticator_ie(s, rsn_ie, false);
-}
-
-bool handshake_state_set_supplicant_rsn(struct handshake_state *s,
-					const uint8_t *rsn_ie)
-{
-	return handshake_state_set_supplicant_ie(s, rsn_ie, false);
-}
-
-bool handshake_state_set_authenticator_wpa(struct handshake_state *s,
-				const uint8_t *wpa_ie)
-{
-	return handshake_state_set_authenticator_ie(s, wpa_ie, true);
-}
-
-bool handshake_state_set_supplicant_wpa(struct handshake_state *s,
-					const uint8_t *wpa_ie)
-{
-	return handshake_state_set_supplicant_ie(s, wpa_ie, true);
 }
 
 void handshake_state_set_ssid(struct handshake_state *s, const uint8_t *ssid,

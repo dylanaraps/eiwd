@@ -623,12 +623,12 @@ static int station_build_handshake_rsn(struct handshake_state *hs,
 	/* RSN takes priority */
 	if (bss->rsne) {
 		ie_build_rsne(&info, rsne_buf);
-		handshake_state_set_authenticator_rsn(hs, bss->rsne);
-		handshake_state_set_supplicant_rsn(hs, rsne_buf);
+		handshake_state_set_authenticator_ie(hs, bss->rsne);
+		handshake_state_set_supplicant_ie(hs, rsne_buf);
 	} else {
 		ie_build_wpa(&info, rsne_buf);
-		handshake_state_set_authenticator_wpa(hs, bss->wpa);
-		handshake_state_set_supplicant_wpa(hs, rsne_buf);
+		handshake_state_set_authenticator_ie(hs, bss->wpa);
+		handshake_state_set_supplicant_ie(hs, rsne_buf);
 	}
 
 	if (info.akm_suites & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
@@ -1199,7 +1199,7 @@ static void station_preauthenticate_cb(struct netdev *netdev,
 		rsn_info.pmkids = pmkid;
 
 		ie_build_rsne(&rsn_info, rsne_buf);
-		handshake_state_set_supplicant_rsn(new_hs, rsne_buf);
+		handshake_state_set_supplicant_ie(new_hs, rsne_buf);
 	}
 
 	station_transition_reassociate(station, bss, new_hs);

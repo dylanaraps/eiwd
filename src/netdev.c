@@ -1616,14 +1616,14 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 
 		switch (ie_tlv_iter_get_tag(&iter)) {
 		case IE_TYPE_RSN:
-			handshake_state_set_supplicant_rsn(netdev->handshake,
+			handshake_state_set_supplicant_ie(netdev->handshake,
 								data - 2);
 			break;
 		case IE_TYPE_VENDOR_SPECIFIC:
 			if (!is_ie_wpa_ie(data, ie_tlv_iter_get_length(&iter)))
 				break;
 
-			handshake_state_set_supplicant_wpa(netdev->handshake,
+			handshake_state_set_supplicant_ie(netdev->handshake,
 								data - 2);
 			break;
 		case IE_TYPE_MOBILITY_DOMAIN:
@@ -2876,7 +2876,7 @@ static int fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 	handshake_state_set_authenticator_address(netdev->handshake,
 							target_bss->addr);
 
-	handshake_state_set_authenticator_rsn(netdev->handshake,
+	handshake_state_set_authenticator_ie(netdev->handshake,
 							target_bss->rsne);
 	memcpy(netdev->handshake->mde + 2, target_bss->mde, 3);
 
