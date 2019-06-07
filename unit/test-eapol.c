@@ -2180,11 +2180,11 @@ static void eapol_sm_test_ptk(const void *data)
 	handshake_state_set_authenticator_address(hs, aa);
 	handshake_state_set_supplicant_address(hs, spa);
 
-	r =  handshake_state_set_supplicant_rsn(hs,
+	r =  handshake_state_set_supplicant_ie(hs,
 				eapol_key_data_4 + EAPOL_FRAME_LEN(16));
 	assert(r);
 
-	handshake_state_set_authenticator_rsn(hs, ap_rsne);
+	handshake_state_set_authenticator_ie(hs, ap_rsne);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
@@ -2244,11 +2244,11 @@ static void eapol_sm_test_igtk(const void *data)
 	handshake_state_set_authenticator_address(hs, aa);
 	handshake_state_set_supplicant_address(hs, spa);
 
-	r =  handshake_state_set_supplicant_rsn(hs,
+	r =  handshake_state_set_supplicant_ie(hs,
 				eapol_key_data_30 + EAPOL_FRAME_LEN(16));
 	assert(r);
 
-	handshake_state_set_authenticator_rsn(hs, ap_rsne);
+	handshake_state_set_authenticator_ie(hs, ap_rsne);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
@@ -2308,11 +2308,11 @@ static void eapol_sm_test_wpa2_ptk_gtk(const void *data)
 	handshake_state_set_authenticator_address(hs, aa);
 	handshake_state_set_supplicant_address(hs, spa);
 
-	r = handshake_state_set_supplicant_rsn(hs,
+	r = handshake_state_set_supplicant_ie(hs,
 				eapol_key_data_8 + EAPOL_FRAME_LEN(16));
 	assert(r);
 
-	handshake_state_set_authenticator_rsn(hs, ap_rsne);
+	handshake_state_set_authenticator_ie(hs, ap_rsne);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
@@ -2375,11 +2375,11 @@ static void eapol_sm_test_wpa_ptk_gtk(const void *data)
 	handshake_state_set_pmk(hs, psk, sizeof(psk));
 	handshake_state_set_authenticator_address(hs, ap_address);
 	handshake_state_set_supplicant_address(hs, sta_address);
-	r = handshake_state_set_supplicant_wpa(hs,
+	r = handshake_state_set_supplicant_ie(hs,
 				eapol_key_data_14 + EAPOL_FRAME_LEN(16));
 	assert(r);
 
-	handshake_state_set_authenticator_wpa(hs, ap_wpa_ie);
+	handshake_state_set_authenticator_ie(hs, ap_wpa_ie);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
@@ -2443,11 +2443,11 @@ static void eapol_sm_test_wpa_ptk_gtk_2(const void *data)
 	handshake_state_set_authenticator_address(hs, ap_address);
 	handshake_state_set_supplicant_address(hs, sta_address);
 
-	r = handshake_state_set_supplicant_wpa(hs,
+	r = handshake_state_set_supplicant_ie(hs,
 				eapol_key_data_20 + EAPOL_FRAME_LEN(16));
 	assert(r);
 
-	handshake_state_set_authenticator_wpa(hs, ap_wpa_ie);
+	handshake_state_set_authenticator_ie(hs, ap_wpa_ie);
 	eapol_start(sm);
 
 	__eapol_set_tx_packet_func(verify_step2);
@@ -2558,11 +2558,11 @@ static void eapol_sm_wpa2_retransmit_test(const void *data)
 	handshake_state_set_authenticator_address(hs, ap_address);
 	handshake_state_set_supplicant_address(hs, sta_address);
 
-	r = handshake_state_set_supplicant_rsn(hs,
+	r = handshake_state_set_supplicant_ie(hs,
 				eapol_key_data_8 + EAPOL_FRAME_LEN(16));
 	assert(r);
 
-	handshake_state_set_authenticator_rsn(hs, ap_rsne);
+	handshake_state_set_authenticator_ie(hs, ap_rsne);
 	eapol_start(sm);
 
 	ptk_step1 = eapol_key_validate(eapol_key_data_7,
@@ -2916,11 +2916,11 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	handshake_state_set_event_func(hs, verify_handshake_successful, NULL);
 	__eapol_set_tx_user_data(s);
 
-	r = handshake_state_set_supplicant_wpa(hs,
+	r = handshake_state_set_supplicant_ie(hs,
 				eapol_key_data_14 + EAPOL_FRAME_LEN(16));
 	assert(r);
 
-	handshake_state_set_authenticator_wpa(hs, ap_wpa_ie);
+	handshake_state_set_authenticator_ie(hs, ap_wpa_ie);
 
 	settings = l_settings_new();
 	l_settings_load_from_data(settings, config, strlen(config));
@@ -3293,11 +3293,11 @@ static void eapol_sm_test_eap_nak(const void *data)
 	handshake_state_set_event_func(hs, test_handshake_event, NULL);
 	__eapol_set_tx_user_data(&s);
 
-	r = handshake_state_set_supplicant_wpa(hs,
+	r = handshake_state_set_supplicant_ie(hs,
 				eapol_key_data_20 + EAPOL_FRAME_LEN(16));
 	assert(r);
 
-	handshake_state_set_authenticator_wpa(hs, ap_wpa_ie);
+	handshake_state_set_authenticator_ie(hs, ap_wpa_ie);
 
 	settings = l_settings_new();
 	l_settings_load_from_data(settings, eapol_8021x_config,
@@ -3390,8 +3390,8 @@ static void eapol_ft_handshake_test(const void *data)
 	handshake_state_set_supplicant_address(hs, spa);
 	handshake_state_set_ssid(hs, (void *) ssid, strlen(ssid));
 
-	handshake_state_set_supplicant_rsn(hs, own_rsne);
-	handshake_state_set_authenticator_rsn(hs, ap_rsne);
+	handshake_state_set_supplicant_ie(hs, own_rsne);
+	handshake_state_set_authenticator_ie(hs, ap_rsne);
 	handshake_state_set_mde(hs, mde);
 	handshake_state_set_fte(hs, fte);
 	handshake_state_set_kh_ids(hs, r0khid, strlen((void *) r0khid), r1khid);
