@@ -50,6 +50,7 @@ enum crypto_akm {
 	CRYPTO_AKM_FT_OVER_FILS_SHA256 = 0x000fac10,
 	CRYPTO_AKM_FT_OVER_FILS_SHA384 = 0x000fac11,
 	CRYPTO_AKM_OWE = 0x000fac12,
+	CRYPTO_AKM_OSEN = 0x506f9a01,
 };
 
 /* Min & Max reported by crypto_cipher_key_len when ignoring WEP */
