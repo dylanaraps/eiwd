@@ -82,7 +82,8 @@ bool security_from_str(const char *str, enum security *security)
 		IE_RSN_AKM_SUITE_FILS_SHA256 |				\
 		IE_RSN_AKM_SUITE_FILS_SHA384 |				\
 		IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256 |			\
-		IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384)			\
+		IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384 |			\
+		IE_RSN_AKM_SUITE_OSEN)					\
 )
 
 enum security security_determine(uint16_t bss_capability,

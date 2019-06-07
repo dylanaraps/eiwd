@@ -1744,6 +1744,8 @@ static unsigned int ie_rsn_akm_suite_to_nl80211(enum ie_rsn_akm_suite akm)
 		return CRYPTO_AKM_FT_OVER_FILS_SHA384;
 	case IE_RSN_AKM_SUITE_OWE:
 		return CRYPTO_AKM_OWE;
+	case IE_RSN_AKM_SUITE_OSEN:
+		return CRYPTO_AKM_OSEN;
 	}
 
 	return 0;

@@ -34,6 +34,7 @@
 
 static const uint8_t ieee_oui[3] = { 0x00, 0x0f, 0xac };
 static const uint8_t microsoft_oui[3] = { 0x00, 0x50, 0xf2 };
+static const uint8_t wifi_alliance_oui[3] = { 0x50, 0x6f, 0x9a };
 
 void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 			unsigned int len)
@@ -839,6 +840,8 @@ static bool ie_build_rsn_akm_suite(uint8_t *data, enum ie_rsn_akm_suite suite)
 		RETURN_AKM(data, ieee_oui, 17);
 	case IE_RSN_AKM_SUITE_OWE:
 		RETURN_AKM(data, ieee_oui, 18);
+	case IE_RSN_AKM_SUITE_OSEN:
+		RETURN_AKM(data, wifi_alliance_oui, 1);
 	}
 
 	return false;
