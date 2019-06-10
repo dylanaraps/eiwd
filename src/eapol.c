@@ -1391,6 +1391,25 @@ static const uint8_t *eapol_find_rsne(const uint8_t *data, size_t data_len,
 	return first;
 }
 
+static const uint8_t *eapol_find_osen(const uint8_t *data, size_t data_len)
+{
+	struct ie_tlv_iter iter;
+
+	ie_tlv_iter_init(&iter, data, data_len);
+
+	while (ie_tlv_iter_next(&iter)) {
+		if (ie_tlv_iter_get_tag(&iter) == IE_TYPE_VENDOR_SPECIFIC) {
+			if (!is_ie_wfa_ie(iter.data, iter.len, IE_WFA_OI_OSEN))
+				continue;
+		} else
+			continue;
+
+		return ie_tlv_iter_get_data(&iter) - 2;
+	}
+
+	return NULL;
+}
+
 /* 802.11-2016 Section 12.7.6.3 */
 static void eapol_handle_ptk_2_of_4(struct eapol_sm *sm,
 					const struct eapol_key *ek)
@@ -1507,13 +1526,16 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 	 * not identical to that the STA received in the Beacon or Probe
 	 * Response frame, the STA shall disassociate.
 	 */
-	if (!sm->handshake->wpa_ie)
+	if (sm->handshake->wpa_ie)
+		rsne = eapol_find_wpa_ie(decrypted_key_data,
+					decrypted_key_data_size);
+	else if (sm->handshake->osen_ie)
+		rsne = eapol_find_osen(decrypted_key_data,
+					decrypted_key_data_size);
+	else
 		rsne = eapol_find_rsne(decrypted_key_data,
 					decrypted_key_data_size,
 					&optional_rsne);
-	else
-		rsne = eapol_find_wpa_ie(decrypted_key_data,
-					decrypted_key_data_size);
 
 	if (!rsne)
 		goto error_ie_different;
