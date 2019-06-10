@@ -539,6 +539,7 @@ static int station_build_handshake_rsn(struct handshake_state *hs,
 	uint8_t rsne_buf[256];
 	struct ie_rsn_info info;
 	uint32_t mfp_setting;
+	uint8_t *ap_ie;
 
 	memset(&info, 0, sizeof(info));
 
@@ -578,6 +579,13 @@ static int station_build_handshake_rsn(struct handshake_state *hs,
 	if (!info.pairwise_ciphers || !info.group_cipher)
 		goto not_supported;
 
+	/* Management frame protection is explicitly off for OSEN */
+	if (info.akm_suites & IE_RSN_AKM_SUITE_OSEN) {
+		info.group_management_cipher =
+					IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC;
+		goto build_ie;
+	}
+
 	if (!l_settings_get_uint(settings, "General",
 			"ManagementFrameProtection", &mfp_setting))
 		mfp_setting = 1;
@@ -616,16 +624,25 @@ static int station_build_handshake_rsn(struct handshake_state *hs,
 	if (bss_info.mfpr && !info.mfpc)
 		goto not_supported;
 
+build_ie:
 	/* RSN takes priority */
 	if (bss->rsne) {
+		ap_ie = bss->rsne;
 		ie_build_rsne(&info, rsne_buf);
-		handshake_state_set_authenticator_ie(hs, bss->rsne);
-		handshake_state_set_supplicant_ie(hs, rsne_buf);
-	} else {
+	} else if (bss->wpa) {
+		ap_ie = bss->wpa;
 		ie_build_wpa(&info, rsne_buf);
-		handshake_state_set_authenticator_ie(hs, bss->wpa);
-		handshake_state_set_supplicant_ie(hs, rsne_buf);
-	}
+	} else if (bss->osen) {
+		ap_ie = bss->osen;
+		ie_build_osen(&info, rsne_buf);
+	} else
+		goto not_supported;
+
+	if (!handshake_state_set_authenticator_ie(hs, ap_ie))
+		goto not_supported;
+
+	if (!handshake_state_set_supplicant_ie(hs, rsne_buf))
+		goto not_supported;
 
 	if (info.akm_suites & (IE_RSN_AKM_SUITE_FT_OVER_8021X |
 				IE_RSN_AKM_SUITE_FT_USING_PSK |
