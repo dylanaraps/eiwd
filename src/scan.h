@@ -48,6 +48,7 @@ struct scan_bss {
 	uint16_t capability;
 	uint8_t *rsne;
 	uint8_t *wpa;
+	uint8_t *osen;
 	uint8_t *wsc;		/* Concatenated WSC IEs */
 	ssize_t wsc_size;	/* Size of Concatenated WSC IEs */
 	uint8_t mde[3];

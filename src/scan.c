@@ -731,6 +731,20 @@ static bool start_next_scan_request(struct scan_context *sc)
 	return false;
 }
 
+static bool scan_parse_vendor_specific(struct scan_bss *bss, const void *data,
+					uint16_t len)
+{
+	if (!bss->wpa && is_ie_wpa_ie(data, len)) {
+		bss->wpa = l_memdup(data - 2, len + 2);
+		return true;
+	} else if (!bss->osen && is_ie_wfa_ie(data, len, IE_WFA_OI_OSEN))
+		bss->osen = l_memdup(data - 2, len + 2);
+	else
+		return false;
+
+	return false;
+}
+
 static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 					const void *data, uint16_t len)
 {
@@ -778,10 +792,8 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 
 			break;
 		case IE_TYPE_VENDOR_SPECIFIC:
-			/* Interested only in WPA IE from Vendor data */
-			if (!bss->wpa && is_ie_wpa_ie(iter.data, iter.len))
-				bss->wpa = l_memdup(iter.data - 2,
-								iter.len + 2);
+			/* Interested only in WPA/WFA IE from Vendor data */
+			scan_parse_vendor_specific(bss, iter.data, iter.len);
 			break;
 		case IE_TYPE_MOBILITY_DOMAIN:
 			if (!bss->mde_present && iter.len == 3) {
@@ -1066,6 +1078,14 @@ int scan_bss_get_rsn_info(const struct scan_bss *bss, struct ie_rsn_info *info)
 							info);
 		if (res < 0) {
 			l_debug("Cannot parse WPA IE (%d, %s)",
+					res, strerror(-res));
+			return res;
+		}
+	} else if (bss->osen) {
+		int res = ie_parse_osen_from_data(bss->osen, bss->osen[1] + 2,
+							info);
+		if (res < 0) {
+			l_debug("Cannot parse OSEN IE (%d, %s)",
 					res, strerror(-res));
 			return res;
 		}
