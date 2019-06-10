@@ -203,7 +203,6 @@ static void bss_free(void *data)
 	const char *addr;
 
 	addr = util_address_to_string(bss->addr);
-	l_debug("Freeing BSS %s", addr);
 
 	scan_bss_free(bss);
 }
