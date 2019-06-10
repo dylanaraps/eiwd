@@ -143,7 +143,13 @@ static bool handshake_state_setup_own_ciphers(struct handshake_state *s,
 	s->pairwise_cipher = info->pairwise_ciphers;
 	s->group_cipher = info->group_cipher;
 	s->group_management_cipher = info->group_management_cipher;
-	s->mfp = info->mfpc;
+
+	/*
+	 * Dont set MFP for OSEN otherwise EAPoL will attempt to negotiate a
+	 * iGTK which is not allowe for OSEN.
+	 */
+	if (!s->osen_ie)
+		s->mfp = info->mfpc;
 
 	return true;
 }
@@ -156,12 +162,16 @@ bool handshake_state_set_authenticator_ie(struct handshake_state *s,
 	l_free(s->authenticator_ie);
 	s->authenticator_ie = l_memdup(ie, ie[1] + 2u);
 	s->wpa_ie = is_ie_wpa_ie(ie + 2, ie[1]);
+	s->osen_ie = is_ie_wfa_ie(ie + 2, ie[1], IE_WFA_OI_OSEN);
 
 	if (!s->authenticator)
 		return true;
 
 	if (s->wpa_ie) {
 		if (ie_parse_wpa_from_data(ie, ie[1] + 2, &info) < 0)
+			return false;
+	} else if (s->osen_ie) {
+		if (ie_parse_osen_from_data(ie, ie[1] + 2, &info) < 0)
 			return false;
 	} else {
 		if (ie_parse_rsne_from_data(ie, ie[1] + 2, &info) < 0)
@@ -179,12 +189,16 @@ bool handshake_state_set_supplicant_ie(struct handshake_state *s,
 	l_free(s->supplicant_ie);
 	s->supplicant_ie = l_memdup(ie, ie[1] + 2u);
 	s->wpa_ie = is_ie_wpa_ie(ie + 2, ie[1]);
+	s->osen_ie = is_ie_wfa_ie(ie + 2, ie[1], IE_WFA_OI_OSEN);
 
 	if (s->authenticator)
 		return true;
 
 	if (s->wpa_ie) {
 		if (ie_parse_wpa_from_data(ie, ie[1] + 2, &info) < 0)
+			return false;
+	} else if (s->osen_ie) {
+		if (ie_parse_osen_from_data(ie, ie[1] + 2, &info) < 0)
 			return false;
 	} else {
 		if (ie_parse_rsne_from_data(ie, ie[1] + 2, &info) < 0)

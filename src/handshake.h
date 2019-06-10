@@ -103,6 +103,7 @@ struct handshake_state {
 	bool have_snonce : 1;
 	bool ptk_complete : 1;
 	bool wpa_ie : 1;
+	bool osen_ie : 1;
 	bool have_pmk : 1;
 	bool mfp : 1;
 	bool have_anonce : 1;
