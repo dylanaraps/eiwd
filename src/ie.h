@@ -479,3 +479,9 @@ bool ie_build_fast_bss_transition(const struct ie_ft_info *info,
 
 int ie_parse_neighbor_report(struct ie_tlv_iter *iter,
 				struct ie_neighbor_report_info *info);
+
+int ie_parse_osen_from_data(const uint8_t *data, size_t len,
+				struct ie_rsn_info *info);
+int ie_parse_osen(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info);
+
+bool ie_build_osen(const struct ie_rsn_info *info, uint8_t *to);

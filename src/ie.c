@@ -424,7 +424,7 @@ static bool ie_parse_cipher_suite(const uint8_t *data,
 }
 
 /* 802.11, Section 8.4.2.27.2 */
-static int ie_parse_akm_suite(const uint8_t *data,
+static int ie_parse_rsn_akm_suite(const uint8_t *data,
 					enum ie_rsn_akm_suite *out)
 {
 	/*
@@ -498,6 +498,20 @@ static int ie_parse_akm_suite(const uint8_t *data,
 	return -ENOENT;
 }
 
+static int ie_parse_osen_akm_suite(const uint8_t *data,
+					enum ie_rsn_akm_suite *out)
+{
+	if (memcmp(data, wifi_alliance_oui, 3))
+		return -ENOENT;
+
+	if (data[3] != 1)
+		return -ENOENT;
+
+	*out = IE_RSN_AKM_SUITE_OSEN;
+
+	return 0;
+}
+
 static bool ie_parse_group_cipher(const uint8_t *data,
 					enum ie_rsn_cipher_suite *out)
 {
@@ -560,6 +574,7 @@ static bool ie_parse_group_management_cipher(const uint8_t *data,
 
 	switch (tmp) {
 	case IE_RSN_CIPHER_SUITE_BIP:
+	case IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC:
 		break;
 	default:
 		return false;
@@ -576,35 +591,19 @@ static bool ie_parse_group_management_cipher(const uint8_t *data,
 	if (len == 0)			\
 		goto done		\
 
-int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
+static int parse_ciphers(const uint8_t *data, size_t len,
+			int (*akm_parse)(const uint8_t *data,
+						enum ie_rsn_akm_suite *out),
+			struct ie_rsn_info *out_info)
 {
-	const uint8_t *data = iter->data;
-	size_t len = iter->len;
-	uint16_t version;
-	struct ie_rsn_info info;
 	uint16_t count;
 	uint16_t i;
-
-	memset(&info, 0, sizeof(info));
-	info.group_cipher = IE_RSN_CIPHER_SUITE_CCMP;
-	info.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP;
-	info.akm_suites = IE_RSN_AKM_SUITE_8021X;
-
-	/* Parse Version field */
-	if (len < 2)
-		return -EMSGSIZE;
-
-	version = l_get_le16(data);
-	if (version != 0x01)
-		return -EBADMSG;
-
-	RSNE_ADVANCE(data, len, 2);
 
 	/* Parse Group Cipher Suite field */
 	if (len < 4)
 		return -EBADMSG;
 
-	if (!ie_parse_group_cipher(data, &info.group_cipher))
+	if (!ie_parse_group_cipher(data, &out_info->group_cipher))
 		return -ERANGE;
 
 	RSNE_ADVANCE(data, len, 4);
@@ -629,13 +628,13 @@ int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 		return -EBADMSG;
 
 	/* Parse Pairwise Cipher Suite List field */
-	for (i = 0, info.pairwise_ciphers = 0; i < count; i++) {
+	for (i = 0, out_info->pairwise_ciphers = 0; i < count; i++) {
 		enum ie_rsn_cipher_suite suite;
 
 		if (!ie_parse_pairwise_cipher(data + i * 4, &suite))
 			return -ERANGE;
 
-		info.pairwise_ciphers |= suite;
+		out_info->pairwise_ciphers |= suite;
 	}
 
 	RSNE_ADVANCE(data, len, count * 4);
@@ -655,14 +654,14 @@ int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 		return -EBADMSG;
 
 	/* Parse AKM Suite List field */
-	for (i = 0, info.akm_suites = 0; i < count; i++) {
+	for (i = 0, out_info->akm_suites = 0; i < count; i++) {
 		enum ie_rsn_akm_suite suite;
 		int ret;
 
-		ret = ie_parse_akm_suite(data + i * 4, &suite);
+		ret = akm_parse(data + i * 4, &suite);
 		switch (ret) {
 		case 0:
-			info.akm_suites |= suite;
+			out_info->akm_suites |= suite;
 			break;
 		case -ENOENT:
 			/* Skip unknown or vendor specific AKMs */
@@ -677,24 +676,24 @@ int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 	if (len < 2)
 		return -EBADMSG;
 
-	info.preauthentication = util_is_bit_set(data[0], 0);
-	info.no_pairwise = util_is_bit_set(data[0], 1);
-	info.ptksa_replay_counter = util_bit_field(data[0], 2, 2);
-	info.gtksa_replay_counter = util_bit_field(data[0], 4, 2);
-	info.mfpr = util_is_bit_set(data[0], 6);
-	info.mfpc = util_is_bit_set(data[0], 7);
-	info.peerkey_enabled = util_is_bit_set(data[1], 1);
-	info.spp_a_msdu_capable = util_is_bit_set(data[1], 2);
-	info.spp_a_msdu_required = util_is_bit_set(data[1], 3);
-	info.pbac = util_is_bit_set(data[1], 4);
-	info.extended_key_id = util_is_bit_set(data[1], 5);
+	out_info->preauthentication = util_is_bit_set(data[0], 0);
+	out_info->no_pairwise = util_is_bit_set(data[0], 1);
+	out_info->ptksa_replay_counter = util_bit_field(data[0], 2, 2);
+	out_info->gtksa_replay_counter = util_bit_field(data[0], 4, 2);
+	out_info->mfpr = util_is_bit_set(data[0], 6);
+	out_info->mfpc = util_is_bit_set(data[0], 7);
+	out_info->peerkey_enabled = util_is_bit_set(data[1], 1);
+	out_info->spp_a_msdu_capable = util_is_bit_set(data[1], 2);
+	out_info->spp_a_msdu_required = util_is_bit_set(data[1], 3);
+	out_info->pbac = util_is_bit_set(data[1], 4);
+	out_info->extended_key_id = util_is_bit_set(data[1], 5);
 
 	/*
 	 * BIP—default group management cipher suite in an RSNA with
 	 * management frame protection enabled
 	 */
-	if (info.mfpc)
-		info.group_management_cipher = IE_RSN_CIPHER_SUITE_BIP;
+	if (out_info->mfpc)
+		out_info->group_management_cipher = IE_RSN_CIPHER_SUITE_BIP;
 
 	RSNE_ADVANCE(data, len, 2);
 
@@ -702,11 +701,11 @@ int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 	if (len < 2)
 		return -EBADMSG;
 
-	info.num_pmkids = l_get_le16(data);
+	out_info->num_pmkids = l_get_le16(data);
 	RSNE_ADVANCE(data, len, 2);
 
-	if (info.num_pmkids > 0) {
-		if (len < 16 * info.num_pmkids)
+	if (out_info->num_pmkids > 0) {
+		if (len < 16 * out_info->num_pmkids)
 			return -EBADMSG;
 
 		/*
@@ -715,8 +714,8 @@ int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 		 * We simply assign the pointer to the PMKIDs to the structure.
 		 * The PMKIDs are fixed size, 16 bytes each.
 		 */
-		info.pmkids = data;
-		RSNE_ADVANCE(data, len, info.num_pmkids * 16);
+		out_info->pmkids = data;
+		RSNE_ADVANCE(data, len, out_info->num_pmkids * 16);
 	}
 
 	/* Parse Group Management Cipher Suite field */
@@ -724,12 +723,41 @@ int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 		return -EBADMSG;
 
 	if (!ie_parse_group_management_cipher(data,
-						&info.group_management_cipher))
+					&out_info->group_management_cipher))
 		return -ERANGE;
 
 	RSNE_ADVANCE(data, len, 4);
 
 	return -EBADMSG;
+
+done:
+	return 0;
+}
+
+int ie_parse_rsne(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
+{
+	const uint8_t *data = iter->data;
+	size_t len = iter->len;
+	uint16_t version;
+	struct ie_rsn_info info;
+
+	memset(&info, 0, sizeof(info));
+	info.group_cipher = IE_RSN_CIPHER_SUITE_CCMP;
+	info.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP;
+	info.akm_suites = IE_RSN_AKM_SUITE_8021X;
+
+	/* Parse Version field */
+	if (len < 2)
+		return -EMSGSIZE;
+
+	version = l_get_le16(data);
+	if (version != 0x01)
+		return -EBADMSG;
+
+	RSNE_ADVANCE(data, len, 2);
+
+	if (parse_ciphers(data, len, ie_parse_rsn_akm_suite, &info) < 0)
+		return -EBADMSG;
 
 done:
 	if (out_info)
@@ -752,6 +780,48 @@ int ie_parse_rsne_from_data(const uint8_t *data, size_t len,
 		return -EPROTOTYPE;
 
 	return ie_parse_rsne(&iter, info);
+}
+
+int ie_parse_osen(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
+{
+	const uint8_t *data = iter->data;
+	size_t len = iter->len;
+	struct ie_rsn_info info;
+
+	if (ie_tlv_iter_get_tag(iter) != IE_TYPE_VENDOR_SPECIFIC)
+		return -EPROTOTYPE;
+
+	if (!is_ie_wfa_ie(iter->data, iter->len, IE_WFA_OI_OSEN))
+		return -EPROTOTYPE;
+
+	RSNE_ADVANCE(data, len, 4);
+
+	memset(&info, 0, sizeof(info));
+	info.group_cipher = IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC;
+	info.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP;
+	info.akm_suites = IE_RSN_AKM_SUITE_8021X;
+
+	if (parse_ciphers(data, len, ie_parse_osen_akm_suite, &info) < 0)
+		return -EBADMSG;
+
+done:
+	if (out_info)
+		memcpy(out_info, &info, sizeof(info));
+
+	return 0;
+}
+
+int ie_parse_osen_from_data(const uint8_t *data, size_t len,
+				struct ie_rsn_info *info)
+{
+	struct ie_tlv_iter iter;
+
+	ie_tlv_iter_init(&iter, data, len);
+
+	if (!ie_tlv_iter_next(&iter))
+		return -EMSGSIZE;
+
+	return ie_parse_osen(&iter, info);
 }
 
 /*
@@ -862,15 +932,8 @@ static bool ie_build_wpa_akm_suite(uint8_t *data, enum ie_rsn_akm_suite suite)
 	return false;
 }
 
-/*
- * Generate an RSNE IE based on the information found in info.
- * The to array must be 256 bytes in size
- *
- * In theory it is possible to generate 257 byte IE RSNs (1 byte for IE Type,
- * 1 byte for Length and 255 bytes of data) but we don't support this
- * possibility.
- */
-bool ie_build_rsne(const struct ie_rsn_info *info, uint8_t *to)
+static int build_ciphers_common(const struct ie_rsn_info *info, uint8_t *to,
+				uint8_t max_len, bool force_group_mgmt_cipher)
 {
 	/* These are the only valid pairwise suites */
 	static enum ie_rsn_cipher_suite pairwise_suites[] = {
@@ -880,22 +943,15 @@ bool ie_build_rsne(const struct ie_rsn_info *info, uint8_t *to)
 		IE_RSN_CIPHER_SUITE_WEP40,
 		IE_RSN_CIPHER_SUITE_USE_GROUP_CIPHER,
 	};
-	unsigned int pos;
+	unsigned int pos = 0;
 	unsigned int i;
 	uint8_t *countptr;
 	uint16_t count;
 	enum ie_rsn_akm_suite akm_suite;
 
-	to[0] = IE_TYPE_RSN;
-
-	/* Version field, always 1 */
-	pos = 2;
-	l_put_le16(1, to + pos);
-	pos += 2;
-
 	/* Group Data Cipher Suite */
 	if (!ie_build_cipher_suite(to + pos, ieee_oui, info->group_cipher))
-		return false;
+		return -EINVAL;
 
 	pos += 4;
 
@@ -909,11 +965,11 @@ bool ie_build_rsne(const struct ie_rsn_info *info, uint8_t *to)
 		if (!(info->pairwise_ciphers & suite))
 			continue;
 
-		if (pos + 4 > 242)
-			return false;
+		if (pos + 4 > max_len)
+			return -EBADMSG;
 
 		if (!ie_build_cipher_suite(to + pos, ieee_oui, suite))
-			return false;
+			return -EINVAL;
 
 		pos += 4;
 		count += 1;
@@ -929,16 +985,16 @@ bool ie_build_rsne(const struct ie_rsn_info *info, uint8_t *to)
 	count = 0;
 
 	for (count = 0, akm_suite = IE_RSN_AKM_SUITE_8021X;
-			akm_suite <= IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384;
+			akm_suite <= IE_RSN_AKM_SUITE_OSEN;
 				akm_suite <<= 1) {
 		if (!(info->akm_suites & akm_suite))
 			continue;
 
-		if (pos + 4 > 248)
-			return false;
+		if (pos + 4 > max_len)
+			return -EBADMSG;
 
 		if (!ie_build_rsn_akm_suite(to + pos, akm_suite))
-			return false;
+			return -EINVAL;
 
 		pos += 4;
 		count += 1;
@@ -987,7 +1043,7 @@ bool ie_build_rsne(const struct ie_rsn_info *info, uint8_t *to)
 	pos += 1;
 
 	/* Short hand the generated RSNE if possible */
-	if (info->num_pmkids == 0) {
+	if (info->num_pmkids == 0 && !force_group_mgmt_cipher) {
 		/* No Group Management Cipher Suite */
 		if (to[pos - 2] == 0 && to[pos - 1] == 0) {
 			pos -= 2;
@@ -1003,26 +1059,81 @@ bool ie_build_rsne(const struct ie_rsn_info *info, uint8_t *to)
 	l_put_le16(info->num_pmkids, to + pos);
 	pos += 2;
 
-	if (pos + info->num_pmkids * 16 > 252)
-		return false;
+	if (pos + info->num_pmkids * 16 > max_len)
+		return -EINVAL;
 
 	/* PMKID List */
-	memcpy(to + pos, info->pmkids, 16 * info->num_pmkids);
-	pos += 16 * info->num_pmkids;
+	if (info->num_pmkids) {
+		memcpy(to + pos, info->pmkids, 16 * info->num_pmkids);
+		pos += 16 * info->num_pmkids;
+	}
 
-	if (!info->mfpc)
+	if (!force_group_mgmt_cipher && !info->mfpc)
 		goto done;
 
-	if (info->group_management_cipher == IE_RSN_CIPHER_SUITE_BIP)
+	if (!force_group_mgmt_cipher && info->group_management_cipher ==
+							IE_RSN_CIPHER_SUITE_BIP)
 		goto done;
 
 	/* Group Management Cipher Suite */
-	if (!ie_build_cipher_suite(to, ieee_oui, info->group_management_cipher))
-		return false;
+	if (!ie_build_cipher_suite(to + pos, ieee_oui,
+					info->group_management_cipher))
+		return -EINVAL;
 
 	pos += 4;
 
 done:
+	return pos;
+}
+
+/*
+ * Generate an RSNE IE based on the information found in info.
+ * The to array must be 256 bytes in size
+ *
+ * In theory it is possible to generate 257 byte IE RSNs (1 byte for IE Type,
+ * 1 byte for Length and 255 bytes of data) but we don't support this
+ * possibility.
+ */
+bool ie_build_rsne(const struct ie_rsn_info *info, uint8_t *to)
+{
+	unsigned int pos;
+	int ret;
+
+	to[0] = IE_TYPE_RSN;
+
+	/* Version field, always 1 */
+	pos = 2;
+	l_put_le16(1, to + pos);
+	pos += 2;
+
+	ret = build_ciphers_common(info, to + 4, 252, false);
+	if (ret < 0)
+		return false;
+
+	pos += ret;
+
+	to[1] = pos - 2;
+
+	return true;
+}
+
+bool ie_build_osen(const struct ie_rsn_info *info, uint8_t *to)
+{
+	unsigned int pos;
+	int ret;
+
+	to[0] = IE_TYPE_VENDOR_SPECIFIC;
+	pos = 2;
+	memcpy(to + pos, wifi_alliance_oui, 3);
+	pos += 3;
+	to[pos++] = 0x12;
+
+	ret = build_ciphers_common(info, to + 6, 250, true);
+	if (ret < 0)
+		return false;
+
+	pos += ret;
+
 	to[1] = pos - 2;
 
 	return true;
