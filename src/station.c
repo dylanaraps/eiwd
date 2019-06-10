@@ -200,9 +200,6 @@ static void station_add_autoconnect_bss(struct station *station,
 static void bss_free(void *data)
 {
 	struct scan_bss *bss = data;
-	const char *addr;
-
-	addr = util_address_to_string(bss->addr);
 
 	scan_bss_free(bss);
 }
