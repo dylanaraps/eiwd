@@ -299,3 +299,11 @@ class Hwsim(iwd.AsyncOpAbstract):
 
         iface.SendFrame(bytearray.fromhex(station.replace(':', '')),
                         freq, -30, bytearray.fromhex(frame))
+
+    def get_radio(self, name):
+        for path in self.radios:
+            radio = self.radios[path]
+            if radio.name == name:
+                return radio
+
+        return None
