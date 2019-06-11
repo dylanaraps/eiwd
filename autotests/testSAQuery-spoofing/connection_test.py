@@ -18,12 +18,8 @@ class Test(unittest.TestCase):
     def test_connection_success(self):
         hwsim = Hwsim()
 
-        intf = list(hostapd_map.values())[0]
-        hostapd = HostapdCLI(intf)
-        for path in hwsim.radios:
-            radio = hwsim.radios[path]
-            if radio.name == intf.wiphy.name:
-                break
+        hostapd = HostapdCLI(config='ssidCCMP.conf')
+        radio = hwsim.get_radio('rad0')
 
         wd = IWD()
 

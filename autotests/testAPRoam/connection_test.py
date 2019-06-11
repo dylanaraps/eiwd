@@ -19,26 +19,12 @@ class Test(unittest.TestCase):
     def test_connection_success(self):
         hwsim = Hwsim()
 
-        bss_hostapd = [None, None, None]
-        bss_radio = [None, None, None]
-
-        for intf in hostapd_map.values():
-            if intf.config and '1' in intf.config:
-                bss_idx = 0
-            elif intf.config and '2' in intf.config:
-                bss_idx = 1
-            elif intf.config and '3' in intf.config:
-                bss_idx = 2
-            else:
-                continue
-
-            for path in hwsim.radios:
-                radio = hwsim.radios[path]
-                if radio.name == intf.wiphy.name:
-                    break
-
-            bss_hostapd[bss_idx] = HostapdCLI(intf)
-            bss_radio[bss_idx] = radio
+        bss_hostapd = [ HostapdCLI(config='ssid1.conf'),
+                        HostapdCLI(config='ssid2.conf'),
+                        HostapdCLI(config='ssid3.conf') ]
+        bss_radio =  [ hwsim.get_radio('rad0'),
+                       hwsim.get_radio('rad1'),
+                       hwsim.get_radio('rad2') ]
 
         wd = IWD()
 

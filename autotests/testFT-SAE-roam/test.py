@@ -151,25 +151,12 @@ class Test(unittest.TestCase):
     def setUpClass(cls):
         hwsim = Hwsim()
 
-        cls.bss_hostapd = [None, None, None]
-        cls.bss_radio = [None, None, None]
-        for intf in hostapd_map.values():
-            if intf.config and '1' in intf.config:
-                bss_idx = 0
-            elif intf.config and '2' in intf.config:
-                bss_idx = 1
-            elif intf.config and '3' in intf.config:
-                bss_idx = 2
-            else:
-                continue
-
-            for path in hwsim.radios:
-                radio = hwsim.radios[path]
-                if radio.name == intf.wiphy.name:
-                    break
-
-            cls.bss_hostapd[bss_idx] = HostapdCLI(intf)
-            cls.bss_radio[bss_idx] = radio
+        cls.bss_hostapd = [ HostapdCLI(config='ft-sae-1.conf'),
+                            HostapdCLI(config='ft-sae-2.conf'),
+                            HostapdCLI(config='ft-psk-3.conf') ]
+        cls.bss_radio =  [ hwsim.get_radio('rad0'),
+                           hwsim.get_radio('rad1'),
+                           hwsim.get_radio('rad2') ]
 
         # Set interface addresses to those expected by hostapd config files
         os.system('ifconfig "' + cls.bss_hostapd[0].ifname +

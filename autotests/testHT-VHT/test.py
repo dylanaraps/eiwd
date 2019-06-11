@@ -50,29 +50,12 @@ class Test(unittest.TestCase):
 
     def test_connection_success(self):
         hwsim = Hwsim()
-        non_ht_hostapd = None
-        ht_hostapd = None
-        non_ht_radio = None
-        ht_radio = None
-        vht_radio = None
-
-        for intf in hostapd_map.values():
-            for path in hwsim.radios:
-                radio = hwsim.radios[path]
-                if radio.name == intf.wiphy.name:
-                    break
-
-            if intf.config == 'non-ht-vht.conf':
-                non_ht_hostapd = HostapdCLI(intf)
-                non_ht_radio = radio
-            elif intf.config == 'ht.conf':
-                ht_hostapd = HostapdCLI(intf)
-                ht_radio = radio
-            elif intf.config == 'vht.conf':
-                vht_hostapd = HostapdCLI(intf)
-                vht_radio = radio
-            else:
-                continue
+        non_ht_hostapd = HostapdCLI(config='non-ht-vht.conf')
+        ht_hostapd = HostapdCLI(config='ht.conf')
+        vht_hostapd = HostapdCLI(config='vht.conf')
+        non_ht_radio = hwsim.get_radio('rad0')
+        ht_radio = hwsim.get_radio('rad1')
+        vht_radio = hwsim.get_radio('rad2')
 
         self.assertIsNotNone(non_ht_hostapd)
         self.assertIsNotNone(ht_hostapd)

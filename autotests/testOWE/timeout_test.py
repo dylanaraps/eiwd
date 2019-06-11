@@ -17,13 +17,7 @@ class Test(unittest.TestCase):
     def test_connection_success(self):
         hwsim = Hwsim()
 
-        bss_radio = None
-
-        intf = list(hostapd.hostapd_map.values())[0]
-        for path in hwsim.radios:
-            radio = hwsim.radios[path]
-            if radio.name == intf.wiphy.name:
-                bss_radio = radio
+        bss_radio = hwsim.get_radio('rad0')
 
         self.assertIsNotNone(bss_radio)
 

@@ -16,23 +16,10 @@ class Test(unittest.TestCase):
     def test_preauth_success(self):
         hwsim = Hwsim()
 
-        bss_hostapd = [None, None]
-        bss_radio = [None, None]
-        for intf in hostapd_map.values():
-            if intf.config and '1' in intf.config:
-                bss_idx = 0
-            elif intf.config and '2' in intf.config:
-                bss_idx = 1
-            else:
-                continue
-
-            for path in hwsim.radios:
-                radio = hwsim.radios[path]
-                if radio.name == intf.wiphy.name:
-                    break
-
-            bss_hostapd[bss_idx] = HostapdCLI(intf)
-            bss_radio[bss_idx] = radio
+        bss_hostapd = [ HostapdCLI(config='eaptls-preauth-1.conf'),
+                        HostapdCLI(config='eaptls-preauth-2.conf') ]
+        bss_radio =  [ hwsim.get_radio('rad0'),
+                       hwsim.get_radio('rad1') ]
 
         rule0 = hwsim.rules.create()
         rule0.source = bss_radio[0].addresses[0]

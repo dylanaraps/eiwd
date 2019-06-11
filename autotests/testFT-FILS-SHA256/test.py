@@ -147,23 +147,10 @@ class Test(unittest.TestCase):
 
         hwsim = Hwsim()
 
-        cls.bss_hostapd = [None, None]
-        cls.bss_radio = [None, None]
-        for intf in hostapd_map.values():
-            if intf.config and '1' in intf.config:
-                bss_idx = 0
-            elif intf.config and '2' in intf.config:
-                bss_idx = 1
-            else:
-                continue
-
-            for path in hwsim.radios:
-                radio = hwsim.radios[path]
-                if radio.name == intf.wiphy.name:
-                    break
-
-            cls.bss_hostapd[bss_idx] = HostapdCLI(intf)
-            cls.bss_radio[bss_idx] = radio
+        cls.bss_hostapd = [ HostapdCLI(config='ft-eap-ccmp-1.conf'),
+                            HostapdCLI(config='ft-eap-ccmp-2.conf') ]
+        cls.bss_radio =  [ hwsim.get_radio('rad0'),
+                           hwsim.get_radio('rad1') ]
 
         # Set interface addresses to those expected by hostapd config files
         os.system('ifconfig "' + cls.bss_hostapd[0].ifname +
