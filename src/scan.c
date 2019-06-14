@@ -1113,6 +1113,7 @@ void scan_bss_free(struct scan_bss *bss)
 	l_free(bss->rsne);
 	l_free(bss->wpa);
 	l_free(bss->wsc);
+	l_free(bss->osen);
 	l_free(bss);
 }
 
