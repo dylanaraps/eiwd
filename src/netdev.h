@@ -66,6 +66,12 @@ enum netdev_iftype {
 	NETDEV_IFTYPE_P2P_GO,
 };
 
+enum netdev_anqp_result {
+	NETDEV_ANQP_SUCCESS,
+	NETDEV_ANQP_TIMEOUT,
+	NETDEV_ANQP_FAILED,
+};
+
 typedef void (*netdev_command_cb_t)(struct netdev *netdev, int result,
 						void *user_data);
 /*
@@ -123,6 +129,16 @@ typedef void (*netdev_frame_watch_func_t)(struct netdev *netdev,
 typedef void (*netdev_station_watch_func_t)(struct netdev *netdev,
 					const uint8_t *mac, bool added,
 					void *user_data);
+
+typedef void (*netdev_anqp_response_func_t)(struct netdev *netdev,
+					enum netdev_anqp_result result,
+					const void *anqp, size_t len,
+					void *user_data);
+uint32_t netdev_anqp_request(struct netdev *netdev, struct scan_bss *bss,
+				const uint8_t *anqp, size_t len,
+				netdev_anqp_response_func_t cb,
+				void *user_data,
+				netdev_destroy_func_t destroy);
 
 struct wiphy *netdev_get_wiphy(struct netdev *netdev);
 const uint8_t *netdev_get_address(struct netdev *netdev);
