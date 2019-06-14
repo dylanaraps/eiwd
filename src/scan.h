@@ -69,6 +69,7 @@ struct scan_bss {
 	bool ht_capable : 1;
 	bool vht_capable : 1;
 	bool anqp_capable : 1;
+	bool hs20_capable : 1;
 };
 
 struct scan_parameters {

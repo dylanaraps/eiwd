@@ -734,15 +734,16 @@ static bool start_next_scan_request(struct scan_context *sc)
 static bool scan_parse_vendor_specific(struct scan_bss *bss, const void *data,
 					uint16_t len)
 {
-	if (!bss->wpa && is_ie_wpa_ie(data, len)) {
+	if (!bss->wpa && is_ie_wpa_ie(data, len))
 		bss->wpa = l_memdup(data - 2, len + 2);
-		return true;
-	} else if (!bss->osen && is_ie_wfa_ie(data, len, IE_WFA_OI_OSEN))
+	else if (!bss->osen && is_ie_wfa_ie(data, len, IE_WFA_OI_OSEN))
 		bss->osen = l_memdup(data - 2, len + 2);
+	else if (is_ie_wfa_ie(data, len, IE_WFA_OI_HS20_INDICATION))
+		bss->hs20_capable = true;
 	else
 		return false;
 
-	return false;
+	return true;
 }
 
 /*
