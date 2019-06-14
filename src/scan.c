@@ -745,6 +745,55 @@ static bool scan_parse_vendor_specific(struct scan_bss *bss, const void *data,
 	return false;
 }
 
+/*
+ * Fully parses the Advertisement Protocol Element. The only thing being looked
+ * for is the ANQP protocol ID, but this could be burried behind several other
+ * advertisement tuples so the entire IE may need to be parsed.
+ */
+static bool scan_parse_advertisement_protocol(struct scan_bss *bss,
+						const void *data, uint16_t len)
+{
+	const uint8_t *ptr = data;
+
+	l_debug("");
+
+	while (len) {
+		/*
+		 * TODO: Store query info for GAS response length verification
+		 */
+		uint8_t id = ptr[1];
+
+		switch (id) {
+		/*
+		 * IEEE 802.11-2016 Section 11.25.3.3.1
+		 *
+		 * "A non-AP STA shall not transmit an ANQP request to
+		 * an AP for any ANQP-element unless the ANQP
+		 * Advertisement Protocol ID is included..."
+		 */
+		case IE_ADVERTISEMENT_ANQP:
+			bss->anqp_capable = true;
+			return true;
+		case IE_ADVERTISEMENT_MIH_SERVICE:
+		case IE_ADVERTISEMENT_MIH_DISCOVERY:
+		case IE_ADVERTISEMENT_EAS:
+		case IE_ADVERTISEMENT_RLQP:
+			len -= 2;
+			ptr += 2;
+			break;
+		case IE_ADVERTISEMENT_VENDOR_SPECIFIC:
+			/* IEEE 802.11-2016 Section 9.4.2.26 */
+			len -= ptr[3];
+			ptr += ptr[3];
+			break;
+		default:
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 					const void *data, uint16_t len)
 {
@@ -836,6 +885,13 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 			bss->vht_capable = true;
 			memcpy(bss->vht_ie, iter.data - 2, iter.len + 2);
 
+			break;
+		case IE_TYPE_ADVERTISEMENT_PROTOCOL:
+			if (iter.len < 2)
+				return false;
+
+			scan_parse_advertisement_protocol(bss, iter.data,
+								iter.len);
 			break;
 		}
 	}
