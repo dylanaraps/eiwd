@@ -253,8 +253,7 @@ static bool parse_eap(const unsigned char *anqp, unsigned int len,
 
 		method_out->method = method;
 		/* nai is guarenteed to NULL terminate and be < 256 bytes */
-		l_strlcpy(method_out->realm, nai,
-					sizeof(method_out->realm) - 1);
+		l_strlcpy(method_out->realm, nai, sizeof(method_out->realm));
 		method_out->non_eap_inner = non_eap_inner;
 		method_out->eap_inner = eap_inner;
 		method_out->credential = credential;
