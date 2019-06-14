@@ -2874,6 +2874,43 @@ static void netdev_gas_timeout_cb(struct l_timeout *timeout, void *user_data)
 		destroy(anqp_data);
 }
 
+static void netdev_frame_wait_cancel_event(struct l_genl_msg *msg,
+						struct netdev *netdev)
+{
+	struct l_genl_attr attr;
+	uint16_t type, len;
+	const void *data;
+	uint64_t cookie = 0;
+
+	l_debug("");
+
+	if (!netdev->anqp_cb)
+		return;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		switch (type) {
+		case NL80211_ATTR_COOKIE:
+			if (len != 8)
+				return;
+
+			cookie = l_get_u64(data);
+
+			break;
+		}
+	}
+
+	if (!cookie)
+		return;
+
+	if (cookie != netdev->anqp_cookie)
+		return;
+
+	netdev_gas_timeout_cb(netdev->gas_timeout, netdev);
+}
+
 uint32_t netdev_anqp_request(struct netdev *netdev, struct scan_bss *bss,
 				const uint8_t *anqp, size_t len,
 				netdev_anqp_response_func_t cb,
@@ -3606,6 +3643,9 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 	case NL80211_CMD_DEL_STATION:
 		netdev_station_event(msg, netdev, false);
+		break;
+	case NL80211_CMD_FRAME_WAIT_CANCEL:
+		netdev_frame_wait_cancel_event(msg, netdev);
 		break;
 	}
 }
