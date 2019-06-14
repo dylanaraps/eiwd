@@ -74,6 +74,7 @@ struct wiphy {
 	bool support_adhoc_rsn:1;
 	bool soft_rfkill : 1;
 	bool hard_rfkill : 1;
+	bool offchannel_tx_ok : 1;
 };
 
 static struct l_queue *wiphy_list = NULL;
@@ -329,6 +330,11 @@ uint8_t wiphy_get_max_num_ssids_per_scan(struct wiphy *wiphy)
 bool wiphy_supports_adhoc_rsn(struct wiphy *wiphy)
 {
 	return wiphy->support_adhoc_rsn;
+}
+
+bool wiphy_can_offchannel_tx(struct wiphy *wiphy)
+{
+	return wiphy->offchannel_tx_ok;
 }
 
 const char *wiphy_get_driver(struct wiphy *wiphy)
@@ -612,6 +618,9 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 		case NL80211_ATTR_SUPPORTED_IFTYPES:
 			if (l_genl_attr_recurse(attr, &nested))
 				parse_supported_iftypes(wiphy, &nested);
+			break;
+		case NL80211_ATTR_OFFCHANNEL_TX_OK:
+			wiphy->offchannel_tx_ok = true;
 			break;
 		}
 	}
