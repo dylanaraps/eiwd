@@ -84,13 +84,13 @@ struct scan_parameters {
 static inline int scan_bss_addr_cmp(const struct scan_bss *a1,
 					const struct scan_bss *a2)
 {
-        return memcmp(a1->addr, a2->addr, sizeof(a1->addr));
+	return memcmp(a1->addr, a2->addr, sizeof(a1->addr));
 }
 
 static inline bool scan_bss_addr_eq(const struct scan_bss *a1,
 					const struct scan_bss *a2)
 {
-        return !memcmp(a1->addr, a2->addr, sizeof(a1->addr));
+	return !memcmp(a1->addr, a2->addr, sizeof(a1->addr));
 }
 
 uint32_t scan_passive(uint32_t ifindex, struct scan_freq_set *freqs,
