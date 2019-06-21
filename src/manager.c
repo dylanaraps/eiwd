@@ -733,7 +733,7 @@ void manager_exit(void)
 	l_strfreev(whitelist_filter);
 	l_strfreev(blacklist_filter);
 
-	l_queue_destroy(pending_wiphys, NULL);
+	l_queue_destroy(pending_wiphys, wiphy_setup_state_free);
 	pending_wiphys = NULL;
 
 	nl80211 = NULL;
