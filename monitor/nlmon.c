@@ -3860,7 +3860,8 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_ACL_POLICY,
 			"ACL Policy", ATTR_U32 },
 	{ NL80211_ATTR_MAC_ADDRS,
-			"MAC Addresses" },
+			"MAC Addresses", ATTR_ARRAY,
+					{ .array_type = ATTR_ADDRESS } },
 	{ NL80211_ATTR_MAC_ACL_MAX,
 			"MAC ACL Max" },
 	{ NL80211_ATTR_RADAR_EVENT,
@@ -3977,6 +3978,8 @@ static void print_value(int indent, const char *label, enum attr_type type,
 	case ATTR_S64:
 	case ATTR_STRING:
 	case ATTR_ADDRESS:
+		print_address(indent, label, buf);
+		break;
 	case ATTR_BINARY:
 	case ATTR_NESTED:
 	case ATTR_ARRAY:
