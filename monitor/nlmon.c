@@ -3969,6 +3969,9 @@ static void print_value(int indent, const char *label, enum attr_type type,
 		if (len != 4)
 			printf("malformed packet\n");
 		break;
+	case ATTR_ADDRESS:
+		print_address(indent, label, buf);
+		break;
 	case ATTR_UNSPEC:
 	case ATTR_FLAG:
 	case ATTR_U8:
@@ -3977,9 +3980,6 @@ static void print_value(int indent, const char *label, enum attr_type type,
 	case ATTR_S32:
 	case ATTR_S64:
 	case ATTR_STRING:
-	case ATTR_ADDRESS:
-		print_address(indent, label, buf);
-		break;
 	case ATTR_BINARY:
 	case ATTR_NESTED:
 	case ATTR_ARRAY:
