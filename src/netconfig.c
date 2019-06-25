@@ -195,6 +195,22 @@ static void netconfig_ifaddr_notify(uint16_t type, const void *data,
 	}
 }
 
+static void netconfig_ifaddr_cmd_cb(int error, uint16_t type,
+						const void *data, uint32_t len,
+						void *user_data)
+{
+	if (error) {
+		l_error("netconfig: ifaddr command failure. "
+				"Error %d: %s", error, strerror(-error));
+		return;
+	}
+
+	if (type != RTM_NEWADDR)
+		return;
+
+	netconfig_ifaddr_notify(type, data, len, user_data);
+}
+
 bool netconfig_ifindex_add(uint32_t ifindex)
 {
 	struct netconfig *netconfig;
@@ -266,6 +282,15 @@ static int netconfig_init(void)
 	if (!r) {
 		l_error("netconfig: Failed to register for RTNL link address"
 							" notifications.");
+		l_netlink_destroy(rtnl);
+		rtnl = NULL;
+
+		return r;
+	}
+
+	r = rtnl_ifaddr_get(rtnl, netconfig_ifaddr_cmd_cb, NULL, NULL);
+	if (!r) {
+		l_error("netconfig: Failed to get addresses from RTNL link.");
 		l_netlink_destroy(rtnl);
 		rtnl = NULL;
 

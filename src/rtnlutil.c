@@ -110,3 +110,24 @@ void rtnl_ifaddr_extract(const struct ifaddrmsg *ifa, int bytes,
 		}
 	}
 }
+
+uint32_t rtnl_ifaddr_get(struct l_netlink *rtnl, l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy)
+{
+	struct ifaddrmsg *rtmmsg;
+	uint32_t id;
+
+	rtmmsg = l_malloc(sizeof(struct ifaddrmsg));
+	explicit_bzero(rtmmsg, sizeof(struct ifaddrmsg));
+
+	rtmmsg->ifa_family = AF_INET;
+
+	id = l_netlink_send(rtnl, RTM_GETADDR, NLM_F_DUMP, rtmmsg,
+				sizeof(struct ifaddrmsg), cb, user_data,
+				destroy);
+
+	l_free(rtmmsg);
+
+	return id;
+}
