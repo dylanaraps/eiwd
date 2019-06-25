@@ -43,6 +43,18 @@ static size_t rta_add_u8(void *rta_buf, unsigned short type, uint8_t value)
 	return RTA_SPACE(sizeof(uint8_t));
 }
 
+static size_t rta_add_data(void *rta_buf, unsigned short type, void *data,
+								size_t data_len)
+{
+	struct rtattr *rta = rta_buf;
+
+	rta->rta_len = RTA_LENGTH(data_len);
+	rta->rta_type = type;
+	memcpy(RTA_DATA(rta), data, data_len);
+
+	return RTA_SPACE(data_len);
+}
+
 uint32_t rtnl_set_linkmode_and_operstate(struct l_netlink *rtnl, int ifindex,
 					uint8_t linkmode, uint8_t operstate,
 					l_netlink_command_func_t cb,
@@ -130,4 +142,81 @@ uint32_t rtnl_ifaddr_get(struct l_netlink *rtnl, l_netlink_command_func_t cb,
 	l_free(rtmmsg);
 
 	return id;
+}
+
+static uint32_t rtnl_ifaddr_change(struct l_netlink *rtnl, uint16_t nlmsg_type,
+					int ifindex, uint8_t prefix_len,
+					const char *ip, const char *broadcast,
+					l_netlink_command_func_t
+					cb, void *user_data,
+					l_netlink_destroy_func_t destroy)
+{
+	struct ifaddrmsg *rtmmsg;
+	struct in_addr in_addr;
+	void *rta_buf;
+	size_t bufsize;
+	uint32_t id;
+
+	bufsize = NLMSG_ALIGN(sizeof(struct ifaddrmsg)) +
+					RTA_SPACE(sizeof(struct in_addr)) +
+					RTA_SPACE(sizeof(struct in_addr));
+
+	rtmmsg = l_malloc(bufsize);
+	explicit_bzero(rtmmsg, bufsize);
+
+	rtmmsg->ifa_index = ifindex;
+	rtmmsg->ifa_family = AF_INET;
+	rtmmsg->ifa_flags = IFA_F_PERMANENT;
+	rtmmsg->ifa_scope = RT_SCOPE_UNIVERSE;
+	rtmmsg->ifa_prefixlen = prefix_len;
+
+	rta_buf = (void *) rtmmsg + NLMSG_ALIGN(sizeof(struct ifaddrmsg));
+
+	if (inet_pton(AF_INET, ip, &in_addr) < 1) {
+		l_free(rtmmsg);
+		return 0;
+	}
+
+	rta_buf += rta_add_data(rta_buf, IFA_LOCAL, &in_addr,
+							sizeof(struct in_addr));
+
+	if (broadcast) {
+		if (inet_pton(AF_INET, broadcast, &in_addr) < 1) {
+			l_free(rtmmsg);
+			return 0;
+		}
+	} else {
+		in_addr.s_addr = in_addr.s_addr |
+					htonl(0xFFFFFFFFLU >> prefix_len);
+	}
+
+	rta_buf += rta_add_data(rta_buf, IFA_BROADCAST, &in_addr,
+							sizeof(struct in_addr));
+
+	id = l_netlink_send(rtnl, nlmsg_type, 0, rtmmsg,
+						rta_buf - (void *) rtmmsg, cb,
+						user_data, destroy);
+	l_free(rtmmsg);
+
+	return id;
+}
+
+uint32_t rtnl_ifaddr_add(struct l_netlink *rtnl, int ifindex,
+				uint8_t prefix_len, const char *ip,
+				const char *broadcast,
+				l_netlink_command_func_t cb, void *user_data,
+				l_netlink_destroy_func_t destroy)
+{
+	return rtnl_ifaddr_change(rtnl, RTM_NEWADDR, ifindex, prefix_len, ip,
+					broadcast, cb, user_data, destroy);
+}
+
+uint32_t rtnl_ifaddr_delete(struct l_netlink *rtnl, int ifindex,
+				uint8_t prefix_len, const char *ip,
+				const char *broadcast,
+				l_netlink_command_func_t cb, void *user_data,
+				l_netlink_destroy_func_t destroy)
+{
+	return rtnl_ifaddr_change(rtnl, RTM_DELADDR, ifindex, prefix_len, ip,
+					broadcast, cb, user_data, destroy);
 }

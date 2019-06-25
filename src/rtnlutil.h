@@ -31,3 +31,13 @@ void rtnl_ifaddr_extract(const struct ifaddrmsg *ifa, int bytes,
 uint32_t rtnl_ifaddr_get(struct l_netlink *rtnl, l_netlink_command_func_t cb,
 				void *user_data,
 				l_netlink_destroy_func_t destroy);
+uint32_t rtnl_ifaddr_add(struct l_netlink *rtnl, int ifindex,
+				uint8_t prefix_len, const char *ip,
+				const char *broadcast,
+				l_netlink_command_func_t cb, void *user_data,
+				l_netlink_destroy_func_t destroy);
+uint32_t rtnl_ifaddr_delete(struct l_netlink *rtnl, int ifindex,
+				uint8_t prefix_len, const char *ip,
+				const char *broadcast,
+				l_netlink_command_func_t cb, void *user_data,
+				l_netlink_destroy_func_t destroy);
