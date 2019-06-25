@@ -40,6 +40,7 @@
 
 struct netconfig {
 	uint32_t ifindex;
+	enum station_state station_state;
 	struct l_dhcp_client *dhcp_client;
 	struct l_queue *ifaddr_list;
 };
@@ -219,6 +220,11 @@ static void netconfig_ifaddr_cmd_cb(int error, uint16_t type,
 	netconfig_ifaddr_notify(type, data, len, user_data);
 }
 
+static bool netconfig_ifaddr_remove(void *data, void *user_data)
+{
+	return false;
+}
+
 static bool netconfig_install_addresses(struct netconfig *netconfig,
 					const struct netconfig_ifaddr *ifaddr,
 					const char *gateway, char **dns)
@@ -346,6 +352,50 @@ static bool netconfig_dhcp_create(struct netconfig *netconfig,
 	return true;
 }
 
+static void netconfig_station_state_changed(enum station_state state,
+								void *userdata)
+{
+	struct netconfig *netconfig = userdata;
+	struct station *station;
+
+	l_debug("");
+
+	switch (state) {
+	case STATION_STATE_CONNECTED:
+		station = station_find(netconfig->ifindex);
+		if (!station)
+			break;
+
+		if (netconfig->station_state == STATION_STATE_ROAMING) {
+			/*
+			 * TODO l_dhcp_client to try to request a previously
+			 * used address.
+			 *
+			 * break;
+			 */
+		}
+
+		if (!l_dhcp_client_start(netconfig->dhcp_client))
+			l_error("netconfig: Failed to start DHCPv4 client for "
+					"interface %u", netconfig->ifindex);
+
+		break;
+	case STATION_STATE_DISCONNECTED:
+		l_dhcp_client_stop(netconfig->dhcp_client);
+
+		l_queue_foreach_remove(netconfig->ifaddr_list,
+					netconfig_ifaddr_remove, netconfig);
+
+		break;
+	case STATION_STATE_ROAMING:
+		break;
+	default:
+		return;
+	}
+
+	netconfig->station_state = state;
+}
+
 bool netconfig_ifindex_add(uint32_t ifindex)
 {
 	struct netconfig *netconfig;
@@ -369,6 +419,9 @@ bool netconfig_ifindex_add(uint32_t ifindex)
 	netconfig->ifaddr_list = l_queue_new();
 
 	netconfig_dhcp_create(netconfig, station);
+
+	station_add_state_watch(station, netconfig_station_state_changed,
+							netconfig, NULL);
 
 	l_queue_push_tail(netconfig_list, netconfig);
 
