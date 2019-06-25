@@ -50,6 +50,7 @@
 #include "src/blacklist.h"
 #include "src/mpdu.h"
 #include "src/erp.h"
+#include "src/netconfig.h"
 
 static struct l_queue *station_list;
 static uint32_t netdev_watch;
@@ -2691,6 +2692,8 @@ static struct station *station_create(struct netdev *netdev)
 	l_dbus_object_add_interface(dbus, netdev_get_path(netdev),
 					IWD_STATION_INTERFACE, station);
 
+	netconfig_ifindex_add(netdev_get_ifindex(netdev));
+
 	return station;
 }
 
@@ -2703,6 +2706,8 @@ static void station_free(struct station *station)
 
 	if (station->connected_bss)
 		netdev_disconnect(station->netdev, NULL, NULL);
+
+	netconfig_ifindex_remove(netdev_get_ifindex(station->netdev));
 
 	periodic_scan_stop(station);
 
