@@ -35,6 +35,8 @@
 #include "src/iwd.h"
 #include "src/netdev.h"
 #include "src/station.h"
+#include "src/common.h"
+#include "src/network.h"
 #include "src/rtnlutil.h"
 #include "src/netconfig.h"
 
@@ -415,6 +417,60 @@ static bool netconfig_dhcp_create(struct netconfig *netconfig,
 	return true;
 }
 
+static bool netconfig_load_static_addresses(struct netconfig *netconfig,
+						struct station *station)
+{
+	const struct network *network;
+	const struct l_settings *settings;
+	struct netconfig_ifaddr ifaddr;
+	struct in_addr in_addr;
+	char *netmask;
+	char *gateway;
+	char **dns;
+
+	l_debug();
+
+	network = station_get_connected_network(station);
+	if (!network)
+		return false;
+
+	settings = network_get_settings(network);
+	if (!settings)
+		return false;
+
+	ifaddr.ip = l_settings_get_string(settings, "IPv4", "ip");
+	gateway = l_settings_get_string(settings, "IPv4", "gateway");
+	if (!ifaddr.ip || !gateway) {
+		l_free(ifaddr.ip);
+		l_free(gateway);
+
+		return false;
+	}
+
+	netmask = l_settings_get_string(settings, "IPv4", "netmask");
+
+	if (netmask && inet_pton(AF_INET, netmask, &in_addr) > 0)
+		ifaddr.prefix_len =
+			__builtin_popcountl(L_BE32_TO_CPU(in_addr.s_addr));
+	else
+		ifaddr.prefix_len = 24;
+
+	l_free(netmask);
+
+	ifaddr.broadcast = l_settings_get_string(settings, "IPv4", "broadcast");
+	dns = l_settings_get_string_list(settings, "IPv4", "dns", ' ');
+	ifaddr.family = AF_INET;
+
+	netconfig_install_addresses(netconfig, &ifaddr, gateway, dns);
+
+	l_free(ifaddr.ip);
+	l_free(gateway);
+	l_free(ifaddr.broadcast);
+	l_strfreev(dns);
+
+	return true;
+}
+
 static void netconfig_station_state_changed(enum station_state state,
 								void *userdata)
 {
@@ -427,6 +483,9 @@ static void netconfig_station_state_changed(enum station_state state,
 	case STATION_STATE_CONNECTED:
 		station = station_find(netconfig->ifindex);
 		if (!station)
+			break;
+
+		if (netconfig_load_static_addresses(netconfig, station))
 			break;
 
 		if (netconfig->station_state == STATION_STATE_ROAMING) {
