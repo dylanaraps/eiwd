@@ -26,6 +26,7 @@
 
 #include <sys/socket.h>
 #include <linux/rtnetlink.h>
+#include <arpa/inet.h>
 
 #include <ell/ell.h>
 
@@ -73,4 +74,39 @@ uint32_t rtnl_set_linkmode_and_operstate(struct l_netlink *rtnl, int ifindex,
 	l_free(rtmmsg);
 
 	return id;
+}
+
+void rtnl_ifaddr_extract(const struct ifaddrmsg *ifa, int bytes,
+				char **label, char **ip, char **broadcast)
+{
+	struct in_addr in_addr;
+	struct rtattr *attr;
+
+	for (attr = IFA_RTA(ifa); RTA_OK(attr, bytes);
+						attr = RTA_NEXT(attr, bytes)) {
+		switch (attr->rta_type) {
+		case IFA_LOCAL:
+			if (!ip)
+				break;
+
+			in_addr = *((struct in_addr *) RTA_DATA(attr));
+			*ip = l_strdup(inet_ntoa(in_addr));
+
+			break;
+		case IFA_BROADCAST:
+			if (!broadcast)
+				break;
+
+			in_addr = *((struct in_addr *) RTA_DATA(attr));
+			*broadcast = l_strdup(inet_ntoa(in_addr));
+
+			break;
+		case IFA_LABEL:
+			if (!label)
+				break;
+
+			*label = l_strdup(RTA_DATA(attr));
+			break;
+		}
+	}
 }
