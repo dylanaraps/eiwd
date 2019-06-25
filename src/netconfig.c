@@ -25,16 +25,22 @@
 #endif
 
 #include <errno.h>
+#include <arpa/inet.h>
 #include <linux/rtnetlink.h>
+#include <linux/if_arp.h>
+#include <linux/in.h>
 
 #include <ell/ell.h>
 
 #include "src/iwd.h"
+#include "src/netdev.h"
+#include "src/station.h"
 #include "src/rtnlutil.h"
 #include "src/netconfig.h"
 
 struct netconfig {
 	uint32_t ifindex;
+	struct l_dhcp_client *dhcp_client;
 	struct l_queue *ifaddr_list;
 };
 
@@ -68,6 +74,8 @@ static void netconfig_ifaddr_destroy(void *data)
 static void netconfig_destroy(void *data)
 {
 	struct netconfig *netconfig = data;
+
+	l_dhcp_client_destroy(netconfig->dhcp_client);
 
 	l_queue_destroy(netconfig->ifaddr_list, netconfig_ifaddr_destroy);
 
@@ -211,9 +219,137 @@ static void netconfig_ifaddr_cmd_cb(int error, uint16_t type,
 	netconfig_ifaddr_notify(type, data, len, user_data);
 }
 
+static bool netconfig_install_addresses(struct netconfig *netconfig,
+					const struct netconfig_ifaddr *ifaddr,
+					const char *gateway, char **dns)
+{
+	return false;
+}
+
+static bool netconfig_uninstall_addresses(struct netconfig *netconfig,
+					const struct netconfig_ifaddr *ifaddr,
+					const char *gateway, char **dns)
+{
+	return false;
+}
+
+enum lease_action {
+	LEASE_ACTION_INSTALL,
+	LEASE_ACTION_UNINSTALL,
+};
+
+static void netconfig_dhcp_lease_received(struct netconfig *netconfig,
+					const struct l_dhcp_client *client,
+					enum lease_action action)
+{
+	const struct l_dhcp_lease *lease;
+	struct netconfig_ifaddr ifaddr;
+	struct in_addr in_addr;
+	char *netmask;
+	char *gateway;
+	char **dns;
+
+	l_debug();
+
+	lease = l_dhcp_client_get_lease(client);
+	if (!lease)
+		return;
+
+	ifaddr.ip = l_dhcp_lease_get_address(lease);
+	gateway = l_dhcp_lease_get_gateway(lease);
+	if (!ifaddr.ip || !gateway)
+		goto no_ip;
+
+	netmask = l_dhcp_lease_get_netmask(lease);
+
+	if (netmask && inet_pton(AF_INET, netmask, &in_addr) > 0)
+		ifaddr.prefix_len =
+			__builtin_popcountl(L_BE32_TO_CPU(in_addr.s_addr));
+	else
+		ifaddr.prefix_len = 24;
+
+	ifaddr.broadcast = l_dhcp_lease_get_broadcast(lease);
+	dns = l_dhcp_lease_get_dns(lease);
+	ifaddr.family = AF_INET;
+
+	switch (action) {
+	case LEASE_ACTION_INSTALL:
+		netconfig_install_addresses(netconfig, &ifaddr, gateway, dns);
+		break;
+	case LEASE_ACTION_UNINSTALL:
+		netconfig_uninstall_addresses(netconfig, &ifaddr, gateway, dns);
+		break;
+	}
+
+	l_strfreev(dns);
+	l_free(netmask);
+	l_free(ifaddr.broadcast);
+no_ip:
+	l_free(ifaddr.ip);
+	l_free(gateway);
+}
+
+static void netconfig_dhcp_event_handler(struct l_dhcp_client *client,
+						enum l_dhcp_client_event event,
+						void *userdata)
+{
+	struct netconfig *netconfig = userdata;
+
+	l_debug("DHCPv4 event %d", event);
+
+	switch (event) {
+	case L_DHCP_CLIENT_EVENT_LEASE_RENEWED:
+	case L_DHCP_CLIENT_EVENT_LEASE_OBTAINED:
+	case L_DHCP_CLIENT_EVENT_IP_CHANGED:
+		netconfig_dhcp_lease_received(netconfig, client,
+							LEASE_ACTION_INSTALL);
+
+		break;
+	case L_DHCP_CLIENT_EVENT_LEASE_EXPIRED:
+		netconfig_dhcp_lease_received(netconfig, client,
+							LEASE_ACTION_UNINSTALL);
+		/* Fall through. */
+	case L_DHCP_CLIENT_EVENT_NO_LEASE:
+		/*
+		 * The requested address is no longer available, try to restart
+		 * the client.
+		 */
+		if (!l_dhcp_client_start(client))
+			l_error("netconfig: Failed to re-start DHCPv4 client "
+					"for interface %u", netconfig->ifindex);
+
+		break;
+	default:
+		l_error("netconfig: Received unsupported DHCPv4 event: %d",
+									event);
+	}
+}
+
+static bool netconfig_dhcp_create(struct netconfig *netconfig,
+							struct station *station)
+{
+	netconfig->dhcp_client = l_dhcp_client_new(netconfig->ifindex);
+
+	l_dhcp_client_set_address(netconfig->dhcp_client, ARPHRD_ETHER,
+					netdev_get_address(
+						station_get_netdev(station)),
+					ETH_ALEN);
+
+	l_dhcp_client_set_event_handler(netconfig->dhcp_client,
+					netconfig_dhcp_event_handler,
+					netconfig, NULL);
+
+	if (getenv("IWD_DHCP_DEBUG"))
+		l_dhcp_client_set_debug(netconfig->dhcp_client, do_debug,
+							"[DHCPv4] ", NULL);
+
+	return true;
+}
+
 bool netconfig_ifindex_add(uint32_t ifindex)
 {
 	struct netconfig *netconfig;
+	struct station *station;
 
 	if (!netconfig_list)
 		return false;
@@ -224,9 +360,15 @@ bool netconfig_ifindex_add(uint32_t ifindex)
 	if (netconfig)
 		return true;
 
+	station = station_find(ifindex);
+	if (!station)
+		return false;
+
 	netconfig = l_new(struct netconfig, 1);
 	netconfig->ifindex = ifindex;
 	netconfig->ifaddr_list = l_queue_new();
+
+	netconfig_dhcp_create(netconfig, station);
 
 	l_queue_push_tail(netconfig_list, netconfig);
 
