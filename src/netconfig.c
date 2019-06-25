@@ -222,21 +222,84 @@ static void netconfig_ifaddr_cmd_cb(int error, uint16_t type,
 
 static bool netconfig_ifaddr_remove(void *data, void *user_data)
 {
-	return false;
+	struct netconfig *netconfig = user_data;
+	struct netconfig_ifaddr *ifaddr = data;
+
+	switch (ifaddr->family) {
+	case AF_INET:
+		if (rtnl_ifaddr_delete(rtnl, netconfig->ifindex,
+					ifaddr->prefix_len, ifaddr->ip,
+					ifaddr->broadcast,
+					netconfig_ifaddr_cmd_cb, NULL, NULL))
+			break;
+
+		l_error("netconfig: Failed to remove ifaddr %s from "
+				"interface %u", ifaddr->ip, netconfig->ifindex);
+		break;
+	default:
+		l_error("netconfig: Unsupported address family: %u",
+								ifaddr->family);
+		break;
+	}
+
+	netconfig_ifaddr_destroy(ifaddr);
+
+	return true;
 }
 
 static bool netconfig_install_addresses(struct netconfig *netconfig,
 					const struct netconfig_ifaddr *ifaddr,
 					const char *gateway, char **dns)
 {
-	return false;
+	if (netconfig_ifaddr_find(netconfig, ifaddr->family, ifaddr->prefix_len,
+								ifaddr->ip))
+		/* The address is already installed. */
+		goto gateway;
+
+	switch (ifaddr->family) {
+	case AF_INET:
+		if (rtnl_ifaddr_add(rtnl, netconfig->ifindex,
+					ifaddr->prefix_len, ifaddr->ip,
+					ifaddr->broadcast,
+					netconfig_ifaddr_cmd_cb, netconfig,
+					NULL))
+			break;
+
+		l_error("netconfig: Failed to set IP %s/%u.", ifaddr->ip,
+							ifaddr->prefix_len);
+		return false;
+	default:
+		l_error("netconfig: Unsupported address family: %u",
+								ifaddr->family);
+		break;
+	}
+
+gateway:
+	/* TODO: Add the routes and domain name servers. */
+
+	return true;
 }
 
 static bool netconfig_uninstall_addresses(struct netconfig *netconfig,
 					const struct netconfig_ifaddr *ifaddr,
 					const char *gateway, char **dns)
 {
-	return false;
+
+	if (!netconfig_ifaddr_find(netconfig, ifaddr->family,
+						ifaddr->prefix_len, ifaddr->ip))
+		/* The address is already removed. */
+		goto gateway;
+
+	if (!netconfig_ifaddr_remove(netconfig, (void *) ifaddr)) {
+		l_error("netconfig: Failed to remove IP %s/%u.", ifaddr->ip,
+							ifaddr->prefix_len);
+		return false;
+	}
+
+gateway:
+	/* TODO: Remove the routes and domain name servers. */
+
+	return true;
 }
 
 enum lease_action {
