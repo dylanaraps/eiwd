@@ -894,6 +894,16 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 			scan_parse_advertisement_protocol(bss, iter.data,
 								iter.len);
 			break;
+		case IE_TYPE_INTERWORKING:
+			/*
+			 * No bits indicate if venue/HESSID is included, so the
+			 * length is the only way to know.
+			 * (IEEE 802.11-2016 - Figure 9-439)
+			 */
+			if (iter.len == 9)
+				memcpy(bss->hessid, iter.data + 3, 6);
+			else if (iter.len == 7)
+				memcpy(bss->hessid, iter.data + 1, 6);
 		}
 	}
 
