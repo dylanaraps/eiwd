@@ -194,3 +194,35 @@ const void *nl80211_parse_get_key_seq(struct l_genl_msg *msg)
 
 	return data;
 }
+
+struct l_genl_msg *nl80211_build_cmd_frame(uint32_t ifindex,
+						const uint8_t *addr,
+						const uint8_t *to,
+						uint32_t freq,
+						struct iovec *iov,
+						size_t iov_len)
+{
+	struct l_genl_msg *msg;
+	struct iovec iovs[iov_len + 1];
+	const uint16_t frame_type = 0x00d0;
+	uint8_t action_frame[24];
+
+	memset(action_frame, 0, 24);
+
+	l_put_le16(frame_type, action_frame + 0);
+	memcpy(action_frame + 4, to, 6);
+	memcpy(action_frame + 10, addr, 6);
+	memcpy(action_frame + 16, to, 6);
+
+	iovs[0].iov_base = action_frame;
+	iovs[0].iov_len = sizeof(action_frame);
+	memcpy(iovs + 1, iov, sizeof(*iov) * iov_len);
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_FRAME, 128 + 512);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &freq);
+	l_genl_msg_append_attrv(msg, NL80211_ATTR_FRAME, iovs, iov_len + 1);
+
+	return msg;
+}

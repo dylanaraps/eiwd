@@ -2655,37 +2655,6 @@ int netdev_leave_adhoc(struct netdev *netdev, netdev_command_cb_t cb,
 	return 0;
 }
 
-static struct l_genl_msg *netdev_build_cmd_frame(struct netdev *netdev,
-						const uint8_t *to,
-						uint32_t freq,
-						struct iovec *iov,
-						size_t iov_len)
-{
-	struct l_genl_msg *msg;
-	struct iovec iovs[iov_len + 1];
-	const uint16_t frame_type = 0x00d0;
-	uint8_t action_frame[24];
-
-	memset(action_frame, 0, 24);
-
-	l_put_le16(frame_type, action_frame + 0);
-	memcpy(action_frame + 4, to, 6);
-	memcpy(action_frame + 10, netdev->addr, 6);
-	memcpy(action_frame + 16, to, 6);
-
-	iovs[0].iov_base = action_frame;
-	iovs[0].iov_len = sizeof(action_frame);
-	memcpy(iovs + 1, iov, sizeof(*iov) * iov_len);
-
-	msg = l_genl_msg_new_sized(NL80211_CMD_FRAME, 128 + 512);
-
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY_FREQ, 4, &freq);
-	l_genl_msg_append_attrv(msg, NL80211_ATTR_FRAME, iovs, iov_len + 1);
-
-	return msg;
-}
-
 static uint32_t netdev_send_action_framev(struct netdev *netdev,
 					const uint8_t *to,
 					struct iovec *iov, size_t iov_len,
@@ -2693,8 +2662,10 @@ static uint32_t netdev_send_action_framev(struct netdev *netdev,
 					l_genl_msg_func_t callback)
 {
 	uint32_t id;
-	struct l_genl_msg *msg = netdev_build_cmd_frame(netdev, to, freq,
-							iov, iov_len);
+	struct l_genl_msg *msg = nl80211_build_cmd_frame(netdev->index,
+								netdev->addr,
+								to, freq,
+								iov, iov_len);
 
 	id = l_genl_family_send(nl80211, msg, callback, netdev, NULL);
 
@@ -2947,8 +2918,8 @@ uint32_t netdev_anqp_request(struct netdev *netdev, struct scan_bss *bss,
 	iov[1].iov_base = (void *)anqp;
 	iov[1].iov_len = len;
 
-	msg = netdev_build_cmd_frame(netdev, bss->addr, bss->frequency,
-					iov, 2);
+	msg = nl80211_build_cmd_frame(netdev->index, netdev->addr, bss->addr,
+					bss->frequency, iov, 2);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_OFFCHANNEL_TX_OK, 0, "");
 	l_genl_msg_append_attr(msg, NL80211_ATTR_DURATION, 4, &duration);
 
