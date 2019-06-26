@@ -41,6 +41,7 @@
 #include "src/rfkill.h"
 #include "src/plugin.h"
 #include "src/storage.h"
+#include "src/anqp.h"
 
 #include "src/backtrace.h"
 
@@ -149,6 +150,7 @@ static void nl80211_appeared(const struct l_genl_family_info *info,
 	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
 
 	manager_init(nl80211, interfaces, nointerfaces);
+	anqp_init(nl80211);
 
 	if (!wiphy_init(nl80211, phys, nophys))
 		l_error("Unable to init wiphy functionality");
@@ -534,6 +536,7 @@ fail_netdev:
 
 	if (nl80211) {
 		manager_exit();
+		anqp_exit();
 		wiphy_exit();
 		l_genl_family_free(nl80211);
 	}
