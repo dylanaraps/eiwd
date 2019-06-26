@@ -93,18 +93,6 @@ struct anqp_iter {
 	const unsigned char *data;
 };
 
-/*
- * TODO: Support expanded EAP types
- */
-struct anqp_eap_method {
-	char realm[256];
-	uint8_t method;
-	uint8_t non_eap_inner;
-	uint8_t eap_inner;
-	uint8_t credential;
-	uint8_t tunneled_credential;
-};
-
 void anqp_iter_init(struct anqp_iter *iter, const unsigned char *anqp,
 			unsigned int len);
 bool anqp_iter_next(struct anqp_iter *iter, uint16_t *id, uint16_t *len,
@@ -113,5 +101,4 @@ bool anqp_iter_is_hs20(const struct anqp_iter *iter, uint8_t *stype,
 			unsigned int *len, const unsigned char **data);
 bool anqp_hs20_parse_osu_provider_nai(const unsigned char *anqp,
 					unsigned int len, const char **nai_out);
-bool anqp_parse_nai_realm(const unsigned char *anqp, unsigned int len,
-				bool hs20, struct anqp_eap_method *method);
+char **anqp_parse_nai_realms(const unsigned char *anqp, unsigned int len);

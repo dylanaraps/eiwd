@@ -128,167 +128,9 @@ bool anqp_iter_is_hs20(const struct anqp_iter *iter, uint8_t *stype,
 	return true;
 }
 
-static bool parse_eap_params(const unsigned char *anqp, unsigned int len,
-				uint8_t *method, uint8_t *non_eap_inner,
-				uint8_t *eap_inner, uint8_t *credential,
-				uint8_t *tunneled_credential)
+char **anqp_parse_nai_realms(const unsigned char *anqp, unsigned int len)
 {
-	uint8_t param_count;
-
-	if (len < 2)
-		return false;
-
-	*method = *anqp++;
-	param_count = *anqp++;
-
-	len -= 2;
-
-	*non_eap_inner = 0;
-	*eap_inner = 0;
-	*credential = 0;
-	*tunneled_credential = 0;
-
-	while (param_count--) {
-		uint8_t ap_id;
-		uint8_t ap_len;
-
-		if (len < 2)
-			return false;
-
-		ap_id = *anqp++;
-		ap_len = *anqp++;
-		len -= 2;
-
-		if (len < ap_len)
-			return false;
-
-		switch (ap_id) {
-		case ANQP_AP_NON_INNER_AUTH_EAP:
-			*non_eap_inner = *anqp;
-			break;
-		case ANQP_AP_INNER_AUTH_EAP:
-			*eap_inner = *anqp;
-			break;
-		case ANQP_AP_CREDENTIAL:
-			*credential = *anqp;
-			break;
-		case ANQP_AP_TUNNELED_EAP_CREDENTIAL:
-			*tunneled_credential = *anqp;
-			break;
-		case ANQP_AP_EXPANDED_EAP_METHOD:
-		case ANQP_AP_EXPANDED_INNER_EAP_METHOD:
-		case ANQP_AP_VENDOR_SPECIFIC:
-			break;
-		}
-
-		anqp += ap_len;
-		len -= ap_len;
-	}
-
-	return true;
-}
-
-/*
- * Parses an EAP ANQP list.
- */
-static bool parse_eap(const unsigned char *anqp, unsigned int len,
-			const char *nai, bool hs20,
-			struct anqp_eap_method *method_out)
-{
-	uint8_t eap_count;
-
-	if (len < 1)
-		return false;
-
-	eap_count = *anqp++;
-	len--;
-
-	while (eap_count--) {
-		uint8_t eap_len;
-		uint8_t method;
-		uint8_t non_eap_inner;
-		uint8_t eap_inner;
-		uint8_t credential;
-		uint8_t tunneled_credential;
-
-		if (len < 1)
-			return false;
-
-		eap_len = *anqp++;
-		len--;
-
-		if (!parse_eap_params(anqp, eap_len,
-					&method, &non_eap_inner,
-					&eap_inner, &credential,
-					&tunneled_credential))
-			return false;
-
-		if (hs20) {
-			/*
-			 * TODO: Support EAP-SIM/AKA/AKA' with Hotspot
-			 */
-			if (method != EAP_TYPE_TTLS) {
-				l_debug("EAP method %u not supported", method);
-				goto next;
-			}
-
-			/* MSCHAPv2 */
-			if (non_eap_inner != 4) {
-				l_debug("Non-EAP inner %u not supported",
-						non_eap_inner);
-				goto next;
-			}
-
-			/* username/password */
-			if (credential != 7) {
-				l_debug("credential type %u not supported",
-						credential);
-				goto next;
-			}
-		} else {
-			/* can't use methods without user/password */
-			if (credential != 7 && tunneled_credential != 7)
-				goto next;
-		}
-
-		method_out->method = method;
-		/* nai is guarenteed to NULL terminate and be < 256 bytes */
-		l_strlcpy(method_out->realm, nai, sizeof(method_out->realm));
-		method_out->non_eap_inner = non_eap_inner;
-		method_out->eap_inner = eap_inner;
-		method_out->credential = credential;
-		method_out->tunneled_credential = tunneled_credential;
-
-		return true;
-
-next:
-		if (len < eap_len)
-			return false;
-
-		anqp += eap_len;
-		len -= eap_len;
-	}
-
-	return false;
-}
-
-/*
- * Parses NAI Realm ANQP-element. The code here parses the NAI Realm until an
- * acceptable EAP method is found. Once a method is found it is returned via
- * method_out. The structure of NAI realm is such that it does not allow for a
- * convenient static structure (several nested lists). Since we can only handle
- * EAP methods with user/password credentials anyways it makes sense to just
- * return the first EAP method found that meets our criteria. In addition, this
- * is only being used for Hotspot 2.0, which mandates EAP-TLS/TTLS/SIM/AKA,
- * meaning TTLS is the only contender for this parsing.
- *
- * @param hs20	true if this parsing is for a Hotspot 2.0 network. This will
- * 		restrict what EAP method info is chosen as to comply with the
- * 		Hotspot 2.0 spec (i.e. EAP-TTLS w/ MSCHAPv2 or SIM/AKA/AKA').
- */
-bool anqp_parse_nai_realm(const unsigned char *anqp, unsigned int len,
-				bool hs20, struct anqp_eap_method *method_out)
-{
+	char **realms = NULL;
 	uint16_t count;
 
 	if (len < 2)
@@ -298,6 +140,8 @@ bool anqp_parse_nai_realm(const unsigned char *anqp, unsigned int len,
 
 	anqp += 2;
 	len -= 2;
+
+	l_debug("");
 
 	while (count--) {
 		uint16_t realm_len;
@@ -315,7 +159,7 @@ bool anqp_parse_nai_realm(const unsigned char *anqp, unsigned int len,
 		 */
 
 		if (len < 4)
-			return false;
+			goto failed;
 
 		realm_len = l_get_le16(anqp);
 		anqp += 2;
@@ -326,7 +170,7 @@ bool anqp_parse_nai_realm(const unsigned char *anqp, unsigned int len,
 		nai_len = anqp[1];
 
 		if (len - 2 < nai_len)
-			return false;
+			goto failed;
 
 		memcpy(nai_realm, anqp + 2, nai_len);
 
@@ -342,19 +186,21 @@ bool anqp_parse_nai_realm(const unsigned char *anqp, unsigned int len,
 			l_warn("Not verifying NAI encoding");
 		else if (!l_utf8_validate(nai_realm, nai_len, NULL)) {
 			l_warn("NAI is not UTF-8");
-			return false;
+			goto failed;
 		}
 
-		if (parse_eap(anqp + 2 + nai_len, realm_len - 2 - nai_len,
-				nai_realm, hs20, method_out))
-			return true;
+		realms = l_strv_append(realms, nai_realm);
 
 		if (len < realm_len)
-			return false;
+			goto failed;
 
 		anqp += realm_len;
 		len -= realm_len;
 	}
 
-	return false;
+	return realms;
+
+failed:
+	l_strv_free(realms);
+	return NULL;
 }
