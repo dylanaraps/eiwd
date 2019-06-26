@@ -1,0 +1,46 @@
+Hotspot 2.0 networks are common in airports/airplanes (e.g. Boingo) and are also
+found in various other locations implemented by cable/cellular providers. These
+networks allow you to use a secure 8021x access point using the account
+credentials for your e.g. cable/cellular provider, or via a dedicated account
+like Boingo. Lots of these services also allow you to roam between networks.
+
+The underlying authentication is standard WPA2-Enterprise but Hotspot 2.0 adds a
+'discovery' stage to identifiying networks. This discovery is done using ANQP,
+which queries the network for additional information to determine if the client
+has the credentials to connect.
+
+Because of this network identification capability the hotspot network must be
+provisioned before hand as you would with 8021x, though the provisioning file
+requires at least one additional value in addition to the regular 8021x EAP
+information. Under the Hotspot group NAIRealmNames and HESSID have
+been added. NAIRealmNames is a required field. HESSID is optional but, if
+provided, may allow IWD to skip the ANQP step and directly connect (assuming
+the network advertised HESSID matches).
+
+NAIRealmNames is a comma separated list of realms e.g.
+
+[Hotspot]
+NAIRealmNames=realm.example.com,another.realm.com
+
+HESSID is simply a MAC address e.g.
+
+[Hotspot]
+HESSID=ab:cd:ef:01:23:67
+
+A side note:
+
+Since hotspot's use of ANQP is done before we are connected, it is done via
+public action frames. This requires the WiFi hardware go offchannel, similar
+to scans. Because of this scans and ANQP are done on a first come first serve
+basis in the kernel, which can result in delays. To mitigate this IWD will
+suspend any scanning until ANQP finishes. There is also a new feature in the
+5.3 kernel which notifies userspace when a 'remain-on-channel' action has
+completed. This feature is only available on mac80211 based driver and is
+required for IWD to do ANQP reliably.
+
+Since not all kernels will have this option right away an option was added to
+IWD which allows the user to disable ANQP. As a result, this will also disable
+any hotspot 2.0 network connections unless the HESSID is provided in the
+configuration file. By default ANQP will be disabled. It can be enabled with:
+
+disable_anqp=0
