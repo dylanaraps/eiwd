@@ -48,6 +48,7 @@
 #include "src/knownnetworks.h"
 #include "src/network.h"
 #include "src/blacklist.h"
+#include "src/util.h"
 
 struct network {
 	char *object_path;
@@ -60,6 +61,8 @@ struct network {
 	struct l_settings *settings;
 	struct l_queue *secrets;
 	struct l_queue *blacklist; /* temporary blacklist for BSS's */
+	uint8_t hessid[6];
+	char **nai_realms;
 	bool update_psk:1;  /* Whether PSK should be written to storage */
 	bool ask_passphrase:1; /* Whether we should force-ask agent */
 	int rank;
@@ -520,6 +523,29 @@ void network_sync_psk(struct network *network)
 					network->settings);
 }
 
+void network_set_hessid(struct network *network, uint8_t *hessid)
+{
+	memcpy(network->hessid, hessid, 6);
+}
+
+void network_set_nai_realms(struct network *network, char **realms)
+{
+	if (network->nai_realms)
+		l_strv_free(network->nai_realms);
+
+	network->nai_realms = realms;
+}
+
+uint8_t *network_get_hessid(struct network *network)
+{
+	return network->hessid;
+}
+
+char **network_get_nai_realms(struct network *network)
+{
+	return network->nai_realms;
+}
+
 static inline bool __bss_is_sae(const struct scan_bss *bss,
 						const struct ie_rsn_info *rsn)
 {
@@ -658,6 +684,9 @@ bool network_bss_add(struct network *network, struct scan_bss *bss)
 	}
 
 	l_queue_push_head(network->info->known_frequencies, known_freq);
+
+	if (!util_mem_is_zero(bss->hessid, 6))
+		memcpy(network->hessid, bss->hessid, 6);
 
 	return true;
 }
@@ -1314,6 +1343,9 @@ void network_remove(struct network *network, int reason)
 	network_info_put(network->info);
 
 	l_queue_destroy(network->blacklist, NULL);
+
+	if (network->nai_realms)
+		l_strv_free(network->nai_realms);
 
 	l_free(network);
 }
