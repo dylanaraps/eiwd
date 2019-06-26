@@ -51,6 +51,8 @@
 #include "src/mpdu.h"
 #include "src/erp.h"
 #include "src/netconfig.h"
+#include "src/anqp.h"
+#include "src/hotspot.h"
 
 static struct l_queue *station_list;
 static uint32_t netdev_watch;
@@ -82,12 +84,20 @@ struct station {
 	struct wiphy *wiphy;
 	struct netdev *netdev;
 
+	struct l_queue *anqp_pending;
+
 	bool preparing_roam : 1;
 	bool signal_low : 1;
 	bool roam_no_orig_ap : 1;
 	bool ap_directed_roaming : 1;
 	bool scanning : 1;
 	bool autoconnect : 1;
+};
+
+struct anqp_entry {
+	struct station *station;
+	struct network *network;
+	uint32_t pending;
 };
 
 struct wiphy *station_get_wiphy(struct station *station)
@@ -388,6 +398,117 @@ static void station_bss_list_remove_expired_bsses(struct station *station)
 	l_queue_foreach_remove(station->bss_list, bss_free_if_expired, &data);
 }
 
+static void station_anqp_response_cb(enum anqp_result result,
+					const void *anqp, size_t anqp_len,
+					void *user_data)
+{
+	struct anqp_entry *entry = user_data;
+	struct station *station = entry->station;
+	struct network *network = entry->network;
+	struct anqp_iter iter;
+	uint16_t id;
+	uint16_t len;
+	const void *data;
+	char **realms = NULL;
+
+	entry->pending = 0;
+
+	l_debug("");
+
+	if (result == ANQP_TIMEOUT) {
+		l_queue_remove(station->anqp_pending, entry);
+		/* TODO: try next BSS */
+		goto request_done;
+	}
+
+	anqp_iter_init(&iter, anqp, anqp_len);
+
+	while (anqp_iter_next(&iter, &id, &len, &data)) {
+		switch (id) {
+		case ANQP_NAI_REALM:
+			if (realms)
+				break;
+
+			realms = anqp_parse_nai_realms(data, len);
+			if (!realms)
+				goto request_done;
+
+			break;
+		default:
+			continue;
+		}
+	}
+
+	network_set_nai_realms(network, realms);
+
+request_done:
+	l_queue_remove(station->anqp_pending, entry);
+
+	/* If no more requests, resume scanning */
+	if (l_queue_isempty(station->anqp_pending))
+		scan_resume(netdev_get_ifindex(station->netdev));
+}
+
+static bool station_start_anqp(struct station *station, struct network *network,
+					struct scan_bss *bss)
+{
+	uint8_t anqp[256];
+	uint8_t *ptr = anqp;
+	struct anqp_entry *entry;
+	bool anqp_disabled;
+
+	/* Network already has ANQP data/HESSID */
+	if (hs20_find_settings_file(network))
+		return false;
+
+	if (!l_settings_get_bool(iwd_get_config(), "General", "disable_anqp",
+				&anqp_disabled))
+		return false;
+
+	if (anqp_disabled)
+		return false;
+
+	if (!bss->hs20_capable)
+		return false;
+
+	entry = l_new(struct anqp_entry, 1);
+	entry->station = station;
+	entry->network = network;
+
+	l_put_le16(ANQP_QUERY_LIST, ptr);
+	ptr += 2;
+	l_put_le16(2, ptr);
+	ptr += 2;
+	l_put_le16(ANQP_NAI_REALM, ptr);
+	ptr += 2;
+	l_put_le16(ANQP_VENDOR_SPECIFIC, ptr);
+	ptr += 2;
+	/* vendor length */
+	l_put_le16(7, ptr);
+	ptr += 2;
+	*ptr++ = 0x50;
+	*ptr++ = 0x6f;
+	*ptr++ = 0x9a;
+	*ptr++ = 0x11; /* HS20 ANQP Element type */
+	*ptr++ = ANQP_HS20_QUERY_LIST;
+	*ptr++ = 0; /* reserved */
+	*ptr++ = ANQP_HS20_OSU_PROVIDERS_NAI_LIST;
+
+	entry->pending = anqp_request(netdev_get_ifindex(station->netdev),
+					netdev_get_address(station->netdev),
+					bss, anqp, ptr - anqp,
+					station_anqp_response_cb,
+					entry, l_free);
+	if (!entry->pending) {
+		l_free(entry);
+		return false;
+	}
+
+	l_queue_push_head(station->anqp_pending, entry);
+
+	return true;
+}
+
 /*
  * Used when scan results were obtained; either from scan running
  * inside station module or scans running in other state machines, e.g. wsc
@@ -398,6 +519,7 @@ void station_set_scan_results(struct station *station,
 {
 	const struct l_queue_entry *bss_entry;
 	struct network *network;
+	bool wait_for_anqp = false;
 
 	while ((network = l_queue_pop_head(station->networks_sorted)))
 		network_bss_list_clear(network);
@@ -439,7 +561,13 @@ void station_set_scan_results(struct station *station,
 		struct scan_bss *bss = bss_entry->data;
 		struct network *network = station_add_seen_bss(station, bss);
 
-		if (!network || !add_to_autoconnect)
+		if (!network)
+			continue;
+
+		if (station_start_anqp(station, network, bss))
+			wait_for_anqp = true;
+
+		if (!add_to_autoconnect)
 			continue;
 
 		station_add_autoconnect_bss(station, network, bss);
@@ -448,6 +576,19 @@ void station_set_scan_results(struct station *station,
 	station->bss_list = new_bss_list;
 
 	l_hashmap_foreach_remove(station->networks, process_network, station);
+
+	/*
+	 * ANQP requests are scheduled in the same manor as scans, and cannot
+	 * be done simultaneously. To avoid long queue times (waiting for a
+	 * scan to finish) its best to stop scanning, do ANQP, then resume
+	 * scanning.
+	 *
+	 * TODO: It may be possible for some hardware to actually scan and do
+	 * ANQP at the same time. Detecting this could allow us to continue
+	 * scanning.
+	 */
+	if (wait_for_anqp)
+		scan_suspend(netdev_get_ifindex(station->netdev));
 }
 
 static void station_reconnect(struct station *station);
@@ -2694,6 +2835,8 @@ static struct station *station_create(struct netdev *netdev)
 
 	netconfig_ifindex_add(netdev_get_ifindex(netdev));
 
+	station->anqp_pending = l_queue_new();
+
 	return station;
 }
 
@@ -2750,6 +2893,8 @@ static void station_free(struct station *station)
 	l_queue_destroy(station->autoconnect_list, l_free);
 
 	watchlist_destroy(&station->state_watches);
+
+	l_queue_destroy(station->anqp_pending, l_free);
 
 	l_free(station);
 }
