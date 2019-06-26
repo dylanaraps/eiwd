@@ -483,6 +483,11 @@ int main(int argc, char *argv[])
 		goto fail_dbus;
 	}
 
+	if (create_dirs(DAEMON_STORAGEDIR "/.hotspot/")) {
+		l_error("Failed to create " DAEMON_STORAGEDIR "/.hotspot/");
+		goto fail_dbus;
+	}
+
 	genl = l_genl_new();
 	if (!genl) {
 		l_error("Failed to open generic netlink socket");
