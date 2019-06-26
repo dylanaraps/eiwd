@@ -131,7 +131,7 @@ uint32_t rtnl_ifaddr_get(struct l_netlink *rtnl, l_netlink_command_func_t cb,
 	uint32_t id;
 
 	rtmmsg = l_malloc(sizeof(struct ifaddrmsg));
-	explicit_bzero(rtmmsg, sizeof(struct ifaddrmsg));
+	memset(rtmmsg, 0, sizeof(struct ifaddrmsg));
 
 	rtmmsg->ifa_family = AF_INET;
 
@@ -162,7 +162,7 @@ static uint32_t rtnl_ifaddr_change(struct l_netlink *rtnl, uint16_t nlmsg_type,
 					RTA_SPACE(sizeof(struct in_addr));
 
 	rtmmsg = l_malloc(bufsize);
-	explicit_bzero(rtmmsg, bufsize);
+	memset(rtmmsg, 0, bufsize);
 
 	rtmmsg->ifa_index = ifindex;
 	rtmmsg->ifa_family = AF_INET;
