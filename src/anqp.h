@@ -24,6 +24,20 @@
 #include <stddef.h>
 #include <unistd.h>
 
+struct scan_bss;
+
+enum anqp_result {
+	ANQP_SUCCESS,
+	ANQP_TIMEOUT,
+	ANQP_FAILED,
+};
+
+typedef void (*anqp_destroy_func_t)(void *user_data);
+
+typedef void (*anqp_response_func_t)(enum anqp_result result,
+					const void *anqp, size_t len,
+					void *user_data);
+
 /* IEEE 802.11-2016 Section 9.4.5 ANQP elements */
 enum anqp_element {
 	/* 0-255 reserved */
@@ -102,3 +116,11 @@ bool anqp_iter_is_hs20(const struct anqp_iter *iter, uint8_t *stype,
 bool anqp_hs20_parse_osu_provider_nai(const unsigned char *anqp,
 					unsigned int len, const char **nai_out);
 char **anqp_parse_nai_realms(const unsigned char *anqp, unsigned int len);
+
+uint32_t anqp_request(uint32_t ifindex, const uint8_t *addr,
+			struct scan_bss *bss, const uint8_t *anqp, size_t len,
+			anqp_response_func_t cb, void *user_data,
+			anqp_destroy_func_t destroy);
+
+bool anqp_init(struct l_genl_family *in);
+void anqp_exit(void);
