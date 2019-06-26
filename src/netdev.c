@@ -61,7 +61,6 @@
 #include "src/fils.h"
 #include "src/auth-proto.h"
 #include "src/rtnlutil.h"
-#include "src/anqp.h"
 
 #ifndef ENOTSUPP
 #define ENOTSUPP 524
@@ -135,12 +134,6 @@ struct netdev {
 	struct watchlist station_watches;
 
 	struct l_io *pae_io;  /* for drivers without EAPoL over NL80211 */
-
-	netdev_anqp_response_func_t anqp_cb;
-	netdev_destroy_func_t anqp_destroy;
-	void *anqp_data;
-	uint64_t anqp_cookie;
-	uint8_t anqp_token;
 
 	bool connected : 1;
 	bool operational : 1;
@@ -608,11 +601,6 @@ static void netdev_free(void *data)
 		netdev->neighbor_report_cb = NULL;
 		l_timeout_remove(netdev->neighbor_report_timeout);
 	}
-
-	if (netdev->anqp_destroy)
-		netdev->anqp_destroy(netdev->anqp_data);
-
-	l_timeout_remove(netdev->gas_timeout);
 
 	if (netdev->connected)
 		netdev_connect_free(netdev);
@@ -2689,264 +2677,6 @@ static uint32_t netdev_send_action_frame(struct netdev *netdev,
 	return netdev_send_action_framev(netdev, to, iov, 1, freq, callback);
 }
 
-static void netdev_gas_request_cb(struct l_genl_msg *msg, void *user_data)
-{
-	struct netdev *netdev = user_data;
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-
-	if (l_genl_msg_get_error(msg) != 0)
-		goto error;
-
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_COOKIE:
-			if (len != 8)
-				goto error;
-
-			netdev->anqp_cookie = l_get_u64(data);
-			break;
-		}
-	}
-
-	return;
-
-error:
-	l_debug("Error sending CMD_FRAME (%d)", l_genl_msg_get_error(msg));
-
-	if (netdev->anqp_cb)
-		netdev->anqp_cb(netdev, NETDEV_ANQP_FAILED, NULL, 0,
-					netdev->anqp_data);
-	netdev->anqp_cb = NULL;
-
-	if (netdev->anqp_destroy)
-		netdev->anqp_destroy(netdev->anqp_data);
-
-	netdev->anqp_destroy = NULL;
-
-	l_timeout_remove(netdev->gas_timeout);
-	netdev->gas_timeout = NULL;
-}
-
-static void netdev_gas_response_frame_event(struct netdev *netdev,
-					const struct mmpdu_header *hdr,
-					const void *body, size_t body_len,
-					void *user_data)
-{
-	const uint8_t *ptr = body;
-	uint16_t status_code;
-	uint16_t delay;
-	uint16_t qrlen;
-	uint8_t adv_proto_len;
-
-	if (body_len < 9)
-		return;
-
-	/* Skip past category/action since this frame was prefixed matched */
-	ptr += 2;
-	body_len -= 2;
-
-	/* dialog token */
-	if (netdev->anqp_token != *ptr++)
-		return;
-
-	status_code = l_get_le16(ptr);
-	ptr += 2;
-	body_len -= 2;
-
-	if (status_code != 0) {
-		l_error("Bad status code on GAS response %u", status_code);
-		return;
-	}
-
-	delay = l_get_le16(ptr);
-	ptr += 2;
-	body_len -= 2;
-
-	/*
-	 * IEEE 80211-2016 Section 9.6.8.13
-	 *
-	 * The value 0 will be returned by the STA when a Query Response is
-	 * provided in this frame
-	 */
-	if (delay != 0) {
-		l_error("GAS comeback delay was not zero");
-		return;
-	}
-
-	if (*ptr != IE_TYPE_ADVERTISEMENT_PROTOCOL) {
-		l_error("GAS request not advertisement protocol");
-		return;
-	}
-
-	ptr++;
-	body_len--;
-
-	adv_proto_len = *ptr++;
-	body_len--;
-
-	if (body_len < adv_proto_len)
-		return;
-
-	ptr += adv_proto_len;
-	body_len -= adv_proto_len;
-
-	if (body_len < 2)
-		return;
-
-	qrlen = l_get_le16(ptr);
-	ptr += 2;
-
-	if (body_len < qrlen)
-		return;
-
-	l_timeout_remove(netdev->gas_timeout);
-	netdev->gas_timeout = NULL;
-
-	netdev->anqp_token++;
-
-	if (netdev->anqp_cb)
-		netdev->anqp_cb(netdev, NETDEV_ANQP_SUCCESS, ptr, qrlen,
-					netdev->anqp_data);
-
-	netdev->anqp_cb = NULL;
-
-	if (netdev->anqp_destroy)
-		netdev->anqp_destroy(netdev->anqp_data);
-
-	netdev->anqp_destroy = NULL;
-
-	return;
-}
-
-static void netdev_gas_timeout_cb(struct l_timeout *timeout, void *user_data)
-{
-	struct netdev *netdev = user_data;
-	netdev_destroy_func_t destroy = netdev->anqp_destroy;
-	void *anqp_data = netdev->anqp_data;
-
-	l_debug("GAS request timed out");
-
-	l_timeout_remove(netdev->gas_timeout);
-	netdev->gas_timeout = NULL;
-
-	netdev->anqp_token++;
-
-	if (netdev->anqp_cb)
-		netdev->anqp_cb(netdev, NETDEV_ANQP_TIMEOUT, NULL, 0,
-					netdev->anqp_data);
-
-	/* allows anqp_request to be re-entrant */
-	if (destroy)
-		destroy(anqp_data);
-}
-
-static void netdev_frame_wait_cancel_event(struct l_genl_msg *msg,
-						struct netdev *netdev)
-{
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-	uint64_t cookie = 0;
-
-	l_debug("");
-
-	if (!netdev->anqp_cb)
-		return;
-
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_COOKIE:
-			if (len != 8)
-				return;
-
-			cookie = l_get_u64(data);
-
-			break;
-		}
-	}
-
-	if (!cookie)
-		return;
-
-	if (cookie != netdev->anqp_cookie)
-		return;
-
-	netdev_gas_timeout_cb(netdev->gas_timeout, netdev);
-}
-
-uint32_t netdev_anqp_request(struct netdev *netdev, struct scan_bss *bss,
-				const uint8_t *anqp, size_t len,
-				netdev_anqp_response_func_t cb,
-				void *user_data,
-				netdev_destroy_func_t destroy)
-{
-	struct wiphy *wiphy = netdev->wiphy;
-	uint8_t frame[512];
-	struct l_genl_msg *msg;
-	struct iovec iov[2];
-	uint32_t id;
-	uint32_t duration = 300;
-
-	/*
-	 * If this is ever extended and used while associated some logic will
-	 * need to be added here to determine if we need to go off channel.
-	 */
-	if (!wiphy_can_offchannel_tx(wiphy)) {
-		l_error("ANQP failed, driver does not support offchannel TX");
-		return 0;
-	}
-
-	frame[0] = 0x04;		/* Category: Public */
-	frame[1] = 0x0a;		/* Action: GAS initial Request */
-	frame[2] = netdev->anqp_token;	/* Dialog Token */
-	frame[3] = IE_TYPE_ADVERTISEMENT_PROTOCOL;
-	frame[4] = 2;
-	frame[5] = 0x7f;
-	frame[6] = IE_ADVERTISEMENT_ANQP;
-	l_put_le16(len, frame + 7);
-
-	iov[0].iov_base = frame;
-	iov[0].iov_len = 9;
-	iov[1].iov_base = (void *)anqp;
-	iov[1].iov_len = len;
-
-	msg = nl80211_build_cmd_frame(netdev->index, netdev->addr, bss->addr,
-					bss->frequency, iov, 2);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_OFFCHANNEL_TX_OK, 0, "");
-	l_genl_msg_append_attr(msg, NL80211_ATTR_DURATION, 4, &duration);
-
-	id = l_genl_family_send(nl80211, msg, netdev_gas_request_cb,
-					netdev, NULL);
-
-	if (!id) {
-		l_genl_msg_unref(msg);
-		return 0;
-	}
-
-	netdev->anqp_cb = cb;
-	netdev->anqp_data = user_data;
-	netdev->anqp_cookie = 0;
-	netdev->anqp_destroy = destroy;
-
-	/*
-	 * The kernel seems to take quite a while to send out public action
-	 * frames (maybe switching frequencies or coming out of idle?). Because
-	 * of this we need a rather large timeout.
-	 */
-	netdev->gas_timeout = l_timeout_create(6, netdev_gas_timeout_cb,
-						netdev, NULL);
-
-	return id;
-}
-
 /*
  * Build an FT Authentication Request frame according to 12.5.2 / 12.5.4:
  * RSN or non-RSN Over-the-air FT Protocol, with the IE contents
@@ -3614,9 +3344,6 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 	case NL80211_CMD_DEL_STATION:
 		netdev_station_event(msg, netdev, false);
-		break;
-	case NL80211_CMD_FRAME_WAIT_CANCEL:
-		netdev_frame_wait_cancel_event(msg, netdev);
 		break;
 	}
 }
@@ -4625,7 +4352,6 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg)
 	const uint8_t action_sa_query_resp_prefix[2] = { 0x08, 0x01 };
 	const uint8_t action_sa_query_req_prefix[2] = { 0x08, 0x00 };
 	const uint8_t action_ft_response_prefix[] =  { 0x06, 0x02 };
-	const uint8_t action_gas_response_prefix[] = { 0x04, 0x0b };
 	struct l_io *pae_io = NULL;
 	const struct l_settings *settings = iwd_get_config();
 	bool pae_over_nl80211;
@@ -4771,11 +4497,6 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg)
 	netdev_frame_watch_add(netdev, 0x00d0, action_ft_response_prefix,
 				sizeof(action_ft_response_prefix),
 				netdev_ft_response_frame_event, NULL);
-
-	netdev_frame_watch_add(netdev, 0x00d0, action_gas_response_prefix,
-				sizeof(action_gas_response_prefix),
-				netdev_gas_response_frame_event, NULL);
-
 
 	/* Set RSSI threshold for CQM notifications */
 	if (netdev->type == NL80211_IFTYPE_STATION)
