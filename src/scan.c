@@ -100,6 +100,7 @@ struct scan_context {
 	bool triggered:1;
 	/* Whether any commands from current request's queue have started */
 	bool started:1;
+	bool suspended:1;
 	struct wiphy *wiphy;
 };
 
@@ -711,6 +712,9 @@ static bool start_next_scan_request(struct scan_context *sc)
 {
 	struct scan_request *sr = l_queue_peek_head(sc->requests);
 
+	if (sc->suspended)
+		return true;
+
 	if (sc->state != SCAN_STATE_NOT_RUNNING)
 		return true;
 
@@ -1226,6 +1230,9 @@ static void scan_finished(struct scan_context *sc, uint32_t wiphy,
 		l_queue_remove(sc->requests, sr);
 		sc->started = false;
 
+		if (sr->callback)
+			new_owner = sr->callback(err, bss_list, sr->userdata);
+
 		/*
 		 * Can start a new scan now that we've removed this one from
 		 * the queue.  If this were an external scan request (sr NULL)
@@ -1234,9 +1241,6 @@ static void scan_finished(struct scan_context *sc, uint32_t wiphy,
 		 * scan, or scheduling the next periodic scan.
 		 */
 		start_next_scan_request(sc);
-
-		if (sr->callback)
-			new_owner = sr->callback(err, bss_list, sr->userdata);
 
 		scan_request_free(sr);
 	} else if (sc->sp.callback)
@@ -1872,6 +1876,34 @@ bool scan_ifindex_remove(uint32_t ifindex)
 	}
 
 	return true;
+}
+
+bool scan_suspend(uint32_t ifindex)
+{
+	struct scan_context *sc;
+
+	sc = l_queue_find(scan_contexts, scan_context_match,
+				L_UINT_TO_PTR(ifindex));
+	if (!sc)
+		return false;
+
+	sc->suspended = true;
+
+	return true;
+}
+
+void scan_resume(uint32_t ifindex)
+{
+	struct scan_context *sc;
+
+	sc = l_queue_find(scan_contexts, scan_context_match,
+				L_UINT_TO_PTR(ifindex));
+	if (!sc)
+		return;
+
+	sc->suspended = false;
+
+	start_next_scan_request(sc);
 }
 
 static int scan_init(void)
