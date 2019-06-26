@@ -49,6 +49,7 @@
 #include "src/network.h"
 #include "src/blacklist.h"
 #include "src/util.h"
+#include "src/hotspot.h"
 
 struct network {
 	char *object_path;
@@ -75,8 +76,23 @@ static bool network_settings_load(struct network *network)
 	if (network->settings)
 		return true;
 
-	network->settings = storage_network_open(network_get_security(network),
-							network->info->ssid);
+	/*
+	 * If this network contains NAI realm info OR we have a Hotspot
+	 * provisioning file containing the HESSID we know this is a Hotspot
+	 * network.
+	 */
+	if (network->nai_realms || !util_mem_is_zero(network->hessid, 6)) {
+		network->settings = l_settings_new();
+
+		if (!l_settings_load_from_file(network->settings,
+					hs20_find_settings_file(network))) {
+			l_settings_free(network->settings);
+			network->settings = NULL;
+		}
+	} else
+		network->settings = storage_network_open(
+						network_get_security(network),
+						network->info->ssid);
 
 	return network->settings != NULL;
 }
