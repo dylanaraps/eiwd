@@ -960,7 +960,11 @@ class IWD(AsyncOpAbstract):
         import shutil
 
         assert not os.path.isabs(source)
-        shutil.copy(source, IWD_STORAGE_DIR)
+
+        if os.path.isdir(source):
+            shutil.copytree(source, IWD_STORAGE_DIR + "/%s" % source)
+        else:
+            shutil.copy(source, IWD_STORAGE_DIR)
 
     @staticmethod
     def remove_from_storage(file_name):
