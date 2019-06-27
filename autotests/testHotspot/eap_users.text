@@ -1,0 +1,4 @@
+# Phase 1 users
+"anonymous@example.com" TTLS
+# Phase 2
+"domain\user" TTLS-MSCHAPV2 "testpasswd" [2]
