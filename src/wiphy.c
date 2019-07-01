@@ -343,6 +343,11 @@ const char *wiphy_get_driver(struct wiphy *wiphy)
 	return wiphy->driver_str;
 }
 
+const char *wiphy_get_name(struct wiphy *wiphy)
+{
+	return wiphy->name;
+}
+
 const uint8_t *wiphy_get_permanent_address(struct wiphy *wiphy)
 {
 	return wiphy->permanent_addr;
