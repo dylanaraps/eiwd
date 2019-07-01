@@ -823,47 +823,6 @@ bool wiphy_destroy(struct wiphy *wiphy)
 	return true;
 }
 
-static void wiphy_regulatory_notify(struct l_genl_msg *msg, void *user_data)
-{
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-	uint8_t cmd;
-
-	cmd = l_genl_msg_get_command(msg);
-
-	l_debug("Regulatory notification %u", cmd);
-
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-	}
-}
-
-static void regulatory_info_callback(struct l_genl_msg *msg, void *user_data)
-{
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_REG_ALPHA2:
-			if (len != 3) {
-				l_warn("Invalid regulatory alpha2 attribute");
-				return;
-			}
-
-			l_debug("Regulatory alpha2 is %s", (char *) data);
-			break;
-		}
-	}
-}
-
 static void wiphy_rfkill_cb(unsigned int wiphy_id, bool soft, bool hard,
 				void *user_data)
 {
@@ -1035,8 +994,6 @@ static void setup_wiphy_interface(struct l_dbus_interface *interface)
 bool wiphy_init(struct l_genl_family *in, const char *whitelist,
 							const char *blacklist)
 {
-	struct l_genl_msg *msg;
-
 	/*
 	 * This is an extra sanity check so that no memory is leaked
 	 * in case the generic netlink handling gets confused.
@@ -1048,16 +1005,7 @@ bool wiphy_init(struct l_genl_family *in, const char *whitelist,
 
 	nl80211 = in;
 
-	if (!l_genl_family_register(nl80211, "regulatory",
-					wiphy_regulatory_notify, NULL, NULL))
-		l_error("Registering for regulatory notification failed");
-
 	wiphy_list = l_queue_new();
-
-	msg = l_genl_msg_new(NL80211_CMD_GET_REG);
-	if (!l_genl_family_send(nl80211, msg, regulatory_info_callback,
-								NULL, NULL))
-		l_error("Getting regulatory info failed");
 
 	rfkill_watch_add(wiphy_rfkill_cb, NULL);
 
