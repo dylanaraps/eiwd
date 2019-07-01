@@ -58,6 +58,7 @@ static char **blacklist_filter;
 struct wiphy {
 	uint32_t id;
 	char name[20];
+	uint8_t permanent_addr[ETH_ALEN];
 	uint32_t feature_flags;
 	uint8_t ext_features[(NUM_NL80211_EXT_FEATURES + 7) / 8];
 	uint8_t max_num_ssids_per_scan;
@@ -342,6 +343,11 @@ const char *wiphy_get_driver(struct wiphy *wiphy)
 	return wiphy->driver_str;
 }
 
+const uint8_t *wiphy_get_permanent_address(struct wiphy *wiphy)
+{
+	return wiphy->permanent_addr;
+}
+
 bool wiphy_constrain_freq_set(const struct wiphy *wiphy,
 						struct scan_freq_set *set)
 {
@@ -401,6 +407,7 @@ static void wiphy_print_basic_info(struct wiphy *wiphy)
 	char buf[1024];
 
 	l_info("Wiphy: %d, Name: %s", wiphy->id, wiphy->name);
+	l_info("\tPermanent Address: "MAC, MAC_STR(wiphy->permanent_addr));
 
 	bands = scan_freq_set_get_bands(wiphy->supported_freqs);
 
@@ -708,6 +715,29 @@ static bool wiphy_get_driver_name(struct wiphy *wiphy)
 	return true;
 }
 
+static int wiphy_get_permanent_addr_from_sysfs(struct wiphy *wiphy)
+{
+	char addr[32];
+	ssize_t len;
+
+	len = read_file(addr, sizeof(addr),
+				"/sys/class/ieee80211/%s/macaddress",
+				wiphy->name);
+	if (len != 18) {
+		if (len < 0)
+			return -errno;
+		return -EINVAL;
+	}
+
+	/* Sysfs appends a \n at the end, strip it */
+	addr[17] = '\0';
+
+	if (!util_string_to_address(addr, wiphy->permanent_addr))
+		return -EINVAL;
+
+	return 0;
+}
+
 static void wiphy_register(struct wiphy *wiphy)
 {
 	struct l_dbus *dbus = dbus_get_bus();
@@ -807,6 +837,14 @@ void wiphy_update_from_genl(struct wiphy *wiphy, struct l_genl_msg *msg)
 
 void wiphy_create_complete(struct wiphy *wiphy)
 {
+	if (util_mem_is_zero(wiphy->permanent_addr, 6)) {
+		int err = wiphy_get_permanent_addr_from_sysfs(wiphy);
+
+		if (err < 0)
+			l_error("Can't read sysfs maccaddr for %s: %s",
+					wiphy->name, strerror(-err));
+	}
+
 	wiphy_print_basic_info(wiphy);
 }
 
