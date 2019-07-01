@@ -145,6 +145,7 @@ struct netdev {
 	bool ignore_connect_event : 1;
 	bool expect_connect_failure : 1;
 	bool aborting : 1;
+	bool mac_randomize_once : 1;
 };
 
 struct netdev_preauth_state {
@@ -4154,6 +4155,20 @@ static void netdev_initial_up_cb(int error, uint16_t type, const void *data,
 				netdev, NETDEV_WATCH_EVENT_NEW);
 }
 
+static void netdev_set_mac_cb(int error, uint16_t type, const void *data,
+					uint32_t len, void *user_data)
+{
+	struct netdev *netdev = user_data;
+
+	if (error)
+		l_error("Error setting mac address on %d: %s", netdev->index,
+			strerror(-error));
+
+	netdev->set_powered_cmd_id =
+		rtnl_set_powered(netdev->index, true, netdev_initial_up_cb,
+					netdev, NULL);
+}
+
 static void netdev_initial_down_cb(int error, uint16_t type, const void *data,
 					uint32_t len, void *user_data)
 {
@@ -4166,6 +4181,18 @@ static void netdev_initial_down_cb(int error, uint16_t type, const void *data,
 			strerror(-error));
 
 		netdev->set_powered_cmd_id = 0;
+		return;
+	}
+
+	if (netdev->mac_randomize_once) {
+		uint8_t addr[ETH_ALEN];
+
+		wiphy_generate_random_address(netdev->wiphy, addr);
+		l_debug("Setting initial random address on "
+			"ifindex: %d to: "MAC, netdev->index, MAC_STR(addr));
+		netdev->set_powered_cmd_id =
+			rtnl_set_mac(rtnl, netdev->index, addr,
+					netdev_set_mac_cb, netdev, NULL);
 		return;
 	}
 
@@ -4203,10 +4230,24 @@ static void netdev_getlink_cb(int error, uint16_t type, const void *data,
 	netdev_newlink_notify(ifi, bytes);
 
 	/*
-	 * If the interface is UP, reset it to ensure a clean state,
-	 * otherwise just bring it UP.
+	 * If the interface is UP, reset it to ensure a clean state.
+	 * Otherwise, if we need to set a random mac, do so.  If not, just
+	 * bring the interface UP.
 	 */
 	powered = netdev_get_is_up(netdev);
+
+	if (!powered && netdev->mac_randomize_once) {
+		uint8_t addr[ETH_ALEN];
+
+		wiphy_generate_random_address(netdev->wiphy, addr);
+		l_debug("Setting initial random address on "
+			"ifindex: %d to: "MAC, netdev->index, MAC_STR(addr));
+		netdev->set_powered_cmd_id =
+			rtnl_set_mac(rtnl, netdev->index, addr,
+					netdev_set_mac_cb, netdev, NULL);
+		return;
+	}
+
 	cb = powered ? netdev_initial_down_cb : netdev_initial_up_cb;
 
 	netdev->set_powered_cmd_id =
@@ -4335,7 +4376,7 @@ error:
 	return NULL;
 }
 
-struct netdev *netdev_create_from_genl(struct l_genl_msg *msg)
+struct netdev *netdev_create_from_genl(struct l_genl_msg *msg, bool random_mac)
 {
 	struct l_genl_attr attr;
 	uint16_t type, len;
@@ -4454,6 +4495,7 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg)
 	memcpy(netdev->name, ifname, ifname_len);
 	netdev->wiphy = wiphy;
 	netdev->pae_over_nl80211 = pae_over_nl80211;
+	netdev->mac_randomize_once = random_mac;
 
 	if (pae_io) {
 		netdev->pae_io = pae_io;
