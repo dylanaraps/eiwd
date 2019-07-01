@@ -43,6 +43,7 @@
 static struct l_genl_family *nl80211 = NULL;
 static char **whitelist_filter;
 static char **blacklist_filter;
+static bool randomize;
 
 struct wiphy_setup_state {
 	uint32_t id;
@@ -109,7 +110,7 @@ static bool manager_use_default(struct wiphy_setup_state *state)
 		return false;
 	}
 
-	netdev_create_from_genl(state->default_if_msg);
+	netdev_create_from_genl(state->default_if_msg, randomize);
 	return true;
 }
 
@@ -133,7 +134,9 @@ static void manager_new_interface_cb(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	netdev_create_from_genl(msg);
+	netdev_create_from_genl(msg, randomize &&
+					!wiphy_has_feature(state->wiphy,
+						NL80211_FEATURE_MAC_ON_CREATE));
 }
 
 static void manager_new_interface_done(void *user_data)
@@ -177,6 +180,18 @@ static void manager_create_interfaces(struct wiphy_setup_state *state)
 				strlen(ifname) + 1, ifname);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_4ADDR, 1, "\0");
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SOCKET_OWNER, 0, "");
+
+	if (randomize && wiphy_has_feature(state->wiphy,
+					NL80211_FEATURE_MAC_ON_CREATE)) {
+		uint8_t random_addr[6];
+
+		wiphy_generate_random_address(state->wiphy, random_addr);
+		l_debug("Creating interface on phy: %s with random addr: "MAC,
+						wiphy_get_name(state->wiphy),
+						MAC_STR(random_addr));
+		l_genl_msg_append_attr(msg, NL80211_ATTR_MAC, 6, random_addr);
+	}
+
 	cmd_id = l_genl_family_send(nl80211, msg,
 					manager_new_interface_cb, state,
 					manager_new_interface_done);
@@ -683,9 +698,11 @@ static void manager_wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 bool manager_init(struct l_genl_family *in,
 			const char *if_whitelist, const char *if_blacklist)
 {
+	const struct l_settings *config = iwd_get_config();
 	struct l_genl_msg *msg;
 	unsigned int wiphy_dump;
 	unsigned int interface_dump;
+	const char *randomize_str;
 
 	nl80211 = in;
 
@@ -725,6 +742,11 @@ bool manager_init(struct l_genl_family *in,
 		return false;
 	}
 
+	randomize_str =
+		l_settings_get_value(config, "General", "mac_randomize");
+	if (randomize_str && !strcmp(randomize_str, "once"))
+		randomize = true;
+
 	return true;
 }
 
@@ -737,4 +759,5 @@ void manager_exit(void)
 	pending_wiphys = NULL;
 
 	nl80211 = NULL;
+	randomize = false;
 }
