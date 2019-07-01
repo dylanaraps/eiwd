@@ -239,20 +239,24 @@ static int hotspot_init(void)
 
 	while ((dirent = readdir(dir))) {
 		struct hs20_config *config;
-		struct l_settings *s = l_settings_new();
-		char *filename = l_strdup_printf("%s/%s", hs20_dir,
-							dirent->d_name);
+		struct l_settings *s;
+		char *filename;
 
-		if (!l_settings_load_from_file(s, filename)) {
-			l_free(filename);
-			l_settings_free(s);
+		if (dirent->d_type != DT_REG && dirent->d_type != DT_LNK)
 			continue;
-		}
+
+		filename = l_strdup_printf("%s/%s", hs20_dir, dirent->d_name);
+		s = l_settings_new();
+
+		if (!l_settings_load_from_file(s, filename))
+			goto next;
 
 		config = hs20_config_new(s, filename);
 
-		l_queue_push_head(hs20_settings, config);
+		if (config)
+			l_queue_push_head(hs20_settings, config);
 
+next:
 		l_free(filename);
 		l_settings_free(s);
 	}
