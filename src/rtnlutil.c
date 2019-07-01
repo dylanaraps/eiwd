@@ -88,6 +88,37 @@ uint32_t rtnl_set_linkmode_and_operstate(struct l_netlink *rtnl, int ifindex,
 	return id;
 }
 
+uint32_t rtnl_set_mac(struct l_netlink *rtnl, int ifindex,
+					const uint8_t addr[static 6],
+					l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy)
+{
+	struct ifinfomsg *rtmmsg;
+	void *rta_buf;
+	size_t bufsize;
+	uint32_t id;
+
+	bufsize = NLMSG_ALIGN(sizeof(struct ifinfomsg)) + RTA_SPACE(6);
+
+	rtmmsg = l_malloc(bufsize);
+	memset(rtmmsg, 0, bufsize);
+
+	rtmmsg->ifi_family = AF_UNSPEC;
+	rtmmsg->ifi_index = ifindex;
+
+	rta_buf = (void *) rtmmsg + NLMSG_ALIGN(sizeof(struct ifinfomsg));
+
+	rta_buf += rta_add_data(rta_buf, IFLA_ADDRESS, (void *) addr, 6);
+
+	id = l_netlink_send(rtnl, RTM_SETLINK, 0, rtmmsg,
+					rta_buf - (void *) rtmmsg,
+					cb, user_data, destroy);
+	l_free(rtmmsg);
+
+	return id;
+}
+
 void rtnl_ifaddr_extract(const struct ifaddrmsg *ifa, int bytes,
 				char **label, char **ip, char **broadcast)
 {

@@ -26,6 +26,12 @@ uint32_t rtnl_set_linkmode_and_operstate(struct l_netlink *rtnl, int ifindex,
 					void *user_data,
 					l_netlink_destroy_func_t destroy);
 
+uint32_t rtnl_set_mac(struct l_netlink *rtnl, int ifindex,
+					const uint8_t addr[static 6],
+					l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy);
+
 void rtnl_ifaddr_extract(const struct ifaddrmsg *ifa, int bytes,
 				char **label, char **ip, char **broadcast);
 uint32_t rtnl_ifaddr_get(struct l_netlink *rtnl, l_netlink_command_func_t cb,
