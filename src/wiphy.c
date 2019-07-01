@@ -54,6 +54,7 @@ static struct l_genl_family *nl80211 = NULL;
 static struct l_hwdb *hwdb;
 static char **whitelist_filter;
 static char **blacklist_filter;
+static int mac_randomize_bytes = 6;
 
 struct wiphy {
 	uint32_t id;
@@ -351,6 +352,35 @@ const char *wiphy_get_name(struct wiphy *wiphy)
 const uint8_t *wiphy_get_permanent_address(struct wiphy *wiphy)
 {
 	return wiphy->permanent_addr;
+}
+
+void wiphy_generate_random_address(struct wiphy *wiphy, uint8_t addr[static 6])
+{
+	switch (mac_randomize_bytes) {
+	case 6:
+		l_getrandom(addr, 6);
+
+		/* Set the locally administered bit */
+		addr[0] |= 0x2;
+
+		/* Reset multicast bit */
+		addr[0] &= 0xfe;
+		break;
+	case 3:
+		l_getrandom(addr + 3, 3);
+		memcpy(addr, wiphy->permanent_addr, 3);
+		break;
+	}
+
+	/*
+	 * Constrain the last NIC byte to 0x00 .. 0xfe, otherwise we might be
+	 * able to generate an address of 0xff 0xff 0xff which might be
+	 * interpreted as a vendor broadcast.  Similarly, 0x00 0x00 0x00 is
+	 * also not valid
+	 */
+	addr[5] &= 0xfe;
+	if (util_mem_is_zero(addr + 3, 3))
+		addr[5] = 0x01;
 }
 
 bool wiphy_constrain_freq_set(const struct wiphy *wiphy,
@@ -1037,6 +1067,13 @@ static void setup_wiphy_interface(struct l_dbus_interface *interface)
 bool wiphy_init(struct l_genl_family *in, const char *whitelist,
 							const char *blacklist)
 {
+	const struct l_settings *config = iwd_get_config();
+	const char *s = l_settings_get_value(config, "General",
+							"mac_randomize_bytes");
+
+	if (s && !strcmp(s, "nic"))
+		mac_randomize_bytes = 3;
+
 	/*
 	 * This is an extra sanity check so that no memory is leaked
 	 * in case the generic netlink handling gets confused.
@@ -1079,6 +1116,7 @@ bool wiphy_exit(void)
 	wiphy_list = NULL;
 
 	nl80211 = NULL;
+	mac_randomize_bytes = 6;
 
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_WIPHY_INTERFACE);
 
