@@ -29,6 +29,7 @@
 #include <ell/ell.h>
 
 #include "src/iwd.h"
+#include "src/dbus.h"
 #include "src/resolve.h"
 
 struct resolve_method_ops {
@@ -45,6 +46,92 @@ struct resolve_method {
 };
 
 static struct resolve_method method;
+
+#define SYSTEMD_RESOLVED_SERVICE           "org.freedesktop.resolve1"
+
+struct systemd_state {
+	uint32_t service_watch;
+	bool is_ready:1;
+};
+
+static void resolve_systemd_add_dns(uint32_t ifindex, char **dns_list,
+								void *data)
+{
+	struct systemd_state *state = data;
+
+	l_debug("ifindex: %u", ifindex);
+
+	if (!state->is_ready) {
+		l_error("resolve-systemd: Failed to add DNS entries. "
+				"Is 'systemd-resolved' service running?");
+
+		return;
+	}
+
+	/* TODO */
+}
+
+static void resolve_systemd_remove(uint32_t ifindex, void *data)
+{
+	struct systemd_state *state = data;
+
+	l_debug("ifindex: %u", ifindex);
+
+	if (!state->is_ready) {
+		l_error("resolve-systemd: Failed to remove DNS entries. "
+				"Is 'systemd-resolved' service running?");
+
+		return;
+	}
+
+	/* TODO */
+}
+
+static void systemd_appeared(struct l_dbus *dbus, void *user_data)
+{
+	struct systemd_state *state = user_data;
+
+	state->is_ready = true;
+}
+
+static void systemd_disappeared(struct l_dbus *dbus, void *user_data)
+{
+	struct systemd_state *state = user_data;
+
+	state->is_ready = false;
+}
+
+static void *resolve_systemd_init(void)
+{
+	struct systemd_state *state;
+
+	state = l_new(struct systemd_state, 1);
+
+	state->service_watch =
+		l_dbus_add_service_watch(dbus_get_bus(),
+						SYSTEMD_RESOLVED_SERVICE,
+						systemd_appeared,
+						systemd_disappeared,
+						state, NULL);
+
+	return state;
+}
+
+static void resolve_systemd_exit(void *data)
+{
+	struct systemd_state *state = data;
+
+	l_dbus_remove_watch(dbus_get_bus(), state->service_watch);
+
+	l_free(state);
+}
+
+static const struct resolve_method_ops resolve_method_systemd = {
+	.init = resolve_systemd_init,
+	.exit = resolve_systemd_exit,
+	.add_dns = resolve_systemd_add_dns,
+	.remove = resolve_systemd_remove,
+};
 
 void resolve_add_dns(uint32_t ifindex, uint8_t type, char **dns_list)
 {
@@ -69,6 +156,7 @@ static const struct {
 	const char *name;
 	const struct resolve_method_ops *method_ops;
 } resolve_method_ops_list[] = {
+	{ "systemd", &resolve_method_systemd },
 	{ }
 };
 
