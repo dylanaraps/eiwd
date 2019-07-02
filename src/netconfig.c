@@ -38,6 +38,7 @@
 #include "src/common.h"
 #include "src/network.h"
 #include "src/rtnlutil.h"
+#include "src/resolve.h"
 #include "src/netconfig.h"
 
 struct netconfig {
@@ -277,7 +278,9 @@ static bool netconfig_install_addresses(struct netconfig *netconfig,
 	}
 
 gateway:
-	/* TODO: Add the routes and domain name servers. */
+	/* TODO: Add the routes. */
+
+	resolve_add_dns(netconfig->ifindex, ifaddr->family, dns);
 
 	return true;
 }
@@ -299,7 +302,9 @@ static bool netconfig_uninstall_addresses(struct netconfig *netconfig,
 	}
 
 gateway:
-	/* TODO: Remove the routes and domain name servers. */
+	/* TODO: Remove the routes. */
+
+	resolve_remove(netconfig->ifindex);
 
 	return true;
 }
