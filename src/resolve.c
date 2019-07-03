@@ -292,7 +292,7 @@ static int resolve_init(void)
 
 static void resolve_exit(void)
 {
-	if (!method.ops->exit)
+	if (!method.ops || !method.ops->exit)
 		return;
 
 	method.ops->exit(method.data);
