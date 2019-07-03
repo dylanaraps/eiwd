@@ -70,7 +70,7 @@ static struct hs20_config *hs20_config_new(struct l_settings *settings,
 {
 	struct hs20_config *config;
 	char *str;
-	char **nai_realms;
+	char **nai_realms = NULL;
 
 	config = l_new(struct hs20_config, 1);
 
@@ -79,9 +79,10 @@ static struct hs20_config *hs20_config_new(struct l_settings *settings,
 	if (str) {
 		util_string_to_address(str, config->hessid);
 		l_free(str);
+		goto done;
 	}
 
-	/* NAI realms are required */
+	/* NAI realms are required if HESSID is not included */
 	nai_realms = l_settings_get_string_list(settings, "Hotspot",
 						"NAIRealmNames", ',');
 	if (!nai_realms) {
@@ -89,6 +90,7 @@ static struct hs20_config *hs20_config_new(struct l_settings *settings,
 		return NULL;
 	}
 
+done:
 	config->nai_realms = nai_realms;
 	config->filename = l_strdup(filename);
 
