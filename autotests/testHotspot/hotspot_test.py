@@ -56,7 +56,7 @@ class Test(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        IWD.copy_to_storage('.hotspot')
+        IWD.copy_to_hotspot('example.conf')
 
     @classmethod
     def tearDownClass(cls):
