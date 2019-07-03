@@ -168,6 +168,7 @@ static void resolve_systemd_add_dns(uint32_t ifindex, uint8_t type,
 static void resolve_systemd_remove(uint32_t ifindex, void *data)
 {
 	struct systemd_state *state = data;
+	struct l_dbus_message *message;
 
 	l_debug("ifindex: %u", ifindex);
 
@@ -178,7 +179,19 @@ static void resolve_systemd_remove(uint32_t ifindex, void *data)
 		return;
 	}
 
-	/* TODO */
+	message =
+		l_dbus_message_new_method_call(dbus_get_bus(),
+					SYSTEMD_RESOLVED_SERVICE,
+					SYSTEMD_RESOLVED_MANAGER_PATH,
+					SYSTEMD_RESOLVED_MANAGER_INTERFACE,
+					"RevertLink");
+	if (!message)
+		return;
+
+	l_dbus_message_set_arguments(message, "i", &ifindex);
+
+	l_dbus_send_with_reply(dbus_get_bus(), message, systemd_link_dns_reply,
+								state, NULL);
 }
 
 static void systemd_appeared(struct l_dbus *dbus, void *user_data)
