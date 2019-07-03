@@ -947,6 +947,7 @@ class IWD(AsyncOpAbstract):
     @staticmethod
     def clear_storage():
         os.system('rm -rf ' + IWD_STORAGE_DIR + '/*')
+        os.system('rm -rf ' + IWD_STORAGE_DIR + '/.hotspot/*')
 
     @staticmethod
     def create_in_storage(file_name, file_content):
@@ -961,10 +962,18 @@ class IWD(AsyncOpAbstract):
 
         assert not os.path.isabs(source)
 
-        if os.path.isdir(source):
-            shutil.copytree(source, IWD_STORAGE_DIR + "/%s" % source)
-        else:
-            shutil.copy(source, IWD_STORAGE_DIR)
+        shutil.copy(source, IWD_STORAGE_DIR)
+
+    @staticmethod
+    def copy_to_hotspot(source):
+        import shutil
+
+        assert not os.path.isabs(source)
+
+        if not os.path.exists(IWD_STORAGE_DIR + "/.hotspot"):
+            os.mkdir(IWD_STORAGE_DIR + "/.hotspot")
+
+        shutil.copy(source, IWD_STORAGE_DIR + "/.hotspot")
 
     @staticmethod
     def remove_from_storage(file_name):
