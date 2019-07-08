@@ -538,7 +538,6 @@ bool scan_cancel(uint32_t ifindex, uint32_t id)
 			l_genl_family_cancel(nl80211, sc->get_scan_cmd_id);
 
 		sc->start_cmd_id = 0;
-		sc->get_scan_cmd_id = 0;
 		l_queue_remove(sc->requests, sr);
 		sc->started = false;
 		start_next_scan_request(sc);
@@ -1258,6 +1257,8 @@ static void get_scan_done(void *user)
 
 	l_debug("get_scan_done");
 
+	sc->get_scan_cmd_id = 0;
+
 	if (l_queue_peek_head(sc->requests) == results->sr)
 		scan_finished(sc, 0, results->bss_list, results->sr);
 	else
@@ -1438,8 +1439,9 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		scan_msg = l_genl_msg_new_sized(NL80211_CMD_GET_SCAN, 8);
 		l_genl_msg_append_attr(scan_msg, NL80211_ATTR_IFINDEX, 4,
 						&attr_ifindex);
-		l_genl_family_dump(nl80211, scan_msg, get_scan_callback,
-					results, get_scan_done);
+		sc->get_scan_cmd_id = l_genl_family_dump(nl80211, scan_msg,
+							get_scan_callback,
+							results, get_scan_done);
 
 		break;
 	}
