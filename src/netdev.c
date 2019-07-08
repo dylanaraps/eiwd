@@ -83,6 +83,7 @@ struct netdev_handshake_state {
 
 struct netdev {
 	uint32_t index;
+	uint64_t wdev_id;
 	char name[IFNAMSIZ];
 	uint32_t type;
 	uint8_t addr[ETH_ALEN];
@@ -257,6 +258,11 @@ const uint8_t *netdev_get_address(struct netdev *netdev)
 uint32_t netdev_get_ifindex(struct netdev *netdev)
 {
 	return netdev->index;
+}
+
+uint64_t netdev_get_wdev_id(struct netdev *netdev)
+{
+	return netdev->wdev_id;
 }
 
 enum netdev_iftype netdev_get_iftype(struct netdev *netdev)
@@ -4385,6 +4391,7 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg, bool random_mac)
 	uint16_t ifname_len = 0;
 	const uint8_t *ifaddr = NULL;
 	const uint32_t *ifindex = NULL, *iftype = NULL;
+	const uint64_t *wdev = NULL;
 	struct netdev *netdev;
 	struct wiphy *wiphy = NULL;
 	struct ifinfomsg *rtmmsg;
@@ -4409,6 +4416,15 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg, bool random_mac)
 			}
 
 			ifindex = data;
+			break;
+
+		case NL80211_ATTR_WDEV:
+			if (len != sizeof(uint64_t)) {
+				l_warn("Invalid wdev attribute");
+				return NULL;
+			}
+
+			wdev = data;
 			break;
 
 		case NL80211_ATTR_IFNAME:
@@ -4455,7 +4471,7 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg, bool random_mac)
 		return NULL;
 	}
 
-	if (!wiphy || !ifindex || !ifaddr || !ifname) {
+	if (!wiphy || !ifindex || !wdev || !ifaddr || !ifname) {
 		l_warn("Unable to parse interface information");
 		return NULL;
 	}
@@ -4489,6 +4505,7 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg, bool random_mac)
 
 	netdev = l_new(struct netdev, 1);
 	netdev->index = *ifindex;
+	netdev->wdev_id = *wdev;
 	netdev->type = *iftype;
 	netdev->rekey_offload_support = true;
 	memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
@@ -4508,7 +4525,8 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg, bool random_mac)
 
 	l_queue_push_tail(netdev_list, netdev);
 
-	l_debug("Created interface %s[%d]", netdev->name, netdev->index);
+	l_debug("Created interface %s[%d %" PRIx64 "]", netdev->name,
+		netdev->index, netdev->wdev_id);
 
 	/* Query interface flags */
 	bufsize = NLMSG_ALIGN(sizeof(struct ifinfomsg));

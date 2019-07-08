@@ -127,6 +127,7 @@ typedef void (*netdev_station_watch_func_t)(struct netdev *netdev,
 struct wiphy *netdev_get_wiphy(struct netdev *netdev);
 const uint8_t *netdev_get_address(struct netdev *netdev);
 uint32_t netdev_get_ifindex(struct netdev *netdev);
+uint64_t netdev_get_wdev_id(struct netdev *netdev);
 enum netdev_iftype netdev_get_iftype(struct netdev *netdev);
 int netdev_set_iftype(struct netdev *netdev, enum netdev_iftype type,
 			netdev_command_cb_t cb, void *user_data,
