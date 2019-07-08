@@ -544,6 +544,9 @@ struct wsc_done {
 	uint8_t registrar_nonce[16];
 };
 
+int wsc_parse_primary_device_type(const uint8_t *pdu, size_t len,
+					struct wsc_primary_device_type *out);
+
 int wsc_parse_credential(const uint8_t *pdu, uint32_t len,
 						struct wsc_credential *out);
 

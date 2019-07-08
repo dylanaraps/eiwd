@@ -423,26 +423,30 @@ static bool extract_public_key(struct wsc_attr_iter *iter, void *data)
 	return true;
 }
 
-static bool extract_primary_device_type(struct wsc_attr_iter *iter, void *data)
+int wsc_parse_primary_device_type(const uint8_t *pdu, size_t len,
+					struct wsc_primary_device_type *out)
 {
-	struct wsc_primary_device_type *out = data;
-	const uint8_t *p;
 	uint16_t category;
 
-	if (wsc_attr_iter_get_length(iter) != 8)
-		return false;
+	if (len != 8)
+		return -EINVAL;
 
-	p = wsc_attr_iter_get_data(iter);
-	category = l_get_be16(p);
-
+	category = l_get_be16(pdu);
 	if (category > 12 && category != 255)
-		return false;
+		return -EINVAL;
 
 	out->category = category;
-	memcpy(out->oui, p + 2, 3);
-	out->oui_type = p[5];
-	out->subcategory = l_get_be16(p + 6);
-	return true;
+	memcpy(out->oui, pdu + 2, 3);
+	out->oui_type = pdu[5];
+	out->subcategory = l_get_be16(pdu + 6);
+	return 0;
+}
+
+static bool extract_primary_device_type(struct wsc_attr_iter *iter, void *data)
+{
+	return wsc_parse_primary_device_type(wsc_attr_iter_get_data(iter),
+						wsc_attr_iter_get_length(iter),
+						data) == 0;
 }
 
 static bool extract_request_type(struct wsc_attr_iter *iter, void *data)
