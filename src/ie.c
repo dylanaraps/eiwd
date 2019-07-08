@@ -209,6 +209,7 @@ void *ie_tlv_extract_p2p_payload(const unsigned char *ies, size_t len,
 static void *ie_tlv_vendor_ie_encapsulate(const unsigned char oui[],
 					uint8_t type,
 					const void *data, size_t len,
+					bool build_empty,
 					size_t *out_len)
 {
 	size_t overhead;
@@ -222,6 +223,9 @@ static void *ie_tlv_vendor_ie_encapsulate(const unsigned char oui[],
 	 */
 	overhead = (len + 250) / 251 * 6;
 
+	if (len == 0 && build_empty)
+		overhead = 6;
+
 	ret = l_malloc(len + overhead);
 
 	if (out_len)
@@ -229,7 +233,7 @@ static void *ie_tlv_vendor_ie_encapsulate(const unsigned char oui[],
 
 	offset = 0;
 
-	while (len) {
+	while (overhead) {
 		ie_len = len <= 251 ? len : 251;
 		ret[offset++] = IE_TYPE_VENDOR_SPECIFIC;
 		ret[offset++] = ie_len + 4;
@@ -240,6 +244,7 @@ static void *ie_tlv_vendor_ie_encapsulate(const unsigned char oui[],
 
 		data += ie_len;
 		len -= ie_len;
+		overhead -= 6;
 	}
 
 	return ret;
@@ -249,7 +254,14 @@ void *ie_tlv_encapsulate_wsc_payload(const uint8_t *data, size_t len,
 								size_t *out_len)
 {
 	return ie_tlv_vendor_ie_encapsulate(microsoft_oui, 0x04,
-							data, len, out_len);
+						data, len, false, out_len);
+}
+
+void *ie_tlv_encapsulate_p2p_payload(const uint8_t *data, size_t len,
+								size_t *out_len)
+{
+	return ie_tlv_vendor_ie_encapsulate(wifi_alliance_oui, 0x09,
+						data, len, true, out_len);
 }
 
 #define TLV_HEADER_LEN 2

@@ -414,6 +414,8 @@ void *ie_tlv_encapsulate_wsc_payload(const uint8_t *data, size_t len,
 
 void *ie_tlv_extract_p2p_payload(const uint8_t *ies, size_t len,
 							ssize_t *out_len);
+void *ie_tlv_encapsulate_p2p_payload(const uint8_t *data, size_t len,
+							size_t *out_len);
 
 bool ie_tlv_builder_init(struct ie_tlv_builder *builder, unsigned char *buf,
 				size_t len);
