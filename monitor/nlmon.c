@@ -3012,6 +3012,32 @@ static void print_public_action_frame(unsigned int level, const uint8_t *body,
 	print_oui(level, oui);
 }
 
+static void print_rm_action_frame(unsigned int level, const uint8_t *body,
+					size_t body_len)
+{
+	const char *category;
+
+	/* 802.11-2016, Table 9-306 */
+	static const char *rm_action_table[] = {
+		[0] = "Radio Measurement Request",
+		[1] = "Radio Measurement Report",
+		[2] = "Link Measurement Request",
+		[3] = "Link Measurement Report",
+		[4] = "Neighbor Report Request",
+		[5] = "Neighbor Report Response",
+	};
+
+	if (body_len < 1)
+		return;
+
+	if (body[0] < L_ARRAY_SIZE(rm_action_table) && rm_action_table[body[0]])
+		category = rm_action_table[body[0]];
+	else
+		category = "Unknown";
+
+	print_attr(level, "Radio Measurement Action: %s (%u)", category, body[0]);
+}
+
 static void print_action_mgmt_frame(unsigned int level,
 					const struct mmpdu_header *mmpdu,
 					size_t total_len, bool no_ack)
@@ -3061,6 +3087,9 @@ static void print_action_mgmt_frame(unsigned int level,
 
 	if (body[0] == 4) {
 		print_public_action_frame(level, body + 1, body_len - 1);
+		return;
+	} else if (body[0] == 5) {
+		print_rm_action_frame(level, body + 1, body_len - 1);
 		return;
 	} else if ((body[0] == 126 || body[0] == 127) && body_len >= 5) {
 		const uint8_t *oui = body + 1;
