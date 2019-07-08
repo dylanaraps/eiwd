@@ -2457,6 +2457,32 @@ done:
 	return ret;
 }
 
+uint8_t *wsc_build_p2p_attrs(const struct wsc_p2p_attrs *attrs, size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+	uint8_t *ret;
+
+	builder = wsc_attr_builder_new(512);
+
+	if (attrs->version)
+		build_version(builder, 0x10);
+
+	if (attrs->device_password_id)
+		build_device_password_id(builder, attrs->device_password_id);
+
+	if (attrs->config_methods)
+		build_configuration_methods(builder, attrs->config_methods);
+
+	if (!attrs->version2)
+		goto done;
+
+	START_WFA_VENDOR_EXTENSION();
+
+done:
+	ret = wsc_attr_builder_free(builder, false, out_len);
+	return ret;
+}
+
 bool wsc_uuid_from_addr(const uint8_t addr[], uint8_t *out_uuid)
 {
 	/* Reuse the NSID from WPA Supplicant for compatibility */

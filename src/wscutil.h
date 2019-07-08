@@ -642,6 +642,16 @@ uint8_t *wsc_build_wsc_nack(const struct wsc_nack *nack, size_t *out_len);
 
 uint8_t *wsc_build_wsc_done(const struct wsc_done *done, size_t *out_len);
 
+struct wsc_p2p_attrs {
+	bool version;
+	bool version2;
+	enum wsc_device_password_id device_password_id;
+	uint16_t config_methods;
+};
+
+uint8_t *wsc_build_p2p_attrs(const struct wsc_p2p_attrs *attrs,
+				size_t *out_len);
+
 bool wsc_uuid_from_addr(const uint8_t addr[], uint8_t *out_uuid);
 
 struct wsc_session_key {
