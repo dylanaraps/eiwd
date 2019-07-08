@@ -97,6 +97,7 @@ static void *ie_tlv_vendor_ie_concat(const unsigned char oui[],
 					unsigned char type,
 					const unsigned char *ies,
 					unsigned int len,
+					bool empty_ok,
 					ssize_t *out_len)
 {
 	struct ie_tlv_iter iter;
@@ -104,6 +105,7 @@ static void *ie_tlv_vendor_ie_concat(const unsigned char oui[],
 	unsigned int ie_len;
 	unsigned int concat_len = 0;
 	unsigned char *ret;
+	bool ie_found = false;
 
 	ie_tlv_iter_init(&iter, ies, len);
 
@@ -124,11 +126,12 @@ static void *ie_tlv_vendor_ie_concat(const unsigned char oui[],
 			continue;
 
 		concat_len += ie_len - 4;
+		ie_found = true;
 	}
 
 	if (concat_len == 0) {
 		if (out_len)
-			*out_len = -ENOENT;
+			*out_len = (ie_found && empty_ok) ? 0 : -ENOENT;
 
 		return NULL;
 	}
@@ -176,7 +179,25 @@ static void *ie_tlv_vendor_ie_concat(const unsigned char oui[],
 void *ie_tlv_extract_wsc_payload(const unsigned char *ies, size_t len,
 							ssize_t *out_len)
 {
-	return ie_tlv_vendor_ie_concat(microsoft_oui, 0x04, ies, len, out_len);
+	return ie_tlv_vendor_ie_concat(microsoft_oui, 0x04,
+					ies, len, false, out_len);
+}
+
+/*
+ * Wi-Fi P2P Technical Specification v1.7, Section 8.2:
+ * "More than one P2P IE may be included in a single frame.  If multiple P2P
+ * IEs are present, the complete P2P attribute data consists of the
+ * concatenation of the P2P Attribute fields of the P2P IEs.  The P2P
+ * Attributes field of each P2P IE may be any length up to the maximum
+ * (251 octets).  The order of the concatenated P2P attribute data shall be
+ * preserved in the ordering of the P2P IEs in the frame.  All of the P2P IEs
+ * shall fit within a single frame and shall be adjacent in the frame."
+ */
+void *ie_tlv_extract_p2p_payload(const unsigned char *ies, size_t len,
+							ssize_t *out_len)
+{
+	return ie_tlv_vendor_ie_concat(wifi_alliance_oui, 0x09,
+					ies, len, true, out_len);
 }
 
 /*
