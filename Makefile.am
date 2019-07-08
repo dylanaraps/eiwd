@@ -211,6 +211,8 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h src/missing.h \
 					src/hotspot.h src/hotspot.c \
 					$(eap_sources) \
 					$(builtin_sources)
+					src/p2putil.h src/p2putil.c
+
 src_iwd_LDADD = $(ell_ldadd) -ldl
 src_iwd_DEPENDENCIES = $(ell_dependencies)
 
@@ -270,7 +272,8 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					src/crypto.h src/crypto.c \
 					src/watchlist.h src/watchlist.c \
 					src/eapolutil.h src/eapolutil.c \
-					src/handshake.h src/handshake.c
+					src/handshake.h src/handshake.c \
+					src/p2putil.c src/p2putil.h
 monitor_iwmon_LDADD = $(ell_ldadd)
 endif
 
