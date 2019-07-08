@@ -2951,6 +2951,67 @@ static void print_deauthentication_mgmt_frame(unsigned int level,
 				L_LE16_TO_CPU(body->reason_code));
 }
 
+static void print_public_action_frame(unsigned int level, const uint8_t *body,
+					size_t body_len)
+{
+	const char *category;
+	const uint8_t *oui = body + 1;
+
+	/* 802.11-2016, Table 9-307 */
+	static const char *public_action_table[] = {
+		[0] = "20/40 BSS Coexistence Management",
+		[1] = "DSE enablement",
+		[2] = "DSE deenablement",
+		[3] = "DSE Registered Location Announcement",
+		[4] = "Extended Channel Switch Announcement",
+		[5] = "DSE measurement request",
+		[6] = "DSE measurement report",
+		[7] = "Measurement Pilot",
+		[8] = "DSE power constraint",
+		[9] = "Vendor-specific",
+		[10] = "GAS Initial Request",
+		[11] = "GAS Initial Response",
+		[12] = "GAS Comeback Request",
+		[13] = "GAS Comeback Response",
+		[14] = "TDLS Discovery Response",
+		[15] = "Location Track Notification",
+		[16] = "QAB Request frame",
+		[17] = "QAB Response frame",
+		[18] = "QMF Policy",
+		[19] = "QMF Policy Change",
+		[20] = "QLoad Request",
+		[21] = "QLoad Report",
+		[22] = "HCCA TXOP Advertisement",
+		[23] = "HCCA TXOP Response",
+		[24] = "Public Key",
+		[25] = "Channel Availabilty Query",
+		[26] = "Channel Schedule Management",
+		[27] = "Contact Verification Signal",
+		[28] = "GDD Enablement Request",
+		[29] = "GDD Enablement Response",
+		[30] = "Network Channel Control",
+		[31] = "White Space Map Announcement",
+		[32] = "Fine Timing Measurement Request",
+		[33] = "Fine Timing Measurement",
+	};
+
+	if (body_len < 1)
+		return;
+
+	if (body[0] < L_ARRAY_SIZE(public_action_table) &&
+			public_action_table[body[0]])
+		category = public_action_table[body[0]];
+	else
+		category = "Unknown";
+
+	print_attr(level, "Public Action: %s (%u)", category, body[0]);
+
+	if (body[0] != 9 || body_len < 5)
+		return;
+
+	print_oui(level, oui);
+}
+
 static void print_action_mgmt_frame(unsigned int level,
 					const struct mmpdu_header *mmpdu,
 					size_t total_len, bool no_ack)
@@ -2998,7 +3059,10 @@ static void print_action_mgmt_frame(unsigned int level,
 	print_attr(level, "Subtype: Action%s", no_ack ? " No Ack" : "");
 	print_attr(level, "Action Category: %s (%u)", category, body[0]);
 
-	if ((body[0] == 126 || body[0] == 127) && body_len >= 5) {
+	if (body[0] == 4) {
+		print_public_action_frame(level, body + 1, body_len - 1);
+		return;
+	} else if ((body[0] == 126 || body[0] == 127) && body_len >= 5) {
 		const uint8_t *oui = body + 1;
 
 		print_oui(level, oui);
