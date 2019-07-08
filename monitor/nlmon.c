@@ -956,20 +956,10 @@ static void print_ie_wfa_hs20(unsigned int level, const char *label,
 	}
 }
 
-static void print_ie_vendor(unsigned int level, const char *label,
-				const void *data, uint16_t size)
+static bool print_oui(unsigned int level, const uint8_t *oui)
 {
-	static const unsigned char msoft_oui[3] = { 0x00, 0x50, 0xf2 };
-	static const unsigned char wfa_oui[3] = { 0x50, 0x6f, 0x9a };
-	static const unsigned char ieee80211_oui[3] = { 0x00, 0x0f, 0xac };
-	const uint8_t *oui = data;
 	const char *str = NULL;
 	unsigned int i;
-
-	print_attr(level, "%s: len %u", label, size);
-
-	if (size < 4)
-		return;
 
 	for (i = 0; oui_table[i].str; i++) {
 		if (!memcmp(oui_table[i].oui, oui, 3)) {
@@ -982,12 +972,30 @@ static void print_ie_vendor(unsigned int level, const char *label,
 		print_attr(level + 1, "OUI: %02x:%02x:%02x type:%02x",
 							oui[0], oui[1], oui[2],
 							oui[3]);
-		return;
+		return false;
 	}
 
 	print_attr(level + 1, "%s (%02x:%02x:%02x) type: %02x", str,
 							oui[0], oui[1], oui[2],
 							oui[3]);
+	return true;
+}
+
+static void print_ie_vendor(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	static const unsigned char msoft_oui[3] = { 0x00, 0x50, 0xf2 };
+	static const unsigned char wfa_oui[3] = { 0x50, 0x6f, 0x9a };
+	static const unsigned char ieee80211_oui[3] = { 0x00, 0x0f, 0xac };
+	const uint8_t *oui = data;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	if (size < 4)
+		return;
+
+	if (!print_oui(level, oui))
+		return;
 
 	data += 4;
 	size -= 4;
@@ -2943,6 +2951,63 @@ static void print_deauthentication_mgmt_frame(unsigned int level,
 				L_LE16_TO_CPU(body->reason_code));
 }
 
+static void print_action_mgmt_frame(unsigned int level,
+					const struct mmpdu_header *mmpdu,
+					size_t total_len, bool no_ack)
+{
+	const uint8_t *body;
+	size_t body_len;
+	const char *category;
+
+	/* 802.11-2016, Table 9-47 */
+	static const char *category_table[] = {
+		[0] = "Sepctrum Management",
+		[1] = "QoS",
+		[2] = "DLS",
+		[3] = "Block Ack",
+		[4] = "Public",
+		[5] = "Radio Measurement",
+		[6] = "Fast BSS Transition",
+		[7] = "HT",
+		[8] = "SA Query",
+		[9] = "Protected Dual of Public Action",
+		[10] = "WNM",
+		[11] = "Unprotected WNM",
+		[12] = "TDLS",
+		[13] = "Mesh",
+		[14] = "Multihop",
+		[15] = "Self-protected",
+		[16] = "DMG",
+		[18] = "Fast Session Transfer",
+		[19] = "Robust AV Streaming",
+		[20] = "Unprotected DMG",
+		[21] = "VHT",
+		[126] = "Vendor-specific Protected",
+		[127] = "Vendor-specific",
+		[128 ... 255] = "Error",
+	};
+
+	body = mmpdu_body(mmpdu);
+	body_len = total_len - (body - (uint8_t *) mmpdu);
+
+	if (category_table[body[0]])
+		category = category_table[body[0]];
+	else
+		category = "Unknown";
+
+	print_attr(level, "Subtype: Action%s", no_ack ? " No Ack" : "");
+	print_attr(level, "Action Category: %s (%u)", category, body[0]);
+
+	if ((body[0] == 126 || body[0] == 127) && body_len >= 5) {
+		const uint8_t *oui = body + 1;
+
+		print_oui(level, oui);
+	}
+
+	print_mpdu_frame_control(level + 1, &mmpdu->fc);
+	print_mmpdu_header(level + 1, mmpdu);
+}
+
 static void print_frame_type(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
@@ -3012,10 +3077,14 @@ static void print_frame_type(unsigned int level, const char *label,
 			str = "Deauthentication";
 		break;
 	case 0x0d:
-		str = "Action";
-		break;
 	case 0x0e:
-		str = "Action No Ack";
+		if (mpdu)
+			print_action_mgmt_frame(level + 1, mpdu, size,
+						subtype == 0x0e);
+		else if (subtype == 0x0d)
+			str = "Action";
+		else
+			str = "Action No Ack";
 		break;
 	default:
 		str = "Reserved";
