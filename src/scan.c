@@ -105,8 +105,7 @@ struct scan_context {
 };
 
 struct scan_results {
-	uint32_t wiphy;
-	uint32_t ifindex;
+	struct scan_context *sc;
 	struct l_queue *bss_list;
 	struct scan_freq_set *freqs;
 	uint64_t time_stamp;
@@ -1177,6 +1176,7 @@ int scan_bss_rank_compare(const void *a, const void *b, void *user_data)
 static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 {
 	struct scan_results *results = user_data;
+	struct scan_context *sc = results->sc;
 	struct scan_bss *bss;
 	uint32_t ifindex;
 
@@ -1189,7 +1189,7 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 	if (!bss)
 		return;
 
-	if (ifindex != results->ifindex) {
+	if (ifindex != sc->ifindex) {
 		l_warn("ifindex mismatch in get_scan_callback");
 		scan_bss_free(bss);
 		return;
@@ -1217,7 +1217,7 @@ static void discover_hidden_network_bsses(struct scan_context *sc,
 	}
 }
 
-static void scan_finished(struct scan_context *sc, uint32_t wiphy,
+static void scan_finished(struct scan_context *sc,
 				int err, struct l_queue *bss_list,
 				struct scan_request *sr)
 {
@@ -1254,15 +1254,12 @@ static void scan_finished(struct scan_context *sc, uint32_t wiphy,
 static void get_scan_done(void *user)
 {
 	struct scan_results *results = user;
-	struct scan_context *sc;
+	struct scan_context *sc = results->sc;
 
 	l_debug("get_scan_done");
 
-	sc = l_queue_find(scan_contexts, scan_context_match,
-					L_UINT_TO_PTR(results->ifindex));
-	if (sc)
-		scan_finished(sc, results->wiphy, 0, results->bss_list,
-				results->sr);
+	if (l_queue_peek_head(sc->requests) == results->sr)
+		scan_finished(sc, 0, results->bss_list, results->sr);
 	else
 		l_queue_destroy(results->bss_list,
 				(l_queue_destroy_func_t) scan_bss_free);
@@ -1392,7 +1389,7 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		/* Was this our own scan or an external scan */
 		if (sc->triggered) {
 			if (!sr->callback) {
-				scan_finished(sc, attr_wiphy, -ECANCELED, NULL, sr);
+				scan_finished(sc, -ECANCELED, NULL, sr);
 				break;
 			}
 
@@ -1417,7 +1414,7 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 
 			/* An external scan may have flushed our results */
 			if (sc->started && scan_parse_flush_flag_from_msg(msg))
-				scan_finished(sc, attr_wiphy, -EAGAIN, NULL, sr);
+				scan_finished(sc, -EAGAIN, NULL, sr);
 			else if (sr && !sc->start_cmd_id)
 				send_next = true;
 
@@ -1432,8 +1429,7 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 			break;
 
 		results = l_new(struct scan_results, 1);
-		results->wiphy = attr_wiphy;
-		results->ifindex = attr_ifindex;
+		results->sc = sc;
 		results->time_stamp = l_time_now();
 		results->sr = sr;
 
@@ -1468,7 +1464,7 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		if (sc->triggered) {
 			sc->triggered = false;
 
-			scan_finished(sc, attr_wiphy, -ECANCELED, NULL,
+			scan_finished(sc, -ECANCELED, NULL,
 					l_queue_peek_head(sc->requests));
 		} else if (sr && !sc->start_cmd_id && !sc->get_scan_cmd_id) {
 			/*
