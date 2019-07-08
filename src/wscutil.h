@@ -547,6 +547,17 @@ struct wsc_done {
 int wsc_parse_primary_device_type(const uint8_t *pdu, size_t len,
 					struct wsc_primary_device_type *out);
 
+enum wsc_attr_flag {
+	WSC_ATTR_FLAG_REQUIRED  = 0x1,  /* Always required */
+	WSC_ATTR_FLAG_VERSION2  = 0x2,  /* Included if Version2 is present */
+	WSC_ATTR_FLAG_REGISTRAR = 0x4,  /* Included if Selected Registrar is true */
+};
+
+int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
+			bool *out_version2, struct wsc_wfa_ext_iter *ext_iter,
+			enum wsc_attr authenticator_type,
+			uint8_t *authenticator, int type, ...);
+
 int wsc_parse_credential(const uint8_t *pdu, uint32_t len,
 						struct wsc_credential *out);
 

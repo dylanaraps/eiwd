@@ -125,12 +125,6 @@ bool wsc_attr_iter_recurse_wfa_ext(struct wsc_attr_iter *iter,
 	return true;
 }
 
-enum attr_flag {
-	ATTR_FLAG_REQUIRED  = 0x1,  /* Always required */
-	ATTR_FLAG_VERSION2  = 0x2,  /* Included if Version2 is present */
-	ATTR_FLAG_REGISTRAR = 0x4,  /* Included if Selected Registrar is true */
-};
-
 typedef bool (*attr_handler)(struct wsc_attr_iter *, void *);
 
 static bool extract_uint8(struct wsc_attr_iter *iter, void *data)
@@ -656,12 +650,10 @@ static bool verify_version2(struct wsc_wfa_ext_iter *ext_iter)
 	return true;
 }
 
-static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
-				bool *out_version2,
-				struct wsc_wfa_ext_iter *ext_iter,
-				enum wsc_attr authenticator_type,
-				uint8_t *authenticator,
-				int type, ...)
+int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
+			bool *out_version2, struct wsc_wfa_ext_iter *ext_iter,
+			enum wsc_attr authenticator_type,
+			uint8_t *authenticator, int type, ...)
 {
 	struct wsc_attr_iter iter;
 	struct l_queue *entries;
@@ -710,7 +702,7 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 				break;
 			}
 
-			if (entry->flags & ATTR_FLAG_REQUIRED) {
+			if (entry->flags & WSC_ATTR_FLAG_REQUIRED) {
 				have_required = false;
 				goto done;
 			}
@@ -752,7 +744,7 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 	for (; e; e = e->next) {
 		struct attr_handler_entry *entry = e->data;
 
-		if (entry->flags & ATTR_FLAG_REQUIRED) {
+		if (entry->flags & WSC_ATTR_FLAG_REQUIRED) {
 			parse_error = true;
 			goto done;
 		}
@@ -795,7 +787,7 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 		for (e = l_queue_get_entries(entries); e; e = e->next) {
 			entry = e->data;
 
-			if (!(entry->flags & ATTR_FLAG_VERSION2))
+			if (!(entry->flags & WSC_ATTR_FLAG_VERSION2))
 				continue;
 
 			if (entry->present)
@@ -816,7 +808,7 @@ static int wsc_parse_attrs(const unsigned char *pdu, unsigned int len,
 		for (e = l_queue_get_entries(entries); e; e = e->next) {
 			entry = e->data;
 
-			if (!(entry->flags & ATTR_FLAG_REGISTRAR))
+			if (!(entry->flags & WSC_ATTR_FLAG_REGISTRAR))
 				continue;
 
 			if (entry->present)
@@ -884,16 +876,16 @@ static bool wfa_extract_registrar_configuration_methods(
 }
 
 #define REQUIRED(attr, out) \
-	WSC_ATTR_ ## attr, ATTR_FLAG_REQUIRED, out
+	WSC_ATTR_ ## attr, WSC_ATTR_FLAG_REQUIRED, out
 
 #define OPTIONAL(attr, out) \
 	WSC_ATTR_ ## attr, 0, out
 
 #define REGISTRAR(attr, out) \
-	WSC_ATTR_ ## attr, ATTR_FLAG_REGISTRAR, out
+	WSC_ATTR_ ## attr, WSC_ATTR_FLAG_REGISTRAR, out
 
 #define VERSION2(attr, out) \
-	WSC_ATTR_ ## attr, ATTR_FLAG_VERSION2, out
+	WSC_ATTR_ ## attr, WSC_ATTR_FLAG_VERSION2, out
 
 int wsc_parse_credential(const uint8_t *pdu, uint32_t len,
 						struct wsc_credential *out)
