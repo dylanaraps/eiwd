@@ -961,6 +961,7 @@ static void print_ie_vendor(unsigned int level, const char *label,
 {
 	static const unsigned char msoft_oui[3] = { 0x00, 0x50, 0xf2 };
 	static const unsigned char wfa_oui[3] = { 0x50, 0x6f, 0x9a };
+	static const unsigned char ieee80211_oui[3] = { 0x00, 0x0f, 0xac };
 	const uint8_t *oui = data;
 	const char *str = NULL;
 	unsigned int i;
@@ -1010,6 +1011,50 @@ static void print_ie_vendor(unsigned int level, const char *label,
 		default:
 			return;
 		}
+	} else if (!memcmp(oui, ieee80211_oui, 3)) {
+		const char *kde;
+
+		/* EAPoL-Key KDEs */
+		switch (oui[3]) {
+		case 1:
+			kde = "GTK";
+			break;
+		case 3:
+			kde = "MAC address";
+			break;
+		case 4:
+			kde = "PMKID";
+			break;
+		case 5:
+			kde = "SMK";
+			break;
+		case 6:
+			kde = "Nonce";
+			break;
+		case 7:
+			kde = "Lifetime";
+			break;
+		case 8:
+			kde = "Error";
+			break;
+		case 9:
+			kde = "IGTK";
+			break;
+		case 10:
+			kde = "Key ID";
+			break;
+		case 11:
+			kde = "Multi-band GTK";
+			break;
+		case 12:
+			kde = "Multi-band Key ID";
+			break;
+		default:
+			return;
+		}
+
+		print_attr(level + 1, "%s KDE", kde);
+		return;
 	}
 }
 
