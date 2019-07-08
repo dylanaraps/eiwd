@@ -2971,6 +2971,35 @@ static void print_deauthentication_mgmt_frame(unsigned int level,
 				L_LE16_TO_CPU(body->reason_code));
 }
 
+static void print_p2p_action_frame(unsigned int level, const uint8_t *body,
+					size_t body_len)
+{
+	const char *subtype;
+
+	/* P2P v1.7 Table 74 */
+	static const char *p2p_action_table[] = {
+		[0] = "Notice of Absence",
+		[1] = "P2P Presence Request",
+		[2] = "P2P Presence Response",
+		[3] = "GO Discoverability Request",
+	};
+
+	if (body_len < 2)
+		return;
+
+	if (body[1] < L_ARRAY_SIZE(p2p_action_table) &&
+			p2p_action_table[body[0]])
+		subtype = p2p_action_table[body[0]];
+	else
+		subtype = "Unknown";
+
+	print_attr(level, "OUI Type: P2P action frame");
+	print_attr(level, "OUI Subtype: %s (%u)", subtype, body[0]);
+	print_attr(level + 1, "Dialog Token: %u", body[1]);
+
+	print_management_ies(level, "IEs", body + 2, body_len - 2);
+}
+
 static void print_public_action_frame(unsigned int level, const uint8_t *body,
 					size_t body_len)
 {
@@ -3114,7 +3143,12 @@ static void print_action_mgmt_frame(unsigned int level,
 	} else if ((body[0] == 126 || body[0] == 127) && body_len >= 5) {
 		const uint8_t *oui = body + 1;
 
-		print_oui(level, oui);
+		if (!print_oui(level, oui))
+			return;
+
+		if (!memcmp(oui, wsc_wfa_oui, 3) && oui[3] == 0x09)
+			print_p2p_action_frame(level + 1, body + 5,
+						body_len - 5);
 	}
 
 	print_mpdu_frame_control(level + 1, &mmpdu->fc);
