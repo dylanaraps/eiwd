@@ -446,7 +446,7 @@ request_done:
 
 	/* If no more requests, resume scanning */
 	if (l_queue_isempty(station->anqp_pending))
-		scan_resume(netdev_get_ifindex(station->netdev));
+		scan_resume(netdev_get_wdev_id(station->netdev));
 }
 
 static bool station_start_anqp(struct station *station, struct network *network,
@@ -588,7 +588,7 @@ void station_set_scan_results(struct station *station,
 	 * scanning.
 	 */
 	if (wait_for_anqp)
-		scan_suspend(netdev_get_ifindex(station->netdev));
+		scan_suspend(netdev_get_wdev_id(station->netdev));
 }
 
 static void station_reconnect(struct station *station);
@@ -905,9 +905,9 @@ static void periodic_scan_trigger(int err, void *user_data)
 
 static void periodic_scan_stop(struct station *station)
 {
-	uint32_t index = netdev_get_ifindex(station->netdev);
+	uint64_t id = netdev_get_wdev_id(station->netdev);
 
-	scan_periodic_stop(index);
+	scan_periodic_stop(id);
 
 	station_property_set_scanning(station, false);
 }
@@ -924,7 +924,7 @@ static uint32_t station_scan_trigger(struct station *station,
 					scan_notify_func_t notify,
 					scan_destroy_func_t destroy)
 {
-	uint32_t index = netdev_get_ifindex(station->netdev);
+	uint64_t id = netdev_get_wdev_id(station->netdev);
 
 	if (wiphy_can_randomize_mac_addr(station->wiphy) ||
 				station_needs_hidden_network_scan(station) ||
@@ -939,11 +939,11 @@ static uint32_t station_scan_trigger(struct station *station,
 
 		params.freqs = freqs;
 
-		return scan_active_full(index, &params, triggered, notify,
-							station, destroy);
+		return scan_active_full(id, &params, triggered, notify,
+					station, destroy);
 	}
 
-	return scan_passive(index, freqs, triggered, notify, station, destroy);
+	return scan_passive(id, freqs, triggered, notify, station, destroy);
 }
 
 static bool station_quick_scan_results(int err, struct l_queue *bss_list,
@@ -1052,7 +1052,7 @@ static const char *station_state_to_string(enum station_state state)
 static void station_enter_state(struct station *station,
 						enum station_state state)
 {
-	uint32_t index = netdev_get_ifindex(station->netdev);
+	uint64_t id = netdev_get_wdev_id(station->netdev);
 	struct l_dbus *dbus = dbus_get_bus();
 	bool disconnected;
 
@@ -1072,7 +1072,7 @@ static void station_enter_state(struct station *station,
 		station_quick_scan_trigger(station);
 		break;
 	case STATION_STATE_AUTOCONNECT_FULL:
-		scan_periodic_start(index, periodic_scan_trigger,
+		scan_periodic_start(id, periodic_scan_trigger,
 					new_scan_results, station);
 		break;
 	case STATION_STATE_CONNECTING:
@@ -1140,7 +1140,7 @@ static void station_roam_state_clear(struct station *station)
 	station->roam_min_time.tv_sec = 0;
 
 	if (station->roam_scan_id)
-		scan_cancel(netdev_get_ifindex(station->netdev),
+		scan_cancel(netdev_get_wdev_id(station->netdev),
 						station->roam_scan_id);
 }
 
@@ -1612,7 +1612,7 @@ static void station_roam_scan(struct station *station,
 		params.ssid = network_get_ssid(station->connected_network);
 
 	station->roam_scan_id =
-		scan_active_full(netdev_get_ifindex(station->netdev), &params,
+		scan_active_full(netdev_get_wdev_id(station->netdev), &params,
 					station_roam_scan_triggered,
 					station_roam_scan_notify, station,
 					station_roam_scan_destroy);
@@ -2294,7 +2294,7 @@ static struct l_dbus_message *station_dbus_connect_hidden_network(
 						void *user_data)
 {
 	struct station *station = user_data;
-	uint32_t index = netdev_get_ifindex(station->netdev);
+	uint64_t id = netdev_get_wdev_id(station->netdev);
 	struct scan_parameters params = {
 		.flush = true,
 		.randomize_mac_addr_hint = true,
@@ -2322,7 +2322,7 @@ static struct l_dbus_message *station_dbus_connect_hidden_network(
 
 	params.ssid = ssid;
 
-	station->hidden_network_scan_id = scan_active_full(index, &params,
+	station->hidden_network_scan_id = scan_active_full(id, &params,
 				station_hidden_network_scan_triggered,
 				station_hidden_network_scan_results,
 				station, station_hidden_network_scan_destroy);
@@ -2873,15 +2873,15 @@ static void station_free(struct station *station)
 			dbus_error_aborted(station->scan_pending));
 
 	if (station->dbus_scan_id)
-		scan_cancel(netdev_get_ifindex(station->netdev),
+		scan_cancel(netdev_get_wdev_id(station->netdev),
 				station->dbus_scan_id);
 
 	if (station->quick_scan_id)
-		scan_cancel(netdev_get_ifindex(station->netdev),
+		scan_cancel(netdev_get_wdev_id(station->netdev),
 				station->quick_scan_id);
 
 	if (station->hidden_network_scan_id)
-		scan_cancel(netdev_get_ifindex(station->netdev),
+		scan_cancel(netdev_get_wdev_id(station->netdev),
 				station->hidden_network_scan_id);
 
 	station_roam_state_clear(station);

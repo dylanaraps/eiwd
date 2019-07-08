@@ -94,22 +94,22 @@ static inline bool scan_bss_addr_eq(const struct scan_bss *a1,
 	return !memcmp(a1->addr, a2->addr, sizeof(a1->addr));
 }
 
-uint32_t scan_passive(uint32_t ifindex, struct scan_freq_set *freqs,
+uint32_t scan_passive(uint64_t wdev_id, struct scan_freq_set *freqs,
 			scan_trigger_func_t trigger, scan_notify_func_t notify,
 			void *userdata, scan_destroy_func_t destroy);
-uint32_t scan_active(uint32_t ifindex, uint8_t *extra_ie, size_t extra_ie_size,
+uint32_t scan_active(uint64_t wdev_id, uint8_t *extra_ie, size_t extra_ie_size,
 			scan_trigger_func_t trigger,
 			scan_notify_func_t notify, void *userdata,
 			scan_destroy_func_t destroy);
-uint32_t scan_active_full(uint32_t ifindex,
+uint32_t scan_active_full(uint64_t wdev_id,
 			const struct scan_parameters *params,
 			scan_trigger_func_t trigger, scan_notify_func_t notify,
 			void *userdata, scan_destroy_func_t destroy);
-bool scan_cancel(uint32_t ifindex, uint32_t id);
+bool scan_cancel(uint64_t wdev_id, uint32_t id);
 
-void scan_periodic_start(uint32_t ifindex, scan_trigger_func_t trigger,
+void scan_periodic_start(uint64_t wdev_id, scan_trigger_func_t trigger,
 				scan_notify_func_t func, void *userdata);
-bool scan_periodic_stop(uint32_t ifindex);
+bool scan_periodic_stop(uint64_t wdev_id);
 
 void scan_bss_free(struct scan_bss *bss);
 int scan_bss_rank_compare(const void *a, const void *b, void *user);
@@ -133,8 +133,8 @@ void scan_freq_set_merge(struct scan_freq_set *to,
 void scan_freq_set_constrain(struct scan_freq_set *set,
 					const struct scan_freq_set *constraint);
 
-bool scan_ifindex_add(uint32_t ifindex);
-bool scan_ifindex_remove(uint32_t ifindex);
+bool scan_wdev_add(uint64_t wdev_id);
+bool scan_wdev_remove(uint64_t wdev_id);
 
-bool scan_suspend(uint32_t ifindex);
-void scan_resume(uint32_t ifindex);
+bool scan_suspend(uint64_t wdev_id);
+void scan_resume(uint64_t wdev_id);

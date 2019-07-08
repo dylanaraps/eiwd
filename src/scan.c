@@ -38,7 +38,6 @@
 #include "linux/nl80211.h"
 #include "src/iwd.h"
 #include "src/wiphy.h"
-#include "src/netdev.h"
 #include "src/ie.h"
 #include "src/common.h"
 #include "src/network.h"
@@ -76,7 +75,7 @@ struct scan_request {
 };
 
 struct scan_context {
-	uint32_t ifindex;
+	uint64_t wdev_id;
 	/*
 	 * Tells us whether a scan, our own or external, is running.
 	 * Set when scan gets triggered, cleared when scan done and
@@ -118,9 +117,9 @@ static void scan_periodic_rearm(struct scan_context *sc);
 static bool scan_context_match(const void *a, const void *b)
 {
 	const struct scan_context *sc = a;
-	uint32_t ifindex = L_PTR_TO_UINT(b);
+	const uint64_t *wdev_id = b;
 
-	return (sc->ifindex == ifindex);
+	return sc->wdev_id == *wdev_id;
 }
 
 static bool scan_request_match(const void *a, const void *b)
@@ -156,22 +155,17 @@ static void scan_request_failed(struct scan_context *sc,
 	scan_request_free(sr);
 }
 
-static struct scan_context *scan_context_new(uint32_t ifindex)
+static struct scan_context *scan_context_new(uint64_t wdev_id)
 {
-	struct netdev *netdev = netdev_find(ifindex);
-	struct wiphy *wiphy;
+	struct wiphy *wiphy = wiphy_find(wdev_id >> 32);
 	struct scan_context *sc;
 
-	if (!netdev)
-		return NULL;
-
-	wiphy = netdev_get_wiphy(netdev);
 	if (!wiphy)
 		return NULL;
 
 	sc = l_new(struct scan_context, 1);
 
-	sc->ifindex = ifindex;
+	sc->wdev_id = wdev_id;
 	sc->wiphy = wiphy;
 	sc->state = SCAN_STATE_NOT_RUNNING;
 	sc->requests = l_queue_new();
@@ -227,8 +221,8 @@ static void scan_request_triggered(struct l_genl_msg *msg, void *userdata)
 	}
 
 	sc->state = sr->passive ? SCAN_STATE_PASSIVE : SCAN_STATE_ACTIVE;
-	l_debug("%s scan triggered for ifindex: %u",
-		sr->passive ? "Passive" : "Active", sc->ifindex);
+	l_debug("%s scan triggered for wdev %" PRIx64,
+		sr->passive ? "Passive" : "Active", sc->wdev_id);
 
 	sc->triggered = true;
 	sc->started = true;
@@ -291,7 +285,7 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 
 	msg = l_genl_msg_new(NL80211_CMD_TRIGGER_SCAN);
 
-	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &sc->ifindex);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WDEV, 8, &sc->wdev_id);
 
 	if (params->extra_ie && params->extra_ie_size)
 		l_genl_msg_append_attr(msg, NL80211_ATTR_IE,
@@ -425,7 +419,7 @@ static int scan_request_send_trigger(struct scan_context *sc,
 	return -EIO;
 }
 
-static uint32_t scan_common(uint32_t ifindex, bool passive,
+static uint32_t scan_common(uint64_t wdev_id, bool passive,
 				const struct scan_parameters *params,
 				scan_trigger_func_t trigger,
 				scan_notify_func_t notify, void *userdata,
@@ -434,8 +428,7 @@ static uint32_t scan_common(uint32_t ifindex, bool passive,
 	struct scan_context *sc;
 	struct scan_request *sr;
 
-	sc = l_queue_find(scan_contexts, scan_context_match,
-				L_UINT_TO_PTR(ifindex));
+	sc = l_queue_find(scan_contexts, scan_context_match, &wdev_id);
 
 	if (!sc)
 		return 0;
@@ -470,17 +463,17 @@ done:
 	return sr->id;
 }
 
-uint32_t scan_passive(uint32_t ifindex, struct scan_freq_set *freqs,
+uint32_t scan_passive(uint64_t wdev_id, struct scan_freq_set *freqs,
 			scan_trigger_func_t trigger, scan_notify_func_t notify,
 			void *userdata, scan_destroy_func_t destroy)
 {
 	struct scan_parameters params = { .freqs = freqs };
 
-	return scan_common(ifindex, true, &params, trigger, notify,
+	return scan_common(wdev_id, true, &params, trigger, notify,
 							userdata, destroy);
 }
 
-uint32_t scan_active(uint32_t ifindex, uint8_t *extra_ie, size_t extra_ie_size,
+uint32_t scan_active(uint64_t wdev_id, uint8_t *extra_ie, size_t extra_ie_size,
 			scan_trigger_func_t trigger,
 			scan_notify_func_t notify, void *userdata,
 			scan_destroy_func_t destroy)
@@ -490,26 +483,25 @@ uint32_t scan_active(uint32_t ifindex, uint8_t *extra_ie, size_t extra_ie_size,
 	params.extra_ie = extra_ie;
 	params.extra_ie_size = extra_ie_size;
 
-	return scan_common(ifindex, false, &params,
+	return scan_common(wdev_id, false, &params,
 					trigger, notify, userdata, destroy);
 }
 
-uint32_t scan_active_full(uint32_t ifindex,
+uint32_t scan_active_full(uint64_t wdev_id,
 			const struct scan_parameters *params,
 			scan_trigger_func_t trigger, scan_notify_func_t notify,
 			void *userdata, scan_destroy_func_t destroy)
 {
-	return scan_common(ifindex, false, params,
+	return scan_common(wdev_id, false, params,
 					trigger, notify, userdata, destroy);
 }
 
-bool scan_cancel(uint32_t ifindex, uint32_t id)
+bool scan_cancel(uint64_t wdev_id, uint32_t id)
 {
 	struct scan_context *sc;
 	struct scan_request *sr;
 
-	sc = l_queue_find(scan_contexts, scan_context_match,
-				L_UINT_TO_PTR(ifindex));
+	sc = l_queue_find(scan_contexts, scan_context_match, &wdev_id);
 	if (!sc)
 		return false;
 
@@ -557,7 +549,7 @@ static void scan_periodic_triggered(int err, void *user_data)
 		return;
 	}
 
-	l_debug("Periodic scan triggered for ifindex: %u", sc->ifindex);
+	l_debug("Periodic scan triggered for wdev %" PRIx64, sc->wdev_id);
 
 	if (sc->sp.trigger)
 		sc->sp.trigger(0, sc->sp.userdata);
@@ -590,11 +582,11 @@ static bool scan_periodic_queue(struct scan_context *sc)
 
 		sc->sp.needs_active_scan = false;
 
-		sc->sp.id = scan_active_full(sc->ifindex, &params,
+		sc->sp.id = scan_active_full(sc->wdev_id, &params,
 						scan_periodic_triggered,
 						scan_periodic_notify, sc, NULL);
 	} else
-		sc->sp.id = scan_passive(sc->ifindex, NULL,
+		sc->sp.id = scan_passive(sc->wdev_id, NULL,
 						scan_periodic_triggered,
 						scan_periodic_notify, sc, NULL);
 
@@ -613,7 +605,7 @@ static bool scan_periodic_is_disabled(void)
 	return disabled;
 }
 
-void scan_periodic_start(uint32_t ifindex, scan_trigger_func_t trigger,
+void scan_periodic_start(uint64_t wdev_id, scan_trigger_func_t trigger,
 				scan_notify_func_t func, void *userdata)
 {
 	struct scan_context *sc;
@@ -621,18 +613,17 @@ void scan_periodic_start(uint32_t ifindex, scan_trigger_func_t trigger,
 	if (scan_periodic_is_disabled())
 		return;
 
-	sc = l_queue_find(scan_contexts, scan_context_match,
-				L_UINT_TO_PTR(ifindex));
+	sc = l_queue_find(scan_contexts, scan_context_match, &wdev_id);
 
 	if (!sc) {
-		l_error("scan_periodic_start called without scan_ifindex_add");
+		l_error("scan_periodic_start called without scan_wdev_add");
 		return;
 	}
 
 	if (sc->sp.interval)
 		return;
 
-	l_debug("Starting periodic scan for ifindex: %u", ifindex);
+	l_debug("Starting periodic scan for wdev %" PRIx64, wdev_id);
 
 	sc->sp.interval = SCAN_INIT_INTERVAL;
 	sc->sp.trigger = trigger;
@@ -643,12 +634,11 @@ void scan_periodic_start(uint32_t ifindex, scan_trigger_func_t trigger,
 	scan_periodic_queue(sc);
 }
 
-bool scan_periodic_stop(uint32_t ifindex)
+bool scan_periodic_stop(uint64_t wdev_id)
 {
 	struct scan_context *sc;
 
-	sc = l_queue_find(scan_contexts, scan_context_match,
-				L_UINT_TO_PTR(ifindex));
+	sc = l_queue_find(scan_contexts, scan_context_match, &wdev_id);
 
 	if (!sc)
 		return false;
@@ -656,13 +646,13 @@ bool scan_periodic_stop(uint32_t ifindex)
 	if (!sc->sp.interval)
 		return false;
 
-	l_debug("Stopping periodic scan for ifindex: %u", ifindex);
+	l_debug("Stopping periodic scan for wdev %" PRIx64, wdev_id);
 
 	if (sc->sp.timeout)
 		l_timeout_remove(sc->sp.timeout);
 
 	if (sc->sp.id) {
-		scan_cancel(ifindex, sc->sp.id);
+		scan_cancel(wdev_id, sc->sp.id);
 		sc->sp.id = 0;
 	}
 
@@ -680,7 +670,7 @@ static void scan_periodic_timeout(struct l_timeout *timeout, void *user_data)
 {
 	struct scan_context *sc = user_data;
 
-	l_debug("scan_periodic_timeout: %u", sc->ifindex);
+	l_debug("scan_periodic_timeout: %" PRIx64, sc->wdev_id);
 
 	sc->sp.interval *= 2;
 
@@ -989,14 +979,12 @@ static struct scan_freq_set *scan_parse_attr_scan_frequencies(
 }
 
 static struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
-					uint32_t *out_ifindex,
-					uint64_t *out_wdev)
+						uint64_t *out_wdev)
 {
 	struct l_genl_attr attr, nested;
 	uint16_t type, len;
 	const void *data;
-	uint32_t ifindex;
-	uint64_t wdev;
+	const uint64_t *wdev = NULL;
 	struct scan_bss *bss = NULL;
 
 	if (!l_genl_attr_init(&attr, msg))
@@ -1004,18 +992,11 @@ static struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
 
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 		switch (type) {
-		case NL80211_ATTR_IFINDEX:
-			if (len != sizeof(uint32_t))
-				return NULL;
-
-			ifindex = *((uint32_t *) data);
-			break;
-
 		case NL80211_ATTR_WDEV:
 			if (len != sizeof(uint64_t))
 				return NULL;
 
-			wdev = *((uint64_t *) data);
+			wdev = data;
 			break;
 
 		case NL80211_ATTR_BSS:
@@ -1030,11 +1011,13 @@ static struct scan_bss *scan_parse_result(struct l_genl_msg *msg,
 	if (!bss)
 		return NULL;
 
-	if (out_ifindex)
-		*out_ifindex = ifindex;
+	if (!wdev) {
+		scan_bss_free(bss);
+		return NULL;
+	}
 
 	if (out_wdev)
-		*out_wdev = wdev;
+		*out_wdev = *wdev;
 
 	return bss;
 }
@@ -1177,19 +1160,19 @@ static void get_scan_callback(struct l_genl_msg *msg, void *user_data)
 	struct scan_results *results = user_data;
 	struct scan_context *sc = results->sc;
 	struct scan_bss *bss;
-	uint32_t ifindex;
+	uint64_t wdev_id;
 
 	l_debug("get_scan_callback");
 
 	if (!results->bss_list)
 		results->bss_list = l_queue_new();
 
-	bss = scan_parse_result(msg, &ifindex, NULL);
+	bss = scan_parse_result(msg, &wdev_id);
 	if (!bss)
 		return;
 
-	if (ifindex != sc->ifindex) {
-		l_warn("ifindex mismatch in get_scan_callback");
+	if (wdev_id != sc->wdev_id) {
+		l_warn("wdev mismatch in get_scan_callback");
 		scan_bss_free(bss);
 		return;
 	}
@@ -1318,8 +1301,8 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 	uint16_t type, len;
 	const void *data;
 	uint8_t cmd;
-	uint32_t uninitialized_var(attr_ifindex);
-	bool have_ifindex;
+	uint64_t uninitialized_var(attr_wdev_id);
+	bool have_wdev_id;
 	uint32_t uninitialized_var(attr_wiphy);
 	bool have_wiphy;
 	struct scan_context *sc;
@@ -1343,14 +1326,14 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 			have_wiphy = true;
 			attr_wiphy = *((uint32_t *) data);
 			break;
-		case NL80211_ATTR_IFINDEX:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid interface index attribute");
+		case NL80211_ATTR_WDEV:
+			if (len != sizeof(uint64_t)) {
+				l_warn("Invalid wdev index attribute");
 				return;
 			}
 
-			have_ifindex = true;
-			attr_ifindex = *((uint32_t *) data);
+			have_wdev_id = true;
+			attr_wdev_id = *((uint64_t *) data);
 			break;
 		case NL80211_ATTR_SCAN_SSIDS:
 			active_scan = true;
@@ -1363,13 +1346,12 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	if (!have_ifindex) {
-		l_warn("Scan results do not contain ifindex attribute");
+	if (!have_wdev_id) {
+		l_warn("Scan results do not contain wdev attribute");
 		return;
 	}
 
-	sc = l_queue_find(scan_contexts, scan_context_match,
-					L_UINT_TO_PTR(attr_ifindex));
+	sc = l_queue_find(scan_contexts, scan_context_match, &attr_wdev_id);
 	if (!sc)
 		return;
 
@@ -1437,8 +1419,8 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		scan_parse_new_scan_results(msg, results);
 
 		scan_msg = l_genl_msg_new_sized(NL80211_CMD_GET_SCAN, 8);
-		l_genl_msg_append_attr(scan_msg, NL80211_ATTR_IFINDEX, 4,
-						&attr_ifindex);
+		l_genl_msg_append_attr(scan_msg, NL80211_ATTR_WDEV, 8,
+					&sc->wdev_id);
 		sc->get_scan_cmd_id = l_genl_family_dump(nl80211, scan_msg,
 							get_scan_callback,
 							results, get_scan_done);
@@ -1829,17 +1811,14 @@ void scan_freq_set_constrain(struct scan_freq_set *set,
 	set->channels_2ghz &= constraint->channels_2ghz;
 }
 
-bool scan_ifindex_add(uint32_t ifindex)
+bool scan_wdev_add(uint64_t wdev_id)
 {
 	struct scan_context *sc;
 
-	sc = l_queue_find(scan_contexts, scan_context_match,
-				L_UINT_TO_PTR(ifindex));
-
-	if (sc)
+	if (l_queue_find(scan_contexts, scan_context_match, &wdev_id))
 		return false;
 
-	sc = scan_context_new(ifindex);
+	sc = scan_context_new(wdev_id);
 	if (!sc)
 		return false;
 
@@ -1855,17 +1834,16 @@ done:
 	return true;
 }
 
-bool scan_ifindex_remove(uint32_t ifindex)
+bool scan_wdev_remove(uint64_t wdev_id)
 {
 	struct scan_context *sc;
 
-	sc = l_queue_remove_if(scan_contexts, scan_context_match,
-				L_UINT_TO_PTR(ifindex));
+	sc = l_queue_remove_if(scan_contexts, scan_context_match, &wdev_id);
 
 	if (!sc)
 		return false;
 
-	l_info("Removing scan context for ifindex: %u", ifindex);
+	l_info("Removing scan context for wdev %" PRIx64, wdev_id);
 	scan_context_free(sc);
 
 	if (l_queue_isempty(scan_contexts)) {
@@ -1876,12 +1854,11 @@ bool scan_ifindex_remove(uint32_t ifindex)
 	return true;
 }
 
-bool scan_suspend(uint32_t ifindex)
+bool scan_suspend(uint64_t wdev_id)
 {
 	struct scan_context *sc;
 
-	sc = l_queue_find(scan_contexts, scan_context_match,
-				L_UINT_TO_PTR(ifindex));
+	sc = l_queue_find(scan_contexts, scan_context_match, &wdev_id);
 	if (!sc)
 		return false;
 
@@ -1890,12 +1867,11 @@ bool scan_suspend(uint32_t ifindex)
 	return true;
 }
 
-void scan_resume(uint32_t ifindex)
+void scan_resume(uint64_t wdev_id)
 {
 	struct scan_context *sc;
 
-	sc = l_queue_find(scan_contexts, scan_context_match,
-				L_UINT_TO_PTR(ifindex));
+	sc = l_queue_find(scan_contexts, scan_context_match, &wdev_id);
 	if (!sc)
 		return;
 
