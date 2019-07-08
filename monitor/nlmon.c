@@ -981,6 +981,13 @@ static bool print_oui(unsigned int level, const uint8_t *oui)
 	return true;
 }
 
+static void print_ipv4(unsigned int level, const char *label,
+				const uint8_t *addr)
+{
+	print_attr(level, "%s: %u.%u.%u.%u", label,
+			addr[0], addr[1], addr[2], addr[3]);
+}
+
 static void print_ie_vendor(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
@@ -1010,6 +1017,19 @@ static void print_ie_vendor(unsigned int level, const char *label,
 		}
 	} else if (!memcmp(oui, wfa_oui, 3)) {
 		switch (oui[3]) {
+		case 0x04:
+			print_attr(level + 1, "IP Address Request KDE");
+			return;
+		case 0x05:
+			print_attr(level + 1, "IP Address Allocation KDE");
+
+			if (size < 12)
+				return;
+
+			print_ipv4(level + 2, "Client IP Address", data + 0);
+			print_ipv4(level + 2, "Subnet Mask", data + 4);
+			print_ipv4(level + 2, "GO IP Address", data + 8);
+			return;
 		case 0x10:
 			print_ie_wfa_hs20(level + 1, label, data, size);
 			return;
