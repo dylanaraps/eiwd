@@ -53,6 +53,7 @@
 #include "src/eapol.h"
 #include "src/util.h"
 #include "src/wscutil.h"
+#include "src/p2putil.h"
 #include "monitor/pcap.h"
 #include "monitor/display.h"
 #include "monitor/nlmon.h"
@@ -2719,20 +2720,699 @@ static void print_wsc_attributes(unsigned int level, const char *label,
 	}
 }
 
+static void print_p2p_status(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+	static const struct p2p_status_desc {
+		uint8_t code;
+		const char *desc;
+	} descs[] = {
+		{ P2P_STATUS_SUCCESS, "Success" },
+		{ P2P_STATUS_FAIL_INFO_NOT_AVAIL, "Fail; information is "
+			"currently unavailable" },
+		{ P2P_STATUS_FAIL_INCOMPATIBLE_PARAMS, "Fail; incompatible "
+			"parameters" },
+		{ P2P_STATUS_FAIL_LIMIT_REACHED, "Fail; limit reached" },
+		{ P2P_STATUS_FAIL_INVALID_PARAMS, "Fail; invalid parameters" },
+		{ P2P_STATUS_FAIL_UNABLE_TO_ACCOMMODATE_REQUEST, "Fail; unable "
+			"to accomodate request" },
+		{ P2P_STATUS_FAIL_PREV_PROTOCOL_ERROR, "Fail; previous protocol"
+			" error, or distruptive behavior" },
+		{ P2P_STATUS_FAIL_NO_COMMON_CHANNELS, "Fail; no common "
+			"channels" },
+		{ P2P_STATUS_FAIL_UNKNOWN_P2P_GROUP, "Fail; unknown P2P "
+			"Group" },
+		{ P2P_STATUS_FAIL_INTENT_15_IN_GO_NEGOTIATION, "Fail; both P2P "
+			"Devices indicated an Intent of 15 in Group Owner "
+			"Negotiation" },
+		{ P2P_STATUS_FAIL_INCOMPATIBLE_PROVISIONING, "Fail; "
+			"incompatible provisioning method" },
+		{ P2P_STATUS_FAIL_REJECTED_BY_USER, "Fail; rejected by user" },
+		{ P2P_STATUS_SUCCESS_ACCEPTED_BY_USER, "Success; accepted by "
+			"user" },
+		{}
+	};
+	int i;
+
+	if (size != 1) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	for (i = 0; descs[i].desc; i++)
+		if (descs[i].code == bytes[0])
+			break;
+
+	if (descs[i].desc)
+		print_attr(level, "%s: %s", label, descs[i].desc);
+	else
+		print_attr(level, "%s: 0x%02x", label, bytes[0]);
+}
+
+#define CHECK_CAPS_BIT(v, str)	\
+	if (caps & (v)) {	\
+		print_attr(level + 1, "%s", (str));	\
+		caps &= ~(v);	\
+	}
+static void print_p2p_device_capability(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	uint8_t caps;
+
+	if (size != 1) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_attr(level, "%s:", label);
+
+	caps = *(const uint8_t *) data;
+
+	CHECK_CAPS_BIT(P2P_DEVICE_CAP_SVC_DISCOVERY,
+			"Service Discovery");
+	CHECK_CAPS_BIT(P2P_DEVICE_CAP_CLIENT_DISCOVERABILITY,
+			"P2P Client Discoverability");
+	CHECK_CAPS_BIT(P2P_DEVICE_CAP_CONCURRENT_OP,
+			"Concurrent Operation");
+	CHECK_CAPS_BIT(P2P_DEVICE_CAP_INFRASTRUCTURE_MANAGED,
+			"P2P Infrastructure Managed");
+	CHECK_CAPS_BIT(P2P_DEVICE_CAP_DEVICE_LIMIT,
+			"P2P Device Limit");
+	CHECK_CAPS_BIT(P2P_DEVICE_CAP_INVITATION_PROCEDURE,
+			"P2P Invitation Procedure");
+
+	if (caps)
+		print_attr(level + 1, "Reserved: 0x%02x", caps);
+}
+
+static void print_p2p_capability(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	uint8_t caps;
+
+	if (size != 2) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_p2p_device_capability(level, "P2P Device Capability", data++, 1);
+
+	print_attr(level, "P2P Group Capability:");
+
+	caps = *(const uint8_t *) data++;
+
+	CHECK_CAPS_BIT(P2P_GROUP_CAP_GO,
+			"P2P Group Owner");
+	CHECK_CAPS_BIT(P2P_GROUP_CAP_PERSISTENT_GROUP,
+			"Persistent P2P Group");
+	CHECK_CAPS_BIT(P2P_GROUP_CAP_GROUP_LIMIT,
+			"P2P Group Limit");
+	CHECK_CAPS_BIT(P2P_GROUP_CAP_INTRA_BSS_DISTRIBUTION,
+			"Intra-BSS Distribution");
+	CHECK_CAPS_BIT(P2P_GROUP_CAP_CROSS_CONNECT,
+			"Cross Connection");
+	CHECK_CAPS_BIT(P2P_GROUP_CAP_PERSISTENT_RECONNECT,
+			"Persistent Reconnect");
+	CHECK_CAPS_BIT(P2P_GROUP_CAP_GROUP_FORMATION,
+			"Group Formation");
+	CHECK_CAPS_BIT(P2P_GROUP_CAP_IP_ALLOCATION,
+			"IP Address Allocation");
+}
+#undef CHECK_CAPS_BIT
+
+static void print_p2p_go_intent(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	if (size != 1) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_attr(level, "%s: Intent %u out of 15, tie breaker %u", label,
+			bytes[0] >> 1, bytes[0] & 1);
+}
+
+static void print_p2p_config_timeout(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	if (size != 2) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_attr(level, "%s: GO Timeout %ums, Client Timeout %ums", label,
+			bytes[0] * 10, bytes[1] * 10);
+}
+
+static void print_p2p_oper_channel(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	if (size != 5) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_attr(level, "%s:", label);
+	print_attr(level + 1, "Country %c%c table %u", bytes[0], bytes[1],
+			bytes[2]);
+	print_attr(level + 1, "Operating Class %u", bytes[3]);
+	print_attr(level + 1, "Channel Number %u", bytes[4]);
+}
+
+static void print_p2p_extended_timing(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	if (size != 4) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_attr(level, "%s: Availability period: %ums, interval: %ums", label,
+			l_get_le16(data + 0), l_get_le16(data + 2));
+}
+
+static void print_p2p_manageability(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	uint8_t val;
+
+	if (size != 1) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_attr(level, "%s:", label);
+
+#define CHECK_BIT(v, str)	\
+	if (val & (v)) {	\
+		print_attr(level + 1, "%s", (str));	\
+		val &= ~(v);	\
+	}
+
+	val = *(const uint8_t *) data;
+
+	CHECK_BIT(P2P_MANAGEABILITY_DEVICE_MGMT, "P2P Device Management");
+	CHECK_BIT(P2P_MANAGEABILITY_CROSS_CONNECT,
+			"Cross Connection Permitted");
+	CHECK_BIT(P2P_MANAGEABILITY_COEXIST_OPTIONAL, "Coexistence Optional");
+
+	if (val)
+		print_attr(level + 1, "Reserved: 0x%02x", val);
+#undef CHECK_BIT
+}
+
+static void print_p2p_channel_list(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	if (size < 3) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_attr(level, "%s:", label);
+	print_attr(level + 1, "Country %c%c table %u", bytes[0], bytes[1],
+			bytes[2]);
+	bytes += 3;
+	size -= 3;
+
+	while (size) {
+		uint8_t channels;
+		char str[128];
+		int pos = 0;
+
+		if (size < 2 || size < 2 + bytes[1]) {
+			printf("malformed P2P %s\n", label);
+			return;
+		}
+
+		print_attr(level + 1, "Operating Class %u channels:", *bytes++);
+		channels = *bytes++;
+		size -= 2 + channels;
+
+		while (channels--)
+			snprintf(str + pos, sizeof(str) - pos, "%s%u",
+					pos ? ", " : "", (int) *bytes++);
+
+		print_attr(level + 2, "%s", str);
+	}
+}
+
+static void print_p2p_notice_of_absence(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	if (size < 2) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_attr(level, "%s %u:", label, bytes[0]);
+	print_attr(level + 1, "GO uses Opportunistic Power Save: %s",
+			(bytes[1] & 0x80) ? "true" : "false");
+	print_attr(level + 1, "Client Traffic window len: %u TUs",
+			bytes[1] & 0x7f);
+	bytes += 2;
+	size -= 2;
+
+	while (size) {
+		if (size < 13) {
+			printf("malformed P2P Channel List\n");
+			return;
+		}
+
+		print_attr(level + 1, "Notice:");
+		print_attr(level + 2, "Count/Type: %u", bytes[0]);
+		print_attr(level + 2, "Duration: %uus", l_get_le32(bytes + 1));
+		print_attr(level + 2, "Interval: %uus", l_get_le32(bytes + 5));
+		print_attr(level + 2, "Start Time: %u", l_get_le32(bytes + 8));
+		bytes += 13;
+		size -= 13;
+	}
+}
+
+static void print_p2p_device_info(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+	int secondary_types;
+
+	if (size < 17 || size < 17 + bytes[16] * 8 + 4) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_attr(level, "%s:", label);
+	print_wsc_mac_address(level + 1, "P2P Device address", bytes, 6);
+	print_wsc_config_methods(level + 1, "Config Methods", bytes + 6, 2);
+	print_wsc_primary_device_type(level + 1, "Primary Device Type",
+					bytes + 8, 8);
+	secondary_types = bytes[16];
+	bytes += 17;
+	size -= 17;
+
+	while (secondary_types--) {
+		print_wsc_primary_device_type(level + 1,
+						"Secondary Device Type",
+						bytes, 8);
+		bytes += 8;
+		size -= 8;
+	}
+
+	if (l_get_be16(bytes) != WSC_ATTR_DEVICE_NAME ||
+			4 + l_get_be16(bytes + 2) > size) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_wsc_device_name(level + 1, "Device Name", bytes + 4,
+				l_get_be16(bytes + 2));
+}
+
+static void print_p2p_group_info(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	print_attr(level, "%s:", label);
+
+	while (size) {
+		size_t desc_size = bytes[0];
+		int secondary_types;
+
+		if (1 + desc_size > size || desc_size < 24 ||
+				desc_size < (size_t) 24 + bytes[24] * 8 + 4) {
+			printf("malformed P2P Client Info Descriptor\n");
+			return;
+		}
+
+		size -= 1 + desc_size;
+
+		print_attr(level + 1, "P2P Client Info Descriptor:");
+		print_wsc_mac_address(level + 2, "P2P Device address",
+					bytes + 1, 6);
+		print_wsc_mac_address(level + 2, "P2P Interface address",
+					bytes + 7, 6);
+		print_p2p_device_capability(level + 2, "P2P Device Capability",
+						bytes + 13, 1);
+		print_wsc_config_methods(level + 2, "Config Methods",
+						bytes + 14, 2);
+		print_wsc_primary_device_type(level + 2, "Primary Device Type",
+						bytes + 16, 8);
+		secondary_types = bytes[24];
+		bytes += 25;
+		desc_size -= 24;
+
+		while (secondary_types--) {
+			print_wsc_primary_device_type(level + 2,
+							"Secondary Device Type",
+							bytes, 8);
+			bytes += 8;
+			desc_size -= 8;
+		}
+
+		if (l_get_be16(bytes) != WSC_ATTR_DEVICE_NAME ||
+				(size_t) 4 + l_get_be16(bytes + 2) >
+				desc_size) {
+			printf("malformed P2P Client Info Descriptor\n");
+			return;
+		}
+
+		print_wsc_device_name(level + 1, "Device Name", bytes + 4,
+					l_get_be16(bytes + 2));
+		bytes += 4 + l_get_be16(bytes + 2);
+	}
+}
+
+static void print_p2p_group_id(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	if (size < 6 || size > 38) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_attr(level, "%s:", label);
+
+	print_wsc_mac_address(level + 1, "P2P Device address",
+				bytes, 6);
+	print_ie_ssid(level + 1, "SSID", bytes + 6, size - 6);
+}
+
+static void print_p2p_interface(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+	int addr_count;
+
+	if (size < 7 || size < 7 + bytes[6] * 6) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_attr(level, "%s:", label);
+
+	print_wsc_mac_address(level + 1, "P2P Device Address",
+				bytes, 6);
+	addr_count = bytes[6];
+	print_attr(level + 1, "P2P Interface Address Count: %u", addr_count);
+	bytes += 7;
+	size -= 7;
+
+	while (addr_count--) {
+		print_wsc_mac_address(level + 2, "Interface Address", bytes, 6);
+		bytes += 6;
+	}
+}
+
+static void print_p2p_invite_flags(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	uint8_t flags;
+
+	if (size != 1) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	flags = *(const uint8_t *) data;
+	print_attr(level, "Invitation Type: %s",
+			(flags & 1) ? "re-invoke a Persistent Group" :
+			"join active group");
+	flags &= ~1;
+
+	if (flags)
+		print_attr(level, "Invitation Flags: reserved 0x%02x", flags);
+}
+
+static void print_p2p_oob_neg_channel(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+	const char *role;
+
+	if (size != 6) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_p2p_oper_channel(level, label, bytes + 0, 5);
+
+	switch (bytes[5]) {
+	case 0x00:
+		role = "not in a group";
+		break;
+	case 0x01:
+		role = "client";
+		break;
+	case 0x02:
+		role = "Group Owner";
+		break;
+	default:
+		role = "reserved";
+		break;
+	}
+
+	print_attr(level + 1, "Current group role indication: %s", role);
+}
+
+static void print_p2p_service_hash(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	if (size % 6 != 0) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	while (size) {
+		print_wsc_bytes(level, "Service Hash", data, 6);
+		data += 6;
+		size -= 6;
+	}
+}
+
+static void print_p2p_connection_caps(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	uint8_t caps;
+	const char *first;
+
+	if (size != 1) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	caps = *(const uint8_t *) data;
+
+	if (caps & 1)
+		first = "New";
+	else if (caps & 2)
+		first = "Cli";
+	else if (caps & ~4)
+		first = "Unknown";
+	else
+		first = "GO";
+
+	print_attr(level, "%s: %s%s", label, first,
+			(caps & ~4) && (caps & 4) ? ", GO" : "");
+}
+
+static void print_p2p_advertisement_id(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	if (size != 10) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_attr(level, "%s: 0x%08x", label, l_get_le32(data + 0));
+	print_wsc_mac_address(level + 1, "Service MAC Address", data + 4, 6);
+}
+
+static void print_p2p_advertised_svc_info(unsigned int level, const char *label,
+						const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	while (size) {
+		if (size < 7 || size < 7 + bytes[6]) {
+			printf("malformed P2P %s\n", label);
+			return;
+		}
+
+		print_attr(level, "%s:", label);
+
+		print_attr(level, "Servce advertisement: ID 0x%08x",
+				l_get_le32(bytes + 0));
+		print_wsc_utf8_string(level + 1, "Service Name",
+					bytes + 6, bytes[6], 255);
+		print_wsc_config_methods(level + 1, "Service Config Methods",
+						bytes + 4, 2);
+		size -= 7 + bytes[6];
+		bytes += 7 + bytes[6];
+	}
+}
+
+static void print_p2p_session_id(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	if (size != 10) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_attr(level, "%s: 0x%08x", label, l_get_le32(data + 0));
+	print_wsc_mac_address(level + 1, "Session MAC Address", data + 4, 6);
+}
+
+static void print_p2p_feature_caps(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const uint8_t *bytes = data;
+
+	if (size != 2) {
+		printf("malformed P2P %s\n", label);
+		return;
+	}
+
+	print_attr(level, "%s:", label);
+
+	if (bytes[0] == 0x01)
+		print_attr(level + 1, "Coordination Protocol Transport: UDP");
+	else
+		print_attr(level + 1, "Coordination Protocol Transport: "
+				"reserved 0x%02x", bytes[1]);
+}
+
+static struct attr_entry p2p_attr_entry[] = {
+	{ P2P_ATTR_STATUS,			"Status",
+		ATTR_CUSTOM,	{ .function = print_p2p_status } },
+	{ P2P_ATTR_MINOR_REASON_CODE,		"Minor Reason Code",
+		ATTR_CUSTOM,	{ .function = print_wsc_byte } },
+	{ P2P_ATTR_P2P_CAPABILITY,		"P2P Capability",
+		ATTR_CUSTOM,	{ .function = print_p2p_capability } },
+	{ P2P_ATTR_P2P_DEVICE_ID,		"P2P Device ID",
+		ATTR_CUSTOM,	{ .function = print_wsc_mac_address } },
+	{ P2P_ATTR_GO_INTENT,			"Group Owner Intent",
+		ATTR_CUSTOM,	{ .function = print_p2p_go_intent } },
+	{ P2P_ATTR_CONFIGURATION_TIMEOUT,	"Configuration Timeout",
+		ATTR_CUSTOM,	{ .function = print_p2p_config_timeout } },
+	{ P2P_ATTR_LISTEN_CHANNEL,		"Listen Channel",
+		ATTR_CUSTOM,	{ .function = print_p2p_oper_channel } },
+	{ P2P_ATTR_P2P_GROUP_BSSID,		"P2P Group BSSID",
+		ATTR_CUSTOM,	{ .function = print_wsc_mac_address } },
+	{ P2P_ATTR_EXTENDED_LISTEN_TIMING,	"Extended Listen Timing",
+		ATTR_CUSTOM,	{ .function = print_p2p_extended_timing } },
+	{ P2P_ATTR_INTENDED_P2P_INTERFACE_ADDR,	"Intended P2P Interface "
+		"Address",
+		ATTR_CUSTOM,	{ .function = print_wsc_mac_address } },
+	{ P2P_ATTR_P2P_MANAGEABILITY,		"P2P Manageability",
+		ATTR_CUSTOM,	{ .function = print_p2p_manageability } },
+	{ P2P_ATTR_CHANNEL_LIST,		"Channel List",
+		ATTR_CUSTOM,	{ .function = print_p2p_channel_list } },
+	{ P2P_ATTR_NOTICE_OF_ABSENCE,		"Notice of Absence",
+		ATTR_CUSTOM,	{ .function = print_p2p_notice_of_absence } },
+	{ P2P_ATTR_P2P_DEVICE_INFO,		"P2P Device Info",
+		ATTR_CUSTOM,	{ .function = print_p2p_device_info } },
+	{ P2P_ATTR_P2P_GROUP_INFO,		"P2P Group Info",
+		ATTR_CUSTOM,	{ .function = print_p2p_group_info } },
+	{ P2P_ATTR_P2P_GROUP_ID,		"P2P Group ID",
+		ATTR_CUSTOM,	{ .function = print_p2p_group_id } },
+	{ P2P_ATTR_P2P_INTERFACE,		"P2P Interface",
+		ATTR_CUSTOM,	{ .function = print_p2p_interface } },
+	{ P2P_ATTR_OPERATING_CHANNEL,		"Operating Channel",
+		ATTR_CUSTOM,	{ .function = print_p2p_oper_channel } },
+	{ P2P_ATTR_INVITATION_FLAGS,		"Invitation Flags",
+		ATTR_CUSTOM,	{ .function = print_p2p_invite_flags } },
+	{ P2P_ATTR_OOB_GO_NEGOTIATION_CHANNEL,	"Out-of-Band Group Owner "
+		"Negotiation Channel",
+		ATTR_CUSTOM,	{ .function = print_p2p_oob_neg_channel } },
+	{ P2P_ATTR_SVC_HASH,			"Service Hash",
+		ATTR_CUSTOM,	{ .function = print_p2p_service_hash } },
+	{ P2P_ATTR_SESSION_INFO_DATA_INFO,	"Session Information Data Info",
+		ATTR_CUSTOM,	{ .function = print_wsc_bytes } },
+	{ P2P_ATTR_CONNECTION_CAPABILITY_INFO,	"Connection Capability Info",
+		ATTR_CUSTOM,	{ .function = print_p2p_connection_caps } },
+	{ P2P_ATTR_ADVERTISEMENT_ID_INFO,	"Advertisement_ID Info",
+		ATTR_CUSTOM,	{ .function = print_p2p_advertisement_id } },
+	{ P2P_ATTR_ADVERTISED_SVC_INFO,		"Advertised Service Info",
+		ATTR_CUSTOM,	{ .function = print_p2p_advertised_svc_info } },
+	{ P2P_ATTR_SESSION_ID_INFO,		"Session ID Info",
+		ATTR_CUSTOM,	{ .function = print_p2p_session_id } },
+	{ P2P_ATTR_FEATURE_CAPABILITY,		"Feature Capability",
+		ATTR_CUSTOM,	{ .function = print_p2p_feature_caps } },
+	{ P2P_ATTR_PERSISTENT_GROUP_INFO,	"Persistent Group Info",
+		ATTR_CUSTOM,	{ .function = print_p2p_group_id } },
+	{ P2P_ATTR_VENDOR_SPECIFIC_ATTR,	"Vendor specific attribute",
+		ATTR_CUSTOM,	{ .function = print_wsc_bytes } },
+	{ },
+};
+
+static void print_p2p_attributes(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	struct p2p_attr_iter iter;
+	int i;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	p2p_attr_iter_init(&iter, data, size);
+
+	while (p2p_attr_iter_next(&iter)) {
+		uint16_t type = p2p_attr_iter_get_type(&iter);
+		uint16_t len = p2p_attr_iter_get_length(&iter);
+		const void *attr = p2p_attr_iter_get_data(&iter);
+		struct attr_entry *entry = NULL;
+
+		for (i = 0; p2p_attr_entry[i].str; i++) {
+			if (p2p_attr_entry[i].attr == type) {
+				entry = &p2p_attr_entry[i];
+				break;
+			}
+		}
+
+		if (entry && entry->function)
+			entry->function(level + 1, entry->str, attr, len);
+		else {
+			print_attr(level + 1, "Type: 0x%02x: len %u",
+								type, len);
+			print_hexdump(level + 2, attr, len);
+		}
+	}
+}
+
 static void print_management_ies(unsigned int level, const char *label,
 					const void *data, uint16_t size)
 {
-	void *wsc_data;
-	ssize_t wsc_len;
+	void *wsc_data, *p2p_data;
+	ssize_t wsc_len, p2p_len;
 
 	print_ie(level, label, data, size);
 
 	wsc_data = ie_tlv_extract_wsc_payload(data, size, &wsc_len);
-	if (!wsc_data)
-		return;
+	if (wsc_data) {
+		print_wsc_attributes(level + 1, "WSC Payload",
+					wsc_data, wsc_len);
+		l_free(wsc_data);
+	}
 
-	print_wsc_attributes(level + 1, "WSC Payload", wsc_data, wsc_len);
-	l_free(wsc_data);
+	p2p_data = ie_tlv_extract_p2p_payload(data, size, &p2p_len);
+	if (p2p_data) {
+		print_p2p_attributes(level + 1, "P2P Attributes",
+					p2p_data, p2p_len);
+		l_free(p2p_data);
+	}
 }
 
 static void print_address(unsigned int level, const char *label,
