@@ -478,3 +478,16 @@ void p2p_free_provision_disc_resp(struct p2p_provision_discovery_resp *data);
 void p2p_free_notice_of_absence(struct p2p_notice_of_absence *data);
 void p2p_free_presence_req(struct p2p_presence_req *data);
 void p2p_free_presence_resp(struct p2p_presence_resp *data);
+
+uint8_t *p2p_build_beacon(const struct p2p_beacon *data, size_t *out_len);
+uint8_t *p2p_build_probe_req(const struct p2p_probe_req *data, size_t *out_len);
+uint8_t *p2p_build_probe_resp(const struct p2p_probe_resp *data,
+				size_t *out_len);
+uint8_t *p2p_build_association_req(const struct p2p_association_req *data,
+					size_t *out_len);
+uint8_t *p2p_build_association_resp(const struct p2p_association_resp *data,
+					size_t *out_len);
+uint8_t *p2p_build_deauthentication(const struct p2p_deauthentication *data,
+					size_t *out_len);
+uint8_t *p2p_build_disassociation(const struct p2p_disassociation *data,
+					size_t *out_len);

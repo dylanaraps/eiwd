@@ -1547,3 +1547,628 @@ void p2p_free_presence_resp(struct p2p_presence_resp *data)
 {
 	p2p_free_notice_of_absence_attr(&data->notice_of_absence);
 }
+
+struct p2p_attr_builder {
+	size_t capacity;
+	uint8_t *buf;
+	uint16_t offset;
+	uint16_t curlen;
+};
+
+static void p2p_attr_builder_grow(struct p2p_attr_builder *builder)
+{
+	builder->buf = l_realloc(builder->buf, builder->capacity * 2);
+	builder->capacity *= 2;
+}
+
+/* Section 4.1.1 */
+static void p2p_attr_builder_start_attr(struct p2p_attr_builder *builder,
+					enum p2p_attr type)
+{
+	/* Record previous attribute's length */
+	if (builder->curlen || builder->offset) {
+		l_put_le16(builder->curlen, builder->buf + builder->offset + 1);
+		builder->offset += 3 + builder->curlen;
+		builder->curlen = 0;
+	}
+
+	if (builder->offset + 3u >= builder->capacity)
+		p2p_attr_builder_grow(builder);
+
+	builder->buf[builder->offset] = type;
+}
+
+static void p2p_attr_builder_put_u8(struct p2p_attr_builder *builder, uint8_t v)
+{
+	if (builder->offset + 3u + builder->curlen + 1u >= builder->capacity)
+		p2p_attr_builder_grow(builder);
+
+	builder->buf[builder->offset + 3 + builder->curlen] = v;
+	builder->curlen += 1;
+}
+
+static void p2p_attr_builder_put_u16(struct p2p_attr_builder *builder,
+					uint16_t v)
+{
+	if (builder->offset + 3u + builder->curlen + 2u >= builder->capacity)
+		p2p_attr_builder_grow(builder);
+
+	l_put_le16(v, builder->buf + builder->offset + 3 + builder->curlen);
+	builder->curlen += 2;
+}
+
+static void p2p_attr_builder_put_be16(struct p2p_attr_builder *builder,
+					uint16_t v)
+{
+	if (builder->offset + 3u + builder->curlen + 2u >= builder->capacity)
+		p2p_attr_builder_grow(builder);
+
+	l_put_be16(v, builder->buf + builder->offset + 3 + builder->curlen);
+	builder->curlen += 2;
+}
+
+static void p2p_attr_builder_put_u32(struct p2p_attr_builder *builder,
+					uint32_t v)
+{
+	if (builder->offset + 3u + builder->curlen + 4u >= builder->capacity)
+		p2p_attr_builder_grow(builder);
+
+	l_put_le32(v, builder->buf + builder->offset + 3 + builder->curlen);
+	builder->curlen += 4;
+}
+
+static void p2p_attr_builder_put_bytes(struct p2p_attr_builder *builder,
+					const void *bytes, size_t size)
+{
+	while (builder->offset + 3u + builder->curlen + size >=
+			builder->capacity)
+		p2p_attr_builder_grow(builder);
+
+	memcpy(builder->buf + builder->offset + 3 + builder->curlen,
+		bytes, size);
+	builder->curlen += size;
+}
+
+static void p2p_attr_builder_put_oui(struct p2p_attr_builder *builder,
+					const uint8_t *oui)
+{
+	if (builder->offset + 3u + builder->curlen + 3u >= builder->capacity)
+		p2p_attr_builder_grow(builder);
+
+	memcpy(builder->buf + builder->offset + 3 + builder->curlen, oui, 3);
+	builder->curlen += 3;
+}
+
+static struct p2p_attr_builder *p2p_attr_builder_new(size_t initial_capacity)
+{
+	struct p2p_attr_builder *builder;
+
+	if (initial_capacity == 0)
+		return NULL;
+
+	builder = l_new(struct p2p_attr_builder, 1);
+	builder->buf = l_malloc(initial_capacity);
+	builder->capacity = initial_capacity;
+
+	return builder;
+}
+
+static uint8_t *p2p_attr_builder_free(struct p2p_attr_builder *builder,
+					bool free_contents, size_t *out_size)
+{
+	uint8_t *ret;
+
+	if (builder->curlen > 0 || builder->offset) {
+		l_put_le16(builder->curlen, builder->buf + builder->offset + 1);
+		builder->offset += 3 + builder->curlen;
+	}
+
+	if (free_contents) {
+		l_free(builder->buf);
+		ret = NULL;
+	} else
+		ret = builder->buf;
+
+	if (out_size)
+		*out_size = builder->offset;
+
+	l_free(builder);
+
+	return ret;
+}
+
+static void p2p_build_u8_attr(struct p2p_attr_builder *builder,
+				enum p2p_attr type, uint8_t value)
+{
+	p2p_attr_builder_start_attr(builder, type);
+	p2p_attr_builder_put_u8(builder, value);
+}
+
+/* Section 4.1.4 */
+static void p2p_build_capability(struct p2p_attr_builder *builder,
+					const struct p2p_capability_attr *attr)
+{
+	/* Always required */
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_P2P_CAPABILITY);
+	p2p_attr_builder_put_u8(builder, attr->device_caps);
+	p2p_attr_builder_put_u8(builder, attr->group_caps);
+}
+
+static const uint8_t zero_addr[6];
+
+/* Section 4.1.5, 4.1.9, 4.1.11, ... */
+static void p2p_build_addr(struct p2p_attr_builder *builder, bool optional,
+				enum p2p_attr type, const uint8_t *addr)
+{
+	if (optional && !memcmp(addr, zero_addr, 6))
+		return;
+
+	p2p_attr_builder_start_attr(builder, type);
+	p2p_attr_builder_put_bytes(builder, addr, 6);
+}
+
+/* Section 4.1.6 */
+static void p2p_build_go_intent(struct p2p_attr_builder *builder,
+				uint8_t intent, bool tie_breaker)
+{
+	/* Always required */
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_GO_INTENT);
+	p2p_attr_builder_put_u8(builder, tie_breaker | (intent << 1));
+}
+
+/* Section 4.1.7 */
+static void p2p_build_config_timeout(struct p2p_attr_builder *builder,
+				bool optional,
+				const struct p2p_config_timeout_attr *attr)
+{
+	if (optional && !attr->go_config_timeout &&
+			!attr->client_config_timeout)
+		return;
+
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_CONFIGURATION_TIMEOUT);
+	p2p_attr_builder_put_u8(builder, attr->go_config_timeout);
+	p2p_attr_builder_put_u8(builder, attr->client_config_timeout);
+}
+
+/* Section 4.1.8, 4.1.19, ... */
+static void p2p_build_channel(struct p2p_attr_builder *builder, bool optional,
+				enum p2p_attr type,
+				const struct p2p_channel_attr *attr)
+{
+	if (optional && !attr->country[0])
+		return;
+
+	p2p_attr_builder_start_attr(builder, type);
+	p2p_attr_builder_put_bytes(builder, attr->country, 3);
+	p2p_attr_builder_put_u8(builder, attr->oper_class);
+	p2p_attr_builder_put_u8(builder, attr->channel_num);
+}
+
+/* Section 4.1.10 */
+static void p2p_build_extended_listen_timing(struct p2p_attr_builder *builder,
+			const struct p2p_extended_listen_timing_attr *attr)
+{
+	/* Always optional */
+	if (!attr->avail_period_ms && !attr->avail_interval_ms)
+		return;
+
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_EXTENDED_LISTEN_TIMING);
+	p2p_attr_builder_put_u16(builder, attr->avail_period_ms);
+	p2p_attr_builder_put_u16(builder, attr->avail_interval_ms);
+}
+
+/* Section 4.1.13 */
+static void p2p_build_channel_list(struct p2p_attr_builder *builder,
+			bool optional,
+			const struct p2p_channel_list_attr *attr)
+{
+	const struct l_queue_entry *entry;
+
+	if (optional && !attr->channel_entries)
+		return;
+
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_CHANNEL_LIST);
+	p2p_attr_builder_put_bytes(builder, attr->country, 3);
+
+	for (entry = l_queue_get_entries(attr->channel_entries); entry;
+			entry = entry->next) {
+		const struct p2p_channel_entries *entries = entry->data;
+
+		p2p_attr_builder_put_u8(builder, entries->oper_class);
+		p2p_attr_builder_put_u8(builder, entries->n_channels);
+		p2p_attr_builder_put_bytes(builder, entries->channels,
+						entries->n_channels);
+	}
+}
+
+/* Section 4.1.14 */
+static void p2p_build_notice_of_absence_attr(struct p2p_attr_builder *builder,
+				bool optional,
+				const struct p2p_notice_of_absence_attr *attr)
+{
+	const struct l_queue_entry *entry;
+
+	if (optional && !attr->ct_window && !attr->descriptors)
+		return;
+
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_NOTICE_OF_ABSENCE);
+	p2p_attr_builder_put_u8(builder, attr->index);
+	p2p_attr_builder_put_u8(builder,
+				attr->ct_window | (attr->opp_ps ? 0x80 : 0));
+
+	for (entry = l_queue_get_entries(attr->descriptors); entry;
+			entry = entry->next) {
+		const struct p2p_notice_of_absence_desc *desc = entry->data;
+
+		p2p_attr_builder_put_u8(builder, desc->count_type);
+		p2p_attr_builder_put_u32(builder, desc->duration);
+		p2p_attr_builder_put_u32(builder, desc->interval);
+		p2p_attr_builder_put_u32(builder, desc->start_time);
+	}
+}
+
+static void p2p_build_wsc_device_type(struct p2p_attr_builder *builder,
+				const struct wsc_primary_device_type *pdt)
+{
+	p2p_attr_builder_put_be16(builder, pdt->category);
+	p2p_attr_builder_put_oui(builder, pdt->oui);
+	p2p_attr_builder_put_u8(builder, pdt->oui_type);
+	p2p_attr_builder_put_be16(builder, pdt->subcategory);
+}
+
+/* Section 4.1.15 */
+static void p2p_build_device_info(struct p2p_attr_builder *builder,
+					bool optional,
+					const struct p2p_device_info_attr *attr)
+{
+	const struct l_queue_entry *entry;
+
+	if (optional && !memcmp(attr->device_addr, zero_addr, 6))
+		return;
+
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_P2P_DEVICE_INFO);
+	p2p_attr_builder_put_bytes(builder, attr->device_addr, 6);
+	p2p_attr_builder_put_be16(builder, attr->wsc_config_methods);
+	p2p_build_wsc_device_type(builder, &attr->primary_device_type);
+	p2p_attr_builder_put_u8(builder,
+				l_queue_length(attr->secondary_device_types));
+
+	for (entry = l_queue_get_entries(attr->secondary_device_types); entry;
+			entry = entry->next)
+		p2p_build_wsc_device_type(builder, entry->data);
+
+	p2p_attr_builder_put_be16(builder, WSC_ATTR_DEVICE_NAME);
+	p2p_attr_builder_put_be16(builder, strlen(attr->device_name));
+	p2p_attr_builder_put_bytes(builder, attr->device_name,
+					strlen(attr->device_name));
+}
+
+/* Section 4.1.16 */
+static void p2p_build_group_info(struct p2p_attr_builder *builder,
+					struct l_queue *clients)
+{
+	const struct l_queue_entry *entry;
+
+	/* Always optional */
+	if (!clients)
+		return;
+
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_P2P_GROUP_INFO);
+
+	for (entry = l_queue_get_entries(clients); entry; entry = entry->next) {
+		const struct l_queue_entry *entry2;
+		const struct p2p_client_info_descriptor *desc = entry->data;
+
+		p2p_attr_builder_put_bytes(builder, desc->device_addr, 6);
+		p2p_attr_builder_put_bytes(builder, desc->interface_addr, 6);
+		p2p_attr_builder_put_u8(builder, desc->device_caps);
+		p2p_attr_builder_put_be16(builder, desc->wsc_config_methods);
+		p2p_build_wsc_device_type(builder, &desc->primary_device_type);
+		p2p_attr_builder_put_u8(builder,
+				l_queue_length(desc->secondary_device_types));
+
+		for (entry2 = l_queue_get_entries(desc->secondary_device_types);
+				entry2; entry2 = entry->next)
+			p2p_build_wsc_device_type(builder, entry2->data);
+
+		p2p_attr_builder_put_be16(builder, WSC_ATTR_DEVICE_NAME);
+		p2p_attr_builder_put_be16(builder, strlen(desc->device_name));
+		p2p_attr_builder_put_bytes(builder, desc->device_name,
+						strlen(desc->device_name));
+	}
+}
+
+/* Section 4.1.17, 4.1.29 */
+static void p2p_build_group_id(struct p2p_attr_builder *builder, bool optional,
+				enum p2p_attr type,
+				const struct p2p_group_id_attr *attr)
+{
+	if (optional && !memcmp(attr->device_addr, zero_addr, 6))
+		return;
+
+	p2p_attr_builder_start_attr(builder, type);
+	p2p_attr_builder_put_bytes(builder, attr->device_addr, 6);
+	p2p_attr_builder_put_bytes(builder, attr->ssid, strlen(attr->ssid));
+}
+
+/* Section 4.1.18 */
+static void p2p_build_interface(struct p2p_attr_builder *builder,
+				const struct p2p_interface_attr *attr)
+{
+	const struct l_queue_entry *entry;
+
+	/* Always optional */
+	if (!memcmp(attr->device_addr, zero_addr, 6))
+		return;
+
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_P2P_INTERFACE);
+	p2p_attr_builder_put_bytes(builder, attr->device_addr, 6);
+	p2p_attr_builder_put_u8(builder, l_queue_length(attr->interface_addrs));
+
+	for (entry = l_queue_get_entries(attr->interface_addrs); entry;
+			entry = entry->next)
+		p2p_attr_builder_put_bytes(builder, entry->data, 6);
+}
+
+/* Section 4.1.22 */
+static void p2p_build_svc_hash(struct p2p_attr_builder *builder,
+				struct l_queue *service_hashes)
+{
+	const struct l_queue_entry *entry;
+
+	/* Always optional */
+	if (!service_hashes)
+		return;
+
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_SVC_HASH);
+
+	for (entry = l_queue_get_entries(service_hashes); entry;
+			entry = entry->next)
+		p2p_attr_builder_put_bytes(builder, entry->data, 6);
+}
+
+/* Section 4.1.23 */
+static void p2p_build_session_data(struct p2p_attr_builder *builder,
+				const struct p2p_session_info_data_attr *attr)
+{
+	/* Always optional */
+	if (!attr->data_len)
+		return;
+
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_SESSION_INFO_DATA_INFO);
+	p2p_attr_builder_put_bytes(builder, attr->data, attr->data_len);
+}
+
+/* Section 4.1.25 */
+static void p2p_build_advertisement_id(struct p2p_attr_builder *builder,
+			bool optional,
+			const struct p2p_advertisement_id_info_attr *attr)
+{
+	if (optional && !memcmp(attr->service_mac_addr, zero_addr, 6))
+		return;
+
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_ADVERTISEMENT_ID_INFO);
+	p2p_attr_builder_put_u32(builder, attr->advertisement_id);
+	p2p_attr_builder_put_bytes(builder, attr->service_mac_addr, 6);
+}
+
+/* Section 4.1.26 */
+static void p2p_build_advertised_service_info(struct p2p_attr_builder *builder,
+						struct l_queue *services)
+{
+	const struct l_queue_entry *entry;
+
+	/* Always optional */
+	if (!services)
+		return;
+
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_ADVERTISED_SVC_INFO);
+
+	for (entry = l_queue_get_entries(services); entry;
+			entry = entry->next) {
+		const struct p2p_advertised_service_descriptor *desc =
+			entry->data;
+
+		p2p_attr_builder_put_u32(builder, desc->advertisement_id);
+		p2p_attr_builder_put_be16(builder, desc->wsc_config_methods);
+		p2p_attr_builder_put_u8(builder, strlen(desc->service_name));
+		p2p_attr_builder_put_bytes(builder, desc->service_name,
+						strlen(desc->service_name));
+	}
+}
+
+/* Section 4.1.27 */
+static void p2p_build_session_id(struct p2p_attr_builder *builder,
+				bool optional,
+				const struct p2p_session_id_info_attr *attr)
+{
+	if (optional && !memcmp(attr->session_mac_addr, zero_addr, 6))
+		return;
+
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_SESSION_ID_INFO);
+	p2p_attr_builder_put_u32(builder, attr->session_id);
+	p2p_attr_builder_put_bytes(builder, attr->session_mac_addr, 6);
+}
+
+/* Section 4.1.28 */
+static void p2p_build_feature_capability(struct p2p_attr_builder *builder,
+			bool optional,
+			enum p2p_asp_coordination_transport_protocol attr)
+{
+	if (optional && attr == P2P_ASP_TRANSPORT_UNKNOWN)
+		return;
+
+	p2p_attr_builder_start_attr(builder, P2P_ATTR_FEATURE_CAPABILITY);
+	p2p_attr_builder_put_u8(builder, 0x01); /* P2P_ASP_TRANSPORT_UDP */
+	p2p_attr_builder_put_u8(builder, 0x00); /* Reserved */
+}
+
+/* Section 4.2.1 */
+uint8_t *p2p_build_beacon(const struct p2p_beacon *data, size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+	uint8_t *ret;
+	uint8_t *tlv;
+	size_t tlv_len;
+
+	builder = p2p_attr_builder_new(512);
+	p2p_build_capability(builder, &data->capability);
+	p2p_build_addr(builder, false, P2P_ATTR_P2P_DEVICE_ID,
+			data->device_addr);
+	p2p_build_notice_of_absence_attr(builder, true,
+						&data->notice_of_absence);
+
+	tlv = p2p_attr_builder_free(builder, false, &tlv_len);
+	ret = ie_tlv_encapsulate_p2p_payload(tlv, tlv_len, out_len);
+	l_free(tlv);
+	return ret;
+}
+
+/* Section 4.2.2 */
+uint8_t *p2p_build_probe_req(const struct p2p_probe_req *data, size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+	uint8_t *ret;
+	uint8_t *tlv;
+	size_t tlv_len;
+
+	builder = p2p_attr_builder_new(512);
+	p2p_build_capability(builder, &data->capability);
+	p2p_build_addr(builder, true, P2P_ATTR_P2P_DEVICE_ID,
+			data->device_addr);
+	p2p_build_channel(builder, true, P2P_ATTR_LISTEN_CHANNEL,
+				&data->listen_channel);
+	p2p_build_extended_listen_timing(builder, &data->listen_availability);
+	p2p_build_device_info(builder, true, &data->device_info);
+	p2p_build_channel(builder, true, P2P_ATTR_OPERATING_CHANNEL,
+				&data->operating_channel);
+	p2p_build_svc_hash(builder, data->service_hashes);
+
+	tlv = p2p_attr_builder_free(builder, false, &tlv_len);
+	ret = ie_tlv_encapsulate_p2p_payload(tlv, tlv_len, out_len);
+	l_free(tlv);
+	return ret;
+}
+
+/* Section 4.2.3 */
+uint8_t *p2p_build_probe_resp(const struct p2p_probe_resp *data,
+				size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+	uint8_t *ret;
+	uint8_t *tlv;
+	size_t tlv_len;
+
+	builder = p2p_attr_builder_new(512);
+	p2p_build_capability(builder, &data->capability);
+	p2p_build_extended_listen_timing(builder, &data->listen_availability);
+	p2p_build_notice_of_absence_attr(builder, true,
+						&data->notice_of_absence);
+	p2p_build_device_info(builder, false, &data->device_info);
+	p2p_build_group_info(builder, data->group_clients);
+	p2p_build_advertised_service_info(builder, data->advertised_svcs);
+
+	tlv = p2p_attr_builder_free(builder, false, &tlv_len);
+	ret = ie_tlv_encapsulate_p2p_payload(tlv, tlv_len, out_len);
+	l_free(tlv);
+	return ret;
+}
+
+/* Section 4.2.4 */
+uint8_t *p2p_build_association_req(const struct p2p_association_req *data,
+					size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+	uint8_t *ret;
+	uint8_t *tlv;
+	size_t tlv_len;
+
+	builder = p2p_attr_builder_new(512);
+	p2p_build_capability(builder, &data->capability);
+	p2p_build_extended_listen_timing(builder, &data->listen_availability);
+	p2p_build_device_info(builder, true, &data->device_info);
+	p2p_build_interface(builder, &data->interface);
+
+	tlv = p2p_attr_builder_free(builder, false, &tlv_len);
+	ret = ie_tlv_encapsulate_p2p_payload(tlv, tlv_len, out_len);
+	l_free(tlv);
+	return ret;
+}
+
+/* Section 4.2.5 */
+uint8_t *p2p_build_association_resp(const struct p2p_association_resp *data,
+					size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+	uint8_t *ret;
+	uint8_t *tlv;
+	size_t tlv_len;
+
+	builder = p2p_attr_builder_new(32);
+
+	/*
+	 * 4.2.5: "The Status attribute shall be present [...] when a
+	 * (Re) association Request frame is denied."
+	 *
+	 * Note the P2P IE may end up being empty but is required for
+	 * this frame type nevertheless.
+	 */
+	if (data->status != P2P_STATUS_SUCCESS &&
+			data->status != P2P_STATUS_SUCCESS_ACCEPTED_BY_USER)
+		p2p_build_u8_attr(builder, P2P_ATTR_STATUS, data->status);
+
+	p2p_build_extended_listen_timing(builder, &data->listen_availability);
+
+	tlv = p2p_attr_builder_free(builder, false, &tlv_len);
+	ret = ie_tlv_encapsulate_p2p_payload(tlv, tlv_len, out_len);
+	l_free(tlv);
+	return ret;
+}
+
+/* Section 4.2.6 */
+uint8_t *p2p_build_deauthentication(const struct p2p_deauthentication *data,
+					size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+	uint8_t *ret;
+	uint8_t *tlv;
+	size_t tlv_len;
+
+	if (!data->minor_reason_code) {
+		*out_len = 0;
+		return (uint8_t *) "";
+	}
+
+	builder = p2p_attr_builder_new(512);
+	p2p_build_u8_attr(builder, P2P_ATTR_MINOR_REASON_CODE,
+				data->minor_reason_code);
+
+	tlv = p2p_attr_builder_free(builder, false, &tlv_len);
+	ret = ie_tlv_encapsulate_p2p_payload(tlv, tlv_len, out_len);
+	l_free(tlv);
+	return ret;
+}
+
+/* Section 4.2.7 */
+uint8_t *p2p_build_disassociation(const struct p2p_disassociation *data,
+					size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+	uint8_t *ret;
+	uint8_t *tlv;
+	size_t tlv_len;
+
+	if (!data->minor_reason_code) {
+		*out_len = 0;
+		return (uint8_t *) "";
+	}
+
+	builder = p2p_attr_builder_new(512);
+	p2p_build_u8_attr(builder, P2P_ATTR_MINOR_REASON_CODE,
+				data->minor_reason_code);
+
+	tlv = p2p_attr_builder_free(builder, false, &tlv_len);
+	ret = ie_tlv_encapsulate_p2p_payload(tlv, tlv_len, out_len);
+	l_free(tlv);
+	return ret;
+}
