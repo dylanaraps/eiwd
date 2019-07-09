@@ -251,3 +251,190 @@ enum p2p_asp_coordination_transport_protocol {
 	P2P_ASP_TRANSPORT_UNKNOWN = 0,
 	P2P_ASP_TRANSPORT_UDP,
 };
+
+struct p2p_beacon {
+	struct p2p_capability_attr capability;
+	uint8_t device_addr[6];
+	struct p2p_notice_of_absence_attr notice_of_absence;
+};
+
+struct p2p_probe_req {
+	struct p2p_capability_attr capability;
+	uint8_t device_addr[6];
+	struct p2p_channel_attr listen_channel;
+	struct p2p_extended_listen_timing_attr listen_availability;
+	struct p2p_device_info_attr device_info;
+	struct p2p_channel_attr operating_channel;
+	struct l_queue *service_hashes;
+};
+
+struct p2p_probe_resp {
+	struct p2p_capability_attr capability;
+	struct p2p_extended_listen_timing_attr listen_availability;
+	struct p2p_notice_of_absence_attr notice_of_absence;
+	struct p2p_device_info_attr device_info;
+	struct l_queue *group_clients;
+	struct l_queue *advertised_svcs;
+};
+
+struct p2p_association_req {
+	struct p2p_capability_attr capability;
+	struct p2p_extended_listen_timing_attr listen_availability;
+	struct p2p_device_info_attr device_info;
+	struct p2p_interface_attr interface;
+};
+
+struct p2p_association_resp {
+	enum p2p_attr_status_code status;
+	struct p2p_extended_listen_timing_attr listen_availability;
+};
+
+struct p2p_deauthentication {
+	uint8_t minor_reason_code;
+};
+
+struct p2p_disassociation {
+	uint8_t minor_reason_code;
+};
+
+struct p2p_go_negotiation_req {
+	uint8_t dialog_token;
+	struct p2p_capability_attr capability;
+	uint8_t go_intent;
+	bool go_tie_breaker;
+	struct p2p_config_timeout_attr config_timeout;
+	struct p2p_channel_attr listen_channel;
+	struct p2p_extended_listen_timing_attr listen_availability;
+	uint8_t intended_interface_addr[6];
+	struct p2p_channel_list_attr channel_list;
+	struct p2p_device_info_attr device_info;
+	struct p2p_channel_attr operating_channel;
+	enum wsc_device_password_id device_password_id;
+};
+
+struct p2p_go_negotiation_resp {
+	uint8_t dialog_token;
+	enum p2p_attr_status_code status;
+	struct p2p_capability_attr capability;
+	uint8_t go_intent;
+	bool go_tie_breaker;
+	struct p2p_config_timeout_attr config_timeout;
+	struct p2p_channel_attr operating_channel;
+	uint8_t intended_interface_addr[6];
+	struct p2p_channel_list_attr channel_list;
+	struct p2p_device_info_attr device_info;
+	struct p2p_group_id_attr group_id;
+	enum wsc_device_password_id device_password_id;
+};
+
+struct p2p_go_negotiation_confirmation {
+	uint8_t dialog_token;
+	enum p2p_attr_status_code status;
+	struct p2p_capability_attr capability;
+	struct p2p_channel_attr operating_channel;
+	struct p2p_channel_list_attr channel_list;
+	struct p2p_group_id_attr group_id;
+};
+
+struct p2p_invitation_req {
+	uint8_t dialog_token;
+	struct p2p_config_timeout_attr config_timeout;
+	bool reinvoke_persistent_group;
+	struct p2p_channel_attr operating_channel;
+	uint8_t group_bssid[6];
+	struct p2p_channel_list_attr channel_list;
+	struct p2p_group_id_attr group_id;
+	struct p2p_device_info_attr device_info;
+	enum wsc_device_password_id device_password_id;
+};
+
+struct p2p_invitation_resp {
+	uint8_t dialog_token;
+	enum p2p_attr_status_code status;
+	struct p2p_config_timeout_attr config_timeout;
+	struct p2p_channel_attr operating_channel;
+	uint8_t group_bssid[6];
+	struct p2p_channel_list_attr channel_list;
+};
+
+struct p2p_device_discoverability_req {
+	uint8_t dialog_token;
+	uint8_t device_addr[6];
+	struct p2p_group_id_attr group_id;
+};
+
+struct p2p_device_discoverability_resp {
+	uint8_t dialog_token;
+	enum p2p_attr_status_code status;
+};
+
+struct p2p_provision_discovery_req {
+	uint8_t dialog_token;
+	struct p2p_capability_attr capability;
+	struct p2p_device_info_attr device_info;
+	struct p2p_group_id_attr group_id;
+	uint8_t intended_interface_addr[6];
+	enum p2p_attr_status_code status;
+	struct p2p_channel_attr operating_channel;
+	struct p2p_channel_list_attr channel_list;
+	struct p2p_session_info_data_attr session_info;
+	uint8_t connection_capability;
+	struct p2p_advertisement_id_info_attr advertisement_id;
+	struct p2p_config_timeout_attr config_timeout;
+	struct p2p_channel_attr listen_channel;
+	struct p2p_session_id_info_attr session_id;
+	enum p2p_asp_coordination_transport_protocol transport_protocol;
+	struct p2p_group_id_attr persistent_group_info;
+	uint16_t wsc_config_method;
+};
+
+struct p2p_provision_discovery_resp {
+	uint8_t dialog_token;
+	enum p2p_attr_status_code status;
+	struct p2p_capability_attr capability;
+	struct p2p_device_info_attr device_info;
+	struct p2p_group_id_attr group_id;
+	uint8_t intended_interface_addr[6];
+	struct p2p_channel_attr operating_channel;
+	struct p2p_channel_list_attr channel_list;
+	uint8_t connection_capability;
+	struct p2p_advertisement_id_info_attr advertisement_id;
+	struct p2p_config_timeout_attr config_timeout;
+	struct p2p_session_id_info_attr session_id;
+	enum p2p_asp_coordination_transport_protocol transport_protocol;
+	struct p2p_group_id_attr persistent_group_info;
+	struct p2p_session_info_data_attr session_info;
+	uint16_t wsc_config_method;
+};
+
+struct p2p_notice_of_absence {
+	struct p2p_notice_of_absence_attr notice_of_absence;
+};
+
+struct p2p_presence_req {
+	uint8_t dialog_token;
+	struct p2p_notice_of_absence_attr notice_of_absence;
+};
+
+struct p2p_presence_resp {
+	uint8_t dialog_token;
+	enum p2p_attr_status_code status;
+	struct p2p_notice_of_absence_attr notice_of_absence;
+};
+
+void p2p_free_beacon(struct p2p_beacon *data);
+void p2p_free_probe_req(struct p2p_probe_req *data);
+void p2p_free_probe_resp(struct p2p_probe_resp *data);
+void p2p_free_association_req(struct p2p_association_req *data);
+void p2p_free_association_resp(struct p2p_association_resp *data);
+void p2p_free_go_negotiation_req(struct p2p_go_negotiation_req *data);
+void p2p_free_go_negotiation_resp(struct p2p_go_negotiation_resp *data);
+void p2p_free_go_negotiation_confirmation(
+				struct p2p_go_negotiation_confirmation *data);
+void p2p_free_invitation_req(struct p2p_invitation_req *data);
+void p2p_free_invitation_resp(struct p2p_invitation_resp *data);
+void p2p_free_provision_disc_req(struct p2p_provision_discovery_req *data);
+void p2p_free_provision_disc_resp(struct p2p_provision_discovery_resp *data);
+void p2p_free_notice_of_absence(struct p2p_notice_of_absence *data);
+void p2p_free_presence_req(struct p2p_presence_req *data);
+void p2p_free_presence_resp(struct p2p_presence_resp *data);
