@@ -325,7 +325,7 @@ unit_tests = unit/test-cmac-aes \
 		unit/test-crypto unit/test-eapol unit/test-mpdu \
 		unit/test-ie unit/test-util unit/test-ssid-security \
 		unit/test-arc4 unit/test-wsc unit/test-eap-mschapv2 \
-		unit/test-eap-sim unit/test-sae
+		unit/test-eap-sim unit/test-sae unit/test-p2p
 
 if CLIENT
 unit_tests += unit/test-client
@@ -458,6 +458,13 @@ unit_test_sae_SOURCES = unit/test-sae.c \
 				src/util.h src/util.c \
 				src/mpdu.h src/mpdu.c
 unit_test_sae_LDADD = $(ell_ldadd)
+
+unit_test_p2p_SOURCES = unit/test-p2p.c src/wscutil.h src/wscutil.c \
+				src/crypto.h src/crypto.c \
+				src/ie.h src/ie.c \
+				src/util.h src/util.c \
+				src/p2putil.h src/p2putil.c
+unit_test_p2p_LDADD = $(ell_ldadd)
 
 TESTS = $(unit_tests)
 
