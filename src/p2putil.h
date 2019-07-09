@@ -436,6 +436,31 @@ int p2p_parse_deauthentication(const uint8_t *pdu, size_t len,
 				struct p2p_deauthentication *out);
 int p2p_parse_disassociation(const uint8_t *pdu, size_t len,
 				struct p2p_disassociation *out);
+int p2p_parse_go_negotiation_req(const uint8_t *pdu, size_t len,
+					struct p2p_go_negotiation_req *out);
+int p2p_parse_go_negotiation_resp(const uint8_t *pdu, size_t len,
+					struct p2p_go_negotiation_resp *out);
+int p2p_parse_go_negotiation_confirmation(const uint8_t *pdu, size_t len,
+				struct p2p_go_negotiation_confirmation *out);
+int p2p_parse_invitation_req(const uint8_t *pdu, size_t len,
+				struct p2p_invitation_req *out);
+int p2p_parse_invitation_resp(const uint8_t *pdu, size_t len,
+				struct p2p_invitation_resp *out);
+int p2p_parse_device_disc_req(const uint8_t *pdu, size_t len,
+				struct p2p_device_discoverability_req *out);
+int p2p_parse_device_disc_resp(const uint8_t *pdu, size_t len,
+				struct p2p_device_discoverability_resp *out);
+int p2p_parse_provision_disc_req(const uint8_t *pdu, size_t len,
+				struct p2p_provision_discovery_req *out);
+int p2p_parse_provision_disc_resp(const uint8_t *pdu, size_t len,
+				struct p2p_provision_discovery_resp *out);
+int p2p_parse_notice_of_absence(const uint8_t *pdu, size_t len,
+				struct p2p_notice_of_absence *out);
+int p2p_parse_presence_req(const uint8_t *pdu, size_t len,
+				struct p2p_presence_req *out);
+int p2p_parse_presence_resp(const uint8_t *pdu, size_t len,
+				struct p2p_presence_resp *out);
+int p2p_parse_go_disc_req(const uint8_t *pdu, size_t len);
 
 void p2p_free_beacon(struct p2p_beacon *data);
 void p2p_free_probe_req(struct p2p_probe_req *data);

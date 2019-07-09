@@ -899,6 +899,527 @@ int p2p_parse_disassociation(const uint8_t *pdu, size_t len,
 	return 0;
 }
 
+#define WSC_REQUIRED(attr, out) \
+	WSC_ATTR_ ## attr, WSC_ATTR_FLAG_REQUIRED, out
+
+#define WSC_OPTIONAL(attr, out) \
+	WSC_ATTR_ ## attr, 0, out
+
+/* Section 4.2.9.2 */
+int p2p_parse_go_negotiation_req(const uint8_t *pdu, size_t len,
+					struct p2p_go_negotiation_req *out)
+{
+	struct p2p_go_negotiation_req d = {};
+	int r;
+	struct p2p_go_intent_attr go_intent;
+	uint8_t *wsc_data;
+	ssize_t wsc_len;
+	uint8_t wsc_version;
+
+	if (len < 1)
+		return -EINVAL;
+
+	d.dialog_token = pdu[0];
+	if (d.dialog_token == 0)
+		return -EINVAL;
+
+	r = p2p_parse_attrs(pdu + 1, len - 1,
+			REQUIRED(P2P_CAPABILITY, &d.capability),
+			REQUIRED(GO_INTENT, &go_intent),
+			REQUIRED(CONFIGURATION_TIMEOUT, &d.config_timeout),
+			REQUIRED(LISTEN_CHANNEL, &d.listen_channel),
+			OPTIONAL(EXTENDED_LISTEN_TIMING,
+					&d.listen_availability),
+			REQUIRED(INTENDED_P2P_INTERFACE_ADDR,
+					&d.intended_interface_addr),
+			REQUIRED(CHANNEL_LIST, &d.channel_list),
+			REQUIRED(P2P_DEVICE_INFO, &d.device_info),
+			REQUIRED(OPERATING_CHANNEL, &d.operating_channel),
+			-1);
+	if (r < 0)
+		goto error;
+
+	wsc_data = ie_tlv_extract_wsc_payload(pdu + 1, len - 1, &wsc_len);
+	if (!wsc_data) {
+		r = wsc_len;
+		goto error;
+	}
+
+	r = wsc_parse_attrs(wsc_data, wsc_len, NULL, NULL, 0, NULL,
+			WSC_REQUIRED(VERSION, &wsc_version),
+			WSC_REQUIRED(DEVICE_PASSWORD_ID, &d.device_password_id),
+			WSC_ATTR_INVALID);
+	l_free(wsc_data);
+
+	if (r < 0)
+		goto error;
+
+	d.go_intent = go_intent.intent;
+	d.go_tie_breaker = go_intent.tie_breaker;
+
+	memcpy(out, &d, sizeof(d));
+	return 0;
+
+error:
+	p2p_free_go_negotiation_req(&d);
+	return r;
+}
+
+/* Section 4.2.9.3 */
+int p2p_parse_go_negotiation_resp(const uint8_t *pdu, size_t len,
+					struct p2p_go_negotiation_resp *out)
+{
+	struct p2p_go_negotiation_resp d = {};
+	int r;
+	struct p2p_go_intent_attr go_intent;
+	uint8_t *wsc_data;
+	ssize_t wsc_len;
+	uint8_t wsc_version;
+
+	if (len < 1)
+		return -EINVAL;
+
+	d.dialog_token = pdu[0];
+	if (d.dialog_token == 0)
+		return -EINVAL;
+
+	r = p2p_parse_attrs(pdu + 1, len - 1,
+			REQUIRED(STATUS, &d.status),
+			REQUIRED(P2P_CAPABILITY, &d.capability),
+			REQUIRED(GO_INTENT, &go_intent),
+			REQUIRED(CONFIGURATION_TIMEOUT, &d.config_timeout),
+			OPTIONAL(OPERATING_CHANNEL, &d.operating_channel),
+			REQUIRED(INTENDED_P2P_INTERFACE_ADDR,
+					&d.intended_interface_addr),
+			REQUIRED(CHANNEL_LIST, &d.channel_list),
+			REQUIRED(P2P_DEVICE_INFO, &d.device_info),
+			OPTIONAL(P2P_GROUP_ID, &d.group_id),
+			-1);
+	if (r < 0)
+		goto error;
+
+	wsc_data = ie_tlv_extract_wsc_payload(pdu + 1, len - 1, &wsc_len);
+	if (!wsc_data) {
+		r = wsc_len;
+		goto error;
+	}
+
+	r = wsc_parse_attrs(wsc_data, wsc_len, NULL, NULL, 0, NULL,
+			WSC_REQUIRED(VERSION, &wsc_version),
+			WSC_REQUIRED(DEVICE_PASSWORD_ID, &d.device_password_id),
+			WSC_ATTR_INVALID);
+	l_free(wsc_data);
+
+	if (r < 0)
+		goto error;
+
+	d.go_intent = go_intent.intent;
+	d.go_tie_breaker = go_intent.tie_breaker;
+
+	memcpy(out, &d, sizeof(d));
+	return 0;
+
+error:
+	p2p_free_go_negotiation_resp(&d);
+	return r;
+}
+
+/* Section 4.2.9.4 */
+int p2p_parse_go_negotiation_confirmation(const uint8_t *pdu, size_t len,
+				struct p2p_go_negotiation_confirmation *out)
+{
+	struct p2p_go_negotiation_confirmation d = {};
+	int r;
+
+	if (len < 1)
+		return -EINVAL;
+
+	d.dialog_token = pdu[0];
+	if (d.dialog_token == 0)
+		return -EINVAL;
+
+	r = p2p_parse_attrs(pdu + 1, len - 1,
+			REQUIRED(STATUS, &d.status),
+			REQUIRED(P2P_CAPABILITY, &d.capability),
+			REQUIRED(OPERATING_CHANNEL, &d.operating_channel),
+			REQUIRED(CHANNEL_LIST, &d.channel_list),
+			OPTIONAL(P2P_GROUP_ID, &d.group_id),
+			-1);
+
+	if (r >= 0)
+		memcpy(out, &d, sizeof(d));
+	else
+		p2p_free_go_negotiation_confirmation(&d);
+
+	return r;
+}
+
+/* Section 4.2.9.5 */
+int p2p_parse_invitation_req(const uint8_t *pdu, size_t len,
+				struct p2p_invitation_req *out)
+{
+	struct p2p_invitation_req d = {};
+	int r;
+	uint8_t *wsc_data;
+	ssize_t wsc_len;
+	bool wsc_version2;
+
+	if (len < 1)
+		return -EINVAL;
+
+	d.dialog_token = pdu[0];
+	if (d.dialog_token == 0)
+		return -EINVAL;
+
+	r = p2p_parse_attrs(pdu + 1, len - 1,
+			REQUIRED(CONFIGURATION_TIMEOUT, &d.config_timeout),
+			REQUIRED(INVITATION_FLAGS,
+					&d.reinvoke_persistent_group),
+			OPTIONAL(OPERATING_CHANNEL, &d.operating_channel),
+			OPTIONAL(P2P_GROUP_BSSID, &d.group_bssid),
+			REQUIRED(CHANNEL_LIST, &d.channel_list),
+			REQUIRED(P2P_GROUP_ID, &d.group_id),
+			REQUIRED(P2P_DEVICE_INFO, &d.device_info),
+			-1);
+	if (r < 0)
+		goto done;
+
+	/* A WSC IE is optional */
+	wsc_data = ie_tlv_extract_wsc_payload(pdu + 1, len - 1, &wsc_len);
+	if (!wsc_data)
+		goto done;
+
+	r = wsc_parse_attrs(wsc_data, wsc_len, &wsc_version2, NULL, 0, NULL,
+			WSC_REQUIRED(DEVICE_PASSWORD_ID, &d.device_password_id),
+			WSC_ATTR_INVALID);
+	l_free(wsc_data);
+
+	if (r >= 0 && !wsc_version2)
+		r = -EINVAL;
+
+done:
+	if (r >= 0)
+		memcpy(out, &d, sizeof(d));
+	else
+		p2p_free_invitation_req(&d);
+
+	return r;
+}
+
+/* Section 4.2.9.6 */
+int p2p_parse_invitation_resp(const uint8_t *pdu, size_t len,
+				struct p2p_invitation_resp *out)
+{
+	struct p2p_invitation_resp d = {};
+	int r;
+
+	if (len < 1)
+		return -EINVAL;
+
+	d.dialog_token = pdu[0];
+	if (d.dialog_token == 0)
+		return -EINVAL;
+
+	r = p2p_parse_attrs(pdu + 1, len - 1,
+			REQUIRED(STATUS, &d.status),
+			REQUIRED(CONFIGURATION_TIMEOUT, &d.config_timeout),
+			OPTIONAL(OPERATING_CHANNEL, &d.operating_channel),
+			OPTIONAL(P2P_GROUP_BSSID, &d.group_bssid),
+			OPTIONAL(CHANNEL_LIST, &d.channel_list),
+			-1);
+
+	if (r >= 0)
+		memcpy(out, &d, sizeof(d));
+	else
+		p2p_free_invitation_resp(&d);
+
+	return r;
+}
+
+/* Section 4.2.9.7 */
+int p2p_parse_device_disc_req(const uint8_t *pdu, size_t len,
+				struct p2p_device_discoverability_req *out)
+{
+	struct p2p_device_discoverability_req d = {};
+	int r;
+
+	if (len < 1)
+		return -EINVAL;
+
+	d.dialog_token = pdu[0];
+	if (d.dialog_token == 0)
+		return -EINVAL;
+
+	r = p2p_parse_attrs(pdu + 1, len - 1,
+			REQUIRED(P2P_DEVICE_ID, &d.device_addr),
+			REQUIRED(P2P_GROUP_ID, &d.group_id),
+			-1);
+
+	if (r >= 0)
+		memcpy(out, &d, sizeof(d));
+
+	return r;
+}
+
+/* Section 4.2.9.8 */
+int p2p_parse_device_disc_resp(const uint8_t *pdu, size_t len,
+				struct p2p_device_discoverability_resp *out)
+{
+	struct p2p_device_discoverability_resp d = {};
+	int r;
+
+	if (len < 1)
+		return -EINVAL;
+
+	d.dialog_token = pdu[0];
+	if (d.dialog_token == 0)
+		return -EINVAL;
+
+	r = p2p_parse_attrs(pdu + 1, len - 1,
+			REQUIRED(STATUS, &d.status),
+			-1);
+
+	if (r >= 0)
+		memcpy(out, &d, sizeof(d));
+
+	return r;
+}
+
+/* Section 4.2.9.9 */
+int p2p_parse_provision_disc_req(const uint8_t *pdu, size_t len,
+				struct p2p_provision_discovery_req *out)
+{
+	struct p2p_provision_discovery_req d = {};
+	int r;
+	uint8_t *wsc_data;
+	ssize_t wsc_len;
+
+	if (len < 1)
+		return -EINVAL;
+
+	d.status = -1;
+
+	d.dialog_token = pdu[0];
+	if (d.dialog_token == 0)
+		return -EINVAL;
+
+	r = p2p_parse_attrs(pdu + 1, len - 1,
+			REQUIRED(P2P_CAPABILITY, &d.capability),
+			REQUIRED(P2P_DEVICE_INFO, &d.device_info),
+			OPTIONAL(P2P_GROUP_ID, &d.group_id),
+			OPTIONAL(INTENDED_P2P_INTERFACE_ADDR,
+					&d.intended_interface_addr),
+			OPTIONAL(STATUS, &d.status),
+			OPTIONAL(OPERATING_CHANNEL, &d.operating_channel),
+			OPTIONAL(CHANNEL_LIST, &d.channel_list),
+			OPTIONAL(SESSION_INFO_DATA_INFO, &d.session_info),
+			OPTIONAL(CONNECTION_CAPABILITY_INFO,
+					&d.connection_capability),
+			OPTIONAL(ADVERTISEMENT_ID_INFO, &d.advertisement_id),
+			OPTIONAL(CONFIGURATION_TIMEOUT, &d.config_timeout),
+			OPTIONAL(LISTEN_CHANNEL, &d.listen_channel),
+			OPTIONAL(SESSION_ID_INFO, &d.session_id),
+			OPTIONAL(FEATURE_CAPABILITY, &d.transport_protocol),
+			OPTIONAL(PERSISTENT_GROUP_INFO,
+					&d.persistent_group_info),
+			-1);
+	if (r < 0)
+		goto error;
+
+	wsc_data = ie_tlv_extract_wsc_payload(pdu + 1, len - 1, &wsc_len);
+	if (wsc_len < 0) {
+		r = wsc_len;
+		goto error;
+	}
+
+	r = wsc_parse_attrs(wsc_data, wsc_len, NULL, NULL, 0, NULL,
+			WSC_REQUIRED(CONFIGURATION_METHODS,
+					&d.wsc_config_method),
+			WSC_ATTR_INVALID);
+	l_free(wsc_data);
+
+	if (r < 0)
+		goto error;
+
+	/*
+	 * 4.2.9.9: "A single method shall be set in the Config Methods
+	 * attribute."
+	 */
+	if (__builtin_popcount(d.wsc_config_method) != 1) {
+		r = -EINVAL;
+		goto error;
+	}
+
+	memcpy(out, &d, sizeof(d));
+	return 0;
+
+error:
+	p2p_free_provision_disc_req(&d);
+	return r;
+}
+
+/* Section 4.2.9.10 */
+int p2p_parse_provision_disc_resp(const uint8_t *pdu, size_t len,
+				struct p2p_provision_discovery_resp *out)
+{
+	struct p2p_provision_discovery_resp d = {};
+	int r;
+	uint8_t *wsc_data;
+	ssize_t wsc_len;
+
+	if (len < 1)
+		return -EINVAL;
+
+	d.status = -1;
+
+	d.dialog_token = pdu[0];
+	if (d.dialog_token == 0)
+		return -EINVAL;
+
+	/*
+	 * The P2P IE is optional but, if present, some of the attributes
+	 * are required for this frame type.
+	 */
+	r = p2p_parse_attrs(pdu + 1, len - 1,
+			REQUIRED(STATUS, &d.status),
+			REQUIRED(P2P_CAPABILITY, &d.capability),
+			REQUIRED(P2P_DEVICE_INFO, &d.device_info),
+			OPTIONAL(P2P_GROUP_ID, &d.group_id),
+			OPTIONAL(INTENDED_P2P_INTERFACE_ADDR,
+					&d.intended_interface_addr),
+			OPTIONAL(OPERATING_CHANNEL, &d.operating_channel),
+			OPTIONAL(CHANNEL_LIST, &d.channel_list),
+			OPTIONAL(CONNECTION_CAPABILITY_INFO,
+					&d.connection_capability),
+			REQUIRED(ADVERTISEMENT_ID_INFO, &d.advertisement_id),
+			OPTIONAL(CONFIGURATION_TIMEOUT, &d.config_timeout),
+			REQUIRED(SESSION_ID_INFO, &d.session_id),
+			REQUIRED(FEATURE_CAPABILITY, &d.transport_protocol),
+			OPTIONAL(PERSISTENT_GROUP_INFO,
+					&d.persistent_group_info),
+			REQUIRED(SESSION_INFO_DATA_INFO, &d.session_info),
+			-1);
+	if (r < 0 && r != -ENOENT)
+		goto error;
+
+	wsc_data = ie_tlv_extract_wsc_payload(pdu + 1, len - 1, &wsc_len);
+	if (wsc_len < 0) {
+		r = wsc_len;
+		goto error;
+	}
+
+	r = wsc_parse_attrs(wsc_data, wsc_len, NULL, NULL, 0, NULL,
+			WSC_REQUIRED(CONFIGURATION_METHODS,
+					&d.wsc_config_method),
+			WSC_ATTR_INVALID);
+	l_free(wsc_data);
+
+	if (r < 0)
+		goto error;
+
+	/*
+	 * 4.2.9.10: "The value of the Config Methods attribute shall be
+	 * set to the same value received in the Provision Discovery
+	 * Request frame to indicate success or shall be null to indicate
+	 * failure of the request."
+	 */
+	if (__builtin_popcount(d.wsc_config_method) > 1) {
+		r = -EINVAL;
+		goto error;
+	}
+
+	memcpy(out, &d, sizeof(d));
+	return 0;
+
+error:
+	p2p_free_provision_disc_resp(&d);
+	return r;
+}
+
+/* Section 4.2.10.2 */
+int p2p_parse_notice_of_absence(const uint8_t *pdu, size_t len,
+				struct p2p_notice_of_absence *out)
+{
+	struct p2p_notice_of_absence d = {};
+	int r;
+
+	if (len < 1)
+		return -EINVAL;
+
+	r = p2p_parse_attrs(pdu + 1, len - 1,
+			REQUIRED(NOTICE_OF_ABSENCE, &d.notice_of_absence),
+			-1);
+
+	if (r >= 0)
+		memcpy(out, &d, sizeof(d));
+	else
+		p2p_free_notice_of_absence(&d);
+
+	return r;
+}
+
+/* Section 4.2.10.3 */
+int p2p_parse_presence_req(const uint8_t *pdu, size_t len,
+				struct p2p_presence_req *out)
+{
+	struct p2p_presence_req d = {};
+	int r;
+
+	if (len < 1)
+		return -EINVAL;
+
+	d.dialog_token = pdu[0];
+	if (d.dialog_token == 0)
+		return -EINVAL;
+
+	r = p2p_parse_attrs(pdu + 1, len - 1,
+			REQUIRED(NOTICE_OF_ABSENCE, &d.notice_of_absence),
+			-1);
+
+	if (r >= 0)
+		memcpy(out, &d, sizeof(d));
+	else
+		p2p_free_presence_req(&d);
+
+	return r;
+}
+
+/* Section 4.2.10.4 */
+int p2p_parse_presence_resp(const uint8_t *pdu, size_t len,
+				struct p2p_presence_resp *out)
+{
+	struct p2p_presence_resp d = {};
+	int r;
+
+	if (len < 1)
+		return -EINVAL;
+
+	d.dialog_token = pdu[0];
+	if (d.dialog_token == 0)
+		return -EINVAL;
+
+	r = p2p_parse_attrs(pdu + 1, len - 1,
+			REQUIRED(STATUS, &d.status),
+			REQUIRED(NOTICE_OF_ABSENCE, &d.notice_of_absence),
+			-1);
+
+	if (r >= 0)
+		memcpy(out, &d, sizeof(d));
+	else
+		p2p_free_presence_resp(&d);
+
+	return r;
+}
+
+/* Section 4.2.10.5 */
+int p2p_parse_go_disc_req(const uint8_t *pdu, size_t len)
+{
+	if (len != 1 || pdu[0] != 0)
+		return -EINVAL;
+
+	return 0;
+}
+
 static void p2p_free_channel_list_attr(struct p2p_channel_list_attr *attr)
 {
 	l_queue_destroy(attr->channel_entries, l_free);
