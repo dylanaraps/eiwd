@@ -52,7 +52,6 @@
 #include "src/mpdu.h"
 #include "src/eapol.h"
 #include "src/util.h"
-#include "src/wscutil.h"
 #include "src/p2putil.h"
 #include "monitor/pcap.h"
 #include "monitor/display.h"
