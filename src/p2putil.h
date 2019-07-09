@@ -22,6 +22,10 @@
 
 #include <stdint.h>
 
+#include "src/wscutil.h"
+
+struct l_queue;
+
 /* Wi-Fi P2P Technical Specification v1.7, Section 4.1.1, Table 6 */
 enum p2p_attr {
 	P2P_ATTR_STATUS = 0,
@@ -147,3 +151,103 @@ static inline const uint8_t *p2p_attr_iter_get_data(struct p2p_attr_iter *iter)
 {
 	return iter->pos + 3;
 }
+
+struct p2p_capability_attr {
+	uint8_t device_caps;
+	uint8_t group_caps;
+};
+
+struct p2p_config_timeout_attr {
+	uint8_t go_config_timeout;
+	uint8_t client_config_timeout;
+};
+
+struct p2p_channel_attr {
+	char country[3];
+	uint8_t oper_class;
+	uint8_t channel_num;
+};
+
+struct p2p_extended_listen_timing_attr {
+	uint16_t avail_period_ms;
+	uint16_t avail_interval_ms;
+};
+
+struct p2p_channel_entries {
+	uint8_t oper_class;
+	int n_channels;
+	uint8_t channels[];
+};
+
+struct p2p_channel_list_attr {
+	char country[3];
+	struct l_queue *channel_entries;
+};
+
+struct p2p_notice_of_absence_desc {
+	uint8_t count_type;
+	uint32_t duration;
+	uint32_t interval;
+	uint32_t start_time;
+};
+
+struct p2p_notice_of_absence_attr {
+	uint8_t index;
+	bool opp_ps;
+	uint8_t ct_window;
+	struct l_queue *descriptors;
+};
+
+struct p2p_device_info_attr {
+	uint8_t device_addr[6];
+	uint16_t wsc_config_methods;
+	struct wsc_primary_device_type primary_device_type;
+	struct l_queue *secondary_device_types;
+	char device_name[33];
+};
+
+struct p2p_client_info_descriptor {
+	uint8_t device_addr[6];
+	uint8_t interface_addr[6];
+	uint8_t device_caps;
+	uint16_t wsc_config_methods;
+	struct wsc_primary_device_type primary_device_type;
+	struct l_queue *secondary_device_types;
+	char device_name[33];
+};
+
+struct p2p_group_id_attr {
+	uint8_t device_addr[6];
+	char ssid[33];
+};
+
+struct p2p_interface_attr {
+	uint8_t device_addr[6];
+	struct l_queue *interface_addrs;
+};
+
+struct p2p_session_info_data_attr {
+	size_t data_len;
+	uint8_t data[144];
+};
+
+struct p2p_advertisement_id_info_attr {
+	uint32_t advertisement_id;
+	uint8_t service_mac_addr[6];
+};
+
+struct p2p_advertised_service_descriptor {
+	uint32_t advertisement_id;
+	uint16_t wsc_config_methods;
+	char *service_name;
+};
+
+struct p2p_session_id_info_attr {
+	uint32_t session_id;
+	uint8_t session_mac_addr[6];
+};
+
+enum p2p_asp_coordination_transport_protocol {
+	P2P_ASP_TRANSPORT_UNKNOWN = 0,
+	P2P_ASP_TRANSPORT_UDP,
+};
