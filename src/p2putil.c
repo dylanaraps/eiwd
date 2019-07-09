@@ -2172,3 +2172,376 @@ uint8_t *p2p_build_disassociation(const struct p2p_disassociation *data,
 	l_free(tlv);
 	return ret;
 }
+
+/* Sections 4.2.9.1, 4.2.10.1.  Note: consumes @p2p_attrs */
+static uint8_t *p2p_build_action_frame(bool public, uint8_t frame_subtype,
+					uint8_t dialog_token,
+					struct p2p_attr_builder *p2p_attrs,
+					const struct wsc_p2p_attrs *wsc_attrs,
+					size_t *out_len)
+{
+	uint8_t *p2p_ie, *wsc_ie, *ret;
+	size_t p2p_ie_len, wsc_ie_len;
+	int pos = 0;
+
+	if (p2p_attrs) {
+		uint8_t *payload;
+		size_t payload_len;
+
+		payload = p2p_attr_builder_free(p2p_attrs, false, &payload_len);
+		p2p_ie = ie_tlv_encapsulate_p2p_payload(payload, payload_len,
+							&p2p_ie_len);
+		l_free(payload);
+	} else
+		p2p_ie = NULL;
+
+	if (wsc_attrs) {
+		uint8_t *payload;
+		size_t payload_len;
+
+		payload = wsc_build_p2p_attrs(wsc_attrs, &payload_len);
+		wsc_ie = ie_tlv_encapsulate_wsc_payload(payload, payload_len,
+							&wsc_ie_len);
+		l_free(payload);
+	} else
+		wsc_ie = NULL;
+
+	*out_len = (public ? 8 : 7) + (p2p_ie ? p2p_ie_len : 0) +
+		(wsc_ie ? wsc_ie_len : 0);
+	ret = l_malloc(*out_len);
+
+	if (public) {
+		ret[pos++] = 0x04; /* Category: Public Action */
+		ret[pos++] = 0x09; /* Action: Vendor Specific */
+	} else
+		ret[pos++] = 0x7f; /* Category: Vendor Specific */
+
+	ret[pos++] = 0x50;	/* OUI: Wi-Fi Alliance */
+	ret[pos++] = 0x6f;
+	ret[pos++] = 0x9a;
+	ret[pos++] = 0x09;	/* OUI type: Wi-Fi Alliance P2P v1.0 */
+	ret[pos++] = frame_subtype;
+	ret[pos++] = dialog_token;
+
+	if (p2p_ie) {
+		memcpy(ret + pos, p2p_ie, p2p_ie_len);
+		l_free(p2p_ie);
+		pos += p2p_ie_len;
+	}
+
+	if (wsc_ie) {
+		memcpy(ret + pos, wsc_ie, wsc_ie_len);
+		l_free(wsc_ie);
+	}
+
+	return ret;
+}
+
+/* Section 4.2.9.2 */
+uint8_t *p2p_build_go_negotiation_req(const struct p2p_go_negotiation_req *data,
+					size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+	struct wsc_p2p_attrs wsc_attrs = {};
+
+	builder = p2p_attr_builder_new(512);
+	p2p_build_capability(builder, &data->capability);
+	p2p_build_go_intent(builder, data->go_intent, data->go_tie_breaker);
+	p2p_build_config_timeout(builder, false, &data->config_timeout);
+	p2p_build_channel(builder, true, P2P_ATTR_LISTEN_CHANNEL,
+				&data->listen_channel);
+	p2p_build_extended_listen_timing(builder, &data->listen_availability);
+	p2p_build_addr(builder, false, P2P_ATTR_INTENDED_P2P_INTERFACE_ADDR,
+			data->intended_interface_addr);
+	p2p_build_channel_list(builder, false, &data->channel_list);
+	p2p_build_device_info(builder, false, &data->device_info);
+	p2p_build_channel(builder, true, P2P_ATTR_OPERATING_CHANNEL,
+				&data->operating_channel);
+
+	wsc_attrs.version = true;
+	wsc_attrs.device_password_id = data->device_password_id;
+
+	return p2p_build_action_frame(true, P2P_ACTION_GO_NEGOTIATION_REQ,
+					data->dialog_token, builder, &wsc_attrs,
+					out_len);
+}
+
+/* Section 4.2.9.3 */
+uint8_t *p2p_build_go_negotiation_resp(
+				const struct p2p_go_negotiation_resp *data,
+				size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+	struct wsc_p2p_attrs wsc_attrs = {};
+
+	builder = p2p_attr_builder_new(512);
+	p2p_build_u8_attr(builder, P2P_ATTR_STATUS, data->status);
+	p2p_build_capability(builder, &data->capability);
+	p2p_build_go_intent(builder, data->go_intent, data->go_tie_breaker);
+	p2p_build_config_timeout(builder, false, &data->config_timeout);
+	p2p_build_channel(builder, true, P2P_ATTR_OPERATING_CHANNEL,
+				&data->operating_channel);
+	p2p_build_addr(builder, false, P2P_ATTR_INTENDED_P2P_INTERFACE_ADDR,
+			data->intended_interface_addr);
+	p2p_build_channel_list(builder, false, &data->channel_list);
+	p2p_build_device_info(builder, false, &data->device_info);
+	p2p_build_group_id(builder, true, P2P_ATTR_P2P_GROUP_ID,
+				&data->group_id);
+
+	wsc_attrs.version = true;
+	wsc_attrs.device_password_id = data->device_password_id;
+
+	return p2p_build_action_frame(true, P2P_ACTION_GO_NEGOTIATION_RESP,
+					data->dialog_token, builder, &wsc_attrs,
+					out_len);
+}
+
+/* Section 4.2.9.4 */
+uint8_t *p2p_build_go_negotiation_confirmation(
+			const struct p2p_go_negotiation_confirmation *data,
+			size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+
+	builder = p2p_attr_builder_new(512);
+	p2p_build_u8_attr(builder, P2P_ATTR_STATUS, data->status);
+	p2p_build_capability(builder, &data->capability);
+	p2p_build_channel(builder, false, P2P_ATTR_OPERATING_CHANNEL,
+				&data->operating_channel);
+	p2p_build_channel_list(builder, false, &data->channel_list);
+	p2p_build_group_id(builder, true, P2P_ATTR_P2P_GROUP_ID,
+				&data->group_id);
+
+	return p2p_build_action_frame(true, P2P_ACTION_GO_NEGOTIATION_CONFIRM,
+					data->dialog_token, builder, NULL,
+					out_len);
+}
+
+/* Section 4.2.9.5 */
+uint8_t *p2p_build_invitation_req(const struct p2p_invitation_req *data,
+					size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+	struct wsc_p2p_attrs wsc_attrs = {};
+
+	builder = p2p_attr_builder_new(512);
+	p2p_build_config_timeout(builder, false, &data->config_timeout);
+	p2p_build_u8_attr(builder, P2P_ATTR_INVITATION_FLAGS,
+				data->reinvoke_persistent_group ? 0x01 : 0x00);
+	p2p_build_channel(builder, true, P2P_ATTR_OPERATING_CHANNEL,
+				&data->operating_channel);
+	p2p_build_addr(builder, true, P2P_ATTR_P2P_GROUP_BSSID,
+			data->group_bssid);
+	p2p_build_channel_list(builder, false, &data->channel_list);
+	p2p_build_group_id(builder, false, P2P_ATTR_P2P_GROUP_ID,
+				&data->group_id);
+	p2p_build_device_info(builder, false, &data->device_info);
+
+	/* Optional WSC IE for NFC Static Handover */
+	wsc_attrs.version2 = true;
+	wsc_attrs.device_password_id = data->device_password_id;
+
+	return p2p_build_action_frame(true, P2P_ACTION_INVITATION_REQ,
+					data->dialog_token, builder,
+					data->device_password_id ?
+					&wsc_attrs : NULL, out_len);
+}
+
+/* Section 4.2.9.6 */
+uint8_t *p2p_build_invitation_resp(const struct p2p_invitation_resp *data,
+					size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+
+	builder = p2p_attr_builder_new(512);
+	p2p_build_u8_attr(builder, P2P_ATTR_STATUS, data->status);
+	p2p_build_config_timeout(builder, false, &data->config_timeout);
+
+	if (data->status == P2P_STATUS_SUCCESS ||
+			data->status == P2P_STATUS_SUCCESS_ACCEPTED_BY_USER) {
+		p2p_build_channel(builder, false, P2P_ATTR_OPERATING_CHANNEL,
+					&data->operating_channel);
+		p2p_build_addr(builder, false, P2P_ATTR_P2P_GROUP_BSSID,
+				data->group_bssid);
+		p2p_build_channel_list(builder, false, &data->channel_list);
+	}
+
+	return p2p_build_action_frame(true, P2P_ACTION_INVITATION_RESP,
+					data->dialog_token, builder, NULL,
+					out_len);
+}
+
+/* Section 4.2.9.7 */
+uint8_t *p2p_build_device_disc_req(
+			const struct p2p_device_discoverability_req *data,
+			size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+
+	builder = p2p_attr_builder_new(64);
+	p2p_build_addr(builder, false, P2P_ATTR_P2P_DEVICE_ID,
+			data->device_addr);
+	p2p_build_group_id(builder, false, P2P_ATTR_P2P_GROUP_ID,
+				&data->group_id);
+
+	return p2p_build_action_frame(true,
+					P2P_ACTION_DEVICE_DISCOVERABILITY_REQ,
+					data->dialog_token, builder, NULL,
+					out_len);
+}
+
+/* Section 4.2.9.8 */
+uint8_t *p2p_build_device_disc_resp(
+			const struct p2p_device_discoverability_resp *data,
+			size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+
+	builder = p2p_attr_builder_new(16);
+	p2p_build_u8_attr(builder, P2P_ATTR_STATUS, data->status);
+
+	return p2p_build_action_frame(true,
+					P2P_ACTION_DEVICE_DISCOVERABILITY_RESP,
+					data->dialog_token, builder, NULL,
+					out_len);
+}
+
+/* Section 4.2.9.9 */
+uint8_t *p2p_build_provision_disc_req(
+				const struct p2p_provision_discovery_req *data,
+				size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+	struct wsc_p2p_attrs wsc_attrs = {};
+
+	builder = p2p_attr_builder_new(512);
+	p2p_build_capability(builder, &data->capability);
+	p2p_build_device_info(builder, false, &data->device_info);
+	p2p_build_group_id(builder, true, P2P_ATTR_P2P_GROUP_ID,
+				&data->group_id);
+	p2p_build_addr(builder, true, P2P_ATTR_INTENDED_P2P_INTERFACE_ADDR,
+			data->intended_interface_addr);
+
+	if (data->status != (enum p2p_attr_status_code) -1)
+		p2p_build_u8_attr(builder, P2P_ATTR_STATUS, data->status);
+
+	p2p_build_channel(builder, true, P2P_ATTR_OPERATING_CHANNEL,
+				&data->operating_channel);
+	p2p_build_channel_list(builder, true, &data->channel_list);
+	p2p_build_session_data(builder, &data->session_info);
+
+	if (data->connection_capability)
+		p2p_build_u8_attr(builder, P2P_ATTR_CONNECTION_CAPABILITY_INFO,
+					data->connection_capability);
+
+	p2p_build_advertisement_id(builder, true, &data->advertisement_id);
+	p2p_build_config_timeout(builder, true, &data->config_timeout);
+	p2p_build_channel(builder, true, P2P_ATTR_LISTEN_CHANNEL,
+				&data->listen_channel);
+	p2p_build_session_id(builder, true, &data->session_id);
+	p2p_build_feature_capability(builder, true, data->transport_protocol);
+	p2p_build_group_id(builder, true, P2P_ATTR_PERSISTENT_GROUP_INFO,
+				&data->persistent_group_info);
+
+	wsc_attrs.config_methods = data->wsc_config_method;
+
+	return p2p_build_action_frame(true, P2P_ACTION_PROVISION_DISCOVERY_REQ,
+					data->dialog_token, builder, &wsc_attrs,
+					out_len);
+}
+
+/* Section 4.2.9.10 */
+uint8_t *p2p_build_provision_disc_resp(
+				const struct p2p_provision_discovery_resp *data,
+				size_t *out_len)
+{
+	struct p2p_attr_builder *builder = NULL;
+	struct wsc_p2p_attrs wsc_attrs = {};
+
+	if (data->status != (enum p2p_attr_status_code) -1) {
+		builder = p2p_attr_builder_new(512);
+		p2p_build_u8_attr(builder, P2P_ATTR_STATUS, data->status);
+		p2p_build_capability(builder, &data->capability);
+		p2p_build_device_info(builder, false, &data->device_info);
+		p2p_build_group_id(builder, true, P2P_ATTR_P2P_GROUP_ID,
+					&data->group_id);
+		p2p_build_addr(builder, true,
+				P2P_ATTR_INTENDED_P2P_INTERFACE_ADDR,
+				data->intended_interface_addr);
+		p2p_build_channel(builder, true, P2P_ATTR_OPERATING_CHANNEL,
+					&data->operating_channel);
+		p2p_build_channel_list(builder, true, &data->channel_list);
+
+		if (data->connection_capability)
+			p2p_build_u8_attr(builder,
+					P2P_ATTR_CONNECTION_CAPABILITY_INFO,
+					data->connection_capability);
+
+		p2p_build_advertisement_id(builder, false,
+						&data->advertisement_id);
+		p2p_build_config_timeout(builder, true, &data->config_timeout);
+		p2p_build_session_id(builder, false, &data->session_id);
+		p2p_build_feature_capability(builder, false,
+						data->transport_protocol);
+		p2p_build_group_id(builder, true,
+					P2P_ATTR_PERSISTENT_GROUP_INFO,
+					&data->persistent_group_info);
+		p2p_build_session_data(builder, &data->session_info);
+	}
+
+	wsc_attrs.config_methods = data->wsc_config_method;
+
+	return p2p_build_action_frame(true, P2P_ACTION_PROVISION_DISCOVERY_RESP,
+					data->dialog_token, builder, &wsc_attrs,
+					out_len);
+}
+
+/* Section 4.2.10.2 */
+uint8_t *p2p_build_notice_of_absence(const struct p2p_notice_of_absence *data,
+					size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+
+	builder = p2p_attr_builder_new(128);
+	p2p_build_notice_of_absence_attr(builder, false,
+						&data->notice_of_absence);
+
+	return p2p_build_action_frame(false, P2P_ACTION_NOTICE_OF_ABSENCE,
+					0, builder, NULL, out_len);
+}
+
+/* Section 4.2.10.3 */
+uint8_t *p2p_build_presence_req(const struct p2p_presence_req *data,
+				size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+
+	builder = p2p_attr_builder_new(128);
+	p2p_build_notice_of_absence_attr(builder, false,
+						&data->notice_of_absence);
+
+	return p2p_build_action_frame(false, P2P_ACTION_PRESENCE_REQ,
+					0, builder, NULL, out_len);
+}
+
+/* Section 4.2.10.4 */
+uint8_t *p2p_build_presence_resp(const struct p2p_presence_resp *data,
+					size_t *out_len)
+{
+	struct p2p_attr_builder *builder;
+
+	builder = p2p_attr_builder_new(128);
+	p2p_build_u8_attr(builder, P2P_ATTR_STATUS, data->status);
+	p2p_build_notice_of_absence_attr(builder, false,
+						&data->notice_of_absence);
+
+	return p2p_build_action_frame(false, P2P_ACTION_PRESENCE_RESP,
+					0, builder, NULL, out_len);
+}
+
+/* Section 4.2.10.5 */
+uint8_t *p2p_build_go_disc_req(size_t *out_len)
+{
+	return p2p_build_action_frame(false, P2P_ACTION_GO_DISCOVERABILITY_REQ,
+					0, NULL, NULL, out_len);
+}

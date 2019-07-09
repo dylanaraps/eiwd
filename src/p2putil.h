@@ -491,3 +491,34 @@ uint8_t *p2p_build_deauthentication(const struct p2p_deauthentication *data,
 					size_t *out_len);
 uint8_t *p2p_build_disassociation(const struct p2p_disassociation *data,
 					size_t *out_len);
+uint8_t *p2p_build_go_negotiation_req(const struct p2p_go_negotiation_req *data,
+					size_t *out_len);
+uint8_t *p2p_build_go_negotiation_resp(
+				const struct p2p_go_negotiation_resp *data,
+				size_t *out_len);
+uint8_t *p2p_build_go_negotiation_confirmation(
+			const struct p2p_go_negotiation_confirmation *data,
+			size_t *out_len);
+uint8_t *p2p_build_invitation_req(const struct p2p_invitation_req *data,
+					size_t *out_len);
+uint8_t *p2p_build_invitation_resp(const struct p2p_invitation_resp *data,
+					size_t *out_len);
+uint8_t *p2p_build_device_disc_req(
+			const struct p2p_device_discoverability_req *data,
+			size_t *out_len);
+uint8_t *p2p_build_device_disc_resp(
+			const struct p2p_device_discoverability_resp *data,
+			size_t *out_len);
+uint8_t *p2p_build_provision_disc_req(
+				const struct p2p_provision_discovery_req *data,
+				size_t *out_len);
+uint8_t *p2p_build_provision_disc_resp(
+				const struct p2p_provision_discovery_resp *data,
+				size_t *out_len);
+uint8_t *p2p_build_notice_of_absence(const struct p2p_notice_of_absence *data,
+					size_t *out_len);
+uint8_t *p2p_build_presence_req(const struct p2p_presence_req *data,
+				size_t *out_len);
+uint8_t *p2p_build_presence_resp(const struct p2p_presence_resp *data,
+					size_t *out_len);
+uint8_t *p2p_build_go_disc_req(size_t *out_len);
