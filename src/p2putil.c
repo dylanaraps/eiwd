@@ -737,6 +737,168 @@ done:
 	return 0;
 }
 
+#define REQUIRED(attr, out) \
+	P2P_ATTR_ ## attr, ATTR_FLAG_REQUIRED, out
+
+#define OPTIONAL(attr, out) \
+	P2P_ATTR_ ## attr, 0, out
+
+/* Section 4.2.1 */
+int p2p_parse_beacon(const uint8_t *pdu, size_t len, struct p2p_beacon *out)
+{
+	struct p2p_beacon d = {};
+	int r;
+
+	r = p2p_parse_attrs(pdu, len,
+			REQUIRED(P2P_CAPABILITY, &d.capability),
+			REQUIRED(P2P_DEVICE_ID, &d.device_addr),
+			OPTIONAL(NOTICE_OF_ABSENCE, &d.notice_of_absence),
+			-1);
+
+	if (r >= 0)
+		memcpy(out, &d, sizeof(d));
+	else
+		p2p_free_beacon(&d);
+
+	return r;
+}
+
+/* Section 4.2.2 */
+int p2p_parse_probe_req(const uint8_t *pdu, size_t len,
+			struct p2p_probe_req *out)
+{
+	struct p2p_probe_req d = {};
+	int r;
+
+	r = p2p_parse_attrs(pdu, len,
+			REQUIRED(P2P_CAPABILITY, &d.capability),
+			OPTIONAL(P2P_DEVICE_ID, &d.device_addr),
+			OPTIONAL(LISTEN_CHANNEL, &d.listen_channel),
+			OPTIONAL(EXTENDED_LISTEN_TIMING,
+					&d.listen_availability),
+			OPTIONAL(P2P_DEVICE_INFO, &d.device_info),
+			OPTIONAL(OPERATING_CHANNEL, &d.operating_channel),
+			OPTIONAL(SVC_HASH, &d.service_hashes),
+			-1);
+
+	if (r >= 0)
+		memcpy(out, &d, sizeof(d));
+	else
+		p2p_free_probe_req(&d);
+
+	/*
+	 * The additional WSC IE attributes are already covered by
+	 * wsc_parse_probe_request.
+	 */
+
+	return r;
+}
+
+/* Section 4.2.3 */
+int p2p_parse_probe_resp(const uint8_t *pdu, size_t len,
+				struct p2p_probe_resp *out)
+{
+	struct p2p_probe_resp d = {};
+	int r;
+
+	r = p2p_parse_attrs(pdu, len,
+			REQUIRED(P2P_CAPABILITY, &d.capability),
+			OPTIONAL(EXTENDED_LISTEN_TIMING,
+					&d.listen_availability),
+			OPTIONAL(NOTICE_OF_ABSENCE, &d.notice_of_absence),
+			REQUIRED(P2P_DEVICE_INFO, &d.device_info),
+			OPTIONAL(P2P_GROUP_INFO, &d.group_clients),
+			OPTIONAL(ADVERTISED_SVC_INFO, &d.advertised_svcs),
+			-1);
+
+	if (r >= 0)
+		memcpy(out, &d, sizeof(d));
+	else
+		p2p_free_probe_resp(&d);
+
+	return r;
+}
+
+/* Section 4.2.4 */
+int p2p_parse_association_req(const uint8_t *pdu, size_t len,
+				struct p2p_association_req *out)
+{
+	struct p2p_association_req d = {};
+	int r;
+
+	r = p2p_parse_attrs(pdu, len,
+			REQUIRED(P2P_CAPABILITY, &d.capability),
+			OPTIONAL(EXTENDED_LISTEN_TIMING,
+					&d.listen_availability),
+			OPTIONAL(P2P_DEVICE_INFO, &d.device_info),
+			OPTIONAL(P2P_INTERFACE, &d.interface),
+			-1);
+
+	if (r >= 0)
+		memcpy(out, &d, sizeof(d));
+	else
+		p2p_free_association_req(&d);
+
+	return r;
+}
+
+/* Section 4.2.5 */
+int p2p_parse_association_resp(const uint8_t *pdu, size_t len,
+				struct p2p_association_resp *out)
+{
+	struct p2p_association_resp d = {};
+	int r;
+
+	r = p2p_parse_attrs(pdu, len,
+			OPTIONAL(STATUS, &d.status),
+			OPTIONAL(EXTENDED_LISTEN_TIMING,
+					&d.listen_availability),
+			-1);
+
+	if (r >= 0)
+		memcpy(out, &d, sizeof(d));
+
+	return r;
+}
+
+/* Section 4.2.6 */
+int p2p_parse_deauthentication(const uint8_t *pdu, size_t len,
+				struct p2p_deauthentication *out)
+{
+	int r;
+	uint8_t reason = 0;
+
+	r = p2p_parse_attrs(pdu, len,
+			REQUIRED(MINOR_REASON_CODE, &reason),
+			-1);
+
+	/* The P2P IE is optional */
+	if (r < 0 && r != -ENOENT)
+		return r;
+
+	out->minor_reason_code = reason;
+	return 0;
+}
+
+/* Section 4.2.7 */
+int p2p_parse_disassociation(const uint8_t *pdu, size_t len,
+				struct p2p_disassociation *out)
+{
+	int r;
+	uint8_t reason = 0;
+
+	r = p2p_parse_attrs(pdu, len,
+			REQUIRED(MINOR_REASON_CODE, &reason),
+			-1);
+
+	/* The P2P IE is optional */
+	if (r < 0 && r != -ENOENT)
+		return r;
+
+	out->minor_reason_code = reason;
+	return 0;
+}
+
 static void p2p_free_channel_list_attr(struct p2p_channel_list_attr *attr)
 {
 	l_queue_destroy(attr->channel_entries, l_free);

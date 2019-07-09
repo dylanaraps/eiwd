@@ -422,6 +422,21 @@ struct p2p_presence_resp {
 	struct p2p_notice_of_absence_attr notice_of_absence;
 };
 
+int p2p_parse_beacon(const uint8_t *pdu, size_t len,
+			struct p2p_beacon *out);
+int p2p_parse_probe_req(const uint8_t *pdu, size_t len,
+			struct p2p_probe_req *out);
+int p2p_parse_probe_resp(const uint8_t *pdu, size_t len,
+				struct p2p_probe_resp *out);
+int p2p_parse_association_req(const uint8_t *pdu, size_t len,
+				struct p2p_association_req *out);
+int p2p_parse_association_resp(const uint8_t *pdu, size_t len,
+				struct p2p_association_resp *out);
+int p2p_parse_deauthentication(const uint8_t *pdu, size_t len,
+				struct p2p_deauthentication *out);
+int p2p_parse_disassociation(const uint8_t *pdu, size_t len,
+				struct p2p_disassociation *out);
+
 void p2p_free_beacon(struct p2p_beacon *data);
 void p2p_free_probe_req(struct p2p_probe_req *data);
 void p2p_free_probe_resp(struct p2p_probe_resp *data);
