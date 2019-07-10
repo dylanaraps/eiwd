@@ -318,6 +318,19 @@ bool wiphy_can_randomize_mac_addr(struct wiphy *wiphy)
 	return wiphy_has_feature(wiphy, NL80211_FEATURE_SCAN_RANDOM_MAC_ADDR);
 }
 
+bool wiphy_rrm_capable(struct wiphy *wiphy)
+{
+	if (wiphy_has_feature(wiphy,
+				NL80211_FEATURE_DS_PARAM_SET_IE_IN_PROBES) &&
+			wiphy_has_feature(wiphy, NL80211_FEATURE_QUIET))
+		return true;
+
+	if (wiphy_has_ext_feature(wiphy, NL80211_EXT_FEATURE_RRM))
+		return true;
+
+	return false;
+}
+
 bool wiphy_has_ext_feature(struct wiphy *wiphy, uint32_t feature)
 {
 	return feature < sizeof(wiphy->ext_features) * 8 &&
