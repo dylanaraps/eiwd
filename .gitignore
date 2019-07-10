@@ -45,6 +45,7 @@ unit/test-sae
 unit/test-eap-mschapv2
 unit/test-eap-sim
 unit/test-client
+unit/test-p2p
 unit/cert-*.pem
 unit/cert-*.csr
 unit/cert-*.srl
