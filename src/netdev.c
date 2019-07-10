@@ -2225,9 +2225,10 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 {
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
-	struct iovec iov[2];
+	struct iovec iov[3];
 	int iov_elems = 0;
 	bool is_rsn = hs->supplicant_ie != NULL;
+	const uint8_t *extended_capabilities;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_CONNECT, 512);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
@@ -2304,6 +2305,16 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 		iov[iov_elems].iov_len = hs->mde[1] + 2;
 		iov_elems += 1;
 	}
+
+	/*
+	 * This element should be added after MDE
+	 * See 802.11-2016, Section 9.3.3.6
+	 */
+	extended_capabilities = wiphy_get_extended_capabilities(netdev->wiphy,
+								netdev->type);
+	iov[iov_elems].iov_base = (void *) extended_capabilities;
+	iov[iov_elems].iov_len = extended_capabilities[1] + 2;
+	iov_elems += 1;
 
 	if (iov_elems)
 		l_genl_msg_append_attrv(msg, NL80211_ATTR_IE, iov, iov_elems);
