@@ -50,6 +50,8 @@
 #include "src/common.h"
 #include "src/watchlist.h"
 
+#define EXT_CAP_LEN 10
+
 static struct l_genl_family *nl80211 = NULL;
 static struct l_hwdb *hwdb;
 static char **whitelist_filter;
@@ -70,6 +72,8 @@ struct wiphy {
 	char *vendor_str;
 	char *driver_str;
 	struct watchlist state_watches;
+	uint8_t extended_capabilities[EXT_CAP_LEN + 2]; /* max bitmap size + IE header */
+	uint8_t *iftype_extended_capabilities[NUM_NL80211_IFTYPES];
 
 	bool support_scheduled_scan:1;
 	bool support_rekey_offload:1;
@@ -188,6 +192,8 @@ static struct wiphy *wiphy_new(uint32_t id)
 	wiphy->id = id;
 	wiphy->supported_freqs = scan_freq_set_new();
 	watchlist_init(&wiphy->state_watches, NULL);
+	wiphy->extended_capabilities[0] = IE_TYPE_EXTENDED_CAPABILITIES;
+	wiphy->extended_capabilities[1] = EXT_CAP_LEN;
 
 	return wiphy;
 }
@@ -195,8 +201,12 @@ static struct wiphy *wiphy_new(uint32_t id)
 static void wiphy_free(void *data)
 {
 	struct wiphy *wiphy = data;
+	uint32_t i;
 
 	l_debug("Freeing wiphy %s[%u]", wiphy->name, wiphy->id);
+
+	for (i = 0; i < NUM_NL80211_IFTYPES; i++)
+		l_free(wiphy->iftype_extended_capabilities[i]);
 
 	scan_freq_set_free(wiphy->supported_freqs);
 	watchlist_destroy(&wiphy->state_watches);
@@ -365,6 +375,15 @@ const char *wiphy_get_name(struct wiphy *wiphy)
 const uint8_t *wiphy_get_permanent_address(struct wiphy *wiphy)
 {
 	return wiphy->permanent_addr;
+}
+
+const uint8_t *wiphy_get_extended_capabilities(struct wiphy *wiphy,
+							uint32_t iftype)
+{
+	if (wiphy->iftype_extended_capabilities[iftype])
+		return wiphy->iftype_extended_capabilities[iftype];
+
+	return wiphy->extended_capabilities;
 }
 
 void wiphy_generate_random_address(struct wiphy *wiphy, uint8_t addr[static 6])
@@ -625,6 +644,45 @@ static void parse_supported_iftypes(struct wiphy *wiphy,
 	}
 }
 
+static void parse_iftype_extended_capabilities(struct wiphy *wiphy,
+						struct l_genl_attr *attr)
+{
+	uint16_t type;
+	uint16_t len;
+	const void *data;
+	struct l_genl_attr nested;
+
+	while (l_genl_attr_next(attr, &type, &len, &data)) {
+		uint32_t iftype;
+
+		if (!l_genl_attr_recurse(attr, &nested))
+			continue;
+
+		if (!l_genl_attr_next(&nested, &type, &len, &data))
+			continue;
+
+		if (type != NL80211_ATTR_IFTYPE)
+			continue;
+
+		iftype = l_get_u32(data);
+
+		if (!l_genl_attr_next(&nested, &type, &len, &data))
+			continue;
+
+		if (type != NL80211_ATTR_EXT_CAPA)
+			continue;
+
+		wiphy->iftype_extended_capabilities[iftype] =
+					l_new(uint8_t, EXT_CAP_LEN + 2);
+		wiphy->iftype_extended_capabilities[iftype][0] =
+					IE_TYPE_EXTENDED_CAPABILITIES;
+		wiphy->iftype_extended_capabilities[iftype][1] =
+					EXT_CAP_LEN;
+		memcpy(wiphy->iftype_extended_capabilities[iftype] + 2,
+				data, minsize(len, EXT_CAP_LEN));
+	}
+}
+
 static void wiphy_parse_attributes(struct wiphy *wiphy,
 					struct l_genl_attr *attr)
 {
@@ -676,6 +734,16 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 			break;
 		case NL80211_ATTR_OFFCHANNEL_TX_OK:
 			wiphy->offchannel_tx_ok = true;
+			break;
+		case NL80211_ATTR_EXT_CAPA:
+			memcpy(wiphy->extended_capabilities + 2,
+				data, minsize(EXT_CAP_LEN, len));
+			break;
+		case NL80211_ATTR_IFTYPE_EXT_CAPA:
+			if (!l_genl_attr_recurse(attr, &nested))
+				break;
+
+			parse_iftype_extended_capabilities(wiphy, &nested);
 			break;
 		}
 	}
