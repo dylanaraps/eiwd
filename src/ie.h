@@ -334,11 +334,21 @@ struct ie_rsn_info {
 	enum ie_rsn_cipher_suite group_management_cipher;
 };
 
-/* See chapter 8.4.1.4 for capability details */
+/* IEEE 802.11-2016, Section 9.4.1.4 */
 enum ie_bss_capability {
-	IE_BSS_CAP_ESS     = 0x0001,
-	IE_BSS_CAP_IBSS    = 0x0002,
-	IE_BSS_CAP_PRIVACY = 0x0010,
+	IE_BSS_CAP_ESS			= 0x0001,
+	IE_BSS_CAP_IBSS			= 0x0002,
+	IE_BSS_CAP_CF_POLLABLE		= 0x0004,
+	IE_BSS_CAP_CF_POLL_REQ		= 0x0008,
+	IE_BSS_CAP_PRIVACY		= 0x0010,
+	IE_BSS_CAP_SHORT_PREAMBLE	= 0x0020,
+	IE_BSS_CAP_SPECTRUM_MANAGEMENT	= 0x0100,
+	IE_BSS_CAP_QOS			= 0x0200,
+	IE_BSS_CAP_SHORT_SLOT_TIME	= 0x0400,
+	IE_BSS_CAP_APSD			= 0x0800,
+	IE_BSS_CAP_RM			= 0x1000,
+	IE_BSS_CAP_DELAYED_BLOCK_ACK	= 0x4000,
+	IE_BSS_CAP_IMMEDIATE_BLOCK_ACK	= 0x8000,
 };
 
 struct ie_ft_info {
