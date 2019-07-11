@@ -279,16 +279,6 @@ Wireless daemon
   Priority: Low
   Complexity: C2
 
-- Implement 4-Address mode when acting as a client
-
-  NL80211 allows one to use 4-address mode in STA role.  In this case the
-  EAPoL packets flow over the bridge interface while the rest of the commands
-  are addressed to the actual interface index.  This can be useful to share
-  the WiFi interface over various VM instances.
-
-  Priority: Low
-  Complexity: C2
-
 - Use NL80211_CMD_CRIT_PROTOCOL_START / CRIT_PROTOCOL_STOP
 
   Research whether iwd should be making use of these commands in order to
