@@ -1287,7 +1287,7 @@ bool is_ie_wfa_ie(const uint8_t *data, uint8_t len, uint8_t oi_type)
 
 	if (oi_type == IE_WFA_OI_OSEN && len < 22)
 		return false;
-	else if (oi_type == IE_WFA_OI_HS20_INDICATION && len < 7)
+	else if (oi_type == IE_WFA_OI_HS20_INDICATION && len < 5)
 		return false;
 	else if (len < 4) /* OI not handled, but at least check length */
 		return false;
