@@ -2387,3 +2387,99 @@ int ie_parse_neighbor_report(struct ie_tlv_iter *iter,
 
 	return 0;
 }
+
+
+int ie_parse_roaming_consortium(struct ie_tlv_iter *iter, size_t *num_anqp_out,
+				const uint8_t **oi1_out, size_t *oi1_len_out,
+				const uint8_t **oi2_out, size_t *oi2_len_out,
+				const uint8_t **oi3_out, size_t *oi3_len_out)
+{
+	unsigned int len = ie_tlv_iter_get_length(iter);
+	const uint8_t *data = ie_tlv_iter_get_data(iter);
+	size_t num_anqp;
+	size_t oi1_len;
+	size_t oi2_len;
+	size_t oi3_len;
+
+	if (len < 4)
+		return -EINVAL;
+
+	num_anqp = l_get_u8(data);
+	oi1_len = util_bit_field(l_get_u8(data + 1), 0, 4);
+	oi2_len = util_bit_field(l_get_u8(data + 1), 4, 4);
+	oi3_len = len - (2 + oi1_len + oi2_len);
+
+	if (!oi1_len)
+		return -EINVAL;
+
+	if (len < oi1_len + oi2_len + oi3_len + 2)
+		return -EINVAL;
+
+	if (num_anqp_out)
+		*num_anqp_out = num_anqp;
+
+	if (oi1_out)
+		*oi1_out = data + 2;
+
+	if (oi1_len_out)
+		*oi1_len_out = oi1_len;
+
+	/* OI2/3 are optional, explicitly set to NULL if not included */
+	if (oi2_len) {
+		if (oi2_out)
+			*oi2_out = data + 2 + oi1_len;
+
+		if (oi2_len_out)
+			*oi2_len_out = oi2_len;
+	} else if (oi2_out)
+		*oi2_out = NULL;
+
+	if (oi3_len) {
+		if (oi3_out)
+			*oi3_out = data + 2 + oi1_len + oi2_len;
+
+		if (oi3_len_out)
+			*oi3_len_out = oi3_len;
+	} else if (oi3_out)
+		*oi3_out = NULL;
+
+	return 0;
+}
+
+int ie_parse_roaming_consortium_from_data(const uint8_t *data, size_t len,
+				size_t *num_anqp_out, const uint8_t **oi1_out,
+				size_t *oi1_len_out, const uint8_t **oi2_out,
+				size_t *oi2_len_out, const uint8_t **oi3_out,
+				size_t *oi3_len_out)
+{
+	struct ie_tlv_iter iter;
+
+	ie_tlv_iter_init(&iter, data, len);
+
+	if (!ie_tlv_iter_next(&iter))
+		return -EMSGSIZE;
+
+	if (ie_tlv_iter_get_tag(&iter) != IE_TYPE_ROAMING_CONSORTIUM)
+		return -EPROTOTYPE;
+
+	return ie_parse_roaming_consortium(&iter, num_anqp_out, oi1_out,
+						oi1_len_out, oi2_out,
+						oi2_len_out, oi3_out,
+						oi3_len_out);
+}
+
+int ie_build_roaming_consortium(const uint8_t *rc, size_t rc_len, uint8_t *to)
+{
+	*to++ = IE_TYPE_VENDOR_SPECIFIC;
+
+	*to++ = rc_len + 4;
+
+	memcpy(to, wifi_alliance_oui, 3);
+	to += 3;
+
+	*to++ = 0x1d;
+
+	memcpy(to, rc, rc_len);
+
+	return 0;
+}

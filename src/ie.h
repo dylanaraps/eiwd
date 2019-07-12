@@ -500,3 +500,16 @@ int ie_parse_osen_from_data(const uint8_t *data, size_t len,
 int ie_parse_osen(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info);
 
 bool ie_build_osen(const struct ie_rsn_info *info, uint8_t *to);
+
+int ie_parse_roaming_consortium(struct ie_tlv_iter *iter, size_t *num_anqp_out,
+				const uint8_t **oi1_out, size_t *oi1_len_out,
+				const uint8_t **oi2_out, size_t *oi2_len_out,
+				const uint8_t **oi3_out, size_t *oi3_len_out);
+
+int ie_parse_roaming_consortium_from_data(const uint8_t *data, size_t len,
+				size_t *num_anqp_out, const uint8_t **oi1_out,
+				size_t *oi1_len_out, const uint8_t **oi2_out,
+				size_t *oi2_len_out, const uint8_t **oi3_out,
+				size_t *oi3_len_out);
+
+int ie_build_roaming_consortium(const uint8_t *rc, size_t rc_len, uint8_t *to);
