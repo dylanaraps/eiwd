@@ -23,3 +23,6 @@
 struct network;
 
 const char *hs20_find_settings_file(struct network *network);
+
+const uint8_t *hs20_get_roaming_consortium(struct network *network,
+						size_t *len);

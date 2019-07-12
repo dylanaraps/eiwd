@@ -271,6 +271,24 @@ try_roaming_consortium:
 	return NULL;
 }
 
+const uint8_t *hs20_get_roaming_consortium(struct network *network,
+						size_t *len)
+{
+	struct hs20_config *config;
+	const uint8_t *rc_ie = network_get_roaming_consortium(network);
+
+	if (!rc_ie)
+		return NULL;
+
+	config = l_queue_find(hs20_settings, match_rc, rc_ie);
+	if (config) {
+		*len = config->rc_len;
+		return config->rc;
+	}
+
+	return NULL;
+}
+
 static int hotspot_init(void)
 {
 	DIR *dir;
