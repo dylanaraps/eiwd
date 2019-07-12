@@ -63,6 +63,7 @@ struct scan_bss {
 	uint8_t vht_ie[14];
 	uint64_t time_stamp;
 	uint8_t hessid[6];
+	uint8_t *rc_ie;		/* Roaming consortium IE */
 	bool mde_present : 1;
 	bool cc_present : 1;
 	bool cap_rm_neighbor_report : 1;

@@ -896,6 +896,14 @@ static bool scan_parse_bss_information_elements(struct scan_bss *bss,
 				memcpy(bss->hessid, iter.data + 3, 6);
 			else if (iter.len == 7)
 				memcpy(bss->hessid, iter.data + 1, 6);
+			break;
+		case IE_TYPE_ROAMING_CONSORTIUM:
+			if (iter.len < 2)
+				return false;
+
+			bss->rc_ie = l_memdup(iter.data - 2, iter.len + 2);
+
+			break;
 		}
 	}
 
@@ -1109,6 +1117,7 @@ void scan_bss_free(struct scan_bss *bss)
 	l_free(bss->wpa);
 	l_free(bss->wsc);
 	l_free(bss->osen);
+	l_free(bss->rc_ie);
 	l_free(bss);
 }
 
