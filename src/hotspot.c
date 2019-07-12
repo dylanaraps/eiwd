@@ -34,6 +34,7 @@
 #include "src/network.h"
 #include "src/util.h"
 #include "src/hotspot.h"
+#include "src/ie.h"
 
 static struct l_dir_watch *hs20_dir_watch;
 static const char *hs20_dir = DAEMON_STORAGEDIR "/.hotspot";
@@ -43,6 +44,8 @@ struct hs20_config {
 	char *filename;
 	uint8_t hessid[6];
 	char **nai_realms;
+	uint8_t *rc; /* roaming consortium */
+	size_t rc_len;
 };
 
 static bool match_filename(const void *a, const void *b)
@@ -71,27 +74,31 @@ static struct hs20_config *hs20_config_new(struct l_settings *settings,
 	struct hs20_config *config;
 	char *str;
 	char **nai_realms = NULL;
+	const char *rc_str;
 
 	config = l_new(struct hs20_config, 1);
 
-	/* HESSID is an optional field */
+	/* One of HESSID, NAI realms, or Roaming Consortium must be included */
 	str = l_settings_get_string(settings, "Hotspot", "HESSID");
 	if (str) {
 		util_string_to_address(str, config->hessid);
 		l_free(str);
-		goto done;
 	}
 
-	/* NAI realms are required if HESSID is not included */
 	nai_realms = l_settings_get_string_list(settings, "Hotspot",
 						"NAIRealmNames", ',');
-	if (!nai_realms) {
+	if (nai_realms)
+		config->nai_realms = nai_realms;
+
+	rc_str = l_settings_get_value(settings, "Hotspot", "RoamingConsortium");
+	if (rc_str)
+		config->rc = l_util_from_hexstring(rc_str, &config->rc_len);
+
+	if (util_mem_is_zero(config->hessid, 6) && !nai_realms && !config->rc) {
 		l_free(config);
 		return NULL;
 	}
 
-done:
-	config->nai_realms = nai_realms;
 	config->filename = l_strdup(filename);
 
 	return config;
@@ -204,11 +211,39 @@ static bool match_nai_realm(const void *a, const void *b)
 	return false;
 }
 
+static bool match_rc(const void *a, const void *b)
+{
+	const struct hs20_config *config = a;
+	const uint8_t *rc_ie = b;
+	const uint8_t *rc1, *rc2, *rc3;
+	size_t rc1_len, rc2_len, rc3_len;
+
+	if (ie_parse_roaming_consortium_from_data(rc_ie, rc_ie[1] + 2, NULL,
+						&rc1, &rc1_len, &rc2, &rc2_len,
+						&rc3, &rc3_len) < 0)
+		return false;
+
+	/* rc1 is guarenteed to be set if the above returns success */
+	if (rc1_len == config->rc_len && !memcmp(rc1, config->rc, rc1_len))
+		return true;
+
+	if (rc2 && rc2_len == config->rc_len &&
+				!memcmp(rc2, config->rc, rc2_len))
+		return true;
+
+	if (rc3 && rc1_len == config->rc_len &&
+				!memcmp(rc3, config->rc, rc3_len))
+		return true;
+
+	return false;
+}
+
 const char *hs20_find_settings_file(struct network *network)
 {
 	struct hs20_config *config;
 	uint8_t *hessid = network_get_hessid(network);
 	char **nai_realms = network_get_nai_realms(network);
+	const uint8_t *rc_ie = network_get_roaming_consortium(network);
 
 	if (!hessid || util_mem_is_zero(hessid, 6))
 		goto try_nai_realms;
@@ -219,13 +254,21 @@ const char *hs20_find_settings_file(struct network *network)
 
 try_nai_realms:
 	if (!nai_realms)
-		return NULL;
+		goto try_roaming_consortium;
 
 	config = l_queue_find(hs20_settings, match_nai_realm, nai_realms);
-	if (!config)
+	if (config)
+		return config->filename;
+
+try_roaming_consortium:
+	if (!rc_ie)
 		return NULL;
 
-	return config->filename;
+	config = l_queue_find(hs20_settings, match_rc, rc_ie);
+	if (config)
+		return config->filename;
+
+	return NULL;
 }
 
 static int hotspot_init(void)
