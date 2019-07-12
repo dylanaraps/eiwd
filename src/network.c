@@ -64,6 +64,7 @@ struct network {
 	struct l_queue *blacklist; /* temporary blacklist for BSS's */
 	uint8_t hessid[6];
 	char **nai_realms;
+	uint8_t *rc_ie;
 	bool update_psk:1;  /* Whether PSK should be written to storage */
 	bool ask_passphrase:1; /* Whether we should force-ask agent */
 	int rank;
@@ -562,6 +563,11 @@ char **network_get_nai_realms(struct network *network)
 	return network->nai_realms;
 }
 
+const uint8_t *network_get_roaming_consortium(struct network *network)
+{
+	return network->rc_ie;
+}
+
 static inline bool __bss_is_sae(const struct scan_bss *bss,
 						const struct ie_rsn_info *rsn)
 {
@@ -703,6 +709,9 @@ bool network_bss_add(struct network *network, struct scan_bss *bss)
 
 	if (!util_mem_is_zero(bss->hessid, 6))
 		memcpy(network->hessid, bss->hessid, 6);
+
+	if (bss->rc_ie && !network->rc_ie)
+		network->rc_ie = l_memdup(bss->rc_ie, bss->rc_ie[1] + 2);
 
 	return true;
 }
@@ -1362,6 +1371,9 @@ void network_remove(struct network *network, int reason)
 
 	if (network->nai_realms)
 		l_strv_free(network->nai_realms);
+
+	if (network->rc_ie)
+		l_free(network->rc_ie);
 
 	l_free(network);
 }

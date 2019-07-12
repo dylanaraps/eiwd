@@ -52,6 +52,7 @@ void network_set_hessid(struct network *network, uint8_t *hessid);
 void network_set_nai_realms(struct network *network, char **realms);
 uint8_t *network_get_hessid(struct network *network);
 char **network_get_nai_realms(struct network *network);
+const uint8_t *network_get_roaming_consortium(struct network *network);
 
 int network_autoconnect(struct network *network, struct scan_bss *bss);
 void network_connect_failed(struct network *network);
