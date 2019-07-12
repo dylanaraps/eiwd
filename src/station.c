@@ -494,6 +494,12 @@ static bool station_start_anqp(struct station *station, struct network *network,
 	*ptr++ = 0; /* reserved */
 	*ptr++ = ANQP_HS20_OSU_PROVIDERS_NAI_LIST;
 
+	/*
+	 * TODO: Additional roaming consortiums can be queried if indicated
+	 * by the roaming consortium IE. The IE contains up to the first 3, and
+	 * these are checked in hs20_find_settings_file.
+	 */
+
 	entry->pending = anqp_request(netdev_get_ifindex(station->netdev),
 					netdev_get_address(station->netdev),
 					bss, anqp, ptr - anqp,
@@ -2153,6 +2159,10 @@ static void station_connect_cb(struct netdev *netdev, enum netdev_result result,
 int __station_connect_network(struct station *station, struct network *network,
 				struct scan_bss *bss)
 {
+	const uint8_t *rc = NULL;
+	size_t rc_len = 0;
+	uint8_t rc_buf[32];
+	struct iovec iov;
 	struct handshake_state *hs;
 	int r;
 
@@ -2160,9 +2170,24 @@ int __station_connect_network(struct station *station, struct network *network,
 	if (!hs)
 		return -ENOTSUP;
 
-	r = netdev_connect(station->netdev, bss, hs, NULL, 0,
-				station_netdev_event, station_connect_cb,
-				station);
+	if (bss->hs20_capable) {
+		/*
+		 * If a matching roaming consortium OI is found for the network
+		 * this single RC value will be set in the handshake and used
+		 * during (Re)Association.
+		 */
+		rc = hs20_get_roaming_consortium(network, &rc_len);
+		if (rc) {
+			ie_build_roaming_consortium(rc, rc_len, rc_buf);
+
+			iov.iov_base = rc_buf;
+			iov.iov_len = rc_buf[1] + 2;
+		}
+	}
+
+	r = netdev_connect(station->netdev, bss, hs, rc ? &iov : NULL,
+				rc ? 1 : 0, station_netdev_event,
+				station_connect_cb, station);
 	if (r < 0) {
 		handshake_state_free(hs);
 		return r;
