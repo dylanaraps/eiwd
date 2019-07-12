@@ -381,6 +381,8 @@ static void anqp_response_frame_event(uint32_t ifindex,
 
 	l_queue_remove(anqp_requests, request);
 
+	l_debug("ANQP response received from "MAC, MAC_STR(hdr->address_2));
+
 	if (request->anqp_cb)
 		request->anqp_cb(ANQP_SUCCESS, ptr, qrlen,
 					request->anqp_data);
@@ -528,10 +530,13 @@ uint32_t anqp_request(uint32_t ifindex, const uint8_t *addr,
 					request, NULL);
 
 	if (!id) {
+		l_debug("Failed to send ANQP request");
 		l_genl_msg_unref(msg);
 		l_free(request);
 		return 0;
 	}
+
+	l_debug("ANQP request sent to "MAC, MAC_STR(bss->addr));
 
 	l_queue_push_head(anqp_requests, request);
 

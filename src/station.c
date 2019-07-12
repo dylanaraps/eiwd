@@ -455,18 +455,19 @@ static bool station_start_anqp(struct station *station, struct network *network,
 	uint8_t anqp[256];
 	uint8_t *ptr = anqp;
 	struct anqp_entry *entry;
-	bool anqp_disabled;
+	bool anqp_disabled = true;
 
 	/* Network already has ANQP data/HESSID */
 	if (hs20_find_settings_file(network))
 		return false;
 
-	if (!l_settings_get_bool(iwd_get_config(), "General", "disable_anqp",
-				&anqp_disabled))
-		return false;
+	l_settings_get_bool(iwd_get_config(), "General", "disable_anqp",
+				&anqp_disabled);
 
-	if (anqp_disabled)
+	if (anqp_disabled) {
+		l_debug("Not querying AP for ANQP data (disabled)");
 		return false;
+	}
 
 	if (!bss->hs20_capable)
 		return false;

@@ -245,24 +245,30 @@ const char *hs20_find_settings_file(struct network *network)
 	char **nai_realms = network_get_nai_realms(network);
 	const uint8_t *rc_ie = network_get_roaming_consortium(network);
 
-	if (!hessid || util_mem_is_zero(hessid, 6))
+	if (!hessid || util_mem_is_zero(hessid, 6)) {
+		l_debug("Network has no HESSID, trying NAI realms");
 		goto try_nai_realms;
+	}
 
 	config = l_queue_find(hs20_settings, match_hessid, hessid);
 	if (config)
 		return config->filename;
 
 try_nai_realms:
-	if (!nai_realms)
+	if (!nai_realms) {
+		l_debug("Network has no NAI Realms, trying roaming consortium");
 		goto try_roaming_consortium;
+	}
 
 	config = l_queue_find(hs20_settings, match_nai_realm, nai_realms);
 	if (config)
 		return config->filename;
 
 try_roaming_consortium:
-	if (!rc_ie)
+	if (!rc_ie) {
+		l_debug("Network has no roaming consortium IE");
 		return NULL;
+	}
 
 	config = l_queue_find(hs20_settings, match_rc, rc_ie);
 	if (config)
