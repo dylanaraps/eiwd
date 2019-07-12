@@ -2160,8 +2160,9 @@ int __station_connect_network(struct station *station, struct network *network,
 	if (!hs)
 		return -ENOTSUP;
 
-	r = netdev_connect(station->netdev, bss, hs, station_netdev_event,
-					station_connect_cb, station);
+	r = netdev_connect(station->netdev, bss, hs, NULL, 0,
+				station_netdev_event, station_connect_cb,
+				station);
 	if (r < 0) {
 		handshake_state_free(hs);
 		return r;

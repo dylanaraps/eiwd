@@ -2221,11 +2221,13 @@ static void netdev_fils_tx_associate(struct iovec *iov, size_t iov_len,
 static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 						struct scan_bss *bss,
 						struct handshake_state *hs,
-						const uint8_t *prev_bssid)
+						const uint8_t *prev_bssid,
+						struct iovec *vendor_ies,
+						size_t num_vendor_ies)
 {
 	uint32_t auth_type = NL80211_AUTHTYPE_OPEN_SYSTEM;
 	struct l_genl_msg *msg;
-	struct iovec iov[4];
+	struct iovec iov[4 + num_vendor_ies];
 	int iov_elems = 0;
 	bool is_rsn = hs->supplicant_ie != NULL;
 	const uint8_t *extended_capabilities;
@@ -2329,6 +2331,12 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 	iov[iov_elems].iov_len = extended_capabilities[1] + 2;
 	iov_elems += 1;
 
+	if (vendor_ies) {
+		memcpy(iov + iov_elems, vendor_ies,
+					sizeof(*vendor_ies) * num_vendor_ies);
+		iov_elems += num_vendor_ies;
+	}
+
 	if (iov_elems)
 		l_genl_msg_append_attrv(msg, NL80211_ATTR_IE, iov, iov_elems);
 
@@ -2379,6 +2387,8 @@ static int netdev_connect_common(struct netdev *netdev,
 
 int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 				struct handshake_state *hs,
+				struct iovec *vendor_ies,
+				size_t num_vendor_ies,
 				netdev_event_func_t event_filter,
 				netdev_connect_cb_t cb, void *user_data)
 {
@@ -2413,7 +2423,8 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 						netdev);
 		break;
 	default:
-		cmd_connect = netdev_build_cmd_connect(netdev, bss, hs, NULL);
+		cmd_connect = netdev_build_cmd_connect(netdev, bss, hs,
+					NULL, vendor_ies, num_vendor_ies);
 
 		if (!cmd_connect)
 			return -EINVAL;
@@ -2447,7 +2458,7 @@ int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
 	if (netdev->connected)
 		return -EISCONN;
 
-	cmd_connect = netdev_build_cmd_connect(netdev, bss, hs, NULL);
+	cmd_connect = netdev_build_cmd_connect(netdev, bss, hs, NULL, NULL, 0);
 	if (!cmd_connect)
 		return -EINVAL;
 
@@ -2536,7 +2547,7 @@ int netdev_reassociate(struct netdev *netdev, struct scan_bss *target_bss,
 	int err;
 
 	cmd_connect = netdev_build_cmd_connect(netdev, target_bss, hs,
-						orig_bss->addr);
+						orig_bss->addr, NULL, 0);
 	if (!cmd_connect)
 		return -EINVAL;
 
