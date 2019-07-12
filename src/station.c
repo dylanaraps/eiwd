@@ -457,6 +457,9 @@ static bool station_start_anqp(struct station *station, struct network *network,
 	struct anqp_entry *entry;
 	bool anqp_disabled = true;
 
+	if (!bss->hs20_capable)
+		return false;
+
 	/* Network already has ANQP data/HESSID */
 	if (hs20_find_settings_file(network))
 		return false;
@@ -468,9 +471,6 @@ static bool station_start_anqp(struct station *station, struct network *network,
 		l_debug("Not querying AP for ANQP data (disabled)");
 		return false;
 	}
-
-	if (!bss->hs20_capable)
-		return false;
 
 	entry = l_new(struct anqp_entry, 1);
 	entry->station = station;
