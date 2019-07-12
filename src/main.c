@@ -118,6 +118,7 @@ static void usage(void)
 		"\t-l, --plugin           Plugins to include\n"
 		"\t-L, --noplugin         Plugins to exclude\n"
 		"\t-d, --debug            Enable debug output\n"
+		"\t-v, --version          Show version\n"
 		"\t-h, --help             Show help options\n");
 }
 
