@@ -52,8 +52,6 @@ struct anqp_request {
 
 static struct l_genl_family *nl80211 = NULL;
 
-static const uint8_t wifi_alliance_oui[3] = { 0x50, 0x6f, 0x9a };
-
 static struct l_queue *anqp_requests;
 static uint8_t anqp_token = 0;
 

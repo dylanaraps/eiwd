@@ -395,6 +395,10 @@ struct ie_neighbor_report_info {
 	bool bss_transition_pref_present : 1;
 };
 
+extern const unsigned char ieee_oui[3];
+extern const unsigned char microsoft_oui[3];
+extern const unsigned char wifi_alliance_oui[3];
+
 void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 			unsigned int len);
 void ie_tlv_iter_recurse(struct ie_tlv_iter *iter,

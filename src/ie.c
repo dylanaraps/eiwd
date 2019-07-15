@@ -32,9 +32,9 @@
 #include "src/crypto.h"
 #include "src/ie.h"
 
-static const uint8_t ieee_oui[3] = { 0x00, 0x0f, 0xac };
-static const uint8_t microsoft_oui[3] = { 0x00, 0x50, 0xf2 };
-static const uint8_t wifi_alliance_oui[3] = { 0x50, 0x6f, 0x9a };
+const unsigned char ieee_oui[3] = { 0x00, 0x0f, 0xac };
+const unsigned char microsoft_oui[3] = { 0x00, 0x50, 0xf2 };
+const unsigned char wifi_alliance_oui[3] = { 0x50, 0x6f, 0x9a };
 
 void ie_tlv_iter_init(struct ie_tlv_iter *iter, const unsigned char *tlv,
 			unsigned int len)
