@@ -506,6 +506,8 @@ bool scan_cancel(uint64_t wdev_id, uint32_t id)
 	struct scan_context *sc;
 	struct scan_request *sr;
 
+	l_debug("Trying to cancel scan id %u for wdev %" PRIx64, id, wdev_id);
+
 	sc = l_queue_find(scan_contexts, scan_context_match, &wdev_id);
 	if (!sc)
 		return false;
@@ -516,6 +518,8 @@ bool scan_cancel(uint64_t wdev_id, uint32_t id)
 
 	/* If already triggered, just zero out the callback */
 	if (sr == l_queue_peek_head(sc->requests) && sc->triggered) {
+		l_debug("Scan is at the top of the queue and triggered");
+
 		sr->callback = NULL;
 
 		if (sr->destroy) {
@@ -528,6 +532,8 @@ bool scan_cancel(uint64_t wdev_id, uint32_t id)
 
 	/* If we already sent the trigger command, cancel the scan */
 	if (sr == l_queue_peek_head(sc->requests)) {
+		l_debug("Scan is at the top of the queue, but not triggered");
+
 		if (sc->start_cmd_id)
 			l_genl_family_cancel(nl80211, sc->start_cmd_id);
 
