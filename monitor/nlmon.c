@@ -57,6 +57,7 @@
 #include "monitor/pcap.h"
 #include "monitor/display.h"
 #include "monitor/nlmon.h"
+#include "src/anqputil.h"
 
 #define COLOR_TIMESTAMP		COLOR_YELLOW
 
@@ -3712,6 +3713,74 @@ static void print_p2p_action_frame(unsigned int level, const uint8_t *body,
 	print_management_ies(level, "IEs", body + 2, body_len - 2);
 }
 
+static void print_anqp_frame(unsigned int level, const uint8_t *anqp,
+				size_t anqp_len)
+{
+	struct anqp_iter iter;
+	uint16_t id, len;
+	const void *data;
+
+	static const char *anqp_elements[] = {
+		[ANQP_QUERY_LIST] = "Query List",
+		[ANQP_CAPABILITY_LIST] = "Capability List",
+		[ANQP_VENUE_NAME] = "Venue Name",
+		[ANQP_EMERGENCY_CALL_NUMBER] = "Emergency Call Number",
+		[ANQP_NETWORK_AUTH_TYPE] = "Network Authentication Type",
+		[ANQP_ROAMING_CONSORTIUM] = "Roaming Consortium",
+		[ANQP_IP_ADDRESS_TYPE_AVAILABILITY] = "IP Address type avail",
+		[ANQP_NAI_REALM] = "NAI Realm",
+		[ANQP_3GPP_CELLULAR_NETWORK] = "3GPP Cellular Network",
+		[ANQP_AP_GEOSPATIAL_LOCATION] = "AP Geospatial location",
+		[ANQP_AP_CIVIC_LOCATION] = "AP Civic Location",
+		[ANQP_AP_LOCATION_PUBLIC_ID] = "AP Location Public ID",
+		[ANQP_DOMAIN_NAME] = "Domain Name",
+		[ANQP_EMERGENCY_ALERT_ID_URI] = "Emergency Alery ID URI",
+		[ANQP_TDLS_CAPABILITY] = "TDLS Capability",
+		[ANQP_EMERGENCY_NAI] = "Emergency NAI",
+		[ANQP_NEIGHBOR_REPORT] = "Neighbor Report",
+		[ANQP_VENUE_URI] = "Venue URI",
+		[ANQP_ADVICE_OF_CHARGE] = "Advice of Charge",
+		[ANQP_LOCAL_CONTENT] = "Local Content",
+		[ANQP_NETWORK_AUTH_TYPE_WITH_TIMESTAMP] =
+					"Network Auth Type with Timestamp",
+		[ANQP_VENDOR_SPECIFIC] = "Vendor Specific"
+	};
+
+	anqp_iter_init(&iter, anqp, anqp_len);
+
+	while (anqp_iter_next(&iter, &id, &len, &data)) {
+		const char *str;
+		char **nai_realms;
+		int i;
+
+		if (id >= L_ARRAY_SIZE(anqp_elements) || id < ANQP_QUERY_LIST)
+			str = "Unknown";
+		else
+			str = anqp_elements[id];
+
+		print_attr(level, "ANQP ID: %s, Len: %u", str, len);
+
+		switch (id) {
+		case ANQP_NAI_REALM:
+			nai_realms = anqp_parse_nai_realms(data, len);
+			if (!nai_realms) {
+				print_attr(level + 1, "bad NAI Realm data");
+				break;
+			}
+
+			for (i = 0; nai_realms[i]; i++)
+				print_attr(level + 2, "Realm[%u] %s", i,
+						nai_realms[i]);
+
+			l_strv_free(nai_realms);
+
+			break;
+		default:
+			print_hexdump(level + 1, anqp + 4, len);
+		}
+	}
+}
+
 static void print_public_action_frame(unsigned int level, const uint8_t *body,
 					size_t body_len)
 {
@@ -3767,15 +3836,52 @@ static void print_public_action_frame(unsigned int level, const uint8_t *body,
 
 	print_attr(level, "Public Action: %s (%u)", category, body[0]);
 
-	if (body[0] != 9 || body_len < 5)
+	if (body_len < 5)
 		return;
 
-	if (!print_oui(level, oui))
-		return;
+	if (!memcmp(oui, wsc_wfa_oui, 3) && oui[3] == 0x09) {
+		if (body[0] != 9)
+			return;
 
-	if (!memcmp(oui, wsc_wfa_oui, 3) && oui[3] == 0x09)
+		if (!print_oui(level, oui))
+			return;
+
 		print_p2p_public_action_frame(level + 1, body + 5,
 						body_len - 5);
+	} else if (body[0] == 0x0a) {
+		if (body_len < 9)
+			return;
+
+		if (body[2] != IE_TYPE_ADVERTISEMENT_PROTOCOL)
+			return;
+
+		if (body[5] != IE_ADVERTISEMENT_ANQP)
+			return;
+
+		if (body_len < l_get_le16(body + 6) + 8u)
+			return;
+
+		print_anqp_frame(level + 1, body + 8, l_get_le16(body + 6));
+	} else if (body[0] == 0x0b) {
+		if (body_len < 10)
+			return;
+
+		print_attr(level + 1, "Dialog Token: %u", body[1]);
+		print_attr(level + 1, "Status: %u", l_get_le16(body + 2));
+		print_attr(level + 1, "Delay: %u", l_get_le16(body + 4));
+
+		if (body[6] != IE_TYPE_ADVERTISEMENT_PROTOCOL)
+			return;
+
+		if (body_len < body[7] + 7u)
+			return;
+
+		if (body_len < l_get_le16(body + 8 + body[7]) + 10u)
+			return;
+
+		print_anqp_frame(level + 1, body + 10 + body[7],
+					l_get_le16(body + 8 + body[7]));
+	}
 }
 
 static void print_rm_action_frame(unsigned int level, const uint8_t *body,

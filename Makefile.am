@@ -276,7 +276,8 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					src/eapolutil.h src/eapolutil.c \
 					src/handshake.h src/handshake.c \
 					src/nl80211cmd.h src/nl80211cmd.c \
-					src/p2putil.c src/p2putil.h
+					src/p2putil.c src/p2putil.h \
+					src/anqputil.h src/anqputil.c
 monitor_iwmon_LDADD = $(ell_ldadd)
 endif
 
