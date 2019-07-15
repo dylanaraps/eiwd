@@ -956,6 +956,8 @@ static struct scan_bss *scan_parse_attr_bss(struct l_genl_attr *attr)
 
 			bss->wsc = ie_tlv_extract_wsc_payload(data, len,
 								&bss->wsc_size);
+			bss->p2p = ie_tlv_extract_p2p_payload(data, len,
+								&bss->p2p_size);
 
 			break;
 		}
@@ -1120,6 +1122,7 @@ void scan_bss_free(struct scan_bss *bss)
 	l_free(bss->rsne);
 	l_free(bss->wpa);
 	l_free(bss->wsc);
+	l_free(bss->p2p);
 	l_free(bss->osen);
 	l_free(bss->rc_ie);
 	l_free(bss);

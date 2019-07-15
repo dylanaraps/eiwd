@@ -51,6 +51,8 @@ struct scan_bss {
 	uint8_t *osen;
 	uint8_t *wsc;		/* Concatenated WSC IEs */
 	ssize_t wsc_size;	/* Size of Concatenated WSC IEs */
+	uint8_t *p2p;		/* Concatenated P2P IEs */
+	ssize_t p2p_size;	/* Size of Concatenated P2P IEs */
 	uint8_t mde[3];
 	uint8_t ssid[32];
 	uint8_t ssid_len;
