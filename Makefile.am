@@ -207,6 +207,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h src/missing.h \
 					src/rtnlutil.h src/rtnlutil.c \
 					src/auth-proto.h \
 					src/anqp.h src/anqp.c \
+					src/anqputil.h src/anqputil.c \
 					src/netconfig.h src/netconfig.c\
 					src/resolve.h src/resolve.c\
 					src/hotspot.h src/hotspot.c \

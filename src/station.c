@@ -52,6 +52,7 @@
 #include "src/erp.h"
 #include "src/netconfig.h"
 #include "src/anqp.h"
+#include "src/anqputil.h"
 #include "src/hotspot.h"
 
 static struct l_queue *station_list;
