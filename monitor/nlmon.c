@@ -2784,9 +2784,9 @@ static void print_p2p_device_capability(unsigned int level, const char *label,
 		return;
 	}
 
-	print_attr(level, "%s:", label);
-
 	caps = *(const uint8_t *) data;
+
+	print_attr(level, "%s:%s", label, !caps ? " None" : "");
 
 	CHECK_CAPS_BIT(P2P_DEVICE_CAP_SVC_DISCOVERY,
 			"Service Discovery");
@@ -2817,9 +2817,9 @@ static void print_p2p_capability(unsigned int level, const char *label,
 
 	print_p2p_device_capability(level, "P2P Device Capability", data++, 1);
 
-	print_attr(level, "P2P Group Capability:");
-
 	caps = *(const uint8_t *) data++;
+
+	print_attr(level, "P2P Group Capability:%s", !caps ? " None" : "");
 
 	CHECK_CAPS_BIT(P2P_GROUP_CAP_GO,
 			"P2P Group Owner");
@@ -2907,8 +2907,6 @@ static void print_p2p_manageability(unsigned int level, const char *label,
 		return;
 	}
 
-	print_attr(level, "%s:", label);
-
 #define CHECK_BIT(v, str)	\
 	if (val & (v)) {	\
 		print_attr(level + 1, "%s", (str));	\
@@ -2916,6 +2914,8 @@ static void print_p2p_manageability(unsigned int level, const char *label,
 	}
 
 	val = *(const uint8_t *) data;
+
+	print_attr(level, "%s:%s", label, !val ? " None" : "");
 
 	CHECK_BIT(P2P_MANAGEABILITY_DEVICE_MGMT, "P2P Device Management");
 	CHECK_BIT(P2P_MANAGEABILITY_CROSS_CONNECT,
