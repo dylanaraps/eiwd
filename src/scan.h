@@ -80,6 +80,7 @@ struct scan_parameters {
 	struct scan_freq_set *freqs;
 	bool flush : 1;
 	bool randomize_mac_addr_hint : 1;
+	bool no_cck_rates : 1;
 	const char *ssid;	/* Used for direct probe request */
 };
 

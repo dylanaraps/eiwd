@@ -314,6 +314,10 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 	if (flags)
 		l_genl_msg_append_attr(msg, NL80211_ATTR_SCAN_FLAGS, 4, &flags);
 
+	if (params->no_cck_rates)
+		l_genl_msg_append_attr(msg, NL80211_ATTR_TX_NO_CCK_RATE, 0,
+					NULL);
+
 	return msg;
 }
 
