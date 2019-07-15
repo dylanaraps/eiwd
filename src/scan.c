@@ -42,6 +42,7 @@
 #include "src/common.h"
 #include "src/network.h"
 #include "src/knownnetworks.h"
+#include "src/nl80211cmd.h"
 #include "src/util.h"
 #include "src/scan.h"
 
@@ -1326,7 +1327,7 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 
 	cmd = l_genl_msg_get_command(msg);
 
-	l_debug("Scan notification %u", cmd);
+	l_debug("Scan notification %s(%u)", nl80211cmd_to_string(cmd), cmd);
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;

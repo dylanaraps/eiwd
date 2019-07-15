@@ -57,6 +57,7 @@
 #include "src/watchlist.h"
 #include "src/sae.h"
 #include "src/nl80211util.h"
+#include "src/nl80211cmd.h"
 #include "src/owe.h"
 #include "src/fils.h"
 #include "src/auth-proto.h"
@@ -3332,7 +3333,7 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 
 	cmd = l_genl_msg_get_command(msg);
 
-	l_debug("MLME notification %u", cmd);
+	l_debug("MLME notification %s(%u)", nl80211cmd_to_string(cmd), cmd);
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;

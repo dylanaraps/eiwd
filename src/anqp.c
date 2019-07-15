@@ -33,6 +33,7 @@
 #include "src/eap-private.h"
 #include "src/ie.h"
 #include "src/nl80211util.h"
+#include "src/nl80211cmd.h"
 #include "src/scan.h"
 #include "src/netdev.h"
 #include "src/iwd.h"
@@ -644,7 +645,7 @@ static void anqp_mlme_notify(struct l_genl_msg *msg, void *user_data)
 
 	cmd = l_genl_msg_get_command(msg);
 
-	l_debug("MLME notification %u", cmd);
+	l_debug("MLME notification %s(%u)", nl80211cmd_to_string(cmd), cmd);
 
 	if (!l_genl_attr_init(&attr, msg))
 		return;

@@ -39,6 +39,7 @@
 #include "src/wiphy.h"
 #include "src/util.h"
 #include "src/common.h"
+#include "src/nl80211cmd.h"
 
 static struct l_genl_family *nl80211 = NULL;
 static char **whitelist_filter;
@@ -601,7 +602,8 @@ static void manager_config_notify(struct l_genl_msg *msg, void *user_data)
 
 	cmd = l_genl_msg_get_command(msg);
 
-	l_debug("Notification of command %u", cmd);
+	l_debug("Notification of command %s(%u)",
+					nl80211cmd_to_string(cmd), cmd);
 
 	switch (cmd) {
 	case NL80211_CMD_NEW_WIPHY:
