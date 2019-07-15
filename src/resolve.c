@@ -188,7 +188,7 @@ static void resolve_systemd_remove(uint32_t ifindex, void *data)
 	if (!message)
 		return;
 
-	l_dbus_message_set_arguments(message, "i", &ifindex);
+	l_dbus_message_set_arguments(message, "i", ifindex);
 
 	l_dbus_send_with_reply(dbus_get_bus(), message, systemd_link_dns_reply,
 								state, NULL);
