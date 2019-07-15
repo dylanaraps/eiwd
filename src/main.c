@@ -486,8 +486,8 @@ int main(int argc, char *argv[])
 		goto fail_dbus;
 	}
 
-	if (create_dirs(DAEMON_STORAGEDIR "/.hotspot/")) {
-		l_error("Failed to create " DAEMON_STORAGEDIR "/.hotspot/");
+	if (create_dirs(DAEMON_STORAGEDIR "/hotspot/")) {
+		l_error("Failed to create " DAEMON_STORAGEDIR "/hotspot/");
 		goto fail_dbus;
 	}
 

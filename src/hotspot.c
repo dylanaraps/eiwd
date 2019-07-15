@@ -37,7 +37,7 @@
 #include "src/ie.h"
 
 static struct l_dir_watch *hs20_dir_watch;
-static const char *hs20_dir = DAEMON_STORAGEDIR "/.hotspot";
+static const char *hs20_dir = DAEMON_STORAGEDIR "/hotspot";
 static struct l_queue *hs20_settings;
 
 struct hs20_config {
