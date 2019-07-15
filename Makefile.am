@@ -198,6 +198,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h src/missing.h \
 					src/ap.c src/adhoc.c \
 					src/sae.h src/sae.c \
 					src/nl80211util.h src/nl80211util.c \
+					src/nl80211cmd.h src/nl80211cmd.c \
 					src/owe.h src/owe.c \
 					src/blacklist.h src/blacklist.c \
 					src/manager.c \
