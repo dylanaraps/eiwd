@@ -991,9 +991,6 @@ static void print_ipv4(unsigned int level, const char *label,
 static void print_ie_vendor(unsigned int level, const char *label,
 				const void *data, uint16_t size)
 {
-	static const unsigned char msoft_oui[3] = { 0x00, 0x50, 0xf2 };
-	static const unsigned char wfa_oui[3] = { 0x50, 0x6f, 0x9a };
-	static const unsigned char ieee80211_oui[3] = { 0x00, 0x0f, 0xac };
 	const uint8_t *oui = data;
 
 	print_attr(level, "%s: len %u", label, size);
@@ -1007,7 +1004,7 @@ static void print_ie_vendor(unsigned int level, const char *label,
 	data += 4;
 	size -= 4;
 
-	if (!memcmp(oui, msoft_oui, 3)) {
+	if (!memcmp(oui, microsoft_oui, 3)) {
 		switch (oui[3]) {
 		case 1:		/* MSoft WPA IE */
 			print_ie_wpa(level + 2, label, data, size);
@@ -1015,7 +1012,7 @@ static void print_ie_vendor(unsigned int level, const char *label,
 		default:
 			return;
 		}
-	} else if (!memcmp(oui, wfa_oui, 3)) {
+	} else if (!memcmp(oui, wifi_alliance_oui, 3)) {
 		switch (oui[3]) {
 		case 0x04:
 			print_attr(level + 1, "IP Address Request KDE");
@@ -1039,7 +1036,7 @@ static void print_ie_vendor(unsigned int level, const char *label,
 		default:
 			return;
 		}
-	} else if (!memcmp(oui, ieee80211_oui, 3)) {
+	} else if (!memcmp(oui, ieee_oui, 3)) {
 		const char *kde;
 
 		/* EAPoL-Key KDEs */
