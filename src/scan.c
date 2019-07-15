@@ -1394,12 +1394,12 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 
 		/* Was this our own scan or an external scan */
 		if (sc->triggered) {
+			sc->triggered = false;
+
 			if (!sr->callback) {
 				scan_finished(sc, -ECANCELED, NULL, sr);
 				break;
 			}
-
-			sc->triggered = false;
 
 			/*
 			 * If this was the last command for the current request
