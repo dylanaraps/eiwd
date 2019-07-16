@@ -890,12 +890,6 @@ void eapol_sm_free(struct eapol_sm *sm)
 	eapol_sm_destroy(sm);
 }
 
-void eapol_sm_set_protocol_version(struct eapol_sm *sm,
-				enum eapol_protocol_version protocol_version)
-{
-	sm->protocol_version = protocol_version;
-}
-
 void eapol_sm_set_listen_interval(struct eapol_sm *sm, uint16_t interval)
 {
 	sm->listen_interval = interval;
@@ -981,10 +975,7 @@ static void send_eapol_start(struct l_timeout *timeout, void *user_data)
 	l_timeout_remove(sm->eapol_start_timeout);
 	sm->eapol_start_timeout = NULL;
 
-	if (!sm->protocol_version)
-		sm->protocol_version = EAPOL_PROTOCOL_VERSION_2001;
-
-	frame->header.protocol_version = sm->protocol_version;
+	frame->header.protocol_version = EAPOL_PROTOCOL_VERSION_2001;
 	frame->header.packet_type = 1;
 	l_put_be16(0, &frame->header.packet_len);
 
@@ -2339,15 +2330,22 @@ void eapol_register(struct eapol_sm *sm)
 		sm->watch_id = eapol_frame_watch_add(sm->handshake->ifindex,
 						eapol_rx_auth_packet, sm);
 
+		if (!sm->handshake->proto_version)
+			sm->protocol_version = EAPOL_PROTOCOL_VERSION_2004;
+		else
+			sm->protocol_version = sm->handshake->proto_version;
+
 		sm->started = true;
 		/* Since AP/AdHoc only support AKM PSK we can hard code this */
 		sm->mic_len = 16;
 
 		/* kick off handshake */
 		eapol_ptk_1_of_4_retry(NULL, sm);
-	} else
+	} else {
 		sm->watch_id = eapol_frame_watch_add(sm->handshake->ifindex,
 						eapol_rx_packet, sm);
+		sm->protocol_version = sm->handshake->proto_version;
+	}
 }
 
 bool eapol_start(struct eapol_sm *sm)

@@ -252,7 +252,6 @@ static struct eapol_sm *adhoc_new_sm(struct sta_state *sta, bool authenticator,
 	}
 
 	eapol_sm_set_listen_interval(sm, 100);
-	eapol_sm_set_protocol_version(sm, EAPOL_PROTOCOL_VERSION_2004);
 
 	if (authenticator)
 		sta->hs_auth = hs;

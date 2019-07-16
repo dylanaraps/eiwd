@@ -444,7 +444,6 @@ static void ap_start_rsna(struct sta_state *sta, const uint8_t *gtk_rsc)
 	}
 
 	eapol_sm_set_listen_interval(sta->sm, sta->listen_interval);
-	eapol_sm_set_protocol_version(sta->sm, EAPOL_PROTOCOL_VERSION_2004);
 
 	eapol_register(sta->sm);
 
