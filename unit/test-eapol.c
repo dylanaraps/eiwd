@@ -2170,11 +2170,11 @@ static void eapol_sm_test_ptk(const void *data)
 	expected_step4_frame_size = sizeof(eapol_key_data_6);
 
 	hs = test_handshake_state_new(1);
+	/* key_data_3 uses 2004 while key_data_3 uses 2001, so force 2001 */
+	handshake_state_set_protocol_version(hs, EAPOL_PROTOCOL_VERSION_2001);
+
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
-
-	/* key_data_3 uses 2004 while key_data_3 uses 2001, so force 2001 */
-	eapol_sm_set_protocol_version(sm, EAPOL_PROTOCOL_VERSION_2001);
 
 	handshake_state_set_pmk(hs, psk, sizeof(psk));
 	handshake_state_set_authenticator_address(hs, aa);
@@ -2234,11 +2234,11 @@ static void eapol_sm_test_igtk(const void *data)
 	expected_step4_frame_size = sizeof(eapol_key_data_32);
 
 	hs = test_handshake_state_new(1);
+	/* key_data_29 uses 2004 while key_data_30 uses 2001, so force 2001 */
+	handshake_state_set_protocol_version(hs, EAPOL_PROTOCOL_VERSION_2001);
+
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
-
-	/* key_data_29 uses 2004 while key_data_30 uses 2001, so force 2001 */
-	eapol_sm_set_protocol_version(sm, EAPOL_PROTOCOL_VERSION_2001);
 
 	handshake_state_set_pmk(hs, psk, sizeof(psk));
 	handshake_state_set_authenticator_address(hs, aa);
