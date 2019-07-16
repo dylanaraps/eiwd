@@ -91,8 +91,21 @@ static struct hs20_config *hs20_config_new(struct l_settings *settings,
 		config->nai_realms = nai_realms;
 
 	rc_str = l_settings_get_value(settings, "Hotspot", "RoamingConsortium");
-	if (rc_str)
+	if (rc_str) {
 		config->rc = l_util_from_hexstring(rc_str, &config->rc_len);
+		/*
+		 * WiFi Alliance Hotspot 2.0 Spec - Section 3.1.4
+		 *
+		 * "The Consortium OI field is 3 or 5-octet field set to a value
+		 * of a roaming consortium OI"
+		 */
+		if (config->rc && config->rc_len != 3 && config->rc_len != 5) {
+			l_warn("invalid RoamingConsortium length %zu",
+					config->rc_len);
+			l_free(config->rc);
+			config->rc = NULL;
+		}
+	}
 
 	if (util_mem_is_zero(config->hessid, 6) && !nai_realms && !config->rc) {
 		l_free(config);
