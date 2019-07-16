@@ -120,6 +120,7 @@ struct handshake_state {
 	uint8_t r1khid[6];
 	uint8_t gtk[32];
 	uint8_t gtk_rsc[6];
+	uint8_t proto_version : 2;
 	unsigned int gtk_index;
 	struct erp_cache_entry *erp_cache;
 	void *user_data;
@@ -166,6 +167,9 @@ void handshake_state_set_no_rekey(struct handshake_state *s, bool no_rekey);
 void handshake_state_set_fils_ft(struct handshake_state *s,
 					const uint8_t *fils_ft,
 					size_t fils_ft_len);
+
+void handshake_state_set_protocol_version(struct handshake_state *s,
+						uint8_t proto_version);
 
 void handshake_state_new_snonce(struct handshake_state *s);
 void handshake_state_new_anonce(struct handshake_state *s);

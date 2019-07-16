@@ -268,6 +268,21 @@ void handshake_state_set_fils_ft(struct handshake_state *s,
 	s->fils_ft_len = fils_ft_len;
 }
 
+/*
+ * Override the protocol version used for EAPoL packets.  The selection is as
+ * follows:
+ *  0 -> Automatic, use same proto as the request for the response and
+ *       2004 when in authenticator mode
+ *  1 -> Chooses 2001 Protocol Version
+ *  2 -> Chooses 2004 Protocol Version
+ *  3 -> Chooses 2010 Protocol Version
+ */
+void handshake_state_set_protocol_version(struct handshake_state *s,
+						uint8_t proto_version)
+{
+	s->proto_version = proto_version;
+}
+
 void handshake_state_new_snonce(struct handshake_state *s)
 {
 	get_nonce(s->snonce);
