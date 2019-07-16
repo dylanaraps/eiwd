@@ -458,7 +458,7 @@ static bool station_start_anqp(struct station *station, struct network *network,
 	struct anqp_entry *entry;
 	bool anqp_disabled = true;
 
-	if (!bss->hs20_capable)
+	if (!bss->hs20_ie)
 		return false;
 
 	/* Network already has ANQP data/HESSID */
@@ -2181,7 +2181,8 @@ int __station_connect_network(struct station *station, struct network *network,
 	const uint8_t *rc = NULL;
 	size_t rc_len = 0;
 	uint8_t rc_buf[32];
-	struct iovec iov;
+	struct iovec iov[2];
+	int iov_elems = 0;
 	struct handshake_state *hs;
 	int r;
 
@@ -2189,7 +2190,12 @@ int __station_connect_network(struct station *station, struct network *network,
 	if (!hs)
 		return -ENOTSUP;
 
-	if (bss->hs20_capable) {
+	if (bss->hs20_ie) {
+		/* Include HS20 Indication with (Re)Association */
+		iov[iov_elems].iov_base = bss->hs20_ie;
+		iov[iov_elems].iov_len = bss->hs20_ie[1] + 2;
+		iov_elems++;
+
 		/*
 		 * If a matching roaming consortium OI is found for the network
 		 * this single RC value will be set in the handshake and used
@@ -2199,13 +2205,14 @@ int __station_connect_network(struct station *station, struct network *network,
 		if (rc) {
 			ie_build_roaming_consortium(rc, rc_len, rc_buf);
 
-			iov.iov_base = rc_buf;
-			iov.iov_len = rc_buf[1] + 2;
+			iov[iov_elems].iov_base = rc_buf;
+			iov[iov_elems].iov_len = rc_buf[1] + 2;
+			iov_elems++;
 		}
 	}
 
-	r = netdev_connect(station->netdev, bss, hs, rc ? &iov : NULL,
-				rc ? 1 : 0, station_netdev_event,
+	r = netdev_connect(station->netdev, bss, hs, iov_elems ? iov : NULL,
+				iov_elems, station_netdev_event,
 				station_connect_cb, station);
 	if (r < 0) {
 		handshake_state_free(hs);

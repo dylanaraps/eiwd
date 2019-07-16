@@ -742,7 +742,7 @@ static bool scan_parse_vendor_specific(struct scan_bss *bss, const void *data,
 	else if (!bss->osen && is_ie_wfa_ie(data, len, IE_WFA_OI_OSEN))
 		bss->osen = l_memdup(data - 2, len + 2);
 	else if (is_ie_wfa_ie(data, len, IE_WFA_OI_HS20_INDICATION))
-		bss->hs20_capable = true;
+		bss->hs20_ie = l_memdup(data - 2, len + 2);
 	else
 		return false;
 
