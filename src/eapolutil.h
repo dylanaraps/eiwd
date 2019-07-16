@@ -28,6 +28,7 @@
 enum eapol_protocol_version {
 	EAPOL_PROTOCOL_VERSION_2001	= 1,
 	EAPOL_PROTOCOL_VERSION_2004	= 2,
+	EAPOL_PROTOCOL_VERSION_2010	= 3,
 };
 
 /*
