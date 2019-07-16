@@ -828,9 +828,11 @@ static struct handshake_state *station_handshake_setup(struct station *station,
 							struct scan_bss *bss)
 {
 	enum security security = network_get_security(network);
+	struct l_settings *settings = network_get_settings(network);
 	struct wiphy *wiphy = station->wiphy;
 	struct handshake_state *hs;
 	const char *ssid;
+	uint32_t eapol_proto_version;
 
 	hs = netdev_handshake_state_new(station->netdev);
 
@@ -841,6 +843,21 @@ static struct handshake_state *station_handshake_setup(struct station *station,
 
 	ssid = network_get_ssid(network);
 	handshake_state_set_ssid(hs, (void *) ssid, strlen(ssid));
+
+	if (settings && l_settings_get_uint(settings, "EAPoL",
+						"ProtocolVersion",
+						&eapol_proto_version)) {
+		if (eapol_proto_version > 3) {
+			l_warn("Invalid ProtolVersion value - should be 0-3");
+			eapol_proto_version = 0;
+		}
+
+		if (eapol_proto_version)
+			l_debug("Overriding EAPoL protocol version to: %u",
+					eapol_proto_version);
+
+		handshake_state_set_protocol_version(hs, eapol_proto_version);
+	}
 
 	if (security == SECURITY_PSK) {
 		/* SAE will generate/set the PMK */
