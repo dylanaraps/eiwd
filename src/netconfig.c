@@ -310,14 +310,14 @@ gateway:
 	return true;
 }
 
-enum lease_action {
-	LEASE_ACTION_INSTALL,
-	LEASE_ACTION_UNINSTALL,
+enum netconfig_action {
+	NETCONFIG_ACTION_INSTALL,
+	NETCONFIG_ACTION_UNINSTALL,
 };
 
-static void netconfig_dhcp_lease_received(struct netconfig *netconfig,
+static void netconfig_dhcp_addressing(struct netconfig *netconfig,
 					const struct l_dhcp_client *client,
-					enum lease_action action)
+					enum netconfig_action action)
 {
 	const struct l_dhcp_lease *lease;
 	struct netconfig_ifaddr ifaddr;
@@ -351,10 +351,10 @@ static void netconfig_dhcp_lease_received(struct netconfig *netconfig,
 	ifaddr.proto = RTPROT_DHCP;
 
 	switch (action) {
-	case LEASE_ACTION_INSTALL:
+	case NETCONFIG_ACTION_INSTALL:
 		netconfig_install_addresses(netconfig, &ifaddr, gateway, dns);
 		break;
-	case LEASE_ACTION_UNINSTALL:
+	case NETCONFIG_ACTION_UNINSTALL:
 		netconfig_uninstall_addresses(netconfig, &ifaddr, gateway, dns);
 		break;
 	}
@@ -379,13 +379,13 @@ static void netconfig_dhcp_event_handler(struct l_dhcp_client *client,
 	case L_DHCP_CLIENT_EVENT_LEASE_RENEWED:
 	case L_DHCP_CLIENT_EVENT_LEASE_OBTAINED:
 	case L_DHCP_CLIENT_EVENT_IP_CHANGED:
-		netconfig_dhcp_lease_received(netconfig, client,
-							LEASE_ACTION_INSTALL);
+		netconfig_dhcp_addressing(netconfig, client,
+						NETCONFIG_ACTION_INSTALL);
 
 		break;
 	case L_DHCP_CLIENT_EVENT_LEASE_EXPIRED:
-		netconfig_dhcp_lease_received(netconfig, client,
-							LEASE_ACTION_UNINSTALL);
+		netconfig_dhcp_addressing(netconfig, client,
+						NETCONFIG_ACTION_UNINSTALL);
 		/* Fall through. */
 	case L_DHCP_CLIENT_EVENT_NO_LEASE:
 		/*
@@ -424,8 +424,9 @@ static bool netconfig_dhcp_create(struct netconfig *netconfig,
 	return true;
 }
 
-static bool netconfig_load_static_addresses(struct netconfig *netconfig,
-						struct station *station)
+static bool netconfig_static_addressing(struct netconfig *netconfig,
+						struct station *station,
+						enum netconfig_action action)
 {
 	const struct network *network;
 	const struct l_settings *settings;
@@ -487,13 +488,14 @@ static void netconfig_station_state_changed(enum station_state state,
 
 	l_debug("");
 
+	station = station_find(netconfig->ifindex);
+	if (!station)
+		return;
+
 	switch (state) {
 	case STATION_STATE_CONNECTED:
-		station = station_find(netconfig->ifindex);
-		if (!station)
-			break;
-
-		if (netconfig_load_static_addresses(netconfig, station))
+		if (netconfig_static_addressing(netconfig, station,
+						NETCONFIG_ACTION_INSTALL))
 			break;
 
 		if (netconfig->station_state == STATION_STATE_ROAMING) {
@@ -511,10 +513,14 @@ static void netconfig_station_state_changed(enum station_state state,
 
 		break;
 	case STATION_STATE_DISCONNECTED:
-		l_dhcp_client_stop(netconfig->dhcp_client);
+		if (netconfig_static_addressing(netconfig, station,
+						NETCONFIG_ACTION_UNINSTALL))
+			break;
 
-		l_queue_foreach_remove(netconfig->ifaddr_list,
-					netconfig_ifaddr_remove, netconfig);
+		netconfig_dhcp_addressing(netconfig, netconfig->dhcp_client,
+						NETCONFIG_ACTION_UNINSTALL);
+
+		l_dhcp_client_stop(netconfig->dhcp_client);
 
 		break;
 	case STATION_STATE_ROAMING:
