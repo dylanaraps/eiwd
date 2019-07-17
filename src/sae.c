@@ -651,10 +651,15 @@ static void sae_process_anti_clogging(struct sae_sm *sm, const uint8_t *ptr,
 	/*
 	 * IEEE 802.11-2016 - Section 12.4.6 Anti-clogging tokens
 	 *
-	 * It is suggested that an Anti-Clogging Token not exceed 256 octets
+	 * "It is suggested that an Anti-Clogging Token not exceed 256 octets"
+	 *
+	 * Also ensure the token is at least 1 byte. The packet passed in will
+	 * contain the group number, meaning the anti-clogging token length is
+	 * going to be 2 bytes less than the passed in length. This is why we
+	 * are checking 3 > len > 258.
 	 */
-	if (len > 256) {
-		l_error("anti-clogging token size %zu too large, 256 max", len);
+	if (len < 3 || len > 258) {
+		l_error("anti-clogging token size invalid %zu", len);
 		return;
 	}
 
