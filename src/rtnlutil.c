@@ -251,3 +251,47 @@ uint32_t rtnl_ifaddr_delete(struct l_netlink *rtnl, int ifindex,
 	return rtnl_ifaddr_change(rtnl, RTM_DELADDR, ifindex, prefix_len, ip,
 					broadcast, cb, user_data, destroy);
 }
+
+void rtnl_route_extract_ipv4(const struct rtmsg *rtmsg, uint32_t len,
+				uint32_t *ifindex, char **dst, char **gateway,
+				char **src)
+{
+	struct in_addr in_addr;
+	struct rtattr *attr;
+
+	for (attr = RTM_RTA(rtmsg); RTA_OK(attr, len);
+						attr = RTA_NEXT(attr, len)) {
+		switch (attr->rta_type) {
+		case RTA_DST:
+			if (!dst)
+				break;
+
+			in_addr = *((struct in_addr *) RTA_DATA(attr));
+			*dst = l_strdup(inet_ntoa(in_addr));
+
+			break;
+		case RTA_GATEWAY:
+			if (!gateway)
+				break;
+
+			in_addr = *((struct in_addr *) RTA_DATA(attr));
+			*gateway = l_strdup(inet_ntoa(in_addr));
+
+			break;
+		case RTA_PREFSRC:
+			if (!src)
+				break;
+
+			in_addr = *((struct in_addr *) RTA_DATA(attr));
+			*src = l_strdup(inet_ntoa(in_addr));
+
+			break;
+		case RTA_OIF:
+			if (!ifindex)
+				break;
+
+			*ifindex = *((uint32_t *) RTA_DATA(attr));
+			break;
+		}
+	}
+}
