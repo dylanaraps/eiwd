@@ -49,6 +49,7 @@ struct netconfig {
 };
 
 struct netconfig_ifaddr {
+	uint8_t proto;
 	uint8_t family;
 	uint8_t prefix_len;
 	char *ip;
@@ -347,6 +348,7 @@ static void netconfig_dhcp_lease_received(struct netconfig *netconfig,
 	ifaddr.broadcast = l_dhcp_lease_get_broadcast(lease);
 	dns = l_dhcp_lease_get_dns(lease);
 	ifaddr.family = AF_INET;
+	ifaddr.proto = RTPROT_DHCP;
 
 	switch (action) {
 	case LEASE_ACTION_INSTALL:
@@ -465,6 +467,7 @@ static bool netconfig_load_static_addresses(struct netconfig *netconfig,
 	ifaddr.broadcast = l_settings_get_string(settings, "IPv4", "broadcast");
 	dns = l_settings_get_string_list(settings, "IPv4", "dns", ' ');
 	ifaddr.family = AF_INET;
+	ifaddr.proto = RTPROT_STATIC;
 
 	netconfig_install_addresses(netconfig, &ifaddr, gateway, dns);
 
