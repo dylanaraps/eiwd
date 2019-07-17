@@ -295,3 +295,17 @@ void rtnl_route_extract_ipv4(const struct rtmsg *rtmsg, uint32_t len,
 		}
 	}
 }
+
+uint32_t rtnl_route_dump_ipv4(struct l_netlink *rtnl,
+				l_netlink_command_func_t cb, void *user_data,
+				l_netlink_destroy_func_t destroy)
+{
+	struct rtmsg rtmsg;
+
+	memset(&rtmsg, 0, sizeof(struct rtmsg));
+	rtmsg.rtm_family = AF_INET;
+
+	return l_netlink_send(rtnl, RTM_GETROUTE, NLM_F_DUMP, &rtmsg,
+					sizeof(struct rtmsg), cb, user_data,
+					destroy);
+}

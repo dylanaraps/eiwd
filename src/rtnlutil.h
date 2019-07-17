@@ -51,3 +51,6 @@ uint32_t rtnl_ifaddr_delete(struct l_netlink *rtnl, int ifindex,
 void rtnl_route_extract_ipv4(const struct rtmsg *rtmsg, uint32_t len,
 				uint32_t *ifindex, char **dst, char **gateway,
 				char **src);
+uint32_t rtnl_route_dump_ipv4(struct l_netlink *rtnl,
+				l_netlink_command_func_t cb, void *user_data,
+				l_netlink_destroy_func_t destroy);
