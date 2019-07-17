@@ -306,6 +306,11 @@ static void device_set_default(const char *device_name)
 	l_queue_destroy(match, NULL);
 }
 
+static void device_reset_default(void)
+{
+	default_device = NULL;
+}
+
 const struct proxy_interface *device_get_default(void)
 {
 	struct l_queue *match;
@@ -483,6 +488,7 @@ static struct command_family device_command_family = {
 	.family_arg_completion = family_arg_completion,
 	.entity_arg_completion = entity_arg_completion,
 	.set_default_entity = device_set_default,
+	.reset_default_entity = device_reset_default,
 };
 
 static int device_command_family_init(void)

@@ -555,6 +555,21 @@ int command_get_exit_status(void)
 	return exit_status;
 }
 
+void command_reset_default_entities(void)
+{
+	const struct l_queue_entry *entry;
+
+	for (entry = l_queue_get_entries(command_families); entry;
+							entry = entry->next) {
+		struct command_family *family = entry->data;
+
+		if (!family->reset_default_entity)
+			continue;
+
+		family->reset_default_entity();
+	}
+}
+
 void command_family_register(const struct command_family *family)
 {
 	l_queue_push_tail(command_families, (void *) family);
