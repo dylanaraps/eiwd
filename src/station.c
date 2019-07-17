@@ -848,7 +848,7 @@ static struct handshake_state *station_handshake_setup(struct station *station,
 						"ProtocolVersion",
 						&eapol_proto_version)) {
 		if (eapol_proto_version > 3) {
-			l_warn("Invalid ProtolVersion value - should be 0-3");
+			l_warn("Invalid ProtocolVersion value - should be 0-3");
 			eapol_proto_version = 0;
 		}
 
