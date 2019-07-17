@@ -604,24 +604,24 @@ static int netconfig_init(void)
 	if (!r) {
 		l_error("netconfig: Failed to register for RTNL link address"
 							" notifications.");
-		l_netlink_destroy(rtnl);
-		rtnl = NULL;
-
-		return r;
+		goto error;
 	}
 
 	r = rtnl_ifaddr_get(rtnl, netconfig_ifaddr_cmd_cb, NULL, NULL);
 	if (!r) {
 		l_error("netconfig: Failed to get addresses from RTNL link.");
-		l_netlink_destroy(rtnl);
-		rtnl = NULL;
-
-		return r;
+		goto error;
 	}
 
 	netconfig_list = l_queue_new();
 
 	return 0;
+
+error:
+	l_netlink_destroy(rtnl);
+	rtnl = NULL;
+
+	return r;
 }
 
 static void netconfig_exit(void)
