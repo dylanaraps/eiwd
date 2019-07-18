@@ -1132,6 +1132,7 @@ void scan_bss_free(struct scan_bss *bss)
 	l_free(bss->p2p);
 	l_free(bss->osen);
 	l_free(bss->rc_ie);
+	l_free(bss->hs20_ie);
 	l_free(bss);
 }
 
