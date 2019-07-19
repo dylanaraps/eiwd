@@ -67,6 +67,7 @@ struct network {
 	uint8_t *rc_ie;
 	bool update_psk:1;  /* Whether PSK should be written to storage */
 	bool ask_passphrase:1; /* Whether we should force-ask agent */
+	bool is_hs20:1;
 	int rank;
 };
 
@@ -82,7 +83,8 @@ static bool network_settings_load(struct network *network)
 	 * provisioning file containing the HESSID we know this is a Hotspot
 	 * network.
 	 */
-	if (network->nai_realms || !util_mem_is_zero(network->hessid, 6)) {
+	if (network->is_hs20 && (network->nai_realms || network->rc_ie ||
+				!util_mem_is_zero(network->hessid, 6))) {
 		network->settings = l_settings_new();
 
 		if (!l_settings_load_from_file(network->settings,
@@ -712,6 +714,9 @@ bool network_bss_add(struct network *network, struct scan_bss *bss)
 
 	if (bss->rc_ie && !network->rc_ie)
 		network->rc_ie = l_memdup(bss->rc_ie, bss->rc_ie[1] + 2);
+
+	if (bss->hs20_ie)
+		network->is_hs20 = true;
 
 	return true;
 }
