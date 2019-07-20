@@ -142,7 +142,8 @@ static struct netconfig_ifaddr *netconfig_ifaddr_find(
 }
 
 static void netconfig_ifaddr_added(struct netconfig *netconfig,
-					const struct ifaddrmsg *ifa, int bytes)
+					const struct ifaddrmsg *ifa,
+					uint32_t len)
 {
 	struct netconfig_ifaddr *ifaddr;
 	char *label;
@@ -151,7 +152,7 @@ static void netconfig_ifaddr_added(struct netconfig *netconfig,
 	ifaddr->family = ifa->ifa_family;
 	ifaddr->prefix_len = ifa->ifa_prefixlen;
 
-	rtnl_ifaddr_extract(ifa, bytes, &label, &ifaddr->ip,
+	rtnl_ifaddr_extract(ifa, len, &label, &ifaddr->ip,
 							&ifaddr->broadcast);
 
 	l_debug("%s: ifaddr %s/%u broadcast %s", label, ifaddr->ip,
@@ -162,12 +163,13 @@ static void netconfig_ifaddr_added(struct netconfig *netconfig,
 }
 
 static void netconfig_ifaddr_deleted(struct netconfig *netconfig,
-					const struct ifaddrmsg *ifa, int bytes)
+					const struct ifaddrmsg *ifa,
+					uint32_t len)
 {
 	struct netconfig_ifaddr *ifaddr;
 	char *ip;
 
-	rtnl_ifaddr_extract(ifa, bytes, NULL, &ip, NULL);
+	rtnl_ifaddr_extract(ifa, len, NULL, &ip, NULL);
 
 	ifaddr = netconfig_ifaddr_find(netconfig, ifa->ifa_family,
 							ifa->ifa_prefixlen, ip);
