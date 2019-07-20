@@ -191,7 +191,7 @@ static void netconfig_ifaddr_notify(uint16_t type, const void *data,
 {
 	const struct ifaddrmsg *ifa = data;
 	struct netconfig *netconfig;
-	unsigned int bytes;
+	uint32_t bytes;
 
 	netconfig = netconfig_find(ifa->ifa_index);
 	if (!netconfig)
