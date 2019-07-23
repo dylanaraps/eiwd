@@ -5688,6 +5688,11 @@ static void print_link_mode(unsigned int indent, const char *str,
 		link_mode_to_ascii(link_mode), link_mode);
 }
 
+static struct attr_entry link_info_entry[] = {
+	{ IFLA_INFO_KIND,	"Kind",		ATTR_STRING },
+	{ },
+};
+
 static struct attr_entry info_entry[] = {
 	{ IFLA_ADDRESS,		"Interface Address", ATTR_CUSTOM,
 					{ .function = print_ifi_addr } },
@@ -5712,6 +5717,8 @@ static struct attr_entry info_entry[] = {
 	{ IFLA_WEIGHT,		"Weight",	ATTR_BINARY },
 	{ IFLA_NET_NS_PID,	"NetNSPid",	ATTR_BINARY },
 	{ IFLA_IFALIAS,		"IFAlias",	ATTR_BINARY },
+	{ IFLA_LINKINFO,	"LinkInfo",
+					ATTR_NESTED, { link_info_entry } },
 	{ },
 };
 
