@@ -5784,7 +5784,7 @@ static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 				printf("missing function\n");
 			break;
 		case ATTR_STRING:
-			print_attr(indent, "%s: %s", str,
+			print_attr(indent, "%s (len:%d): %s", str, payload,
 						(char *) RTA_DATA(attr));
 			break;
 		case ATTR_U8:
