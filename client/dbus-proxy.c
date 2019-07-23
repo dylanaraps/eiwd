@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2017  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2017-2019  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -140,6 +140,20 @@ static void interface_update_properties(struct proxy_interface *proxy,
 		proxy_interface_property_update(proxy, name, NULL);
 }
 
+static char *strdup_quoted_for_spaces(const char *str)
+{
+	const char *p;
+
+	for (p = str; *p; p++) {
+		if (*p != ' ')
+			continue;
+
+		return l_strdup_printf("\"%s\"", str);
+	}
+
+	return l_strdup(str);
+}
+
 char *proxy_property_str_completion(const struct proxy_interface_type *type,
 					proxy_property_match_func_t function,
 					const char *property_name,
@@ -177,7 +191,7 @@ char *proxy_property_str_completion(const struct proxy_interface_type *type,
 		if (!str)
 			goto done;
 
-		return l_strdup(str);
+		return strdup_quoted_for_spaces(str);
 	}
 done:
 	l_queue_destroy(match, NULL);
