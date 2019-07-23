@@ -5863,27 +5863,8 @@ static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 	}
 }
 
-static struct flag_names rtnl_flags[] = {
-	{ IFF_UP, "up" },
-	{ IFF_BROADCAST, "broadcast" },
-	{ IFF_DEBUG, "debug" },
-	{ IFF_LOOPBACK, "loopback" },
-	{ IFF_POINTOPOINT, "pointopoint"},
-	{ IFF_NOTRAILERS, "notrailers" },
-	{ IFF_RUNNING, "running" },
-	{ IFF_NOARP, "noarp" },
-	{ IFF_PROMISC, "promisc" },
-	{ IFF_ALLMULTI, "allmulti" },
-	{ IFF_MASTER, "master" },
-	{ IFF_SLAVE, "slave" },
-	{ IFF_MULTICAST, "multicast" },
-	{ IFF_PORTSEL, "portsel" },
-	{ IFF_AUTOMEDIA, "automedia" },
-	{ IFF_DYNAMIC, "dynamic" },
-	{ },
-};
-
-static void ififlags_str(char *str, size_t size, uint16_t flags)
+static void flags_str(const struct flag_names *table,
+				char *str, size_t size, uint16_t flags)
 {
 	int pos, i;
 
@@ -5893,10 +5874,10 @@ static void ififlags_str(char *str, size_t size, uint16_t flags)
 
 	pos += sprintf(str + pos, " [");
 
-	for (i = 0; rtnl_flags[i].name; i++) {
-		if (flags & rtnl_flags[i].flag) {
-			flags &= ~rtnl_flags[i].flag;
-			pos += sprintf(str + pos, "%s%s", rtnl_flags[i].name,
+	for (i = 0; table[i].name; i++) {
+		if (flags & table[i].flag) {
+			flags &= ~table[i].flag;
+			pos += sprintf(str + pos, "%s%s", table[i].name,
 							flags ? "," : "");
 		}
 	}
@@ -5906,6 +5887,26 @@ static void ififlags_str(char *str, size_t size, uint16_t flags)
 
 static void print_ifinfomsg(const struct ifinfomsg *info)
 {
+	static struct flag_names iff_flags[] = {
+		{ IFF_UP, "up" },
+		{ IFF_BROADCAST, "broadcast" },
+		{ IFF_DEBUG, "debug" },
+		{ IFF_LOOPBACK, "loopback" },
+		{ IFF_POINTOPOINT, "pointopoint"},
+		{ IFF_NOTRAILERS, "notrailers" },
+		{ IFF_RUNNING, "running" },
+		{ IFF_NOARP, "noarp" },
+		{ IFF_PROMISC, "promisc" },
+		{ IFF_ALLMULTI, "allmulti" },
+		{ IFF_MASTER, "master" },
+		{ IFF_SLAVE, "slave" },
+		{ IFF_MULTICAST, "multicast" },
+		{ IFF_PORTSEL, "portsel" },
+		{ IFF_AUTOMEDIA, "automedia" },
+		{ IFF_DYNAMIC, "dynamic" },
+		{ },
+	};
+
 	char str[256];
 
 	if (!info)
@@ -5915,7 +5916,7 @@ static void print_ifinfomsg(const struct ifinfomsg *info)
 	print_field("IFLA Type: %u", info->ifi_type);
 	print_field("IFLA Index: %d", info->ifi_index);
 	print_field("IFLA ChangeMask: %u", info->ifi_change);
-	ififlags_str(str, sizeof(str), info->ifi_flags);
+	flags_str(iff_flags, str, sizeof(str), info->ifi_flags);
 	print_field("IFLA Flags: %s", str);
 }
 
