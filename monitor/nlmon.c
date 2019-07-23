@@ -6108,9 +6108,10 @@ static void print_nlmsg(const struct timeval *tv, const struct nlmsghdr *nlmsg)
 	switch (nlmsg->nlmsg_type) {
 	case NLMSG_ERROR:
 		err = NLMSG_DATA(nlmsg);
-		status = -err->error;
+		status = err->error;
 		if (status < 0)
-			print_field("Error: %d (%s)", status, strerror(status));
+			print_field("Error: %d (%s)",
+						status, strerror(-status));
 		else
 			print_field("ACK: %d", status);
 		break;
