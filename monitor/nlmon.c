@@ -5753,6 +5753,7 @@ static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 		uint16_t rta_type = attr->rta_type;
 		enum attr_type type = ATTR_UNSPEC;
 		attr_func_t function;
+		const struct attr_entry *nested;
 		uint64_t val64;
 		uint32_t val32;
 		uint16_t val16;
@@ -5770,6 +5771,7 @@ static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 				str = table[i].str;
 				type = table[i].type;
 				function = table[i].function;
+				nested = table[i].nested;
 				break;
 			}
 		}
@@ -5849,12 +5851,18 @@ static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 			} else
 				printf("malformed packet\n");
 			break;
+		case ATTR_NESTED:
+			print_attr(indent, "%s: len %u", str, payload);
+			if (!nested)
+				printf("missing table\n");
+			print_rtnl_attributes(indent + 1, nested,
+						RTA_DATA(attr), payload);
+			break;
 		case ATTR_BINARY:
 			print_attr(indent, "%s: len %d", str, payload);
 			print_hexdump(indent + 1, RTA_DATA(attr), payload);
 			break;
 		case ATTR_ADDRESS:
-		case ATTR_NESTED:
 		case ATTR_ARRAY:
 		case ATTR_UNSPEC:
 			print_attr(indent, "%s: len %d", str, payload);
