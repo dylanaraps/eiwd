@@ -693,7 +693,6 @@ int main(int argc, char *argv[])
 	const char *reader_path = NULL;
 	const char *analyze_path = NULL;
 	const char *ifname = NULL;
-	struct iwmon_interface monitor_interface = { };
 	uint16_t nl80211_family = 0;
 	int exit_status;
 
