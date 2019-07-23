@@ -5748,6 +5748,23 @@ static struct attr_entry addr_entry[] = {
 	{ },
 };
 
+static struct attr_entry route_entry[] = {
+	{ RTA_DST,		"Destination Address", ATTR_CUSTOM,
+					{ .function = print_inet_addr } },
+	{ RTA_SRC,		"Source Address", ATTR_CUSTOM,
+					{ .function = print_inet_addr } },
+	{ RTA_IIF,		"Input Interface Index", ATTR_S32 },
+	{ RTA_OIF,		"Output Interface Index", ATTR_S32 },
+	{ RTA_GATEWAY,		"Gateway", ATTR_CUSTOM,
+					{ .function = print_inet_addr } },
+	{ RTA_PRIORITY,		"Priority of the route", ATTR_S32 },
+	{ RTA_METRICS,		"Metric of the route", ATTR_S32 },
+	{ RTA_TABLE,		"Routing Table", ATTR_U32 },
+	{ RTA_PREFSRC,		"Preferred Source", ATTR_CUSTOM,
+					{ .function = print_inet_addr } },
+	{ },
+};
+
 static void print_rtnl_attributes(int indent, const struct attr_entry *table,
 						struct rtattr *rt_attr, int len)
 {
@@ -5947,6 +5964,28 @@ static void print_ifaddrmsg(const struct ifaddrmsg *addr)
 	print_field("IFA Flags: %u", addr->ifa_flags);
 }
 
+static void print_rtmsg(const struct rtmsg *msg)
+{
+	static struct flag_names rtm_flags[] = {
+		{ RTM_F_NOTIFY, "notify" },
+		{ RTM_F_CLONED, "cloned" },
+		{ RTM_F_EQUALIZE, "multipath-equalizer" },
+		{ },
+	};
+	char str[256];
+
+	print_field("RTM Family: %hhu", msg->rtm_family);
+	print_field("RTM Destination Len: %hhu", msg->rtm_dst_len);
+	print_field("RTM Source Len: %hhu", msg->rtm_src_len);
+	print_field("RTM TOS Field: %hhu", msg->rtm_tos);
+	print_field("RTM Table: %hhu", msg->rtm_table);
+	print_field("RTM Protocol: %hhu", msg->rtm_protocol);
+	print_field("RTM Scope: %hhu", msg->rtm_scope);
+	print_field("RTM Type: %hhu", msg->rtm_type);
+	flags_str(rtm_flags, str, sizeof(str), msg->rtm_flags);
+	print_field("RTM Flags: %s", str);
+}
+
 static void read_uevent(const char *ifname, int index)
 {
 	char filename[64], line[128];
@@ -6034,6 +6073,15 @@ static void print_rtm_link(uint16_t type, const struct ifinfomsg *info, int len)
 
 		l_free(iface);
 	}
+}
+
+static void print_rtm_route(uint16_t type, const struct rtmsg *msg, size_t len)
+{
+	if (!msg || len < sizeof(struct rtmsg))
+		return;
+
+	print_rtmsg(msg);
+	print_rtnl_attributes(1, route_entry, RTM_RTA(msg), len);
 }
 
 static const char *nlmsg_type_to_str(uint32_t msg_type)
@@ -6147,6 +6195,7 @@ static void print_rtnl_msg(const struct timeval *tv,
 {
 	struct ifinfomsg *info;
 	struct ifaddrmsg *addr;
+	struct rtmsg *rtm;
 	struct wlan_iface *iface;
 	int len;
 
@@ -6159,6 +6208,24 @@ static void print_rtnl_msg(const struct timeval *tv,
 		len = IFLA_PAYLOAD(nlmsg);
 		print_nlmsghdr(tv, nlmsg);
 		print_rtm_link(nlmsg->nlmsg_type, info, len);
+		break;
+
+	case RTM_NEWROUTE:
+	case RTM_GETROUTE:
+	case RTM_DELROUTE:
+		rtm = (struct rtmsg *) NLMSG_DATA(nlmsg);
+		len = RTM_PAYLOAD(nlmsg);
+
+		if (!rtm || len <= (int) sizeof(struct rtmsg))
+			return;
+
+		/* Skip 'kernel' and 'default' tables */
+		if (rtm->rtm_table == RT_TABLE_LOCAL ||
+				rtm->rtm_table == RT_TABLE_DEFAULT)
+			return;
+
+		print_nlmsghdr(tv, nlmsg);
+		print_rtm_route(nlmsg->nlmsg_type, rtm, len);
 		break;
 
 	case RTM_NEWADDR:
@@ -6206,6 +6273,9 @@ void nlmon_print_rtnl(struct nlmon *nlmon, const struct timeval *tv,
 		case RTM_NEWADDR:
 		case RTM_DELADDR:
 		case RTM_GETADDR:
+		case RTM_NEWROUTE:
+		case RTM_GETROUTE:
+		case RTM_DELROUTE:
 			print_rtnl_msg(tv, nlmsg);
 			break;
 		}
