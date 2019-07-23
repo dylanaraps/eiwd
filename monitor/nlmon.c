@@ -6091,11 +6091,11 @@ static void print_nlmsghdr(const struct timeval *tv,
 
 	print_packet(tv, out ? '<' : '>', COLOR_YELLOW, "RTNL", str, extra_str);
 
-	print_field("Flags: %d (0x%03x)", nlmsg->nlmsg_flags,
+	print_field("Flags: %hu (0x%03x)", nlmsg->nlmsg_flags,
 							nlmsg->nlmsg_flags);
-	print_field("Sequence number: %d (0x%08x)",
+	print_field("Sequence number: %u (0x%08x)",
 					nlmsg->nlmsg_seq, nlmsg->nlmsg_seq);
-	print_field("Port ID: %d", nlmsg->nlmsg_pid);
+	print_field("Port ID: %u", nlmsg->nlmsg_pid);
 }
 
 static void print_nlmsg(const struct timeval *tv, const struct nlmsghdr *nlmsg)
