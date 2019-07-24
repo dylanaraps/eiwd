@@ -1176,6 +1176,12 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 
 	l_debug("");
 
+	if (network == station_get_connected_network(station))
+		/*
+		 * The requested network is already connected, return success.
+		 */
+		return l_dbus_message_new_method_return(message);
+
 	/*
 	 * Select the best BSS to use at this time.  If we have to query the
 	 * agent this may not be the final choice because BSS visibility can
