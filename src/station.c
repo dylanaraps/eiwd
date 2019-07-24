@@ -460,7 +460,7 @@ static bool station_start_anqp(struct station *station, struct network *network,
 	struct anqp_entry *entry;
 	bool anqp_disabled = true;
 
-	if (!bss->hs20_ie)
+	if (!bss->hs20_capable)
 		return false;
 
 	/* Network already has ANQP data/HESSID */
@@ -2181,6 +2181,7 @@ int __station_connect_network(struct station *station, struct network *network,
 				struct scan_bss *bss)
 {
 	const uint8_t *rc = NULL;
+	uint8_t hs20_ie[7];
 	size_t rc_len = 0;
 	uint8_t rc_buf[32];
 	struct iovec iov[2];
@@ -2192,10 +2193,12 @@ int __station_connect_network(struct station *station, struct network *network,
 	if (!hs)
 		return -ENOTSUP;
 
-	if (bss->hs20_ie) {
+	if (bss->hs20_capable) {
 		/* Include HS20 Indication with (Re)Association */
-		iov[iov_elems].iov_base = bss->hs20_ie;
-		iov[iov_elems].iov_len = bss->hs20_ie[1] + 2;
+		ie_build_hs20_indication(bss->hs20_version, hs20_ie);
+
+		iov[iov_elems].iov_base = hs20_ie;
+		iov[iov_elems].iov_len = hs20_ie[1] + 2;
 		iov_elems++;
 
 		/*

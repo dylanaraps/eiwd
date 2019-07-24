@@ -741,9 +741,13 @@ static bool scan_parse_vendor_specific(struct scan_bss *bss, const void *data,
 		bss->wpa = l_memdup(data - 2, len + 2);
 	else if (!bss->osen && is_ie_wfa_ie(data, len, IE_WFA_OI_OSEN))
 		bss->osen = l_memdup(data - 2, len + 2);
-	else if (is_ie_wfa_ie(data, len, IE_WFA_OI_HS20_INDICATION))
-		bss->hs20_ie = l_memdup(data - 2, len + 2);
-	else
+	else if (is_ie_wfa_ie(data, len, IE_WFA_OI_HS20_INDICATION)) {
+		if (ie_parse_hs20_indication_from_data(data - 2, len + 2,
+					&bss->hs20_version, NULL, NULL) < 0)
+			return false;
+
+		bss->hs20_capable = true;
+	} else
 		return false;
 
 	return true;
@@ -1132,7 +1136,6 @@ void scan_bss_free(struct scan_bss *bss)
 	l_free(bss->p2p);
 	l_free(bss->osen);
 	l_free(bss->rc_ie);
-	l_free(bss->hs20_ie);
 	l_free(bss);
 }
 

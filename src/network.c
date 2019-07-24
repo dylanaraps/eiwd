@@ -715,7 +715,7 @@ bool network_bss_add(struct network *network, struct scan_bss *bss)
 	if (bss->rc_ie && !network->rc_ie)
 		network->rc_ie = l_memdup(bss->rc_ie, bss->rc_ie[1] + 2);
 
-	if (bss->hs20_ie)
+	if (bss->hs20_capable)
 		network->is_hs20 = true;
 
 	return true;
