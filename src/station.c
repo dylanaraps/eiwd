@@ -63,6 +63,8 @@ struct station {
 	struct watchlist state_watches;
 	struct scan_bss *connected_bss;
 	struct network *connected_network;
+	struct scan_bss *connect_pending_bss;
+	struct network *connect_pending_network;
 	struct l_queue *autoconnect_list;
 	struct l_queue *bss_list;
 	struct l_queue *hidden_bss_list_sorted;
@@ -2225,6 +2227,53 @@ int __station_connect_network(struct station *station, struct network *network,
 	return 0;
 }
 
+static void station_disconnect_onconnect_cb(struct netdev *netdev, bool success,
+					void *user_data)
+{
+	struct station *station = user_data;
+	int err;
+
+	station_enter_state(station, STATION_STATE_DISCONNECTED);
+
+	err = __station_connect_network(station,
+					station->connect_pending_network,
+					station->connect_pending_bss);
+
+	station->connect_pending_network = NULL;
+	station->connect_pending_bss = NULL;
+
+	if (err < 0) {
+		l_dbus_send(dbus_get_bus(),
+				dbus_error_from_errno(err,
+						station->connect_pending));
+		return;
+	}
+
+	station_enter_state(station, STATION_STATE_CONNECTING);
+}
+
+static void station_disconnect_onconnect(struct station *station,
+					struct network *network,
+					struct scan_bss *bss,
+					struct l_dbus_message *message)
+{
+	if (netdev_disconnect(station->netdev, station_disconnect_onconnect_cb,
+								station) < 0) {
+		l_dbus_send(dbus_get_bus(),
+					dbus_error_from_errno(-EIO, message));
+		return;
+	}
+
+	station_reset_connection_state(station);
+
+	station_enter_state(station, STATION_STATE_DISCONNECTING);
+
+	station->connect_pending_network = network;
+	station->connect_pending_bss = bss;
+
+	station->connect_pending = l_dbus_message_ref(message);
+}
+
 void station_connect_network(struct station *station, struct network *network,
 				struct scan_bss *bss,
 				struct l_dbus_message *message)
@@ -2233,8 +2282,9 @@ void station_connect_network(struct station *station, struct network *network,
 	int err;
 
 	if (station_is_busy(station)) {
-		err = -EBUSY;
-		goto error;
+		station_disconnect_onconnect(station, network, bss, message);
+
+		return;
 	}
 
 	err = __station_connect_network(station, network, bss);

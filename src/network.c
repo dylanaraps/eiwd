@@ -1176,9 +1176,6 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 
 	l_debug("");
 
-	if (station_is_busy(station))
-		return dbus_error_busy(message);
-
 	/*
 	 * Select the best BSS to use at this time.  If we have to query the
 	 * agent this may not be the final choice because BSS visibility can
