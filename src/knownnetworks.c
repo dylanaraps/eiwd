@@ -40,36 +40,19 @@
 #include "src/dbus.h"
 #include "src/knownnetworks.h"
 #include "src/scan.h"
+#include "src/util.h"
 
 static struct l_queue *known_networks;
 static size_t num_known_hidden_networks;
 static struct l_dir_watch *storage_dir_watch;
-
-static int timespec_compare(const struct timespec *tsa,
-				const struct timespec *tsb)
-{
-
-	if (tsa->tv_sec > tsb->tv_sec)
-		return -1;
-
-	if (tsa->tv_sec < tsb->tv_sec)
-		return 1;
-
-	if (tsa->tv_nsec > tsb->tv_nsec)
-		return -1;
-
-	if (tsa->tv_nsec < tsb->tv_nsec)
-		return -1;
-
-	return 0;
-}
 
 static int connected_time_compare(const void *a, const void *b, void *user_data)
 {
 	const struct network_info *ni_a = a;
 	const struct network_info *ni_b = b;
 
-	return timespec_compare(&ni_a->connected_time, &ni_b->connected_time);
+	return util_timespec_compare(&ni_a->connected_time,
+					&ni_b->connected_time);
 }
 
 const char *known_network_get_path(const struct network_info *network)
@@ -131,7 +114,7 @@ static void known_network_update(struct network_info *orig_network,
 	else
 		network = network_info_add_known(ssid, security);
 
-	if (timespec_compare(&network->connected_time, connected_time) &&
+	if (util_timespec_compare(&network->connected_time, connected_time) &&
 			orig_network) {
 		l_dbus_property_changed(dbus_get_bus(),
 					known_network_get_path(network),
