@@ -4518,10 +4518,17 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg, bool random_mac)
 	}
 
 	if (!l_settings_get_bool(settings, "General",
-				"ControlPortOverNL80211", &pae_over_nl80211)) {
-		pae_over_nl80211 = true;
-		l_info("No ControlPortOverNL80211 setting, defaulting to %s",
-			pae_over_nl80211 ? "True" : "False");
+				"control_port_over_nl80211",
+				&pae_over_nl80211)) {
+		if (!l_settings_get_bool(settings, "General",
+					"ControlPortOverNL80211", &pae_over_nl80211)) {
+			pae_over_nl80211 = true;
+			l_info("No control_port_over_nl80211 setting, "
+				"defaulting to %s",
+				pae_over_nl80211 ? "True" : "False");
+		} else
+			l_warn("ControlPortOverNL80211 is deprecated, use "
+				"'control_port_over_nl80211'");
 	}
 
 	if (!wiphy_has_ext_feature(wiphy,
