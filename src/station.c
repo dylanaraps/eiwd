@@ -739,8 +739,15 @@ static int station_build_handshake_rsn(struct handshake_state *hs,
 	}
 
 	if (!l_settings_get_uint(settings, "General",
-			"ManagementFrameProtection", &mfp_setting))
-		mfp_setting = 1;
+					"management_frame_protection",
+					&mfp_setting)) {
+		if (!l_settings_get_uint(settings, "General",
+				"ManagementFrameProtection", &mfp_setting)) {
+			mfp_setting = 1;
+		} else
+			l_warn("ManagementFrameProtection option is deprecated "
+				"use 'management_frame_protection'");
+	}
 
 	if (mfp_setting > 2) {
 		l_error("Invalid MFP value, using default of 1");
