@@ -555,17 +555,17 @@ void network_set_nai_realms(struct network *network, char **realms)
 	network->nai_realms = realms;
 }
 
-uint8_t *network_get_hessid(struct network *network)
+const uint8_t *network_get_hessid(const struct network *network)
 {
 	return network->hessid;
 }
 
-char **network_get_nai_realms(struct network *network)
+char **network_get_nai_realms(const struct network *network)
 {
 	return network->nai_realms;
 }
 
-const uint8_t *network_get_roaming_consortium(struct network *network)
+const uint8_t *network_get_roaming_consortium(const struct network *network)
 {
 	return network->rc_ie;
 }

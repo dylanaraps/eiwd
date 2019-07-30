@@ -50,9 +50,9 @@ void network_sync_psk(struct network *network);
 
 void network_set_hessid(struct network *network, uint8_t *hessid);
 void network_set_nai_realms(struct network *network, char **realms);
-uint8_t *network_get_hessid(struct network *network);
-char **network_get_nai_realms(struct network *network);
-const uint8_t *network_get_roaming_consortium(struct network *network);
+const uint8_t *network_get_hessid(const struct network *network);
+char **network_get_nai_realms(const struct network *network);
+const uint8_t *network_get_roaming_consortium(const struct network *network);
 
 int network_autoconnect(struct network *network, struct scan_bss *bss);
 void network_connect_failed(struct network *network);

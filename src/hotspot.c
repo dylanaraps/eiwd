@@ -254,7 +254,7 @@ static bool match_rc(const void *a, const void *b)
 const char *hs20_find_settings_file(struct network *network)
 {
 	struct hs20_config *config;
-	uint8_t *hessid = network_get_hessid(network);
+	const uint8_t *hessid = network_get_hessid(network);
 	char **nai_realms = network_get_nai_realms(network);
 	const uint8_t *rc_ie = network_get_roaming_consortium(network);
 
