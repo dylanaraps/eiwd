@@ -402,68 +402,12 @@ gateway:
 	return true;
 }
 
-enum netconfig_action {
-	NETCONFIG_ACTION_INSTALL,
-	NETCONFIG_ACTION_UNINSTALL,
-};
-
-static void netconfig_ipv4_dhcp_addressing(struct netconfig *netconfig,
-					const struct l_dhcp_client *client,
-					enum netconfig_action action)
-{
-	const struct l_dhcp_lease *lease;
-	struct netconfig_ifaddr ifaddr;
-	struct in_addr in_addr;
-	char *netmask;
-	char *gateway;
-	char **dns;
-
-	l_debug();
-
-	lease = l_dhcp_client_get_lease(client);
-	if (!lease)
-		return;
-
-	ifaddr.ip = l_dhcp_lease_get_address(lease);
-	gateway = l_dhcp_lease_get_gateway(lease);
-	if (!ifaddr.ip || !gateway)
-		goto no_ip;
-
-	netmask = l_dhcp_lease_get_netmask(lease);
-
-	if (netmask && inet_pton(AF_INET, netmask, &in_addr) > 0)
-		ifaddr.prefix_len =
-			__builtin_popcountl(L_BE32_TO_CPU(in_addr.s_addr));
-	else
-		ifaddr.prefix_len = 24;
-
-	ifaddr.broadcast = l_dhcp_lease_get_broadcast(lease);
-	dns = l_dhcp_lease_get_dns(lease);
-	ifaddr.family = AF_INET;
-	ifaddr.proto = RTPROT_DHCP;
-
-	switch (action) {
-	case NETCONFIG_ACTION_INSTALL:
-		netconfig_install_addresses(netconfig, &ifaddr, gateway, dns);
-		break;
-	case NETCONFIG_ACTION_UNINSTALL:
-		netconfig_uninstall_addresses(netconfig, &ifaddr, gateway, dns);
-		break;
-	}
-
-	l_strfreev(dns);
-	l_free(netmask);
-	l_free(ifaddr.broadcast);
-no_ip:
-	l_free(ifaddr.ip);
-	l_free(gateway);
-}
-
 static void netconfig_ipv4_dhcp_event_handler(struct l_dhcp_client *client,
 						enum l_dhcp_client_event event,
 						void *userdata)
 {
 	struct netconfig *netconfig = userdata;
+	struct netconfig_ifaddr *ifaddr;
 
 	l_debug("DHCPv4 event %d", event);
 
@@ -471,13 +415,30 @@ static void netconfig_ipv4_dhcp_event_handler(struct l_dhcp_client *client,
 	case L_DHCP_CLIENT_EVENT_LEASE_RENEWED:
 	case L_DHCP_CLIENT_EVENT_LEASE_OBTAINED:
 	case L_DHCP_CLIENT_EVENT_IP_CHANGED:
-		netconfig_ipv4_dhcp_addressing(netconfig, client,
-						NETCONFIG_ACTION_INSTALL);
+		ifaddr = netconfig_ipv4_get_ifaddr(netconfig, RTPROT_DHCP);
+		if (!ifaddr) {
+			l_error("netconfig: Failed to obtain IP addresses from "
+							"DHCPv4 lease.");
+			return;
+		}
+
+		/* TODO Install address */
+
+		netconfig_ifaddr_destroy(ifaddr);
 
 		break;
 	case L_DHCP_CLIENT_EVENT_LEASE_EXPIRED:
-		netconfig_ipv4_dhcp_addressing(netconfig, client,
-						NETCONFIG_ACTION_UNINSTALL);
+		ifaddr = netconfig_ipv4_get_ifaddr(netconfig, RTPROT_DHCP);
+		if (!ifaddr) {
+			l_error("netconfig: Failed to obtain IP addresses from "
+							"DHCPv4 lease.");
+			return;
+		}
+
+		/* TODO Uninstall address */
+
+		netconfig_ifaddr_destroy(ifaddr);
+
 		/* Fall through. */
 	case L_DHCP_CLIENT_EVENT_NO_LEASE:
 		/*
