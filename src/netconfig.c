@@ -204,6 +204,31 @@ static struct netconfig_ifaddr *netconfig_ipv4_get_ifaddr(
 	return NULL;
 }
 
+static char *netconfig_ipv4_get_gateway(struct netconfig *netconfig,
+								uint8_t proto)
+{
+	const struct l_dhcp_lease *lease;
+	const struct l_settings *settings;
+
+	switch (proto) {
+	case RTPROT_STATIC:
+		settings = netconfig_get_connected_network_settings(netconfig);
+		if (!settings)
+			return NULL;
+
+		return l_settings_get_string(settings, "IPv4", "gateway");
+
+	case RTPROT_DHCP:
+		lease = l_dhcp_client_get_lease(netconfig->dhcp_client);
+		if (!lease)
+			return NULL;
+
+		return l_dhcp_lease_get_gateway(lease);
+	}
+
+	return NULL;
+}
+
 static char **netconfig_ipv4_get_dns(struct netconfig *netconfig, uint8_t proto)
 {
 	const struct l_dhcp_lease *lease;
@@ -339,6 +364,76 @@ static void netconfig_ifaddr_cmd_cb(int error, uint16_t type,
 	netconfig_ifaddr_notify(type, data, len, user_data);
 }
 
+/*
+ * Routing priority offset, configurable in main.conf. The route with lower
+ * priority offset is preferred.
+ */
+static int ROUTE_PRIORITY_OFFSET;
+
+static void netconfig_route_cmd_cb(int error, uint16_t type,
+						const void *data, uint32_t len,
+						void *user_data)
+{
+	if (!error)
+		return;
+
+	l_error("netconfig: Route command failure. Error %d: %s",
+						error, strerror(-error));
+}
+
+static bool netconfig_ipv4_routes_install(struct netconfig *netconfig,
+						struct netconfig_ifaddr *ifaddr)
+{
+	L_AUTO_FREE_VAR(char *, gateway) = NULL;
+	struct in_addr in_addr;
+	char *network;
+	uint8_t proto;
+
+	if (inet_pton(AF_INET, ifaddr->ip, &in_addr) < 1)
+		return false;
+
+	in_addr.s_addr = in_addr.s_addr &
+			htonl(0xFFFFFFFFLU << (32 - ifaddr->prefix_len));
+
+	network = inet_ntoa(in_addr);
+	if (!network)
+		return false;
+
+	proto = netconfig->ipv4_is_static ? RTPROT_STATIC : RTPROT_DHCP;
+
+	if (!rtnl_route_ipv4_add_connected(rtnl, netconfig->ifindex,
+						ifaddr->prefix_len, network,
+						ifaddr->ip, proto,
+						netconfig_route_cmd_cb,
+						NULL, NULL)) {
+		l_error("netconfig: Failed to add subnet route.");
+
+		return false;
+	}
+
+	gateway = netconfig_ipv4_get_gateway(netconfig, proto);
+	if (!gateway) {
+		l_error("netconfig: Failed to obtain gateway from %s.",
+			netconfig->ipv4_is_static ?
+					"setting file" : "DHCPv4 lease");
+
+		return false;
+	}
+
+	if (!rtnl_route_ipv4_add_gateway(rtnl, netconfig->ifindex, gateway,
+						ifaddr->ip,
+						ROUTE_PRIORITY_OFFSET,
+						proto, netconfig_route_cmd_cb,
+						NULL, NULL)) {
+		l_error("netconfig: Failed to add route for: %s gateway.",
+								gateway);
+
+		return false;
+	}
+
+	return true;
+}
+
 static void netconfig_ipv4_ifaddr_add_cmd_cb(int error, uint16_t type,
 						const void *data, uint32_t len,
 						void *user_data)
@@ -363,7 +458,11 @@ static void netconfig_ipv4_ifaddr_add_cmd_cb(int error, uint16_t type,
 		return;
 	}
 
-	/* TODO Install the routes */
+	if (!netconfig_ipv4_routes_install(netconfig, ifaddr)) {
+		l_error("netconfig: Failed to install IPv4 routes.");
+
+		goto done;
+	}
 
 	dns = netconfig_ipv4_get_dns(netconfig, netconfig->ipv4_is_static ?
 						RTPROT_STATIC : RTPROT_DHCP);
@@ -702,6 +801,11 @@ static int netconfig_init(void)
 		l_error("netconfig: Failed to get addresses from RTNL link.");
 		goto error;
 	}
+
+	if (!l_settings_get_int(iwd_get_config(), "General",
+							"route_priority_offset",
+							&ROUTE_PRIORITY_OFFSET))
+		ROUTE_PRIORITY_OFFSET = 300;
 
 	netconfig_list = l_queue_new();
 
