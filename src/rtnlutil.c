@@ -43,6 +43,17 @@ static size_t rta_add_u8(void *rta_buf, unsigned short type, uint8_t value)
 	return RTA_SPACE(sizeof(uint8_t));
 }
 
+static size_t rta_add_u32(void *rta_buf, unsigned short type, uint32_t value)
+{
+	struct rtattr *rta = rta_buf;
+
+	rta->rta_len = RTA_LENGTH(sizeof(uint32_t));
+	rta->rta_type = type;
+	*((uint32_t *) RTA_DATA(rta)) = value;
+
+	return RTA_SPACE(sizeof(uint32_t));
+}
+
 static size_t rta_add_data(void *rta_buf, unsigned short type, void *data,
 								size_t data_len)
 {
@@ -308,4 +319,117 @@ uint32_t rtnl_route_dump_ipv4(struct l_netlink *rtnl,
 	return l_netlink_send(rtnl, RTM_GETROUTE, NLM_F_DUMP, &rtmsg,
 					sizeof(struct rtmsg), cb, user_data,
 					destroy);
+}
+
+static uint32_t rtnl_route_add(struct l_netlink *rtnl, int ifindex,
+					uint8_t scope, uint8_t dst_len,
+					const char *dst, const char *gateway,
+					const char *src,
+					uint32_t priority_offset, uint8_t proto,
+					l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy)
+{
+	struct rtmsg *rtmmsg;
+	struct in_addr in_addr;
+	size_t bufsize;
+	void *rta_buf;
+	uint32_t id;
+	uint16_t flags;
+
+	if (!dst && !gateway)
+		return 0;
+
+	bufsize = NLMSG_ALIGN(sizeof(struct rtmsg)) +
+			RTA_SPACE(sizeof(uint32_t)) +
+			(priority_offset ? RTA_SPACE(sizeof(uint32_t)) : 0) +
+			(gateway ? RTA_SPACE(sizeof(struct in_addr)) : 0) +
+			(src ? RTA_SPACE(sizeof(struct in_addr)) : 0) +
+			(dst ? RTA_SPACE(sizeof(struct in_addr)) : 0);
+
+	rtmmsg = l_malloc(bufsize);
+	memset(rtmmsg, 0, bufsize);
+
+	rtmmsg->rtm_family = AF_INET;
+	rtmmsg->rtm_table = RT_TABLE_MAIN;
+	rtmmsg->rtm_protocol = proto;
+	rtmmsg->rtm_type = RTN_UNICAST;
+	rtmmsg->rtm_scope = scope;
+
+	flags = NLM_F_CREATE | NLM_F_REPLACE;
+
+
+	rta_buf = (void *) rtmmsg + NLMSG_ALIGN(sizeof(struct rtmsg));
+	rta_buf += rta_add_u32(rta_buf, RTA_OIF, ifindex);
+
+	if (priority_offset)
+		rta_buf += rta_add_u32(rta_buf, RTA_PRIORITY,
+						priority_offset + ifindex);
+
+	if (dst) {
+		if (inet_pton(AF_INET, dst, &in_addr) < 1) {
+			l_free(rtmmsg);
+
+			return 0;
+		}
+
+		rtmmsg->rtm_dst_len = dst_len;
+		rta_buf += rta_add_data(rta_buf, RTA_DST, &in_addr,
+							sizeof(struct in_addr));
+	}
+
+	if (gateway) {
+		if (inet_pton(AF_INET, gateway, &in_addr) < 1) {
+			l_free(rtmmsg);
+
+			return 0;
+		}
+
+		rta_buf += rta_add_data(rta_buf, RTA_GATEWAY, &in_addr,
+							sizeof(struct in_addr));
+	}
+
+	if (src) {
+		if (inet_pton(AF_INET, src, &in_addr) < 1) {
+			l_free(rtmmsg);
+
+			return 0;
+		}
+
+		rtmmsg->rtm_src_len = 32;
+		rta_buf += rta_add_data(rta_buf, RTA_PREFSRC, &in_addr,
+							sizeof(struct in_addr));
+	}
+
+	id = l_netlink_send(rtnl, RTM_NEWROUTE, flags, rtmmsg,
+				rta_buf - (void *) rtmmsg, cb, user_data,
+								destroy);
+
+	l_free(rtmmsg);
+
+	return id;
+}
+
+uint32_t rtnl_route_ipv4_add_connected(struct l_netlink *rtnl, int ifindex,
+					uint8_t dst_len, const char *dst,
+					const char *src, uint8_t proto,
+					l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy)
+{
+	return rtnl_route_add(rtnl, ifindex, RT_SCOPE_LINK, dst_len, dst, NULL,
+				src, 0, proto, cb, user_data, destroy);
+}
+
+uint32_t rtnl_route_ipv4_add_gateway(struct l_netlink *rtnl, int ifindex,
+					const char *gateway, const char *src,
+					uint32_t priority_offset,
+					uint8_t proto,
+					l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy)
+{
+	return rtnl_route_add(rtnl, ifindex, RT_SCOPE_UNIVERSE, 0, NULL,
+				gateway, src, priority_offset, proto, cb,
+				user_data, destroy);
 }

@@ -54,3 +54,16 @@ void rtnl_route_extract_ipv4(const struct rtmsg *rtmsg, uint32_t len,
 uint32_t rtnl_route_dump_ipv4(struct l_netlink *rtnl,
 				l_netlink_command_func_t cb, void *user_data,
 				l_netlink_destroy_func_t destroy);
+uint32_t rtnl_route_ipv4_add_connected(struct l_netlink *rtnl, int ifindex,
+					uint8_t dst_len, const char *dst,
+					const char *src, uint8_t proto,
+					l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy);
+uint32_t rtnl_route_ipv4_add_gateway(struct l_netlink *rtnl, int ifindex,
+					const char *gateway, const char *src,
+					uint32_t priority_offset,
+					uint8_t proto,
+					l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy);
