@@ -59,6 +59,12 @@ struct netconfig_ifaddr {
 static struct l_netlink *rtnl;
 static struct l_queue *netconfig_list;
 
+/*
+ * Routing priority offset, configurable in main.conf. The route with lower
+ * priority offset is preferred.
+ */
+static uint32_t ROUTE_PRIORITY_OFFSET;
+
 static void do_debug(const char *str, void *user_data)
 {
 	const char *prefix = user_data;
@@ -360,12 +366,6 @@ static void netconfig_ifaddr_cmd_cb(int error, uint16_t type,
 
 	netconfig_ifaddr_notify(type, data, len, user_data);
 }
-
-/*
- * Routing priority offset, configurable in main.conf. The route with lower
- * priority offset is preferred.
- */
-static int ROUTE_PRIORITY_OFFSET;
 
 static void netconfig_route_cmd_cb(int error, uint16_t type,
 						const void *data, uint32_t len,
@@ -789,7 +789,7 @@ static int netconfig_init(void)
 		goto error;
 	}
 
-	if (!l_settings_get_int(iwd_get_config(), "General",
+	if (!l_settings_get_uint(iwd_get_config(), "General",
 							"route_priority_offset",
 							&ROUTE_PRIORITY_OFFSET))
 		ROUTE_PRIORITY_OFFSET = 300;
