@@ -317,7 +317,7 @@ enum netconfig_action {
 	NETCONFIG_ACTION_UNINSTALL,
 };
 
-static void netconfig_dhcp_addressing(struct netconfig *netconfig,
+static void netconfig_ipv4_dhcp_addressing(struct netconfig *netconfig,
 					const struct l_dhcp_client *client,
 					enum netconfig_action action)
 {
@@ -369,7 +369,7 @@ no_ip:
 	l_free(gateway);
 }
 
-static void netconfig_dhcp_event_handler(struct l_dhcp_client *client,
+static void netconfig_ipv4_dhcp_event_handler(struct l_dhcp_client *client,
 						enum l_dhcp_client_event event,
 						void *userdata)
 {
@@ -381,12 +381,12 @@ static void netconfig_dhcp_event_handler(struct l_dhcp_client *client,
 	case L_DHCP_CLIENT_EVENT_LEASE_RENEWED:
 	case L_DHCP_CLIENT_EVENT_LEASE_OBTAINED:
 	case L_DHCP_CLIENT_EVENT_IP_CHANGED:
-		netconfig_dhcp_addressing(netconfig, client,
+		netconfig_ipv4_dhcp_addressing(netconfig, client,
 						NETCONFIG_ACTION_INSTALL);
 
 		break;
 	case L_DHCP_CLIENT_EVENT_LEASE_EXPIRED:
-		netconfig_dhcp_addressing(netconfig, client,
+		netconfig_ipv4_dhcp_addressing(netconfig, client,
 						NETCONFIG_ACTION_UNINSTALL);
 		/* Fall through. */
 	case L_DHCP_CLIENT_EVENT_NO_LEASE:
@@ -405,7 +405,7 @@ static void netconfig_dhcp_event_handler(struct l_dhcp_client *client,
 	}
 }
 
-static bool netconfig_dhcp_create(struct netconfig *netconfig,
+static bool netconfig_ipv4_dhcp_create(struct netconfig *netconfig,
 							struct station *station)
 {
 	netconfig->dhcp_client = l_dhcp_client_new(netconfig->ifindex);
@@ -416,7 +416,7 @@ static bool netconfig_dhcp_create(struct netconfig *netconfig,
 					ETH_ALEN);
 
 	l_dhcp_client_set_event_handler(netconfig->dhcp_client,
-					netconfig_dhcp_event_handler,
+					netconfig_ipv4_dhcp_event_handler,
 					netconfig, NULL);
 
 	if (getenv("IWD_DHCP_DEBUG"))
@@ -426,7 +426,7 @@ static bool netconfig_dhcp_create(struct netconfig *netconfig,
 	return true;
 }
 
-static bool netconfig_static_addressing(struct netconfig *netconfig,
+static bool netconfig_ipv4_static_addressing(struct netconfig *netconfig,
 						struct station *station,
 						enum netconfig_action action)
 {
@@ -496,7 +496,7 @@ static void netconfig_station_state_changed(enum station_state state,
 
 	switch (state) {
 	case STATION_STATE_CONNECTED:
-		if (netconfig_static_addressing(netconfig, station,
+		if (netconfig_ipv4_static_addressing(netconfig, station,
 						NETCONFIG_ACTION_INSTALL))
 			break;
 
@@ -515,11 +515,12 @@ static void netconfig_station_state_changed(enum station_state state,
 
 		break;
 	case STATION_STATE_DISCONNECTED:
-		if (netconfig_static_addressing(netconfig, station,
+		if (netconfig_ipv4_static_addressing(netconfig, station,
 						NETCONFIG_ACTION_UNINSTALL))
 			break;
 
-		netconfig_dhcp_addressing(netconfig, netconfig->dhcp_client,
+		netconfig_ipv4_dhcp_addressing(netconfig,
+						netconfig->dhcp_client,
 						NETCONFIG_ACTION_UNINSTALL);
 
 		l_dhcp_client_stop(netconfig->dhcp_client);
@@ -556,7 +557,7 @@ bool netconfig_ifindex_add(uint32_t ifindex)
 	netconfig->ifindex = ifindex;
 	netconfig->ifaddr_list = l_queue_new();
 
-	netconfig_dhcp_create(netconfig, station);
+	netconfig_ipv4_dhcp_create(netconfig, station);
 
 	station_add_state_watch(station, netconfig_station_state_changed,
 							netconfig, NULL);
