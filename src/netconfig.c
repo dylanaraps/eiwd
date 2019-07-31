@@ -50,7 +50,6 @@ struct netconfig {
 };
 
 struct netconfig_ifaddr {
-	uint8_t proto;
 	uint8_t family;
 	uint8_t prefix_len;
 	char *ip;
@@ -205,6 +204,30 @@ static struct netconfig_ifaddr *netconfig_ipv4_get_ifaddr(
 	return NULL;
 }
 
+static char **netconfig_ipv4_get_dns(struct netconfig *netconfig, uint8_t proto)
+{
+	const struct l_dhcp_lease *lease;
+	const struct l_settings *settings;
+
+	switch (proto) {
+	case RTPROT_STATIC:
+		settings = netconfig_get_connected_network_settings(netconfig);
+		if (!settings)
+			return NULL;
+
+		return l_settings_get_string_list(settings, "IPv4", "dns", ' ');
+
+	case RTPROT_DHCP:
+		lease = l_dhcp_client_get_lease(netconfig->dhcp_client);
+		if (!lease)
+			return NULL;
+
+		return l_dhcp_lease_get_dns(lease);
+	}
+
+	return NULL;
+}
+
 static struct netconfig_ifaddr *netconfig_ifaddr_find(
 					const struct netconfig *netconfig,
 					uint8_t family, uint8_t prefix_len,
@@ -316,6 +339,48 @@ static void netconfig_ifaddr_cmd_cb(int error, uint16_t type,
 	netconfig_ifaddr_notify(type, data, len, user_data);
 }
 
+static void netconfig_ipv4_ifaddr_add_cmd_cb(int error, uint16_t type,
+						const void *data, uint32_t len,
+						void *user_data)
+{
+	struct netconfig *netconfig = user_data;
+	struct netconfig_ifaddr *ifaddr;
+	char **dns;
+
+	if (error && error != -EEXIST) {
+		l_error("netconfig: Failed to add IP address. "
+				"Error %d: %s", error, strerror(-error));
+		return;
+	}
+
+	ifaddr = netconfig_ipv4_get_ifaddr(netconfig,
+						netconfig->ipv4_is_static ?
+						RTPROT_STATIC : RTPROT_DHCP);
+	if (!ifaddr) {
+		l_error("netconfig: Failed to obtain IP address from %s.",
+					netconfig->ipv4_is_static ?
+					"setting file" : "DHCPv4 lease");
+		return;
+	}
+
+	/* TODO Install the routes */
+
+	dns = netconfig_ipv4_get_dns(netconfig, netconfig->ipv4_is_static ?
+						RTPROT_STATIC : RTPROT_DHCP);
+	if (!dns) {
+		l_error("netconfig: Failed to obtain DNS addresses from %s.",
+					netconfig->ipv4_is_static ?
+					"setting file" : "DHCPv4 lease");
+		goto done;
+	}
+
+	resolve_add_dns(netconfig->ifindex, ifaddr->family, dns);
+	l_strv_free(dns);
+
+done:
+	netconfig_ifaddr_destroy(ifaddr);
+}
+
 static void netconfig_install_address(struct netconfig *netconfig,
 						struct netconfig_ifaddr *ifaddr)
 {
@@ -328,7 +393,7 @@ static void netconfig_install_address(struct netconfig *netconfig,
 		if (rtnl_ifaddr_add(rtnl, netconfig->ifindex,
 					ifaddr->prefix_len, ifaddr->ip,
 					ifaddr->broadcast,
-					netconfig_ifaddr_cmd_cb,
+					netconfig_ipv4_ifaddr_add_cmd_cb,
 					netconfig, NULL))
 			return;
 
@@ -340,6 +405,32 @@ static void netconfig_install_address(struct netconfig *netconfig,
 								ifaddr->family);
 		break;
 	}
+}
+
+static void netconfig_ifaddr_del_cmd_cb(int error, uint16_t type,
+						const void *data, uint32_t len,
+						void *user_data)
+{
+	struct netconfig *netconfig;
+
+	if (error == -ENODEV)
+		/* The device is unplugged, we are done. */
+		return;
+
+	if (error) {
+		l_error("netconfig: Failed to delete IP address. "
+				"Error %d: %s", error, strerror(-error));
+		return;
+	}
+
+	netconfig = user_data;
+
+	/*
+	 * The kernel removes all of the routes associated with the deleted
+	 * IP on its own. There is no need to explicitly remove them.
+	 */
+
+	resolve_remove(netconfig->ifindex);
 }
 
 static void netconfig_uninstall_address(struct netconfig *netconfig,
@@ -354,7 +445,7 @@ static void netconfig_uninstall_address(struct netconfig *netconfig,
 		if (rtnl_ifaddr_delete(rtnl, netconfig->ifindex,
 					ifaddr->prefix_len, ifaddr->ip,
 					ifaddr->broadcast,
-					netconfig_ifaddr_cmd_cb, netconfig,
+					netconfig_ifaddr_del_cmd_cb, netconfig,
 					NULL))
 			return;
 
