@@ -46,7 +46,7 @@ struct netconfig {
 	enum station_state station_state;
 	struct l_dhcp_client *dhcp_client;
 	struct l_queue *ifaddr_list;
-	bool ipv4_is_static:1;
+	uint8_t rtm_protocol;
 };
 
 struct netconfig_ifaddr {
@@ -153,8 +153,6 @@ static struct netconfig_ifaddr *netconfig_ipv4_get_ifaddr(
 		if (!ip)
 			return NULL;
 
-		netconfig->ipv4_is_static = true;
-
 		ifaddr = l_new(struct netconfig_ifaddr, 1);
 		ifaddr->ip = ip;
 
@@ -204,13 +202,12 @@ static struct netconfig_ifaddr *netconfig_ipv4_get_ifaddr(
 	return NULL;
 }
 
-static char *netconfig_ipv4_get_gateway(struct netconfig *netconfig,
-								uint8_t proto)
+static char *netconfig_ipv4_get_gateway(struct netconfig *netconfig)
 {
 	const struct l_dhcp_lease *lease;
 	const struct l_settings *settings;
 
-	switch (proto) {
+	switch (netconfig->rtm_protocol) {
 	case RTPROT_STATIC:
 		settings = netconfig_get_connected_network_settings(netconfig);
 		if (!settings)
@@ -387,7 +384,6 @@ static bool netconfig_ipv4_routes_install(struct netconfig *netconfig,
 	L_AUTO_FREE_VAR(char *, gateway) = NULL;
 	struct in_addr in_addr;
 	char *network;
-	uint8_t proto;
 
 	if (inet_pton(AF_INET, ifaddr->ip, &in_addr) < 1)
 		return false;
@@ -399,11 +395,10 @@ static bool netconfig_ipv4_routes_install(struct netconfig *netconfig,
 	if (!network)
 		return false;
 
-	proto = netconfig->ipv4_is_static ? RTPROT_STATIC : RTPROT_DHCP;
-
 	if (!rtnl_route_ipv4_add_connected(rtnl, netconfig->ifindex,
 						ifaddr->prefix_len, network,
-						ifaddr->ip, proto,
+						ifaddr->ip,
+						netconfig->rtm_protocol,
 						netconfig_route_cmd_cb,
 						NULL, NULL)) {
 		l_error("netconfig: Failed to add subnet route.");
@@ -411,11 +406,11 @@ static bool netconfig_ipv4_routes_install(struct netconfig *netconfig,
 		return false;
 	}
 
-	gateway = netconfig_ipv4_get_gateway(netconfig, proto);
+	gateway = netconfig_ipv4_get_gateway(netconfig);
 	if (!gateway) {
 		l_error("netconfig: Failed to obtain gateway from %s.",
-			netconfig->ipv4_is_static ?
-					"setting file" : "DHCPv4 lease");
+				netconfig->rtm_protocol == RTPROT_STATIC ?
+				"setting file" : "DHCPv4 lease");
 
 		return false;
 	}
@@ -423,7 +418,8 @@ static bool netconfig_ipv4_routes_install(struct netconfig *netconfig,
 	if (!rtnl_route_ipv4_add_gateway(rtnl, netconfig->ifindex, gateway,
 						ifaddr->ip,
 						ROUTE_PRIORITY_OFFSET,
-						proto, netconfig_route_cmd_cb,
+						netconfig->rtm_protocol,
+						netconfig_route_cmd_cb,
 						NULL, NULL)) {
 		l_error("netconfig: Failed to add route for: %s gateway.",
 								gateway);
@@ -448,13 +444,11 @@ static void netconfig_ipv4_ifaddr_add_cmd_cb(int error, uint16_t type,
 		return;
 	}
 
-	ifaddr = netconfig_ipv4_get_ifaddr(netconfig,
-						netconfig->ipv4_is_static ?
-						RTPROT_STATIC : RTPROT_DHCP);
+	ifaddr = netconfig_ipv4_get_ifaddr(netconfig, netconfig->rtm_protocol);
 	if (!ifaddr) {
 		l_error("netconfig: Failed to obtain IP address from %s.",
-					netconfig->ipv4_is_static ?
-					"setting file" : "DHCPv4 lease");
+				netconfig->rtm_protocol == RTPROT_STATIC ?
+				"setting file" : "DHCPv4 lease");
 		return;
 	}
 
@@ -464,12 +458,11 @@ static void netconfig_ipv4_ifaddr_add_cmd_cb(int error, uint16_t type,
 		goto done;
 	}
 
-	dns = netconfig_ipv4_get_dns(netconfig, netconfig->ipv4_is_static ?
-						RTPROT_STATIC : RTPROT_DHCP);
+	dns = netconfig_ipv4_get_dns(netconfig, netconfig->rtm_protocol);
 	if (!dns) {
 		l_error("netconfig: Failed to obtain DNS addresses from %s.",
-					netconfig->ipv4_is_static ?
-					"setting file" : "DHCPv4 lease");
+				netconfig->rtm_protocol == RTPROT_STATIC ?
+				"setting file" : "DHCPv4 lease");
 		goto done;
 	}
 
@@ -639,11 +632,14 @@ static void netconfig_ipv4_select_and_install(struct netconfig *netconfig)
 
 	ifaddr = netconfig_ipv4_get_ifaddr(netconfig, RTPROT_STATIC);
 	if (ifaddr) {
+		netconfig->rtm_protocol = RTPROT_STATIC;
 		netconfig_install_address(netconfig, ifaddr);
 		netconfig_ifaddr_destroy(ifaddr);
 
 		return;
 	}
+
+	netconfig->rtm_protocol = RTPROT_DHCP;
 
 	if (netconfig->station_state == STATION_STATE_ROAMING) {
 		/*
@@ -665,20 +661,11 @@ static void netconfig_ipv4_select_and_uninstall(struct netconfig *netconfig)
 {
 	struct netconfig_ifaddr *ifaddr;
 
-	ifaddr = netconfig_ipv4_get_ifaddr(netconfig, RTPROT_STATIC);
+	ifaddr = netconfig_ipv4_get_ifaddr(netconfig, netconfig->rtm_protocol);
 	if (ifaddr) {
 		netconfig_uninstall_address(netconfig, ifaddr);
 		netconfig_ifaddr_destroy(ifaddr);
-
-		return;
 	}
-
-	ifaddr = netconfig_ipv4_get_ifaddr(netconfig, RTPROT_DHCP);
-	if (!ifaddr)
-		return;
-
-	netconfig_uninstall_address(netconfig, ifaddr);
-	netconfig_ifaddr_destroy(ifaddr);
 
 	l_dhcp_client_stop(netconfig->dhcp_client);
 }
