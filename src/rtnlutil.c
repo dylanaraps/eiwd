@@ -330,11 +330,10 @@ static uint32_t rtnl_route_add(struct l_netlink *rtnl, int ifindex,
 					void *user_data,
 					l_netlink_destroy_func_t destroy)
 {
-	struct rtmsg *rtmmsg;
+	L_AUTO_FREE_VAR(struct rtmsg *, rtmmsg);
 	struct in_addr in_addr;
 	size_t bufsize;
 	void *rta_buf;
-	uint32_t id;
 	uint16_t flags;
 
 	if (!dst && !gateway)
@@ -358,7 +357,6 @@ static uint32_t rtnl_route_add(struct l_netlink *rtnl, int ifindex,
 
 	flags = NLM_F_CREATE | NLM_F_REPLACE;
 
-
 	rta_buf = (void *) rtmmsg + NLMSG_ALIGN(sizeof(struct rtmsg));
 	rta_buf += rta_add_u32(rta_buf, RTA_OIF, ifindex);
 
@@ -367,11 +365,8 @@ static uint32_t rtnl_route_add(struct l_netlink *rtnl, int ifindex,
 						priority_offset + ifindex);
 
 	if (dst) {
-		if (inet_pton(AF_INET, dst, &in_addr) < 1) {
-			l_free(rtmmsg);
-
+		if (inet_pton(AF_INET, dst, &in_addr) < 1)
 			return 0;
-		}
 
 		rtmmsg->rtm_dst_len = dst_len;
 		rta_buf += rta_add_data(rta_buf, RTA_DST, &in_addr,
@@ -379,35 +374,25 @@ static uint32_t rtnl_route_add(struct l_netlink *rtnl, int ifindex,
 	}
 
 	if (gateway) {
-		if (inet_pton(AF_INET, gateway, &in_addr) < 1) {
-			l_free(rtmmsg);
-
+		if (inet_pton(AF_INET, gateway, &in_addr) < 1)
 			return 0;
-		}
 
 		rta_buf += rta_add_data(rta_buf, RTA_GATEWAY, &in_addr,
 							sizeof(struct in_addr));
 	}
 
 	if (src) {
-		if (inet_pton(AF_INET, src, &in_addr) < 1) {
-			l_free(rtmmsg);
-
+		if (inet_pton(AF_INET, src, &in_addr) < 1)
 			return 0;
-		}
 
 		rtmmsg->rtm_src_len = 32;
 		rta_buf += rta_add_data(rta_buf, RTA_PREFSRC, &in_addr,
 							sizeof(struct in_addr));
 	}
 
-	id = l_netlink_send(rtnl, RTM_NEWROUTE, flags, rtmmsg,
+	return l_netlink_send(rtnl, RTM_NEWROUTE, flags, rtmmsg,
 				rta_buf - (void *) rtmmsg, cb, user_data,
 								destroy);
-
-	l_free(rtmmsg);
-
-	return id;
 }
 
 uint32_t rtnl_route_ipv4_add_connected(struct l_netlink *rtnl, int ifindex,
