@@ -516,62 +516,6 @@ static bool netconfig_ipv4_dhcp_create(struct netconfig *netconfig,
 	return true;
 }
 
-static bool netconfig_ipv4_static_addressing(struct netconfig *netconfig,
-						struct station *station,
-						enum netconfig_action action)
-{
-	const struct network *network;
-	const struct l_settings *settings;
-	struct netconfig_ifaddr ifaddr;
-	struct in_addr in_addr;
-	char *netmask;
-	char *gateway;
-	char **dns;
-
-	l_debug();
-
-	network = station_get_connected_network(station);
-	if (!network)
-		return false;
-
-	settings = network_get_settings(network);
-	if (!settings)
-		return false;
-
-	ifaddr.ip = l_settings_get_string(settings, "IPv4", "ip");
-	gateway = l_settings_get_string(settings, "IPv4", "gateway");
-	if (!ifaddr.ip || !gateway) {
-		l_free(ifaddr.ip);
-		l_free(gateway);
-
-		return false;
-	}
-
-	netmask = l_settings_get_string(settings, "IPv4", "netmask");
-
-	if (netmask && inet_pton(AF_INET, netmask, &in_addr) > 0)
-		ifaddr.prefix_len =
-			__builtin_popcountl(L_BE32_TO_CPU(in_addr.s_addr));
-	else
-		ifaddr.prefix_len = 24;
-
-	l_free(netmask);
-
-	ifaddr.broadcast = l_settings_get_string(settings, "IPv4", "broadcast");
-	dns = l_settings_get_string_list(settings, "IPv4", "dns", ' ');
-	ifaddr.family = AF_INET;
-	ifaddr.proto = RTPROT_STATIC;
-
-	netconfig_install_addresses(netconfig, &ifaddr, gateway, dns);
-
-	l_free(ifaddr.ip);
-	l_free(gateway);
-	l_free(ifaddr.broadcast);
-	l_strfreev(dns);
-
-	return true;
-}
-
 static void netconfig_ipv4_select_and_install(struct netconfig *netconfig)
 {
 	struct netconfig_ifaddr *ifaddr;
