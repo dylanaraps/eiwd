@@ -330,7 +330,7 @@ static uint32_t rtnl_route_add(struct l_netlink *rtnl, int ifindex,
 					void *user_data,
 					l_netlink_destroy_func_t destroy)
 {
-	L_AUTO_FREE_VAR(struct rtmsg *, rtmmsg);
+	L_AUTO_FREE_VAR(struct rtmsg *, rtmmsg) = NULL;
 	struct in_addr in_addr;
 	size_t bufsize;
 	void *rta_buf;
