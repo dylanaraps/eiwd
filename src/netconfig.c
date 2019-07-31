@@ -46,6 +46,7 @@ struct netconfig {
 	enum station_state station_state;
 	struct l_dhcp_client *dhcp_client;
 	struct l_queue *ifaddr_list;
+	bool ipv4_is_static:1;
 };
 
 struct netconfig_ifaddr {
@@ -110,6 +111,95 @@ static struct netconfig *netconfig_find(uint32_t ifindex)
 			continue;
 
 		return netconfig;
+	}
+
+	return NULL;
+}
+
+static struct l_settings *netconfig_get_connected_network_settings(
+						struct netconfig *netconfig)
+{
+	struct station *station;
+	const struct network *network;
+
+	station = station_find(netconfig->ifindex);
+	if (!station)
+		return NULL;
+
+	network = station_get_connected_network(station);
+	if (!network)
+		return NULL;
+
+	return network_get_settings(network);
+}
+
+static struct netconfig_ifaddr *netconfig_ipv4_get_ifaddr(
+						struct netconfig *netconfig,
+						uint8_t proto)
+{
+	const struct l_dhcp_lease *lease;
+	const struct l_settings *settings;
+	struct netconfig_ifaddr *ifaddr;
+	struct in_addr in_addr;
+	char *netmask;
+	char *ip;
+
+	switch (proto) {
+	case RTPROT_STATIC:
+		settings = netconfig_get_connected_network_settings(netconfig);
+		if (!settings)
+			return NULL;
+
+		ip = l_settings_get_string(settings, "IPv4", "ip");
+		if (!ip)
+			return NULL;
+
+		netconfig->ipv4_is_static = true;
+
+		ifaddr = l_new(struct netconfig_ifaddr, 1);
+		ifaddr->ip = ip;
+
+		netmask = l_settings_get_string(settings, "IPv4", "netmask");
+		if (netmask && inet_pton(AF_INET, netmask, &in_addr) > 0)
+			ifaddr->prefix_len = __builtin_popcountl(
+						L_BE32_TO_CPU(in_addr.s_addr));
+		else
+			ifaddr->prefix_len = 24;
+
+		l_free(netmask);
+
+		ifaddr->broadcast = l_settings_get_string(settings, "IPv4",
+								"broadcast");
+		ifaddr->family = AF_INET;
+
+		return ifaddr;
+
+	case RTPROT_DHCP:
+		lease = l_dhcp_client_get_lease(netconfig->dhcp_client);
+		if (!lease)
+			return NULL;
+
+		ip = l_dhcp_lease_get_address(lease);
+		if (!ip)
+			return NULL;
+
+		ifaddr = l_new(struct netconfig_ifaddr, 1);
+		ifaddr->ip = ip;
+
+		netmask = l_dhcp_lease_get_netmask(lease);
+
+		if (netmask && inet_pton(AF_INET, netmask, &in_addr) > 0)
+			ifaddr->prefix_len = __builtin_popcountl(
+						L_BE32_TO_CPU(in_addr.s_addr));
+		else
+			ifaddr->prefix_len = 24;
+
+		l_free(netmask);
+
+		ifaddr->broadcast = l_dhcp_lease_get_broadcast(lease);
+		ifaddr->family = AF_INET;
+
+		return ifaddr;
 	}
 
 	return NULL;
