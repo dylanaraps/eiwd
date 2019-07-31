@@ -572,48 +572,74 @@ static bool netconfig_ipv4_static_addressing(struct netconfig *netconfig,
 	return true;
 }
 
+static void netconfig_ipv4_select_and_install(struct netconfig *netconfig)
+{
+	struct netconfig_ifaddr *ifaddr;
+
+	ifaddr = netconfig_ipv4_get_ifaddr(netconfig, RTPROT_STATIC);
+	if (ifaddr) {
+		/* TODO Install address */
+		netconfig_ifaddr_destroy(ifaddr);
+
+		return;
+	}
+
+	if (netconfig->station_state == STATION_STATE_ROAMING) {
+		/*
+		 * TODO l_dhcp_client to try to request a
+		 * previously used address.
+		 *
+		 * return;
+		 */
+	}
+
+	if (l_dhcp_client_start(netconfig->dhcp_client))
+		return;
+
+	l_error("netconfig: Failed to start DHCPv4 client for interface %u",
+							netconfig->ifindex);
+}
+
+static void netconfig_ipv4_select_and_uninstall(struct netconfig *netconfig)
+{
+	struct netconfig_ifaddr *ifaddr;
+
+	ifaddr = netconfig_ipv4_get_ifaddr(netconfig, RTPROT_STATIC);
+	if (ifaddr) {
+		/* TODO Uninstall address */
+		netconfig_ifaddr_destroy(ifaddr);
+
+		return;
+	}
+
+	ifaddr = netconfig_ipv4_get_ifaddr(netconfig, RTPROT_DHCP);
+	if (!ifaddr)
+		return;
+
+	/* TODO Uninstall address */
+	netconfig_ifaddr_destroy(ifaddr);
+
+	l_dhcp_client_stop(netconfig->dhcp_client);
+}
+
 static void netconfig_station_state_changed(enum station_state state,
 								void *userdata)
 {
 	struct netconfig *netconfig = userdata;
-	struct station *station;
 
 	l_debug("");
 
-	station = station_find(netconfig->ifindex);
-	if (!station)
-		return;
-
 	switch (state) {
 	case STATION_STATE_CONNECTED:
-		if (netconfig_ipv4_static_addressing(netconfig, station,
-						NETCONFIG_ACTION_INSTALL))
-			break;
+		netconfig_ipv4_select_and_install(netconfig);
 
-		if (netconfig->station_state == STATION_STATE_ROAMING) {
-			/*
-			 * TODO l_dhcp_client to try to request a previously
-			 * used address.
-			 *
-			 * break;
-			 */
-		}
-
-		if (!l_dhcp_client_start(netconfig->dhcp_client))
-			l_error("netconfig: Failed to start DHCPv4 client for "
-					"interface %u", netconfig->ifindex);
+		/* TODO: IPv6 addressing */
 
 		break;
 	case STATION_STATE_DISCONNECTED:
-		if (netconfig_ipv4_static_addressing(netconfig, station,
-						NETCONFIG_ACTION_UNINSTALL))
-			break;
+		netconfig_ipv4_select_and_uninstall(netconfig);
 
-		netconfig_ipv4_dhcp_addressing(netconfig,
-						netconfig->dhcp_client,
-						NETCONFIG_ACTION_UNINSTALL);
-
-		l_dhcp_client_stop(netconfig->dhcp_client);
+		/* TODO: IPv6 addressing */
 
 		break;
 	case STATION_STATE_ROAMING:
