@@ -23,10 +23,8 @@ class Test(unittest.TestCase):
         devices[2].disconnect()
         devices[3].disconnect()
 
-        condition = 'not obj.scanning'
+        condition = 'obj.scanning'
         wd.wait_for_object_condition(device, condition)
-
-        device.scan()
 
         condition = 'not obj.scanning'
         wd.wait_for_object_condition(device, condition)
