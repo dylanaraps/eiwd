@@ -64,6 +64,7 @@ class Test(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         IWD.clear_storage()
+        os.remove('/tmp/main.conf')
 
 if __name__ == '__main__':
     unittest.main(exit=True)
