@@ -903,7 +903,7 @@ static struct l_dbus_message *wsc_push_button(struct l_dbus *dbus,
 	if (wsc->pending)
 		return dbus_error_busy(message);
 
-	wsc->station = station_find(netdev_get_wdev_id(wsc->netdev));
+	wsc->station = station_find(netdev_get_ifindex(wsc->netdev));
 	if (!wsc->station)
 		return dbus_error_not_available(message);
 
