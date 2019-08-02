@@ -26,6 +26,8 @@
 
 #include <errno.h>
 #include <arpa/inet.h>
+#include <sys/stat.h>
+#include <stdio.h>
 
 #include <ell/ell.h>
 
@@ -240,6 +242,116 @@ static const struct resolve_method_ops resolve_method_systemd = {
 	.remove = resolve_systemd_remove,
 };
 
+#define RESOLVCONF_PATH "/sbin/resolvconf"
+
+static void resolve_resolvconf_add_dns(uint32_t ifindex, uint8_t type,
+						char **dns_list, void *data)
+{
+	bool *ready = data;
+	FILE *resolvconf;
+	struct l_string *content;
+	int error;
+	L_AUTO_FREE_VAR(char *, cmd) = NULL;
+	L_AUTO_FREE_VAR(char *, str) = NULL;
+
+	if (!*ready)
+		return;
+
+	cmd = l_strdup_printf(RESOLVCONF_PATH " -a %u", ifindex);
+
+	if (!(resolvconf = popen(cmd, "w"))) {
+		l_error("resolve: Failed to start %s (%s).", RESOLVCONF_PATH,
+							strerror(errno));
+		return;
+	}
+
+	content = l_string_new(0);
+
+	for (; *dns_list; dns_list++)
+		l_string_append_printf(content, "nameserver %s\n", *dns_list);
+
+	str = l_string_unwrap(content);
+
+	if (fprintf(resolvconf, "%s", str) < 0)
+		l_error("resolve: Failed to print into %s stdin.",
+							RESOLVCONF_PATH);
+
+	error = pclose(resolvconf);
+	if (error < 0)
+		l_error("resolve: Failed to close pipe to %s (%s).",
+					RESOLVCONF_PATH, strerror(errno));
+	else if (error > 0)
+		l_info("resolve: %s exited with status (%d).", RESOLVCONF_PATH,
+									error);
+}
+
+static void resolve_resolvconf_remove(uint32_t ifindex, void *data)
+{
+	bool *ready = data;
+	FILE *resolvconf;
+	int error;
+	L_AUTO_FREE_VAR(char *, cmd) = NULL;
+
+	if (!*ready)
+		return;
+
+	cmd = l_strdup_printf(RESOLVCONF_PATH " -d %u", ifindex);
+
+	if (!(resolvconf = popen(cmd, "r"))) {
+		l_error("resolve: Failed to start %s (%s).", RESOLVCONF_PATH,
+							strerror(errno));
+		return;
+	}
+
+	error = pclose(resolvconf);
+	if (error < 0)
+		l_error("resolve: Failed to close pipe to %s (%s).",
+					RESOLVCONF_PATH, strerror(errno));
+	else if (error > 0)
+		l_info("resolve: %s exited with status (%d).", RESOLVCONF_PATH,
+									error);
+}
+
+static void *resolve_resolvconf_init(void)
+{
+	struct stat st;
+	bool *ready;
+
+	ready = l_new(bool, 1);
+
+	if (stat(RESOLVCONF_PATH, &st)) {
+		l_error("resolve: Could not stat %s (%s).", RESOLVCONF_PATH,
+							strerror(errno));
+		goto error;
+	}
+
+	if (!(st.st_mode & S_IXUSR)) {
+		l_error("resolve: %s is not executable.", RESOLVCONF_PATH);
+		goto error;
+	}
+
+	*ready = true;
+	return ready;
+
+error:
+	*ready = false;
+	return ready;
+}
+
+static void resolve_resolvconf_exit(void *data)
+{
+	bool *ready = data;
+
+	l_free(ready);
+}
+
+static const struct resolve_method_ops resolve_method_resolvconf = {
+	.init = resolve_resolvconf_init,
+	.exit = resolve_resolvconf_exit,
+	.add_dns = resolve_resolvconf_add_dns,
+	.remove = resolve_resolvconf_remove,
+};
+
 void resolve_add_dns(uint32_t ifindex, uint8_t type, char **dns_list)
 {
 	if (!dns_list || !*dns_list)
@@ -264,6 +376,7 @@ static const struct {
 	const struct resolve_method_ops *method_ops;
 } resolve_method_ops_list[] = {
 	{ "systemd", &resolve_method_systemd },
+	{ "resolvconf", &resolve_method_resolvconf },
 	{ }
 };
 
