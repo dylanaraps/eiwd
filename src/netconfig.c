@@ -26,9 +26,10 @@
 
 #include <errno.h>
 #include <arpa/inet.h>
+#include <net/if_arp.h>
+#include <netinet/if_ether.h>
+#include <netinet/in.h>
 #include <linux/rtnetlink.h>
-#include <linux/if_arp.h>
-#include <linux/in.h>
 
 #include <ell/ell.h>
 
