@@ -211,9 +211,9 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h src/missing.h \
 					src/netconfig.h src/netconfig.c\
 					src/resolve.h src/resolve.c\
 					src/hotspot.h src/hotspot.c \
+					src/p2putil.h src/p2putil.c \
 					$(eap_sources) \
 					$(builtin_sources)
-					src/p2putil.h src/p2putil.c
 
 src_iwd_LDADD = $(ell_ldadd) -ldl
 src_iwd_DEPENDENCIES = $(ell_dependencies)
