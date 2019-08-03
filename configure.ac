@@ -116,6 +116,9 @@ else
 	wired_storagedir="${localstatedir}/lib/ead"
 fi
 
+AC_SUBST([daemon_storagedir], [${daemon_storagedir}])
+AC_SUBST([wired_storagedir], [${wired_storagedir}])
+
 AC_DEFINE_UNQUOTED(DAEMON_STORAGEDIR, "${daemon_storagedir}",
 			[Directory for Wireless daemon storage files])
 AC_DEFINE_UNQUOTED(DAEMON_CONFIGDIR, "/etc/iwd",

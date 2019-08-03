@@ -568,8 +568,10 @@ ell/ell.h: Makefile
 		echo "#include <$$f>" >> $@ ; \
 	done
 
-SED_PROCESS = $(AM_V_GEN)$(MKDIR_P) $(dir $@) && \
-		$(SED) -e 's,@libexecdir\@,$(libexecdir),g' \
+SED_PROCESS = $(AM_V_GEN)$(MKDIR_P) $(dir $@) && $(SED) \
+		-e 's,@libexecdir\@,$(libexecdir),g' \
+		-e 's,@daemon_storagedir\@,$(daemon_storagedir),g' \
+		-e 's,@wired_storagedir\@,$(wired_storagedir),g' \
 		< $< > $@
 
 %.service: %.service.in Makefile

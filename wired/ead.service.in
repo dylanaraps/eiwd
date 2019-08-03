@@ -8,6 +8,15 @@ Type=dbus
 BusName=net.connman.ead
 ExecStart=@libexecdir@/ead
 LimitNPROC=1
+Restart=on-failure
+PrivateTmp=true
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=@wired_storagedir@
+ProtectControlGroups=yes
+ProtectKernelModules=yes
 
 [Install]
 WantedBy=multi-user.target

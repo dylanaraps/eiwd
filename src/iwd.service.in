@@ -15,7 +15,7 @@ DevicePolicy=closed
 DeviceAllow=/dev/rfkill rw
 ProtectHome=yes
 ProtectSystem=strict
-ReadWritePaths=/var/lib/iwd/
+ReadWritePaths=@daemon_storagedir@
 ProtectControlGroups=yes
 ProtectKernelModules=yes
 
