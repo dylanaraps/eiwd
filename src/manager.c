@@ -65,7 +65,7 @@ struct wiphy_setup_state {
 static struct l_queue *pending_wiphys;
 
 /* With these drivers don't even try creating our interfaces */
-const char *default_if_driver_list[] = {
+static const char *default_if_driver_list[] = {
 	/*
 	 * The out-of-tree rtl88x2bu crashes the kernel hard.  Seemingly
 	 * many other drivers are built from the same source code so
