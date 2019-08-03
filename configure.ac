@@ -244,15 +244,6 @@ if (test "${enable_external_ell}" = "yes"); then
 fi
 AM_CONDITIONAL(EXTERNAL_ELL, test "${enable_external_ell}" = "yes")
 
-AC_ARG_ENABLE([sim_hardcoded], AC_HELP_STRING([--enable-sim-hardcoded],
-				[enable hard coded SIM keys]),
-					[enable_sim_hardcoded=${enableval}])
-AM_CONDITIONAL(SIM_HARDCODED, test "${enable_sim_hardcoded}" = "yes")
-
-AC_ARG_ENABLE([ofono], AC_HELP_STRING([--enable-ofono],
-				[enable oFono SIM authentication support]),
-					[enable_ofono=${enableval}])
-AM_CONDITIONAL(OFONO, test "${enable_ofono}" = "yes")
 
 AC_ARG_ENABLE([wired], AC_HELP_STRING([--enable-wired],
 				[enable Ethernet authentication support]),
@@ -268,6 +259,16 @@ AC_ARG_ENABLE([tools], AC_HELP_STRING([--enable-tools],
 				[enable internal testing utilities]),
 					[enable_tools=${enableval}])
 AM_CONDITIONAL(TOOLS, test "${enable_tools}" = "yes")
+
+AC_ARG_ENABLE([ofono], AC_HELP_STRING([--enable-ofono],
+				[enable oFono SIM authentication support]),
+					[enable_ofono=${enableval}])
+AM_CONDITIONAL(OFONO, test "${enable_ofono}" = "yes")
+
+AC_ARG_ENABLE([sim_hardcoded], AC_HELP_STRING([--enable-sim-hardcoded],
+				[enable hard coded SIM keys]),
+					[enable_sim_hardcoded=${enableval}])
+AM_CONDITIONAL(SIM_HARDCODED, test "${enable_sim_hardcoded}" = "yes")
 
 AC_ARG_ENABLE([docs], AC_HELP_STRING([--enable-docs],
 				[build documentation and manual pages]),

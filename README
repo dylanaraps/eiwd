@@ -127,17 +127,9 @@ that can be enabled if the functionality is required:
 		Since the public API of Embedded Linux library  is not yet
 		stable, the usage of the internal ELL copy is preferred.
 
-	--enable-sim-hardcoded
 
-		Enable support for hard coded SIM keys
 
-		Note: With --disable-daemon this option is ignored
 
-	--enable-ofono
-
-		Enable support for oFono SIM authentication
-
-		Note: With --disable-daemon this option is ignored
 
 	--enable-wired
 
@@ -171,6 +163,18 @@ that can be enabled if the functionality is required:
 
 		This enables building of all utilities that are however
 		not installed and only useful during development.
+
+	--enable-ofono
+
+		Enable support for oFono SIM authentication
+
+		Note: With --disable-daemon this option is ignored
+
+	--enable-sim-hardcoded
+
+		Enable support for hard coded SIM keys
+
+		Note: With --disable-daemon this option is ignored
 
 	--enable-docs
 

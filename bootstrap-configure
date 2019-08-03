@@ -9,10 +9,10 @@ fi
 		--enable-debug \
 		--prefix=/usr \
 		--localstatedir=/var \
-		--enable-sim-hardcoded \
-		--enable-ofono \
 		--enable-wired \
 		--enable-hwsim \
 		--enable-tools \
+		--enable-ofono \
+		--enable-sim-hardcoded \
 		--disable-dbus-policy \
 		--disable-systemd-service $*
