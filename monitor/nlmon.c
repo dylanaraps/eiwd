@@ -1797,6 +1797,42 @@ static void print_fils_session(unsigned int level, const char *label,
 	print_attr(level, "FILS Session: len %u", size);
 }
 
+static void print_ie_supported_operating_classes(unsigned int level,
+							const char *label,
+							const void *data,
+							uint16_t size)
+{
+	const void *end = data + size;
+
+	if (size < 1) {
+		print_ie_error(level, label, size, -EINVAL);
+		return;
+	}
+
+	print_attr(level, "Current Operating Class: %u", l_get_u8(data));
+
+	data += 1;
+
+	while (end - data) {
+		uint8_t cls = l_get_u8(data);
+
+		/*
+		 * TODO: Support Current Operating Class Extension Sequence
+		 *       and Operating Class Duple Sequence
+		*/
+		if (cls == 130 || cls == 0) {
+			data = end;
+			break;
+		}
+
+		print_attr(level, "Supported Operating Class: %u", cls);
+		data += 1;
+	}
+
+	if (end - data)
+		print_ie_error(level, label, size, -EINVAL);
+}
+
 static struct attr_entry ie_entry[] = {
 	{ IE_TYPE_SSID,				"SSID",
 		ATTR_CUSTOM,	{ .function = print_ie_ssid } },
@@ -1842,6 +1878,9 @@ static struct attr_entry ie_entry[] = {
 		ATTR_CUSTOM,	{ .function = print_fils_key_confirmation } },
 	{ IE_TYPE_FILS_SESSION,			"FILS Session",
 		ATTR_CUSTOM,	{ .function = print_fils_session } },
+	{ IE_TYPE_SUPPORTED_OPERATING_CLASSES,	"Supported Operating Classes",
+		ATTR_CUSTOM,
+		{ .function = print_ie_supported_operating_classes } },
 	{ },
 };
 
