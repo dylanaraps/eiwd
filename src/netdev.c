@@ -3745,14 +3745,20 @@ static struct l_genl_msg *netdev_build_cmd_cqm_rssi_update(
 
 static void netdev_cmd_set_cqm_cb(struct l_genl_msg *msg, void *user_data)
 {
-	if (l_genl_msg_get_error(msg) < 0)
-		l_error("CMD_SET_CQM failed");
+	int r = l_genl_msg_get_error(msg);
+
+	if (!r)
+		return;
+
+	l_error("CMD_SET_CQM failed: %d(%s)", r, strerror(-r));
 }
 
 int netdev_set_rssi_report_levels(struct netdev *netdev, const int8_t *levels,
 					size_t levels_num)
 {
 	struct l_genl_msg *cmd_set_cqm;
+
+	l_debug("ifindex: %d, num_levels: %zu", netdev->index, levels_num);
 
 	if (levels_num > L_ARRAY_SIZE(netdev->rssi_levels))
 		return -ENOSPC;
@@ -3768,10 +3774,7 @@ int netdev_set_rssi_report_levels(struct netdev *netdev, const int8_t *levels,
 
 	if (!l_genl_family_send(nl80211, cmd_set_cqm, netdev_cmd_set_cqm_cb,
 				NULL, NULL)) {
-		l_error("CMD_SET_CQM failed");
-
 		l_genl_msg_unref(cmd_set_cqm);
-
 		return -EIO;
 	}
 
@@ -3794,15 +3797,14 @@ static int netdev_cqm_rssi_update(struct netdev *netdev)
 						netdev->rssi_levels,
 						netdev->rssi_levels_num);
 
+	l_debug("");
+
 	if (!msg)
 		return -EINVAL;
 
 	if (!l_genl_family_send(nl80211, msg, netdev_cmd_set_cqm_cb,
 				NULL, NULL)) {
-		l_error("CMD_SET_CQM failed");
-
 		l_genl_msg_unref(msg);
-
 		return -EIO;
 	}
 
