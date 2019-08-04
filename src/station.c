@@ -1641,6 +1641,8 @@ static void station_roam_scan(struct station *station,
 {
 	struct scan_parameters params = { .freqs = freq_set, .flush = true };
 
+	l_debug("ifindex: %u", netdev_get_ifindex(station->netdev));
+
 	if (station->connected_network)
 		/* Use direct probe request */
 		params.ssid = network_get_ssid(station->connected_network);
@@ -1711,6 +1713,10 @@ static void station_neighbor_report_cb(struct netdev *netdev, int err,
 	struct scan_freq_set *freq_set_md, *freq_set_no_md;
 	uint32_t current_freq = 0;
 	struct handshake_state *hs = netdev_get_handshake(station->netdev);
+
+	l_debug("ifindex: %u, error: %d(%s)",
+			netdev_get_ifindex(station->netdev),
+			err, err < 0 ? strerror(-err) : "");
 
 	/*
 	 * Check if we're still attempting to roam -- if dbus Disconnect
@@ -1925,6 +1931,8 @@ void station_ap_directed_roam(struct station *station,
 	uint16_t dtimer;
 	uint8_t valid_interval;
 
+	l_debug("ifindex: %u", netdev_get_ifindex(station->netdev));
+
 	if (station_cannot_roam(station))
 		return;
 
@@ -1951,7 +1959,8 @@ void station_ap_directed_roam(struct station *station,
 	valid_interval = l_get_u8(body + pos);
 	pos++;
 
-	l_debug("BSS transition received from AP: Disassociation Time: %u, "
+	l_debug("roam: BSS transition received from AP: "
+			"Disassociation Time: %u, "
 			"Validity interval: %u", dtimer, valid_interval);
 
 	/* check req_mode for optional values */
@@ -1983,11 +1992,15 @@ void station_ap_directed_roam(struct station *station,
 	l_timeout_remove(station->roam_trigger_timeout);
 	station->roam_trigger_timeout = NULL;
 
-	if (req_mode & WNM_REQUEST_MODE_PREFERRED_CANDIDATE_LIST)
+
+	if (req_mode & WNM_REQUEST_MODE_PREFERRED_CANDIDATE_LIST) {
+		l_debug("roam: AP sent a preffered candidate list");
 		station_neighbor_report_cb(station->netdev, 0, body + pos,
 				body_len - pos,station);
-	else
+	} else {
+		l_debug("roam: AP did not include a preferred candidate list");
 		station_roam_scan(station, NULL);
+	}
 
 	return;
 
