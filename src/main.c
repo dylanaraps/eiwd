@@ -221,7 +221,7 @@ static void dbus_ready(void *user_data)
 {
 	struct l_dbus *dbus = user_data;
 
-	l_dbus_name_acquire(dbus, "net.connman.iwd", false, false, true,
+	l_dbus_name_acquire(dbus, "net.connman.iwd", false, false, false,
 				request_name_callback, NULL);
 }
 
