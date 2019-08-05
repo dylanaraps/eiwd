@@ -80,6 +80,7 @@ static bool enable_debug;
 const char *debug_filter;
 static struct l_settings *hw_config;
 static bool native_hw;
+static bool shell;
 static const char *qemu_binary;
 static const char *kernel_image;
 static const char *exec_home;
@@ -386,7 +387,7 @@ static bool start_qemu(void)
 			"TESTVERBOUT=\'%s\' DEBUG_FILTER=\'%s\'"
 			"TEST_ACTION=%u TEST_ACTION_PARAMS=\'%s\' "
 			"TESTARGS=\'%s\' PATH=\'%s\' VALGRIND=%u"
-			"GDB=\'%s\' HW=\'%s\'",
+			"GDB=\'%s\' HW=\'%s\' SHELL=%u",
 			check_verbosity("kernel") ? "ignore_loglevel" : "quiet",
 			initcmd, cwd, verbose_opt ? verbose_opt : "none",
 			enable_debug ? debug_filter : "",
@@ -396,7 +397,8 @@ static bool start_qemu(void)
 			getenv("PATH"),
 			valgrind,
 			gdb_opt ? gdb_opt : "none",
-			hw_config ? "real" : "virtual");
+			hw_config ? "real" : "virtual",
+			shell);
 
 	if (hw_config) {
 		if (l_settings_has_group(hw_config, "PCIAdapters")) {
@@ -2045,7 +2047,12 @@ static void create_network_and_run_tests(const void *key, void *value,
 
 	set_wiphy_list(wiphy_list);
 
-	run_py_tests(hw_settings, test_queue, test_stats_queue);
+	if (!shell)
+		run_py_tests(hw_settings, test_queue, test_stats_queue);
+	else {
+		if (system("/bin/sh"))
+			l_info("executing /bin/sh failed");
+	}
 
 	l_info("Destructing network...");
 
@@ -2551,6 +2558,14 @@ static void run_tests(void)
 		return;
 	}
 
+	ptr = strstr(cmdline, "SHELL=");
+	if (ptr) {
+		*ptr = '\0';
+		test_action_str = ptr + 6;
+
+		shell = atoi(test_action_str);
+	}
+
 	ptr = strstr(cmdline, "HW=");
 	if (ptr) {
 		*ptr = '\0';
@@ -2742,7 +2757,8 @@ static void usage(void)
 		"\t-g, --gdb <iwd|hostapd>	Run gdb on the specified"
 						" executable\n"
 		"\t-w, --hw <config>	Run using a physical hardware "
-					"configuration");
+					"configuration\n"
+		"\t-s, --shell		Boot into shell, not autotests\n");
 	l_info("Commands:\n"
 		"\t-A, --auto-tests <dirs>	Comma separated list of the "
 						"test configuration\n\t\t\t\t"
@@ -2761,6 +2777,7 @@ static const struct option main_options[] = {
 	{ "gdb",	required_argument, NULL, 'g' },
 	{ "valgrind",	no_argument,       NULL, 'V' },
 	{ "hw",		required_argument, NULL, 'w' },
+	{ "shell",	optional_argument, NULL, 's' },
 	{ "help",	no_argument,       NULL, 'h' },
 	{ }
 };
@@ -2846,6 +2863,9 @@ int main(int argc, char *argv[])
 				l_settings_free(hw_config);
 				return EXIT_FAILURE;
 			}
+			break;
+		case 's':
+			shell = true;
 			break;
 		case 'h':
 			usage();
