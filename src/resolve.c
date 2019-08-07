@@ -345,6 +345,7 @@ static void resolve_resolvconf_exit(void *data)
 {
 	bool *ready = data;
 
+	l_free(resolvconf_path);
 	resolvconf_path = NULL;
 	l_free(ready);
 }
