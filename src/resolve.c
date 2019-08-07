@@ -28,6 +28,7 @@
 #include <arpa/inet.h>
 #include <sys/stat.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include <ell/ell.h>
 
@@ -49,6 +50,7 @@ struct resolve_method {
 };
 
 static struct resolve_method method;
+static char *RESOLVCONF_PATH;
 
 #define SYSTEMD_RESOLVED_SERVICE           "org.freedesktop.resolve1"
 #define SYSTEMD_RESOLVED_MANAGER_PATH      "/org/freedesktop/resolve1"
@@ -242,8 +244,6 @@ static const struct resolve_method_ops resolve_method_systemd = {
 	.remove = resolve_systemd_remove,
 };
 
-#define RESOLVCONF_PATH "/sbin/resolvconf"
-
 static void resolve_resolvconf_add_dns(uint32_t ifindex, uint8_t type,
 						char **dns_list, void *data)
 {
@@ -257,7 +257,7 @@ static void resolve_resolvconf_add_dns(uint32_t ifindex, uint8_t type,
 	if (!*ready)
 		return;
 
-	cmd = l_strdup_printf(RESOLVCONF_PATH " -a %u", ifindex);
+	cmd = l_strdup_printf("%s -a %u", RESOLVCONF_PATH, ifindex);
 
 	if (!(resolvconf = popen(cmd, "w"))) {
 		l_error("resolve: Failed to start %s (%s).", RESOLVCONF_PATH,
@@ -295,7 +295,7 @@ static void resolve_resolvconf_remove(uint32_t ifindex, void *data)
 	if (!*ready)
 		return;
 
-	cmd = l_strdup_printf(RESOLVCONF_PATH " -d %u", ifindex);
+	cmd = l_strdup_printf("%s -d %u", RESOLVCONF_PATH, ifindex);
 
 	if (!(resolvconf = popen(cmd, "r"))) {
 		l_error("resolve: Failed to start %s (%s).", RESOLVCONF_PATH,
@@ -314,27 +314,30 @@ static void resolve_resolvconf_remove(uint32_t ifindex, void *data)
 
 static void *resolve_resolvconf_init(void)
 {
-	struct stat st;
+	static const char *default_path = "/sbin:/usr/sbin";
 	bool *ready;
+	const char *path;
 
 	ready = l_new(bool, 1);
-
-	if (stat(RESOLVCONF_PATH, &st)) {
-		l_error("resolve: Could not stat %s (%s).", RESOLVCONF_PATH,
-							strerror(errno));
-		goto error;
-	}
-
-	if (!(st.st_mode & S_IXUSR)) {
-		l_error("resolve: %s is not executable.", RESOLVCONF_PATH);
-		goto error;
-	}
-
-	*ready = true;
-	return ready;
-
-error:
 	*ready = false;
+
+	l_debug("Trying to find resolvconf in $PATH");
+	path = getenv("PATH");
+	if (path)
+		RESOLVCONF_PATH = l_path_find("resolvconf", path, X_OK);
+
+	if (!RESOLVCONF_PATH) {
+		l_debug("Trying to find resolvconf in default paths");
+		RESOLVCONF_PATH = l_path_find("resolvconf", default_path, X_OK);
+	}
+
+	if (!RESOLVCONF_PATH) {
+		l_error("No usable resolvconf found on system");
+		return ready;
+	}
+
+	l_debug("resolvconf found as: %s", RESOLVCONF_PATH);
+	*ready = true;
 	return ready;
 }
 
@@ -342,6 +345,7 @@ static void resolve_resolvconf_exit(void *data)
 {
 	bool *ready = data;
 
+	RESOLVCONF_PATH = NULL;
 	l_free(ready);
 }
 
