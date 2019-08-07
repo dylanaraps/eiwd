@@ -58,7 +58,8 @@ ell_headers = ell/util.h \
 			ell/cert.h \
 			ell/ecc.h \
 			ell/ecdh.h \
-			ell/time.h
+			ell/time.h \
+			ell/path.h
 
 ell_sources = ell/private.h \
 			ell/missing.h \
@@ -124,7 +125,8 @@ ell_sources = ell/private.h \
 			ell/ecc-private.h \
 			ell/ecc.c \
 			ell/ecdh.c \
-			ell/time.c
+			ell/time.c \
+			ell/path.c
 
 ell_libell_internal_la_SOURCES = $(ell_headers) $(ell_sources)
 endif
