@@ -44,8 +44,25 @@ struct iwd_module_desc {
 	bool active;
 } __attribute__((aligned(8)));
 
+struct iwd_module_depends {
+	const char *self;
+	const char *target;
+};
+
 #define IWD_MODULE(name, init, exit)					\
 	static struct iwd_module_desc __iwd_module_ ## name		\
 		__attribute__((used, section("__iwd_module"), aligned(8))) = {\
 			#name, init, exit				\
 		};
+
+#define IWD_MODULE_DEPENDS(name, dep)					\
+	static struct iwd_module_depends				\
+				__iwd_module__##name_##dep		\
+		__attribute__((used, section("__iwd_module_dep"),       \
+					aligned(8))) = {		\
+			.self = #name,					\
+			.target = #dep,					\
+		};
+
+int iwd_modules_init();
+void iwd_modules_exit();

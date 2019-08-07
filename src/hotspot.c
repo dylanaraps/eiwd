@@ -360,3 +360,4 @@ static void hotspot_exit(void)
 }
 
 IWD_MODULE(hotspot, hotspot_init, hotspot_exit)
+IWD_MODULE_DEPENDS(hotspot, known_networks)

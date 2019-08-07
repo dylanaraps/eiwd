@@ -159,44 +159,6 @@ static void nl80211_appeared(const struct l_genl_family_info *info,
 	netdev_set_nl80211(nl80211);
 }
 
-extern struct iwd_module_desc __start___iwd_module[];
-extern struct iwd_module_desc __stop___iwd_module[];
-
-static int iwd_modules_init()
-{
-	struct iwd_module_desc *desc;
-	int r;
-
-	l_debug("");
-
-	for (desc = __start___iwd_module; desc < __stop___iwd_module; desc++) {
-		r = desc->init();
-		if (r < 0)
-			return r;
-
-		l_debug("Initialized module: %s", desc->name);
-		desc->active = true;
-	}
-
-	return 0;
-}
-
-static void iwd_modules_exit()
-{
-	struct iwd_module_desc *desc;
-
-	l_debug("");
-
-	for (desc = __stop___iwd_module - 1;
-			desc >= __start___iwd_module; desc--) {
-		if (!desc->active)
-			continue;
-		l_debug("Removing module: %s", desc->name);
-		desc->exit();
-		desc->active = false;
-	}
-}
-
 static void request_name_callback(struct l_dbus *dbus, bool success,
 					bool queued, void *user_data)
 {

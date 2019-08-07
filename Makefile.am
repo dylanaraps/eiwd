@@ -214,6 +214,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h src/missing.h \
 					src/resolve.h src/resolve.c\
 					src/hotspot.h src/hotspot.c \
 					src/p2putil.h src/p2putil.c \
+					src/module.c \
 					$(eap_sources) \
 					$(builtin_sources)
 
