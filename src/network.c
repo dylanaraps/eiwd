@@ -52,6 +52,7 @@
 #include "src/hotspot.h"
 
 struct network {
+	char ssid[33];
 	char *object_path;
 	struct station *station;
 	struct network_info *info;
@@ -95,7 +96,7 @@ static bool network_settings_load(struct network *network)
 	} else
 		network->settings = storage_network_open(
 						network_get_security(network),
-						network->info->ssid);
+						network_get_ssid(network));
 
 	return network->settings != NULL;
 }
@@ -159,14 +160,14 @@ static bool network_secret_check_cacheable(void *data, void *user_data)
 
 void network_connected(struct network *network)
 {
+	const char *ssid = network_get_ssid(network);
 	int err;
 
 	/*
 	 * This triggers an update to network->info->connected_time and
 	 * other possible actions in knownnetworks.c.
 	 */
-	err = storage_network_touch(network_get_security(network),
-					network->info->ssid);
+	err = storage_network_touch(network_get_security(network), ssid);
 	switch (err) {
 	case 0:
 		break;
@@ -181,8 +182,7 @@ void network_connected(struct network *network)
 		if (!network->settings)
 			network->settings = l_settings_new();
 
-		storage_network_sync(network_get_security(network),
-					network->info->ssid,
+		storage_network_sync(network_get_security(network), ssid,
 					network->settings);
 		break;
 	default:
@@ -305,6 +305,7 @@ struct network *network_create(struct station *station, const char *ssid,
 
 	network = l_new(struct network, 1);
 	network->station = station;
+	strcpy(network->ssid, ssid);
 	network->info = network_info_get(ssid, security);
 
 	network->bss_list = l_queue_new();
@@ -315,7 +316,7 @@ struct network *network_create(struct station *station, const char *ssid,
 
 const char *network_get_ssid(const struct network *network)
 {
-	return network->info->ssid;
+	return network->ssid;
 }
 
 const char *network_get_path(const struct network *network)
@@ -417,6 +418,7 @@ static bool network_set_8021x_secrets(struct network *network)
 
 static int network_load_psk(struct network *network, bool need_passphrase)
 {
+	const char *ssid = network_get_ssid(network);
 	size_t len;
 	const char *psk = l_settings_get_value(network->settings,
 						"Security", "PreSharedKey");
@@ -442,7 +444,7 @@ static int network_load_psk(struct network *network, bool need_passphrase)
 
 		network_reset_psk(network);
 
-		path = storage_get_network_file_path(info->type, info->ssid);
+		path = storage_get_network_file_path(info->type, ssid);
 		l_error("%s: invalid PreSharedKey format", path);
 		l_free(path);
 
@@ -451,8 +453,8 @@ static int network_load_psk(struct network *network, bool need_passphrase)
 	}
 
 	network->psk = l_malloc(32);
-	r = crypto_psk_from_passphrase(passphrase, (uint8_t *) info->ssid,
-					strlen(info->ssid), network->psk);
+	r = crypto_psk_from_passphrase(passphrase, (uint8_t *) ssid,
+					strlen(ssid), network->psk);
 	if (!r) {
 		network->update_psk = true;
 		return 0;
@@ -473,13 +475,14 @@ static int network_load_psk(struct network *network, bool need_passphrase)
 void network_sync_psk(struct network *network)
 {
 	struct l_settings *fs_settings;
+	const char *ssid = network_get_ssid(network);
 
 	if (!network->update_psk)
 		return;
 
 	network->update_psk = false;
 
-	fs_settings = storage_network_open(SECURITY_PSK, network->info->ssid);
+	fs_settings = storage_network_open(SECURITY_PSK, ssid);
 
 	if (network->psk) {
 		char *hex = l_util_hexstring(network->psk, 32);
@@ -505,12 +508,10 @@ void network_sync_psk(struct network *network)
 	}
 
 	if (fs_settings) {
-		storage_network_sync(SECURITY_PSK, network->info->ssid,
-					fs_settings);
+		storage_network_sync(SECURITY_PSK, ssid, fs_settings);
 		l_settings_free(fs_settings);
 	} else
-		storage_network_sync(SECURITY_PSK, network->info->ssid,
-					network->settings);
+		storage_network_sync(SECURITY_PSK, ssid, network->settings);
 }
 
 void network_set_hessid(struct network *network, uint8_t *hessid)
@@ -781,6 +782,7 @@ static void passphrase_callback(enum agent_result result,
 {
 	struct network *network = user_data;
 	struct station *station = network->station;
+	const char *ssid = network_get_ssid(network);
 	struct scan_bss *bss;
 	int r;
 
@@ -811,8 +813,7 @@ static void passphrase_callback(enum agent_result result,
 	network_reset_psk(network);
 	network->psk = l_malloc(32);
 	r = crypto_psk_from_passphrase(passphrase,
-					(uint8_t *) network->info->ssid,
-					strlen(network->info->ssid),
+					(uint8_t *) ssid, strlen(ssid),
 					network->psk);
 	if (r) {
 		struct l_dbus_message *error;
@@ -1239,7 +1240,8 @@ static bool network_property_get_name(struct l_dbus *dbus,
 {
 	struct network *network = user_data;
 
-	l_dbus_message_builder_append_basic(builder, 's', network->info->ssid);
+	l_dbus_message_builder_append_basic(builder, 's',
+						network_get_ssid(network));
 	return true;
 }
 
