@@ -214,6 +214,20 @@ bool known_networks_has_hidden(void)
 	return num_known_hidden_networks ? true : false;
 }
 
+static bool network_info_match(const void *a, const void *b)
+{
+	const struct network_info *ni_a = a;
+	const struct network_info *ni_b = b;
+
+	if (ni_a->type != ni_b->type)
+		return false;
+
+	if (strcmp(ni_a->ssid, ni_b->ssid))
+		return false;
+
+	return true;
+}
+
 struct network_info *known_networks_find(const char *ssid,
 						enum security security)
 {

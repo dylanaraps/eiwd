@@ -131,20 +131,6 @@ static void network_settings_close(struct network *network)
 	network->settings = NULL;
 }
 
-bool network_info_match(const void *a, const void *b)
-{
-	const struct network_info *ni_a = a;
-	const struct network_info *ni_b = b;
-
-	if (ni_a->type != ni_b->type)
-		return false;
-
-	if (strcmp(ni_a->ssid, ni_b->ssid))
-		return false;
-
-	return true;
-}
-
 static bool network_secret_check_cacheable(void *data, void *user_data)
 {
 	struct eap_secret_info *secret = data;
