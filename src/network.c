@@ -247,15 +247,6 @@ bool network_rankmod(const struct network *network, double *rankmod)
 	return true;
 }
 
-void network_info_free(void *data)
-{
-	struct network_info *network = data;
-
-	l_queue_destroy(network->known_frequencies, l_free);
-
-	l_free(network);
-}
-
 struct network *network_create(struct station *station, const char *ssid,
 				enum security security)
 {

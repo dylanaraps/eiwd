@@ -46,6 +46,15 @@ static struct l_queue *known_networks;
 static size_t num_known_hidden_networks;
 static struct l_dir_watch *storage_dir_watch;
 
+static void network_info_free(void *data)
+{
+	struct network_info *network = data;
+
+	l_queue_destroy(network->known_frequencies, l_free);
+
+	l_free(network);
+}
+
 static int connected_time_compare(const void *a, const void *b, void *user_data)
 {
 	const struct network_info *ni_a = a;
