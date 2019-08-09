@@ -1344,18 +1344,18 @@ static void emit_known_network_changed(struct station *station, void *user_data)
 				IWD_NETWORK_INTERFACE, "KnownNetwork");
 }
 
-struct network_info *network_info_add_known(const char *ssid,
-						enum security security)
+static void match_known_network(struct station *station, void *user_data)
 {
-	struct network_info *network;
+	struct network_info *info = user_data;
+	struct network *network = station_network_find(station,
+							info->ssid, info->type);
 
-	network = l_new(struct network_info, 1);
-	strcpy(network->ssid, ssid);
-	network->type = security;
+	if (!network)
+		return;
 
-	station_foreach(emit_known_network_changed, network);
-
-	return network;
+	network->info = info;
+	l_dbus_property_changed(dbus_get_bus(), network_get_path(network),
+				IWD_NETWORK_INTERFACE, "KnownNetwork");
 }
 
 static void disconnect_no_longer_known(struct station *station, void *user_data)
@@ -1375,10 +1375,11 @@ static void known_networks_changed(enum known_networks_event event,
 {
 	switch (event) {
 	case KNOWN_NETWORKS_EVENT_ADDED:
+		station_foreach(match_known_network, (void *) info);
 		break;
 	case KNOWN_NETWORKS_EVENT_REMOVED:
-		station_foreach(emit_known_network_changed, (void *) info);
 		station_foreach(disconnect_no_longer_known, (void *) info);
+		station_foreach(emit_known_network_changed, (void *) info);
 		break;
 	}
 }

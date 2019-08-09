@@ -149,8 +149,11 @@ static void known_network_update(struct network_info *orig_network,
 
 	if (orig_network)
 		network = orig_network;
-	else
-		network = network_info_add_known(ssid, security);
+	else {
+		network = l_new(struct network_info, 1);
+		strcpy(network->ssid, ssid);
+		network->type = security;
+	}
 
 	if (util_timespec_compare(&network->connected_time, connected_time) &&
 			orig_network) {
@@ -194,8 +197,11 @@ static void known_network_update(struct network_info *orig_network,
 		return;
 
 	l_queue_insert(known_networks, network, connected_time_compare, NULL);
-
 	known_network_register_dbus(network);
+
+	WATCHLIST_NOTIFY(&known_network_watches,
+				known_networks_watch_func_t,
+				KNOWN_NETWORKS_EVENT_ADDED, network);
 }
 
 bool known_networks_foreach(known_networks_foreach_func_t function,
