@@ -276,6 +276,37 @@ struct scan_freq_set *known_networks_get_recent_frequencies(
 	return set;
 }
 
+static bool known_frequency_match(const void *a, const void *b)
+{
+	const struct known_frequency *known_freq = a;
+	const uint32_t *frequency = b;
+
+	return known_freq->frequency == *frequency;
+}
+
+/*
+ * Adds a frequency to the 'known' set of frequencies that this network
+ * operates on.  The list is sorted according to most-recently seen
+ */
+int known_network_add_frequency(struct network_info *info, uint32_t frequency)
+{
+	struct known_frequency *known_freq;
+
+	if (!info->known_frequencies)
+		info->known_frequencies = l_queue_new();
+
+	known_freq = l_queue_remove_if(info->known_frequencies,
+					known_frequency_match, &frequency);
+	if (!known_freq) {
+		known_freq = l_new(struct known_frequency, 1);
+		known_freq->frequency = frequency;
+	}
+
+	l_queue_push_head(info->known_frequencies, known_freq);
+
+	return 0;
+}
+
 static struct l_dbus_message *known_network_forget(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)

@@ -592,36 +592,14 @@ void network_connect_failed(struct network *network)
 	l_queue_clear(network->blacklist, NULL);
 }
 
-static bool known_frequency_match(const void *a, const void *b)
-{
-	const struct known_frequency *known_freq = a;
-	const uint32_t *frequency = b;
-
-	return known_freq->frequency == *frequency;
-}
-
 bool network_bss_add(struct network *network, struct scan_bss *bss)
 {
-	struct known_frequency *known_freq;
-
 	if (!l_queue_insert(network->bss_list, bss, scan_bss_rank_compare,
 									NULL))
 		return false;
 
-	if (network->info) {
-		if (!network->info->known_frequencies)
-			network->info->known_frequencies = l_queue_new();
-
-		known_freq = l_queue_remove_if(network->info->known_frequencies,
-						known_frequency_match,
-						&bss->frequency);
-		if (!known_freq) {
-			known_freq = l_new(struct known_frequency, 1);
-			known_freq->frequency = bss->frequency;
-		}
-
-		l_queue_push_head(network->info->known_frequencies, known_freq);
-	}
+	if (network->info)
+		known_network_add_frequency(network->info, bss->frequency);
 
 	if (!util_mem_is_zero(bss->hessid, 6))
 		memcpy(network->hessid, bss->hessid, 6);

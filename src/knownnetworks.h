@@ -42,3 +42,4 @@ const char *known_network_get_path(const struct network_info *network);
 
 struct scan_freq_set *known_networks_get_recent_frequencies(
 						uint8_t num_networks_tosearch);
+int known_network_add_frequency(struct network_info *info, uint32_t frequency);
