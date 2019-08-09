@@ -53,6 +53,7 @@
 
 struct network {
 	char ssid[33];
+	enum security security;
 	char *object_path;
 	struct station *station;
 	struct network_info *info;
@@ -306,6 +307,7 @@ struct network *network_create(struct station *station, const char *ssid,
 	network = l_new(struct network, 1);
 	network->station = station;
 	strcpy(network->ssid, ssid);
+	network->security = security;
 	network->info = network_info_get(ssid, security);
 
 	network->bss_list = l_queue_new();
@@ -326,7 +328,7 @@ const char *network_get_path(const struct network *network)
 
 enum security network_get_security(const struct network *network)
 {
-	return network->info->type;
+	return network->security;
 }
 
 const uint8_t *network_get_psk(struct network *network)
@@ -346,7 +348,7 @@ struct l_queue *network_get_secrets(const struct network *network)
 
 bool network_set_psk(struct network *network, const uint8_t *psk)
 {
-	if (network->info->type != SECURITY_PSK)
+	if (network_get_security(network) != SECURITY_PSK)
 		return false;
 
 	if (!network_settings_load(network))
@@ -419,12 +421,12 @@ static bool network_set_8021x_secrets(struct network *network)
 static int network_load_psk(struct network *network, bool need_passphrase)
 {
 	const char *ssid = network_get_ssid(network);
+	enum security security = network_get_security(network);
 	size_t len;
 	const char *psk = l_settings_get_value(network->settings,
 						"Security", "PreSharedKey");
 	char *passphrase = l_settings_get_string(network->settings,
 						"Security", "Passphrase");
-	struct network_info *info = network->info;
 	int r;
 
 	/* PSK can be generated from the passphrase but not the other way */
@@ -444,7 +446,7 @@ static int network_load_psk(struct network *network, bool need_passphrase)
 
 		network_reset_psk(network);
 
-		path = storage_get_network_file_path(info->type, ssid);
+		path = storage_get_network_file_path(security, ssid);
 		l_error("%s: invalid PreSharedKey format", path);
 		l_free(path);
 
