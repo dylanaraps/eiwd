@@ -51,6 +51,8 @@
 #include "src/util.h"
 #include "src/hotspot.h"
 
+static uint32_t known_networks_watch;
+
 struct network {
 	char ssid[33];
 	enum security security;
@@ -1376,6 +1378,18 @@ void network_info_forget_known(struct network_info *network)
 	station_foreach(disconnect_no_longer_known, network);
 }
 
+static void known_networks_changed(enum known_networks_event event,
+					const struct network_info *info,
+					void *user_data)
+{
+	switch (event) {
+	case KNOWN_NETWORKS_EVENT_ADDED:
+		break;
+	case KNOWN_NETWORKS_EVENT_REMOVED:
+		break;
+	}
+}
+
 static void setup_network_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Connect", 0,
@@ -1406,12 +1420,19 @@ static int network_init(void)
 		l_error("Unable to register %s interface",
 						IWD_NETWORK_INTERFACE);
 
+	known_networks_watch =
+		known_networks_watch_add(known_networks_changed, NULL, NULL);
+
 	return 0;
 }
 
 static void network_exit(void)
 {
+	known_networks_watch_remove(known_networks_watch);
+	known_networks_watch = 0;
+
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_NETWORK_INTERFACE);
 }
 
 IWD_MODULE(network, network_init, network_exit)
+IWD_MODULE_DEPENDS(network, known_networks)
