@@ -456,7 +456,10 @@ static void known_network_removed(struct network_info *network)
 	l_dbus_unregister_object(dbus_get_bus(),
 					known_network_get_path(network));
 
-	network_info_forget_known(network);
+	WATCHLIST_NOTIFY(&known_network_watches,
+				known_networks_watch_func_t,
+				KNOWN_NETWORKS_EVENT_REMOVED, network);
+
 	network_info_free(network);
 }
 

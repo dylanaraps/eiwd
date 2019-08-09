@@ -88,4 +88,3 @@ struct network_info {
 
 struct network_info *network_info_add_known(const char *ssid,
 						enum security security);
-void network_info_forget_known(struct network_info *network);
