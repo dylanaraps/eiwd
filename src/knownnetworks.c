@@ -41,10 +41,12 @@
 #include "src/knownnetworks.h"
 #include "src/scan.h"
 #include "src/util.h"
+#include "src/watchlist.h"
 
 static struct l_queue *known_networks;
 static size_t num_known_hidden_networks;
 static struct l_dir_watch *storage_dir_watch;
+static struct watchlist known_network_watches;
 
 static void network_info_free(void *data)
 {
@@ -666,6 +668,18 @@ static void known_network_frequencies_sync(void)
 	l_settings_free(known_freqs);
 }
 
+uint32_t known_networks_watch_add(known_networks_watch_func_t func,
+					void *user_data,
+					known_networks_destroy_func_t destroy)
+{
+	return watchlist_add(&known_network_watches, func, user_data, destroy);
+}
+
+void known_networks_watch_remove(uint32_t id)
+{
+	watchlist_remove(&known_network_watches, id);
+}
+
 static int known_networks_init(void)
 {
 	struct l_dbus *dbus = dbus_get_bus();
@@ -721,6 +735,7 @@ static int known_networks_init(void)
 	storage_dir_watch = l_dir_watch_new(DAEMON_STORAGEDIR,
 						known_networks_watch_cb, NULL,
 						known_networks_watch_destroy);
+	watchlist_init(&known_network_watches, NULL);
 
 	return 0;
 }
@@ -737,6 +752,8 @@ static void known_networks_exit(void)
 	known_networks = NULL;
 
 	l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE);
+
+	watchlist_destroy(&known_network_watches);
 }
 
 IWD_MODULE(known_networks, known_networks_init, known_networks_exit)

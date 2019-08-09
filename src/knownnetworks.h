@@ -24,8 +24,18 @@ enum security;
 struct network_info;
 struct scan_freq_set;
 
+enum known_networks_event {
+	KNOWN_NETWORKS_EVENT_ADDED,
+	KNOWN_NETWORKS_EVENT_REMOVED,
+};
+
 typedef bool (*known_networks_foreach_func_t)(const struct network_info *info,
 						void *user_data);
+
+typedef void (*known_networks_watch_func_t)(enum known_networks_event event,
+						const struct network_info *info,
+						void *user_data);
+typedef void (*known_networks_destroy_func_t)(void *user_data);
 
 struct known_frequency {
 	uint32_t frequency;
@@ -43,3 +53,8 @@ const char *known_network_get_path(const struct network_info *network);
 struct scan_freq_set *known_networks_get_recent_frequencies(
 						uint8_t num_networks_tosearch);
 int known_network_add_frequency(struct network_info *info, uint32_t frequency);
+
+uint32_t known_networks_watch_add(known_networks_watch_func_t func,
+					void *user_data,
+					known_networks_destroy_func_t destroy);
+void known_networks_watch_remove(uint32_t id);
