@@ -400,11 +400,8 @@ static void known_network_removed(struct network_info *network)
 	l_dbus_unregister_object(dbus_get_bus(),
 					known_network_get_path(network));
 
-	/*
-	 * network_info_forget_known will either re-add the network_info to
-	 * its seen networks lists or call network_info_free.
-	 */
 	network_info_forget_known(network);
+	network_info_free(network);
 }
 
 static void known_networks_watch_cb(const char *filename,

@@ -73,8 +73,6 @@ struct network {
 	int rank;
 };
 
-static struct l_queue *networks;
-
 static bool network_settings_load(struct network *network)
 {
 	if (network->settings)
@@ -232,7 +230,7 @@ bool network_rankmod(const struct network *network, double *rankmod)
 	 * to at least once are autoconnectable.  Known Networks that
 	 * we have never connected to are not.
 	 */
-	if (!network->info->connected_time.tv_sec)
+	if (!network->info || !network->info->connected_time.tv_sec)
 		return false;
 
 	n = known_network_offset(network->info);
@@ -258,47 +256,6 @@ void network_info_free(void *data)
 	l_free(network);
 }
 
-static struct network_info *network_info_get(const char *ssid,
-						enum security security)
-{
-	struct network_info *network;
-
-	network = known_networks_find(ssid, security);
-
-	if (!network) {
-		struct network_info search;
-
-		search.type = security;
-		strcpy(search.ssid, ssid);
-
-		network = l_queue_find(networks, network_info_match, &search);
-	}
-
-	if (!network) {
-		network = l_new(struct network_info, 1);
-		strcpy(network->ssid, ssid);
-		network->type = security;
-
-		l_queue_push_tail(networks, network);
-	}
-
-	network->seen_count++;
-
-	return network;
-}
-
-static void network_info_put(struct network_info *network)
-{
-	if (--network->seen_count)
-		return;
-
-	if (!networks || network->is_known)
-		return;
-
-	l_queue_remove(networks, network);
-	network_info_free(network);
-}
-
 struct network *network_create(struct station *station, const char *ssid,
 				enum security security)
 {
@@ -308,7 +265,10 @@ struct network *network_create(struct station *station, const char *ssid,
 	network->station = station;
 	strcpy(network->ssid, ssid);
 	network->security = security;
-	network->info = network_info_get(ssid, security);
+
+	network->info = known_networks_find(ssid, security);
+	if (network->info)
+		network->info->seen_count++;
 
 	network->bss_list = l_queue_new();
 	network->blacklist = l_queue_new();
@@ -671,17 +631,20 @@ bool network_bss_add(struct network *network, struct scan_bss *bss)
 									NULL))
 		return false;
 
-	if (!network->info->known_frequencies)
-		network->info->known_frequencies = l_queue_new();
+	if (network->info) {
+		if (!network->info->known_frequencies)
+			network->info->known_frequencies = l_queue_new();
 
-	known_freq = l_queue_remove_if(network->info->known_frequencies,
-					known_frequency_match, &bss->frequency);
-	if (!known_freq) {
-		known_freq = l_new(struct known_frequency, 1);
-		known_freq->frequency = bss->frequency;
+		known_freq = l_queue_remove_if(network->info->known_frequencies,
+						known_frequency_match,
+						&bss->frequency);
+		if (!known_freq) {
+			known_freq = l_new(struct known_frequency, 1);
+			known_freq->frequency = bss->frequency;
+		}
+
+		l_queue_push_head(network->info->known_frequencies, known_freq);
 	}
-
-	l_queue_push_head(network->info->known_frequencies, known_freq);
 
 	if (!util_mem_is_zero(bss->hessid, 6))
 		memcpy(network->hessid, bss->hessid, 6);
@@ -1197,7 +1160,6 @@ void network_connect_new_hidden_network(struct network *network,
 	 * network_sync_psk or network_connected will save this network
 	 * as hidden and trigger an update to the hidden networks count.
 	 */
-	network->info->is_hidden = true;
 
 	bss = network_bss_select(network, true);
 	if (!bss) {
@@ -1298,7 +1260,7 @@ static bool network_property_get_known_network(struct l_dbus *dbus,
 {
 	struct network *network = user_data;
 
-	if (!network->info->is_known)
+	if (!network->info)
 		return false;
 
 	l_dbus_message_builder_append_basic(builder, 'o',
@@ -1347,9 +1309,10 @@ void network_remove(struct network *network, int reason)
 	l_queue_destroy(network->secrets, eap_secret_info_free);
 	network->secrets = NULL;
 
-	l_queue_destroy(network->bss_list, NULL);
-	network_info_put(network->info);
+	if (network->info)
+		network->info->seen_count -= 1;
 
+	l_queue_destroy(network->bss_list, NULL);
 	l_queue_destroy(network->blacklist, NULL);
 
 	if (network->nai_realms)
@@ -1376,7 +1339,6 @@ void network_rank_update(struct network *network, bool connected)
 	 * here and in network_bss_select but those should be rare cases.
 	 */
 	struct scan_bss *best_bss = l_queue_peek_head(network->bss_list);
-	int rank;
 
 	/*
 	 * The rank should separate networks into four groups that use
@@ -1390,21 +1352,25 @@ void network_rank_update(struct network *network, bool connected)
 	 * Within the 2nd group the last connection time is the main factor,
 	 * for the other two groups it's the BSS rank - mainly signal strength.
 	 */
-	if (connected)
-		rank = INT_MAX;
-	else if (network->info->connected_time.tv_sec != 0) {
+	if (connected) {
+		network->rank = INT_MAX;
+		return;
+	}
+
+	if (!network->info) { /* Not known, assign negative rank */
+		network->rank = (int) best_bss->rank - USHRT_MAX;
+		return;
+	}
+
+	if (network->info->connected_time.tv_sec != 0) {
 		int n = known_network_offset(network->info);
 
 		if (n >= (int) L_ARRAY_SIZE(rankmod_table))
 			n = L_ARRAY_SIZE(rankmod_table) - 1;
 
-		rank = rankmod_table[n] * best_bss->rank + USHRT_MAX;
-	} else if (network->info->is_known)
-		rank = best_bss->rank;
-	else
-		rank = (int) best_bss->rank - USHRT_MAX; /* Negative rank */
-
-	network->rank = rank;
+		network->rank = rankmod_table[n] * best_bss->rank + USHRT_MAX;
+	} else
+		network->rank = best_bss->rank;
 }
 
 static void emit_known_network_changed(struct station *station, void *user_data)
@@ -1426,23 +1392,12 @@ struct network_info *network_info_add_known(const char *ssid,
 						enum security security)
 {
 	struct network_info *network;
-	struct network_info search;
-
-	strcpy(search.ssid, ssid);
-	search.type = security;
-
-	network = l_queue_remove_if(networks, network_info_match, &search);
-	if (network) {
-		/* Promote network to is_known */
-		network->is_known = true;
-		station_foreach(emit_known_network_changed, network);
-		return network;
-	}
 
 	network = l_new(struct network_info, 1);
 	strcpy(network->ssid, ssid);
 	network->type = security;
-	network->is_known = true;
+
+	station_foreach(emit_known_network_changed, network);
 
 	return network;
 }
@@ -1460,20 +1415,10 @@ static void disconnect_no_longer_known(struct station *station, void *user_data)
 
 void network_info_forget_known(struct network_info *network)
 {
-	network->is_known = false;
 	memset(&network->connected_time, 0, sizeof(network->connected_time));
 
 	station_foreach(emit_known_network_changed, network);
 	station_foreach(disconnect_no_longer_known, network);
-
-	/*
-	 * Network is no longer a Known Network, see if we still need to
-	 * keep the network_info around.
-	 */
-	if (network->seen_count)
-		l_queue_push_tail(networks, network);
-	else
-		network_info_free(network);
 }
 
 static void setup_network_interface(struct l_dbus_interface *interface)
@@ -1506,15 +1451,11 @@ static int network_init(void)
 		l_error("Unable to register %s interface",
 						IWD_NETWORK_INTERFACE);
 
-	networks = l_queue_new();
 	return 0;
 }
 
 static void network_exit(void)
 {
-	l_queue_destroy(networks, network_info_free);
-	networks = NULL;
-
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_NETWORK_INTERFACE);
 }
 

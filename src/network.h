@@ -83,7 +83,6 @@ struct network_info {
 	struct timespec connected_time;	/* Time last connected */
 	int seen_count;			/* Ref count for network.info */
 	bool is_hidden:1;
-	bool is_known:1;
 	bool is_autoconnectable:1;
 };
 
