@@ -31,6 +31,7 @@ struct known_frequency {
 	uint32_t frequency;
 };
 
+int known_network_offset(const struct network_info *target);
 bool known_networks_foreach(known_networks_foreach_func_t function,
 				void *user_data);
 bool known_networks_has_hidden(void);

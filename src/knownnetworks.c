@@ -72,6 +72,33 @@ const char *known_network_get_path(const struct network_info *network)
 	return path;
 }
 
+/*
+ * Finds the position n of this network_info in the list of known networks
+ * sorted by connected_time.  E.g. an offset of 0 means the most recently
+ * used network.  Only networks with seen_count > 0 are considered.  E.g.
+ * only networks that appear in scan results on at least one wifi card.
+ *
+ * Returns -ENOENT if the entry couldn't be found.
+ */
+int known_network_offset(const struct network_info *target)
+{
+	const struct l_queue_entry *entry;
+	const struct network_info *info;
+	int n = 0;
+
+	for (entry = l_queue_get_entries(known_networks); entry;
+						entry = entry->next) {
+		info = entry->data;
+		if (target == info)
+			return n;
+
+		if (info->seen_count)
+			n += 1;
+	}
+
+	return -ENOENT;
+}
+
 static void known_network_register_dbus(struct network_info *network)
 {
 	const char *path = known_network_get_path(network);

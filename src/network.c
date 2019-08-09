@@ -201,35 +201,6 @@ void network_disconnected(struct network *network)
 	network_settings_close(network);
 }
 
-struct network_find_rank_data {
-	const struct network_info *info;
-	int n;
-};
-
-static bool network_find_rank_update(const struct network_info *network,
-					void *user_data)
-{
-	struct network_find_rank_data *data = user_data;
-
-	if (network == data->info)
-		return false;
-
-	if (network->seen_count)
-		data->n++;
-
-	return true;
-}
-
-static int network_find_rank_index(const struct network_info *info)
-{
-	struct network_find_rank_data data = { info, 0 };
-
-	if (!known_networks_foreach(network_find_rank_update, &data))
-		return data.n;
-
-	return -1;
-}
-
 /* First 64 entries calculated by 1 / pow(n, 0.3) for n >= 1 */
 static const double rankmod_table[] = {
 	1.0000000000, 0.8122523964, 0.7192230933, 0.6597539554,
@@ -263,8 +234,8 @@ bool network_rankmod(const struct network *network, double *rankmod)
 	if (!network->info->connected_time.tv_sec)
 		return false;
 
-	n = network_find_rank_index(network->info);
-	if (n == -1)
+	n = known_network_offset(network->info);
+	if (n < 0)
 		return false;
 
 	nmax = L_ARRAY_SIZE(rankmod_table);
@@ -1418,7 +1389,7 @@ void network_rank_update(struct network *network, bool connected)
 	if (connected)
 		rank = INT_MAX;
 	else if (network->info->connected_time.tv_sec != 0) {
-		int n = network_find_rank_index(network->info);
+		int n = known_network_offset(network->info);
 
 		if (n >= (int) L_ARRAY_SIZE(rankmod_table))
 			n = L_ARRAY_SIZE(rankmod_table) - 1;
