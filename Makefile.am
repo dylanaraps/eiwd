@@ -583,6 +583,14 @@ SED_PROCESS = $(AM_V_GEN)$(MKDIR_P) $(dir $@) && $(SED) \
 %.1: %.txt
 	$(AM_V_GEN)$(A2X) --doctype manpage --format manpage $(srcdir)/$<
 
+install-data-local:
+if DAEMON
+	$(MKDIR_P) -m 700 $(DESTDIR)$(daemon_storagedir)
+endif
+if WIRED
+	$(MKDIR_P) -m 700 $(DESTDIR)$(wired_storagedir)
+endif
+
 clean-local:
 	-rm -f unit/cert-*.pem unit/cert-*.csr unit/cert-*.srl
 
