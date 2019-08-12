@@ -470,8 +470,8 @@ static void known_network_removed(struct network_info *network)
 }
 
 static void known_networks_watch_cb(const char *filename,
-                                                enum l_dir_watch_event event,
-                                                void *user_data)
+					enum l_dir_watch_event event,
+					void *user_data)
 {
 	const char *ssid;
 	L_AUTO_FREE_VAR(char *, full_path) = NULL;
