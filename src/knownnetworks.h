@@ -47,6 +47,7 @@ struct network_info {
 	int seen_count;			/* Ref count for network.info */
 	bool is_hidden:1;
 	bool is_autoconnectable:1;
+	bool is_hotspot:1;
 };
 
 typedef bool (*known_networks_foreach_func_t)(const struct network_info *info,
