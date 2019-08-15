@@ -75,13 +75,3 @@ void network_connect_new_hidden_network(struct network *network,
 						struct l_dbus_message *message);
 
 void network_blacklist_add(struct network *network, struct scan_bss *bss);
-
-struct network_info {
-	char ssid[33];
-	enum security type;
-	struct l_queue *known_frequencies;
-	struct timespec connected_time;	/* Time last connected */
-	int seen_count;			/* Ref count for network.info */
-	bool is_hidden:1;
-	bool is_autoconnectable:1;
-};

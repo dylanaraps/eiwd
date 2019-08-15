@@ -21,12 +21,21 @@
  */
 
 enum security;
-struct network_info;
 struct scan_freq_set;
 
 enum known_networks_event {
 	KNOWN_NETWORKS_EVENT_ADDED,
 	KNOWN_NETWORKS_EVENT_REMOVED,
+};
+
+struct network_info {
+	char ssid[33];
+	enum security type;
+	struct l_queue *known_frequencies;
+	struct timespec connected_time;	/* Time last connected */
+	int seen_count;			/* Ref count for network.info */
+	bool is_hidden:1;
+	bool is_autoconnectable:1;
 };
 
 typedef bool (*known_networks_foreach_func_t)(const struct network_info *info,
