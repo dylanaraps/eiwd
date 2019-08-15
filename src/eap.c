@@ -35,7 +35,7 @@
 #include "src/eap-private.h"
 
 static uint32_t default_mtu;
-struct l_queue *eap_methods;
+static struct l_queue *eap_methods;
 
 static void dump_eap(const char *str, void *user_data)
 {
