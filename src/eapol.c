@@ -41,15 +41,15 @@
 #include "src/watchlist.h"
 #include "src/erp.h"
 
-struct l_queue *state_machines;
-struct l_queue *preauths;
-struct watchlist frame_watches;
+static struct l_queue *state_machines;
+static struct l_queue *preauths;
+static struct watchlist frame_watches;
 static uint32_t eapol_4way_handshake_time = 2;
 
-eapol_rekey_offload_func_t rekey_offload = NULL;
+static eapol_rekey_offload_func_t rekey_offload = NULL;
 
-eapol_tx_packet_func_t tx_packet = NULL;
-void *tx_user_data;
+static eapol_tx_packet_func_t tx_packet = NULL;
+static void *tx_user_data;
 
 #define VERIFY_IS_ZERO(field)						\
 	do {								\
