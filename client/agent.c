@@ -29,6 +29,7 @@
 #include "agent.h"
 #include "dbus-proxy.h"
 #include "display.h"
+#include "command.h"
 
 #define IWD_AGENT_INTERFACE "net.connman.iwd.Agent"
 
@@ -49,6 +50,17 @@ static struct pending_op {
 	struct l_queue *saved_input;
 } pending_op;
 
+static struct l_dbus_message *agent_error(const char *text)
+{
+	display_error(text);
+
+	command_set_exit_status(EXIT_FAILURE);
+
+	l_main_quit();
+
+	return NULL;
+}
+
 static struct l_dbus_message *release_method_call(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -61,6 +73,24 @@ static struct l_dbus_message *release_method_call(struct l_dbus *dbus,
 	return l_dbus_message_new_method_return(message);
 }
 
+static struct l_dbus_message *request_passphrase_command_option(
+						struct l_dbus_message *message)
+{
+	struct l_dbus_message *reply;
+	const char *passphrase;
+
+	passphrase = command_option_get(COMMAND_OPTION_PASSPHRASE);
+	if (!passphrase)
+		return agent_error("No passphrase is provided as "
+					"'--"COMMAND_OPTION_PASSPHRASE"' "
+						"command-line option.\n");
+
+	reply = l_dbus_message_new_method_return(message);
+	l_dbus_message_set_arguments(reply, "s", passphrase);
+
+	return reply;
+}
+
 static struct l_dbus_message *request_passphrase_method_call(
 						struct l_dbus *dbus,
 						struct l_dbus_message *message,
@@ -71,6 +101,9 @@ static struct l_dbus_message *request_passphrase_method_call(
 
 	if (dbus_message_has_error(message))
 		return NULL;
+
+	if (!command_is_interactive_mode())
+		return request_passphrase_command_option(message);
 
 	l_dbus_message_get_arguments(message, "o", &path);
 	if (!path)
@@ -103,6 +136,9 @@ static struct l_dbus_message *request_private_key_passphrase_method_call(
 	if (dbus_message_has_error(message))
 		return NULL;
 
+	if (!command_is_interactive_mode())
+		return request_passphrase_command_option(message);
+
 	l_dbus_message_get_arguments(message, "o", &path);
 	if (!path)
 		return NULL;
@@ -123,6 +159,31 @@ static struct l_dbus_message *request_private_key_passphrase_method_call(
 	return NULL;
 }
 
+static struct l_dbus_message *request_username_and_password_command_option(
+						struct l_dbus_message *message)
+{
+	struct l_dbus_message *reply;
+	const char *username;
+	const char *password;
+
+	username = command_option_get(COMMAND_OPTION_USERNAME);
+	if (!username)
+		return agent_error("No username is provided as "
+					"'--"COMMAND_OPTION_USERNAME"' "
+						"command-line option.\n");
+
+	password = command_option_get(COMMAND_OPTION_PASSWORD);
+	if (!password)
+		return agent_error("No password is provided as "
+					"'--"COMMAND_OPTION_PASSWORD"' "
+						"command-line option.\n");
+
+	reply = l_dbus_message_new_method_return(message);
+	l_dbus_message_set_arguments(reply, "ss", username, password);
+
+	return reply;
+}
+
 static struct l_dbus_message *request_username_and_password_method_call(
 						struct l_dbus *dbus,
 						struct l_dbus_message *message,
@@ -133,6 +194,9 @@ static struct l_dbus_message *request_username_and_password_method_call(
 
 	if (dbus_message_has_error(message))
 		return NULL;
+
+	if (!command_is_interactive_mode())
+		return request_username_and_password_command_option(message);
 
 	l_dbus_message_get_arguments(message, "o", &path);
 	if (!path)
@@ -154,6 +218,24 @@ static struct l_dbus_message *request_username_and_password_method_call(
 	return NULL;
 }
 
+static struct l_dbus_message *request_user_password_command_option(
+						struct l_dbus_message *message)
+{
+	struct l_dbus_message *reply;
+	const char *password;
+
+	password = command_option_get(COMMAND_OPTION_PASSWORD);
+	if (!password)
+		return agent_error("No password is provided as "
+					"'--"COMMAND_OPTION_PASSWORD"' "
+						"command-line option.\n");
+
+	reply = l_dbus_message_new_method_return(message);
+	l_dbus_message_set_arguments(reply, "s", password);
+
+	return reply;
+}
+
 static struct l_dbus_message *request_user_password_method_call(
 						struct l_dbus *dbus,
 						struct l_dbus_message *message,
@@ -166,6 +248,9 @@ static struct l_dbus_message *request_user_password_method_call(
 
 	if (dbus_message_has_error(message))
 		return NULL;
+
+	if (!command_is_interactive_mode())
+		return request_user_password_command_option(message);
 
 	l_dbus_message_get_arguments(message, "os", &path, &username);
 	if (!path || !username)
