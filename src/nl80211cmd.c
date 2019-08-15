@@ -147,6 +147,23 @@ static const struct {
 	{ NL80211_CMD_TDLS_CANCEL_CHANNEL_SWITCH,
 						"Cancel TLDS Channel Switch" },
 	{ NL80211_CMD_WIPHY_REG_CHANGE,		"Wiphy Reg Change"	},
+	{ NL80211_CMD_ABORT_SCAN,		"Abort Scan"		},
+	{ NL80211_CMD_START_NAN,		"Start NAN"		},
+	{ NL80211_CMD_STOP_NAN,			"Stop NAN"		},
+	{ NL80211_CMD_ADD_NAN_FUNCTION,		"Add NAN Function"	},
+	{ NL80211_CMD_DEL_NAN_FUNCTION,		"Delete NAN Function"	},
+	{ NL80211_CMD_CHANGE_NAN_CONFIG,	"Change NAN Config"	},
+	{ NL80211_CMD_NAN_MATCH,		"NAN Match"		},
+	{ NL80211_CMD_SET_MULTICAST_TO_UNICAST, "Set Multicast to Unicast" },
+	{ NL80211_CMD_UPDATE_CONNECT_PARAMS,	"Update Connect Params" },
+	{ NL80211_CMD_SET_PMK,			"Set PMK"		},
+	{ NL80211_CMD_DEL_PMK,			"Delete PMK"		},
+	{ NL80211_CMD_PORT_AUTHORIZED,		"Port Authorized"	},
+	{ NL80211_CMD_RELOAD_REGDB,		"Reload Reg Database"	},
+	{ NL80211_CMD_EXTERNAL_AUTH,		"External Auth"		},
+	{ NL80211_CMD_STA_OPMODE_CHANGED,	"STA Opmode Changed"	},
+	{ NL80211_CMD_CONTROL_PORT_FRAME,	"Control Port Frame"	},
+	{ NL80211_CMD_GET_FTM_RESPONDER_STATS,	"Get FTM Responder Stats" },
 	{ }
 };
 
