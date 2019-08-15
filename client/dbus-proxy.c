@@ -299,6 +299,7 @@ struct proxy_callback_data {
 static void proxy_callback(struct l_dbus_message *message, void *user_data)
 {
 	struct proxy_callback_data *callback_data = user_data;
+	const struct proxy_interface *proxy;
 	const char *name;
 	const char *text;
 
@@ -308,9 +309,16 @@ static void proxy_callback(struct l_dbus_message *message, void *user_data)
 	if (command_is_interactive_mode())
 		return;
 
-	if (l_dbus_message_get_error(message, &name, &text))
+	if (l_dbus_message_get_error(message, &name, &text)) {
 		command_set_exit_status(EXIT_FAILURE);
+		goto quit;
+	}
 
+	proxy = callback_data->user_data;
+	if (!strcmp(proxy->type->interface, IWD_AGENT_MANAGER_INTERFACE))
+		return;
+
+quit:
 	l_main_quit();
 }
 
