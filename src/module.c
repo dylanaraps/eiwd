@@ -45,7 +45,7 @@ extern struct iwd_module_desc __stop___iwd_module[];
 extern struct iwd_module_depends __start___iwd_module_dep[];
 extern struct iwd_module_depends __stop___iwd_module_dep[];
 
-struct iwd_module_desc **modules_sorted;
+static struct iwd_module_desc **modules_sorted;
 
 static struct module *module_find(struct module *modules, size_t count,
 						const char *name)

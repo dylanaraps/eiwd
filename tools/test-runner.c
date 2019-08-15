@@ -86,7 +86,7 @@ static const char *kernel_image;
 static const char *exec_home;
 static const char *test_action_params;
 static char top_level_path[PATH_MAX];
-struct l_queue *wiphy_list;
+static struct l_queue *wiphy_list;
 
 #if defined(__i386__)
 /*

@@ -93,7 +93,7 @@ struct user_cb {
 static uint32_t ofono_watch;
 static uint32_t modem_add_watch;
 static uint32_t modem_removed_watch;
-struct l_queue *modems;
+static struct l_queue *modems;
 
 static struct user_cb *new_cb(void *func, void *data, bool is_gsm)
 {
