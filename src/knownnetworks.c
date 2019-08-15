@@ -247,12 +247,7 @@ static void known_network_update(struct network_info *orig_network,
 	if (orig_network)
 		return;
 
-	l_queue_insert(known_networks, network, connected_time_compare, NULL);
-	known_network_register_dbus(network);
-
-	WATCHLIST_NOTIFY(&known_network_watches,
-				known_networks_watch_func_t,
-				KNOWN_NETWORKS_EVENT_ADDED, network);
+	known_networks_add(network);
 }
 
 bool known_networks_foreach(known_networks_foreach_func_t function,
@@ -504,7 +499,7 @@ static void setup_known_network_interface(struct l_dbus_interface *interface)
 				NULL);
 }
 
-static void known_network_removed(struct network_info *network)
+void known_networks_remove(struct network_info *network)
 {
 	if (network->is_hidden)
 		num_known_hidden_networks--;
@@ -517,7 +512,19 @@ static void known_network_removed(struct network_info *network)
 				known_networks_watch_func_t,
 				KNOWN_NETWORKS_EVENT_REMOVED, network);
 
+	network->ops->remove(network);
+
 	network_info_free(network);
+}
+
+void known_networks_add(struct network_info *network)
+{
+	l_queue_insert(known_networks, network, connected_time_compare, NULL);
+	known_network_register_dbus(network);
+
+	WATCHLIST_NOTIFY(&known_network_watches,
+				known_networks_watch_func_t,
+				KNOWN_NETWORKS_EVENT_ADDED, network);
 }
 
 static void known_networks_watch_cb(const char *filename,
@@ -566,7 +573,7 @@ static void known_networks_watch_cb(const char *filename,
 						settings, &connected_time);
 		else {
 			if (network_before)
-				known_network_removed(network_before);
+				known_networks_remove(network_before);
 		}
 
 		l_settings_free(settings);

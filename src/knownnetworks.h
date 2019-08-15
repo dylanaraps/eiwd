@@ -81,3 +81,6 @@ void known_networks_watch_remove(uint32_t id);
 struct l_settings *network_info_open_settings(struct network_info *info);
 int network_info_touch(struct network_info *info);
 const char *network_info_get_path(const struct network_info *info);
+
+void known_networks_add(struct network_info *info);
+void known_networks_remove(struct network_info *info);
