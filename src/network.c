@@ -94,10 +94,8 @@ static bool network_settings_load(struct network *network)
 			l_settings_free(network->settings);
 			network->settings = NULL;
 		}
-	} else
-		network->settings = storage_network_open(
-						network_get_security(network),
-						network_get_ssid(network));
+	} else if (network->info)
+		network->settings = network_info_open_settings(network->info);
 
 	return network->settings != NULL;
 }
@@ -147,18 +145,11 @@ static bool network_secret_check_cacheable(void *data, void *user_data)
 
 void network_connected(struct network *network)
 {
+	enum security security = network_get_security(network);
 	const char *ssid = network_get_ssid(network);
 	int err;
 
-	/*
-	 * This triggers an update to network->info->connected_time and
-	 * other possible actions in knownnetworks.c.
-	 */
-	err = storage_network_touch(network_get_security(network), ssid);
-	switch (err) {
-	case 0:
-		break;
-	case -ENOENT:
+	if (!network->info) {
 		/*
 		 * This is an open network seen for the first time:
 		 *
@@ -169,12 +160,11 @@ void network_connected(struct network *network)
 		if (!network->settings)
 			network->settings = l_settings_new();
 
-		storage_network_sync(network_get_security(network), ssid,
-					network->settings);
-		break;
-	default:
-		l_error("Error %i touching network config", err);
-		break;
+		storage_network_sync(security, ssid, network->settings);
+	} else {
+		err = network_info_touch(network->info);
+		if (err < 0)
+			l_error("Error %i touching network config", err);
 	}
 
 	l_queue_foreach_remove(network->secrets,
@@ -1221,7 +1211,7 @@ static bool network_property_get_known_network(struct l_dbus *dbus,
 		return false;
 
 	l_dbus_message_builder_append_basic(builder, 'o',
-					known_network_get_path(network->info));
+					network_info_get_path(network->info));
 
 	return true;
 }

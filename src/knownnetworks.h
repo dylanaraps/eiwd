@@ -22,13 +22,24 @@
 
 enum security;
 struct scan_freq_set;
+struct network_info;
 
 enum known_networks_event {
 	KNOWN_NETWORKS_EVENT_ADDED,
 	KNOWN_NETWORKS_EVENT_REMOVED,
 };
 
+struct network_info_ops {
+	struct l_settings *(*open)(struct network_info *info);
+	int (*touch)(struct network_info *info);
+	void (*sync)(struct network_info *info, struct l_settings *settings);
+	void (*remove)(struct network_info *info);
+	void (*free)(struct network_info *info);
+	const char *(*get_path)(const struct network_info *info);
+};
+
 struct network_info {
+	const struct network_info_ops *ops;
 	char ssid[33];
 	enum security type;
 	struct l_queue *known_frequencies;
@@ -57,8 +68,6 @@ bool known_networks_has_hidden(void);
 struct network_info *known_networks_find(const char *ssid,
 						enum security security);
 
-const char *known_network_get_path(const struct network_info *network);
-
 struct scan_freq_set *known_networks_get_recent_frequencies(
 						uint8_t num_networks_tosearch);
 int known_network_add_frequency(struct network_info *info, uint32_t frequency);
@@ -67,3 +76,7 @@ uint32_t known_networks_watch_add(known_networks_watch_func_t func,
 					void *user_data,
 					known_networks_destroy_func_t destroy);
 void known_networks_watch_remove(uint32_t id);
+
+struct l_settings *network_info_open_settings(struct network_info *info);
+int network_info_touch(struct network_info *info);
+const char *network_info_get_path(const struct network_info *info);

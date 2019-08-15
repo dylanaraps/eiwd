@@ -54,7 +54,7 @@ static void network_info_free(void *data)
 
 	l_queue_destroy(network->known_frequencies, l_free);
 
-	l_free(network);
+	network->ops->free(network);
 }
 
 static int connected_time_compare(const void *a, const void *b, void *user_data)
@@ -66,7 +66,7 @@ static int connected_time_compare(const void *a, const void *b, void *user_data)
 					&ni_b->connected_time);
 }
 
-const char *known_network_get_path(const struct network_info *network)
+static const char *known_network_get_path(const struct network_info *network)
 {
 	static char path[256];
 	unsigned int pos = 0, i;
@@ -137,6 +137,56 @@ static void known_network_set_autoconnect(struct network_info *network,
 				IWD_KNOWN_NETWORK_INTERFACE, "Autoconnect");
 }
 
+static int known_network_touch(struct network_info *info)
+{
+	return storage_network_touch(info->type, info->ssid);
+}
+
+static struct l_settings *known_network_open(struct network_info *info)
+{
+	return storage_network_open(info->type, info->ssid);
+}
+
+static void known_network_sync(struct network_info *info,
+					struct l_settings *settings)
+{
+	storage_network_sync(info->type, info->ssid, settings);
+}
+
+static void known_network_remove(struct network_info *info)
+{
+	storage_network_remove(info->type, info->ssid);
+}
+
+static void known_network_free(struct network_info *info)
+{
+	l_free(info);
+}
+
+static struct network_info_ops known_network_ops = {
+	.open = known_network_open,
+	.touch = known_network_touch,
+	.sync = known_network_sync,
+	.remove = known_network_remove,
+	.free = known_network_free,
+	.get_path = known_network_get_path,
+};
+
+struct l_settings *network_info_open_settings(struct network_info *info)
+{
+	return info->ops->open(info);
+}
+
+int network_info_touch(struct network_info *info)
+{
+	return info->ops->touch(info);
+}
+
+const char *network_info_get_path(const struct network_info *info)
+{
+	return info->ops->get_path(info);
+}
+
 static void known_network_update(struct network_info *orig_network,
 					const char *ssid,
 					enum security security,
@@ -153,6 +203,7 @@ static void known_network_update(struct network_info *orig_network,
 		network = l_new(struct network_info, 1);
 		strcpy(network->ssid, ssid);
 		network->type = security;
+		network->ops = &known_network_ops;
 	}
 
 	if (util_timespec_compare(&network->connected_time, connected_time) &&
@@ -323,7 +374,7 @@ static struct l_dbus_message *known_network_forget(struct l_dbus *dbus,
 	struct l_dbus_message *reply;
 
 	/* Other actions taken care of by the filesystem watch callback */
-	storage_network_remove(network->type, network->ssid);
+	network->ops->remove(network);
 
 	reply = l_dbus_message_new_method_return(message);
 	l_dbus_message_set_arguments(reply, "");
@@ -399,13 +450,13 @@ static struct l_dbus_message *known_network_property_set_autoconnect(
 	if (network->is_autoconnectable == autoconnect)
 		return l_dbus_message_new_method_return(message);
 
-	settings = storage_network_open(network->type, network->ssid);
+	settings = network->ops->open(network);
 	if (!settings)
 		return dbus_error_failed(message);
 
 	l_settings_set_bool(settings, "Settings", "Autoconnect", autoconnect);
 
-	storage_network_sync(network->type, network->ssid, settings);
+	network->ops->sync(network, settings);
 	l_settings_free(settings);
 
 	return l_dbus_message_new_method_return(message);
