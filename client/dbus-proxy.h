@@ -27,6 +27,7 @@ struct proxy_interface;
 #define IWD_ADAPTER_INTERFACE          "net.connman.iwd.Adapter"
 #define IWD_ACCESS_POINT_INTERFACE     "net.connman.iwd.AccessPoint"
 #define IWD_AD_HOC_INTERFACE           "net.connman.iwd.AdHoc"
+#define IWD_AGENT_MANAGER_INTERFACE    "net.connman.iwd.AgentManager"
 #define IWD_DEVICE_INTERFACE           "net.connman.iwd.Device"
 #define IWD_KNOWN_NETWORK_INTREFACE    "net.connman.iwd.KnownNetwork"
 #define IWD_NETWORK_INTERFACE          "net.connman.iwd.Network"
