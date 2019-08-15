@@ -2932,6 +2932,31 @@ struct station *station_find(uint32_t ifindex)
 	return NULL;
 }
 
+struct network_foreach_data {
+	station_network_foreach_func_t func;
+	void *user_data;
+};
+
+static void network_foreach(const void *key, void *value, void *user_data)
+{
+	struct network_foreach_data *data = user_data;
+	struct network *network = value;
+
+	data->func(network, data->user_data);
+}
+
+void station_network_foreach(struct station *station,
+				station_network_foreach_func_t func,
+				void *user_data)
+{
+	struct network_foreach_data data = {
+		.func = func,
+		.user_data = user_data,
+	};
+
+	l_hashmap_foreach(station->networks, network_foreach, &data);
+}
+
 static struct station *station_create(struct netdev *netdev)
 {
 	struct station *station;

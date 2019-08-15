@@ -46,6 +46,7 @@ enum station_state {
 typedef void (*station_foreach_func_t)(struct station *, void *data);
 typedef void (*station_state_watch_func_t)(enum station_state, void *userdata);
 typedef void (*station_destroy_func_t)(void *userdata);
+typedef void (*station_network_foreach_func_t)(struct network *, void *data);
 
 struct wiphy *station_get_wiphy(struct station *station);
 struct netdev *station_get_netdev(struct station *station);
@@ -80,3 +81,7 @@ int station_disconnect(struct station *station);
 
 struct station *station_find(uint32_t ifindex);
 void station_foreach(station_foreach_func_t func, void *user_data);
+
+void station_network_foreach(struct station *station,
+				station_network_foreach_func_t func,
+				void *user_data);
