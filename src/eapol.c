@@ -51,8 +51,6 @@ eapol_rekey_offload_func_t rekey_offload = NULL;
 eapol_tx_packet_func_t tx_packet = NULL;
 void *tx_user_data;
 
-uint32_t next_frame_watch_id;
-
 #define VERIFY_IS_ZERO(field)						\
 	do {								\
 		if (!util_mem_is_zero((field), sizeof((field))))	\
