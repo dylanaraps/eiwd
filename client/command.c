@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2017-2018  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2017-2019  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -27,6 +27,7 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
+#include <getopt.h>
 #include <ell/ell.h>
 #include <readline/readline.h>
 
@@ -34,12 +35,48 @@
 #include "display.h"
 
 static struct l_queue *command_families;
+static struct l_queue *command_options;
 static int exit_status;
 static bool interactive_mode;
 static struct command_noninteractive {
 	char **argv;
 	int argc;
 } command_noninteractive;
+
+struct command_option {
+	const char *name;
+	char *value;
+};
+
+static void command_options_destroy(void *data)
+{
+	struct command_option *option = data;
+
+	l_free(option->value);
+	l_free(option);
+}
+
+const char *command_option_get(const char *name)
+{
+	const struct l_queue_entry *entry;
+
+	for (entry = l_queue_get_entries(command_options); entry;
+							entry = entry->next) {
+		const struct command_option *option = entry->data;
+
+		if (strcmp(option->name, name))
+			continue;
+
+		return option->value;
+	}
+
+	return NULL;
+}
+
+bool command_has_options(void)
+{
+	return !l_queue_isempty(command_options);
+}
 
 static enum cmd_status cmd_version(const char *entity,
 						char **argv, int argc)
@@ -580,14 +617,23 @@ void command_family_unregister(const struct command_family *family)
 	l_queue_remove(command_families, (void *) family);
 }
 
+static const struct option command_opts[] = {
+	{ COMMAND_OPTION_USERNAME,	required_argument, NULL, 'u' },
+	{ COMMAND_OPTION_PASSWORD,	required_argument, NULL, 'p' },
+	{ COMMAND_OPTION_PASSPHRASE,	required_argument, NULL, 'P' },
+	{ }
+};
+
 extern struct command_family_desc __start___command[];
 extern struct command_family_desc __stop___command[];
 
 bool command_init(char **argv, int argc)
 {
 	struct command_family_desc *desc;
+	int opt;
 
 	command_families = l_queue_new();
+	command_options = l_queue_new();
 
 	for (desc = __start___command; desc < __stop___command; desc++) {
 		if (!desc->init)
@@ -596,13 +642,56 @@ bool command_init(char **argv, int argc)
 		desc->init();
 	}
 
+	for (;;) {
+		struct command_option *option;
+
+		opt = getopt_long(argc, argv, "u:p:P:", command_opts, NULL);
+
+		switch (opt) {
+		case 'u':
+			option = l_new(struct command_option, 1);
+			option->name = COMMAND_OPTION_USERNAME;
+			option->value = l_strdup(optarg);
+
+			l_queue_push_tail(command_options, option);
+
+			break;
+		case 'p':
+			option = l_new(struct command_option, 1);
+			option->name = COMMAND_OPTION_PASSWORD;
+			option->value = l_strdup(optarg);
+
+			l_queue_push_tail(command_options, option);
+
+			break;
+		case 'P':
+			option = l_new(struct command_option, 1);
+			option->name = COMMAND_OPTION_PASSPHRASE;
+			option->value = l_strdup(optarg);
+
+			l_queue_push_tail(command_options, option);
+
+			break;
+		case -1:
+			goto options_parsed;
+		case '?':
+			exit_status = EXIT_FAILURE;
+
+			return false;
+		}
+	}
+
+options_parsed:
+	argv += optind;
+	argc -= optind;
+
 	if (argc < 2) {
 		interactive_mode = true;
 		return true;
 	}
 
-	command_noninteractive.argv = argv + 1;
-	command_noninteractive.argc = argc - 1;
+	command_noninteractive.argv = argv;
+	command_noninteractive.argc = argc;
 
 	return false;
 }
@@ -620,4 +709,7 @@ void command_exit(void)
 
 	l_queue_destroy(command_families, NULL);
 	command_families = NULL;
+
+	l_queue_destroy(command_options, command_options_destroy);
+	command_options = NULL;
 }
