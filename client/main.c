@@ -55,6 +55,10 @@ int main(int argc, char *argv[])
 
 	interactive = command_init(argv, argc);
 
+	exit_status = command_get_exit_status();
+	if (exit_status)
+		goto done;
+
 	if (interactive)
 		display_init();
 
@@ -68,6 +72,7 @@ int main(int argc, char *argv[])
 		display_exit();
 
 	exit_status = command_get_exit_status();
+done:
 	command_exit();
 
 	l_main_exit();
