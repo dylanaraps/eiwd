@@ -278,7 +278,7 @@ void display(const char *fmt, ...)
 
 void display_error(const char *error)
 {
-	char *text = l_strdup_printf(COLOR_RED "%s\n" COLOR_OFF, error);
+	char *text = l_strdup_printf(COLOR_RED "%s" COLOR_OFF "\n", error);
 
 	display_text(text);
 
