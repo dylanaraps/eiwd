@@ -4500,6 +4500,297 @@ static void print_wiphy_bands(unsigned int level, const char *label,
 	}
 }
 
+static void print_eapol_key(unsigned int level, const void *data, uint32_t size)
+{
+	const struct eapol_key *ek = (struct eapol_key *)data;
+	size_t mic_lengths[] = { 16, 24, 32 };
+	size_t mic_len = 0;
+	int i;
+
+	/*
+	 * The MIC length is not encoded anywhere in the frame, and should be
+	 * determined by AKM. To even further complicate things, some non
+	 * 802.11 AKMs define their own MIC lengths. But since the only valid
+	 * lengths are 16, 24 and 32 its trivial to try each until we find a
+	 * matching length.
+	 */
+	for (i = 0; i < 3; i++) {
+		size_t mlen = mic_lengths[i];
+
+		if (size < EAPOL_FRAME_LEN(mlen))
+			break;
+
+		if (size == EAPOL_FRAME_LEN(mlen) +
+				EAPOL_KEY_DATA_LEN(ek, mlen)) {
+			mic_len = mlen;
+			break;
+		}
+	}
+
+	/* could not determine MIC length, malformed packet? */
+	if (!mic_len)
+		return;
+
+	ek = eapol_key_validate(data, size, mic_len);
+	if (!ek)
+		return;
+
+	print_attr(level, "Descriptor Type: %u", ek->descriptor_type);
+	print_attr(level, "Key MIC: %s", ek->key_mic ? "true" : "false");
+	print_attr(level, "Secure: %s", ek->secure ? "true" : "false");
+	print_attr(level, "Error: %s", ek->error ? "true" : "false");
+	print_attr(level, "Request: %s", ek->request ? "true" : "false");
+	print_attr(level, "Encrypted Key Data: %s",
+				ek->encrypted_key_data ? "true" : "false");
+	print_attr(level, "SMK Message: %s",
+				ek->smk_message ? "true" : "false");
+	print_attr(level, "Key Descriptor Version: %d (%02x)",
+						ek->key_descriptor_version,
+						ek->key_descriptor_version);
+	print_attr(level, "Key Type: %s", ek->key_type ? "true" : "false");
+
+	if (ek->descriptor_type == EAPOL_DESCRIPTOR_TYPE_WPA)
+		print_attr(level, "Key Id: %u", ek->wpa_key_id);
+
+	print_attr(level, "Install: %s", ek->install ? "true" : "false");
+	print_attr(level, "Key ACK: %s", ek->key_ack ? "true" : "false");
+	print_attr(level, "Key Length: %d", L_BE16_TO_CPU(ek->key_length));
+	print_attr(level, "Key Replay Counter: %" PRIu64,
+					L_BE64_TO_CPU(ek->key_replay_counter));
+	print_attr(level, "Key NONCE");
+	print_hexdump(level + 1, ek->key_nonce, 32);
+	print_attr(level, "Key IV");
+	print_hexdump(level + 1, ek->eapol_key_iv, 16);
+	print_attr(level, "Key RSC ");
+	print_hexdump(level + 1, ek->key_rsc, 8);
+
+	print_attr(level, "Key MIC Data");
+
+	print_hexdump(level + 1, EAPOL_KEY_MIC(ek), mic_len);
+
+	if (ek->encrypted_key_data) {
+		print_attr(level, "Key Data: len %d",
+					EAPOL_KEY_DATA_LEN(ek, mic_len));
+		print_hexdump(level + 1, EAPOL_KEY_DATA(ek, mic_len),
+				EAPOL_KEY_DATA_LEN(ek, mic_len));
+		return;
+	}
+
+	print_ie(level, "Key Data", EAPOL_KEY_DATA(ek, mic_len),
+			EAPOL_KEY_DATA_LEN(ek, mic_len));
+}
+
+static void print_eap_wsc(unsigned int level,
+				const uint8_t *eap_wsc, uint32_t size)
+{
+	const char *str;
+
+	if (size < 2)
+		return;
+
+	switch (eap_wsc[0]) {
+	case 0x01:
+		str = "WSC-Start";
+		break;
+	case 0x02:
+		str = "WSC-Ack";
+		break;
+	case 0x03:
+		str = "WSC-Nack";
+		break;
+	case 0x04:
+		str = "WSC-Msg";
+		break;
+	case 0x05:
+		str = "WSC-Done";
+		break;
+	case 0x06:
+		str = "WSC-Frag-Ack";
+		break;
+	default:
+		str = "Reserved";
+		break;
+	}
+
+	print_attr(level, "Op-Code: %u (%s)", eap_wsc[0], str);
+	print_attr(level, "Flags: %02x", eap_wsc[1]);
+
+	if (eap_wsc[1] == 0)
+		print_wsc_attributes(level + 1, "EAP-WSC Payload",
+						eap_wsc + 2, size - 2);
+}
+
+static void print_eap(unsigned int level, const void *data, uint32_t size)
+{
+	static const uint8_t wfa_smi[3] = { 0x00, 0x37, 0x2a };
+	const uint8_t *eap = data;
+	const char *str;
+
+	if (size < 5)
+		return;
+
+	switch (eap[0]) {
+	case 0x01:
+		str = "Request";
+		break;
+	case 0x02:
+		str = "Response";
+		break;
+	case 0x03:
+		str = "Success";
+		break;
+	case 0x04:
+		str = "Failure";
+		break;
+	default:
+		str = "Reserved";
+		break;
+	};
+
+	print_attr(level, "Code: %u (%s)", eap[0], str);
+	print_attr(level, "Identifier: %u", eap[1]);
+	print_attr(level, "Length: %u", l_get_be16(eap + 2));
+
+	switch (eap[4]) {
+	case 1:
+		str = "Identity";
+		break;
+	case 2:
+		str = "Notification";
+		break;
+	case 3:
+		str = "Nak";
+		break;
+	case 4:
+		str = "MD5 Challenge";
+		break;
+	case 13:
+		str = "TLS EAP";
+		break;
+	case 21:
+		str = "TTLS";
+		break;
+	case 254:
+		str = "Expanded";
+		break;
+	default:
+		str = "Reserved";
+		break;
+	}
+
+	print_attr(level, "Type: %u (%s)", eap[4], str);
+
+	if (eap[4] == 254) {
+		if (size < 12)
+			return;
+
+		if (memcmp(eap + 5, wfa_smi, 3))
+			return;
+
+		if (l_get_be32(eap + 8) == 1)
+			print_eap_wsc(level, eap + 12, size - 12);
+	}
+}
+
+static void print_eapol(unsigned int level, const char *label,
+					const void *data, uint16_t size)
+{
+	const struct eapol_header *eh;
+	const char *str;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	if (size < 4)
+		return;
+
+	eh = data;
+
+	switch (eh->protocol_version) {
+	case 0x01:
+		str = "802.1X-2001";
+		break;
+	case 0x02:
+		str = "802.1X-2004";
+		break;
+	case 0x03:
+		str = "802.1X-2010";
+		break;
+	default:
+		str = "Reserved";
+		break;
+	}
+
+	print_attr(level + 1, "Protocol Version: %u (%s)",
+					eh->protocol_version, str);
+
+	switch (eh->packet_type) {
+	case 0x00:
+		str = "EAP";
+		break;
+	case 0x01:
+		str = "Start";
+		break;
+	case 0x02:
+		str = "Logoff";
+		break;
+	case 0x03:
+		str = "Key";
+		break;
+	case 0x04:
+		str = "Encapsulated-ASF-Alert";
+		break;
+	case 0x05:
+		str = "MKA";
+		break;
+	case 0x06:
+		str = "Announcement (Generic)";
+		break;
+	case 0x07:
+		str = "Announcement (Specific)";
+		break;
+	case 0x08:
+		str = "Announcement-Req";
+		break;
+	default:
+		str = "Reserved";
+		break;
+	}
+
+	print_attr(level + 1, "Type: %u (%s)", eh->packet_type, str);
+	print_attr(level + 1, "Length: %d", L_BE16_TO_CPU(eh->packet_len));
+
+	switch (eh->packet_type) {
+	case 0x03:
+		print_eapol_key(level + 1, data, size);
+		break;
+	case 0x00:
+		print_eap(level + 1, data + 4, size - 4);
+	}
+
+	print_hexdump(level + 1, data, size);
+}
+
+/*
+ * Control Port sends a EAPoL frame inside ATTR_FRAME and not a management
+ * frame.  So a separate table with all the possible attributes is provided
+ */
+static const struct attr_entry control_port_attr_table[] = {
+	{ NL80211_ATTR_CONTROL_PORT_ETHERTYPE,
+			"Control Port Ethertype", ATTR_FLAG_OR_U16 },
+	{ NL80211_ATTR_CONTROL_PORT_NO_ENCRYPT,
+			"Control Port No Encrypt", ATTR_FLAG },
+	{ NL80211_ATTR_MAC,
+			"MAC Address", ATTR_ADDRESS },
+	{ NL80211_ATTR_FRAME,
+			"Frame", ATTR_CUSTOM, { .function = print_eapol } },
+	{ NL80211_ATTR_WDEV,
+			"Wireless Device", ATTR_U64 },
+	{ NL80211_ATTR_IFINDEX,
+			"Interface Index", ATTR_U32 },
+	{ NL80211_ATTR_WIPHY,
+			"Wiphy", ATTR_U32 },
+};
+
 static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_WIPHY,
 			"Wiphy", ATTR_U32 },
@@ -4721,10 +5012,6 @@ static const struct attr_entry attr_table[] = {
 	{ NL80211_ATTR_FRAME_TYPE,
 			"Frame Type", ATTR_CUSTOM,
 					{ .function = print_frame_type } },
-	{ NL80211_ATTR_CONTROL_PORT_ETHERTYPE,
-			"Control Port Ethertype", ATTR_FLAG_OR_U16 },
-	{ NL80211_ATTR_CONTROL_PORT_NO_ENCRYPT,
-			"Control Port No Encrypt", ATTR_FLAG },
 	{ NL80211_ATTR_SUPPORT_IBSS_RSN,
 			"Support IBSS RSN", ATTR_FLAG },
 	{ NL80211_ATTR_WIPHY_ANTENNA_TX,
@@ -5214,85 +5501,6 @@ static void print_attributes(int indent, const struct attr_entry *table,
 	}
 }
 
-static void print_eapol_key(const void *data, uint32_t size)
-{
-	const struct eapol_key *ek = (struct eapol_key *)data;
-	size_t mic_lengths[] = { 16, 24, 32 };
-	size_t mic_len = 0;
-	int i;
-
-	/*
-	 * The MIC length is not encoded anywhere in the frame, and should be
-	 * determined by AKM. To even further complicate things, some non
-	 * 802.11 AKMs define their own MIC lengths. But since the only valid
-	 * lengths are 16, 24 and 32 its trivial to try each until we find a
-	 * matching length.
-	 */
-	for (i = 0; i < 3; i++) {
-		size_t mlen = mic_lengths[i];
-
-		if (size < EAPOL_FRAME_LEN(mlen))
-			break;
-
-		if (size == EAPOL_FRAME_LEN(mlen) +
-				EAPOL_KEY_DATA_LEN(ek, mlen)) {
-			mic_len = mlen;
-			break;
-		}
-	}
-
-	/* could not determine MIC length, malformed packet? */
-	if (!mic_len)
-		return;
-
-	ek = eapol_key_validate(data, size, mic_len);
-	if (!ek)
-		return;
-
-	print_attr(1, "Descriptor Type: %u", ek->descriptor_type);
-	print_attr(1, "Key MIC: %s", ek->key_mic ? "true" : "false");
-	print_attr(1, "Secure: %s", ek->secure ? "true" : "false");
-	print_attr(1, "Error: %s", ek->error ? "true" : "false");
-	print_attr(1, "Request: %s", ek->request ? "true" : "false");
-	print_attr(1, "Encrypted Key Data: %s",
-				ek->encrypted_key_data ? "true" : "false");
-	print_attr(1, "SMK Message: %s", ek->smk_message ? "true" : "false");
-	print_attr(1, "Key Descriptor Version: %d (%02x)",
-						ek->key_descriptor_version,
-						ek->key_descriptor_version);
-	print_attr(1, "Key Type: %s", ek->key_type ? "true" : "false");
-
-	if (ek->descriptor_type == EAPOL_DESCRIPTOR_TYPE_WPA)
-		print_attr(1, "Key Id: %u", ek->wpa_key_id);
-
-	print_attr(1, "Install: %s", ek->install ? "true" : "false");
-	print_attr(1, "Key ACK: %s", ek->key_ack ? "true" : "false");
-	print_attr(1, "Key Length: %d", L_BE16_TO_CPU(ek->key_length));
-	print_attr(1, "Key Replay Counter: %" PRIu64,
-					L_BE64_TO_CPU(ek->key_replay_counter));
-	print_attr(1, "Key NONCE");
-	print_hexdump(2, ek->key_nonce, 32);
-	print_attr(1, "Key IV");
-	print_hexdump(2, ek->eapol_key_iv, 16);
-	print_attr(1, "Key RSC ");
-	print_hexdump(2, ek->key_rsc, 8);
-
-	print_attr(1, "Key MIC Data");
-
-	print_hexdump(2, EAPOL_KEY_MIC(ek), mic_len);
-
-	if (ek->encrypted_key_data) {
-		print_attr(1, "Key Data: len %d",
-					EAPOL_KEY_DATA_LEN(ek, mic_len));
-		print_hexdump(2, EAPOL_KEY_DATA(ek, mic_len),
-				EAPOL_KEY_DATA_LEN(ek, mic_len));
-		return;
-	}
-
-	print_ie(1, "Key Data", EAPOL_KEY_DATA(ek, mic_len),
-			EAPOL_KEY_DATA_LEN(ek, mic_len));
-}
-
 static void netlink_str(char *str, size_t size,
 				uint16_t type, uint16_t flags, uint32_t len)
 {
@@ -5441,7 +5649,13 @@ static void print_message(struct nlmon *nlmon, const struct timeval *tv,
 	case MSG_REQUEST:
 	case MSG_RESULT:
 	case MSG_EVENT:
-		print_attributes(0, attr_table, data, len);
+		switch (cmd) {
+		case NL80211_CMD_CONTROL_PORT_FRAME:
+			print_attributes(0, control_port_attr_table, data, len);
+			break;
+		default:
+			print_attributes(0, attr_table, data, len);
+		}
 		break;
 	case MSG_RESPONSE:
 		print_field("Status: %s (%d)", strerror(status), status);
@@ -6505,124 +6719,11 @@ static struct l_io *open_packet(const char *name)
 	return io;
 }
 
-static void print_eap_wsc(const uint8_t *eap_wsc, uint32_t size)
-{
-	const char *str;
-
-	if (size < 2)
-		return;
-
-	switch (eap_wsc[0]) {
-	case 0x01:
-		str = "WSC-Start";
-		break;
-	case 0x02:
-		str = "WSC-Ack";
-		break;
-	case 0x03:
-		str = "WSC-Nack";
-		break;
-	case 0x04:
-		str = "WSC-Msg";
-		break;
-	case 0x05:
-		str = "WSC-Done";
-		break;
-	case 0x06:
-		str = "WSC-Frag-Ack";
-		break;
-	default:
-		str = "Reserved";
-		break;
-	}
-
-	print_attr(1, "Op-Code: %u (%s)", eap_wsc[0], str);
-	print_attr(1, "Flags: %02x", eap_wsc[1]);
-
-	if (eap_wsc[1] == 0)
-		print_wsc_attributes(2, "EAP-WSC Payload",
-						eap_wsc + 2, size - 2);
-}
-
-static void print_eap(const void *data, uint32_t size)
-{
-	static const uint8_t wfa_smi[3] = { 0x00, 0x37, 0x2a };
-	const uint8_t *eap = data;
-	const char *str;
-
-	if (size < 5)
-		return;
-
-	switch (eap[0]) {
-	case 0x01:
-		str = "Request";
-		break;
-	case 0x02:
-		str = "Response";
-		break;
-	case 0x03:
-		str = "Success";
-		break;
-	case 0x04:
-		str = "Failure";
-		break;
-	default:
-		str = "Reserved";
-		break;
-	};
-
-	print_attr(1, "Code: %u (%s)", eap[0], str);
-	print_attr(1, "Identifier: %u", eap[1]);
-	print_attr(1, "Length: %u", l_get_be16(eap + 2));
-
-	switch (eap[4]) {
-	case 1:
-		str = "Identity";
-		break;
-	case 2:
-		str = "Notification";
-		break;
-	case 3:
-		str = "Nak";
-		break;
-	case 4:
-		str = "MD5 Challenge";
-		break;
-	case 13:
-		str = "TLS EAP";
-		break;
-	case 21:
-		str = "TTLS";
-		break;
-	case 254:
-		str = "Expanded";
-		break;
-	default:
-		str = "Reserved";
-		break;
-	}
-
-	print_attr(1, "Type: %u (%s)", eap[4], str);
-
-	if (eap[4] == 254) {
-		if (size < 12)
-			return;
-
-		if (memcmp(eap + 5, wfa_smi, 3))
-			return;
-
-		if (l_get_be32(eap + 8) == 1)
-			print_eap_wsc(eap + 12, size - 12);
-	}
-}
-
 void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 					uint8_t type, int index,
 					const void *data, uint32_t size)
 {
 	char extra_str[16];
-	const char *str;
-	const struct eapol_header *eh;
 
 	update_time_offset(tv);
 
@@ -6633,74 +6734,7 @@ void nlmon_print_pae(struct nlmon *nlmon, const struct timeval *tv,
 	if (index >= 0)
 		print_attr(0, "Interface Index: %u", index);
 
-	if (size < 4)
-		return;
-
-	print_attr(0, "EAPoL: len %u", size);
-	print_hexdump(0, data, size);
-
-	eh = data;
-
-	switch (eh->protocol_version) {
-	case 0x01:
-		str = "802.1X-2001";
-		break;
-	case 0x02:
-		str = "802.1X-2004";
-		break;
-	case 0x03:
-		str = "802.1X-2010";
-		break;
-	default:
-		str = "Reserved";
-		break;
-	}
-
-	print_attr(1, "Protocol Version: %u (%s)", eh->protocol_version, str);
-
-	switch (eh->packet_type) {
-	case 0x00:
-		str = "EAP";
-		break;
-	case 0x01:
-		str = "Start";
-		break;
-	case 0x02:
-		str = "Logoff";
-		break;
-	case 0x03:
-		str = "Key";
-		break;
-	case 0x04:
-		str = "Encapsulated-ASF-Alert";
-		break;
-	case 0x05:
-		str = "MKA";
-		break;
-	case 0x06:
-		str = "Announcement (Generic)";
-		break;
-	case 0x07:
-		str = "Announcement (Specific)";
-		break;
-	case 0x08:
-		str = "Announcement-Req";
-		break;
-	default:
-		str = "Reserved";
-		break;
-	}
-
-	print_attr(1, "Type: %u (%s)", eh->packet_type, str);
-	print_attr(1, "Length: %d", L_BE16_TO_CPU(eh->packet_len));
-
-	switch (eh->packet_type) {
-	case 0x03:
-		print_eapol_key(data, size);
-		break;
-	case 0x00:
-		print_eap(data + 4, size - 4);
-	}
+	print_eapol(0, "EAPoL", data, size);
 }
 
 static bool pae_receive(struct l_io *io, void *user_data)
