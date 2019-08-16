@@ -742,6 +742,14 @@ bool netconfig_ifindex_remove(uint32_t ifindex)
 	if (!netconfig)
 		return false;
 
+	if (netconfig->station_state != STATION_STATE_DISCONNECTED) {
+		netconfig_ipv4_select_and_uninstall(netconfig);
+
+		/* TODO Uninstall IPv6 addresses. */
+
+		resolve_remove(netconfig->ifindex);
+	}
+
 	netconfig_destroy(netconfig);
 
 	return true;
