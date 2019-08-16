@@ -1329,6 +1329,7 @@ static void emit_known_network_changed(struct station *station, void *user_data)
 	if (!network)
 		return;
 
+	info->seen_count--;
 	network->info = NULL;
 	l_dbus_property_changed(dbus_get_bus(), network_get_path(network),
 				IWD_NETWORK_INTERFACE, "KnownNetwork");
@@ -1344,6 +1345,7 @@ static void match_known_network(struct station *station, void *user_data)
 		return;
 
 	network->info = info;
+	network->info->seen_count++;
 	l_dbus_property_changed(dbus_get_bus(), network_get_path(network),
 				IWD_NETWORK_INTERFACE, "KnownNetwork");
 }
