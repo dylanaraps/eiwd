@@ -36,6 +36,14 @@ struct network_info_ops {
 	void (*remove)(struct network_info *info);
 	void (*free)(struct network_info *info);
 	const char *(*get_path)(const struct network_info *info);
+
+	bool (*match_hessid)(const struct network_info *info,
+						const uint8_t *hessid);
+	bool (*match_roaming_consortium)(const struct network_info *info,
+						const uint8_t *rc_ie,
+						size_t rc_len);
+	bool (*match_nai_realms)(const struct network_info *info,
+						const char **nai_realms);
 };
 
 struct network_info {
@@ -81,6 +89,14 @@ void known_networks_watch_remove(uint32_t id);
 struct l_settings *network_info_open_settings(struct network_info *info);
 int network_info_touch(struct network_info *info);
 const char *network_info_get_path(const struct network_info *info);
+
+bool network_info_match_hessid(const struct network_info *info,
+				const uint8_t *hessid);
+bool network_info_match_roaming_consortium(const struct network_info *info,
+						const uint8_t *rc,
+						size_t rc_len);
+bool network_info_match_nai_realm(const struct network_info *info,
+						const char **nai_realms);
 
 void known_networks_add(struct network_info *info);
 void known_networks_remove(struct network_info *info);

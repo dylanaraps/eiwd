@@ -166,6 +166,70 @@ static const char *hotspot_network_get_path(const struct network_info *info)
 	return config->object_path;
 }
 
+static bool hotspot_match_hessid(const struct network_info *info,
+					const uint8_t *hessid)
+{
+	struct hs20_config *config = l_container_of(info, struct hs20_config,
+							super);
+
+	if (util_mem_is_zero(config->hessid, 6) || !hessid)
+		return false;
+
+	return !memcmp(config->hessid, hessid, 6);
+}
+
+static bool hotspot_match_roaming_consortium(const struct network_info *info,
+						const uint8_t *rc_ie,
+						size_t rc_len)
+{
+	const uint8_t *rc1, *rc2, *rc3;
+	size_t rc1_len, rc2_len, rc3_len;
+	struct hs20_config *config = l_container_of(info, struct hs20_config,
+							super);
+
+	if (!config->rc || !rc_ie)
+		return false;
+
+	if (ie_parse_roaming_consortium_from_data(rc_ie, rc_ie[1] + 2, NULL,
+						&rc1, &rc1_len, &rc2, &rc2_len,
+						&rc3, &rc3_len) < 0)
+		return false;
+
+	/* rc1 is guarenteed to be set if the above returns success */
+	if (rc1_len == config->rc_len && !memcmp(rc1, config->rc, rc1_len))
+		return true;
+
+	if (rc2 && rc2_len == config->rc_len &&
+				!memcmp(rc2, config->rc, rc2_len))
+		return true;
+
+	if (rc3 && rc1_len == config->rc_len &&
+				!memcmp(rc3, config->rc, rc3_len))
+		return true;
+
+	return false;
+}
+
+static bool hotspot_match_nai_realms(const struct network_info *info,
+					const char **nai_realms)
+{
+	const char **realms = nai_realms;
+	struct hs20_config *config = l_container_of(info, struct hs20_config,
+							super);
+
+	if (!config->nai_realms || !nai_realms)
+		return false;
+
+	while (*realms) {
+		if (l_strv_contains(config->nai_realms, *realms))
+			return true;
+
+		realms++;
+	}
+
+	return false;
+}
+
 static struct network_info_ops hotspot_ops = {
 	.open = hotspot_network_open,
 	.touch = hotspot_network_touch,
@@ -173,6 +237,10 @@ static struct network_info_ops hotspot_ops = {
 	.remove = hotspot_network_remove,
 	.free = hotspot_network_free,
 	.get_path = hotspot_network_get_path,
+
+	.match_hessid = hotspot_match_hessid,
+	.match_roaming_consortium = hotspot_match_roaming_consortium,
+	.match_nai_realms = hotspot_match_nai_realms,
 };
 
 static struct hs20_config *hs20_config_new(struct l_settings *settings,
