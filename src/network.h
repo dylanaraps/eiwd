@@ -48,11 +48,6 @@ struct l_settings *network_get_settings(const struct network *network);
 bool network_set_psk(struct network *network, const uint8_t *psk);
 void network_sync_psk(struct network *network);
 
-void network_set_hessid(struct network *network, uint8_t *hessid);
-void network_set_nai_realms(struct network *network, char **realms);
-const uint8_t *network_get_hessid(const struct network *network);
-char **network_get_nai_realms(const struct network *network);
-const uint8_t *network_get_roaming_consortium(const struct network *network);
 const struct network_info *network_get_info(const struct network *network);
 void network_set_info(struct network *network, struct network_info *info);
 

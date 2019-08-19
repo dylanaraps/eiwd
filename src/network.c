@@ -431,34 +431,6 @@ void network_sync_psk(struct network *network)
 		storage_network_sync(SECURITY_PSK, ssid, network->settings);
 }
 
-void network_set_hessid(struct network *network, uint8_t *hessid)
-{
-	memcpy(network->hessid, hessid, 6);
-}
-
-void network_set_nai_realms(struct network *network, char **realms)
-{
-	if (network->nai_realms)
-		l_strv_free(network->nai_realms);
-
-	network->nai_realms = realms;
-}
-
-const uint8_t *network_get_hessid(const struct network *network)
-{
-	return network->hessid;
-}
-
-char **network_get_nai_realms(const struct network *network)
-{
-	return network->nai_realms;
-}
-
-const uint8_t *network_get_roaming_consortium(const struct network *network)
-{
-	return network->rc_ie;
-}
-
 const struct network_info *network_get_info(const struct network *network)
 {
 	return network->info;
