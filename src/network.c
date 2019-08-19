@@ -438,7 +438,13 @@ const struct network_info *network_get_info(const struct network *network)
 
 void network_set_info(struct network *network, struct network_info *info)
 {
-	network->info = info;
+	if (info) {
+		network->info = info;
+		network->info->seen_count++;
+	} else {
+		network->info->seen_count--;
+		network->info = NULL;
+	}
 
 	l_dbus_property_changed(dbus_get_bus(), network_get_path(network),
 					IWD_NETWORK_INTERFACE, "KnownNetwork");
@@ -555,28 +561,36 @@ void network_connect_failed(struct network *network)
 	l_queue_clear(network->blacklist, NULL);
 }
 
+static bool hotspot_info_matches(struct network *network,
+					const struct network_info *info)
+{
+	struct scan_bss *bss;
+
+	if (!network->is_hs20 || !info->is_hotspot)
+		return false;
+
+	bss = network_bss_select(network, true);
+
+	if (network_info_match_hessid(info, bss->hessid))
+		return true;
+
+	if (network_info_match_roaming_consortium(info, bss->rc_ie,
+							bss->rc_ie[1] + 2))
+		return true;
+
+	return false;
+}
+
 static bool match_hotspot_network(const struct network_info *info,
 					void *user_data)
 {
 	struct network *network = user_data;
-	struct scan_bss *bss;
 
-	if (!info->is_hotspot)
+	if (!hotspot_info_matches(network, info))
 		return false;
 
-	bss = network_bss_select(network, false);
+	network_set_info(network, (struct network_info *) info);
 
-	if (network_info_match_roaming_consortium(info, bss->rc_ie,
-							bss->rc_ie[1] + 2))
-		goto found;
-
-	if (network_info_match_hessid(info, bss->hessid))
-		goto found;
-
-	return false;
-
-found:
-	network->info = (struct network_info *)info;
 	return true;
 }
 
@@ -1319,34 +1333,57 @@ void network_rank_update(struct network *network, bool connected)
 		network->rank = best_bss->rank;
 }
 
+static void network_unset_hotspot(struct network *network, void *user_data)
+{
+	struct network_info *info = user_data;
+
+	if (!hotspot_info_matches(network, info))
+		return;
+
+	network_set_info(network, NULL);
+}
+
 static void emit_known_network_changed(struct station *station, void *user_data)
 {
 	struct network_info *info = user_data;
 	struct network *network;
 
-	network = station_network_find(station, info->ssid, info->type);
-	if (!network)
-		return;
+	if (!info->is_hotspot) {
+		network = station_network_find(station, info->ssid, info->type);
+		if (!network)
+			return;
 
-	info->seen_count--;
-	network->info = NULL;
-	l_dbus_property_changed(dbus_get_bus(), network_get_path(network),
-				IWD_NETWORK_INTERFACE, "KnownNetwork");
+		network_set_info(network, NULL);
+		return;
+	}
+
+	/* This is a new hotspot network */
+	station_network_foreach(station, network_unset_hotspot, info);
+}
+
+static void network_update_hotspot(struct network *network, void *user_data)
+{
+	struct network_info *info = user_data;
+
+	match_hotspot_network(info, network);
 }
 
 static void match_known_network(struct station *station, void *user_data)
 {
 	struct network_info *info = user_data;
-	struct network *network = station_network_find(station,
-							info->ssid, info->type);
+	struct network *network;
 
-	if (!network)
+	if (!info->is_hotspot) {
+		network = station_network_find(station, info->ssid, info->type);
+		if (!network)
+			return;
+
+		network_set_info(network, info);
 		return;
+	}
 
-	network->info = info;
-	network->info->seen_count++;
-	l_dbus_property_changed(dbus_get_bus(), network_get_path(network),
-				IWD_NETWORK_INTERFACE, "KnownNetwork");
+	/* This is a new hotspot network */
+	station_network_foreach(station, network_update_hotspot, info);
 }
 
 static void disconnect_no_longer_known(struct station *station, void *user_data)
