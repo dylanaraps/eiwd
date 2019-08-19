@@ -597,6 +597,31 @@ void network_connect_failed(struct network *network)
 	l_queue_clear(network->blacklist, NULL);
 }
 
+static bool match_hotspot_network(const struct network_info *info,
+					void *user_data)
+{
+	struct network *network = user_data;
+	struct scan_bss *bss;
+
+	if (!info->is_hotspot)
+		return false;
+
+	bss = network_bss_select(network, false);
+
+	if (network_info_match_roaming_consortium(info, bss->rc_ie,
+							bss->rc_ie[1] + 2))
+		goto found;
+
+	if (network_info_match_hessid(info, bss->hessid))
+		goto found;
+
+	return false;
+
+found:
+	network->info = (struct network_info *)info;
+	return true;
+}
+
 bool network_bss_add(struct network *network, struct scan_bss *bss)
 {
 	if (!l_queue_insert(network->bss_list, bss, scan_bss_rank_compare,
@@ -606,14 +631,17 @@ bool network_bss_add(struct network *network, struct scan_bss *bss)
 	if (network->info)
 		known_network_add_frequency(network->info, bss->frequency);
 
-	if (!util_mem_is_zero(bss->hessid, 6))
-		memcpy(network->hessid, bss->hessid, 6);
-
-	if (bss->rc_ie && !network->rc_ie)
-		network->rc_ie = l_memdup(bss->rc_ie, bss->rc_ie[1] + 2);
-
-	if (bss->hs20_capable)
+	/* Done if BSS is not HS20 or we already have network_info set */
+	if (!bss->hs20_capable)
+		return true;
+	else
 		network->is_hs20 = true;
+
+	if (network->info)
+		return true;
+
+	/* Set the network_info to a matching hotspot entry, if found */
+	known_networks_foreach(match_hotspot_network, network);
 
 	return true;
 }
