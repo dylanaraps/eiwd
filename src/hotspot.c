@@ -132,8 +132,7 @@ static void hotspot_network_free(struct network_info *info)
 
 static const char *hotspot_network_get_path(const struct network_info *info)
 {
-	uint8_t digest[8];
-	unsigned int pos = 0, i;
+	char *digest;
 	struct l_checksum *sha;
 	char **realms;
 	struct hs20_config *config = l_container_of(info, struct hs20_config,
@@ -159,21 +158,10 @@ static const char *hotspot_network_get_path(const struct network_info *info)
 	if (!util_mem_is_zero(config->hessid, 6))
 		l_checksum_update(sha, config->hessid, 6);
 
-	l_checksum_get_digest(sha, digest, 8);
-
-	/* Path is of the form "/<16 hex characters>_hotspot" (26 bytes) */
-	config->object_path = l_malloc(26);
-
-	config->object_path[pos++] = '/';
-
-	for (i = 0; i < 8; i++) {
-		pos += snprintf(config->object_path + pos, 26, "%02x",
-					digest[i]);
-	}
-
-	snprintf(config->object_path + pos, 26 - pos, "_hotspot");
-
+	digest = l_checksum_get_string(sha);
 	l_checksum_free(sha);
+	config->object_path = l_strdup_printf("/%.8s_hotspot", digest);
+	l_free(digest);
 
 	return config->object_path;
 }
