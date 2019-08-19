@@ -80,21 +80,7 @@ static bool network_settings_load(struct network *network)
 	if (network->settings)
 		return true;
 
-	/*
-	 * If this network contains NAI realm info OR we have a Hotspot
-	 * provisioning file containing the HESSID we know this is a Hotspot
-	 * network.
-	 */
-	if (network->is_hs20 && (network->nai_realms || network->rc_ie ||
-				!util_mem_is_zero(network->hessid, 6))) {
-		network->settings = l_settings_new();
-
-		if (!l_settings_load_from_file(network->settings,
-					hs20_find_settings_file(network))) {
-			l_settings_free(network->settings);
-			network->settings = NULL;
-		}
-	} else if (network->info)
+	if (network->info)
 		network->settings = network_info_open_settings(network->info);
 
 	return network->settings != NULL;
