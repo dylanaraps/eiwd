@@ -401,6 +401,23 @@ static void station_bss_list_remove_expired_bsses(struct station *station)
 	l_queue_foreach_remove(station->bss_list, bss_free_if_expired, &data);
 }
 
+struct nai_search {
+	struct network *network;
+	const char **realms;
+};
+
+static bool match_nai_realms(const struct network_info *info, void *user_data)
+{
+	struct nai_search *search = user_data;
+
+	if (!network_info_match_nai_realm(info, search->realms))
+		return false;
+
+	network_set_info(search->network, (struct network_info *) info);
+
+	return true;
+}
+
 static void station_anqp_response_cb(enum anqp_result result,
 					const void *anqp, size_t anqp_len,
 					void *user_data)
@@ -413,6 +430,7 @@ static void station_anqp_response_cb(enum anqp_result result,
 	uint16_t len;
 	const void *data;
 	char **realms = NULL;
+	struct nai_search search;
 
 	entry->pending = 0;
 
@@ -442,7 +460,13 @@ static void station_anqp_response_cb(enum anqp_result result,
 		}
 	}
 
-	network_set_nai_realms(network, realms);
+	if (!realms)
+		goto request_done;
+
+	search.network = network;
+	search.realms = (const char **)realms;
+
+	known_networks_foreach(match_nai_realms, &search);
 
 request_done:
 	l_queue_remove(station->anqp_pending, entry);
@@ -464,7 +488,7 @@ static bool station_start_anqp(struct station *station, struct network *network,
 		return false;
 
 	/* Network already has ANQP data/HESSID */
-	if (hs20_find_settings_file(network))
+	if (network_get_info(network))
 		return false;
 
 	l_settings_get_bool(iwd_get_config(), "General", "disable_anqp",
