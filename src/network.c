@@ -473,6 +473,19 @@ const uint8_t *network_get_roaming_consortium(const struct network *network)
 	return network->rc_ie;
 }
 
+const struct network_info *network_get_info(const struct network *network)
+{
+	return network->info;
+}
+
+void network_set_info(struct network *network, struct network_info *info)
+{
+	network->info = info;
+
+	l_dbus_property_changed(dbus_get_bus(), network_get_path(network),
+					IWD_NETWORK_INTERFACE, "KnownNetwork");
+}
+
 static inline bool __bss_is_sae(const struct scan_bss *bss,
 						const struct ie_rsn_info *rsn)
 {
