@@ -2280,8 +2280,10 @@ static void run_auto_tests(void)
 	if (!start_dbus_daemon())
 		goto exit;
 
-	if (!start_haveged())
+	if (!start_haveged()) {
+		l_error("Failed to start haveged");
 		goto exit;
+	}
 
 	test_stat_queue = l_queue_new();
 
