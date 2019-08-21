@@ -283,15 +283,33 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 {
 	struct l_genl_msg *msg;
 	uint32_t flags = 0;
+	struct iovec iov[2];
+	unsigned int iov_elems = 0;
+	const uint8_t *ext_capa;
 
 	msg = l_genl_msg_new(NL80211_CMD_TRIGGER_SCAN);
 
 	l_genl_msg_append_attr(msg, NL80211_ATTR_WDEV, 8, &sc->wdev_id);
 
-	if (params->extra_ie && params->extra_ie_size)
-		l_genl_msg_append_attr(msg, NL80211_ATTR_IE,
-						params->extra_ie_size,
-						params->extra_ie);
+	ext_capa = wiphy_get_extended_capabilities(sc->wiphy,
+							NL80211_IFTYPE_STATION);
+	/*
+	 * XXX: If adding IE's here ensure that ordering is not broken for
+	 * probe requests (IEEE-2016 Table 9-33).
+	 */
+	/* Order 9 - Extended Capabilities */
+	iov[iov_elems].iov_base = (void *) ext_capa;
+	iov[iov_elems].iov_len = ext_capa[1] + 2;
+	iov_elems++;
+
+	/* Order Last (assuming WSC vendor specific) */
+	if (params->extra_ie && params->extra_ie_size) {
+		iov[iov_elems].iov_base = (void *) params->extra_ie;
+		iov[iov_elems].iov_len = params->extra_ie_size;
+		iov_elems++;
+	}
+
+	l_genl_msg_append_attrv(msg, NL80211_ATTR_IE, iov, iov_elems);
 
 	if (params->freqs)
 		scan_build_attr_scan_frequencies(msg, params->freqs);
