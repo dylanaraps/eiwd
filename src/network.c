@@ -194,7 +194,7 @@ bool network_rankmod(const struct network *network, double *rankmod)
 	 * to at least once are autoconnectable.  Known Networks that
 	 * we have never connected to are not.
 	 */
-	if (!network->info || !network->info->connected_time.tv_sec)
+	if (!network->info || !network->info->connected_time)
 		return false;
 
 	n = known_network_offset(network->info);
@@ -1322,7 +1322,7 @@ void network_rank_update(struct network *network, bool connected)
 		return;
 	}
 
-	if (network->info->connected_time.tv_sec != 0) {
+	if (network->info->connected_time != 0) {
 		int n = known_network_offset(network->info);
 
 		if (n >= (int) L_ARRAY_SIZE(rankmod_table))

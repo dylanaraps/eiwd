@@ -25,7 +25,6 @@
 #endif
 
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
@@ -62,8 +61,12 @@ static int connected_time_compare(const void *a, const void *b, void *user_data)
 	const struct network_info *ni_a = a;
 	const struct network_info *ni_b = b;
 
-	return util_timespec_compare(&ni_a->connected_time,
-					&ni_b->connected_time);
+	if (l_time_after(ni_a->connected_time, ni_b->connected_time))
+		return -1;
+	else if (l_time_before(ni_a->connected_time, ni_b->connected_time))
+		return 1;
+
+	return 0;
 }
 
 static const char *known_network_get_path(const struct network_info *network)
@@ -219,7 +222,7 @@ static void known_network_update(struct network_info *orig_network,
 					const char *ssid,
 					enum security security,
 					struct l_settings *settings,
-					struct timespec *connected_time)
+					uint64_t connected_time)
 {
 	struct network_info *network;
 	bool is_hidden = false;
@@ -234,8 +237,8 @@ static void known_network_update(struct network_info *orig_network,
 		network->ops = &known_network_ops;
 	}
 
-	if (util_timespec_compare(&network->connected_time, connected_time) &&
-			orig_network) {
+	if (l_time_before(network->connected_time, connected_time) &&
+				orig_network) {
 		l_dbus_property_changed(dbus_get_bus(),
 					known_network_get_path(network),
 					IWD_KNOWN_NETWORK_INTERFACE,
@@ -246,8 +249,7 @@ static void known_network_update(struct network_info *orig_network,
 				NULL);
 	}
 
-	memcpy(&network->connected_time, connected_time,
-		sizeof(struct timespec));
+	network->connected_time = connected_time;
 
 	l_settings_get_bool(settings, "Settings", "Hidden", &is_hidden);
 
@@ -493,11 +495,12 @@ static bool known_network_property_get_last_connected(struct l_dbus *dbus,
 	struct network_info *network = user_data;
 	char datestr[64];
 	struct tm tm;
+	time_t seconds = l_time_to_secs(network->connected_time);
 
-	if (network->connected_time.tv_sec == 0)
+	if (network->connected_time == 0)
 		return false;
 
-	gmtime_r(&network->connected_time.tv_sec, &tm);
+	gmtime_r(&seconds, &tm);
 
 	if (!strftime(datestr, sizeof(datestr), "%FT%TZ", &tm))
 		return false;
@@ -564,7 +567,7 @@ static void known_networks_watch_cb(const char *filename,
 	enum security security;
 	struct network_info *network_before;
 	struct l_settings *settings;
-	struct timespec connected_time;
+	uint64_t connected_time;
 
 	/*
 	 * Ignore notifications for the actual directory, we can't do
@@ -595,11 +598,12 @@ static void known_networks_watch_cb(const char *filename,
 		 */
 		settings = storage_network_open(security, ssid);
 
-		if (settings && storage_network_get_mtime(security, ssid,
-						&connected_time) == 0)
+		if (settings) {
+			connected_time = l_path_get_mtime(full_path);
+
 			known_network_update(network_before, ssid, security,
-						settings, &connected_time);
-		else {
+						settings, connected_time);
+		} else {
 			if (network_before)
 				known_networks_remove(network_before);
 		}
@@ -803,7 +807,8 @@ static int known_networks_init(void)
 		const char *ssid;
 		enum security security;
 		struct l_settings *settings;
-		struct timespec connected_time;
+		uint64_t connected_time;
+		L_AUTO_FREE_VAR(char *, full_path) = NULL;
 
 		if (dirent->d_type != DT_REG && dirent->d_type != DT_LNK)
 			continue;
@@ -815,10 +820,14 @@ static int known_networks_init(void)
 
 		settings = storage_network_open(security, ssid);
 
-		if (settings && storage_network_get_mtime(security, ssid,
-							&connected_time) == 0)
+		full_path = storage_get_network_file_path(security, ssid);
+
+		if (settings) {
+			connected_time = l_path_get_mtime(full_path);
+
 			known_network_update(NULL, ssid, security, settings,
-						&connected_time);
+						connected_time);
+		}
 
 		l_settings_free(settings);
 	}

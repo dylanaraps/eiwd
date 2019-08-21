@@ -51,7 +51,7 @@ struct network_info {
 	char ssid[33];
 	enum security type;
 	struct l_queue *known_frequencies;
-	struct timespec connected_time;	/* Time last connected */
+	uint64_t connected_time;	/* Time last connected */
 	int seen_count;			/* Ref count for network.info */
 	bool is_hidden:1;
 	bool is_autoconnectable:1;
