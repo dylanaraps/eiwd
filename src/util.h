@@ -65,4 +65,9 @@ static inline bool util_mem_is_zero(const uint8_t *field, size_t size)
 	return true;
 }
 
+static inline void util_set_bit(uint8_t *field, unsigned int bit)
+{
+	field[bit / 8] = 1 << (bit % 8);
+}
+
 #endif /* __UTIL_H */
