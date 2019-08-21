@@ -36,6 +36,8 @@ struct network_info_ops {
 	void (*remove)(struct network_info *info);
 	void (*free)(struct network_info *info);
 	const char *(*get_path)(const struct network_info *info);
+	const char *(*get_name)(const struct network_info *info);
+	const char *(*get_type)(const struct network_info *info);
 
 	bool (*match_hessid)(const struct network_info *info,
 						const uint8_t *hessid);
@@ -89,6 +91,8 @@ void known_networks_watch_remove(uint32_t id);
 struct l_settings *network_info_open_settings(struct network_info *info);
 int network_info_touch(struct network_info *info);
 const char *network_info_get_path(const struct network_info *info);
+const char *network_info_get_name(const struct network_info *info);
+const char *network_info_get_type(const struct network_info *info);
 
 bool network_info_match_hessid(const struct network_info *info,
 				const uint8_t *hessid);

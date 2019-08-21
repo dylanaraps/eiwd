@@ -166,6 +166,16 @@ static void known_network_free(struct network_info *info)
 	l_free(info);
 }
 
+static const char *known_network_get_name(const struct network_info *info)
+{
+	return info->ssid;
+}
+
+static const char *known_network_get_type(const struct network_info *info)
+{
+	return security_to_str(info->type);
+}
+
 static struct network_info_ops known_network_ops = {
 	.open = known_network_open,
 	.touch = known_network_touch,
@@ -173,6 +183,8 @@ static struct network_info_ops known_network_ops = {
 	.remove = known_network_remove,
 	.free = known_network_free,
 	.get_path = known_network_get_path,
+	.get_name = known_network_get_name,
+	.get_type = known_network_get_type,
 };
 
 struct l_settings *network_info_open_settings(struct network_info *info)
@@ -188,6 +200,16 @@ int network_info_touch(struct network_info *info)
 const char *network_info_get_path(const struct network_info *info)
 {
 	return info->ops->get_path(info);
+}
+
+const char *network_info_get_name(const struct network_info *info)
+{
+	return info->ops->get_name(info);
+}
+
+const char *network_info_get_type(const struct network_info *info)
+{
+	return info->ops->get_type(info);
 }
 
 bool network_info_match_hessid(const struct network_info *info,
