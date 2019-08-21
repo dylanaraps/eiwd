@@ -171,6 +171,7 @@ class NetworkType(Enum):
     open =  'open'
     psk =   'psk'
     eap =   '8021x'
+    hotspot = 'hotspot'
 
     def __str__(self):
         return str(self.value)
