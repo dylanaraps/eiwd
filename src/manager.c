@@ -722,7 +722,7 @@ bool manager_init(struct l_genl_family *in,
 		return false;
 	}
 
-	msg = l_genl_msg_new(NL80211_CMD_GET_WIPHY, 128);
+	msg = l_genl_msg_new_sized(NL80211_CMD_GET_WIPHY, 128);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SPLIT_WIPHY_DUMP, 0, NULL);
 	wiphy_dump = l_genl_family_dump(nl80211, msg,
 						manager_wiphy_dump_callback,
