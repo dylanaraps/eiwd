@@ -51,6 +51,7 @@ struct hs20_config {
 	uint8_t *rc; /* roaming consortium */
 	size_t rc_len;
 	char *object_path;
+	char *name;
 };
 
 static bool match_filename(const void *a, const void *b)
@@ -74,6 +75,7 @@ static void hs20_config_free(void *user_data)
 	l_free(config->rc);
 	l_free(config->object_path);
 	l_free(config->filename);
+	l_free(config->name);
 	l_free(config);
 }
 
@@ -166,6 +168,19 @@ static const char *hotspot_network_get_path(const struct network_info *info)
 	return config->object_path;
 }
 
+static const char *hotspot_network_get_name(const struct network_info *info)
+{
+	struct hs20_config *config = l_container_of(info, struct hs20_config,
+							super);
+
+	return config->name;
+}
+
+static const char *hotspot_network_get_type(const struct network_info *info)
+{
+	return "hotspot";
+}
+
 static bool hotspot_match_hessid(const struct network_info *info,
 					const uint8_t *hessid)
 {
@@ -237,6 +252,8 @@ static struct network_info_ops hotspot_ops = {
 	.remove = hotspot_network_remove,
 	.free = hotspot_network_free,
 	.get_path = hotspot_network_get_path,
+	.get_name = hotspot_network_get_name,
+	.get_type = hotspot_network_get_type,
 
 	.match_hessid = hotspot_match_hessid,
 	.match_roaming_consortium = hotspot_match_roaming_consortium,
@@ -250,6 +267,7 @@ static struct hs20_config *hs20_config_new(struct l_settings *settings,
 	char *hessid_str;
 	char **nai_realms = NULL;
 	const char *rc_str;
+	char *name;
 	bool autoconnect = true;
 
 	/* One of HESSID, NAI realms, or Roaming Consortium must be included */
@@ -262,8 +280,12 @@ static struct hs20_config *hs20_config_new(struct l_settings *settings,
 
 	l_settings_get_bool(settings, "Settings", "Autoconnect", &autoconnect);
 
-	if (!hessid_str && !nai_realms && !rc_str)
-		return NULL;
+	name = l_settings_get_string(settings, "Hotspot", "Name");
+
+	if ((!hessid_str && !nai_realms && !rc_str) || !name) {
+		l_error("Could not parse hotspot config %s", filename);
+		goto free_values;
+	}
 
 	config = l_new(struct hs20_config, 1);
 
@@ -298,12 +320,20 @@ static struct hs20_config *hs20_config_new(struct l_settings *settings,
 	config->super.type = SECURITY_8021X;
 	config->super.ops = &hotspot_ops;
 	config->super.connected_time = l_path_get_mtime(filename);
+	config->name = name;
 
 	config->filename = l_strdup(filename);
 
 	known_networks_add(&config->super);
 
 	return config;
+
+free_values:
+	l_strv_free(nai_realms);
+	l_free(hessid_str);
+	l_free(name);
+
+	return NULL;
 }
 
 static void hs20_dir_watch_cb(const char *filename,
