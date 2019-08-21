@@ -14,12 +14,14 @@ Methods		void Forget()
 
 Properties	string Name [readonly]
 
-			Contains the Name (SSID) of the network
+			Contains the Name of the network. This is usually the
+			SSID, unless the network is a hotspot. In the hotspot
+			case the Name is obtained from the provisioning file.
 
 		string Type [readonly]
 
 			Contains the type of the network.  Possible
-			types are "open", "psk", "8021x" (EAP)
+			types are "open", "psk", "8021x" (EAP), "hotspot"
 
 		bool Hidden [readonly]
 
