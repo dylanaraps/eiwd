@@ -436,7 +436,8 @@ static bool known_network_property_get_name(struct l_dbus *dbus,
 {
 	struct network_info *network = user_data;
 
-	l_dbus_message_builder_append_basic(builder, 's', network->ssid);
+	l_dbus_message_builder_append_basic(builder, 's',
+						network_info_get_name(network));
 
 	return true;
 }
@@ -449,7 +450,7 @@ static bool known_network_property_get_type(struct l_dbus *dbus,
 	struct network_info *network = user_data;
 
 	l_dbus_message_builder_append_basic(builder, 's',
-						security_to_str(network->type));
+						network_info_get_type(network));
 
 	return true;
 }
