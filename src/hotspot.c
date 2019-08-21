@@ -297,6 +297,7 @@ static struct hs20_config *hs20_config_new(struct l_settings *settings,
 	config->super.is_hotspot = true;
 	config->super.type = SECURITY_8021X;
 	config->super.ops = &hotspot_ops;
+	config->super.connected_time = l_path_get_mtime(filename);
 
 	config->filename = l_strdup(filename);
 
