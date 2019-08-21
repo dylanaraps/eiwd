@@ -283,9 +283,10 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 {
 	struct l_genl_msg *msg;
 	uint32_t flags = 0;
-	struct iovec iov[2];
+	struct iovec iov[3];
 	unsigned int iov_elems = 0;
 	const uint8_t *ext_capa;
+	uint8_t interworking[3];
 
 	msg = l_genl_msg_new(NL80211_CMD_TRIGGER_SCAN);
 
@@ -300,6 +301,15 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 	/* Order 9 - Extended Capabilities */
 	iov[iov_elems].iov_base = (void *) ext_capa;
 	iov[iov_elems].iov_len = ext_capa[1] + 2;
+	iov_elems++;
+
+	/* Order 12 - Interworking */
+	interworking[0] = IE_TYPE_INTERWORKING;
+	interworking[1] = 1;
+	interworking[2] = 0; /* Private network, INet=0,ASRA=0,ESR=0,UESA=0 */
+
+	iov[iov_elems].iov_base = interworking;
+	iov[iov_elems].iov_len = 3;
 	iov_elems++;
 
 	/* Order Last (assuming WSC vendor specific) */
