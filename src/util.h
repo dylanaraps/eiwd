@@ -65,7 +65,4 @@ static inline bool util_mem_is_zero(const uint8_t *field, size_t size)
 	return true;
 }
 
-int util_timespec_compare(const struct timespec *tsa,
-				const struct timespec *tsb);
-
 #endif /* __UTIL_H */

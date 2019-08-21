@@ -209,22 +209,3 @@ const char *util_get_username(const char *identity)
 
 	return identity;
 }
-
-int util_timespec_compare(const struct timespec *tsa,
-				const struct timespec *tsb)
-{
-
-	if (tsa->tv_sec > tsb->tv_sec)
-		return -1;
-
-	if (tsa->tv_sec < tsb->tv_sec)
-		return 1;
-
-	if (tsa->tv_nsec > tsb->tv_nsec)
-		return -1;
-
-	if (tsa->tv_nsec < tsb->tv_nsec)
-		return -1;
-
-	return 0;
-}

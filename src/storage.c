@@ -286,32 +286,6 @@ int storage_network_touch(enum security type, const char *ssid)
 	return -errno;
 }
 
-int storage_network_get_mtime(enum security type, const char *ssid,
-				struct timespec *mtim)
-{
-	char *path;
-	int ret;
-	struct stat sb;
-
-	if (ssid == NULL)
-		return -EINVAL;
-
-	path = storage_get_network_file_path(type, ssid);
-	ret = stat(path, &sb);
-	l_free(path);
-
-	if (ret < 0)
-		return -errno;
-
-	if (!S_ISREG(sb.st_mode))
-		return -EINVAL;
-
-	if (mtim)
-		memcpy(mtim, &sb.st_mtim, sizeof(struct timespec));
-
-	return 0;
-}
-
 void storage_network_sync(enum security type, const char *ssid,
 				struct l_settings *settings)
 {

@@ -39,8 +39,6 @@ char *storage_get_network_file_path(enum security type, const char *ssid);
 
 struct l_settings *storage_network_open(enum security type, const char *ssid);
 int storage_network_touch(enum security type, const char *ssid);
-int storage_network_get_mtime(enum security type, const char *ssid,
-				struct timespec *mtim);
 void storage_network_sync(enum security type, const char *ssid,
 				struct l_settings *settings);
 int storage_network_remove(enum security type, const char *ssid);
