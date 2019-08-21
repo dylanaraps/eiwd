@@ -303,14 +303,17 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 	iov[iov_elems].iov_len = ext_capa[1] + 2;
 	iov_elems++;
 
-	/* Order 12 - Interworking */
-	interworking[0] = IE_TYPE_INTERWORKING;
-	interworking[1] = 1;
-	interworking[2] = 0; /* Private network, INet=0,ASRA=0,ESR=0,UESA=0 */
+	if (util_is_bit_set(ext_capa[3], 7)) {
+		/* Order 12 - Interworking */
+		interworking[0] = IE_TYPE_INTERWORKING;
+		interworking[1] = 1;
+		/* Private network, INet=0,ASRA=0,ESR=0,UESA=0 */
+		interworking[2] = 0;
 
-	iov[iov_elems].iov_base = interworking;
-	iov[iov_elems].iov_len = 3;
-	iov_elems++;
+		iov[iov_elems].iov_base = interworking;
+		iov[iov_elems].iov_len = 3;
+		iov_elems++;
+	}
 
 	/* Order Last (assuming WSC vendor specific) */
 	if (params->extra_ie && params->extra_ie_size) {
