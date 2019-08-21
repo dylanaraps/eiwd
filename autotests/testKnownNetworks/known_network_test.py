@@ -40,30 +40,31 @@ class Test(unittest.TestCase):
     def list_removal_and_addition(self, wd):
 
         known_networks = wd.list_known_networks()
-        self.assertEqual(len(known_networks), 3)
+        self.assertEqual(len(known_networks), 4)
 
         for network in known_networks:
             if network.name == 'ssidTKIP':
                 network.forget()
 
         known_networks = wd.list_known_networks()
-        self.assertEqual(len(known_networks), 2)
+        self.assertEqual(len(known_networks), 3)
 
         self.connect_to_new_network(wd)
 
         known_networks = wd.list_known_networks()
-        self.assertEqual(len(known_networks), 3)
+        self.assertEqual(len(known_networks), 4)
 
         IWD.copy_to_storage('known_networks/ssidPSK.psk')
-        condition = 'len(obj.list_known_networks()) == 4'
+        condition = 'len(obj.list_known_networks()) == 5'
         wd.wait_for_object_condition(wd, condition, 1)
 
-        expected = ['ssidNew', 'ssidOpen', 'ssidPSK', 'ssidEAP-TLS']
+        expected = ['ssidNew', 'ssidOpen', 'ssidPSK', 'ssidEAP-TLS',
+                    'Hotspot Network']
         self.assertEqual({n.name for n in wd.list_known_networks()},
                          set(expected))
 
         IWD.remove_from_storage('ssidPSK.psk')
-        condition = 'len(obj.list_known_networks()) == 3'
+        condition = 'len(obj.list_known_networks()) == 4'
         wd.wait_for_object_condition(wd, condition, 1)
 
         for net in known_networks:
@@ -82,6 +83,7 @@ class Test(unittest.TestCase):
         IWD.copy_to_storage('known_networks/ssidOpen.open')
         IWD.copy_to_storage('known_networks/ssidTKIP.psk')
         IWD.copy_to_storage('known_networks/ssidEAP-TLS.8021x')
+        IWD.copy_to_hotspot('known_networks/hotspot.conf')
 
     @classmethod
     def tearDownClass(cls):
