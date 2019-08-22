@@ -44,7 +44,7 @@ def process_payload_array(parray):
                                 network.nai_realms.append(nai_array[i].text)
                         continue
                 elif parray[l].text == "IsHotspot":
-                        if parray[l + 1].text == "True":
+                        if parray[l + 1].tag.lower() == "true":
                                 network.is_hotspot = True
                         else:
                                 network.is_hotspot = False
