@@ -128,8 +128,12 @@ def write_network(network, root_ca_path):
                 for i in range(len(network.nai_realms)):
                         output += network.nai_realms[i]
 
-                if i < len(network.nai_realms) - 1:
-                        output += ','
+                        if i < len(network.nai_realms) - 1:
+                                output += ','
+
+                output += "\n"
+                output += "Name=%s\n" % network.ssid
+
         else:
                 conf_file = iwd_dir + '/' + network.ssid + '.8021x'
 
