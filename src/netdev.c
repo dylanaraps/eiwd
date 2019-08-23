@@ -2232,6 +2232,7 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 	int iov_elems = 0;
 	bool is_rsn = hs->supplicant_ie != NULL;
 	const uint8_t *extended_capabilities;
+	const uint8_t *rm_enabled_capabilities;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_CONNECT, 512);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
@@ -2303,14 +2304,11 @@ static struct l_genl_msg *netdev_build_cmd_connect(struct netdev *netdev,
 				NL80211_ATTR_CONTROL_PORT_OVER_NL80211,
 				0, NULL);
 
-	if (wiphy_rrm_capable(netdev->wiphy) &&
-			bss->capability & IE_BSS_CAP_RM) {
-		uint8_t rm_cap_ie[7] = { IE_TYPE_RM_ENABLED_CAPABILITIES, 5,
-					0x00, 0x00, 0x00, 0x00, 0x00 };
-
-		/* TODO: Send an empty IE for now */
-		iov[iov_elems].iov_base = rm_cap_ie;
-		iov[iov_elems].iov_len = rm_cap_ie[1] + 2;
+	rm_enabled_capabilities =
+			wiphy_get_rm_enabled_capabilities(netdev->wiphy);
+	if (rm_enabled_capabilities && bss->capability & IE_BSS_CAP_RM) {
+		iov[iov_elems].iov_base = (void *) rm_enabled_capabilities;
+		iov[iov_elems].iov_len = rm_enabled_capabilities[1] + 2;
 		iov_elems += 1;
 
 		l_genl_msg_append_attr(msg, NL80211_ATTR_USE_RRM, 0, NULL);
