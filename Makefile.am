@@ -412,7 +412,8 @@ unit_test_eapol_SOURCES = unit/test-eapol.c \
 				src/erp.h src/erp.c \
 				src/mschaputil.h src/mschaputil.c
 unit_test_eapol_LDADD = $(ell_ldadd)
-unit_test_eapol_DEPENDENCIES = unit/cert-server.pem \
+unit_test_eapol_DEPENDENCIES = $(ell_dependencies) \
+				unit/cert-server.pem \
 				unit/cert-server-key-pkcs8.pem \
 				unit/cert-client.pem \
 				unit/cert-client-key-pkcs8.pem
