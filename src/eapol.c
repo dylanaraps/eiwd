@@ -863,8 +863,6 @@ static void eapol_sm_destroy(void *value)
 	explicit_bzero(sm->installed_igtk, sizeof(sm->installed_igtk));
 
 	l_free(sm);
-
-	l_queue_remove(state_machines, sm);
 }
 
 struct eapol_sm *eapol_sm_new(struct handshake_state *hs)
@@ -886,6 +884,8 @@ struct eapol_sm *eapol_sm_new(struct handshake_state *hs)
 void eapol_sm_free(struct eapol_sm *sm)
 {
 	eapol_sm_destroy(sm);
+
+	l_queue_remove(state_machines, sm);
 }
 
 void eapol_sm_set_listen_interval(struct eapol_sm *sm, uint16_t interval)
