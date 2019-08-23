@@ -1296,7 +1296,7 @@ static void print_ie_ht_operation(unsigned int level, const char *label,
 	print_ie_mcs(level + 1, "Basic MCS set", &bytes[6], 16);
 }
 
-static const char *extended_capabilities_bitfield[64] = {
+static const char *extended_capabilities_bitfield[80] = {
 	[0] = "20/40 BSS coexistence management support",
 	[1] = "Reserved",
 	[2] = "Extended channel switching",
@@ -1344,9 +1344,30 @@ static const char *extended_capabilities_bitfield[64] = {
 	[46] = "WNM- Notification",
 	[47] = "Reserved",
 	[48] = "UTF-8 SSID",
-	[49 ... 61] = "Reserved",
+	[49] = "QMF Activated",
+	[50] = "QMF Reconfiguration Activated",
+	[51] = "Robust AV Streaming",
+	[52] = "Advanced GCR",
+	[53] = "Mesh GCR",
+	[54] = "SCS",
+	[55] = "QLoad Report",
+	[56] = "Alternate EDCA",
+	[57] = "Unprotected TXOP Negotiation",
+	[58] = "Protected TXOP Negotiation",
+	[59] = "Reserved",
+	[60] = "Protected QLoad Report",
+	[61] = "TDLS Wider Bandwidth",
 	[62] = "Opmode Notification",
-	[63] = "TDLS Wide Bandwidth support",
+	[65] = "Channel Schedule Management",
+	[66] = "Geodatabase Inband Enabling Signal",
+	[67] = "Network Channel Control",
+	[68] = "White Space Map",
+	[69] = "Channel Availability Query",
+	[70] = "Fine Timing Measurement Responder",
+	[71] = "Fine Timing Measurement Initiator",
+	[72] = "FILS Capability",
+	[73] = "Extended Spectrum Management Capable",
+	[74] = "Future Channel Guidance",
 };
 
 static void print_ie_extended_capabilities(unsigned int level,
