@@ -117,6 +117,7 @@ struct eap_tls_state {
 	char *client_cert;
 	char *client_key;
 	char *passphrase;
+	char **domain_mask;
 
 	const struct eap_tls_variant_ops *variant_ops;
 	void *variant_data;
@@ -186,6 +187,7 @@ void eap_tls_common_state_free(struct eap_state *eap)
 		l_free(eap_tls->passphrase);
 	}
 
+	l_strv_free(eap_tls->domain_mask);
 	l_free(eap_tls);
 }
 
@@ -552,6 +554,9 @@ static bool eap_tls_tunnel_init(struct eap_state *eap)
 		return false;
 	}
 
+	if (eap_tls->domain_mask)
+		l_tls_set_domain_mask(eap_tls->tunnel, eap_tls->domain_mask);
+
 	if (!l_tls_start(eap_tls->tunnel)) {
 		l_error("%s: Failed to start the TLS client",
 						eap_get_method_name(eap));
@@ -765,6 +770,7 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 	ssize_t result;
 	uint8_t *encrypted, *decrypted;
 	struct l_key *pub_key;
+	const char *domain_mask_str;
 
 	L_AUTO_FREE_VAR(char *, path);
 	L_AUTO_FREE_VAR(char *, client_cert) = NULL;
@@ -930,6 +936,22 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 		goto done;
 	}
 
+	/*
+	 * Require CACert if ServerDomainMask is present.  If the server
+	 * certificate is not being checked against any trusted certificates
+	 * there's no point validating its contents and we wouldn't even
+	 * receive the subject DN from ell, because it may be freely made up.
+	 */
+	snprintf(setting_key, sizeof(setting_key), "%sServerDomainMask",
+			prefix);
+	domain_mask_str = l_settings_get_value(settings, "Security",
+						setting_key);
+	if (domain_mask_str && !cacerts) {
+		l_error("%s was set but no CA Certificates given", setting_key);
+		ret = -EINVAL;
+		goto done;
+	}
+
 	ret = 0;
 done:
 	l_queue_destroy(cacerts,
@@ -950,6 +972,7 @@ bool eap_tls_common_settings_load(struct eap_state *eap,
 {
 	struct eap_tls_state *eap_tls;
 	char setting_key[72];
+	char *domain_mask_str;
 
 	eap_tls = l_new(struct eap_tls_state, 1);
 
@@ -973,6 +996,16 @@ bool eap_tls_common_settings_load(struct eap_state *eap,
 									prefix);
 	eap_tls->passphrase = l_settings_get_string(settings, "Security",
 								setting_key);
+
+	snprintf(setting_key, sizeof(setting_key), "%sServerDomainMask",
+								prefix);
+	domain_mask_str = l_settings_get_string(settings, "Security",
+								setting_key);
+
+	if (domain_mask_str) {
+		eap_tls->domain_mask = l_strsplit(domain_mask_str, ';');
+		l_free(domain_mask_str);
+	}
 
 	eap_set_data(eap, eap_tls);
 
