@@ -2738,6 +2738,7 @@ struct eapol_8021x_tls_test_state {
 	l_tls_disconnect_cb_t disconnect_cb;
 
 	uint8_t method;
+	bool expect_handshake_fail;
 
 	struct l_tls *tls;
 	uint8_t last_id;
@@ -2745,6 +2746,7 @@ struct eapol_8021x_tls_test_state {
 	bool success;
 	bool pending_req;
 	bool tx_ack;
+	bool disconnected;
 
 	uint8_t tx_buf[16384];
 	unsigned int tx_buf_len, tx_buf_offset;
@@ -2850,7 +2852,6 @@ static void eapol_sm_test_tls_test_ready(const char *peer_identity,
 	struct eapol_8021x_tls_test_state *s = user_data;
 
 	assert(!s->tx_ack);
-	/* TODO: require the right peer_identity */
 
 	s->success = true;
 
@@ -2861,17 +2862,23 @@ static void eapol_sm_test_tls_test_ready(const char *peer_identity,
 static void eapol_sm_test_tls_test_disconnected(enum l_tls_alert_desc reason,
 						bool remote, void *user_data)
 {
-	l_info("Unexpected TLS alert: %d", reason);
-	assert(false);
+	struct eapol_8021x_tls_test_state *s = user_data;
+
+	l_info("TLS alert: %s (%d)", l_tls_alert_to_str(reason), reason);
+	assert(s->expect_handshake_fail);
+	s->disconnected = true;
 }
 
-static void verify_handshake_successful(struct handshake_state *hs,
+static void test_handshake_event(struct handshake_state *hs,
 					enum handshake_event event,
 					void *event_data, void *user_data)
 {
+	struct test_handshake_state *ths =
+			l_container_of(hs, struct test_handshake_state, super);
+
 	switch (event) {
 	case HANDSHAKE_EVENT_FAILED:
-		assert(false);
+		ths->handshake_failed = true;
 		break;
 	default:
 		break;
@@ -2908,12 +2915,13 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	__handshake_set_get_nonce_func(test_nonce);
 
 	hs = test_handshake_state_new(1);
+	ths = l_container_of(hs, struct test_handshake_state, super);
 	sm = eapol_sm_new(hs);
 	eapol_register(sm);
 
 	handshake_state_set_authenticator_address(hs, ap_address);
 	handshake_state_set_supplicant_address(hs, sta_address);
-	handshake_state_set_event_func(hs, verify_handshake_successful, NULL);
+	handshake_state_set_event_func(hs, test_handshake_event, NULL);
 	__eapol_set_tx_user_data(s);
 
 	r = handshake_state_set_supplicant_ie(hs,
@@ -2952,9 +2960,11 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	assert(l_tls_set_cacert(s->tls, CERTDIR "cert-ca.pem"));
 	assert(l_tls_start(s->tls));
 
+	ths->handshake_failed = false;
 	start = 1;
 	__eapol_set_tx_packet_func(verify_8021x_tls_resp);
-	while (!s->success || s->tx_buf_len) {
+	while ((!s->success || s->tx_buf_len) &&
+			!ths->handshake_failed && !s->disconnected) {
 		tx_len = 0;
 		data_len = 1024 < s->tx_buf_len ? 1024 : s->tx_buf_len;
 		header_len = 6;
@@ -3002,6 +3012,9 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 		__eapol_rx_packet(1, ap_address, ETH_P_PAE,
 					tx_buf, tx_len, false);
 
+		if (ths->handshake_failed || s->disconnected)
+			break;
+
 		assert(!s->pending_req);
 
 		while (s->tx_ack) {
@@ -3023,11 +3036,25 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 			__eapol_rx_packet(1, ap_address, ETH_P_PAE,
 						tx_buf, tx_len, false);
 
+			if (ths->handshake_failed || s->disconnected)
+				break;
+
 			assert(!s->pending_req);
 		}
 	}
 
 	l_tls_free(s->tls);
+
+	if (ths->handshake_failed || s->disconnected) {
+		assert(s->expect_handshake_fail);
+
+		if (ths->handshake_failed)
+			sm = NULL;
+
+		goto done;
+	}
+
+	assert(!s->expect_handshake_fail);
 
 	tx_len = 0;
 	tx_buf[tx_len++] = EAPOL_PROTOCOL_VERSION_2004;
@@ -3094,15 +3121,18 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 
 	__eapol_set_tx_packet_func(verify_step4);
 	__handshake_set_install_tk_func(verify_install_tk);
-	ths = l_container_of(hs, struct test_handshake_state, super);
 	ths->tk = ptk + 16 + 16;
 	__eapol_rx_packet(1, ap_address, ETH_P_PAE,
 				step3_buf, sizeof(eapol_key_data_15), false);
 	assert(verify_step4_called);
 	assert(verify_install_tk_called);
 
+done:
 	__handshake_set_install_tk_func(NULL);
-	eapol_sm_free(sm);
+
+	if (sm)
+		eapol_sm_free(sm);
+
 	handshake_state_free(hs);
 	eapol_exit();
 	eap_exit();
@@ -3116,12 +3146,51 @@ static void eapol_sm_test_eap_tls(const void *data)
 		"EAP-TLS-CACert=" CERTDIR "cert-ca.pem\n"
 		"EAP-TLS-ClientCert=" CERTDIR "cert-client.pem\n"
 		"EAP-TLS-ClientKey=" CERTDIR "cert-client-key-pkcs8.pem";
-	struct eapol_8021x_tls_test_state s;
+	struct eapol_8021x_tls_test_state s = {};
 
 	s.app_data_cb = eapol_sm_test_tls_new_data;
 	s.ready_cb = eapol_sm_test_tls_test_ready;
 	s.disconnect_cb = eapol_sm_test_tls_test_disconnected;
 	s.method = EAP_TYPE_TLS;
+
+	eapol_sm_test_tls(&s, eapol_8021x_config);
+}
+
+static void eapol_sm_test_eap_tls_subject_good(const void *data)
+{
+	static const char *eapol_8021x_config = "[Security]\n"
+		"EAP-Method=TLS\n"
+		"EAP-Identity=abc@example.com\n"
+		"EAP-TLS-CACert=" CERTDIR "cert-ca.pem\n"
+		"EAP-TLS-ClientCert=" CERTDIR "cert-client.pem\n"
+		"EAP-TLS-ClientKey=" CERTDIR "cert-client-key-pkcs8.pem\n"
+		"EAP-TLS-ServerDomainMask=Foo Example Organization";
+	struct eapol_8021x_tls_test_state s = {};
+
+	s.app_data_cb = eapol_sm_test_tls_new_data;
+	s.ready_cb = eapol_sm_test_tls_test_ready;
+	s.disconnect_cb = eapol_sm_test_tls_test_disconnected;
+	s.method = EAP_TYPE_TLS;
+
+	eapol_sm_test_tls(&s, eapol_8021x_config);
+}
+
+static void eapol_sm_test_eap_tls_subject_bad(const void *data)
+{
+	static const char *eapol_8021x_config = "[Security]\n"
+		"EAP-Method=TLS\n"
+		"EAP-Identity=abc@example.com\n"
+		"EAP-TLS-CACert=" CERTDIR "cert-ca.pem\n"
+		"EAP-TLS-ClientCert=" CERTDIR "cert-client.pem\n"
+		"EAP-TLS-ClientKey=" CERTDIR "cert-client-key-pkcs8.pem\n"
+		"EAP-TLS-ServerDomainMask=Bar Example Organization";
+	struct eapol_8021x_tls_test_state s = {};
+
+	s.app_data_cb = eapol_sm_test_tls_new_data;
+	s.ready_cb = eapol_sm_test_tls_test_ready;
+	s.disconnect_cb = eapol_sm_test_tls_test_disconnected;
+	s.method = EAP_TYPE_TLS;
+	s.expect_handshake_fail = true;
 
 	eapol_sm_test_tls(&s, eapol_8021x_config);
 }
@@ -3195,7 +3264,7 @@ static void eapol_sm_test_eap_ttls_md5(const void *data)
 		"EAP-TTLS-Phase2-Method=MD5\n"
 		"EAP-TTLS-Phase2-Identity=abc@example.com\n"
 		"EAP-TTLS-Phase2-Password=testpasswd";
-	struct eapol_8021x_eap_ttls_test_state s;
+	struct eapol_8021x_eap_ttls_test_state s = {};
 
 	s.tls.app_data_cb = eapol_sm_test_eap_ttls_new_data;
 	s.tls.ready_cb = eapol_sm_test_eap_ttls_test_ready;
@@ -3203,23 +3272,6 @@ static void eapol_sm_test_eap_ttls_md5(const void *data)
 	s.tls.method = EAP_TYPE_TTLS;
 
 	eapol_sm_test_tls(&s.tls, eapol_8021x_config);
-}
-
-static void test_handshake_event(struct handshake_state *hs,
-					enum handshake_event event,
-					void *event_data,
-					void *user_data)
-{
-	struct test_handshake_state *ths =
-			l_container_of(hs, struct test_handshake_state, super);
-
-	switch (event) {
-	case HANDSHAKE_EVENT_FAILED:
-		ths->handshake_failed = true;
-		break;
-	default:
-		break;
-	}
 }
 
 static const uint8_t eap_ttls_start_req[] = {
@@ -3273,7 +3325,7 @@ static void eapol_sm_test_eap_nak(const void *data)
 
 	struct eapol_sm *sm;
 	struct l_settings *settings;
-	struct eapol_8021x_tls_test_state s;
+	struct eapol_8021x_tls_test_state s = {};
 
 	aa = ap_address;
 	spa = sta_address;
@@ -3536,6 +3588,11 @@ int main(int argc, char *argv[])
 					&eapol_sm_test_eap_ttls_md5, NULL);
 		l_test_add("EAPoL/8021x EAP NAK",
 				&eapol_sm_test_eap_nak, NULL);
+
+		l_test_add("EAPoL/8021x EAP-TLS subject name match",
+				&eapol_sm_test_eap_tls_subject_good, NULL);
+		l_test_add("EAPoL/8021x EAP-TLS subject name mismatch",
+				&eapol_sm_test_eap_tls_subject_bad, NULL);
 	}
 
 	l_test_add("EAPoL/FT-Using-PSK 4-Way Handshake",
