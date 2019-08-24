@@ -528,7 +528,7 @@ unit/cert-server.csr: unit/cert-server-key.pem unit/gencerts.cnf
 			-key $< -out $@
 
 unit/cert-server.pem: unit/cert-server.csr unit/cert-ca.pem unit/gencerts.cnf
-	$(AM_V_GEN)openssl x509 -req -extensions cert_ext \
+	$(AM_V_GEN)openssl x509 -req -extensions server_ext \
 			-extfile $(srcdir)/unit/gencerts.cnf \
 			-in $< -CA $(builddir)/unit/cert-ca.pem \
 			-CAkey $(builddir)/unit/cert-ca-key.pem \
