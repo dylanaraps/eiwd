@@ -3164,7 +3164,7 @@ static void eapol_sm_test_eap_tls_subject_good(const void *data)
 		"EAP-TLS-CACert=" CERTDIR "cert-ca.pem\n"
 		"EAP-TLS-ClientCert=" CERTDIR "cert-client.pem\n"
 		"EAP-TLS-ClientKey=" CERTDIR "cert-client-key-pkcs8.pem\n"
-		"EAP-TLS-ServerDomainMask=Foo Example Organization";
+		"EAP-TLS-ServerDomainMask=bad.example.org;*.example.org";
 	struct eapol_8021x_tls_test_state s = {};
 
 	s.app_data_cb = eapol_sm_test_tls_new_data;
@@ -3183,7 +3183,7 @@ static void eapol_sm_test_eap_tls_subject_bad(const void *data)
 		"EAP-TLS-CACert=" CERTDIR "cert-ca.pem\n"
 		"EAP-TLS-ClientCert=" CERTDIR "cert-client.pem\n"
 		"EAP-TLS-ClientKey=" CERTDIR "cert-client-key-pkcs8.pem\n"
-		"EAP-TLS-ServerDomainMask=Bar Example Organization";
+		"EAP-TLS-ServerDomainMask=bad.example.org";
 	struct eapol_8021x_tls_test_state s = {};
 
 	s.app_data_cb = eapol_sm_test_tls_new_data;
