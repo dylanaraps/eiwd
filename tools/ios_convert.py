@@ -366,8 +366,9 @@ supported. Inner methods supported are PAP, CHAP, MSCHAP, MSCHAPv2.
 '''
 
 parser = argparse.ArgumentParser(description=description)
-parser.add_argument('-i', '--input', nargs='?', required=True,
-                metavar='mobileconfig', help='iOS mobileconfig file')
+group = parser.add_mutually_exclusive_group(required=True)
+group.add_argument('-i', '--input', nargs='?', metavar='mobileconfig',
+                help='iOS mobileconfig file')
 parser.add_argument('-o', '--iwd-out', nargs='?', metavar='dir',
                 help='IWD configuration directory (default /var/lib/iwd)')
 parser.add_argument('-u', '--user', action='store_true',
@@ -376,27 +377,34 @@ parser.add_argument('-p', '--passwd', action='store_true',
                 help='Store password (plaintext) in provisioning file')
 parser.add_argument('-v', '--verbose', action='store_true',
                 help='Enable verbose output')
+group.add_argument('-x', '--xml', nargs='?',
+                help='Directly pass XML')
 
 args = parser.parse_args()
 
 if args.iwd_out:
         iwd_dir = args.iwd_out
 
-with open(os.devnull, 'w') as devnull:
-        proc = subprocess.Popen(['openssl', 'cms', '-in', args.input, '-inform',
-                                'der', '-verify', '-noverify'],
-                                stdout=subprocess.PIPE, stderr=devnull)
+if args.input:
+        with open(os.devnull, 'w') as devnull:
+                proc = subprocess.Popen(['openssl', 'cms', '-in', args.input, '-inform',
+                                        'der', '-verify', '-noverify'],
+                                        stdout=subprocess.PIPE, stderr=devnull)
 
-xml, err = proc.communicate()
+        xml, err = proc.communicate()
+
+        xml = xml.decode('utf-8')
+else:
+        with open(args.xml) as f:
+                xml = f.read()
 
 if args.verbose:
-        print(xml.decode("utf-8"))
+        print(xml)
 
-subprocess.call(['openssl', 'cms', '-in', args.input, '-inform', 'der',
-                '-outform', 'pem', '-noout', '-cmsout', '-certsout',
-                '/tmp/certchain.crt'])
-
-xml = xml.decode('utf-8')
+if args.input:
+        subprocess.call(['openssl', 'cms', '-in', args.input, '-inform', 'der',
+                        '-outform', 'pem', '-noout', '-cmsout', '-certsout',
+                        '/tmp/certchain.crt'])
 
 root = ElementTree.fromstring(xml)
 
@@ -410,7 +418,10 @@ for i in range(len(root)):
                 payload = root[i][j + 1]
                 nets = process_payload(payload)
 
-root_ca_path = find_root_ca('/tmp/certchain.crt')
+if args.input:
+        root_ca_path = find_root_ca('/tmp/certchain.crt')
+else:
+        root_ca_path = None
 
 for n in nets:
         write_network(n, root_ca_path)
