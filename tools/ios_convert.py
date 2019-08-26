@@ -17,6 +17,7 @@ class Network:
                 self.username = None
                 self.password = None
                 self.ssid = None
+                self.display_name = None
 
 def process_eap_config(eap_conf, network):
         for m in range(len(eap_conf)):
@@ -50,6 +51,8 @@ def process_payload_array(parray):
                                 network.is_hotspot = False
                 elif parray[l].text == "SSID_STR":
                         network.ssid = parray[l + 1].text
+                elif parray[l].text == "DisplayedOperatorName":
+                        network.display_name = parray[l + 1].text
                 elif parray[l].text == "EAPClientConfiguration":
                         process_eap_config(parray[l + 1], network)
 
@@ -119,9 +122,16 @@ def write_network(network, root_ca_path):
                 output += "EAP-%s-Phase2-Password=%s\n" % \
                                                         (eap, network.password)
 
+        if network.display_name:
+                name = network.display_name
+        elif network.ssid:
+                name = network.ssid
+        else:
+                name = "NameUnknown"
+
         if network.is_hotspot:
                 conf_file = iwd_dir + '/hotspot/' + \
-                                os.path.splitext(args.input)[0] + '.conf'
+                                name + '.conf'
                 output += "[Hotspot]\n"
                 output += "NAIRealmNames="
 
@@ -132,10 +142,10 @@ def write_network(network, root_ca_path):
                                 output += ','
 
                 output += "\n"
-                output += "Name=%s\n" % network.ssid
+                output += "Name=%s\n" % name
 
         else:
-                conf_file = iwd_dir + '/' + network.ssid + '.8021x'
+                conf_file = iwd_dir + '/' + name + '.8021x'
 
         # Some AP's require older protocol versions. There should be no harm in
         # setting this all the time.
