@@ -18,6 +18,7 @@ class Network:
                 self.password = None
                 self.ssid = None
                 self.display_name = None
+                self.tls_trusted_servers = []
 
 def process_eap_config(eap_conf, network):
         for m in range(len(eap_conf)):
@@ -34,6 +35,10 @@ def process_eap_config(eap_conf, network):
                         network.username =  eap_conf[m + 1].text
                 elif eap_conf[m].text == "UserPassword" and args.passwd:
                         network.password =  eap_conf[m + 1].text
+                elif eap_conf[m].text == "TLSTrustedServerNames":
+                        tarray = eap_conf[m + 1]
+                        for i in range(len(tarray)):
+                                network.tls_trusted_servers.append(tarray[i].text)
 
 def process_payload_array(parray):
         network = Network()
@@ -121,6 +126,11 @@ def write_network(network, root_ca_path):
         if network.password:
                 output += "EAP-%s-Phase2-Password=%s\n" % \
                                                         (eap, network.password)
+
+        if len(network.tls_trusted_servers) > 0:
+                output += "EAP-%s-ServerDomainMask=" % eap
+                output += ';'.join(network.tls_trusted_servers)
+                output += '\n'
 
         if network.display_name:
                 name = network.display_name
