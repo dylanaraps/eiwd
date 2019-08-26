@@ -144,13 +144,7 @@ def write_network(network, root_ca_path):
                                 name + '.conf'
                 output += "[Hotspot]\n"
                 output += "NAIRealmNames="
-
-                for i in range(len(network.nai_realms)):
-                        output += network.nai_realms[i]
-
-                        if i < len(network.nai_realms) - 1:
-                                output += ','
-
+                output += ','.join(network.nai_realms)
                 output += "\n"
                 output += "Name=%s\n" % name
 
