@@ -594,9 +594,22 @@ static void signal_handler(void *user_data)
 		display_refresh_reset();
 }
 
+static char *history_path;
+
 void display_init(void)
 {
+	const char *home_path;
+
 	display_refresh.redo_entries = l_queue_new();
+
+	stifle_history(24);
+
+	home_path = getenv("HOME");
+	if (home_path)
+		history_path = l_strdup_printf("%s/%s", home_path,
+							".iwctl_history");
+
+	read_history(history_path);
 
 	setlinebuf(stdout);
 
@@ -609,6 +622,7 @@ void display_init(void)
 	rl_erase_empty_line = 1;
 	rl_callback_handler_install("Waiting for IWD to appear...",
 							readline_callback);
+
 	rl_redisplay();
 }
 
@@ -630,6 +644,9 @@ void display_exit(void)
 	l_io_destroy(io);
 
 	l_signal_remove(resize_signal);
+
+	write_history(history_path);
+	l_free(history_path);
 
 	display_quit();
 }
