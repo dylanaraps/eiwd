@@ -397,48 +397,64 @@ static void display_completion_matches(char **matches, int num_matches,
 static struct masked_input {
 	bool use_mask;
 	char passphrase[MAX_PASSPHRASE_LEN];
-	char mask[MAX_PASSPHRASE_LEN];
+	uint8_t point;
+	uint8_t end;
 } masked_input;
 
 static void mask_input(void)
 {
-	int point;
-	char *line;
-	size_t len;
-
 	if (!masked_input.use_mask)
 		return;
 
-	line = rl_copy_text(0, rl_end);
-	len = strlen(line);
-
-	if (!len)
-		goto done;
-
-	point = rl_point;
-
-	if (len > MAX_PASSPHRASE_LEN) {
-		point--;
-	} else if (strlen(masked_input.passphrase) > len) {
-		masked_input.passphrase[len] = 0;
-		masked_input.mask[len] = 0;
-	} else {
-		masked_input.passphrase[len - 1] = line[len - 1];
-		masked_input.mask[len - 1] = '*';
+	if (rl_end > MAX_PASSPHRASE_LEN) {
+		rl_point = rl_end = MAX_PASSPHRASE_LEN;
+		goto set_mask;
 	}
 
-	rl_replace_line(masked_input.mask, 0);
-	rl_point = point;
+	if (masked_input.end == rl_end) {
+		/* Moving cursor. */
+		goto done;
+	} else if (masked_input.end < rl_end) {
+		/* Insertion. */
+		memcpy(masked_input.passphrase + rl_point,
+				masked_input.passphrase + masked_input.point,
+				masked_input.end - masked_input.point);
+		memcpy(masked_input.passphrase + masked_input.point,
+				rl_line_buffer + masked_input.point,
+				rl_point - masked_input.point);
+	} else {
+		/* Deletion. */
+		if (masked_input.point > rl_point)
+			/* Backspace key. */
+			memcpy(masked_input.passphrase + rl_point,
+				masked_input.passphrase + masked_input.point,
+				masked_input.end - masked_input.point);
+		else
+			/* Delete key. */
+			memcpy(masked_input.passphrase + rl_point,
+				masked_input.passphrase + masked_input.point
+									+ 1,
+				rl_end - rl_point);
+		memset(masked_input.passphrase + rl_end, 0,
+				masked_input.end - rl_end);
+	}
+
+set_mask:
+	memset(rl_line_buffer, '*', rl_end);
+	rl_line_buffer[rl_end] = '\0';
+
 	rl_redisplay();
 
+	masked_input.end = rl_end;
 done:
-	l_free(line);
+	masked_input.point = rl_point;
 }
 
 static void reset_masked_input(void)
 {
 	memset(masked_input.passphrase, 0, MAX_PASSPHRASE_LEN);
-	memset(masked_input.mask, 0, MAX_PASSPHRASE_LEN);
+	masked_input.point = 0;
+	masked_input.end = 0;
 }
 
 static void readline_callback(char *prompt)
