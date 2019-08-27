@@ -797,7 +797,7 @@ static void eap_wsc_handle_m2(struct eap_state *eap,
 {
 	struct eap_wsc_state *wsc = eap_get_data(eap);
 	struct l_key *remote_public;
-	uint8_t shared_secret[192];
+	uint8_t shared_secret[192] = { 0 };
 	size_t shared_secret_len = sizeof(shared_secret);
 	struct l_checksum *sha256;
 	uint8_t dhkey[32];
