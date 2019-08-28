@@ -3790,13 +3790,16 @@ done:
 
 static int netdev_cqm_rssi_update(struct netdev *netdev)
 {
-	struct l_genl_msg *msg =
-		netdev_build_cmd_cqm_rssi_update(netdev,
-						netdev->rssi_levels,
-						netdev->rssi_levels_num);
+	struct l_genl_msg *msg;
 
 	l_debug("");
 
+	if (!wiphy_has_ext_feature(netdev->wiphy,
+					NL80211_EXT_FEATURE_CQM_RSSI_LIST))
+		return 0;
+
+	msg = netdev_build_cmd_cqm_rssi_update(netdev, netdev->rssi_levels,
+						netdev->rssi_levels_num);
 	if (!msg)
 		return -EINVAL;
 
