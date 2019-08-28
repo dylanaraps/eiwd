@@ -2903,7 +2903,8 @@ static int fast_transition(struct netdev *netdev, struct scan_bss *target_bss,
 	handshake_state_set_authenticator_address(netdev->handshake,
 							target_bss->addr);
 
-	handshake_state_set_authenticator_ie(netdev->handshake,
+	if (target_bss->rsne)
+		handshake_state_set_authenticator_ie(netdev->handshake,
 							target_bss->rsne);
 	memcpy(netdev->handshake->mde + 2, target_bss->mde, 3);
 
