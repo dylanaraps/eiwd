@@ -1357,7 +1357,7 @@ static void emit_known_network_changed(struct station *station, void *user_data)
 		return;
 	}
 
-	/* This is a new hotspot network */
+	/* This is a removed hotspot */
 	station_network_foreach(station, network_unset_hotspot, info);
 }
 
