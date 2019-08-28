@@ -25,6 +25,8 @@ class Test(unittest.TestCase):
         condition = 'obj.state == DeviceState.connected'
         wd.wait_for_object_condition(device, condition)
 
+        self.assertEqual(len(wd.list_known_networks()), 1)
+
         device.disconnect()
 
         condition = 'obj.state == DeviceState.disconnected'
