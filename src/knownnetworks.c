@@ -240,27 +240,14 @@ bool network_info_match_nai_realm(const struct network_info *info,
 	return info->ops->match_nai_realms(info, nai_realms);
 }
 
-static void known_network_update(struct network_info *orig_network,
-					const char *ssid,
-					enum security security,
+void known_network_update(struct network_info *network,
 					struct l_settings *settings,
 					uint64_t connected_time)
 {
-	struct network_info *network;
 	bool is_hidden = false;
 	bool is_autoconnectable;
 
-	if (orig_network)
-		network = orig_network;
-	else {
-		network = l_new(struct network_info, 1);
-		strcpy(network->ssid, ssid);
-		network->type = security;
-		network->ops = &known_network_ops;
-	}
-
-	if (l_time_before(network->connected_time, connected_time) &&
-				orig_network) {
+	if (network->connected_time != connected_time) {
 		l_dbus_property_changed(dbus_get_bus(),
 					known_network_get_path(network),
 					IWD_KNOWN_NETWORK_INTERFACE,
@@ -275,19 +262,19 @@ static void known_network_update(struct network_info *orig_network,
 
 	l_settings_get_bool(settings, "Settings", "Hidden", &is_hidden);
 
-	if (network->is_hidden && orig_network)
-		num_known_hidden_networks--;
+	if (network->is_hidden != is_hidden) {
+		if (network->is_hidden && !is_hidden)
+			num_known_hidden_networks--;
+		else if (!network->is_hidden && is_hidden)
+			num_known_hidden_networks++;
 
-	if (network->is_hidden != is_hidden && orig_network)
 		l_dbus_property_changed(dbus_get_bus(),
 					known_network_get_path(network),
 					IWD_KNOWN_NETWORK_INTERFACE,
 					"Hidden");
+	}
 
 	network->is_hidden = is_hidden;
-
-	if (network->is_hidden)
-		num_known_hidden_networks++;
 
 	if (!l_settings_get_bool(settings, "Settings", "Autoconnect",
 							&is_autoconnectable))
@@ -295,11 +282,6 @@ static void known_network_update(struct network_info *orig_network,
 		is_autoconnectable = true;
 
 	known_network_set_autoconnect(network, is_autoconnectable);
-
-	if (orig_network)
-		return;
-
-	known_networks_add(network);
 }
 
 bool known_networks_foreach(known_networks_foreach_func_t function,
@@ -579,6 +561,37 @@ void known_networks_add(struct network_info *network)
 				KNOWN_NETWORKS_EVENT_ADDED, network);
 }
 
+static void known_network_new(const char *ssid, enum security security,
+					struct l_settings *settings,
+					uint64_t connected_time)
+{
+	bool is_hidden;
+	bool is_autoconnectable;
+	struct network_info *network;
+
+	network = l_new(struct network_info, 1);
+	strcpy(network->ssid, ssid);
+	network->type = security;
+	network->connected_time = connected_time;
+	network->ops = &known_network_ops;
+
+	if (!l_settings_get_bool(settings, "Settings", "Hidden",
+					&is_hidden))
+		is_hidden = false;
+
+	if (!l_settings_get_bool(settings, "Settings", "Autoconnect",
+						&is_autoconnectable))
+		is_autoconnectable = true;
+
+	if (is_hidden)
+		num_known_hidden_networks++;
+
+	network->is_hidden = is_hidden;
+	network->is_autoconnectable = is_autoconnectable;
+
+	known_networks_add(network);
+}
+
 static void known_networks_watch_cb(const char *filename,
 					enum l_dir_watch_event event,
 					void *user_data)
@@ -622,14 +635,17 @@ static void known_networks_watch_cb(const char *filename,
 		if (settings) {
 			connected_time = l_path_get_mtime(full_path);
 
-			known_network_update(network_before, ssid, security,
-						settings, connected_time);
-		} else {
 			if (network_before)
-				known_networks_remove(network_before);
-		}
+				known_network_update(network_before, settings,
+							connected_time);
+			else
+				known_network_new(ssid, security, settings,
+							connected_time);
+		} else if (network_before)
+			known_networks_remove(network_before);
 
 		l_settings_free(settings);
+
 		break;
 	case L_DIR_WATCH_EVENT_ACCESSED:
 		break;
@@ -846,7 +862,7 @@ static int known_networks_init(void)
 		if (settings) {
 			connected_time = l_path_get_mtime(full_path);
 
-			known_network_update(NULL, ssid, security, settings,
+			known_network_new(ssid, security, settings,
 						connected_time);
 		}
 
