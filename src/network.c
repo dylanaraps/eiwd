@@ -267,7 +267,7 @@ bool network_set_psk(struct network *network, const uint8_t *psk)
 		return false;
 
 	if (!network_settings_load(network))
-		return false;
+		network->settings = l_settings_new();
 
 	network_reset_psk(network);
 	network->psk = l_memdup(psk, 32);
