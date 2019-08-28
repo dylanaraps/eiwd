@@ -1337,7 +1337,7 @@ static void network_unset_hotspot(struct network *network, void *user_data)
 {
 	struct network_info *info = user_data;
 
-	if (!hotspot_info_matches(network, info))
+	if (network->info != info)
 		return;
 
 	network_set_info(network, NULL);
