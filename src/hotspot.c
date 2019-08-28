@@ -341,6 +341,7 @@ static void hs20_dir_watch_cb(const char *filename,
 				void *user_data)
 {
 	struct l_settings *new;
+	uint64_t connected_time;
 	struct hs20_config *config;
 
 	L_AUTO_FREE_VAR(char *, full_path) = NULL;
@@ -385,12 +386,11 @@ static void hs20_dir_watch_cb(const char *filename,
 
 		break;
 	case L_DIR_WATCH_EVENT_MODIFIED:
-		config = l_queue_remove_if(hs20_settings, match_filename,
-						full_path);
+		config = l_queue_find(hs20_settings, match_filename, full_path);
 		if (!config)
 			return;
 
-		known_networks_remove(&config->super);
+		connected_time = l_path_get_mtime(full_path);
 
 		new = l_settings_new();
 
@@ -399,13 +399,7 @@ static void hs20_dir_watch_cb(const char *filename,
 			return;
 		}
 
-		config = hs20_config_new(new, full_path);
-		if (!config)
-			break;
-
-		known_networks_add(&config->super);
-
-		l_queue_push_head(hs20_settings, config);
+		known_network_update(&config->super, new, connected_time);
 
 		break;
 	case L_DIR_WATCH_EVENT_ACCESSED:
