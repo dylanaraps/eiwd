@@ -425,3 +425,31 @@ class TestFailingCase(unittest.TestCase):
 if __name__ == '__main__':
 	unittest.main()
 #~~~~~~~~~~~~~~~~~~ end of alwaysFailingTest.py ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Using the 'shell' feature
+---------------------------
+
+The --shell,-s flag allows you to boot into a shell inside the test-runner VM.
+If this flag is used the python test will not actually run, only the environment
+will be setup. Tis is useful for diagnosing issues with a particular test
+quickly without having to modify the python test and restart the VM. The shell
+flag is meant to be used in conjunction with --autotest,-A. If no specific test
+is specified test-runner will default to the 'shell' test, which is just an
+empty test with one adapter.
+
+Using the shell with real hardware (--hw flag) is even more powerful. If your
+system is setup for USB/PCI passthrough you can expose physical network cards
+in the VM and use them in the shell sandbox. This allows you to try out
+different kernels in the VM very quickly (no reboots/swapping out kernels on
+the host system).
+
+Here are some examples of --shell usage:
+
+Setup environment for 'testWPA' and boot into shell:
+./test-runner -k <kernel> -A testWPA --shell
+
+Boot directly into 'shell' test (sandbox):
+./test-runner -k <kernel> --shell
+
+Use hardware passthrough:
+./test-runner -k <kernel> --hw <hw.conf> --shell
