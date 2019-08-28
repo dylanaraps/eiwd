@@ -566,8 +566,6 @@ void known_networks_remove(struct network_info *network)
 				known_networks_watch_func_t,
 				KNOWN_NETWORKS_EVENT_REMOVED, network);
 
-	network->ops->remove(network);
-
 	network_info_free(network);
 }
 
