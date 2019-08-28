@@ -418,6 +418,17 @@ static bool match_nai_realms(const struct network_info *info, void *user_data)
 	return true;
 }
 
+static void network_add_foreach(struct network *network, void *user_data)
+{
+	struct station *station = user_data;
+	struct scan_bss *bss = network_bss_select(network, false);
+
+	if (!bss)
+		return;
+
+	station_add_autoconnect_bss(station, network, bss);
+}
+
 static void station_anqp_response_cb(enum anqp_result result,
 					const void *anqp, size_t anqp_len,
 					void *user_data)
@@ -472,8 +483,18 @@ request_done:
 	l_queue_remove(station->anqp_pending, entry);
 
 	/* If no more requests, resume scanning */
-	if (l_queue_isempty(station->anqp_pending))
-		scan_resume(netdev_get_wdev_id(station->netdev));
+	if (!l_queue_isempty(station->anqp_pending))
+		return;
+
+	l_queue_destroy(station->autoconnect_list, l_free);
+	station->autoconnect_list = l_queue_new();
+
+	if (station_is_autoconnecting(station)) {
+		station_network_foreach(station, network_add_foreach, station);
+		station_autoconnect_next(station);
+	}
+
+	scan_resume(netdev_get_wdev_id(station->netdev));
 }
 
 static bool station_start_anqp(struct station *station, struct network *network,
@@ -600,11 +621,6 @@ void station_set_scan_results(struct station *station,
 
 		if (station_start_anqp(station, network, bss))
 			wait_for_anqp = true;
-
-		if (!add_to_autoconnect)
-			continue;
-
-		station_add_autoconnect_bss(station, network, bss);
 	}
 
 	station->bss_list = new_bss_list;
@@ -623,6 +639,10 @@ void station_set_scan_results(struct station *station,
 	 */
 	if (wait_for_anqp)
 		scan_suspend(netdev_get_wdev_id(station->netdev));
+	else if (add_to_autoconnect) {
+		station_network_foreach(station, network_add_foreach, station);
+		station_autoconnect_next(station);
+	}
 }
 
 static void station_reconnect(struct station *station);
@@ -948,9 +968,6 @@ static bool new_scan_results(int err, struct l_queue *bss_list, void *userdata)
 	autoconnect = station_is_autoconnecting(station);
 	station_set_scan_results(station, bss_list, autoconnect);
 
-	if (autoconnect)
-		station_autoconnect_next(station);
-
 	return true;
 }
 
@@ -1020,9 +1037,6 @@ static bool station_quick_scan_results(int err, struct l_queue *bss_list,
 
 	autoconnect = station_is_autoconnecting(station);
 	station_set_scan_results(station, bss_list, autoconnect);
-
-	if (autoconnect)
-		station_autoconnect_next(station);
 
 	if (station->state == STATION_STATE_AUTOCONNECT_QUICK)
 		/*
