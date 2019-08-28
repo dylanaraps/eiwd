@@ -49,6 +49,7 @@ typedef void (*eapol_preauth_cb_t)(const uint8_t *pmk, void *user_data);
 typedef void (*eapol_preauth_destroy_func_t)(void *user_data);
 typedef void (*eapol_frame_watch_func_t)(uint16_t proto, const uint8_t *from,
 						const struct eapol_frame *frame,
+						bool noencrypt,
 						void *user_data);
 
 bool eapol_calculate_mic(enum ie_rsn_akm_suite akm, const uint8_t *kck,

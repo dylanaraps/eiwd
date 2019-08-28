@@ -833,8 +833,10 @@ struct eapol_sm {
 	bool use_eapol_start:1;
 	bool require_handshake:1;
 	bool eap_exchanged:1;
+	bool last_eap_unencrypted:1;
 	struct eap_state *eap;
 	struct eapol_frame *early_frame;
+	bool early_frame_unencrypted : 1;
 	uint32_t watch_id;
 	uint8_t installed_gtk_len;
 	uint8_t installed_gtk[CRYPTO_MAX_GTK_LEN];
@@ -962,22 +964,32 @@ static void eapol_install_igtk(struct eapol_sm *sm, uint8_t igtk_key_index,
 	sm->installed_igtk_len = igtk_len - 6;
 }
 
-static void send_eapol_start(struct l_timeout *timeout, void *user_data)
+static void __send_eapol_start(struct eapol_sm *sm, bool noencrypt)
 {
-	struct eapol_sm *sm = user_data;
 	uint8_t buf[sizeof(struct eapol_frame)];
 	struct eapol_frame *frame = (struct eapol_frame *) buf;
 
 	handshake_event(sm->handshake, HANDSHAKE_EVENT_STARTED, NULL);
 
-	l_timeout_remove(sm->eapol_start_timeout);
-	sm->eapol_start_timeout = NULL;
-
 	frame->header.protocol_version = EAPOL_PROTOCOL_VERSION_2001;
 	frame->header.packet_type = 1;
 	l_put_be16(0, &frame->header.packet_len);
 
-	eapol_sm_write(sm, frame, false);
+	eapol_sm_write(sm, frame, noencrypt);
+}
+
+static void send_eapol_start(struct l_timeout *timeout, void *user_data)
+{
+	struct eapol_sm *sm = user_data;
+
+	l_timeout_remove(sm->eapol_start_timeout);
+	sm->eapol_start_timeout = NULL;
+
+	/*
+	 * AP is probably waiting for us to start, so always send unencrypted
+	 * since the key hasn't been established yet
+	 */
+	__send_eapol_start(sm, true);
 }
 
 static void eapol_set_key_timeout(struct eapol_sm *sm,
@@ -1073,7 +1085,8 @@ static void eapol_ptk_1_of_4_retry(struct l_timeout *timeout, void *user_data)
 }
 
 static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
-					const struct eapol_key *ek)
+					const struct eapol_key *ek,
+					bool unencrypted)
 {
 	const uint8_t *kck;
 	struct eapol_key *step2;
@@ -1133,7 +1146,7 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 			 * try that, otherwise give up.
 			 */
 			if (sm->eap) {
-				send_eapol_start(NULL, sm);
+				__send_eapol_start(sm, unencrypted);
 				return;
 			}
 
@@ -1235,7 +1248,7 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 		}
 	}
 
-	eapol_sm_write(sm, (struct eapol_frame *) step2, false);
+	eapol_sm_write(sm, (struct eapol_frame *) step2, unencrypted);
 	l_free(step2);
 
 	l_timeout_remove(sm->eapol_start_timeout);
@@ -1477,7 +1490,8 @@ static const uint8_t *eapol_find_wpa_ie(const uint8_t *data, size_t data_len)
 static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 					const struct eapol_key *ek,
 					const uint8_t *decrypted_key_data,
-					size_t decrypted_key_data_size)
+					size_t decrypted_key_data_size,
+					bool unencrypted)
 {
 	const uint8_t *kck;
 	const uint8_t *kek;
@@ -1708,7 +1722,7 @@ retransmit:
 		}
 	}
 
-	eapol_sm_write(sm, (struct eapol_frame *) step4, false);
+	eapol_sm_write(sm, (struct eapol_frame *) step4, unencrypted);
 	l_free(step4);
 
 	if (sm->handshake->ptk_complete)
@@ -1773,7 +1787,8 @@ static void eapol_handle_ptk_4_of_4(struct eapol_sm *sm,
 static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 					const struct eapol_key *ek,
 					const uint8_t *decrypted_key_data,
-					size_t decrypted_key_data_size)
+					size_t decrypted_key_data_size,
+					bool unencrypted)
 {
 	const uint8_t *kck;
 	struct eapol_key *step2;
@@ -1872,7 +1887,7 @@ static void eapol_handle_gtk_1_of_2(struct eapol_sm *sm,
 		}
 	}
 
-	eapol_sm_write(sm, (struct eapol_frame *) step2, false);
+	eapol_sm_write(sm, (struct eapol_frame *) step2, unencrypted);
 	l_free(step2);
 
 	eapol_install_gtk(sm, gtk_key_index, gtk, gtk_len, ek->key_rsc);
@@ -1903,7 +1918,8 @@ static struct eapol_sm *eapol_find_sm(uint32_t ifindex, const uint8_t *aa)
 }
 
 static void eapol_key_handle(struct eapol_sm *sm,
-				const struct eapol_frame *frame)
+				const struct eapol_frame *frame,
+				bool unencrypted)
 {
 	const struct eapol_key *ek;
 	const uint8_t *kck;
@@ -2004,13 +2020,13 @@ static void eapol_key_handle(struct eapol_sm *sm,
 			goto done;
 
 		eapol_handle_gtk_1_of_2(sm, ek, decrypted_key_data,
-					key_data_len);
+					key_data_len, unencrypted);
 		goto done;
 	}
 
 	/* If no MIC, then assume packet 1, otherwise packet 3 */
 	if (!ek->key_mic && !ek->encrypted_key_data)
-		eapol_handle_ptk_1_of_4(sm, ek);
+		eapol_handle_ptk_1_of_4(sm, ek, unencrypted);
 	else {
 		if (!key_data_len)
 			goto done;
@@ -2018,7 +2034,7 @@ static void eapol_key_handle(struct eapol_sm *sm,
 		eapol_handle_ptk_3_of_4(sm, ek,
 					decrypted_key_data ?:
 					EAPOL_KEY_DATA(ek, sm->mic_len),
-					key_data_len);
+					key_data_len, unencrypted);
 	}
 
 done:
@@ -2042,7 +2058,7 @@ static void eapol_eap_msg_cb(const uint8_t *eap_data, size_t len,
 
 	memcpy(frame->data, eap_data, len);
 
-	eapol_sm_write(sm, frame, false);
+	eapol_sm_write(sm, frame, sm->last_eap_unencrypted);
 }
 
 /* This respresentes the eapTimout, eapFail and eapSuccess messages */
@@ -2192,6 +2208,7 @@ static void eapol_auth_key_handle(struct eapol_sm *sm,
 
 static void eapol_rx_auth_packet(uint16_t proto, const uint8_t *from,
 				const struct eapol_frame *frame,
+				bool noencrypt,
 				void *user_data)
 {
 	struct eapol_sm *sm = user_data;
@@ -2214,6 +2231,7 @@ static void eapol_rx_auth_packet(uint16_t proto, const uint8_t *from,
 
 static void eapol_rx_packet(uint16_t proto, const uint8_t *from,
 				const struct eapol_frame *frame,
+				bool unencrypted,
 				void *user_data)
 {
 	struct eapol_sm *sm = user_data;
@@ -2233,6 +2251,7 @@ static void eapol_rx_packet(uint16_t proto, const uint8_t *from,
 			return;
 
 		sm->early_frame = l_memdup(frame, len);
+		sm->early_frame_unencrypted = unencrypted;
 
 		return;
 	}
@@ -2258,6 +2277,7 @@ static void eapol_rx_packet(uint16_t proto, const uint8_t *from,
 		}
 
 		sm->eap_exchanged = true;
+		sm->last_eap_unencrypted = unencrypted;
 
 		eap_rx_packet(sm->eap, frame->data,
 				L_BE16_TO_CPU(frame->header.packet_len));
@@ -2275,13 +2295,16 @@ static void eapol_rx_packet(uint16_t proto, const uint8_t *from,
 			 * use a cached PMK.  We don't yet cache PMKs so
 			 * send an EAPOL-Start if we haven't sent one yet.
 			 */
-			if (sm->eapol_start_timeout)
-				send_eapol_start(NULL, sm);
+			if (sm->eapol_start_timeout) {
+				l_timeout_remove(sm->eapol_start_timeout);
+				sm->eapol_start_timeout = NULL;
+				__send_eapol_start(sm, unencrypted);
+			}
 
 			return;
 		}
 
-		eapol_key_handle(sm, frame);
+		eapol_key_handle(sm, frame, unencrypted);
 		break;
 
 	default:
@@ -2397,7 +2420,8 @@ bool eapol_start(struct eapol_sm *sm)
 	/* Process any frames received early due to scheduling */
 	if (sm->early_frame) {
 		eapol_rx_packet(ETH_P_PAE, sm->handshake->aa,
-				sm->early_frame, sm);
+				sm->early_frame, sm->early_frame_unencrypted,
+				sm);
 		l_free(sm->early_frame);
 		sm->early_frame = NULL;
 	}
@@ -2458,11 +2482,21 @@ static void preauth_frame(struct preauth_sm *sm, uint8_t packet_type,
 
 static void preauth_rx_packet(uint16_t proto, const uint8_t *from,
 				const struct eapol_frame *frame,
+				bool unencrypted,
 				void *user_data)
 {
 	struct preauth_sm *sm = user_data;
 
 	if (proto != 0x88c7 || memcmp(from, sm->aa, 6))
+		return;
+
+	/*
+	 * We do not expect any pre-auth packets to be unencrypted
+	 * since we're authenticating via the currently connected AP
+	 * and pre-authentication implies we are already connected
+	 * and the keys are set
+	 */
+	if (L_WARN_ON(unencrypted))
 		return;
 
 	if (frame->header.packet_type != 0) /* EAPOL-EAP */
@@ -2651,7 +2685,8 @@ void __eapol_rx_packet(uint32_t ifindex, const uint8_t *src, uint16_t proto,
 					eapol_frame_watch_match_ifindex,
 					L_UINT_TO_PTR(ifindex),
 					eapol_frame_watch_func_t, proto, src,
-					(const struct eapol_frame *) eh);
+					(const struct eapol_frame *) eh,
+					noencrypt);
 }
 
 void __eapol_tx_packet(uint32_t ifindex, const uint8_t *dst, uint16_t proto,
