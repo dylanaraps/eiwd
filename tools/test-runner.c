@@ -2262,12 +2262,29 @@ static void run_auto_tests(void)
 			i++;
 		}
 	} else {
-		l_info("Automatic test execution requested");
-		l_info("Searching for the test configurations...");
+		/*
+		 * --shell without any specific tests implies 'shell' test
+		 */
+		if (shell) {
+			char *config_dir_path;
+			config_dir_path = l_strdup_printf("%s/shell",
+								test_home_path);
 
-		if (!find_test_configuration(test_home_path, 0,
-							test_config_map))
-			goto exit;
+			if (!find_test_configuration(config_dir_path, 1,
+							test_config_map)) {
+				l_free(config_dir_path);
+				goto exit;
+			}
+
+			l_free(config_dir_path);
+		} else {
+			l_info("Automatic test execution requested");
+			l_info("Searching for the test configurations...");
+
+			if (!find_test_configuration(test_home_path, 0,
+								test_config_map))
+				goto exit;
+		}
 	}
 
 	if (l_hashmap_isempty(test_config_map)) {
@@ -2769,7 +2786,14 @@ static void usage(void)
 						" executable\n"
 		"\t-w, --hw <config>	Run using a physical hardware "
 					"configuration\n"
-		"\t-s, --shell		Boot into shell, not autotests\n");
+		"\t-s, --shell		Boot into shell. If -A is used the"
+					" environment\n"
+					"\t\t\t\twill be setup exactly as it is"
+					" in the test,\n"
+					"\t\t\t\tbut no test will be run. If no"
+					" test is specified\n"
+					"\t\t\t\tthe 'shell' test"
+					" will be used");
 	l_info("Commands:\n"
 		"\t-A, --auto-tests <dirs>	Comma separated list of the "
 						"test configuration\n\t\t\t\t"
