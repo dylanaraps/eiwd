@@ -705,6 +705,11 @@ static void get_managed_objects_callback(struct l_dbus_message *message,
 		proxy_interface_create(path, &object);
 
 	if (!agent_manager_register_agent()) {
+		display_error("Failed to register Agent.\n");
+
+		if (!command_is_interactive_mode())
+			command_set_exit_status(EXIT_FAILURE);
+
 		l_main_quit();
 
 		return;
