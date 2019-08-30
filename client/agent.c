@@ -50,17 +50,6 @@ static struct pending_op {
 	struct l_queue *saved_input;
 } pending_op;
 
-static struct l_dbus_message *agent_error(const char *text)
-{
-	display_error(text);
-
-	command_set_exit_status(EXIT_FAILURE);
-
-	l_main_quit();
-
-	return NULL;
-}
-
 static struct l_dbus_message *release_method_call(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -81,9 +70,7 @@ static struct l_dbus_message *request_passphrase_command_option(
 
 	passphrase = command_option_get(COMMAND_OPTION_PASSPHRASE);
 	if (!passphrase)
-		return agent_error("No passphrase is provided as "
-					"'--"COMMAND_OPTION_PASSPHRASE"' "
-						"command-line option.\n");
+		return NULL;
 
 	reply = l_dbus_message_new_method_return(message);
 	l_dbus_message_set_arguments(reply, "s", passphrase);
@@ -97,13 +84,15 @@ static struct l_dbus_message *request_passphrase_method_call(
 						void *user_data)
 {
 	const struct proxy_interface *proxy;
+	struct l_dbus_message *reply;
 	const char *path;
 
 	if (dbus_message_has_error(message))
 		return NULL;
 
-	if (!command_is_interactive_mode())
-		return request_passphrase_command_option(message);
+	reply = request_passphrase_command_option(message);
+	if (reply)
+		return reply;
 
 	l_dbus_message_get_arguments(message, "o", &path);
 	if (!path)
@@ -131,13 +120,15 @@ static struct l_dbus_message *request_private_key_passphrase_method_call(
 						void *user_data)
 {
 	const struct proxy_interface *proxy;
+	struct l_dbus_message *reply;
 	const char *path;
 
 	if (dbus_message_has_error(message))
 		return NULL;
 
-	if (!command_is_interactive_mode())
-		return request_passphrase_command_option(message);
+	reply = request_passphrase_command_option(message);
+	if (reply)
+		return reply;
 
 	l_dbus_message_get_arguments(message, "o", &path);
 	if (!path)
@@ -168,15 +159,11 @@ static struct l_dbus_message *request_username_and_password_command_option(
 
 	username = command_option_get(COMMAND_OPTION_USERNAME);
 	if (!username)
-		return agent_error("No username is provided as "
-					"'--"COMMAND_OPTION_USERNAME"' "
-						"command-line option.\n");
+		return NULL;
 
 	password = command_option_get(COMMAND_OPTION_PASSWORD);
 	if (!password)
-		return agent_error("No password is provided as "
-					"'--"COMMAND_OPTION_PASSWORD"' "
-						"command-line option.\n");
+		return NULL;
 
 	reply = l_dbus_message_new_method_return(message);
 	l_dbus_message_set_arguments(reply, "ss", username, password);
@@ -190,13 +177,15 @@ static struct l_dbus_message *request_username_and_password_method_call(
 						void *user_data)
 {
 	const struct proxy_interface *proxy;
+	struct l_dbus_message *reply;
 	const char *path;
 
 	if (dbus_message_has_error(message))
 		return NULL;
 
-	if (!command_is_interactive_mode())
-		return request_username_and_password_command_option(message);
+	reply = request_username_and_password_command_option(message);
+	if (reply)
+		return reply;
 
 	l_dbus_message_get_arguments(message, "o", &path);
 	if (!path)
@@ -226,9 +215,7 @@ static struct l_dbus_message *request_user_password_command_option(
 
 	password = command_option_get(COMMAND_OPTION_PASSWORD);
 	if (!password)
-		return agent_error("No password is provided as "
-					"'--"COMMAND_OPTION_PASSWORD"' "
-						"command-line option.\n");
+		return NULL;
 
 	reply = l_dbus_message_new_method_return(message);
 	l_dbus_message_set_arguments(reply, "s", password);
@@ -242,6 +229,7 @@ static struct l_dbus_message *request_user_password_method_call(
 						void *user_data)
 {
 	const struct proxy_interface *proxy;
+	struct l_dbus_message *reply;
 	const char *path;
 	const char *username;
 	char *username_prompt;
@@ -249,8 +237,9 @@ static struct l_dbus_message *request_user_password_method_call(
 	if (dbus_message_has_error(message))
 		return NULL;
 
-	if (!command_is_interactive_mode())
-		return request_user_password_command_option(message);
+	reply = request_user_password_command_option(message);
+	if (reply)
+		return reply;
 
 	l_dbus_message_get_arguments(message, "os", &path, &username);
 	if (!path || !username)
