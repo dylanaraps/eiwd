@@ -704,16 +704,12 @@ static void get_managed_objects_callback(struct l_dbus_message *message,
 	while (l_dbus_message_iter_next_entry(&objects, &path, &object))
 		proxy_interface_create(path, &object);
 
-	if (!command_is_interactive_mode() && !command_has_options())
-		goto proceed;
-
 	if (!agent_manager_register_agent()) {
 		l_main_quit();
 
 		return;
 	}
 
-proceed:
 	if (!command_is_interactive_mode()) {
 		command_noninteractive_trigger();
 
@@ -828,10 +824,7 @@ bool dbus_proxy_exit(void)
 {
 	struct interface_type_desc *desc;
 
-	if (command_is_interactive_mode() ||
-			(!command_is_interactive_mode() &&
-							command_has_options()))
-		agent_manager_unregister_agent();
+	agent_manager_unregister_agent();
 
 	for (desc = __start___interface; desc < __stop___interface; desc++) {
 		if (!desc->exit)
