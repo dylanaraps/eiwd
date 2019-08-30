@@ -509,7 +509,7 @@ static bool read_handler(struct l_io *io, void *user_data)
 {
 	rl_callback_read_char();
 
-	if (display_agent_is_active())
+	if (display_agent_is_active() || !command_is_interactive_mode())
 		mask_input();
 
 	return true;
@@ -547,33 +547,52 @@ void display_agent_prompt(const char *label, bool mask_input)
 {
 	char *prompt;
 
-	if (agent_saved_input)
-		return;
-
 	masked_input.use_mask = mask_input;
 
 	if (mask_input)
 		reset_masked_input();
 
-	agent_saved_input = l_new(struct saved_input, 1);
-
-	agent_saved_input->point = rl_point;
-	agent_saved_input->line = rl_copy_text(0, rl_end);
-	rl_set_prompt("");
-	rl_replace_line("", 0);
-	rl_redisplay();
-
-	rl_erase_empty_line = 0;
-
 	prompt = l_strdup_printf(COLOR_BLUE "%s " COLOR_OFF, label);
-	rl_set_prompt(prompt);
+
+	if (command_is_interactive_mode()) {
+		if (agent_saved_input) {
+			l_free(prompt);
+			return;
+		}
+
+		agent_saved_input = l_new(struct saved_input, 1);
+
+		agent_saved_input->point = rl_point;
+		agent_saved_input->line = rl_copy_text(0, rl_end);
+		rl_set_prompt("");
+		rl_replace_line("", 0);
+		rl_redisplay();
+
+		rl_erase_empty_line = 0;
+		rl_set_prompt(prompt);
+	} else {
+		rl_callback_handler_install(prompt, readline_callback);
+
+		if (!io)
+			io = l_io_new(fileno(stdin));
+
+		l_io_set_read_handler(io, read_handler, NULL, NULL);
+	}
+
 	l_free(prompt);
 
-	rl_forced_update_display();
+	rl_redisplay();
 }
 
 void display_agent_prompt_release(const char *label)
 {
+	if (!command_is_interactive_mode()) {
+		rl_callback_handler_remove();
+		l_io_destroy(io);
+
+		return;
+	}
+
 	if (!agent_saved_input)
 		return;
 
