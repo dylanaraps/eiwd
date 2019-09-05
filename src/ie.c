@@ -1321,11 +1321,11 @@ int ie_parse_wpa(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 	if (!is_ie_wpa_ie(iter->data, iter->len))
 		return -EINVAL;
 
+	memset(&info, 0, sizeof(info));
 	info.group_cipher = IE_RSN_CIPHER_SUITE_TKIP;
 	info.pairwise_ciphers = IE_RSN_CIPHER_SUITE_TKIP;
 	info.akm_suites = IE_RSN_AKM_SUITE_PSK;
 
-	memset(&info, 0, sizeof(info));
 	RSNE_ADVANCE(data, len, 6);
 
 	/* Parse Group Cipher Suite field */
