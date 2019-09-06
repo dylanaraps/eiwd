@@ -146,7 +146,7 @@ struct handshake_state *netdev_get_handshake(struct netdev *netdev);
 
 int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 				struct handshake_state *hs,
-				struct iovec *vendor_ies,
+				const struct iovec *vendor_ies,
 				size_t num_vendor_ies,
 				netdev_event_func_t event_filter,
 				netdev_connect_cb_t cb, void *user_data);
