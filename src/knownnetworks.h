@@ -41,9 +41,11 @@ struct network_info_ops {
 
 	bool (*match_hessid)(const struct network_info *info,
 						const uint8_t *hessid);
-	bool (*match_roaming_consortium)(const struct network_info *info,
+	const uint8_t *(*match_roaming_consortium)(
+						const struct network_info *info,
 						const uint8_t *rc_ie,
-						size_t rc_len);
+						size_t rc_len,
+						size_t *rc_len_out);
 	bool (*match_nai_realms)(const struct network_info *info,
 						const char **nai_realms);
 };
@@ -96,9 +98,11 @@ const char *network_info_get_type(const struct network_info *info);
 
 bool network_info_match_hessid(const struct network_info *info,
 				const uint8_t *hessid);
-bool network_info_match_roaming_consortium(const struct network_info *info,
+const uint8_t *network_info_match_roaming_consortium(
+						const struct network_info *info,
 						const uint8_t *rc,
-						size_t rc_len);
+						size_t rc_len,
+						size_t *rc_len_out);
 bool network_info_match_nai_realm(const struct network_info *info,
 						const char **nai_realms);
 

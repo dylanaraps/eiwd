@@ -192,9 +192,11 @@ static bool hotspot_match_hessid(const struct network_info *info,
 	return !memcmp(config->hessid, hessid, 6);
 }
 
-static bool hotspot_match_roaming_consortium(const struct network_info *info,
+static const uint8_t *hotspot_match_roaming_consortium(
+						const struct network_info *info,
 						const uint8_t *rc_ie,
-						size_t rc_len)
+						size_t rc_len,
+						size_t *rc_len_out)
 {
 	const uint8_t *rc1, *rc2, *rc3;
 	size_t rc1_len, rc2_len, rc3_len;
@@ -202,26 +204,35 @@ static bool hotspot_match_roaming_consortium(const struct network_info *info,
 							super);
 
 	if (!config->rc || !rc_ie)
-		return false;
+		return NULL;
 
 	if (ie_parse_roaming_consortium_from_data(rc_ie, rc_ie[1] + 2, NULL,
 						&rc1, &rc1_len, &rc2, &rc2_len,
 						&rc3, &rc3_len) < 0)
-		return false;
+		return NULL;
 
 	/* rc1 is guarenteed to be set if the above returns success */
-	if (rc1_len == config->rc_len && !memcmp(rc1, config->rc, rc1_len))
-		return true;
+	if (rc1_len == config->rc_len && !memcmp(rc1, config->rc, rc1_len)) {
+		if (rc_len_out)
+			*rc_len_out = rc1_len;
+		return rc1;
+	}
 
 	if (rc2 && rc2_len == config->rc_len &&
-				!memcmp(rc2, config->rc, rc2_len))
-		return true;
+				!memcmp(rc2, config->rc, rc2_len)) {
+		if (rc_len_out)
+			*rc_len_out = rc2_len;
+		return rc2;
+	}
 
 	if (rc3 && rc1_len == config->rc_len &&
-				!memcmp(rc3, config->rc, rc3_len))
-		return true;
+				!memcmp(rc3, config->rc, rc3_len)) {
+		if (rc_len_out)
+			*rc_len_out = rc3_len;
+		return rc3;
+	}
 
-	return false;
+	return NULL;
 }
 
 static bool hotspot_match_nai_realms(const struct network_info *info,

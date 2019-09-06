@@ -575,7 +575,8 @@ static bool hotspot_info_matches(struct network *network,
 		return true;
 
 	if (network_info_match_roaming_consortium(info, bss->rc_ie,
-							bss->rc_ie[1] + 2))
+							bss->rc_ie[1] + 2,
+							NULL))
 		return true;
 
 	return false;

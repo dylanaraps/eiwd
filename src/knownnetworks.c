@@ -221,14 +221,17 @@ bool network_info_match_hessid(const struct network_info *info,
 	return info->ops->match_hessid(info, hessid);
 }
 
-bool network_info_match_roaming_consortium(const struct network_info *info,
+const uint8_t *network_info_match_roaming_consortium(
+						const struct network_info *info,
 						const uint8_t *rc,
-						size_t rc_len)
+						size_t rc_len,
+						size_t *rc_len_out)
 {
 	if (!info->ops->match_roaming_consortium)
-		return false;
+		return NULL;
 
-	return info->ops->match_roaming_consortium(info, rc, rc_len);
+	return info->ops->match_roaming_consortium(info, rc, rc_len,
+							rc_len_out);
 }
 
 bool network_info_match_nai_realm(const struct network_info *info,
