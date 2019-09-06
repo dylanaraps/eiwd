@@ -1394,7 +1394,19 @@ int ie_parse_wpa(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 
 	RSNE_ADVANCE(data, len, count * 4);
 
-	return -EBADMSG;
+	if (len < 2)
+		return -EBADMSG;
+
+	out_info->preauthentication = util_is_bit_set(data[0], 0);
+	out_info->no_pairwise = util_is_bit_set(data[0], 1);
+	out_info->ptksa_replay_counter = util_bit_field(data[0], 2, 2);
+	out_info->gtksa_replay_counter = util_bit_field(data[0], 4, 2);
+
+	RSNE_ADVANCE(data, len, 2);
+
+	l_warn("Received WPA element with extra trailing bytes -"
+		" which will be ignored");
+	return 0;
 
 done:
 	/*
