@@ -14,9 +14,10 @@ NoNewPrivileges=true
 PrivateDevices=true
 ProtectHome=yes
 ProtectSystem=strict
-ReadWritePaths=@wired_storagedir@
 ProtectControlGroups=yes
 ProtectKernelModules=yes
+ConfigurationDirectory=ead
+ReadWritePaths=@wired_storagedir@
 
 [Install]
 WantedBy=multi-user.target

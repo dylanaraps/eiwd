@@ -15,9 +15,10 @@ DevicePolicy=closed
 DeviceAllow=/dev/rfkill rw
 ProtectHome=yes
 ProtectSystem=strict
-ReadWritePaths=@daemon_storagedir@
 ProtectControlGroups=yes
 ProtectKernelModules=yes
+ConfigurationDirectory=iwd
+ReadWritePaths=@daemon_storagedir@
 
 [Install]
 WantedBy=multi-user.target
