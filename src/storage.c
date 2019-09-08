@@ -46,7 +46,7 @@
 #define STORAGE_DIR_MODE (S_IRUSR | S_IWUSR | S_IXUSR)
 #define STORAGE_FILE_MODE (S_IRUSR | S_IWUSR)
 
-int create_dirs(const char *filename)
+static int create_dirs(const char *filename)
 {
 	struct stat st;
 	char *dir;
@@ -163,6 +163,21 @@ error_create_dirs:
 	l_free(tmp_path);
 	l_free(path);
 	return r;
+}
+
+bool storage_create_dirs(void)
+{
+	if (create_dirs(DAEMON_STORAGEDIR "/")) {
+		l_error("Failed to create " DAEMON_STORAGEDIR "/");
+		return false;
+	}
+
+	if (create_dirs(DAEMON_STORAGEDIR "/hotspot/")) {
+		l_error("Failed to create " DAEMON_STORAGEDIR "/hotspot/");
+		return false;
+	}
+
+	return true;
 }
 
 char *storage_get_network_file_path(enum security type, const char *ssid)

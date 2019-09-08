@@ -451,15 +451,8 @@ int main(int argc, char *argv[])
 
 	exit_status = EXIT_FAILURE;
 
-	if (create_dirs(DAEMON_STORAGEDIR "/")) {
-		l_error("Failed to create " DAEMON_STORAGEDIR "/");
+	if (!storage_create_dirs())
 		goto fail_dbus;
-	}
-
-	if (create_dirs(DAEMON_STORAGEDIR "/hotspot/")) {
-		l_error("Failed to create " DAEMON_STORAGEDIR "/hotspot/");
-		goto fail_dbus;
-	}
 
 	genl = l_genl_new();
 	if (!genl) {
