@@ -822,6 +822,8 @@ static int known_networks_init(void)
 	DIR *dir;
 	struct dirent *dirent;
 
+	L_AUTO_FREE_VAR(char *, storage_dir) = storage_get_path(NULL);
+
 	if (!l_dbus_register_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE,
 						setup_known_network_interface,
 						NULL, false)) {
@@ -830,10 +832,9 @@ static int known_networks_init(void)
 		return -EPERM;
 	}
 
-	dir = opendir(DAEMON_STORAGEDIR);
+	dir = opendir(storage_dir);
 	if (!dir) {
-		l_info("Unable to open %s: %s", DAEMON_STORAGEDIR,
-							strerror(errno));
+		l_info("Unable to open %s: %s", storage_dir, strerror(errno));
 		l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE);
 		return -ENOENT;
 	}
@@ -873,7 +874,7 @@ static int known_networks_init(void)
 
 	known_network_frequencies_load();
 
-	storage_dir_watch = l_dir_watch_new(DAEMON_STORAGEDIR,
+	storage_dir_watch = l_dir_watch_new(storage_dir,
 						known_networks_watch_cb, NULL,
 						known_networks_watch_destroy);
 	watchlist_init(&known_network_watches, NULL);
