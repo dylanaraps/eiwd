@@ -113,7 +113,6 @@ static void usage(void)
 		"\t-I, --nointerfaces     Interfaces to ignore\n"
 		"\t-p, --phys             Phys to manage\n"
 		"\t-P, --nophys           Phys to ignore\n"
-		"\t-c, --config           Configuration directory to use\n"
 		"\t-l, --plugin           Plugins to include\n"
 		"\t-L, --noplugin         Plugins to exclude\n"
 		"\t-d, --debug            Enable debug output\n"
@@ -128,7 +127,6 @@ static const struct option main_options[] = {
 	{ "nointerfaces", required_argument, NULL, 'I' },
 	{ "phys",         required_argument, NULL, 'p' },
 	{ "nophys",       required_argument, NULL, 'P' },
-	{ "config",       required_argument, NULL, 'c' },
 	{ "plugin",       required_argument, NULL, 'l' },
 	{ "noplugin",     required_argument, NULL, 'L' },
 	{ "debug",        optional_argument, NULL, 'd' },
@@ -347,7 +345,7 @@ int main(int argc, char *argv[])
 	bool enable_dbus_debug = false;
 	int exit_status;
 	struct l_dbus *dbus;
-	const char *config_dir = NULL;
+	const char *config_dir;
 	char **config_dirs;
 	uint32_t eap_mtu;
 	int i;
@@ -355,7 +353,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "Bi:I:p:P:c:d::vh",
+		opt = getopt_long(argc, argv, "Bi:I:p:P:d::vh",
 							main_options, NULL);
 		if (opt < 0)
 			break;
@@ -375,9 +373,6 @@ int main(int argc, char *argv[])
 			break;
 		case 'P':
 			nophys = optarg;
-			break;
-		case 'c':
-			config_dir = optarg;
 			break;
 		case 'l':
 			plugins = optarg;
@@ -426,11 +421,9 @@ int main(int argc, char *argv[])
 
 	l_info("Wireless daemon version %s", VERSION);
 
-	if (!config_dir) {
-		config_dir = getenv("CONFIGURATION_DIRECTORY");
-		if (!config_dir)
-			config_dir = DAEMON_CONFIGDIR;
-	}
+	config_dir = getenv("CONFIGURATION_DIRECTORY");
+	if (!config_dir)
+		config_dir = DAEMON_CONFIGDIR;
 
 	l_debug("Using configuration directory %s", config_dir);
 
