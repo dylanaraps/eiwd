@@ -42,6 +42,7 @@ struct network {
 
 static struct l_queue *network_list;
 static struct l_dir_watch *storage_watch;
+static char *storage_path;
 
 static char *network_name_from_filename(const char *filename)
 {
@@ -125,7 +126,7 @@ struct l_settings *network_lookup_security(const char *network)
 	struct l_settings *conf;
 	char *path;
 
-	path = l_strdup_printf("%s/%s%s", WIRED_STORAGEDIR, network,
+	path = l_strdup_printf("%s/%s%s", storage_path, network,
 							STORAGEFILE_SUFFIX);
 
 	l_debug("Loading %s", path);
@@ -174,11 +175,27 @@ bool network_init(void)
 {
 	DIR *dir;
 	struct dirent *dirent;
+	const char *state_dir;
+	char **state_dirs;
 
-	dir = opendir(WIRED_STORAGEDIR);
+	state_dir = getenv("STATE_DIRECTORY");
+	if (!state_dir)
+		state_dir = WIRED_STORAGEDIR;
+
+	l_debug("Using state directory %s", state_dir);
+
+	state_dirs = l_strsplit(state_dir, ':');
+	if (!state_dirs[0]) {
+		l_strv_free(state_dirs);
+		return false;
+	}
+
+	storage_path = l_strdup(state_dirs[0]);
+	l_strv_free(state_dirs);
+
+	dir = opendir(storage_path);
 	if (!dir) {
-		l_info("Unable to open %s: %s", WIRED_STORAGEDIR,
-							strerror(errno));
+		l_info("Unable to open %s: %s", storage_path, strerror(errno));
 		return false;
 	}
 
@@ -203,7 +220,7 @@ bool network_init(void)
 
 	closedir(dir);
 
-	storage_watch = l_dir_watch_new(WIRED_STORAGEDIR,
+	storage_watch = l_dir_watch_new(storage_path,
 					network_storage_watch_cb, NULL,
 					network_storage_watch_destroy);
 
@@ -216,4 +233,6 @@ void network_exit(void)
 
 	l_queue_destroy(network_list, network_free);
 	network_list = NULL;
+
+	l_free(storage_path);
 }
