@@ -1468,8 +1468,7 @@ static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 
 	l_strv_free(envp);
 
-	if (iwd_phys)
-		l_free(iwd_phys);
+	l_free(iwd_phys);
 
 	return ret;
 }
