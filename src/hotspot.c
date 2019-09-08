@@ -40,7 +40,6 @@
 #include "src/storage.h"
 
 static struct l_dir_watch *hs20_dir_watch;
-static const char *hs20_dir = DAEMON_STORAGEDIR "/hotspot";
 static struct l_queue *hs20_settings;
 
 struct hs20_config {
@@ -354,7 +353,7 @@ static void hs20_dir_watch_cb(const char *filename,
 	if (!filename)
 		return;
 
-	full_path = l_strdup_printf("%s/%s", hs20_dir, filename);
+	full_path = storage_get_hotspot_path("%s", filename);
 
 	switch (event) {
 	case L_DIR_WATCH_EVENT_CREATED:
@@ -437,6 +436,8 @@ static int hotspot_init(void)
 {
 	DIR *dir;
 	struct dirent *dirent;
+
+	L_AUTO_FREE_VAR(char *, hs20_dir) = storage_get_hotspot_path(NULL);
 
 	dir = opendir(hs20_dir);
 	if (!dir)
