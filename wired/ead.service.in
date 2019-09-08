@@ -17,7 +17,7 @@ ProtectSystem=strict
 ProtectControlGroups=yes
 ProtectKernelModules=yes
 ConfigurationDirectory=ead
-ReadWritePaths=@wired_storagedir@
+StateDirectory=ead
 
 [Install]
 WantedBy=multi-user.target

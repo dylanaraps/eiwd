@@ -18,7 +18,7 @@ ProtectSystem=strict
 ProtectControlGroups=yes
 ProtectKernelModules=yes
 ConfigurationDirectory=iwd
-ReadWritePaths=@daemon_storagedir@
+StateDirectory=iwd
 
 [Install]
 WantedBy=multi-user.target
