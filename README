@@ -124,12 +124,8 @@ that can be enabled if the functionality is required:
 		This allows using an externally installed Embedded Linux
 		library instead of using the internal copy of ELL.
 
-		Since the public API of Embedded Linux library  is not yet
+		Since the public API of Embedded Linux library is not yet
 		stable, the usage of the internal ELL copy is preferred.
-
-
-
-
 
 	--enable-wired
 
