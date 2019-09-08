@@ -32,6 +32,9 @@ ssize_t write_file(const void *buffer, size_t len, const char *path_fmt, ...)
 	__attribute__((format(printf, 3, 4)));
 
 bool storage_create_dirs(void);
+void storage_cleanup_dirs(void);
+char *storage_get_path(const char *format, ...);
+char *storage_get_hotspot_path(const char *format, ...);
 
 const char *storage_network_ssid_from_path(const char *path,
 							enum security *type);

@@ -507,6 +507,7 @@ fail_netdev:
 
 	dbus_exit();
 	l_dbus_destroy(dbus);
+	storage_cleanup_dirs();
 fail_dbus:
 	l_genl_unref(genl);
 fail_genl:

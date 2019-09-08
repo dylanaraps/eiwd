@@ -46,6 +46,11 @@
 #define STORAGE_DIR_MODE (S_IRUSR | S_IWUSR | S_IXUSR)
 #define STORAGE_FILE_MODE (S_IRUSR | S_IWUSR)
 
+#define KNOWN_FREQ_FILENAME ".known_network.freq"
+
+static char *storage_path = NULL;
+static char *storage_hotspot_path = NULL;
+
 static int create_dirs(const char *filename)
 {
 	struct stat st;
@@ -167,17 +172,78 @@ error_create_dirs:
 
 bool storage_create_dirs(void)
 {
-	if (create_dirs(DAEMON_STORAGEDIR "/")) {
-		l_error("Failed to create " DAEMON_STORAGEDIR "/");
+	const char *state_dir;
+	char **state_dirs;
+
+	state_dir = getenv("STATE_DIRECTORY");
+	if (!state_dir)
+		state_dir = DAEMON_STORAGEDIR;
+
+	l_debug("Using state directory %s", state_dir);
+
+	state_dirs = l_strsplit(state_dir, ':');
+	if (!state_dirs[0]) {
+		l_strv_free(state_dirs);
 		return false;
 	}
 
-	if (create_dirs(DAEMON_STORAGEDIR "/hotspot/")) {
-		l_error("Failed to create " DAEMON_STORAGEDIR "/hotspot/");
+	storage_path = l_strdup(state_dirs[0]);
+	storage_hotspot_path = l_strdup_printf("%s/hotspot", state_dirs[0]);
+	l_strv_free(state_dirs);
+
+	if (create_dirs(storage_path)) {
+		l_error("Failed to create %s", storage_path);
+		return false;
+	}
+
+	if (create_dirs(storage_hotspot_path)) {
+		l_error("Failed to create %s", storage_hotspot_path);
 		return false;
 	}
 
 	return true;
+}
+
+void storage_cleanup_dirs(void)
+{
+	l_free(storage_path);
+	l_free(storage_hotspot_path);
+}
+
+char *storage_get_path(const char *format, ...)
+{
+	va_list args;
+	char *fmt, *str;
+
+	if (!format)
+		return l_strdup(storage_path);
+
+	fmt = l_strdup_printf("%s/%s", storage_path, format);
+
+	va_start(args, format);
+	str = l_strdup_vprintf(fmt, args);
+	va_end(args);
+
+	l_free(fmt);
+	return str;
+}
+
+char *storage_get_hotspot_path(const char *format, ...)
+{
+	va_list args;
+	char *fmt, *str;
+
+	if (!format)
+		return l_strdup(storage_hotspot_path);
+
+	fmt = l_strdup_printf("%s/%s", storage_hotspot_path, format);
+
+	va_start(args, format);
+	str = l_strdup_vprintf(fmt, args);
+	va_end(args);
+
+	l_free(fmt);
+	return str;
 }
 
 char *storage_get_network_file_path(enum security type, const char *ssid)
@@ -193,14 +259,10 @@ char *storage_get_network_file_path(enum security type, const char *ssid)
 	if (*c) {
 		hex = l_util_hexstring((const unsigned char *) ssid,
 					strlen(ssid));
-
-		path = l_strdup_printf(DAEMON_STORAGEDIR "/=%s.%s", hex,
-					security_to_str(type));
-
+		path = storage_get_path("/=%s.%s", hex, security_to_str(type));
 		l_free(hex);
 	} else
-		path = l_strdup_printf(DAEMON_STORAGEDIR "/%s.%s", ssid,
-					security_to_str(type));
+		path = storage_get_path("/%s.%s", ssid, security_to_str(type));
 
 	return path;
 }
@@ -327,32 +389,39 @@ int storage_network_remove(enum security type, const char *ssid)
 	return ret < 0 ? -errno : 0;
 }
 
-static const char *known_freq_file_path =
-				DAEMON_STORAGEDIR "/.known_network.freq";
-
 struct l_settings *storage_known_frequencies_load(void)
 {
 	struct l_settings *known_freqs;
+	char *known_freq_file_path;
 
 	known_freqs = l_settings_new();
+
+	known_freq_file_path = storage_get_path("/%", KNOWN_FREQ_FILENAME);
 
 	if (!l_settings_load_from_file(known_freqs, known_freq_file_path)) {
 		l_settings_free(known_freqs);
 		known_freqs = NULL;
 	}
 
+	l_free(known_freq_file_path);
+
 	return known_freqs;
 }
 
 void storage_known_frequencies_sync(struct l_settings *known_freqs)
 {
+	char *known_freq_file_path;
 	char *data;
 	size_t len;
 
 	if (!known_freqs)
 		return;
 
+	known_freq_file_path = storage_get_path("/%", KNOWN_FREQ_FILENAME);
+
 	data = l_settings_to_data(known_freqs, &len);
 	write_file(data, len, "%s", known_freq_file_path);
 	l_free(data);
+
+	l_free(known_freq_file_path);
 }
