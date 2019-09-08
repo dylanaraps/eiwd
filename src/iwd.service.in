@@ -7,6 +7,7 @@ Wants=network.target
 Type=dbus
 BusName=net.connman.iwd
 ExecStart=@libexecdir@/iwd
+NotifyAccess=main
 LimitNPROC=1
 Restart=on-failure
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
