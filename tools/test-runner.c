@@ -1398,7 +1398,7 @@ done:
 static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 		const char *ext_options, int num_phys)
 {
-	char *argv[13];
+	char *argv[13], **envp;
 	char *iwd_phys = NULL;
 	pid_t ret;
 	int idx = 0;
@@ -1415,8 +1415,6 @@ static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 	}
 
 	argv[idx++] = BIN_IWD;
-	argv[idx++] = "-c";
-	argv[idx++] = (char *) config_dir;
 
 	if (check_verbosity(BIN_IWD) || shell)
 		argv[idx++] = "-d";
@@ -1459,8 +1457,16 @@ static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 	argv[idx++] = (char *)ext_options;
 	argv[idx] = NULL;
 
-	ret = execute_program(argv, environ, false,
+	envp = l_strv_copy(environ);
+	envp = l_strv_append_printf(envp, "CONFIGURATION_DIRECTORY=%s",
+							config_dir);
+	envp = l_strv_append_printf(envp, "STATE_DIRECTORY=%s",
+							DAEMON_STORAGEDIR);
+
+	ret = execute_program(argv, envp, false,
 					check_verbosity(BIN_IWD), shell);
+
+	l_strv_free(envp);
 
 	if (iwd_phys)
 		l_free(iwd_phys);
