@@ -396,7 +396,7 @@ struct l_settings *storage_known_frequencies_load(void)
 
 	known_freqs = l_settings_new();
 
-	known_freq_file_path = storage_get_path("/%", KNOWN_FREQ_FILENAME);
+	known_freq_file_path = storage_get_path("/%s", KNOWN_FREQ_FILENAME);
 
 	if (!l_settings_load_from_file(known_freqs, known_freq_file_path)) {
 		l_settings_free(known_freqs);
@@ -417,7 +417,7 @@ void storage_known_frequencies_sync(struct l_settings *known_freqs)
 	if (!known_freqs)
 		return;
 
-	known_freq_file_path = storage_get_path("/%", KNOWN_FREQ_FILENAME);
+	known_freq_file_path = storage_get_path("/%s", KNOWN_FREQ_FILENAME);
 
 	data = l_settings_to_data(known_freqs, &len);
 	write_file(data, len, "%s", known_freq_file_path);
