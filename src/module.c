@@ -150,8 +150,10 @@ int iwd_modules_init()
 		desc = modules_sorted[i];
 		r = desc->init();
 
-		if (r < 0)
+		if (r < 0) {
+			l_error("Module %s failed to start: %d", desc->name, r);
 			return r;
+		}
 
 		desc->active = true;
 	}
