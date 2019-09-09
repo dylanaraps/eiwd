@@ -188,7 +188,7 @@ bool storage_create_dirs(void)
 	}
 
 	storage_path = l_strdup(state_dirs[0]);
-	storage_hotspot_path = l_strdup_printf("%s/hotspot", state_dirs[0]);
+	storage_hotspot_path = l_strdup_printf("%s/hotspot/", state_dirs[0]);
 	l_strv_free(state_dirs);
 
 	if (create_dirs(storage_path)) {
