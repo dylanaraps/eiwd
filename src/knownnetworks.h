@@ -38,6 +38,9 @@ struct network_info_ops {
 	const char *(*get_path)(const struct network_info *info);
 	const char *(*get_name)(const struct network_info *info);
 	const char *(*get_type)(const struct network_info *info);
+	const struct iovec *(*get_extra_ies)(const struct network_info *info,
+						struct scan_bss *bss,
+						size_t *num_elems);
 
 	bool (*match_hessid)(const struct network_info *info,
 						const uint8_t *hessid);
@@ -95,6 +98,9 @@ int network_info_touch(struct network_info *info);
 const char *network_info_get_path(const struct network_info *info);
 const char *network_info_get_name(const struct network_info *info);
 const char *network_info_get_type(const struct network_info *info);
+const struct iovec *network_info_get_extra_ies(const struct network_info *info,
+						struct scan_bss *bss,
+						size_t *num_elems);
 
 bool network_info_match_hessid(const struct network_info *info,
 				const uint8_t *hessid);

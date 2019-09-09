@@ -212,6 +212,16 @@ const char *network_info_get_type(const struct network_info *info)
 	return info->ops->get_type(info);
 }
 
+const struct iovec *network_info_get_extra_ies(const struct network_info *info,
+						struct scan_bss *bss,
+						size_t *num_elems)
+{
+	if (!info->ops->get_extra_ies)
+		return NULL;
+
+	return info->ops->get_extra_ies(info, bss, num_elems);
+}
+
 bool network_info_match_hessid(const struct network_info *info,
 				const uint8_t *hessid)
 {
