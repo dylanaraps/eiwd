@@ -216,7 +216,7 @@ const struct iovec *network_info_get_extra_ies(const struct network_info *info,
 						struct scan_bss *bss,
 						size_t *num_elems)
 {
-	if (!info->ops->get_extra_ies)
+	if (!info || !info->ops->get_extra_ies)
 		return NULL;
 
 	return info->ops->get_extra_ies(info, bss, num_elems);
