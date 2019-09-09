@@ -16,6 +16,7 @@ systemd-run \
 	--property=ProtectSystem=strict \
 	--property=ProtectControlGroups=yes \
 	--property=ProtectKernelModules=yes \
-	--property=StateDirectory=iwd \
 	--property=ConfigurationDirectory=iwd \
+	--property=StateDirectory=iwd \
+	--property=StateDirectoryMode=0700 \
 	./src/iwd $*

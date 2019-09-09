@@ -20,6 +20,7 @@ ProtectControlGroups=yes
 ProtectKernelModules=yes
 ConfigurationDirectory=ead
 StateDirectory=ead
+StateDirectoryMode=0700
 
 [Install]
 WantedBy=multi-user.target
