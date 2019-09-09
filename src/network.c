@@ -49,7 +49,6 @@
 #include "src/network.h"
 #include "src/blacklist.h"
 #include "src/util.h"
-#include "src/hotspot.h"
 
 static uint32_t known_networks_watch;
 
