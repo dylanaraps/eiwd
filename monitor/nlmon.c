@@ -3634,6 +3634,26 @@ static void print_mmpdu_header(unsigned int level,
 					MPDU_SEQUENCE_NUMBER(*mmpdu));
 }
 
+static void print_association_mgmt_frame(unsigned int level,
+					const struct mmpdu_header *mmpdu,
+					size_t size)
+{
+	const struct mmpdu_association_response *body;
+
+	body = mmpdu_body(mmpdu);
+
+	print_attr(level, "Association Response:");
+
+	print_mpdu_frame_control(level + 1, &mmpdu->fc);
+	print_mmpdu_header(level + 1, mmpdu);
+
+	print_attr(level + 1, "Status Code: %u", body->status_code);
+	print_attr(level + 1, "AID: %u", body->aid);
+
+	print_management_ies(level, "IEs", body->ies,
+				size - 6 - sizeof(struct mmpdu_header));
+}
+
 static void print_authentication_mgmt_frame(unsigned int level,
 					const struct mmpdu_header *mmpdu,
 					size_t size)
@@ -4068,7 +4088,10 @@ static void print_frame_type(unsigned int level, const char *label,
 		str = "Association request";
 		break;
 	case 0x01:
-		str = "Association response";
+		if (mpdu)
+			print_association_mgmt_frame(level + 1, mpdu, size);
+		else
+			str = "Association response";
 		break;
 	case 0x02:
 		str = "Reassociation request";
