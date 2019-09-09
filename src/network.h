@@ -72,3 +72,6 @@ void network_connect_new_hidden_network(struct network *network,
 						struct l_dbus_message *message);
 
 void network_blacklist_add(struct network *network, struct scan_bss *bss);
+
+const struct iovec *network_get_extra_ies(struct network *network,
+						size_t *num_elems);
