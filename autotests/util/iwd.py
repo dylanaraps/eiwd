@@ -858,9 +858,9 @@ class IWD(AsyncOpAbstract):
                     args.append('--leak-check=full')
                     args.append('--log-file=/tmp/valgrind.log')
 
+            os.environ["CONFIGURATION_DIRECTORY"] = iwd_config_dir;
+
             args.append('iwd')
-            args.append('-c')
-            args.append(iwd_config_dir)
             args.append('-p')
             args.append(whitelist)
             args.append('-d')
@@ -899,6 +899,8 @@ class IWD(AsyncOpAbstract):
         self._iwd_proc.wait()
 
         self._iwd_proc = None
+
+        del os.environ["CONFIGURATION_DIRECTORY"]
 
     @property
     def _object_manager(self):
