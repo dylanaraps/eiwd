@@ -53,7 +53,6 @@
 #include "src/netconfig.h"
 #include "src/anqp.h"
 #include "src/anqputil.h"
-#include "src/hotspot.h"
 
 static struct l_queue *station_list;
 static uint32_t netdev_watch;
@@ -2238,12 +2237,8 @@ static void station_connect_cb(struct netdev *netdev, enum netdev_result result,
 int __station_connect_network(struct station *station, struct network *network,
 				struct scan_bss *bss)
 {
-	const uint8_t *rc = NULL;
-	uint8_t hs20_ie[7];
-	size_t rc_len = 0;
-	uint8_t rc_buf[32];
-	struct iovec iov[2];
-	int iov_elems = 0;
+	const struct iovec *extra_ies;
+	size_t iov_elems = 0;
 	struct handshake_state *hs;
 	int r;
 
@@ -2251,30 +2246,9 @@ int __station_connect_network(struct station *station, struct network *network,
 	if (!hs)
 		return -ENOTSUP;
 
-	if (bss->hs20_capable) {
-		/* Include HS20 Indication with (Re)Association */
-		ie_build_hs20_indication(bss->hs20_version, hs20_ie);
+	extra_ies = network_get_extra_ies(network, &iov_elems);
 
-		iov[iov_elems].iov_base = hs20_ie;
-		iov[iov_elems].iov_len = hs20_ie[1] + 2;
-		iov_elems++;
-
-		/*
-		 * If a matching roaming consortium OI is found for the network
-		 * this single RC value will be set in the handshake and used
-		 * during (Re)Association.
-		 */
-		rc = hs20_get_roaming_consortium(network, &rc_len);
-		if (rc) {
-			ie_build_roaming_consortium(rc, rc_len, rc_buf);
-
-			iov[iov_elems].iov_base = rc_buf;
-			iov[iov_elems].iov_len = rc_buf[1] + 2;
-			iov_elems++;
-		}
-	}
-
-	r = netdev_connect(station->netdev, bss, hs, iov_elems ? iov : NULL,
+	r = netdev_connect(station->netdev, bss, hs, extra_ies,
 				iov_elems, station_netdev_event,
 				station_connect_cb, station);
 	if (r < 0) {
