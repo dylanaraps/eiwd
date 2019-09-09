@@ -34,7 +34,6 @@
 #include "src/common.h"
 #include "src/network.h"
 #include "src/util.h"
-#include "src/hotspot.h"
 #include "src/ie.h"
 #include "src/knownnetworks.h"
 #include "src/storage.h"
@@ -455,27 +454,6 @@ static void hs20_dir_watch_cb(const char *filename,
 static void hs20_dir_watch_destroy(void *user_data)
 {
 	hs20_dir_watch = NULL;
-}
-
-const uint8_t *hs20_get_roaming_consortium(struct network *network,
-						size_t *len)
-{
-	const struct network_info *info = network_get_info(network);
-	struct hs20_config *config;
-
-	if (!info || !info->is_hotspot)
-		return NULL;
-
-	config = l_container_of(info, struct hs20_config, super);
-
-	if (config->rc) {
-		if (len)
-			*len = config->rc_len;
-
-		return config->rc;
-	}
-
-	return NULL;
 }
 
 static int hotspot_init(void)
