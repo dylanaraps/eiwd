@@ -38,6 +38,7 @@
 #include "src/ie.h"
 #include "src/knownnetworks.h"
 #include "src/storage.h"
+#include "src/scan.h"
 
 static struct l_dir_watch *hs20_dir_watch;
 static struct l_queue *hs20_settings;
@@ -255,6 +256,39 @@ static bool hotspot_match_nai_realms(const struct network_info *info,
 	return false;
 }
 
+static const struct iovec *hotspot_network_get_ies(
+						const struct network_info *info,
+						struct scan_bss *bss,
+						size_t *num_elems)
+{
+	static struct iovec iov[2];
+	static uint8_t hs20_ie[7];
+	static uint8_t rc_buf[11];
+	const uint8_t *rc;
+	size_t rc_len;
+	size_t iov_elems = 0;
+
+	ie_build_hs20_indication(bss->hs20_version, hs20_ie);
+
+	iov[iov_elems].iov_base = hs20_ie;
+	iov[iov_elems].iov_len = hs20_ie[1] + 2;
+	iov_elems++;
+
+	rc = hotspot_match_roaming_consortium(info, bss->rc_ie,
+						bss->rc_ie[1] + 2, &rc_len);
+	if (rc) {
+		ie_build_roaming_consortium(rc, rc_len, rc_buf);
+
+		iov[iov_elems].iov_base = rc_buf;
+		iov[iov_elems].iov_len = rc_buf[1] + 2;
+		iov_elems++;
+	}
+
+	*num_elems = iov_elems;
+
+	return iov;
+}
+
 static struct network_info_ops hotspot_ops = {
 	.open = hotspot_network_open,
 	.touch = hotspot_network_touch,
@@ -264,6 +298,7 @@ static struct network_info_ops hotspot_ops = {
 	.get_path = hotspot_network_get_path,
 	.get_name = hotspot_network_get_name,
 	.get_type = hotspot_network_get_type,
+	.get_extra_ies = hotspot_network_get_ies,
 
 	.match_hessid = hotspot_match_hessid,
 	.match_roaming_consortium = hotspot_match_roaming_consortium,
