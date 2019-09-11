@@ -36,10 +36,6 @@ class Test(unittest.TestCase):
 
         device = wd.list_devices(1)[0]
 
-        with self.assertRaises(subprocess.CalledProcessError):
-                subprocess.check_call(['iwctl', 'station', device.name,
-                                                        'connect', ssid])
-
         subprocess.check_call(['iwctl', '-P', 'passphrase',
                                 'station', device.name, 'connect', ssid])
 
