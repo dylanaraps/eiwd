@@ -23,6 +23,7 @@ scripts/config --enable CONFIG_CRYPTO_ECB
 scripts/config --enable CONFIG_CRYPTO_CMAC
 scripts/config --enable CONFIG_CRYPTO_DES
 scripts/config --enable CONFIG_CRYPTO_DES3_EDE_X86_64
+scripts/config --enable CONFIG_CRYPTO_ARC4
 scripts/config --enable CONFIG_KEY_DH_OPERATIONS
 scripts/config --enable CONFIG_ASYMMETRIC_KEY_TYPE
 scripts/config --enable CONFIG_ASYMMETRIC_PUBLIC_KEY_SUBTYPE
