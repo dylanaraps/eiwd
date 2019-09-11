@@ -71,7 +71,15 @@ static void eap_peap_phase2_complete(enum eap_result result, void *user_data)
 	 * The receipt of a EAP-Failure or EAP-Success within the TLS protected
 	 * channel results in a shutdown of the TLS channel by the peer.
 	 */
-	eap_tls_common_tunnel_close(eap);
+	if (result == EAP_RESULT_SUCCESS)
+		/*
+		 * Some of the EAP-PEAP server implementations seem to require a
+		 * cleartext ACK for the tunneled EAP-Success messages instead
+		 * of simply closing the tunnel.
+		 */
+		eap_tls_common_send_empty_response(eap);
+	else
+		eap_tls_common_tunnel_close(eap);
 
 	eap_discard_success_and_failure(eap, false);
 	eap_tls_common_set_completed(eap);
