@@ -63,6 +63,8 @@ static void eap_peap_phase2_complete(enum eap_result result, void *user_data)
 {
 	struct eap_state *eap = user_data;
 
+	l_debug("result: %d", result);
+
 	/*
 	 * PEAPv1: draft-josefsson-pppext-eap-tls-eap-05, Section 2.2
 	 *
@@ -128,6 +130,8 @@ static int eap_extensions_handle_result_avp(struct eap_state *eap,
 	data += 2;
 
 	result = l_get_be16(data);
+
+	l_debug("result: %d", result);
 
 	switch (result) {
 	case EAP_EXTENSIONS_RESULT_SUCCCESS:
