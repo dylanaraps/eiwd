@@ -1078,10 +1078,16 @@ static int build_ciphers_common(const struct ie_rsn_info *info, uint8_t *to,
 	/* Short hand the generated RSNE if possible */
 	if (info->num_pmkids == 0 && !force_group_mgmt_cipher) {
 		/* No Group Management Cipher Suite */
-		if (to[pos - 2] == 0 && to[pos - 1] == 0) {
-			pos -= 2;
+		if (to[pos - 2] == 0 && to[pos - 1] == 0)
+			/*
+			 * The RSN Capabilities bytes are in theory optional,
+			 * but some APs don't seem to like us not including
+			 * them in the RSN element.  Also wireshark has a
+			 * bug and complains of a malformed element if these
+			 * bytes are not included.
+			 */
 			goto done;
-		} else if (!info->mfpc)
+		else if (!info->mfpc)
 			goto done;
 		else if (info->group_management_cipher ==
 				IE_RSN_CIPHER_SUITE_BIP)
