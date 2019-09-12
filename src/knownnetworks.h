@@ -41,6 +41,7 @@ struct network_info_ops {
 	const struct iovec *(*get_extra_ies)(const struct network_info *info,
 						struct scan_bss *bss,
 						size_t *num_elems);
+	char *(*get_file_path)(const struct network_info *info);
 
 	bool (*match_hessid)(const struct network_info *info,
 						const uint8_t *hessid);

@@ -176,6 +176,11 @@ static const char *known_network_get_type(const struct network_info *info)
 	return security_to_str(info->type);
 }
 
+static char *known_network_get_file_path(const struct network_info *info)
+{
+	return storage_get_network_file_path(info->type, info->ssid);
+}
+
 static struct network_info_ops known_network_ops = {
 	.open = known_network_open,
 	.touch = known_network_touch,
@@ -185,6 +190,7 @@ static struct network_info_ops known_network_ops = {
 	.get_path = known_network_get_path,
 	.get_name = known_network_get_name,
 	.get_type = known_network_get_type,
+	.get_file_path = known_network_get_file_path,
 };
 
 struct l_settings *network_info_open_settings(struct network_info *info)
