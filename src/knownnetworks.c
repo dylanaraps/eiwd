@@ -46,6 +46,7 @@ static struct l_queue *known_networks;
 static size_t num_known_hidden_networks;
 static struct l_dir_watch *storage_dir_watch;
 static struct watchlist known_network_watches;
+static struct l_settings *known_freqs;
 
 static void network_info_free(void *data)
 {
@@ -737,7 +738,6 @@ static char *known_frequencies_to_string(struct l_queue *known_frequencies)
 static void known_network_frequencies_load(void)
 {
 	char **network_names;
-	struct l_settings *known_freqs;
 	struct l_queue *known_frequencies;
 	uint32_t i;
 
@@ -782,45 +782,31 @@ next:
 
 done:
 	l_strv_free(network_names);
-	l_settings_free(known_freqs);
 }
 
-static bool known_network_frequencies_to_settings(
-					const struct network_info *network_info,
-					void *user_data)
+/*
+ * Syncs a single network_info frequency to the global frequency file
+ */
+void known_network_frequency_sync(const struct network_info *info)
 {
-	struct l_settings *known_freqs = user_data;
 	char *freq_list_str;
-	char *network_path;
+	char *file_path;
 
-	if (!network_info->known_frequencies)
-		return true;
+	if (!info->known_frequencies)
+		return;
 
-	freq_list_str = known_frequencies_to_string(
-					network_info->known_frequencies);
+	if (!known_freqs)
+		known_freqs = l_settings_new();
 
-	network_path = storage_get_network_file_path(network_info->type,
-							network_info->ssid);
+	freq_list_str = known_frequencies_to_string(info->known_frequencies);
 
-	l_settings_set_value(known_freqs, network_path, "list", freq_list_str);
-	l_free(network_path);
+	file_path = info->ops->get_file_path(info);
+
+	l_settings_set_value(known_freqs, file_path, "list", freq_list_str);
+	l_free(file_path);
 	l_free(freq_list_str);
 
-	return true;
-}
-
-static void known_network_frequencies_sync(void)
-{
-	struct l_settings *known_freqs;
-
-	known_freqs = l_settings_new();
-
-	known_networks_foreach(known_network_frequencies_to_settings,
-								known_freqs);
-
 	storage_known_frequencies_sync(known_freqs);
-
-	l_settings_free(known_freqs);
 }
 
 uint32_t known_networks_watch_add(known_networks_watch_func_t func,
@@ -907,10 +893,10 @@ static void known_networks_exit(void)
 
 	l_dir_watch_destroy(storage_dir_watch);
 
-	known_network_frequencies_sync();
-
 	l_queue_destroy(known_networks, network_info_free);
 	known_networks = NULL;
+
+	l_settings_free(known_freqs);
 
 	l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE);
 
