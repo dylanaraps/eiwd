@@ -781,7 +781,7 @@ static struct network_info *find_network_info_from_path(const char *path)
 	return search.info;
 }
 
-static void known_network_frequencies_load(void)
+static int known_network_frequencies_load(void)
 {
 	char **groups;
 	struct l_queue *known_frequencies;
@@ -790,7 +790,7 @@ static void known_network_frequencies_load(void)
 	known_freqs = storage_known_frequencies_load();
 	if (!known_freqs) {
 		l_debug("No known frequency file found.");
-		return;
+		return 0;
 	}
 
 	groups = l_settings_get_groups(known_freqs);
@@ -822,6 +822,8 @@ next:
 	}
 
 	l_strv_free(groups);
+
+	return 0;
 }
 
 /*
@@ -931,8 +933,6 @@ static int known_networks_init(void)
 
 	closedir(dir);
 
-	known_network_frequencies_load();
-
 	storage_dir_watch = l_dir_watch_new(storage_dir,
 						known_networks_watch_cb, NULL,
 						known_networks_watch_destroy);
@@ -950,11 +950,22 @@ static void known_networks_exit(void)
 	l_queue_destroy(known_networks, network_info_free);
 	known_networks = NULL;
 
-	l_settings_free(known_freqs);
-
 	l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE);
 
 	watchlist_destroy(&known_network_watches);
 }
 
 IWD_MODULE(known_networks, known_networks_init, known_networks_exit)
+
+static void known_frequencies_exit(void)
+{
+	l_settings_free(known_freqs);
+}
+
+/*
+ * Since the known frequency file should only be read in after all known
+ * networks are loaded (including hotspots) we need to create another module
+ * here which depends on hotspot.
+ */
+IWD_MODULE(known_frequencies, known_network_frequencies_load, known_frequencies_exit)
+IWD_MODULE_DEPENDS(known_frequencies, hotspot)
