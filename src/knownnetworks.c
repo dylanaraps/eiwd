@@ -29,6 +29,8 @@
 #include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <limits.h>
+#include <stdlib.h>
 
 #include <ell/ell.h>
 
@@ -735,9 +737,53 @@ static char *known_frequencies_to_string(struct l_queue *known_frequencies)
 	return l_string_unwrap(str);
 }
 
+struct hotspot_search {
+	struct network_info *info;
+	const char *path;
+};
+
+static bool match_hotspot_path(const struct network_info *info, void *user_data)
+{
+	struct hotspot_search *search = user_data;
+	char *path;
+
+	if (!info->is_hotspot)
+		return true;
+
+	path = info->ops->get_file_path(info);
+
+	if (!strcmp(path, search->path)) {
+		l_free(path);
+		search->info = (struct network_info *)info;
+		return false;
+	}
+
+	l_free(path);
+
+	return true;
+}
+
+static struct network_info *find_network_info_from_path(const char *path)
+{
+	enum security security;
+	struct hotspot_search search;
+	const char *ssid = storage_network_ssid_from_path(path, &security);
+
+	if (ssid)
+		return known_networks_find(ssid, security);
+
+	search.info = NULL;
+	search.path = path;
+
+	/* Try hotspot */
+	known_networks_foreach(match_hotspot_path, &search);
+
+	return search.info;
+}
+
 static void known_network_frequencies_load(void)
 {
-	char **network_names;
+	char **groups;
 	struct l_queue *known_frequencies;
 	uint32_t i;
 
@@ -747,41 +793,35 @@ static void known_network_frequencies_load(void)
 		return;
 	}
 
-	network_names = l_settings_get_groups(known_freqs);
-	if (!network_names[0])
-		goto done;
+	groups = l_settings_get_groups(known_freqs);
 
-	for (i = 0; network_names[i]; i++) {
-		struct network_info *network_info;
-		enum security security;
-		const char *ssid;
+	for (i = 0; groups[i]; i++) {
+		struct network_info *info;
 		char *freq_list;
-
-		ssid = storage_network_ssid_from_path(network_names[i],
-								&security);
-		if (!ssid)
+		const char *path = l_settings_get_value(known_freqs, groups[i],
+							"name");
+		if (!path)
 			continue;
 
-		freq_list = l_settings_get_string(known_freqs, network_names[i],
-									"list");
+		info = find_network_info_from_path(path);
+		if (!info)
+			continue;
+
+		freq_list = l_settings_get_string(known_freqs, groups[i],
+							"list");
 		if (!freq_list)
 			continue;
-
-		network_info = known_networks_find(ssid, security);
-		if (!network_info)
-			goto next;
 
 		known_frequencies = known_frequencies_from_string(freq_list);
 		if (!known_frequencies)
 			goto next;
 
-		network_info->known_frequencies = known_frequencies;
+		info->known_frequencies = known_frequencies;
 next:
 		l_free(freq_list);
 	}
 
-done:
-	l_strv_free(network_names);
+	l_strv_free(groups);
 }
 
 /*
@@ -791,6 +831,16 @@ void known_network_frequency_sync(const struct network_info *info)
 {
 	char *freq_list_str;
 	char *file_path;
+	char group[37];
+	uint8_t uuid[16];
+	/*
+	 * 16 bytes of randomness. Since we only care about a unique value there
+	 * is no need to use any special pre-defined namespace.
+	 */
+	static const uint8_t nsid[16] = {
+		0xfd, 0x88, 0x6f, 0x1e, 0xdf, 0x02, 0xd7, 0x8b,
+		0xc4, 0x90, 0x30, 0x59, 0x73, 0x8a, 0x86, 0x0d
+	};
 
 	if (!info->known_frequencies)
 		return;
@@ -802,7 +852,11 @@ void known_network_frequency_sync(const struct network_info *info)
 
 	file_path = info->ops->get_file_path(info);
 
-	l_settings_set_value(known_freqs, file_path, "list", freq_list_str);
+	l_uuid_v5(nsid, file_path, strlen(file_path), uuid);
+	l_uuid_to_string(uuid, group, sizeof(group));
+
+	l_settings_set_value(known_freqs, group, "name", file_path);
+	l_settings_set_value(known_freqs, group, "list", freq_list_str);
 	l_free(file_path);
 	l_free(freq_list_str);
 
