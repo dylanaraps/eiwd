@@ -1,5 +1,7 @@
-[/var/lib/iwd/ssid_open_1.open]
+[c95e8a95-cd8e-5024-acdf-c6e43b85c5df]
+name=/var/lib/iwd/ssid_open_1.open
 list= 5180
 
-[/var/lib/iwd/ssid_open_2.open]
+[d85efe73-700d-5879-9556-94f2920d5e9f]
+name=/var/lib/iwd/ssid_open_2.open
 list= 2412 2437
