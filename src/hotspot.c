@@ -288,6 +288,13 @@ static const struct iovec *hotspot_network_get_ies(
 	return iov;
 }
 
+static char *hotspot_network_get_file_path(const struct network_info *info)
+{
+	struct hs20_config *config = l_container_of(info, struct hs20_config,
+							super);
+	return l_strdup(config->filename);
+}
+
 static struct network_info_ops hotspot_ops = {
 	.open = hotspot_network_open,
 	.touch = hotspot_network_touch,
@@ -298,6 +305,7 @@ static struct network_info_ops hotspot_ops = {
 	.get_name = hotspot_network_get_name,
 	.get_type = hotspot_network_get_type,
 	.get_extra_ies = hotspot_network_get_ies,
+	.get_file_path = hotspot_network_get_file_path,
 
 	.match_hessid = hotspot_match_hessid,
 	.match_roaming_consortium = hotspot_match_roaming_consortium,
