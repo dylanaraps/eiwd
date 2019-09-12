@@ -150,6 +150,9 @@ void network_connected(struct network *network)
 		err = network_info_touch(network->info);
 		if (err < 0)
 			l_error("Error %i touching network config", err);
+
+		/* Syncs frequencies of already known network*/
+		known_network_frequency_sync(network->info);
 	}
 
 	l_queue_foreach_remove(network->secrets,
@@ -435,11 +438,21 @@ const struct network_info *network_get_info(const struct network *network)
 	return network->info;
 }
 
+static void add_known_frequency(void *data, void *user_data)
+{
+	struct scan_bss *bss = data;
+	struct network_info *info = user_data;
+
+	known_network_add_frequency(info, bss->frequency);
+}
+
 void network_set_info(struct network *network, struct network_info *info)
 {
 	if (info) {
 		network->info = info;
 		network->info->seen_count++;
+
+		l_queue_foreach(network->bss_list, add_known_frequency, info);
 	} else {
 		network->info->seen_count--;
 		network->info = NULL;
@@ -1412,6 +1425,9 @@ static void known_networks_changed(enum known_networks_event event,
 	switch (event) {
 	case KNOWN_NETWORKS_EVENT_ADDED:
 		station_foreach(match_known_network, (void *) info);
+
+		/* Syncs frequencies of newly known network */
+		known_network_frequency_sync(info);
 		break;
 	case KNOWN_NETWORKS_EVENT_REMOVED:
 		station_foreach(disconnect_no_longer_known, (void *) info);
