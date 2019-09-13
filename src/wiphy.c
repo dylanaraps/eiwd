@@ -79,6 +79,7 @@ struct wiphy {
 	bool support_scheduled_scan:1;
 	bool support_rekey_offload:1;
 	bool support_adhoc_rsn:1;
+	bool support_qos_set_map:1;
 	bool soft_rfkill : 1;
 	bool hard_rfkill : 1;
 	bool offchannel_tx_ok : 1;
@@ -363,6 +364,11 @@ bool wiphy_can_offchannel_tx(struct wiphy *wiphy)
 	return wiphy->offchannel_tx_ok;
 }
 
+bool wiphy_supports_qos_set_map(struct wiphy *wiphy)
+{
+	return wiphy->support_qos_set_map;
+}
+
 const char *wiphy_get_driver(struct wiphy *wiphy)
 {
 	return wiphy->driver_str;
@@ -544,6 +550,10 @@ static void parse_supported_commands(struct wiphy *wiphy,
 			break;
 		case NL80211_CMD_SET_REKEY_OFFLOAD:
 			wiphy->support_rekey_offload = true;
+			break;
+		case NL80211_CMD_SET_QOS_MAP:
+			wiphy->support_qos_set_map = true;
+			break;
 		}
 	}
 }
@@ -988,6 +998,10 @@ static void wiphy_set_station_capability_bits(struct wiphy *wiphy)
 	/* Set Interworking */
 	if (!anqp_disabled)
 		util_set_bit(ext_capa + 2, 31);
+
+	/* Set QoS Map */
+	if (wiphy->support_qos_set_map)
+		util_set_bit(ext_capa + 2, 32);
 
 	/* Set FILS */
 	util_set_bit(ext_capa + 2, 72);
