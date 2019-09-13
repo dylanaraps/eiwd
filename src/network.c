@@ -1427,7 +1427,7 @@ static void known_networks_changed(enum known_networks_event event,
 		station_foreach(match_known_network, (void *) info);
 
 		/* Syncs frequencies of newly known network */
-		known_network_frequency_sync(info);
+		known_network_frequency_sync((struct network_info *)info);
 		break;
 	case KNOWN_NETWORKS_EVENT_REMOVED:
 		station_foreach(disconnect_no_longer_known, (void *) info);

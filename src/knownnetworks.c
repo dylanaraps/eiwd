@@ -231,6 +231,36 @@ const struct iovec *network_info_get_extra_ies(const struct network_info *info,
 	return info->ops->get_extra_ies(info, bss, num_elems);
 }
 
+const uint8_t *network_info_get_uuid(struct network_info *info)
+{
+	char *file_path;
+	/*
+	 * 16 bytes of randomness. Since we only care about a unique value there
+	 * is no need to use any special pre-defined namespace.
+	 */
+	static const uint8_t nsid[16] = {
+		0xfd, 0x88, 0x6f, 0x1e, 0xdf, 0x02, 0xd7, 0x8b,
+		0xc4, 0x90, 0x30, 0x59, 0x73, 0x8a, 0x86, 0x0d
+	};
+
+	if (info->has_uuid)
+		return info->uuid;
+
+	file_path = info->ops->get_file_path(info);
+
+	l_uuid_v5(nsid, file_path, strlen(file_path), info->uuid);
+
+	info->has_uuid = true;
+
+	return info->uuid;
+}
+
+void network_info_set_uuid(struct network_info *info, const uint8_t *uuid)
+{
+	memcpy(info->uuid, uuid, 16);
+	info->has_uuid = true;
+}
+
 bool network_info_match_hessid(const struct network_info *info,
 				const uint8_t *hessid)
 {
@@ -786,6 +816,7 @@ static int known_network_frequencies_load(void)
 	char **groups;
 	struct l_queue *known_frequencies;
 	uint32_t i;
+	uint8_t uuid[16];
 
 	known_freqs = storage_known_frequencies_load();
 	if (!known_freqs) {
@@ -816,7 +847,12 @@ static int known_network_frequencies_load(void)
 		if (!known_frequencies)
 			goto next;
 
+		if (!l_uuid_from_string(groups[i], uuid))
+			goto next;
+
+		network_info_set_uuid(info, uuid);
 		info->known_frequencies = known_frequencies;
+
 next:
 		l_free(freq_list);
 	}
@@ -829,20 +865,11 @@ next:
 /*
  * Syncs a single network_info frequency to the global frequency file
  */
-void known_network_frequency_sync(const struct network_info *info)
+void known_network_frequency_sync(struct network_info *info)
 {
 	char *freq_list_str;
 	char *file_path;
 	char group[37];
-	uint8_t uuid[16];
-	/*
-	 * 16 bytes of randomness. Since we only care about a unique value there
-	 * is no need to use any special pre-defined namespace.
-	 */
-	static const uint8_t nsid[16] = {
-		0xfd, 0x88, 0x6f, 0x1e, 0xdf, 0x02, 0xd7, 0x8b,
-		0xc4, 0x90, 0x30, 0x59, 0x73, 0x8a, 0x86, 0x0d
-	};
 
 	if (!info->known_frequencies)
 		return;
@@ -854,8 +881,7 @@ void known_network_frequency_sync(const struct network_info *info)
 
 	file_path = info->ops->get_file_path(info);
 
-	l_uuid_v5(nsid, file_path, strlen(file_path), uuid);
-	l_uuid_to_string(uuid, group, sizeof(group));
+	l_uuid_to_string(network_info_get_uuid(info), group, sizeof(group));
 
 	l_settings_set_value(known_freqs, group, "name", file_path);
 	l_settings_set_value(known_freqs, group, "list", freq_list_str);

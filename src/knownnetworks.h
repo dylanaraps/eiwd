@@ -61,9 +61,11 @@ struct network_info {
 	struct l_queue *known_frequencies;
 	uint64_t connected_time;	/* Time last connected */
 	int seen_count;			/* Ref count for network.info */
+	uint8_t uuid[16];
 	bool is_hidden:1;
 	bool is_autoconnectable:1;
 	bool is_hotspot:1;
+	bool has_uuid:1;
 };
 
 typedef bool (*known_networks_foreach_func_t)(const struct network_info *info,
@@ -88,7 +90,7 @@ struct network_info *known_networks_find(const char *ssid,
 struct scan_freq_set *known_networks_get_recent_frequencies(
 						uint8_t num_networks_tosearch);
 int known_network_add_frequency(struct network_info *info, uint32_t frequency);
-void known_network_frequency_sync(const struct network_info *info);
+void known_network_frequency_sync(struct network_info *info);
 
 uint32_t known_networks_watch_add(known_networks_watch_func_t func,
 					void *user_data,
@@ -103,6 +105,9 @@ const char *network_info_get_type(const struct network_info *info);
 const struct iovec *network_info_get_extra_ies(const struct network_info *info,
 						struct scan_bss *bss,
 						size_t *num_elems);
+/* Gets the UUID, or generates one if not yet created */
+const uint8_t *network_info_get_uuid(struct network_info *info);
+void network_info_set_uuid(struct network_info *info, const uint8_t *uuid);
 
 bool network_info_match_hessid(const struct network_info *info,
 				const uint8_t *hessid);
