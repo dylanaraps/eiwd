@@ -110,6 +110,7 @@ struct netdev {
 	uint32_t leave_adhoc_cmd_id;
 	uint32_t set_interface_cmd_id;
 	uint32_t rekey_offload_cmd_id;
+	uint32_t qos_map_cmd_id;
 	enum netdev_result result;
 	uint16_t last_code; /* reason or status, depending on result */
 	struct l_timeout *neighbor_report_timeout;
@@ -641,6 +642,11 @@ static void netdev_free(void *data)
 	if (netdev->rekey_offload_cmd_id) {
 		l_genl_family_cancel(nl80211, netdev->rekey_offload_cmd_id);
 		netdev->rekey_offload_cmd_id = 0;
+	}
+
+	if (netdev->qos_map_cmd_id) {
+		l_genl_family_cancel(nl80211, netdev->qos_map_cmd_id);
+		netdev->qos_map_cmd_id = 0;
 	}
 
 	if (netdev->device) {
@@ -1545,6 +1551,55 @@ static void netdev_set_rekey_offload(uint32_t ifindex,
 							netdev, NULL);
 }
 
+static void netdev_qos_map_cb(struct l_genl_msg *msg, void *user_data)
+{
+	struct netdev *netdev = user_data;
+	int err = l_genl_msg_get_error(msg);
+
+	if (err < 0)
+		l_error("Could not set QoS Map in kernel: %d", err);
+
+	netdev->qos_map_cmd_id = 0;
+}
+
+/*
+ * TODO: Fix this in the kernel:
+ *
+ * The QoS Map is really of no use to IWD. The kernel requires it to map QoS
+ * network values properly to what it puts into the IP header. The way we have
+ * to let the kernel know is to receive the IE, then give it right back...
+ *
+ * The kernel/driver/firmware *could* simply obtain this information as the
+ * frame comes in and not require userspace to forward it back... but thats a
+ * battle for another day.
+ */
+static void netdev_send_qos_map_set(struct netdev *netdev,
+					const uint8_t *qos_set, size_t qos_len)
+{
+	struct l_genl_msg *msg;
+
+	if (!wiphy_supports_qos_set_map(netdev->wiphy)) {
+		l_warn("AP sent QoS Map, but capability was not advertised!");
+		return;
+	}
+
+	/*
+	 * Since this IE comes in on either a management frame or during
+	 * Association response we could have potentially already set this.
+	 */
+	if (netdev->qos_map_cmd_id)
+		return;
+
+	msg = l_genl_msg_new_sized(NL80211_CMD_SET_QOS_MAP, 128 + qos_len);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_IFINDEX, 4, &netdev->index);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_QOS_MAP, qos_len, qos_set);
+
+	netdev->qos_map_cmd_id = l_genl_family_send(nl80211, msg,
+						netdev_qos_map_cb,
+						netdev, NULL);
+}
+
 static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 {
 	struct l_genl_attr attr;
@@ -1641,11 +1696,10 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 		}
 	}
 
-	/* FILS handles its own FT key derivation */
-	if (resp_ies && !(netdev->handshake->akm_suite &
-			(IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256 |
-			IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384))) {
+	if (resp_ies) {
 		const uint8_t *fte = NULL;
+		const uint8_t *qos_set = NULL;
+		size_t qos_len = 0;
 		struct ie_ft_info ft_info;
 
 		ie_tlv_iter_init(&iter, resp_ies, resp_ies_len);
@@ -1657,10 +1711,17 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 			case IE_TYPE_FAST_BSS_TRANSITION:
 				fte = data - 2;
 				break;
+			case IE_TYPE_QOS_MAP_SET:
+				qos_set = data;
+				qos_len = ie_tlv_iter_get_length(&iter);
+				break;
 			}
 		}
 
-		if (fte) {
+		/* FILS handles its own FT key derivation */
+		if (fte && !(netdev->handshake->akm_suite &
+				(IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA256 |
+				IE_RSN_AKM_SUITE_FT_OVER_FILS_SHA384))) {
 			uint32_t kck_len =
 				handshake_state_get_kck_len(netdev->handshake);
 			/*
@@ -1682,6 +1743,9 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 					" failed.  Expect handshake failure");
 			}
 		}
+
+		if (qos_set)
+			netdev_send_qos_map_set(netdev, qos_set, qos_len);
 	}
 
 	if (netdev->sm) {
@@ -2848,6 +2912,27 @@ ft_error:
 	netdev_connect_failed(netdev, NETDEV_RESULT_AUTHENTICATION_FAILED,
 				status_code);
 	return;
+}
+
+static void netdev_qos_map_frame_event(struct netdev *netdev,
+					const struct mmpdu_header *hdr,
+					const void *body, size_t body_len,
+					void *user_data)
+{
+	/* No point telling the kernel */
+	if (!netdev->connected)
+		return;
+
+	if (memcmp(netdev->handshake->aa, hdr->address_2, ETH_ALEN))
+		return;
+
+	if (body_len < 5)
+		return;
+
+	if (l_get_u8(body + 2) != IE_TYPE_QOS_MAP_SET)
+		return;
+
+	netdev_send_qos_map_set(netdev, body + 4, body_len - 4);
 }
 
 static void netdev_ft_over_ds_tx_authenticate(struct iovec *iov,
@@ -4440,6 +4525,7 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg, bool random_mac)
 	const uint8_t action_sa_query_resp_prefix[2] = { 0x08, 0x01 };
 	const uint8_t action_sa_query_req_prefix[2] = { 0x08, 0x00 };
 	const uint8_t action_ft_response_prefix[] =  { 0x06, 0x02 };
+	const uint8_t action_qos_map_prefix[] = { 0x01, 0x04 };
 	struct l_io *pae_io = NULL;
 	const struct l_settings *settings = iwd_get_config();
 	bool pae_over_nl80211;
@@ -4604,6 +4690,11 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg, bool random_mac)
 	netdev_frame_watch_add(netdev, 0x00d0, action_ft_response_prefix,
 				sizeof(action_ft_response_prefix),
 				netdev_ft_response_frame_event, NULL);
+
+	if (wiphy_supports_qos_set_map(netdev->wiphy))
+		netdev_frame_watch_add(netdev, 0x00d0, action_qos_map_prefix,
+					sizeof(action_qos_map_prefix),
+					netdev_qos_map_frame_event, NULL);
 
 	/* Set RSSI threshold for CQM notifications */
 	if (netdev->type == NL80211_IFTYPE_STATION)
