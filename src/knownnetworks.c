@@ -234,6 +234,7 @@ const struct iovec *network_info_get_extra_ies(const struct network_info *info,
 const uint8_t *network_info_get_uuid(struct network_info *info)
 {
 	char *file_path;
+	char *to_hash;
 	/*
 	 * 16 bytes of randomness. Since we only care about a unique value there
 	 * is no need to use any special pre-defined namespace.
@@ -248,7 +249,15 @@ const uint8_t *network_info_get_uuid(struct network_info *info)
 
 	file_path = info->ops->get_file_path(info);
 
-	l_uuid_v5(nsid, file_path, strlen(file_path), info->uuid);
+	/*
+	 * This will generate a UUID based on file path and mtime. This
+	 * is done so we can get a different UUID if the network has
+	 * been forgotten.
+	 */
+	to_hash = l_strdup_printf("%s_%" PRIu64, file_path,
+					info->connected_time);
+	l_uuid_v5(nsid, to_hash, strlen(to_hash), info->uuid);
+	l_free(to_hash);
 
 	info->has_uuid = true;
 
@@ -599,6 +608,14 @@ void known_networks_remove(struct network_info *network)
 	WATCHLIST_NOTIFY(&known_network_watches,
 				known_networks_watch_func_t,
 				KNOWN_NETWORKS_EVENT_REMOVED, network);
+
+	if (known_freqs && network->has_uuid) {
+		char uuid[37];
+
+		l_uuid_to_string(network->uuid, uuid, sizeof(uuid));
+		l_settings_remove_group(known_freqs, uuid);
+		storage_known_frequencies_sync(known_freqs);
+	}
 
 	network_info_free(network);
 }
