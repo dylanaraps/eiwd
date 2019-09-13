@@ -1854,6 +1854,13 @@ static void print_ie_supported_operating_classes(unsigned int level,
 		print_ie_error(level, label, size, -EINVAL);
 }
 
+static void print_qos_map(unsigned int level, const char *label,
+							const void *data,
+							uint16_t size)
+{
+	print_attr(level, "QoS Map");
+}
+
 static struct attr_entry ie_entry[] = {
 	{ IE_TYPE_SSID,				"SSID",
 		ATTR_CUSTOM,	{ .function = print_ie_ssid } },
@@ -1902,6 +1909,8 @@ static struct attr_entry ie_entry[] = {
 	{ IE_TYPE_SUPPORTED_OPERATING_CLASSES,	"Supported Operating Classes",
 		ATTR_CUSTOM,
 		{ .function = print_ie_supported_operating_classes } },
+	{ IE_TYPE_QOS_MAP_SET,			"QoS Map",
+		ATTR_CUSTOM,	{ .function = print_qos_map } },
 	{ },
 };
 
