@@ -983,14 +983,14 @@ static void wiphy_set_station_capability_bits(struct wiphy *wiphy)
 		anqp_disabled = true;
 
 	/* Set BSS Transition Management */
-	util_set_bit(ext_capa, 19);
+	util_set_bit(ext_capa + 2, 19);
 
 	/* Set Interworking */
 	if (!anqp_disabled)
-		util_set_bit(ext_capa, 31);
+		util_set_bit(ext_capa + 2, 31);
 
 	/* Set FILS */
-	util_set_bit(ext_capa, 72);
+	util_set_bit(ext_capa + 2, 72);
 }
 
 static void wiphy_setup_rm_enabled_capabilities(struct wiphy *wiphy)
