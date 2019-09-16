@@ -268,62 +268,15 @@ follows:
 
 	$ cd hostap/hostapd
 
-	$ cp defconfig .config
-
-	$ vi .config
-
-	Find the following lines:
-
-		#CONFIG_DRIVER_NL80211=y
-		#CONFIG_LIBNL32=y
-
-	and uncomment it by removing the '#' sign.
-
-	For WPS tests uncomment the following:
-
-		#CONFIG_WPS=y
-
-	For 802.11r (fast roaming) tests uncomment the following:
-
-		#CONFIG_IEEE80211R=y
-		#CONFIG_WNM_AP=y
-		#CONFIG_WNM=y
-
-	For EAP-SIM/AKA tests uncomment the following:
-
-		#CONFIG_EAP_SIM=y
-		#CONDIG_EAP_AKA=y
-		#CONFIG_EAP_AKA_PRIME=y
-
-	For EAP-PWD tests uncomment the following:
-
-		#CONFIG_EAP_PWD=y
-
-	For SAE tests add the following lines:
-
-		CONFIG_SAE=y
-		CONFIG_OWE=y
-		CONFIG_DPP=y
-
-	For pre-authentication tests add the following:
-
-		CONFIG_RADIUS_SERVER=y
-
-	For High Throughput tests add the following:
-
-		CONFIG_IEEE80211N=y
-		CONFIG_IEEE80211AC=y
-
-	For FILS tests add the following:
-
-		CONFIG_FILS=y
-		CONFIG_FILS_SK_PFS=y
-		CONFIG_OCV=y
+	$ cp <iwd>/doc/hostapd.config .config
 
 	Note: You may need to pre-install: 'gnutls-devel' and 'libgcrypt-devel'
 	libraries.
 
 	$ make install
+
+Note: All hostapd build options (CONFIG_*) are stored in doc/hostapd.config.
+Any new options which are required for a test should be added there.
 
 Note: If 'make install' fails with the netlink warnings you may need to
 install libnl-1.0pre8 (or later).
