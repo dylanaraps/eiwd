@@ -108,6 +108,10 @@ const struct iovec *network_info_get_extra_ies(const struct network_info *info,
 /* Gets the UUID, or generates one if not yet created */
 const uint8_t *network_info_get_uuid(struct network_info *info);
 void network_info_set_uuid(struct network_info *info, const uint8_t *uuid);
+struct scan_freq_set *network_info_get_roam_frequencies(
+					const struct network_info *info,
+					uint32_t current_freq,
+					uint8_t max);
 
 bool network_info_match_hessid(const struct network_info *info,
 				const uint8_t *hessid);

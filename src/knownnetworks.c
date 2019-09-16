@@ -271,6 +271,36 @@ void network_info_set_uuid(struct network_info *info, const uint8_t *uuid)
 	info->has_uuid = true;
 }
 
+struct scan_freq_set *network_info_get_roam_frequencies(
+					const struct network_info *info,
+					uint32_t current_freq,
+					uint8_t max)
+{
+	struct scan_freq_set *freqs;
+	const struct l_queue_entry *entry;
+
+	freqs = scan_freq_set_new();
+
+	for (entry = l_queue_get_entries(info->known_frequencies); entry && max;
+			entry = entry->next) {
+		struct known_frequency *kn = entry->data;
+
+		if (kn->frequency == current_freq)
+			continue;
+
+		scan_freq_set_add(freqs, kn->frequency);
+
+		max--;
+	}
+
+	if (scan_freq_set_isempty(freqs)) {
+		scan_freq_set_free(freqs);
+		return NULL;
+	}
+
+	return freqs;
+}
+
 bool network_info_match_hessid(const struct network_info *info,
 				const uint8_t *hessid)
 {
