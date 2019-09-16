@@ -258,6 +258,7 @@ const uint8_t *network_info_get_uuid(struct network_info *info)
 					info->connected_time);
 	l_uuid_v5(nsid, to_hash, strlen(to_hash), info->uuid);
 	l_free(to_hash);
+	l_free(file_path);
 
 	info->has_uuid = true;
 
