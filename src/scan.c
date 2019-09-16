@@ -1809,6 +1809,14 @@ void scan_freq_set_merge(struct scan_freq_set *to,
 							to->channels_5ghz);
 }
 
+bool scan_freq_set_isempty(const struct scan_freq_set *set)
+{
+	if (set->channels_2ghz == 0 && l_uintset_isempty(set->channels_5ghz))
+		return true;
+
+	return false;
+}
+
 struct channels_5ghz_foreach_data {
 	scan_freq_set_func_t func;
 	void *user_data;

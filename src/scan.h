@@ -137,6 +137,7 @@ void scan_freq_set_merge(struct scan_freq_set *to,
 					const struct scan_freq_set *from);
 void scan_freq_set_constrain(struct scan_freq_set *set,
 					const struct scan_freq_set *constraint);
+bool scan_freq_set_isempty(const struct scan_freq_set *set);
 
 bool scan_wdev_add(uint64_t wdev_id);
 bool scan_wdev_remove(uint64_t wdev_id);
