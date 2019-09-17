@@ -1696,6 +1696,25 @@ static void station_roam_scan(struct station *station,
 		station_roam_failed(station);
 }
 
+static bool station_roam_scan_known_freqs(struct station *station)
+{
+	const struct network_info *info = network_get_info(
+						station->connected_network);
+	struct scan_freq_set *freqs = network_info_get_roam_frequencies(info,
+					station->connected_bss->frequency, 5);
+
+	if (!freqs) {
+		l_debug("no known frequencies to scan");
+		return false;
+	}
+
+	station_roam_scan(station, freqs);
+
+	scan_freq_set_free(freqs);
+
+	return true;
+}
+
 static uint32_t station_freq_from_neighbor_report(const uint8_t *country,
 		struct ie_neighbor_report_info *info, enum scan_band *out_band)
 {
@@ -1765,8 +1784,10 @@ static void station_neighbor_report_cb(struct netdev *netdev, int err,
 		return;
 
 	if (!reports || err) {
-		/* Have to do a full scan */
-		station_roam_scan(station, NULL);
+		if (!station_roam_scan_known_freqs(station)) {
+			l_debug("no neighbor report results or known freqs");
+			station_roam_failed(station);
+		}
 
 		return;
 	}
@@ -1895,8 +1916,11 @@ static void station_roam_trigger_cb(struct l_timeout *timeout, void *user_data)
 						station_neighbor_report_cb))
 			return;
 
-	/* Otherwise do a full scan for target BSS candidates */
-	station_roam_scan(station, NULL);
+	if (!station_roam_scan_known_freqs(station)) {
+		l_debug("No neighbor report or known frequencies, roam failed");
+		station_roam_failed(station);
+		return;
+	}
 }
 
 static void station_roam_timeout_rearm(struct station *station, int seconds)
