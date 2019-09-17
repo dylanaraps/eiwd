@@ -295,20 +295,6 @@ Wireless daemon
   Priority: Low
   Complexity: C8
 
-- Implement EAP Authenticator certificate element matching
-
-  With TLS based EAP methods it is possible for certain Man-In-The-Middle
-  attacks to be performed by having a trusted CA issue a certificate for an
-  unrelated domain and then have an adversary utilize that certificate to spoof
-  trusted Access Points for a certain SSID.  To prevent this it is possible
-  for clients to further limit what certificates they accept by utilizing
-  dNSName sub-element of SubjectAltName in the X.509 certificate (or
-  alternatively the SubjectName CN) of the Authenticator.  This matching can
-  be done by suffix, an exact match, or perhaps even glob matching.
-
-  Priority: Medium
-  Complexity: C8
-
 - Support receiving OCE FILS Discovery Frames
 
   When operating in station mode, we should support receiving of FILS
