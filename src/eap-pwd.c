@@ -726,7 +726,6 @@ static int eap_pwd_check_settings(struct l_settings *settings,
 	const struct eap_secret_info *secret;
 	char identity_key[72];
 	char password_key[72];
-	char password_key_old[72];
 
 	L_AUTO_FREE_VAR(char *, identity);
 	L_AUTO_FREE_VAR(char *, password) = NULL;
@@ -752,17 +751,6 @@ static int eap_pwd_check_settings(struct l_settings *settings,
 	password = l_settings_get_string(settings, "Security", password_key);
 
 	if (!password) {
-		snprintf(password_key_old, sizeof(password_key_old),
-						"%sPWD-Password", prefix);
-		password = l_settings_get_string(settings, "Security",
-							password_key_old);
-		if (password) {
-			explicit_bzero(password, strlen(password));
-			l_warn("Setting '%s' is deprecated, use '%s' instead",
-					password_key_old, password_key);
-			return 0;
-		}
-
 		secret = l_queue_find(secrets, eap_secret_info_match,
 								password_key);
 		if (secret)
@@ -802,17 +790,10 @@ static bool eap_pwd_load_settings(struct eap_state *eap,
 								setting_key);
 
 	if (!pwd->password) {
-		snprintf(setting_key, sizeof(setting_key), "%sPWD-Password",
-									prefix);
-		pwd->password = l_settings_get_string(settings, "Security",
-								setting_key);
-
-		if (!pwd->password) {
-			snprintf(setting_key, sizeof(setting_key), "%sPassword",
-									prefix);
-			l_error("'%s' setting is missing", setting_key);
-			goto error;
-		}
+		snprintf(setting_key, sizeof(setting_key), "%sPassword",
+								prefix);
+		l_error("'%s' setting is missing", setting_key);
+		goto error;
 	}
 
 	eap_set_data(eap, pwd);
