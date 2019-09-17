@@ -46,20 +46,18 @@ static void signal_handler(uint32_t signo, void *user_data)
 int main(int argc, char *argv[])
 {
 	int exit_status;
-	bool interactive;
+	bool all_done;
 
 	if (!l_main_init())
 		return EXIT_FAILURE;
 
 	l_log_set_stderr();
 
-	interactive = command_init(argv, argc);
-
-	exit_status = command_get_exit_status();
-	if (exit_status)
+	all_done = command_init(argv, argc);
+	if (all_done)
 		goto done;
 
-	if (interactive)
+	if (command_is_interactive_mode())
 		display_init();
 
 	dbus_proxy_init();
@@ -68,11 +66,12 @@ int main(int argc, char *argv[])
 
 	dbus_proxy_exit();
 
-	if (interactive)
+	if (command_is_interactive_mode())
 		display_exit();
 
-	exit_status = command_get_exit_status();
 done:
+	exit_status = command_get_exit_status();
+
 	command_exit();
 
 	l_main_exit();

@@ -677,7 +677,7 @@ bool command_init(char **argv, int argc)
 		case '?':
 			exit_status = EXIT_FAILURE;
 
-			return false;
+			return true;
 		}
 	}
 
@@ -687,7 +687,7 @@ options_parsed:
 
 	if (argc < 2) {
 		interactive_mode = true;
-		return true;
+		return false;
 	}
 
 	command_noninteractive.argv = argv;
