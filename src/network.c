@@ -250,12 +250,38 @@ enum security network_get_security(const struct network *network)
 
 const uint8_t *network_get_psk(struct network *network)
 {
+	if (network->psk)
+		return network->psk;
+
+	if (!network->passphrase)
+		return NULL;
+
+	network->psk = l_malloc(32);
+
+	crypto_psk_from_passphrase(network->passphrase,
+					(unsigned char *)network->ssid,
+					strlen(network->ssid), network->psk);
+
 	return network->psk;
 }
 
 const char *network_get_passphrase(const struct network *network)
 {
 	return network->passphrase;
+}
+
+bool network_set_passphrase(struct network *network, const char *passphrase)
+{
+	if (network_get_security(network) != SECURITY_PSK)
+		return false;
+
+	if (!network_settings_load(network))
+		network->settings = l_settings_new();
+
+	network_reset_passphrase(network);
+	network->passphrase = l_strdup(passphrase);
+
+	return true;
 }
 
 struct l_queue *network_get_secrets(const struct network *network)
