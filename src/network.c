@@ -275,6 +275,9 @@ bool network_set_passphrase(struct network *network, const char *passphrase)
 	if (network_get_security(network) != SECURITY_PSK)
 		return false;
 
+	if (!crypto_passphrase_is_valid(passphrase))
+		return false;
+
 	if (!network_settings_load(network))
 		network->settings = l_settings_new();
 
