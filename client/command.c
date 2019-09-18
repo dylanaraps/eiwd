@@ -624,6 +624,7 @@ static const struct option command_opts[] = {
 	{ COMMAND_OPTION_USERNAME,	required_argument, NULL, 'u' },
 	{ COMMAND_OPTION_PASSWORD,	required_argument, NULL, 'p' },
 	{ COMMAND_OPTION_PASSPHRASE,	required_argument, NULL, 'P' },
+	{ COMMAND_OPTION_DONTASK,	no_argument,	   NULL, 'd' },
 	{ }
 };
 
@@ -648,7 +649,7 @@ bool command_init(char **argv, int argc)
 	for (;;) {
 		struct command_option *option;
 
-		opt = getopt_long(argc, argv, "u:p:P:", command_opts, NULL);
+		opt = getopt_long(argc, argv, "u:p:P:d", command_opts, NULL);
 
 		switch (opt) {
 		case 'u':
@@ -671,6 +672,13 @@ bool command_init(char **argv, int argc)
 			option = l_new(struct command_option, 1);
 			option->name = COMMAND_OPTION_PASSPHRASE;
 			option->value = l_strdup(optarg);
+
+			l_queue_push_tail(command_options, option);
+
+			break;
+		case 'd':
+			option = l_new(struct command_option, 1);
+			option->name = COMMAND_OPTION_DONTASK;
 
 			l_queue_push_tail(command_options, option);
 
