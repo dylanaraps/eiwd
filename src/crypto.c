@@ -479,20 +479,10 @@ int crypto_cipher_tk_bits(enum crypto_cipher cipher)
 	return crypto_cipher_key_len(cipher) * 8;
 }
 
-int crypto_psk_from_passphrase(const char *passphrase,
-				const unsigned char *ssid, size_t ssid_len,
-				unsigned char *out_psk)
+bool crypto_passphrase_is_valid(const char *passphrase)
 {
 	size_t passphrase_len;
 	size_t i;
-	bool result;
-	unsigned char psk[32];
-
-	if (!passphrase)
-		return -EINVAL;
-
-	if (!ssid)
-		return -EINVAL;
 
 	/*
 	 * IEEE 802.11, Annex M, Section M.4.1:
@@ -503,10 +493,7 @@ int crypto_psk_from_passphrase(const char *passphrase,
 	 */
 	passphrase_len = strlen(passphrase);
 	if (passphrase_len < 8 || passphrase_len > 63)
-		return -ERANGE;
-
-	if (ssid_len == 0 || ssid_len > 32)
-		return -ERANGE;
+		return false;
 
 	/* IEEE 802.11, Annex M, Section M.4.1:
 	 * "Each character in the pass-phrase must have an encoding in the
@@ -518,8 +505,30 @@ int crypto_psk_from_passphrase(const char *passphrase,
 		if (l_ascii_isprint(passphrase[i]))
 			continue;
 
-		return -EINVAL;
+		return false;
 	}
+
+	return true;
+}
+
+int crypto_psk_from_passphrase(const char *passphrase,
+				const unsigned char *ssid, size_t ssid_len,
+				unsigned char *out_psk)
+{
+	bool result;
+	unsigned char psk[32];
+
+	if (!passphrase)
+		return -EINVAL;
+
+	if (!ssid)
+		return -EINVAL;
+
+	if (!crypto_passphrase_is_valid(passphrase))
+		return -ERANGE;
+
+	if (ssid_len == 0 || ssid_len > 32)
+		return -ERANGE;
 
 	result = l_pkcs5_pbkdf2(L_CHECKSUM_SHA1, passphrase, ssid, ssid_len,
 				4096, psk, sizeof(psk));

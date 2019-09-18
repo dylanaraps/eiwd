@@ -91,6 +91,8 @@ bool aes_siv_decrypt(const uint8_t *key, size_t key_len, const uint8_t *in,
 int crypto_cipher_key_len(enum crypto_cipher cipher);
 int crypto_cipher_tk_bits(enum crypto_cipher cipher);
 
+bool crypto_passphrase_is_valid(const char *passphrase);
+
 int crypto_psk_from_passphrase(const char *passphrase,
 				const unsigned char *ssid, size_t ssid_len,
 				unsigned char *out_psk);
