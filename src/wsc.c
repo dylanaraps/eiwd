@@ -63,8 +63,12 @@ struct wsc {
 	struct {
 		char ssid[33];
 		enum security security;
-		uint8_t psk[32];
+		union {
+			uint8_t psk[32];
+			char passphrase[64];
+		};
 		uint8_t addr[6];
+		bool has_passphrase;
 	} creds[3];
 	uint32_t n_creds;
 	struct l_settings *eap_settings;
@@ -132,9 +136,24 @@ static void wsc_try_credentials(struct wsc *wsc)
 		if (!bss)
 			continue;
 
-		if (wsc->creds[i].security == SECURITY_PSK &&
-				!network_set_psk(network, wsc->creds[i].psk))
-			continue;
+		if (wsc->creds[i].security == SECURITY_PSK) {
+			bool ret;
+
+			/*
+			 * Prefer setting passphrase, this will work for both
+			 * WPA2 and WPA3 since the PSK can always be generated
+			 * if needed
+			 */
+			if (wsc->creds[i].has_passphrase)
+				ret = network_set_passphrase(network,
+						wsc->creds[i].passphrase);
+			else
+				ret = network_set_psk(network,
+						wsc->creds[i].psk);
+
+			if (!ret)
+				continue;
+		}
 
 		station_connect_network(wsc->station, network, bss,
 								wsc->pending);
@@ -315,18 +334,10 @@ static void wsc_credential_obtained(struct wsc *wsc,
 			explicit_bzero(decoded, 32);
 			l_free(decoded);
 		} else {
-			const char *passphrase =
-				(const char *) cred->network_key;
-			/*
-			 * wscutil should memset cred->network_key to 0 prior
-			 * to copying in the contents of the passphrase
-			 */
-			if (crypto_psk_from_passphrase(passphrase,
-					cred->ssid, cred->ssid_len,
-					wsc->creds[wsc->n_creds].psk) != 0) {
-				l_warn("Ignoring invalid passphrase");
-				return;
-			}
+			strncpy(wsc->creds[wsc->n_creds].passphrase,
+					(const char *) cred->network_key,
+					cred->network_key_len);
+			wsc->creds[wsc->n_creds].has_passphrase = true;
 		}
 
 		break;
