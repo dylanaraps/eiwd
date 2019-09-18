@@ -56,7 +56,7 @@ static void command_options_destroy(void *data)
 	l_free(option);
 }
 
-const char *command_option_get(const char *name)
+bool command_option_get(const char *name, const char **value_out)
 {
 	const struct l_queue_entry *entry;
 
@@ -67,10 +67,13 @@ const char *command_option_get(const char *name)
 		if (strcmp(option->name, name))
 			continue;
 
-		return option->value;
+		if (value_out)
+			*value_out = option->value;
+
+		return true;
 	}
 
-	return NULL;
+	return false;
 }
 
 bool command_has_options(void)

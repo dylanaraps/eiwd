@@ -66,9 +66,9 @@ static struct l_dbus_message *request_passphrase_command_option(
 						struct l_dbus_message *message)
 {
 	struct l_dbus_message *reply;
-	const char *passphrase;
+	const char *passphrase = NULL;
 
-	passphrase = command_option_get(COMMAND_OPTION_PASSPHRASE);
+	command_option_get(COMMAND_OPTION_PASSPHRASE, &passphrase);
 	if (!passphrase)
 		return NULL;
 
@@ -154,14 +154,14 @@ static struct l_dbus_message *request_username_and_password_command_option(
 						struct l_dbus_message *message)
 {
 	struct l_dbus_message *reply;
-	const char *username;
-	const char *password;
+	const char *username = NULL;
+	const char *password = NULL;
 
-	username = command_option_get(COMMAND_OPTION_USERNAME);
+	command_option_get(COMMAND_OPTION_USERNAME, &username);
 	if (!username)
 		return NULL;
 
-	password = command_option_get(COMMAND_OPTION_PASSWORD);
+	command_option_get(COMMAND_OPTION_PASSWORD, &password);
 	if (!password)
 		return NULL;
 
@@ -213,7 +213,7 @@ static struct l_dbus_message *request_user_password_command_option(
 	struct l_dbus_message *reply;
 	const char *password;
 
-	password = command_option_get(COMMAND_OPTION_PASSWORD);
+	command_option_get(COMMAND_OPTION_PASSWORD, &password);
 	if (!password)
 		return NULL;
 
