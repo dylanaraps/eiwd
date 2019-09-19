@@ -76,6 +76,12 @@ bool command_option_get(const char *name, const char **value_out)
 	return false;
 }
 
+bool command_needs_no_agent(void)
+{
+	return command_option_get(COMMAND_OPTION_DONTASK, NULL) &&
+					(l_queue_length(command_options) == 1);
+}
+
 static enum cmd_status cmd_version(const char *entity,
 						char **argv, int argc)
 {

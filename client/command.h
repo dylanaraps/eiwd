@@ -58,6 +58,7 @@ struct command_family {
 };
 
 bool command_option_get(const char *name, const char **value_out);
+bool command_needs_no_agent(void);
 
 bool command_line_find_token(const char *token, uint8_t num_to_inspect);
 char **command_completion(const char *text, int start, int end);
