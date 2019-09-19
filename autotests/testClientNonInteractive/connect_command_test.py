@@ -36,6 +36,11 @@ class Test(unittest.TestCase):
 
         device = wd.list_devices(1)[0]
 
+        # Use --dontaks cmd-line option
+        with self.assertRaises(subprocess.CalledProcessError):
+                        subprocess.check_call(['iwctl', '-d', 'station',
+                                                 device.name, 'connect', ssid])
+
         subprocess.check_call(['iwctl', '-P', 'passphrase',
                                 'station', device.name, 'connect', ssid])
 
