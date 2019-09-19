@@ -76,11 +76,6 @@ bool command_option_get(const char *name, const char **value_out)
 	return false;
 }
 
-bool command_has_options(void)
-{
-	return !l_queue_isempty(command_options);
-}
-
 static enum cmd_status cmd_version(const char *entity,
 						char **argv, int argc)
 {
