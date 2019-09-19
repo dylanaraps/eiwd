@@ -49,7 +49,6 @@ static bool randomize;
 struct wiphy_setup_state {
 	uint32_t id;
 	struct wiphy *wiphy;
-	struct l_timeout *setup_timeout;
 	unsigned int pending_cmd_count;
 	bool aborted;
 
@@ -84,9 +83,6 @@ static const char *default_if_driver_list[] = {
 static void wiphy_setup_state_free(void *data)
 {
 	struct wiphy_setup_state *state = data;
-
-	if (state->setup_timeout)
-		l_timeout_remove(state->setup_timeout);
 
 	if (state->default_if_msg)
 		l_genl_msg_unref(state->default_if_msg);
@@ -375,47 +371,6 @@ static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 	state->pending_cmd_count++;
 }
 
-static void manager_wiphy_dump_interfaces(struct wiphy_setup_state *state)
-{
-	struct l_genl_msg *msg;
-	unsigned cmd_id;
-
-	if (state->setup_timeout) {
-		l_timeout_remove(state->setup_timeout);
-		state->setup_timeout = NULL;
-	}
-
-	/*
-	 * As the first step after new wiphy is detected we will query
-	 * the initial interface setup, delete the default interfaces
-	 * and create interfaces for our own use with NL80211_ATTR_SOCKET_OWNER
-	 * on them.  After that if new interfaces are created outside of
-	 * IWD, or removed outside of IWD, we don't touch them and will
-	 * try to minimally adapt to handle the removals correctly.  It's
-	 * a very unlikely situation in any case but it wouldn't make
-	 * sense to try to continually enforce our setup fighting against
-	 * some other process, and it wouldn't make sense to try to
-	 * manage and use additional interfaces beyond the one or two
-	 * we need for our operations.
-	 */
-
-	msg = l_genl_msg_new(NL80211_CMD_GET_INTERFACE);
-	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY, 4, &state->id);
-	cmd_id = l_genl_family_dump(nl80211, msg,
-					manager_get_interface_cb, state,
-					manager_setup_cmd_done);
-
-	if (!cmd_id) {
-		l_error("Querying interface information for wiphy %u failed",
-			(unsigned int) state->id);
-		wiphy_setup_state_destroy(state);
-		return;
-	}
-
-	l_debug("");
-	state->pending_cmd_count++;
-}
-
 static struct wiphy_setup_state *manager_rx_cmd_new_wiphy(
 							struct l_genl_msg *msg)
 {
@@ -490,32 +445,6 @@ static struct wiphy_setup_state *manager_rx_cmd_new_wiphy(
 done:
 	wiphy_update_from_genl(wiphy, msg);
 	return state;
-}
-
-static void manager_wiphy_setup_timeout(struct l_timeout *timeout,
-					void *user_data)
-{
-	struct wiphy_setup_state *state = user_data;
-
-	manager_wiphy_dump_interfaces(state);
-}
-
-static void manager_new_wiphy_event(struct l_genl_msg *msg)
-{
-	struct wiphy_setup_state *state;
-
-	if (!pending_wiphys)
-		return;
-
-	state = manager_rx_cmd_new_wiphy(msg);
-	if (!state)
-		return;
-
-	wiphy_create_complete(state->wiphy);
-
-	/* Setup a timer just in case a default interface is not created */
-	state->setup_timeout = l_timeout_create(1, manager_wiphy_setup_timeout,
-						state, NULL);
 }
 
 static bool manager_wiphy_state_match(const void *a, const void *b)
@@ -593,56 +522,6 @@ static void manager_del_wiphy_event(struct l_genl_msg *msg)
 		wiphy_destroy(wiphy);
 }
 
-static void manager_config_notify(struct l_genl_msg *msg, void *user_data)
-{
-	uint8_t cmd;
-	struct wiphy_setup_state *state;
-	struct l_genl_attr attr;
-	struct netdev *netdev;
-
-	cmd = l_genl_msg_get_command(msg);
-
-	l_debug("Notification of command %s(%u)",
-					nl80211cmd_to_string(cmd), cmd);
-
-	switch (cmd) {
-	case NL80211_CMD_NEW_WIPHY:
-		manager_new_wiphy_event(msg);
-		break;
-
-	case NL80211_CMD_DEL_WIPHY:
-		manager_del_wiphy_event(msg);
-		break;
-
-	case NL80211_CMD_NEW_INTERFACE:
-		/*
-		 * If we have a NEW_INTERFACE for a freshly detected wiphy
-		 * assume we can now query for the default or pre-created
-		 * interfaces, remove any we don't need and create our own.
-		 */
-		if (!l_genl_attr_init(&attr, msg))
-			break;
-
-		state = manager_find_pending(manager_parse_wiphy_id(&attr));
-		if (!state || !state->setup_timeout)
-			break;
-
-		manager_wiphy_dump_interfaces(state);
-		break;
-
-	case NL80211_CMD_DEL_INTERFACE:
-		if (!l_genl_attr_init(&attr, msg))
-			break;
-
-		netdev = netdev_find(manager_parse_ifindex(&attr));
-		if (!netdev)
-			break;
-
-		netdev_destroy(netdev);
-		break;
-	}
-}
-
 static void manager_interface_dump_callback(struct l_genl_msg *msg,
 						void *user_data)
 {
@@ -655,7 +534,7 @@ static void manager_interface_dump_callback(struct l_genl_msg *msg,
 		return;
 
 	state = manager_find_pending(manager_parse_wiphy_id(&attr));
-	if (!state || state->setup_timeout)
+	if (!state)
 		return;
 
 	manager_get_interface_cb(msg, state);
@@ -664,10 +543,6 @@ static void manager_interface_dump_callback(struct l_genl_msg *msg,
 static bool manager_check_create_interfaces(const void *a, const void *b)
 {
 	struct wiphy_setup_state *state = (void *) a;
-
-	/* phy might have been detected after the initial dump */
-	if (state->setup_timeout)
-		return false;
 
 	wiphy_create_complete(state->wiphy);
 
@@ -695,6 +570,107 @@ static void manager_wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 	l_debug("");
 
 	manager_rx_cmd_new_wiphy(msg);
+}
+
+static void manager_new_wiphy_event(struct l_genl_msg *msg)
+{
+	struct l_genl_attr attr;
+	unsigned int wiphy_cmd_id;
+	unsigned int iface_cmd_id;
+	uint32_t wiphy_id;
+
+	if (!pending_wiphys)
+		return;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	wiphy_id = manager_parse_wiphy_id(&attr);
+	/*
+	 * Until fixed, a NEW_WIPHY event will not include all the information
+	 * that may be available, but a dump will. Because of this we do both
+	 * GET_WIPHY/GET_INTERFACE, same as we would during initalization.
+	 */
+	msg = l_genl_msg_new_sized(NL80211_CMD_GET_WIPHY, 128);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_SPLIT_WIPHY_DUMP, 0, NULL);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY, 4, &wiphy_id);
+
+	wiphy_cmd_id = l_genl_family_dump(nl80211, msg,
+						manager_wiphy_dump_callback,
+						NULL, NULL);
+	if (!wiphy_cmd_id) {
+		l_error("Could not dump wiphy %u", wiphy_id);
+		l_genl_msg_unref(msg);
+		return;
+	}
+
+	/*
+	 * As the first step after new wiphy is detected we will query
+	 * the initial interface setup, delete the default interfaces
+	 * and create interfaces for our own use with NL80211_ATTR_SOCKET_OWNER
+	 * on them.  After that if new interfaces are created outside of
+	 * IWD, or removed outside of IWD, we don't touch them and will
+	 * try to minimally adapt to handle the removals correctly.  It's
+	 * a very unlikely situation in any case but it wouldn't make
+	 * sense to try to continually enforce our setup fighting against
+	 * some other process, and it wouldn't make sense to try to
+	 * manage and use additional interfaces beyond the one or two
+	 * we need for our operations.
+	 */
+	msg = l_genl_msg_new(NL80211_CMD_GET_INTERFACE);
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY, 4, &wiphy_id);
+
+	iface_cmd_id = l_genl_family_dump(nl80211, msg,
+					manager_interface_dump_callback,
+					NULL, manager_interface_dump_done);
+
+	if (!iface_cmd_id) {
+		l_error("Could not dump interface for wiphy %u", wiphy_id);
+		l_genl_family_cancel(nl80211, wiphy_cmd_id);
+		l_genl_msg_unref(msg);
+	}
+}
+
+static void manager_config_notify(struct l_genl_msg *msg, void *user_data)
+{
+	uint8_t cmd;
+	struct l_genl_attr attr;
+	struct netdev *netdev;
+
+	cmd = l_genl_msg_get_command(msg);
+
+	l_debug("Notification of command %s(%u)",
+					nl80211cmd_to_string(cmd), cmd);
+
+	switch (cmd) {
+	case NL80211_CMD_NEW_WIPHY:
+		manager_new_wiphy_event(msg);
+		break;
+
+	case NL80211_CMD_DEL_WIPHY:
+		manager_del_wiphy_event(msg);
+		break;
+
+	case NL80211_CMD_NEW_INTERFACE:
+		/*
+		 * TODO: Until NEW_WIPHY contains all required information we
+		 * are stuck always having to do a full dump. This specific
+		 * interface must also be dumped, and this is taken care of
+		 * in manager_new_wiphy_event.
+		 */
+		break;
+
+	case NL80211_CMD_DEL_INTERFACE:
+		if (!l_genl_attr_init(&attr, msg))
+			break;
+
+		netdev = netdev_find(manager_parse_ifindex(&attr));
+		if (!netdev)
+			break;
+
+		netdev_destroy(netdev);
+		break;
+	}
 }
 
 bool manager_init(struct l_genl_family *in,
