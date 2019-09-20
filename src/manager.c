@@ -402,17 +402,6 @@ static struct wiphy_setup_state *manager_rx_cmd_new_wiphy(
 	if (!wiphy)
 		return NULL;
 
-	/*
-	 * We've got a new wiphy, flag it as new and wait for a
-	 * NEW_INTERFACE event for this wiphy's default driver-created
-	 * interface.  That event's handler will check the flag and
-	 * finish setting up the interfaces for this new wiphy and then
-	 * clear the flag.  In some corner cases there may be no
-	 * default interface on this wiphy and no user-space created
-	 * interfaces from before IWD started, so set a 1-second timeout
-	 * for the event.  The timeout pointer is also used as the flag.
-	 */
-
 	state = l_new(struct wiphy_setup_state, 1);
 	state->id = id;
 	state->wiphy = wiphy;
