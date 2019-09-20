@@ -49,6 +49,31 @@ static bool extract_ifindex(const void *data, uint16_t len, void *o)
 	return true;
 }
 
+static bool extract_name(const void *data, uint16_t len, void *o)
+{
+	const char **out = o;
+
+	if (len < 1)
+		return false;
+
+	if (!memchr(data + 1, 0, len - 1))
+		return false;
+
+	*out = data;
+	return true;
+}
+
+static bool extract_uint64(const void *data, uint16_t len, void *o)
+{
+	uint64_t *out = o;
+
+	if (len != 8)
+		return false;
+
+	*out = l_get_u64(data);
+	return true;
+}
+
 static bool extract_uint32(const void *data, uint16_t len, void *o)
 {
 	uint32_t *out = o;
@@ -66,7 +91,12 @@ static attr_handler handler_for_type(enum nl80211_attrs type)
 	case NL80211_ATTR_IFINDEX:
 		return extract_ifindex;
 	case NL80211_ATTR_WIPHY:
+	case NL80211_ATTR_IFTYPE:
 		return extract_uint32;
+	case NL80211_ATTR_WDEV:
+		return extract_uint64;
+	case NL80211_ATTR_IFNAME:
+		return extract_name;
 	default:
 		break;
 	}

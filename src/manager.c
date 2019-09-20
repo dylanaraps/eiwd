@@ -236,12 +236,11 @@ static void manager_del_interface_cb(struct l_genl_msg *msg, void *user_data)
 static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy_setup_state *state = user_data;
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-	const uint32_t *ifindex = NULL, *iftype = NULL;
-	const uint64_t *wdev_idx = NULL;
-	const char *ifname = NULL;
+	uint32_t wiphy;
+	uint32_t ifindex;
+	uint32_t iftype;
+	uint64_t wdev;
+	const char *ifname;
 	struct l_genl_msg *del_msg;
 	unsigned cmd_id;
 	char *pattern;
@@ -253,83 +252,41 @@ static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 	if (state->aborted)
 		return;
 
-	if (!l_genl_attr_init(&attr, msg))
+	if (nl80211_parse_attrs(msg, NL80211_ATTR_WDEV, &wdev,
+					NL80211_ATTR_WIPHY, &wiphy,
+					NL80211_ATTR_IFTYPE, &iftype,
+					NL80211_ATTR_UNSPEC) < 0)
 		return;
 
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_IFINDEX:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid interface index attribute");
-				return;
-			}
+	if (wiphy != state->id) {
+		l_debug("Wiphy attribute mis-match, wanted: %u, got %u",
+				state->id, wiphy);
+		return;
+	}
 
-			ifindex = data;
-			break;
 
-		case NL80211_ATTR_WDEV:
-			if (len != sizeof(uint64_t)) {
-				l_warn("Invalid wdev index attribute");
-				return;
-			}
+	if (nl80211_parse_attrs(msg, NL80211_ATTR_IFINDEX, &ifindex,
+					NL80211_ATTR_IFNAME, &ifname,
+					NL80211_ATTR_UNSPEC) < 0)
+		goto delete_interface;
 
-			wdev_idx = data;
-			break;
+	if (whitelist_filter) {
+		for (i = 0; (pattern = whitelist_filter[i]); i++) {
+			if (fnmatch(pattern, ifname, 0) != 0)
+				continue;
 
-		case NL80211_ATTR_WIPHY:
-			if (len != sizeof(uint32_t) ||
-					*((uint32_t *) data) != state->id) {
-				l_warn("Invalid wiphy attribute");
-				return;
-			}
-
-			break;
-
-		case NL80211_ATTR_IFTYPE:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid interface type attribute");
-				return;
-			}
-
-			iftype = data;
-			break;
-
-		case NL80211_ATTR_IFNAME:
-			if (len < 1 || !memchr(data + 1, 0, len - 1)) {
-				l_warn("Invalid interface name attribute");
-				return;
-			}
-
-			ifname = data;
+			whitelisted = true;
 			break;
 		}
 	}
 
-	if (!wdev_idx || !iftype)
-		return;
+	if (blacklist_filter) {
+		for (i = 0; (pattern = blacklist_filter[i]); i++) {
+			if (fnmatch(pattern, ifname, 0) != 0)
+				continue;
 
-	if (ifindex) {
-		if (!ifname)
-			return;
-
-		if (whitelist_filter) {
-			for (i = 0; (pattern = whitelist_filter[i]); i++) {
-				if (fnmatch(pattern, ifname, 0) != 0)
-					continue;
-
-				whitelisted = true;
-				break;
-			}
-		}
-
-		if (blacklist_filter) {
-			for (i = 0; (pattern = blacklist_filter[i]); i++) {
-				if (fnmatch(pattern, ifname, 0) != 0)
-					continue;
-
-				blacklisted = true;
-				break;
-			}
+			blacklisted = true;
+			break;
 		}
 	}
 
@@ -338,32 +295,28 @@ static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 	 * driver does not support interface manipulation, save the message
 	 * just in case.
 	 */
-	if ((*iftype == NL80211_IFTYPE_ADHOC ||
-				*iftype == NL80211_IFTYPE_STATION ||
-				*iftype == NL80211_IFTYPE_AP) &&
-			ifindex && *ifindex != 0 &&
+	if ((iftype == NL80211_IFTYPE_ADHOC ||
+				iftype == NL80211_IFTYPE_STATION ||
+				iftype == NL80211_IFTYPE_AP) &&
 			!state->default_if_msg &&
 			(!whitelist_filter || whitelisted) &&
 			!blacklisted)
 		state->default_if_msg = l_genl_msg_ref(msg);
 
+delete_interface:
 	if (state->use_default)
 		return;
 
 	del_msg = l_genl_msg_new(NL80211_CMD_DEL_INTERFACE);
-
-	if (ifindex)
-		l_genl_msg_append_attr(del_msg, NL80211_ATTR_IFINDEX, 4, ifindex);
-
-	l_genl_msg_append_attr(del_msg, NL80211_ATTR_WDEV, 8, wdev_idx);
+	l_genl_msg_append_attr(del_msg, NL80211_ATTR_WDEV, 8, &wdev);
 	l_genl_msg_append_attr(del_msg, NL80211_ATTR_WIPHY, 4, &state->id);
 	cmd_id = l_genl_family_send(nl80211, del_msg,
 					manager_del_interface_cb, state,
 					manager_setup_cmd_done);
 
 	if (!cmd_id) {
-		l_error("Sending DEL_INTERFACE for %s failed",
-			ifname ?: "unnamed interface");
+		l_error("Sending DEL_INTERFACE for wdev: %" PRIu64" failed",
+				wdev);
 		state->use_default = true;
 		return;
 	}
