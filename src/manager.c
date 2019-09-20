@@ -34,6 +34,7 @@
 
 #include "linux/nl80211.h"
 
+#include "src/nl80211util.h"
 #include "src/iwd.h"
 #include "src/netdev.h"
 #include "src/wiphy.h"
@@ -450,22 +451,15 @@ static struct wiphy_setup_state *manager_find_pending(uint32_t id)
 				L_UINT_TO_PTR(id));
 }
 
-static uint32_t manager_parse_ifindex(struct l_genl_attr *attr)
+static uint32_t manager_parse_ifindex(struct l_genl_msg *msg)
 {
-	uint16_t type, len;
-	const void *data;
+	uint32_t ifindex;
 
-	while (l_genl_attr_next(attr, &type, &len, &data)) {
-		if (type != NL80211_ATTR_IFINDEX)
-			continue;
+	if (nl80211_parse_attrs(msg, NL80211_ATTR_IFINDEX, &ifindex,
+					NL80211_ATTR_UNSPEC) < 0)
+		return -1;
 
-		if (len != sizeof(uint32_t))
-			break;
-
-		return *((uint32_t *) data);
-	}
-
-	return -1;
+	return ifindex;
 }
 
 static uint32_t manager_parse_wiphy_id(struct l_genl_attr *attr)
@@ -623,7 +617,6 @@ static void manager_new_wiphy_event(struct l_genl_msg *msg)
 static void manager_config_notify(struct l_genl_msg *msg, void *user_data)
 {
 	uint8_t cmd;
-	struct l_genl_attr attr;
 	struct netdev *netdev;
 
 	cmd = l_genl_msg_get_command(msg);
@@ -650,10 +643,7 @@ static void manager_config_notify(struct l_genl_msg *msg, void *user_data)
 		break;
 
 	case NL80211_CMD_DEL_INTERFACE:
-		if (!l_genl_attr_init(&attr, msg))
-			break;
-
-		netdev = netdev_find(manager_parse_ifindex(&attr));
+		netdev = netdev_find(manager_parse_ifindex(msg));
 		if (!netdev)
 			break;
 
