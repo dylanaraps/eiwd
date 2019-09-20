@@ -1024,9 +1024,27 @@ static int is_test_dir(const char *dir)
 }
 
 static bool find_test_configuration(const char *path, int level,
-						struct l_hashmap *config_map);
+						struct l_queue *config_queue);
 
-static bool add_path(const char *path, int level, struct l_hashmap *config_map)
+struct test_entry {
+	struct l_queue *test_queue;
+	char *path;
+};
+
+static int insert_py_test(const void *a, const void *b, void *user_data)
+{
+	return strcmp((const char *)a, (const char *)b);
+}
+
+static int insert_test_entry(const void *a, const void *b, void *user_data)
+{
+	const struct test_entry *entry_a = a;
+	const struct test_entry *entry_b = b;
+
+	return strcmp(entry_a->path, entry_b->path);
+}
+
+static bool add_path(const char *path, int level, struct l_queue *config_queue)
 {
 	DIR *dir = NULL;
 	struct l_queue *py_test_queue = NULL;
@@ -1049,7 +1067,7 @@ static bool add_path(const char *path, int level, struct l_hashmap *config_map)
 				npath = l_strdup_printf("%s/%s", path,
 								entry->d_name);
 
-				find_test_configuration(npath, 1, config_map);
+				find_test_configuration(npath, 1, config_queue);
 
 				l_free(npath);
 			}
@@ -1057,26 +1075,32 @@ static bool add_path(const char *path, int level, struct l_hashmap *config_map)
 			if (!py_test_queue)
 				py_test_queue = l_queue_new();
 
-			l_queue_push_tail(py_test_queue,
-						l_strdup(entry->d_name));
+			l_queue_insert(py_test_queue, l_strdup(entry->d_name),
+						insert_py_test, NULL);
 		}
 	}
 
-	if (py_test_queue && !l_queue_isempty(py_test_queue))
-		l_hashmap_insert(config_map, path, py_test_queue);
+	if (py_test_queue && !l_queue_isempty(py_test_queue)) {
+		struct test_entry *entry = l_new(struct test_entry, 1);
+
+		entry->test_queue = py_test_queue;
+		entry->path = l_strdup(path);
+
+		l_queue_insert(config_queue, entry, insert_test_entry, NULL);
+	}
 
 	closedir(dir);
 	return true;
 }
 
 static bool find_test_configuration(const char *path, int level,
-						struct l_hashmap *config_map)
+						struct l_queue *config_queue)
 {
 	glob_t glist;
 	int i = 0;
 	int ret;
 
-	if (!config_map)
+	if (!config_queue)
 		return false;
 
 	ret = glob(path, 0, NULL, &glist);
@@ -1086,7 +1110,7 @@ static bool find_test_configuration(const char *path, int level,
 	}
 
 	while (glist.gl_pathv[i]) {
-		if (!add_path(glist.gl_pathv[i], level, config_map))
+		if (!add_path(glist.gl_pathv[i], level, config_queue))
 			return false;
 
 		i++;
@@ -1883,8 +1907,7 @@ static void wiphy_reset(void *data, void *user_data)
 	wiphy->hostapd_ctrl_interface = NULL;
 }
 
-static void create_network_and_run_tests(const void *key, void *value,
-								void *data)
+static void create_network_and_run_tests(void *data, void *user_data)
 {
 	pid_t hostapd_pids[HWSIM_RADIOS_MAX];
 	pid_t iwd_pid = -1;
@@ -1905,12 +1928,13 @@ static void create_network_and_run_tests(const void *key, void *value,
 	const char *reg_domain;
 	int phys_used;
 	int num_radios;
+	struct test_entry *entry = data;
 
 	memset(hostapd_pids, -1, sizeof(hostapd_pids));
 
-	config_dir_path = (char *) key;
-	test_queue = (struct l_queue *) value;
-	test_stats_queue = (struct l_queue *) data;
+	config_dir_path = (char *) entry->path;
+	test_queue = (struct l_queue *) entry->test_queue;
+	test_stats_queue = (struct l_queue *) user_data;
 
 	if (l_queue_isempty(test_queue)) {
 		l_error("No Python IWD tests have been found in %s",
@@ -2216,12 +2240,20 @@ static void test_stat_queue_entry_destroy(void *data)
 	l_free(ts);
 }
 
+static void free_test_entry(void *data)
+{
+	struct test_entry *entry = data;
+
+	l_free(entry->path);
+	l_free(entry);
+}
+
 static void run_auto_tests(void)
 {
 	L_AUTO_FREE_VAR(char*, test_home_path);
 	L_AUTO_FREE_VAR(char*, env_path);
 	int i;
-	struct l_hashmap *test_config_map;
+	struct l_queue *test_config_queue;
 	struct l_queue *test_stat_queue;
 	char **test_config_dirs;
 
@@ -2238,8 +2270,8 @@ static void run_auto_tests(void)
 		return;
 	}
 
-	test_config_map = l_hashmap_string_new();
-	if (!test_config_map)
+	test_config_queue = l_queue_new();
+	if (!test_config_queue)
 		return;
 
 	test_config_dirs = l_strsplit(test_action_params, ',');
@@ -2251,7 +2283,7 @@ static void run_auto_tests(void)
 			if (strchr(test_config_dirs[i], '/')) {
 				if (!find_test_configuration(
 							test_config_dirs[i], 1,
-							test_config_map))
+							test_config_queue))
 					goto exit;
 			} else {
 				char *config_dir_path;
@@ -2261,7 +2293,7 @@ static void run_auto_tests(void)
 							test_config_dirs[i]);
 
 				if (!find_test_configuration(config_dir_path, 1,
-							test_config_map)) {
+							test_config_queue)) {
 					l_free(config_dir_path);
 
 					goto exit;
@@ -2282,7 +2314,7 @@ static void run_auto_tests(void)
 								test_home_path);
 
 			if (!find_test_configuration(config_dir_path, 1,
-							test_config_map)) {
+							test_config_queue)) {
 				l_free(config_dir_path);
 				goto exit;
 			}
@@ -2293,12 +2325,12 @@ static void run_auto_tests(void)
 			l_info("Searching for the test configurations...");
 
 			if (!find_test_configuration(test_home_path, 0,
-								test_config_map))
+							test_config_queue))
 				goto exit;
 		}
 	}
 
-	if (l_hashmap_isempty(test_config_map)) {
+	if (l_queue_isempty(test_config_queue)) {
 		l_error("No test configuration discovered");
 		goto exit;
 	}
@@ -2315,7 +2347,7 @@ static void run_auto_tests(void)
 
 	test_stat_queue = l_queue_new();
 
-	l_hashmap_foreach(test_config_map, create_network_and_run_tests,
+	l_queue_foreach(test_config_queue, create_network_and_run_tests,
 							test_stat_queue);
 
 	print_results(test_stat_queue);
@@ -2325,7 +2357,7 @@ static void run_auto_tests(void)
 exit:
 	l_strfreev(verbose_apps);
 	l_strfreev(test_config_dirs);
-	l_hashmap_destroy(test_config_map, NULL);
+	l_queue_destroy(test_config_queue, free_test_entry);
 }
 
 static void run_unit_tests(void)
