@@ -24,12 +24,107 @@
 #include <config.h>
 #endif
 
+#include <errno.h>
 #include <linux/if_ether.h>
 #include <ell/ell.h>
 
 #include "linux/nl80211.h"
 
 #include "src/nl80211util.h"
+
+typedef bool (*attr_handler)(const void *data, uint16_t len, void *o);
+
+static bool extract_ifindex(const void *data, uint16_t len, void *o)
+{
+	uint32_t *out = o;
+
+	if (len != 4)
+		return false;
+
+	/* ifindex cannot be 0 */
+	if (l_get_u32(data) == 0)
+		return false;
+
+	*out = l_get_u32(data);
+	return true;
+}
+
+static attr_handler handler_for_type(enum nl80211_attrs type)
+{
+	switch (type) {
+	case NL80211_ATTR_IFINDEX:
+		return extract_ifindex;
+	default:
+		break;
+	}
+
+	return NULL;
+}
+
+struct attr_entry {
+	uint16_t type;
+	void *data;
+	attr_handler handler;
+};
+
+int nl80211_parse_attrs(struct l_genl_msg *msg, int tag, ...)
+{
+	struct l_genl_attr attr;
+	va_list args;
+	struct l_queue *entries;
+	const struct l_queue_entry *e;
+	struct attr_entry *entry;
+	uint16_t type;
+	uint16_t len;
+	const void *data;
+	int ret;
+
+	if (!l_genl_attr_init(&attr, msg))
+		return -EINVAL;
+
+	va_start(args, tag);
+	entries = l_queue_new();
+	ret = -ENOSYS;
+
+	while (tag != NL80211_ATTR_UNSPEC) {
+		entry = l_new(struct attr_entry, 1);
+
+		entry->type = tag;
+		entry->data = va_arg(args, void *);
+		entry->handler = handler_for_type(tag);
+		l_queue_push_tail(entries, entry);
+
+		if (!entry->handler)
+			goto done;
+
+		tag = va_arg(args, enum nl80211_attrs);
+	}
+
+	va_end(args);
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
+		for (e = l_queue_get_entries(entries); e; e = e->next) {
+			entry = e->data;
+
+			if (entry->type == type)
+				break;
+		}
+
+		if (!e)
+			continue;
+
+		if (!entry->handler(data, len, entry->data)) {
+			ret = -EINVAL;
+			goto done;
+		}
+	}
+
+	ret = 0;
+
+done:
+	l_queue_destroy(entries, l_free);
+	return ret;
+}
 
 struct l_genl_msg *nl80211_build_new_key_group(uint32_t ifindex, uint32_t cipher,
 					uint8_t key_id, const uint8_t *key,
