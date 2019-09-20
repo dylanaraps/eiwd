@@ -274,7 +274,7 @@ bool rfkill_get_hard_state(unsigned int wiphy_id)
 	return entry ? entry->hard_state : false;
 }
 
-int rfkill_init(void)
+static int rfkill_init(void)
 {
 	int fd;
 
@@ -289,7 +289,6 @@ int rfkill_init(void)
 	}
 
 	l_io_set_close_on_destroy(rfkill_io, true);
-
 	l_io_set_read_handler(rfkill_io, rfkill_read, NULL, NULL);
 
 	rfkill_map = l_queue_new();
@@ -297,11 +296,11 @@ int rfkill_init(void)
 	return 0;
 }
 
-void rfkill_exit(void)
+static void rfkill_exit(void)
 {
 	l_io_destroy(rfkill_io);
-
 	l_queue_destroy(rfkill_map, l_free);
-
 	l_queue_destroy(rfkill_watches, l_free);
 }
+
+IWD_MODULE(rfkill, rfkill_init, rfkill_exit)

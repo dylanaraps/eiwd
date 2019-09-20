@@ -478,7 +478,6 @@ int main(int argc, char *argv[])
 
 	eap_init(eap_mtu);
 	eapol_init();
-	rfkill_init();
 
 	if (!netdev_init())
 		goto fail_netdev;
@@ -494,7 +493,6 @@ fail_modules:
 	iwd_modules_exit();
 	netdev_exit();
 fail_netdev:
-	rfkill_exit();
 	eapol_exit();
 	eap_exit();
 

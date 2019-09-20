@@ -29,6 +29,3 @@ bool rfkill_watch_remove(uint32_t watch_id);
 bool rfkill_get_soft_state(unsigned int wiphy_id);
 bool rfkill_set_soft_state(unsigned int wiphy_id, bool state);
 bool rfkill_get_hard_state(unsigned int wiphy_id);
-
-int rfkill_init(void);
-void rfkill_exit(void);
