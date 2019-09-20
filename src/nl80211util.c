@@ -94,6 +94,7 @@ static attr_handler handler_for_type(enum nl80211_attrs type)
 	case NL80211_ATTR_IFTYPE:
 		return extract_uint32;
 	case NL80211_ATTR_WDEV:
+	case NL80211_ATTR_COOKIE:
 		return extract_uint64;
 	case NL80211_ATTR_IFNAME:
 	case NL80211_ATTR_WIPHY_NAME:

@@ -70,26 +70,13 @@ static void anqp_destroy(void *user_data)
 static void netdev_gas_request_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct anqp_request *request = user_data;
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
 
 	if (l_genl_msg_get_error(msg) != 0)
 		goto error;
 
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_COOKIE:
-			if (len != 8)
-				goto error;
-
-			request->anqp_cookie = l_get_u64(data);
-			break;
-		}
-	}
+	if (nl80211_parse_attrs(msg, NL80211_ATTR_COOKIE, &request->anqp_cookie,
+					NL80211_ATTR_UNSPEC) < 0)
+		goto error;
 
 	return;
 
@@ -261,10 +248,7 @@ static bool match_cookie(const void *a, const void *b)
 static void anqp_frame_wait_cancel_event(struct l_genl_msg *msg,
 						uint32_t ifindex)
 {
-	struct l_genl_attr attr;
-	uint16_t type, len;
-	const void *data;
-	uint64_t cookie = 0;
+	uint64_t cookie;
 	struct anqp_request *request;
 	struct cookie_match {
 		uint64_t cookie;
@@ -273,22 +257,8 @@ static void anqp_frame_wait_cancel_event(struct l_genl_msg *msg,
 
 	l_debug("");
 
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	while (l_genl_attr_next(&attr, &type, &len, &data)) {
-		switch (type) {
-		case NL80211_ATTR_COOKIE:
-			if (len != 8)
-				return;
-
-			cookie = l_get_u64(data);
-
-			break;
-		}
-	}
-
-	if (!cookie)
+	if (nl80211_parse_attrs(msg, NL80211_ATTR_COOKIE, &cookie,
+					NL80211_ATTR_UNSPEC) < 0)
 		return;
 
 	match.cookie = cookie;
