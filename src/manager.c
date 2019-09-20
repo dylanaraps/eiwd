@@ -462,35 +462,24 @@ static uint32_t manager_parse_ifindex(struct l_genl_msg *msg)
 	return ifindex;
 }
 
-static uint32_t manager_parse_wiphy_id(struct l_genl_attr *attr)
+static uint32_t manager_parse_wiphy_id(struct l_genl_msg *msg)
 {
-	uint16_t type, len;
-	const void *data;
+	uint32_t wiphy;
 
-	while (l_genl_attr_next(attr, &type, &len, &data)) {
-		if (type != NL80211_ATTR_WIPHY)
-			continue;
+	if (nl80211_parse_attrs(msg, NL80211_ATTR_WIPHY, &wiphy,
+					NL80211_ATTR_UNSPEC) < 0)
+		return -1;
 
-		if (len != sizeof(uint32_t))
-			break;
-
-		return *((uint32_t *) data);
-	}
-
-	return -1;
+	return wiphy;
 }
 
 static void manager_del_wiphy_event(struct l_genl_msg *msg)
 {
 	struct wiphy_setup_state *state;
 	struct wiphy *wiphy;
-	struct l_genl_attr attr;
 	uint32_t id;
 
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	id = manager_parse_wiphy_id(&attr);
+	id = manager_parse_wiphy_id(msg);
 
 	state = manager_find_pending(id);
 	if (state) {
@@ -509,14 +498,10 @@ static void manager_interface_dump_callback(struct l_genl_msg *msg,
 						void *user_data)
 {
 	struct wiphy_setup_state *state;
-	struct l_genl_attr attr;
 
 	l_debug("");
 
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	state = manager_find_pending(manager_parse_wiphy_id(&attr));
+	state = manager_find_pending(manager_parse_wiphy_id(msg));
 	if (!state)
 		return;
 
@@ -557,7 +542,6 @@ static void manager_wiphy_dump_callback(struct l_genl_msg *msg, void *user_data)
 
 static void manager_new_wiphy_event(struct l_genl_msg *msg)
 {
-	struct l_genl_attr attr;
 	unsigned int wiphy_cmd_id;
 	unsigned int iface_cmd_id;
 	uint32_t wiphy_id;
@@ -565,10 +549,7 @@ static void manager_new_wiphy_event(struct l_genl_msg *msg)
 	if (!pending_wiphys)
 		return;
 
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	wiphy_id = manager_parse_wiphy_id(&attr);
+	wiphy_id = manager_parse_wiphy_id(msg);
 	/*
 	 * Until fixed, a NEW_WIPHY event will not include all the information
 	 * that may be available, but a dump will. Because of this we do both

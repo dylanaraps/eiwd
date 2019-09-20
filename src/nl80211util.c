@@ -49,11 +49,24 @@ static bool extract_ifindex(const void *data, uint16_t len, void *o)
 	return true;
 }
 
+static bool extract_uint32(const void *data, uint16_t len, void *o)
+{
+	uint32_t *out = o;
+
+	if (len != 4)
+		return false;
+
+	*out = l_get_u32(data);
+	return true;
+}
+
 static attr_handler handler_for_type(enum nl80211_attrs type)
 {
 	switch (type) {
 	case NL80211_ATTR_IFINDEX:
 		return extract_ifindex;
+	case NL80211_ATTR_WIPHY:
+		return extract_uint32;
 	default:
 		break;
 	}
