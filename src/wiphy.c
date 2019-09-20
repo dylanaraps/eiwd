@@ -49,6 +49,7 @@
 #include "src/util.h"
 #include "src/common.h"
 #include "src/watchlist.h"
+#include "src/nl80211util.h"
 
 #define EXT_CAP_LEN 10
 
@@ -703,13 +704,17 @@ static void parse_iftype_extended_capabilities(struct wiphy *wiphy,
 }
 
 static void wiphy_parse_attributes(struct wiphy *wiphy,
-					struct l_genl_attr *attr)
+					struct l_genl_msg *msg)
 {
+	struct l_genl_attr attr;
 	struct l_genl_attr nested;
 	uint16_t type, len;
 	const void *data;
 
-	while (l_genl_attr_next(attr, &type, &len, &data)) {
+	if (!l_genl_attr_init(&attr, msg))
+		return;
+
+	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 		switch (type) {
 		case NL80211_ATTR_FEATURE_FLAGS:
 			if (len != sizeof(uint32_t))
@@ -725,7 +730,7 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 			memcpy(wiphy->ext_features, data, len);
 			break;
 		case NL80211_ATTR_SUPPORTED_COMMANDS:
-			if (l_genl_attr_recurse(attr, &nested))
+			if (l_genl_attr_recurse(&attr, &nested))
 				parse_supported_commands(wiphy, &nested);
 
 			break;
@@ -733,7 +738,7 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 			parse_supported_ciphers(wiphy, data, len);
 			break;
 		case NL80211_ATTR_WIPHY_BANDS:
-			if (l_genl_attr_recurse(attr, &nested))
+			if (l_genl_attr_recurse(&attr, &nested))
 				parse_supported_bands(wiphy, &nested);
 
 			break;
@@ -748,7 +753,7 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 			wiphy->support_adhoc_rsn = true;
 			break;
 		case NL80211_ATTR_SUPPORTED_IFTYPES:
-			if (l_genl_attr_recurse(attr, &nested))
+			if (l_genl_attr_recurse(&attr, &nested))
 				parse_supported_iftypes(wiphy, &nested);
 			break;
 		case NL80211_ATTR_OFFCHANNEL_TX_OK:
@@ -759,75 +764,13 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 				data, minsize(EXT_CAP_LEN, len));
 			break;
 		case NL80211_ATTR_IFTYPE_EXT_CAPA:
-			if (!l_genl_attr_recurse(attr, &nested))
+			if (!l_genl_attr_recurse(&attr, &nested))
 				break;
 
 			parse_iftype_extended_capabilities(wiphy, &nested);
 			break;
 		}
 	}
-}
-
-bool wiphy_parse_id_and_name(struct l_genl_attr *attr, uint32_t *out_id,
-				const char **out_name)
-{
-	uint16_t type, len;
-	const void *data;
-	uint32_t id;
-	const char *name;
-
-	/*
-	 * The wiphy attribute, name and generation are always the first
-	 * three attributes (in that order) in every NEW_WIPHY & DEL_WIPHY
-	 * message.  If not, then error out with a warning and ignore the
-	 * whole message.
-	 */
-	if (!l_genl_attr_next(attr, &type, &len, &data))
-		return false;
-
-	if (type != NL80211_ATTR_WIPHY)
-		return false;
-
-	if (len != sizeof(uint32_t))
-		return false;
-
-	id = *((uint32_t *) data);
-
-	if (!l_genl_attr_next(attr, &type, &len, &data))
-		return false;
-
-	if (type != NL80211_ATTR_WIPHY_NAME)
-		return false;
-
-	if (len > sizeof(((struct wiphy *) 0)->name))
-		return false;
-
-	name = data;
-
-	if (len < 1 || !memchr(name + 1, 0, len - 1))
-		return false;
-
-	if (!l_genl_attr_next(attr, &type, &len, &data))
-		return false;
-
-	if (type != NL80211_ATTR_GENERATION)
-		return false;
-
-	if (len != sizeof(uint32_t))
-		return false;
-
-	/*
-	 * TODO: Handle GENERATION.  In theory if we detect a changed generation
-	 * number during a dump, it means that our dump needs to be re-started
-	 */
-
-	if (out_id)
-		*out_id = id;
-
-	if (out_name)
-		*out_name = name;
-
-	return true;
 }
 
 static bool wiphy_get_driver_name(struct wiphy *wiphy)
@@ -942,23 +885,11 @@ struct wiphy *wiphy_create(uint32_t wiphy_id, const char *name)
 	return wiphy;
 }
 
-void wiphy_update_from_genl(struct wiphy *wiphy, struct l_genl_msg *msg)
+void wiphy_update_from_genl(struct wiphy *wiphy, const char *name,
+				struct l_genl_msg *msg)
 {
-	struct l_genl_attr attr;
-	const char *name;
-
 	l_debug("");
 
-	if (!l_genl_attr_init(&attr, msg))
-		return;
-
-	if (!wiphy_parse_id_and_name(&attr, NULL, &name))
-		return;
-
-	/*
-	 * WIPHY_NAME is a NLA_NUL_STRING, so the kernel
-	 * enforces the data to be null terminated.
-	 */
 	if (strncmp(wiphy->name, name, sizeof(wiphy->name))) {
 		struct l_dbus *dbus = dbus_get_bus();
 
@@ -967,7 +898,7 @@ void wiphy_update_from_genl(struct wiphy *wiphy, struct l_genl_msg *msg)
 					IWD_WIPHY_INTERFACE, "Name");
 	}
 
-	wiphy_parse_attributes(wiphy, &attr);
+	wiphy_parse_attributes(wiphy, msg);
 }
 
 static void wiphy_set_station_capability_bits(struct wiphy *wiphy)

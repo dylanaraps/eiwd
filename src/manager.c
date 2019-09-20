@@ -330,17 +330,15 @@ static struct wiphy_setup_state *manager_rx_cmd_new_wiphy(
 {
 	struct wiphy_setup_state *state = NULL;
 	struct wiphy *wiphy;
-	struct l_genl_attr attr;
 	uint32_t id;
 	const char *name;
 	const char *driver, **driver_bad;
 	bool use_default;
 	const struct l_settings *settings = iwd_get_config();
 
-	if (!l_genl_attr_init(&attr, msg))
-		return NULL;
-
-	if (!wiphy_parse_id_and_name(&attr, &id, &name))
+	if (nl80211_parse_attrs(msg, NL80211_ATTR_WIPHY, &id,
+					NL80211_ATTR_WIPHY_NAME, &name,
+					NL80211_ATTR_UNSPEC) < 0)
 		return NULL;
 
 	/*
@@ -386,7 +384,7 @@ static struct wiphy_setup_state *manager_rx_cmd_new_wiphy(
 		l_info("Wiphy %s will only use the default interface", name);
 
 done:
-	wiphy_update_from_genl(wiphy, msg);
+	wiphy_update_from_genl(wiphy, name, msg);
 	return state;
 }
 
