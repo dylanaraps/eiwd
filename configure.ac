@@ -188,6 +188,17 @@ AC_ARG_ENABLE([systemd-service], AC_HELP_STRING([--disable-systemd-service],
 					[enable_systemd_service=${enableval}])
 AM_CONDITIONAL(SYSTEMD_SERVICE, test "${enable_systemd_service}" != "no")
 
+AC_ARG_ENABLE([manual-pages], AC_HELP_STRING([--disable-manual-pages],
+				[don't install manual pages]),
+					[enable_manual_pages=${enableval}])
+if (test "${manual_pages}" != "no"); then
+	AC_CHECK_PROGS(RST2MAN, [rst2man rst2man-3], "no")
+	if (test "x$RST2MAN" = "xno"); then
+		AC_MSG_WARN([rst2man required for building manual pages])
+	fi
+fi
+AM_CONDITIONAL(MANUAL_PAGES, test "${manual_pages}" != "no")
+
 AC_ARG_WITH([dbus-busdir], AC_HELP_STRING([--with-dbus-busdir=DIR],
 				[path to D-Bus bus services directory]),
 					[path_dbus_busdir=${withval}])
@@ -272,14 +283,6 @@ AC_ARG_ENABLE([sim_hardcoded], AC_HELP_STRING([--enable-sim-hardcoded],
 				[enable hard coded SIM keys]),
 					[enable_sim_hardcoded=${enableval}])
 AM_CONDITIONAL(SIM_HARDCODED, test "${enable_sim_hardcoded}" = "yes")
-
-AC_ARG_ENABLE([docs], AC_HELP_STRING([--enable-docs],
-				[build documentation and manual pages]),
-					[enable_docs=${enableval}])
-if (test "${enable_docs}" = "yes"); then
-	AC_PATH_PROG(A2X, [a2x], [], $PATH:/sbin:/usr/sbin)
-fi
-AM_CONDITIONAL(BUILD_DOCS, test "$A2X" != "")
 
 AC_CONFIG_FILES(Makefile)
 

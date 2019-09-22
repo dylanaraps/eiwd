@@ -110,6 +110,16 @@ configuration options which are generally useful and enabled by default:
 
 		Note: This option affects all systemd unit setups.
 
+	--disable-manual-pages
+
+		Disable generation and installation of manual pages
+
+		By default all available manual pages will be generated
+		and installed. When disabling this options, no manual
+		pages are installed.
+
+		Note: This options affects all manual pages.
+
 When building for a system that wants to use wireless technology, disabling
 any of the above options makes only limited sense. It may break the general
 setup and usability for wireless connections.
@@ -171,12 +181,6 @@ that can be enabled if the functionality is required:
 		Enable support for hard coded SIM keys
 
 		Note: With --disable-daemon this option is ignored
-
-	--enable-docs
-
-		Enable generation of documentation and manual pages
-
-		Note: This option does not provide any value right now
 
 
 Netlink monitoring

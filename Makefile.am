@@ -151,6 +151,10 @@ systemd_modloaddir = @SYSTEMD_MODLOADDIR@
 systemd_modload_DATA = src/pkcs8.conf
 endif
 
+if MANUAL_PAGES
+dist_man_MANS =
+endif
+
 eap_sources = src/eap.c src/eap.h src/eap-private.h \
 				src/eap-wsc.c src/eap-wsc.h \
 				src/eap-md5.c \
@@ -241,6 +245,10 @@ src_iwd_DEPENDENCIES += src/iwd.service
 systemd_unit_DATA += src/iwd.service
 dbus_bus_DATA += src/net.connman.iwd.service
 endif
+
+if MANUAL_PAGES
+dist_man_MANS += src/iwd.8
+endif
 endif
 
 if CLIENT
@@ -261,6 +269,10 @@ client_iwctl_SOURCES = client/main.c \
 			client/properties.h client/properties.c \
 			client/wsc.c client/station.c
 client_iwctl_LDADD = $(ell_ldadd) -lreadline
+
+if MANUAL_PAGES
+dist_man_MANS += client/iwctl.1
+endif
 endif
 
 if MONITOR
@@ -282,6 +294,10 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					src/p2putil.c src/p2putil.h \
 					src/anqputil.h src/anqputil.c
 monitor_iwmon_LDADD = $(ell_ldadd)
+
+if MANUAL_PAGES
+dist_man_MANS += monitor/iwmon.1
+endif
 endif
 
 if WIRED
@@ -303,6 +319,10 @@ wired_ead_DEPENDENCIES += wired/ead.service
 systemd_unit_DATA += wired/ead.service
 dbus_bus_DATA += wired/net.connman.ead.service
 endif
+
+if MANUAL_PAGES
+dist_man_MANS += wired/ead.8
+endif
 endif
 
 if HWSIM
@@ -316,6 +336,10 @@ tools_hwsim_LDADD = $(ell_ldadd)
 
 if DBUS_POLICY
 dist_dbus_data_DATA += tools/hwsim-dbus.conf
+endif
+
+if MANUAL_PAGES
+dist_man_MANS += tools/hwsim.1
 endif
 endif
 
@@ -476,16 +500,11 @@ unit_test_p2p_LDADD = $(ell_ldadd)
 
 TESTS = $(unit_tests)
 
-manual_pages = doc/iwmon.1
-
-if BUILD_DOCS
-dist_man_MANS = $(manual_pages)
-endif
-
 EXTRA_DIST = src/genbuiltin src/iwd.service.in src/net.connman.iwd.service \
 			wired/ead.service.in wired/net.connman.ead.service \
-			src/pkcs8.conf unit/gencerts.cnf \
-			doc/main.conf $(manual_pages:.1=.txt)
+			src/pkcs8.conf src/iwd.rst wired/ead.rst \
+			client/iwctl.rst monitor/iwmon.rst tools/hwsim.rst \
+			doc/main.conf unit/gencerts.cnf
 
 AM_CFLAGS = $(ell_cflags) -fvisibility=hidden \
 				-DUNITDIR=\""$(top_srcdir)/unit/"\" \
@@ -500,7 +519,7 @@ DISTCHECK_CONFIGURE_FLAGS = --disable-dbus-policy --disable-systemd-service \
 				--enable-hwsim \
 				--enable-tools
 
-DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests) $(manual_pages)
+DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests) $(dist_man_MANS)
 
 MAINTAINERCLEANFILES = Makefile.in configure config.h.in aclocal.m4
 
@@ -576,11 +595,17 @@ SED_PROCESS = $(AM_V_GEN)$(MKDIR_P) $(dir $@) && $(SED) \
 		-e 's,@libexecdir\@,$(libexecdir),g' \
 		< $< > $@
 
+RST2MAN_PROCESS = $(AM_V_GEN)$(RST2MAN) --strict --no-raw --no-generator \
+			--no-datestamp < $< > $@
+
 %.service: %.service.in Makefile
 	$(SED_PROCESS)
 
-%.1: %.txt
-	$(AM_V_GEN)$(A2X) --doctype manpage --format manpage $(srcdir)/$<
+%.1: %.rst Makefile
+	$(RST2MAN_PROCESS)
+
+%.8: %.rst Makefile
+	$(RST2MAN_PROCESS)
 
 install-data-local:
 if !SYSTEMD_SERVICE
