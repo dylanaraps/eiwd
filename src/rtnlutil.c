@@ -532,3 +532,56 @@ uint32_t rtnl_ifaddr_ipv6_delete(struct l_netlink *rtnl, int ifindex,
 	return rtnl_ifaddr_ipv6_change(rtnl, RTM_DELADDR, ifindex, prefix_len,
 						ip, cb, user_data, destroy);
 }
+
+uint32_t rtnl_route_ipv6_add_gateway(struct l_netlink *rtnl, int ifindex,
+					const char *gateway,
+					uint32_t priority_offset,
+					uint8_t proto,
+					l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy)
+{
+	L_AUTO_FREE_VAR(struct rtmsg *, rtmmsg) = NULL;
+	struct in6_addr in6_addr;
+	size_t bufsize;
+	void *rta_buf;
+	uint16_t flags;
+
+	if (!gateway)
+		return 0;
+
+	bufsize = NLMSG_ALIGN(sizeof(struct rtmsg)) +
+			RTA_SPACE(sizeof(uint32_t)) +
+			(priority_offset ? RTA_SPACE(sizeof(uint32_t)) : 0) +
+			(gateway ? RTA_SPACE(sizeof(struct in6_addr)) : 0);
+
+	rtmmsg = l_malloc(bufsize);
+	memset(rtmmsg, 0, bufsize);
+
+	rtmmsg->rtm_family = AF_INET6;
+	rtmmsg->rtm_table = RT_TABLE_MAIN;
+	rtmmsg->rtm_protocol = proto;
+	rtmmsg->rtm_type = RTN_UNICAST;
+	rtmmsg->rtm_scope = RT_SCOPE_UNIVERSE;
+
+	flags = NLM_F_CREATE | NLM_F_REPLACE;
+
+	rta_buf = (void *) rtmmsg + NLMSG_ALIGN(sizeof(struct rtmsg));
+	rta_buf += rta_add_u32(rta_buf, RTA_OIF, ifindex);
+
+	if (priority_offset)
+		rta_buf += rta_add_u32(rta_buf, RTA_PRIORITY,
+						priority_offset + ifindex);
+
+	if (gateway) {
+		if (inet_pton(AF_INET6, gateway, &in6_addr) < 1)
+			return 0;
+
+		rta_buf += rta_add_data(rta_buf, RTA_GATEWAY, &in6_addr,
+						sizeof(struct in6_addr));
+	}
+
+	return l_netlink_send(rtnl, RTM_NEWROUTE, flags, rtmmsg,
+				rta_buf - (void *) rtmmsg, cb, user_data,
+								destroy);
+}
