@@ -94,17 +94,6 @@ static void netconfig_free(void *data)
 	l_free(netconfig);
 }
 
-static bool netconfig_match(const void *a, const void *b)
-{
-	const struct netconfig *netconfig = a;
-	uint32_t ifindex = L_PTR_TO_UINT(b);
-
-	if (netconfig->ifindex == ifindex)
-		return true;
-
-	return false;
-}
-
 static struct netconfig *netconfig_find(uint32_t ifindex)
 {
 	const struct l_queue_entry *entry;
@@ -696,23 +685,23 @@ static void netconfig_station_state_changed(enum station_state state,
 	netconfig->station_state = state;
 }
 
-bool netconfig_ifindex_add(uint32_t ifindex)
+struct netconfig *netconfig_new(uint32_t ifindex)
 {
 	struct netconfig *netconfig;
 	struct station *station;
 
 	if (!netconfig_list)
-		return false;
+		return NULL;
 
 	l_debug("Starting netconfig for interface: %d", ifindex);
 
 	netconfig = netconfig_find(ifindex);
 	if (netconfig)
-		return true;
+		return netconfig;
 
 	station = station_find(ifindex);
 	if (!station)
-		return false;
+		return NULL;
 
 	netconfig = l_new(struct netconfig, 1);
 	netconfig->ifindex = ifindex;
@@ -725,22 +714,17 @@ bool netconfig_ifindex_add(uint32_t ifindex)
 
 	l_queue_push_tail(netconfig_list, netconfig);
 
-	return true;
+	return netconfig;
 }
 
-bool netconfig_ifindex_remove(uint32_t ifindex)
+void netconfig_destroy(struct netconfig *netconfig)
 {
-	struct netconfig *netconfig;
-
 	if (!netconfig_list)
-		return false;
+		return;
 
 	l_debug();
 
-	netconfig = l_queue_remove_if(netconfig_list, netconfig_match,
-							L_UINT_TO_PTR(ifindex));
-	if (!netconfig)
-		return false;
+	l_queue_remove(netconfig_list, netconfig);
 
 	if (netconfig->station_state != STATION_STATE_DISCONNECTED) {
 		netconfig_ipv4_select_and_uninstall(netconfig);
@@ -751,8 +735,6 @@ bool netconfig_ifindex_remove(uint32_t ifindex)
 	}
 
 	netconfig_free(netconfig);
-
-	return true;
 }
 
 static int netconfig_init(void)

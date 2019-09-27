@@ -20,5 +20,7 @@
  *
  */
 
-bool netconfig_ifindex_add(uint32_t ifindex);
-bool netconfig_ifindex_remove(uint32_t ifindex);
+struct netconfig;
+
+struct netconfig *netconfig_new(uint32_t ifindex);
+void netconfig_destroy(struct netconfig *netconfig);

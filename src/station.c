@@ -88,6 +88,8 @@ struct station {
 
 	struct l_queue *anqp_pending;
 
+	struct netconfig *netconfig;
+
 	bool preparing_roam : 1;
 	bool signal_low : 1;
 	bool roam_no_orig_ap : 1;
@@ -3021,7 +3023,7 @@ static struct station *station_create(struct netdev *netdev)
 	l_dbus_object_add_interface(dbus, netdev_get_path(netdev),
 					IWD_STATION_INTERFACE, station);
 
-	netconfig_ifindex_add(netdev_get_ifindex(netdev));
+	station->netconfig = netconfig_new(netdev_get_ifindex(netdev));
 
 	station->anqp_pending = l_queue_new();
 
@@ -3038,7 +3040,8 @@ static void station_free(struct station *station)
 	if (station->connected_bss)
 		netdev_disconnect(station->netdev, NULL, NULL);
 
-	netconfig_ifindex_remove(netdev_get_ifindex(station->netdev));
+	netconfig_destroy(station->netconfig);
+	station->netconfig = NULL;
 
 	periodic_scan_stop(station);
 
