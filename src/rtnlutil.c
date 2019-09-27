@@ -418,3 +418,33 @@ uint32_t rtnl_route_ipv4_add_gateway(struct l_netlink *rtnl, int ifindex,
 				gateway, src, priority_offset, proto, cb,
 				user_data, destroy);
 }
+
+void rtnl_ifaddr_ipv6_extract(const struct ifaddrmsg *ifa, int len, char **ip)
+{
+	struct in6_addr in6_addr;
+	struct rtattr *attr;
+	char address[128];
+
+	for (attr = IFA_RTA(ifa); RTA_OK(attr, len);
+						attr = RTA_NEXT(attr, len)) {
+		switch (attr->rta_type) {
+		case IFA_ADDRESS:
+			if (!ip)
+				break;
+
+			memcpy(&in6_addr.s6_addr, RTA_DATA(attr),
+						sizeof(in6_addr.s6_addr));
+
+			if (!inet_ntop(AF_INET6, &in6_addr, address,
+							INET6_ADDRSTRLEN)) {
+
+				l_error("rtnl: Failed to extract IPv6 address");
+				break;
+			}
+
+			*ip = l_strdup(address);
+
+			break;
+		}
+	}
+}

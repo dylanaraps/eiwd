@@ -67,3 +67,6 @@ uint32_t rtnl_route_ipv4_add_gateway(struct l_netlink *rtnl, int ifindex,
 					l_netlink_command_func_t cb,
 					void *user_data,
 					l_netlink_destroy_func_t destroy);
+
+void rtnl_ifaddr_ipv6_extract(const struct ifaddrmsg *ifa, int bytes,
+								char **ip);
