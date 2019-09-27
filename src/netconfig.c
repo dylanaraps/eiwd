@@ -83,7 +83,7 @@ static void netconfig_ifaddr_destroy(void *data)
 	l_free(ifaddr);
 }
 
-static void netconfig_destroy(void *data)
+static void netconfig_free(void *data)
 {
 	struct netconfig *netconfig = data;
 
@@ -750,7 +750,7 @@ bool netconfig_ifindex_remove(uint32_t ifindex)
 		resolve_remove(netconfig->ifindex);
 	}
 
-	netconfig_destroy(netconfig);
+	netconfig_free(netconfig);
 
 	return true;
 }
@@ -818,7 +818,7 @@ static void netconfig_exit(void)
 	l_netlink_destroy(rtnl);
 	rtnl = NULL;
 
-	l_queue_destroy(netconfig_list, netconfig_destroy);
+	l_queue_destroy(netconfig_list, netconfig_free);
 }
 
 IWD_MODULE(netconfig, netconfig_init, netconfig_exit)
