@@ -74,3 +74,12 @@ uint32_t rtnl_ifaddr_ipv6_get(struct l_netlink *rtnl,
 				l_netlink_command_func_t cb,
 				void *user_data,
 				l_netlink_destroy_func_t destroy);
+uint32_t rtnl_ifaddr_ipv6_add(struct l_netlink *rtnl, int ifindex,
+				uint8_t prefix_len, const char *ip,
+				l_netlink_command_func_t cb, void *user_data,
+				l_netlink_destroy_func_t destroy);
+uint32_t rtnl_ifaddr_ipv6_delete(struct l_netlink *rtnl, int ifindex,
+					uint8_t prefix_len, const char *ip,
+					l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy);

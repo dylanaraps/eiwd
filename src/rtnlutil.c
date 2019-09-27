@@ -469,3 +469,66 @@ uint32_t rtnl_ifaddr_ipv6_get(struct l_netlink *rtnl,
 
 	return id;
 }
+
+static uint32_t rtnl_ifaddr_ipv6_change(struct l_netlink *rtnl,
+					uint16_t nlmsg_type,
+					int ifindex, uint8_t prefix_len,
+					const char *ip,
+					l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy)
+{
+	struct ifaddrmsg *rtmmsg;
+	struct in6_addr in6_addr;
+	void *rta_buf;
+	size_t bufsize;
+	uint32_t id;
+
+	bufsize = NLMSG_ALIGN(sizeof(struct ifaddrmsg)) +
+					RTA_SPACE(sizeof(struct in6_addr));
+
+	rtmmsg = l_malloc(bufsize);
+	memset(rtmmsg, 0, bufsize);
+
+	rtmmsg->ifa_index = ifindex;
+	rtmmsg->ifa_family = AF_INET6;
+	rtmmsg->ifa_flags = IFA_F_PERMANENT;
+	rtmmsg->ifa_scope = RT_SCOPE_UNIVERSE;
+	rtmmsg->ifa_prefixlen = prefix_len;
+
+	rta_buf = (void *) rtmmsg + NLMSG_ALIGN(sizeof(struct ifaddrmsg));
+
+	if (inet_pton(AF_INET6, ip, &in6_addr) < 1) {
+		l_free(rtmmsg);
+		return 0;
+	}
+
+	rta_buf += rta_add_data(rta_buf, IFA_LOCAL, &in6_addr,
+						sizeof(struct in6_addr));
+
+	id = l_netlink_send(rtnl, nlmsg_type, 0, rtmmsg,
+						rta_buf - (void *) rtmmsg, cb,
+						user_data, destroy);
+	l_free(rtmmsg);
+
+	return id;
+}
+
+uint32_t rtnl_ifaddr_ipv6_add(struct l_netlink *rtnl, int ifindex,
+				uint8_t prefix_len, const char *ip,
+				l_netlink_command_func_t cb, void *user_data,
+				l_netlink_destroy_func_t destroy)
+{
+	return rtnl_ifaddr_ipv6_change(rtnl, RTM_NEWADDR, ifindex, prefix_len,
+						ip, cb, user_data, destroy);
+}
+
+uint32_t rtnl_ifaddr_ipv6_delete(struct l_netlink *rtnl, int ifindex,
+					uint8_t prefix_len, const char *ip,
+					l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy)
+{
+	return rtnl_ifaddr_ipv6_change(rtnl, RTM_DELADDR, ifindex, prefix_len,
+						ip, cb, user_data, destroy);
+}
