@@ -113,29 +113,11 @@ static struct netconfig *netconfig_find(uint32_t ifindex)
 	return NULL;
 }
 
-static struct l_settings *netconfig_get_connected_network_settings(
-						struct netconfig *netconfig)
-{
-	struct station *station;
-	const struct network *network;
-
-	station = station_find(netconfig->ifindex);
-	if (!station)
-		return NULL;
-
-	network = station_get_connected_network(station);
-	if (!network)
-		return NULL;
-
-	return network_get_settings(network);
-}
-
 static struct netconfig_ifaddr *netconfig_ipv4_get_ifaddr(
 						struct netconfig *netconfig,
 						uint8_t proto)
 {
 	const struct l_dhcp_lease *lease;
-	const struct l_settings *settings;
 	struct netconfig_ifaddr *ifaddr;
 	struct in_addr in_addr;
 	char *netmask;
@@ -143,18 +125,17 @@ static struct netconfig_ifaddr *netconfig_ipv4_get_ifaddr(
 
 	switch (proto) {
 	case RTPROT_STATIC:
-		settings = netconfig_get_connected_network_settings(netconfig);
-		if (!settings)
-			return NULL;
 
-		ip = l_settings_get_string(settings, "IPv4", "ip");
+		ip = l_settings_get_string(netconfig->active_settings, "IPv4",
+									"ip");
 		if (!ip)
 			return NULL;
 
 		ifaddr = l_new(struct netconfig_ifaddr, 1);
 		ifaddr->ip = ip;
 
-		netmask = l_settings_get_string(settings, "IPv4", "netmask");
+		netmask = l_settings_get_string(netconfig->active_settings,
+							"IPv4", "netmask");
 		if (netmask && inet_pton(AF_INET, netmask, &in_addr) > 0)
 			ifaddr->prefix_len = __builtin_popcountl(
 						L_BE32_TO_CPU(in_addr.s_addr));
@@ -163,8 +144,9 @@ static struct netconfig_ifaddr *netconfig_ipv4_get_ifaddr(
 
 		l_free(netmask);
 
-		ifaddr->broadcast = l_settings_get_string(settings, "IPv4",
-								"broadcast");
+		ifaddr->broadcast =
+			l_settings_get_string(netconfig->active_settings,
+							"IPv4", "broadcast");
 		ifaddr->family = AF_INET;
 
 		return ifaddr;
@@ -203,15 +185,12 @@ static struct netconfig_ifaddr *netconfig_ipv4_get_ifaddr(
 static char *netconfig_ipv4_get_gateway(struct netconfig *netconfig)
 {
 	const struct l_dhcp_lease *lease;
-	const struct l_settings *settings;
 
 	switch (netconfig->rtm_protocol) {
 	case RTPROT_STATIC:
-		settings = netconfig_get_connected_network_settings(netconfig);
-		if (!settings)
-			return NULL;
 
-		return l_settings_get_string(settings, "IPv4", "gateway");
+		return l_settings_get_string(netconfig->active_settings,
+							"IPv4", "gateway");
 
 	case RTPROT_DHCP:
 		lease = l_dhcp_client_get_lease(netconfig->dhcp_client);
@@ -227,15 +206,12 @@ static char *netconfig_ipv4_get_gateway(struct netconfig *netconfig)
 static char **netconfig_ipv4_get_dns(struct netconfig *netconfig, uint8_t proto)
 {
 	const struct l_dhcp_lease *lease;
-	const struct l_settings *settings;
 
 	switch (proto) {
 	case RTPROT_STATIC:
-		settings = netconfig_get_connected_network_settings(netconfig);
-		if (!settings)
-			return NULL;
 
-		return l_settings_get_string_list(settings, "IPv4", "dns", ' ');
+		return l_settings_get_string_list(netconfig->active_settings,
+							"IPv4", "dns", ' ');
 
 	case RTPROT_DHCP:
 		lease = l_dhcp_client_get_lease(netconfig->dhcp_client);
