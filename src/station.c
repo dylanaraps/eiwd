@@ -1158,8 +1158,23 @@ static void station_enter_state(struct station *station,
 				IWD_NETWORK_INTERFACE, "Connected");
 		/* fall through */
 	case STATION_STATE_DISCONNECTED:
+		periodic_scan_stop(station);
+
+		break;
 	case STATION_STATE_CONNECTED:
 		periodic_scan_stop(station);
+
+		if (station->state == STATION_STATE_ROAMING) {
+			netconfig_reconfigure(station->netconfig);
+
+			break;
+		}
+
+		netconfig_configure(station->netconfig,
+					network_get_settings(
+						station->connected_network),
+					netdev_get_address(
+							station->netdev));
 		break;
 	case STATION_STATE_DISCONNECTING:
 	case STATION_STATE_ROAMING:
@@ -1246,6 +1261,8 @@ static void station_reset_connection_state(struct station *station)
 static void station_disassociated(struct station *station)
 {
 	l_debug("%u", netdev_get_ifindex(station->netdev));
+
+	netconfig_reset(station->netconfig);
 
 	station_reset_connection_state(station);
 
@@ -2327,6 +2344,8 @@ static void station_disconnect_onconnect(struct station *station,
 		return;
 	}
 
+	netconfig_reset(station->netconfig);
+
 	station_reset_connection_state(station);
 
 	station_enter_state(station, STATION_STATE_DISCONNECTING);
@@ -2561,6 +2580,8 @@ int station_disconnect(struct station *station)
 	if (netdev_disconnect(station->netdev,
 					station_disconnect_cb, station) < 0)
 		return -EIO;
+
+	netconfig_reset(station->netconfig);
 
 	/*
 	 * If the disconnect somehow fails we won't know if we're still
