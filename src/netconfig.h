@@ -22,5 +22,11 @@
 
 struct netconfig;
 
+bool netconfig_configure(struct netconfig *netconfig,
+				const struct l_settings *active_settings,
+				const uint8_t *mac_address);
+bool netconfig_reconfigure(struct netconfig *netconfig);
+bool netconfig_reset(struct netconfig *netconfig);
+
 struct netconfig *netconfig_new(uint32_t ifindex);
 void netconfig_destroy(struct netconfig *netconfig);

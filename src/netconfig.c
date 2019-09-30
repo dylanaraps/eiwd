@@ -48,6 +48,8 @@ struct netconfig {
 	struct l_dhcp_client *dhcp_client;
 	struct l_queue *ifaddr_list;
 	uint8_t rtm_protocol;
+
+	const struct l_settings *active_settings;
 };
 
 struct netconfig_ifaddr {
@@ -589,15 +591,9 @@ static void netconfig_ipv4_dhcp_event_handler(struct l_dhcp_client *client,
 	}
 }
 
-static bool netconfig_ipv4_dhcp_create(struct netconfig *netconfig,
-							struct station *station)
+static bool netconfig_ipv4_dhcp_create(struct netconfig *netconfig)
 {
 	netconfig->dhcp_client = l_dhcp_client_new(netconfig->ifindex);
-
-	l_dhcp_client_set_address(netconfig->dhcp_client, ARPHRD_ETHER,
-					netdev_get_address(
-						station_get_netdev(station)),
-					ETH_ALEN);
 
 	l_dhcp_client_set_event_handler(netconfig->dhcp_client,
 					netconfig_ipv4_dhcp_event_handler,
@@ -654,41 +650,57 @@ static void netconfig_ipv4_select_and_uninstall(struct netconfig *netconfig)
 	l_dhcp_client_stop(netconfig->dhcp_client);
 }
 
-static void netconfig_station_state_changed(enum station_state state,
-								void *userdata)
+bool netconfig_configure(struct netconfig *netconfig,
+				const struct l_settings *active_settings,
+				const uint8_t *mac_address)
 {
-	struct netconfig *netconfig = userdata;
+	netconfig->active_settings = active_settings;
 
-	l_debug("");
+	l_dhcp_client_set_address(netconfig->dhcp_client, ARPHRD_ETHER,
+							mac_address, ETH_ALEN);
 
-	switch (state) {
-	case STATION_STATE_CONNECTED:
-		netconfig_ipv4_select_and_install(netconfig);
+	netconfig_ipv4_select_and_install(netconfig);
 
-		/* TODO: IPv6 addressing */
+	/* TODO: IPv6 addressing */
 
-		break;
-	case STATION_STATE_DISCONNECTED:
-		netconfig_ipv4_select_and_uninstall(netconfig);
+	return true;
+}
 
-		/* TODO: IPv6 addressing */
-
-		resolve_remove(netconfig->ifindex);
-
-		break;
-	case STATION_STATE_ROAMING:
-		break;
-	default:
-		return;
+bool netconfig_reconfigure(struct netconfig *netconfig)
+{
+	if (netconfig->rtm_protocol == RTPROT_DHCP) {
+		/*
+		 *
+		 * TODO l_dhcp_client to try to request a
+		 * previously used address.
+		 *
+		 * return;
+		 */
 	}
 
-	netconfig->station_state = state;
+	netconfig_ipv4_select_and_install(netconfig);
+
+	/* TODO: IPv6 addressing */
+
+	return true;
+}
+
+bool netconfig_reset(struct netconfig *netconfig)
+{
+	netconfig_ipv4_select_and_uninstall(netconfig);
+
+	/* TODO: IPv6 addressing */
+
+	resolve_remove(netconfig->ifindex);
+
+	netconfig->rtm_protocol = 0;
+
+	return true;
 }
 
 struct netconfig *netconfig_new(uint32_t ifindex)
 {
 	struct netconfig *netconfig;
-	struct station *station;
 
 	if (!netconfig_list)
 		return NULL;
@@ -699,18 +711,11 @@ struct netconfig *netconfig_new(uint32_t ifindex)
 	if (netconfig)
 		return netconfig;
 
-	station = station_find(ifindex);
-	if (!station)
-		return NULL;
-
 	netconfig = l_new(struct netconfig, 1);
 	netconfig->ifindex = ifindex;
 	netconfig->ifaddr_list = l_queue_new();
 
-	netconfig_ipv4_dhcp_create(netconfig, station);
-
-	station_add_state_watch(station, netconfig_station_state_changed,
-							netconfig, NULL);
+	netconfig_ipv4_dhcp_create(netconfig);
 
 	l_queue_push_tail(netconfig_list, netconfig);
 
@@ -726,7 +731,7 @@ void netconfig_destroy(struct netconfig *netconfig)
 
 	l_queue_remove(netconfig_list, netconfig);
 
-	if (netconfig->station_state != STATION_STATE_DISCONNECTED) {
+	if (netconfig->rtm_protocol) {
 		netconfig_ipv4_select_and_uninstall(netconfig);
 
 		/* TODO Uninstall IPv6 addresses. */
