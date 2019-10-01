@@ -2906,6 +2906,9 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	struct eapol_key *step1, *step2, *step3, *step4;
 	uint8_t ptk_buf[64];
 	uint8_t *ptk;
+	struct l_certchain *server_cert;
+	struct l_key *server_key;
+	struct l_queue *ca_cert;
 
 	aa = ap_address;
 	spa = sta_address;
@@ -2955,9 +2958,18 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	s->tx_buf_len = 0;
 	s->tx_buf_offset = 0;
 
-	assert(l_tls_set_auth_data(s->tls, CERTDIR "cert-server.pem",
-				CERTDIR "cert-server-key-pkcs8.pem", NULL));
-	assert(l_tls_set_cacert(s->tls, CERTDIR "cert-ca.pem"));
+	server_cert = l_pem_load_certificate_chain(CERTDIR "cert-server.pem");
+	assert(server_cert);
+
+	server_key = l_pem_load_private_key(CERTDIR "cert-server-key-pkcs8.pem",
+						NULL, NULL);
+	assert(server_key);
+
+	ca_cert = l_pem_load_certificate_list(CERTDIR "cert-ca.pem");
+	assert(ca_cert);
+
+	assert(l_tls_set_auth_data(s->tls, server_cert, server_key));
+	assert(l_tls_set_cacert(s->tls, ca_cert));
 	assert(l_tls_start(s->tls));
 
 	ths->handshake_failed = false;
