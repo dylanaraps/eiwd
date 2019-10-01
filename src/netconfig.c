@@ -419,6 +419,22 @@ static void netconfig_ifaddr_ipv6_notify(uint16_t type, const void *data,
 	}
 }
 
+static void netconfig_ifaddr_ipv6_cmd_cb(int error, uint16_t type,
+						const void *data, uint32_t len,
+						void *user_data)
+{
+	if (error) {
+		l_error("netconfig: ifaddr IPv6 command failure. "
+				"Error %d: %s", error, strerror(-error));
+		return;
+	}
+
+	if (type != RTM_NEWADDR)
+		return;
+
+	netconfig_ifaddr_ipv6_notify(type, data, len, user_data);
+}
+
 static void netconfig_route_cmd_cb(int error, uint16_t type,
 						const void *data, uint32_t len,
 						void *user_data)
@@ -829,6 +845,14 @@ static int netconfig_init(void)
 	if (!r) {
 		l_error("netconfig: Failed to register for RTNL link IPv6 "
 					"address notifications.");
+		goto error;
+	}
+
+	r = rtnl_ifaddr_ipv6_get(rtnl, netconfig_ifaddr_ipv6_cmd_cb, NULL,
+									NULL);
+	if (!r) {
+		l_error("netconfig: Failed to get IPv6 addresses from RTNL"
+								" link.");
 		goto error;
 	}
 
