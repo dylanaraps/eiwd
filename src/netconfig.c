@@ -224,6 +224,23 @@ static char **netconfig_ipv4_get_dns(struct netconfig *netconfig, uint8_t proto)
 	return NULL;
 }
 
+static bool netconfig_ifaddr_match(const void *a, const void *b)
+{
+	const struct netconfig_ifaddr *entry = a;
+	const struct netconfig_ifaddr *query = b;
+
+	if (entry->family != query->family)
+		return false;
+
+	if (entry->prefix_len != query->prefix_len)
+		return false;
+
+	if (strcmp(entry->ip, query->ip))
+		return false;
+
+	return true;
+}
+
 static struct netconfig_ifaddr *netconfig_ifaddr_find(
 					const struct netconfig *netconfig,
 					uint8_t family, uint8_t prefix_len,
@@ -333,6 +350,73 @@ static void netconfig_ifaddr_cmd_cb(int error, uint16_t type,
 		return;
 
 	netconfig_ifaddr_notify(type, data, len, user_data);
+}
+
+static void netconfig_ifaddr_ipv6_added(struct netconfig *netconfig,
+					const struct ifaddrmsg *ifa,
+					uint32_t len)
+{
+	struct netconfig_ifaddr *ifaddr;
+
+	ifaddr = l_new(struct netconfig_ifaddr, 1);
+	ifaddr->family = ifa->ifa_family;
+	ifaddr->prefix_len = ifa->ifa_prefixlen;
+
+	rtnl_ifaddr_ipv6_extract(ifa, len, &ifaddr->ip);
+
+	l_debug("ifindex %u: ifaddr %s/%u", netconfig->ifindex, ifaddr->ip,
+							ifaddr->prefix_len);
+
+	l_queue_push_tail(netconfig->ifaddr_list, ifaddr);
+}
+
+static void netconfig_ifaddr_ipv6_deleted(struct netconfig *netconfig,
+						const struct ifaddrmsg *ifa,
+						uint32_t len)
+{
+	struct netconfig_ifaddr *ifaddr;
+	struct netconfig_ifaddr query;
+
+	rtnl_ifaddr_ipv6_extract(ifa, len, &query.ip);
+
+	query.family = ifa->ifa_family;
+	query.prefix_len = ifa->ifa_prefixlen;
+
+	ifaddr = l_queue_remove_if(netconfig->ifaddr_list,
+						netconfig_ifaddr_match, &query);
+
+	l_free(query.ip);
+
+	if (!ifaddr)
+		return;
+
+	l_debug("ifaddr %s/%u", ifaddr->ip, ifaddr->prefix_len);
+
+	netconfig_ifaddr_destroy(ifaddr);
+}
+
+static void netconfig_ifaddr_ipv6_notify(uint16_t type, const void *data,
+						uint32_t len, void *user_data)
+{
+	const struct ifaddrmsg *ifa = data;
+	struct netconfig *netconfig;
+	uint32_t bytes;
+
+	netconfig = netconfig_find(ifa->ifa_index);
+	if (!netconfig)
+		/* Ignore the interfaces which aren't managed by iwd. */
+		return;
+
+	bytes = len - NLMSG_ALIGN(sizeof(struct ifaddrmsg));
+
+	switch (type) {
+	case RTM_NEWADDR:
+		netconfig_ifaddr_ipv6_added(netconfig, ifa, bytes);
+		break;
+	case RTM_DELADDR:
+		netconfig_ifaddr_ipv6_deleted(netconfig, ifa, bytes);
+		break;
+	}
 }
 
 static void netconfig_route_cmd_cb(int error, uint16_t type,
@@ -737,6 +821,14 @@ static int netconfig_init(void)
 	r = rtnl_ifaddr_get(rtnl, netconfig_ifaddr_cmd_cb, NULL, NULL);
 	if (!r) {
 		l_error("netconfig: Failed to get addresses from RTNL link.");
+		goto error;
+	}
+
+	r = l_netlink_register(rtnl, RTNLGRP_IPV6_IFADDR,
+				netconfig_ifaddr_ipv6_notify, NULL, NULL);
+	if (!r) {
+		l_error("netconfig: Failed to register for RTNL link IPv6 "
+					"address notifications.");
 		goto error;
 	}
 
