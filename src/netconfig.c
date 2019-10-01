@@ -317,6 +317,47 @@ static char *netconfig_ipv6_get_gateway(struct netconfig *netconfig)
 	return NULL;
 }
 
+static char **netconfig_ipv6_get_dns(struct netconfig *netconfig, uint8_t proto)
+{
+	struct in6_addr in6_addr;
+	char **dns_list;
+	char **p;
+
+	switch (proto) {
+	case RTPROT_STATIC:
+		p = dns_list =
+			l_settings_get_string_list(netconfig->active_settings,
+							"IPv6", "dns", ' ');
+
+		if (!dns_list || !*dns_list) {
+			l_strv_free(dns_list);
+
+			return NULL;
+		}
+
+		for (; *p; p++) {
+			if (inet_pton(AF_INET6, *p, &in6_addr) == 1)
+				continue;
+
+			l_error("netconfig: Invalid IPv6 DNS address %s is "
+				"provided in network configuration file.", *p);
+
+			l_strv_free(dns_list);
+
+			return NULL;
+		}
+
+		return dns_list;
+
+	case RTPROT_DHCP:
+		/* TODO */
+
+		return NULL;
+	}
+
+	return NULL;
+}
+
 static bool netconfig_ifaddr_match(const void *a, const void *b)
 {
 	const struct netconfig_ifaddr *entry = a;
@@ -666,6 +707,7 @@ static void netconfig_ipv6_ifaddr_add_cmd_cb(int error, uint16_t type,
 						void *user_data)
 {
 	struct netconfig *netconfig = user_data;
+	char **dns;
 
 	if (error && error != -EEXIST) {
 		l_error("netconfig: Failed to add IPv6 address. "
@@ -679,7 +721,16 @@ static void netconfig_ipv6_ifaddr_add_cmd_cb(int error, uint16_t type,
 		return;
 	}
 
-	/* TODO Install DNS */
+	dns = netconfig_ipv6_get_dns(netconfig, netconfig->rtm_v6_protocol);
+	if (!dns) {
+		l_error("netconfig: Failed to obtain the DNS addresses from "
+			"%s.", netconfig->rtm_v6_protocol == RTPROT_STATIC ?
+				"setting file" : "DHCPv6 lease");
+		return;
+	}
+
+	resolve_add_dns(netconfig->ifindex, AF_INET6, dns);
+	l_strv_free(dns);
 }
 
 static void netconfig_install_address(struct netconfig *netconfig,
