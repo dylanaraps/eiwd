@@ -190,13 +190,13 @@ AM_CONDITIONAL(SYSTEMD_SERVICE, test "${enable_systemd_service}" != "no")
 AC_ARG_ENABLE([manual-pages], AC_HELP_STRING([--disable-manual-pages],
 				[don't install manual pages]),
 					[enable_manual_pages=${enableval}])
-if (test "${manual_pages}" != "no"); then
+if (test "${enable_manual_pages}" != "no"); then
 	AC_CHECK_PROGS(RST2MAN, [rst2man rst2man-3 rst2man.py], "no")
 	if (test "x$RST2MAN" = "xno"); then
 		AC_MSG_WARN([rst2man required for building manual pages])
 	fi
 fi
-AM_CONDITIONAL(MANUAL_PAGES, test "${manual_pages}" != "no")
+AM_CONDITIONAL(MANUAL_PAGES, test "${enable_manual_pages}" != "no")
 
 AC_ARG_WITH([dbus-busdir], AC_HELP_STRING([--with-dbus-busdir=DIR],
 				[path to D-Bus bus services directory]),
