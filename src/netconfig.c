@@ -597,15 +597,6 @@ static void netconfig_ipv4_select_and_install(struct netconfig *netconfig)
 
 	netconfig->rtm_protocol = RTPROT_DHCP;
 
-	if (netconfig->station_state == STATION_STATE_ROAMING) {
-		/*
-		 * TODO l_dhcp_client to try to request a
-		 * previously used address.
-		 *
-		 * return;
-		 */
-	}
-
 	if (l_dhcp_client_start(netconfig->dhcp_client))
 		return;
 
