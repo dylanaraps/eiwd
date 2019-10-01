@@ -645,16 +645,8 @@ bool netconfig_configure(struct netconfig *netconfig,
 bool netconfig_reconfigure(struct netconfig *netconfig)
 {
 	if (netconfig->rtm_protocol == RTPROT_DHCP) {
-		/*
-		 *
-		 * TODO l_dhcp_client to try to request a
-		 * previously used address.
-		 *
-		 * return;
-		 */
+		/* TODO l_dhcp_client sending a DHCP inform request */
 	}
-
-	netconfig_ipv4_select_and_install(netconfig);
 
 	/* TODO: IPv6 addressing */
 
