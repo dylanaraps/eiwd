@@ -427,21 +427,21 @@ static void netconfig_ifaddr_deleted(struct netconfig *netconfig,
 					uint32_t len)
 {
 	struct netconfig_ifaddr *ifaddr;
-	char *ip;
+	struct netconfig_ifaddr query;
 
-	rtnl_ifaddr_extract(ifa, len, NULL, &ip, NULL);
+	rtnl_ifaddr_extract(ifa, len, NULL, &query.ip, NULL);
 
-	ifaddr = netconfig_ifaddr_find(netconfig, ifa->ifa_family,
-							ifa->ifa_prefixlen, ip);
+	query.family = ifa->ifa_family;
+	query.prefix_len = ifa->ifa_prefixlen;
 
-	l_free(ip);
+	ifaddr = l_queue_remove_if(netconfig->ifaddr_list,
+						netconfig_ifaddr_match, &query);
+	l_free(query.ip);
 
 	if (!ifaddr)
 		return;
 
 	l_debug("ifaddr %s/%u", ifaddr->ip, ifaddr->prefix_len);
-
-	l_queue_remove(netconfig->ifaddr_list, ifaddr);
 
 	netconfig_ifaddr_destroy(ifaddr);
 }
