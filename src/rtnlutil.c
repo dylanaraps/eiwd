@@ -533,7 +533,8 @@ uint32_t rtnl_ifaddr_ipv6_delete(struct l_netlink *rtnl, int ifindex,
 						ip, cb, user_data, destroy);
 }
 
-uint32_t rtnl_route_ipv6_add_gateway(struct l_netlink *rtnl, int ifindex,
+static uint32_t rtnl_route_ipv6_change(struct l_netlink *rtnl,
+					uint16_t nlmsg_type, int ifindex,
 					const char *gateway,
 					uint32_t priority_offset,
 					uint8_t proto,
@@ -581,7 +582,33 @@ uint32_t rtnl_route_ipv6_add_gateway(struct l_netlink *rtnl, int ifindex,
 						sizeof(struct in6_addr));
 	}
 
-	return l_netlink_send(rtnl, RTM_NEWROUTE, flags, rtmmsg,
+	return l_netlink_send(rtnl, nlmsg_type, flags, rtmmsg,
 				rta_buf - (void *) rtmmsg, cb, user_data,
 								destroy);
+}
+
+uint32_t rtnl_route_ipv6_add_gateway(struct l_netlink *rtnl, int ifindex,
+					const char *gateway,
+					uint32_t priority_offset,
+					uint8_t proto,
+					l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy)
+{
+	return rtnl_route_ipv6_change(rtnl, RTM_NEWROUTE, ifindex, gateway,
+					priority_offset, proto, cb,
+					user_data, destroy);
+}
+
+uint32_t rtnl_route_ipv6_delete_gateway(struct l_netlink *rtnl, int ifindex,
+					const char *gateway,
+					uint32_t priority_offset,
+					uint8_t proto,
+					l_netlink_command_func_t cb,
+					void *user_data,
+					l_netlink_destroy_func_t destroy)
+{
+	return rtnl_route_ipv6_change(rtnl, RTM_DELROUTE, ifindex, gateway,
+					priority_offset, proto, cb,
+					user_data, destroy);
 }
