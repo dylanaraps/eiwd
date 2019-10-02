@@ -543,15 +543,56 @@ static bool eap_tls_tunnel_init(struct eap_state *eap)
 		l_tls_set_debug(eap_tls->tunnel, eap_tls_tunnel_debug, eap,
 									NULL);
 
-	if (!l_tls_set_auth_data(eap_tls->tunnel, eap_tls->client_cert,
-							eap_tls->client_key,
-							eap_tls->passphrase) ||
-			(eap_tls->ca_cert &&
-				!l_tls_set_cacert(eap_tls->tunnel,
-							eap_tls->ca_cert))) {
-		l_error("%s: Error loading TLS keys or certificates.",
-						eap_get_method_name(eap));
-		return false;
+	if (eap_tls->client_cert || eap_tls->client_key) {
+		struct l_certchain *client_cert =
+			l_pem_load_certificate_chain(eap_tls->client_cert);
+		struct l_key *client_key;
+
+		if (!client_cert) {
+			l_error("%s: Failed to parse client certificate: %s.",
+					eap_get_method_name(eap),
+					eap_tls->client_cert);
+			return false;
+		}
+
+		client_key = l_pem_load_private_key(eap_tls->client_key,
+							eap_tls->passphrase,
+							NULL);
+		if (!client_key) {
+			l_error("%s: Failed to parse client private key: %s.",
+					eap_get_method_name(eap),
+					eap_tls->client_key);
+			return false;
+		}
+
+		if (!l_tls_set_auth_data(eap_tls->tunnel,
+						client_cert, client_key)) {
+			l_certchain_free(client_cert);
+			l_key_free(client_key);
+			l_error("%s: Failed to set auth data.",
+					eap_get_method_name(eap));
+			return false;
+		}
+	}
+
+	if (eap_tls->ca_cert) {
+		struct l_queue *ca_cert =
+			l_pem_load_certificate_list(eap_tls->ca_cert);
+
+		if (!ca_cert) {
+			l_error("%s: Error loading CA certificates from %s.",
+						eap_get_method_name(eap),
+						eap_tls->ca_cert);
+			return false;
+		}
+
+		if (!l_tls_set_cacert(eap_tls->tunnel, ca_cert)) {
+			l_queue_destroy(ca_cert,
+					(l_queue_destroy_func_t)l_cert_free);
+			l_error("%s: Error settings CA certificates.",
+					eap_get_method_name(eap));
+			return false;
+		}
 	}
 
 	if (eap_tls->domain_mask)
