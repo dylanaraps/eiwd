@@ -958,6 +958,7 @@ static void netconfig_ipv6_select_and_install(struct netconfig *netconfig)
 static void netconfig_ipv6_select_and_uninstall(struct netconfig *netconfig)
 {
 	struct netconfig_ifaddr *ifaddr;
+	char *gateway;
 
 	ifaddr = netconfig_ipv6_get_ifaddr(netconfig,
 						netconfig->rtm_v6_protocol);
@@ -970,6 +971,20 @@ static void netconfig_ipv6_select_and_uninstall(struct netconfig *netconfig)
 	 * TODO
 	 * l_dhcp_v6_client_stop(netconfig->l_dhcp_v6_client);
 	 */
+
+	gateway = netconfig_ipv6_get_gateway(netconfig);
+	if (!gateway)
+		return;
+
+	if (!rtnl_route_ipv6_delete_gateway(rtnl, netconfig->ifindex,
+			gateway, ROUTE_PRIORITY_OFFSET,
+			netconfig->rtm_v6_protocol,
+			netconfig_route_cmd_cb, NULL, NULL)) {
+		l_error("netconfig: Failed to delete route for: %s gateway.",
+								gateway);
+	}
+
+	l_free(gateway);
 }
 
 bool netconfig_configure(struct netconfig *netconfig,
