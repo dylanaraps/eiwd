@@ -1072,7 +1072,7 @@ static int netconfig_init(void)
 								!enabled) {
 		l_warn("netconfig: Network configuration with the IP addresses "
 								"is disabled.");
-		return false;
+		return 0;
 	}
 
 	rtnl = l_netlink_new(NETLINK_ROUTE);
