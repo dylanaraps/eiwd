@@ -345,23 +345,14 @@ static char **netconfig_ipv6_get_dns(struct netconfig *netconfig, uint8_t proto)
 	char **dns_list;
 	char **p;
 
-	switch (proto) {
-	case RTPROT_STATIC:
-		p = dns_list =
-			l_settings_get_string_list(netconfig->active_settings,
+	p = dns_list = l_settings_get_string_list(netconfig->active_settings,
 							"IPv6", "dns", ' ');
-
-		if (!dns_list || !*dns_list) {
-			l_strv_free(dns_list);
-
-			return NULL;
-		}
-
+	if (dns_list && *dns_list) {
 		for (; *p; p++) {
 			if (inet_pton(AF_INET6, *p, &in6_addr) == 1)
 				continue;
 
-			l_error("netconfig: Invalid IPv6 DNS address %s is "
+			l_error("netconfig: Invalid IPv6 DNS address '%s' is "
 				"provided in network configuration file.", *p);
 
 			l_strv_free(dns_list);
@@ -369,9 +360,18 @@ static char **netconfig_ipv6_get_dns(struct netconfig *netconfig, uint8_t proto)
 			return NULL;
 		}
 
+		/* Allow to override the DHCP DNSs with static addressing. */
 		return dns_list;
+	} else if (dns_list) {
+		l_error("netconfig: No IPv6 DNS address is provided in network "
+							"configuration file.");
 
-	case RTPROT_DHCP:
+		l_strv_free(dns_list);
+
+		return NULL;
+	}
+
+	if (proto == RTPROT_DHCP) {
 		/* TODO */
 
 		return NULL;
