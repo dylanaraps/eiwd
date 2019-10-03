@@ -595,8 +595,12 @@ SED_PROCESS = $(AM_V_GEN)$(MKDIR_P) $(dir $@) && $(SED) \
 		-e 's,@libexecdir\@,$(libexecdir),g' \
 		< $< > $@
 
+if RUN_RST2MAN
 RST2MAN_PROCESS = $(AM_V_GEN)$(RST2MAN) --strict --no-raw --no-generator \
 			--no-datestamp < $< > $@
+else
+RST2MAN_PROCESS = $(AM_V_GEN)touch $@
+endif
 
 %.service: %.service.in Makefile
 	$(SED_PROCESS)
