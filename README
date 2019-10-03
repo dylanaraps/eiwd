@@ -52,6 +52,17 @@ When using --enable-external-ell build option, it is not required that the
 Embedded Linux library source code is available in the top level directory.
 
 
+Manual pages
+============
+
+The manual pages are generated from reStructuredText markup source files
+during the normal build process. The generation requires the rst2man utility
+from Python Docutils project.
+
+When building from the tarballs, a copy of the generated manual pages is
+included and the rst2man utility is actually not needed.
+
+
 Configuration and options
 =========================
 
