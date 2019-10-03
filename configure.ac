@@ -192,9 +192,9 @@ AC_ARG_ENABLE([manual-pages], AC_HELP_STRING([--disable-manual-pages],
 					[enable_manual_pages=${enableval}])
 if (test "${enable_manual_pages}" != "no"); then
 	AC_CHECK_PROGS(RST2MAN, [rst2man rst2man.py], "no")
-	AM_CONDITIONAL(RUN_RST2MAN, test "${RST2MAN}" != "no")
 fi
 AM_CONDITIONAL(MANUAL_PAGES, test "${enable_manual_pages}" != "no")
+AM_CONDITIONAL(RUN_RST2MAN, test "${enable_manual_pages}" != "no" && test "${RST2MAN}" != "no")
 
 AC_ARG_WITH([dbus-busdir], AC_HELP_STRING([--with-dbus-busdir=DIR],
 				[path to D-Bus bus services directory]),
