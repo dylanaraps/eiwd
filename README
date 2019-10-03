@@ -51,6 +51,10 @@ internally.
 When using --enable-external-ell build option, it is not required that the
 Embedded Linux library source code is available in the top level directory.
 
+The tarballs include a copy of the Embedded Linux library source files. When
+building from the tarballs, then it is not required to have the library
+sources available in the top level directory.
+
 
 Manual pages
 ============
