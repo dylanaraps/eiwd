@@ -1165,16 +1165,18 @@ static void station_enter_state(struct station *station,
 		periodic_scan_stop(station);
 
 		if (station->state == STATION_STATE_ROAMING) {
-			netconfig_reconfigure(station->netconfig);
+			if (station->netconfig)
+				netconfig_reconfigure(station->netconfig);
 
 			break;
 		}
 
-		netconfig_configure(station->netconfig,
-					network_get_settings(
-						station->connected_network),
-					netdev_get_address(
-							station->netdev));
+		if (station->netconfig)
+			netconfig_configure(station->netconfig,
+						network_get_settings(
+							station->connected_network),
+						netdev_get_address(
+								station->netdev));
 		break;
 	case STATION_STATE_DISCONNECTING:
 	case STATION_STATE_ROAMING:
@@ -1262,7 +1264,8 @@ static void station_disassociated(struct station *station)
 {
 	l_debug("%u", netdev_get_ifindex(station->netdev));
 
-	netconfig_reset(station->netconfig);
+	if (station->netconfig)
+		netconfig_reset(station->netconfig);
 
 	station_reset_connection_state(station);
 
@@ -2344,7 +2347,8 @@ static void station_disconnect_onconnect(struct station *station,
 		return;
 	}
 
-	netconfig_reset(station->netconfig);
+	if (station->netconfig)
+		netconfig_reset(station->netconfig);
 
 	station_reset_connection_state(station);
 
@@ -2581,7 +2585,8 @@ int station_disconnect(struct station *station)
 					station_disconnect_cb, station) < 0)
 		return -EIO;
 
-	netconfig_reset(station->netconfig);
+	if (station->netconfig)
+		netconfig_reset(station->netconfig);
 
 	/*
 	 * If the disconnect somehow fails we won't know if we're still
@@ -3061,7 +3066,8 @@ static void station_free(struct station *station)
 	if (station->connected_bss)
 		netdev_disconnect(station->netdev, NULL, NULL);
 
-	netconfig_destroy(station->netconfig);
+	if (station->netconfig)
+		netconfig_destroy(station->netconfig);
 	station->netconfig = NULL;
 
 	periodic_scan_stop(station);
