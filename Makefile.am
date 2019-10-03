@@ -247,7 +247,7 @@ dbus_bus_DATA += src/net.connman.iwd.service
 endif
 
 if MANUAL_PAGES
-dist_man_MANS += src/iwd.8
+dist_man_MANS += src/iwd.8 src/iwd.conf.5
 endif
 endif
 
@@ -607,6 +607,9 @@ endif
 	$(SED_PROCESS)
 
 %.1: %.rst Makefile
+	$(RST2MAN_PROCESS)
+
+%.5: %.rst Makefile
 	$(RST2MAN_PROCESS)
 
 %.8: %.rst Makefile
