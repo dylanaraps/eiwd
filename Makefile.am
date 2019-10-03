@@ -599,7 +599,8 @@ if RUN_RST2MAN
 RST2MAN_PROCESS = $(AM_V_GEN)$(RST2MAN) --strict --no-raw --no-generator \
 			--no-datestamp < $< > $@
 else
-RST2MAN_PROCESS = $(AM_V_GEN)touch $@
+RST2MAN_PROCESS = $(AM_V_GEN)test -f $@ || \
+		{ echo "Generated manual page $@ does not exist"; false; }
 endif
 
 %.service: %.service.in Makefile
