@@ -206,14 +206,37 @@ static char *netconfig_ipv4_get_gateway(struct netconfig *netconfig)
 static char **netconfig_ipv4_get_dns(struct netconfig *netconfig, uint8_t proto)
 {
 	const struct l_dhcp_lease *lease;
+	struct in_addr in_addr;
+	char **dns_list;
+	char **p;
 
-	switch (proto) {
-	case RTPROT_STATIC:
-
-		return l_settings_get_string_list(netconfig->active_settings,
+	p = dns_list = l_settings_get_string_list(netconfig->active_settings,
 							"IPv4", "dns", ' ');
+	if (dns_list && *dns_list) {
+		for (; *p; p++) {
+			if (inet_pton(AF_INET, *p, &in_addr) == 1)
+				continue;
 
-	case RTPROT_DHCP:
+			l_error("netconfig: Invalid IPv4 DNS address '%s' is "
+				"provided in network configuration file.", *p);
+
+			l_strv_free(dns_list);
+
+			return NULL;
+		}
+
+		/* Allow to override the DHCP DNSs with static addressing. */
+		return dns_list;
+	} else if (dns_list) {
+		l_error("netconfig: No IPv4 DNS address is provided in network "
+							"configuration file.");
+
+		l_strv_free(dns_list);
+
+		return NULL;
+	}
+
+	if (proto == RTPROT_DHCP) {
 		lease = l_dhcp_client_get_lease(netconfig->dhcp_client);
 		if (!lease)
 			return NULL;
@@ -661,9 +684,7 @@ static void netconfig_ipv4_ifaddr_add_cmd_cb(int error, uint16_t type,
 
 	dns = netconfig_ipv4_get_dns(netconfig, netconfig->rtm_protocol);
 	if (!dns) {
-		l_error("netconfig: Failed to obtain DNS addresses from %s.",
-				netconfig->rtm_protocol == RTPROT_STATIC ?
-				"setting file" : "DHCPv4 lease");
+		l_error("netconfig: Failed to obtain DNS addresses.");
 		goto done;
 	}
 
