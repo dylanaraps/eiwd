@@ -194,6 +194,7 @@ if (test "${enable_manual_pages}" != "no"); then
 	AC_CHECK_PROGS(RST2MAN, [rst2man rst2man-3 rst2man.py], "no")
 	if (test "x$RST2MAN" = "xno"); then
 		AC_MSG_WARN([rst2man required for building manual pages])
+		enable_manual_pages="no"
 	fi
 fi
 AM_CONDITIONAL(MANUAL_PAGES, test "${enable_manual_pages}" != "no")
