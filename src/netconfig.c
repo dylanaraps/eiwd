@@ -44,7 +44,6 @@
 
 struct netconfig {
 	uint32_t ifindex;
-	enum station_state station_state;
 	struct l_dhcp_client *dhcp_client;
 	struct l_queue *ifaddr_list;
 	uint8_t rtm_protocol;
