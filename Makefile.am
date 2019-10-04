@@ -103,6 +103,7 @@ ell_sources = ell/private.h \
 			ell/base64.c \
 			ell/asn1-private.h \
 			ell/pem.c \
+			ell/pem-private.h \
 			ell/tls-private.h \
 			ell/tls.c \
 			ell/tls-record.c \
