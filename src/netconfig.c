@@ -50,6 +50,9 @@ struct netconfig {
 	uint8_t rtm_v6_protocol;
 
 	const struct l_settings *active_settings;
+
+	netconfig_notify_func_t notify;
+	void *user_data;
 };
 
 struct netconfig_ifaddr {
@@ -595,11 +598,19 @@ static void netconfig_route_add_cmd_cb(int error, uint16_t type,
 						const void *data, uint32_t len,
 						void *user_data)
 {
-	if (!error)
+	struct netconfig *netconfig = user_data;
+
+	if (error) {
+		l_error("netconfig: Failed to add route. Error %d: %s",
+						error, strerror(-error));
+		return;
+	}
+
+	if (!netconfig->notify)
 		return;
 
-	l_error("netconfig: Failed to add route. Error %d: %s",
-						error, strerror(-error));
+	netconfig->notify(NETCONFIG_EVENT_CONNECTED, netconfig->user_data);
+	netconfig->notify = NULL;
 }
 
 static void netconfig_route_del_cmd_cb(int error, uint16_t type,
@@ -611,6 +622,7 @@ static void netconfig_route_del_cmd_cb(int error, uint16_t type,
 
 	l_error("netconfig: Failed to delete route. Error %d: %s",
 						error, strerror(-error));
+
 }
 
 static bool netconfig_ipv4_routes_install(struct netconfig *netconfig,
@@ -635,7 +647,7 @@ static bool netconfig_ipv4_routes_install(struct netconfig *netconfig,
 						ifaddr->ip,
 						netconfig->rtm_protocol,
 						netconfig_route_add_cmd_cb,
-						NULL, NULL)) {
+						netconfig, NULL)) {
 		l_error("netconfig: Failed to add subnet route.");
 
 		return false;
@@ -655,7 +667,7 @@ static bool netconfig_ipv4_routes_install(struct netconfig *netconfig,
 						ROUTE_PRIORITY_OFFSET,
 						netconfig->rtm_protocol,
 						netconfig_route_add_cmd_cb,
-						NULL, NULL)) {
+						netconfig, NULL)) {
 		l_error("netconfig: Failed to add route for: %s gateway.",
 								gateway);
 
@@ -723,7 +735,7 @@ static bool netconfig_ipv6_routes_install(struct netconfig *netconfig)
 						ROUTE_PRIORITY_OFFSET,
 						netconfig->rtm_v6_protocol,
 						netconfig_route_add_cmd_cb,
-						NULL, NULL)) {
+						netconfig, NULL)) {
 		l_error("netconfig: Failed to add route for: %s gateway.",
 								gateway);
 
@@ -1020,9 +1032,12 @@ static void netconfig_ipv6_select_and_uninstall(struct netconfig *netconfig)
 
 bool netconfig_configure(struct netconfig *netconfig,
 				const struct l_settings *active_settings,
-				const uint8_t *mac_address)
+				const uint8_t *mac_address,
+				netconfig_notify_func_t notify, void *user_data)
 {
 	netconfig->active_settings = active_settings;
+	netconfig->notify = notify;
+	netconfig->user_data = user_data;
 
 	l_dhcp_client_set_address(netconfig->dhcp_client, ARPHRD_ETHER,
 							mac_address, ETH_ALEN);

@@ -22,9 +22,18 @@
 
 struct netconfig;
 
+enum netconfig_event {
+	NETCONFIG_EVENT_CONNECTED,
+};
+
+typedef void (*netconfig_notify_func_t)(enum netconfig_event event,
+							void *user_data);
+
 bool netconfig_configure(struct netconfig *netconfig,
 				const struct l_settings *active_settings,
-				const uint8_t *mac_address);
+				const uint8_t *mac_address,
+				netconfig_notify_func_t notify,
+				void *user_data);
 bool netconfig_reconfigure(struct netconfig *netconfig);
 bool netconfig_reset(struct netconfig *netconfig);
 
