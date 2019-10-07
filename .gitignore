@@ -54,6 +54,7 @@ unit/test-p2p
 unit/cert-*.pem
 unit/cert-*.csr
 unit/cert-*.srl
+unit/*-settings.8021x
 unit/*.log
 unit/*.trs
 test-suite.log
