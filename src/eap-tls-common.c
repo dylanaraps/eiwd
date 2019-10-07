@@ -113,10 +113,9 @@ struct eap_tls_state {
 
 	bool expecting_frag_ack:1;
 
-	char *ca_cert;
-	char *client_cert;
-	char *client_key;
-	char *passphrase;
+	struct l_queue *ca_cert;
+	struct l_certchain *client_cert;
+	struct l_key *client_key;
 	char **domain_mask;
 
 	const struct eap_tls_variant_ops *variant_ops;
@@ -154,6 +153,21 @@ static void __eap_tls_common_state_reset(struct eap_tls_state *eap_tls)
 	}
 }
 
+static void __eap_tls_common_state_free(struct eap_tls_state *eap_tls)
+{
+	if (eap_tls->ca_cert)
+		l_queue_destroy(eap_tls->ca_cert,
+					(l_queue_destroy_func_t)l_cert_free);
+	if (eap_tls->client_cert)
+		l_certchain_free(eap_tls->client_cert);
+
+	if (eap_tls->client_key)
+		l_key_free(eap_tls->client_key);
+
+	l_strv_free(eap_tls->domain_mask);
+	l_free(eap_tls);
+}
+
 bool eap_tls_common_state_reset(struct eap_state *eap)
 {
 	struct eap_tls_state *eap_tls = eap_get_data(eap);
@@ -177,18 +191,7 @@ void eap_tls_common_state_free(struct eap_state *eap)
 	if (eap_tls->variant_ops->destroy)
 		eap_tls->variant_ops->destroy(eap_tls->variant_data);
 
-	l_free(eap_tls->ca_cert);
-	l_free(eap_tls->client_cert);
-	l_free(eap_tls->client_key);
-
-	if (eap_tls->passphrase) {
-		explicit_bzero(eap_tls->passphrase,
-				strlen(eap_tls->passphrase));
-		l_free(eap_tls->passphrase);
-	}
-
-	l_strv_free(eap_tls->domain_mask);
-	l_free(eap_tls);
+	__eap_tls_common_state_free(eap_tls);
 }
 
 static void eap_tls_tunnel_debug(const char *str, void *user_data)
@@ -544,55 +547,34 @@ static bool eap_tls_tunnel_init(struct eap_state *eap)
 									NULL);
 
 	if (eap_tls->client_cert || eap_tls->client_key) {
-		struct l_certchain *client_cert =
-			l_pem_load_certificate_chain(eap_tls->client_cert);
-		struct l_key *client_key;
+		if (!l_tls_set_auth_data(eap_tls->tunnel, eap_tls->client_cert,
+						eap_tls->client_key)) {
+			l_certchain_free(eap_tls->client_cert);
+			eap_tls->client_cert = NULL;
 
-		if (!client_cert) {
-			l_error("%s: Failed to parse client certificate: %s.",
-					eap_get_method_name(eap),
-					eap_tls->client_cert);
-			return false;
-		}
+			l_key_free(eap_tls->client_key);
+			eap_tls->client_key = NULL;
 
-		client_key = l_pem_load_private_key(eap_tls->client_key,
-							eap_tls->passphrase,
-							NULL);
-		if (!client_key) {
-			l_error("%s: Failed to parse client private key: %s.",
-					eap_get_method_name(eap),
-					eap_tls->client_key);
-			return false;
-		}
-
-		if (!l_tls_set_auth_data(eap_tls->tunnel,
-						client_cert, client_key)) {
-			l_certchain_free(client_cert);
-			l_key_free(client_key);
 			l_error("%s: Failed to set auth data.",
 					eap_get_method_name(eap));
 			return false;
 		}
+
+		eap_tls->client_cert = NULL;
+		eap_tls->client_key = NULL;
 	}
 
 	if (eap_tls->ca_cert) {
-		struct l_queue *ca_cert =
-			l_pem_load_certificate_list(eap_tls->ca_cert);
-
-		if (!ca_cert) {
-			l_error("%s: Error loading CA certificates from %s.",
-						eap_get_method_name(eap),
-						eap_tls->ca_cert);
-			return false;
-		}
-
-		if (!l_tls_set_cacert(eap_tls->tunnel, ca_cert)) {
-			l_queue_destroy(ca_cert,
+		if (!l_tls_set_cacert(eap_tls->tunnel, eap_tls->ca_cert)) {
+			l_queue_destroy(eap_tls->ca_cert,
 					(l_queue_destroy_func_t)l_cert_free);
+			eap_tls->ca_cert = NULL;
 			l_error("%s: Error settings CA certificates.",
 					eap_get_method_name(eap));
 			return false;
 		}
+
+		eap_tls->ca_cert = NULL;
 	}
 
 	if (eap_tls->domain_mask)
@@ -793,6 +775,83 @@ error:
 	eap_method_error(eap);
 }
 
+static const char *load_embedded_pem(struct l_settings *settings,
+					const char *name)
+{
+	const char *pem;
+	const char *type;
+
+	pem = l_settings_get_embedded_value(settings, name + 6, &type);
+	if (!pem)
+		return NULL;
+
+	if (strcmp(type, "pem"))
+		return NULL;
+
+	return pem;
+}
+
+static bool is_embedded(const char *str)
+{
+	if (!str)
+		return false;
+
+	if (strlen(str) < 6)
+		return false;
+
+	if (!strncmp("embed:", str, 6))
+		return true;
+
+	return false;
+}
+
+static struct l_queue *eap_tls_load_ca_cert(struct l_settings *settings,
+						const char *value)
+{
+	const char *pem;
+
+	if (!is_embedded(value))
+		return l_pem_load_certificate_list(value);
+
+	pem = load_embedded_pem(settings, value);
+	if (!pem)
+		return NULL;
+
+	return l_pem_load_certificate_list_from_data(pem, strlen(pem));
+}
+
+static struct l_certchain *eap_tls_load_client_cert(struct l_settings *settings,
+							const char *value)
+{
+	const char *pem;
+
+	if (!is_embedded(value))
+		return l_pem_load_certificate_chain(value);
+
+	pem = load_embedded_pem(settings, value);
+	if (!pem)
+		return NULL;
+
+	return l_pem_load_certificate_chain_from_data(pem, strlen(pem));
+}
+
+static struct l_key *eap_tls_load_priv_key(struct l_settings *settings,
+				const char *value, const char *passphrase,
+				bool *is_encrypted)
+{
+	const char *pem;
+
+	if (!is_embedded(value))
+		return l_pem_load_private_key(value, passphrase, is_encrypted);
+
+	pem = load_embedded_pem(settings, value);
+	if (!pem)
+		return NULL;
+
+	return l_pem_load_private_key_from_data(pem, strlen(pem),
+						passphrase, is_encrypted);
+}
+
 int eap_tls_common_settings_check(struct l_settings *settings,
 					struct l_queue *secrets,
 					const char *prefix,
@@ -813,16 +872,17 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 	struct l_key *pub_key;
 	const char *domain_mask_str;
 
-	L_AUTO_FREE_VAR(char *, path);
+	L_AUTO_FREE_VAR(char *, value);
 	L_AUTO_FREE_VAR(char *, client_cert) = NULL;
 	L_AUTO_FREE_VAR(char *, passphrase) = NULL;
 
 	snprintf(setting_key, sizeof(setting_key), "%sCACert", prefix);
-	path = l_settings_get_string(settings, "Security", setting_key);
-	if (path) {
-		cacerts = l_pem_load_certificate_list(path);
+	value = l_settings_get_string(settings, "Security", setting_key);
+	if (value) {
+		cacerts = eap_tls_load_ca_cert(settings, value);
+
 		if (!cacerts) {
-			l_error("Failed to load %s", path);
+			l_error("Failed to load %s", value);
 			return -EIO;
 		}
 	}
@@ -832,7 +892,8 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 	client_cert = l_settings_get_string(settings, "Security",
 							client_cert_setting);
 	if (client_cert) {
-		cert = l_pem_load_certificate_chain(client_cert);
+		cert = eap_tls_load_client_cert(settings, client_cert);
+
 		if (!cert) {
 			l_error("Failed to load %s", client_cert);
 			ret = -EIO;
@@ -843,7 +904,7 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 			if (cacerts)
 				l_error("Certificate chain %s is not trusted "
 					"by any CA in %s or fails verification"
-					": %s", client_cert, path, error_str);
+					": %s", client_cert, value, error_str);
 			else
 				l_error("Certificate chain %s fails "
 					"verification: %s",
@@ -854,17 +915,17 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 		}
 	}
 
-	l_free(path);
+	l_free(value);
 
 	snprintf(setting_key, sizeof(setting_key), "%sClientKey", prefix);
-	path = l_settings_get_string(settings, "Security", setting_key);
+	value = l_settings_get_string(settings, "Security", setting_key);
 
-	if (path && !client_cert) {
+	if (value && !client_cert) {
 		l_error("%s present but no client certificate (%s)",
 					setting_key, client_cert_setting);
 		ret = -ENOENT;
 		goto done;
-	} else if (!path && client_cert) {
+	} else if (!value && client_cert) {
 		l_error("%s present but no client private key (%s)",
 					client_cert_setting, setting_key);
 		ret = -ENOENT;
@@ -885,10 +946,11 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 			passphrase = l_strdup(secret->value);
 	}
 
-	if (!path) {
+	if (!value) {
 		if (passphrase) {
-			l_error("%s present but no client private key path set (%s)",
-				passphrase_setting, setting_key);
+			l_error("%s present but no client private key"
+				" value set (%s)", passphrase_setting,
+				setting_key);
 			ret = -ENOENT;
 			goto done;
 		}
@@ -897,17 +959,19 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 		goto done;
 	}
 
-	priv_key = l_pem_load_private_key(path, passphrase, &is_encrypted);
+	priv_key = eap_tls_load_priv_key(settings, value, passphrase,
+						&is_encrypted);
+
 	if (!priv_key) {
 		if (!is_encrypted) {
-			l_error("Error loading client private key %s", path);
+			l_error("Error loading client private key %s", value);
 			ret = -EIO;
 			goto done;
 		}
 
 		if (passphrase) {
 			l_error("Error loading encrypted client private key %s",
-				path);
+				value);
 			ret = -EACCES;
 			goto done;
 		}
@@ -918,7 +982,7 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 		 */
 		eap_append_secret(out_missing,
 					EAP_SECRET_LOCAL_PKEY_PASSPHRASE,
-					passphrase_setting, NULL, path,
+					passphrase_setting, NULL, value,
 					EAP_CACHE_TEMPORARY);
 		ret = 0;
 		goto done;
@@ -926,7 +990,7 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 
 	if (passphrase && !is_encrypted) {
 		l_error("%s present but client private key %s is not encrypted",
-			passphrase_setting, path);
+			passphrase_setting, value);
 		ret = -ENOENT;
 		goto done;
 	}
@@ -934,7 +998,7 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 	if (!l_key_get_info(priv_key, L_KEY_RSA_PKCS1_V1_5, L_CHECKSUM_NONE,
 				&size, &is_public) || is_public) {
 		l_error("%s is not a private key or l_key_get_info fails",
-			path);
+			value);
 		ret = -EINVAL;
 		goto done;
 	}
@@ -964,14 +1028,14 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 	result = l_key_decrypt(priv_key, L_KEY_RSA_PKCS1_V1_5, L_CHECKSUM_NONE,
 				encrypted, decrypted, size, size);
 	if (result < 0) {
-		l_error("l_key_decrypt fails with %s: %s", path,
+		l_error("l_key_decrypt fails with %s: %s", value,
 			strerror(-result));
 		ret = result;
 		goto done;
 	}
 
 	if (result != 1 || decrypted[0] != 0) {
-		l_error("Private key %s does not match certificate %s", path,
+		l_error("Private key %s does not match certificate %s", value,
 			client_cert);
 		ret = -EINVAL;
 		goto done;
@@ -1014,6 +1078,8 @@ bool eap_tls_common_settings_load(struct eap_state *eap,
 	struct eap_tls_state *eap_tls;
 	char setting_key[72];
 	char *domain_mask_str;
+	L_AUTO_FREE_VAR(char *, value) = NULL;
+	L_AUTO_FREE_VAR(char *, passphrase) = NULL;
 
 	eap_tls = l_new(struct eap_tls_state, 1);
 
@@ -1022,21 +1088,45 @@ bool eap_tls_common_settings_load(struct eap_state *eap,
 	eap_tls->variant_data = variant_data;
 
 	snprintf(setting_key, sizeof(setting_key), "%sCACert", prefix);
-	eap_tls->ca_cert = l_settings_get_string(settings, "Security",
-								setting_key);
+	value = l_settings_get_string(settings, "Security", setting_key);
+	if (value) {
+		eap_tls->ca_cert = eap_tls_load_ca_cert(settings, value);
+		if (!eap_tls->ca_cert) {
+			l_error("Could not load CACert %s", value);
+			goto load_error;
+		}
+	}
+
+	l_free(value);
 
 	snprintf(setting_key, sizeof(setting_key), "%sClientCert", prefix);
-	eap_tls->client_cert = l_settings_get_string(settings, "Security",
-								setting_key);
+	value = l_settings_get_string(settings, "Security", setting_key);
+	if (value) {
+		eap_tls->client_cert = eap_tls_load_client_cert(settings,
+								value);
+		if (!eap_tls->ca_cert) {
+			l_error("Could not load ClientCert %s", value);
+			goto load_error;
+		}
+	}
 
-	snprintf(setting_key, sizeof(setting_key), "%sClientKey", prefix);
-	eap_tls->client_key = l_settings_get_string(settings, "Security",
-								setting_key);
+	l_free(value);
 
 	snprintf(setting_key, sizeof(setting_key), "%sClientKeyPassphrase",
 									prefix);
-	eap_tls->passphrase = l_settings_get_string(settings, "Security",
-								setting_key);
+	passphrase = l_settings_get_string(settings, "Security", setting_key);
+
+	snprintf(setting_key, sizeof(setting_key), "%sClientKey", prefix);
+	value = l_settings_get_string(settings, "Security", setting_key);
+	if (value) {
+		eap_tls->client_key = eap_tls_load_priv_key(settings, value,
+								passphrase,
+								NULL);
+		if (!eap_tls->client_key) {
+			l_error("Could not load ClientKey %s", value);
+			goto load_error;
+		}
+	}
 
 	snprintf(setting_key, sizeof(setting_key), "%sServerDomainMask",
 								prefix);
@@ -1051,6 +1141,11 @@ bool eap_tls_common_settings_load(struct eap_state *eap,
 	eap_set_data(eap, eap_tls);
 
 	return true;
+
+load_error:
+	__eap_tls_common_state_free(eap_tls);
+
+	return false;
 }
 
 void eap_tls_common_set_completed(struct eap_state *eap)
