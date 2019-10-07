@@ -441,7 +441,8 @@ unit_test_eapol_DEPENDENCIES = $(ell_dependencies) \
 				unit/cert-server.pem \
 				unit/cert-server-key-pkcs8.pem \
 				unit/cert-client.pem \
-				unit/cert-client-key-pkcs8.pem
+				unit/cert-client-key-pkcs8.pem \
+				unit/tls-settings.8021x
 
 unit_test_util_SOURCES = src/util.h src/util.c \
 				unit/test-util.c
@@ -576,6 +577,21 @@ unit/cert-client.pem: unit/cert-client.csr unit/cert-ca.pem unit/gencerts.cnf
 			-CAserial $(builddir)/unit/cert-ca.srl \
 			-CAcreateserial -sha256 -days 10000 -out $@ $($(AM_V_P)_redirect_openssl)
 
+unit/tls-settings.8021x: unit/cert-ca.pem unit/cert-client.pem unit/cert-client-key-pkcs8.pem
+	$(AM_V_GEN) \
+	$(file >$@,[Security]) \
+	$(file >>$@,EAP-Method=TLS) \
+	$(file >>$@,EAP-Identity=abc@example.com) \
+	$(file >>$@,EAP-TLS-CACert=embed:ca_cert) \
+	$(file >>$@,EAP-TLS-ClientCert=embed:client_cert) \
+	$(file >>$@,EAP-TLS-ClientKey=embed:client_key) \
+	$(file >>$@,[@pem@ca_cert]) \
+	$(shell cat unit/cert-ca.pem >> $@) \
+	$(file >>$@,[@pem@client_cert]) \
+	$(shell cat unit/cert-client.pem >> $@) \
+	$(file >>$@,[@pem@client_key]) \
+	$(shell cat unit/cert-client-key-pkcs8.pem >> $@)
+
 BUILT_SOURCES = $(ell_built_sources) src/builtin.h
 
 ell/internal: Makefile
@@ -627,7 +643,7 @@ endif
 endif
 
 clean-local:
-	-rm -f unit/cert-*.pem unit/cert-*.csr unit/cert-*.srl
+	-rm -f unit/cert-*.pem unit/cert-*.csr unit/cert-*.srl unit/*-settings.8021x
 
 maintainer-clean-local:
 	-rm -rf build-aux ell
