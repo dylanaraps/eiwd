@@ -114,7 +114,7 @@ def write_network(network, root_ca_path):
                 output += "EAP-Identity=anonymous\n"
 
         if root_ca_path:
-                output += "EAP-%s-CACert=%s\n" % (eap, root_ca_path)
+                output += "EAP-%s-CACert=embed:root_ca\n" % eap
 
         output += "EAP-%s-Phase2-Method=Tunneled-%s\n" % \
                                                         (eap, network.inner_eap)
@@ -157,6 +157,11 @@ def write_network(network, root_ca_path):
         output += "ProtocolVersion=1\n"
 
         output += "\n"
+
+        if root_ca_path:
+                output += "[@pem@root_ca]\n"
+                with open(root_ca_path) as f:
+                        output += f.read()
 
         print("Provisioning network %s\n" % conf_file)
 
