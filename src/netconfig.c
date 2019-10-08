@@ -591,14 +591,25 @@ static void netconfig_ifaddr_ipv6_cmd_cb(int error, uint16_t type,
 	netconfig_ifaddr_ipv6_notify(type, data, len, user_data);
 }
 
-static void netconfig_route_cmd_cb(int error, uint16_t type,
+static void netconfig_route_add_cmd_cb(int error, uint16_t type,
 						const void *data, uint32_t len,
 						void *user_data)
 {
 	if (!error)
 		return;
 
-	l_error("netconfig: Route command failure. Error %d: %s",
+	l_error("netconfig: Failed to add route. Error %d: %s",
+						error, strerror(-error));
+}
+
+static void netconfig_route_del_cmd_cb(int error, uint16_t type,
+						const void *data, uint32_t len,
+						void *user_data)
+{
+	if (!error)
+		return;
+
+	l_error("netconfig: Failed to delete route. Error %d: %s",
 						error, strerror(-error));
 }
 
@@ -623,7 +634,7 @@ static bool netconfig_ipv4_routes_install(struct netconfig *netconfig,
 						ifaddr->prefix_len, network,
 						ifaddr->ip,
 						netconfig->rtm_protocol,
-						netconfig_route_cmd_cb,
+						netconfig_route_add_cmd_cb,
 						NULL, NULL)) {
 		l_error("netconfig: Failed to add subnet route.");
 
@@ -643,7 +654,7 @@ static bool netconfig_ipv4_routes_install(struct netconfig *netconfig,
 						ifaddr->ip,
 						ROUTE_PRIORITY_OFFSET,
 						netconfig->rtm_protocol,
-						netconfig_route_cmd_cb,
+						netconfig_route_add_cmd_cb,
 						NULL, NULL)) {
 		l_error("netconfig: Failed to add route for: %s gateway.",
 								gateway);
@@ -711,7 +722,7 @@ static bool netconfig_ipv6_routes_install(struct netconfig *netconfig)
 	if (!rtnl_route_ipv6_add_gateway(rtnl, netconfig->ifindex, gateway,
 						ROUTE_PRIORITY_OFFSET,
 						netconfig->rtm_v6_protocol,
-						netconfig_route_cmd_cb,
+						netconfig_route_add_cmd_cb,
 						NULL, NULL)) {
 		l_error("netconfig: Failed to add route for: %s gateway.",
 								gateway);
@@ -999,7 +1010,7 @@ static void netconfig_ipv6_select_and_uninstall(struct netconfig *netconfig)
 	if (!rtnl_route_ipv6_delete_gateway(rtnl, netconfig->ifindex,
 			gateway, ROUTE_PRIORITY_OFFSET,
 			netconfig->rtm_v6_protocol,
-			netconfig_route_cmd_cb, NULL, NULL)) {
+			netconfig_route_del_cmd_cb, NULL, NULL)) {
 		l_error("netconfig: Failed to delete route for: %s gateway.",
 								gateway);
 	}
