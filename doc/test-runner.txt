@@ -301,7 +301,7 @@ command:
 Make sure that '-i' option is available in the list of option.
 For more information on hostapd refer to this page:
 
-	http://linuxwireless.org/en/users/Documentation/hostapd/
+	https://wireless.wiki.kernel.org/en/users/documentation/hostapd
 
 A full set of the hostapd configurations along with explanation can be
 found at:
