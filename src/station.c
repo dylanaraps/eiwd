@@ -1164,19 +1164,20 @@ static void station_enter_state(struct station *station,
 	case STATION_STATE_CONNECTED:
 		periodic_scan_stop(station);
 
+		if (!station->netconfig)
+			break;
+
 		if (station->state == STATION_STATE_ROAMING) {
-			if (station->netconfig)
-				netconfig_reconfigure(station->netconfig);
+			netconfig_reconfigure(station->netconfig);
 
 			break;
 		}
 
-		if (station->netconfig)
-			netconfig_configure(station->netconfig,
-						network_get_settings(
-							station->connected_network),
-						netdev_get_address(
-								station->netdev));
+		netconfig_configure(station->netconfig,
+					network_get_settings(
+						station->connected_network),
+					netdev_get_address(
+							station->netdev));
 		break;
 	case STATION_STATE_DISCONNECTING:
 	case STATION_STATE_ROAMING:
@@ -3066,9 +3067,10 @@ static void station_free(struct station *station)
 	if (station->connected_bss)
 		netdev_disconnect(station->netdev, NULL, NULL);
 
-	if (station->netconfig)
+	if (station->netconfig) {
 		netconfig_destroy(station->netconfig);
-	station->netconfig = NULL;
+		station->netconfig = NULL;
+	}
 
 	periodic_scan_stop(station);
 
