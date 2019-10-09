@@ -1111,9 +1111,6 @@ void netconfig_destroy(struct netconfig *netconfig)
 	if (netconfig->rtm_protocol)
 		netconfig_ipv4_select_and_uninstall(netconfig);
 
-	if (netconfig->rtm_v6_protocol)
-		netconfig_ipv6_select_and_uninstall(netconfig);
-
 	if (netconfig->rtm_protocol || netconfig->rtm_v6_protocol)
 		resolve_remove(netconfig->ifindex);
 
