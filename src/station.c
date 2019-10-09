@@ -1314,6 +1314,22 @@ static void station_roam_failed(struct station *station)
 		station_roam_timeout_rearm(station, 60);
 }
 
+static void station_netconfig_event_handler(enum netconfig_event event,
+							void *user_data)
+{
+	struct station *station = user_data;
+
+	switch (event) {
+	case NETCONFIG_EVENT_CONNECTED:
+		station_enter_state(station, STATION_STATE_CONNECTED);
+
+		break;
+	default:
+		l_error("station: Unsupported netconfig event: %d.", event);
+		break;
+	}
+}
+
 static void station_reassociate_cb(struct netdev *netdev,
 					enum netdev_result result,
 					void *event_data,
@@ -2271,7 +2287,9 @@ static void station_connect_cb(struct netdev *netdev, enum netdev_result result,
 		netconfig_configure(station->netconfig,
 					network_get_settings(
 						station->connected_network),
-					netdev_get_address(station->netdev));
+					netdev_get_address(station->netdev),
+					station_netconfig_event_handler,
+					station);
 	else
 		station_enter_state(station, STATION_STATE_CONNECTED);
 }
