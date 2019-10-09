@@ -1158,26 +1158,9 @@ static void station_enter_state(struct station *station,
 				IWD_NETWORK_INTERFACE, "Connected");
 		/* fall through */
 	case STATION_STATE_DISCONNECTED:
-		periodic_scan_stop(station);
-
-		break;
 	case STATION_STATE_CONNECTED:
 		periodic_scan_stop(station);
 
-		if (!station->netconfig)
-			break;
-
-		if (station->state == STATION_STATE_ROAMING) {
-			netconfig_reconfigure(station->netconfig);
-
-			break;
-		}
-
-		netconfig_configure(station->netconfig,
-					network_get_settings(
-						station->connected_network),
-					netdev_get_address(
-							station->netdev));
 		break;
 	case STATION_STATE_DISCONNECTING:
 	case STATION_STATE_ROAMING:
@@ -1302,6 +1285,11 @@ static void station_roamed(struct station *station)
 	station->signal_low = false;
 	station->roam_min_time.tv_sec = 0;
 	station->roam_no_orig_ap = false;
+
+	if (station->netconfig)
+		netconfig_reconfigure(station->netconfig);
+
+	station_enter_state(station, STATION_STATE_CONNECTED);
 }
 
 static void station_roam_failed(struct station *station)
@@ -1338,10 +1326,9 @@ static void station_reassociate_cb(struct netdev *netdev,
 	if (station->state != STATION_STATE_ROAMING)
 		return;
 
-	if (result == NETDEV_RESULT_OK) {
+	if (result == NETDEV_RESULT_OK)
 		station_roamed(station);
-		station_enter_state(station, STATION_STATE_CONNECTED);
-	} else
+	else
 		station_roam_failed(station);
 }
 
@@ -1357,10 +1344,9 @@ static void station_fast_transition_cb(struct netdev *netdev,
 	if (station->state != STATION_STATE_ROAMING)
 		return;
 
-	if (result == NETDEV_RESULT_OK) {
+	if (result == NETDEV_RESULT_OK)
 		station_roamed(station);
-		station_enter_state(station, STATION_STATE_CONNECTED);
-	} else
+	else
 		station_roam_failed(station);
 }
 
@@ -2280,7 +2266,14 @@ static void station_connect_cb(struct netdev *netdev, enum netdev_result result,
 	}
 
 	network_connected(station->connected_network);
-	station_enter_state(station, STATION_STATE_CONNECTED);
+
+	if (station->netconfig)
+		netconfig_configure(station->netconfig,
+					network_get_settings(
+						station->connected_network),
+					netdev_get_address(station->netdev));
+	else
+		station_enter_state(station, STATION_STATE_CONNECTED);
 }
 
 int __station_connect_network(struct station *station, struct network *network,
