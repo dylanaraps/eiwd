@@ -97,6 +97,13 @@ static bool systemd_builder_add_dns(struct l_dbus_message_builder *builder,
 		buf_size = 4;
 
 		break;
+	case AF_INET6:
+		if (inet_pton(AF_INET6, dns, buf) < 1)
+			return false;
+
+		buf_size = 16;
+
+		break;
 	default:
 		return false;
 	}
