@@ -2362,28 +2362,54 @@ exit:
 
 static void run_unit_tests(void)
 {
-	size_t i;
+	DIR *d;
+	struct dirent *dirent;
 	char *argv[2];
-	char *unit_test_abs_path;
-	char **unit_tests = l_strsplit(test_action_params, ',');
+	char *unit_test_abs_path = NULL;
+	char **unit_tests = NULL;
 
-	if (!unit_tests || !unit_tests[0])
-		goto exit;
+	if (strcmp(test_action_params, "")) {
+		unit_tests = l_strsplit(test_action_params, ',');
+
+		if (!unit_tests || !unit_tests[0])
+			goto exit;
+	}
 
 	if (chdir(top_level_path) < 0)
 		goto exit;
 
-	for (i = 0; unit_tests[i]; i++) {
-		unit_test_abs_path =
-			l_strdup_printf("%s%s%s", top_level_path, "/unit/",
-								unit_tests[i]);
+	d = opendir("unit/");
+	if (!d)
+		goto exit;
+
+	while ((dirent = readdir(d)) != NULL) {
+		struct stat st;
+
+		if (dirent->d_type != DT_REG)
+			continue;
+
+		unit_test_abs_path = l_strdup_printf("%s%s%s", top_level_path,
+						"/unit/", dirent->d_name);
+
+		if (stat(unit_test_abs_path, &st) < 0)
+			goto next;
+
+		if (!(st.st_mode & S_IEXEC))
+			goto next;
+
+		if (unit_tests) {
+			if (!l_strv_contains(unit_tests, dirent->d_name))
+				goto next;
+		}
 
 		argv[0] = unit_test_abs_path;
 		argv[1] = NULL;
 
+		l_info("\n---------- Unit %s ----------", dirent->d_name);
 		execute_program(argv, environ, true,
 					check_verbosity("unit"), false);
 
+next:
 		l_free(unit_test_abs_path);
 	}
 
@@ -2848,7 +2874,7 @@ static void usage(void)
 
 static const struct option main_options[] = {
 	{ "auto-tests",	required_argument, NULL, 'A' },
-	{ "unit-tests",	required_argument, NULL, 'U' },
+	{ "unit-tests",	optional_argument, NULL, 'U' },
 	{ "qemu",	required_argument, NULL, 'q' },
 	{ "kernel",	required_argument, NULL, 'k' },
 	{ "verbose",	required_argument, NULL, 'v' },
@@ -2885,7 +2911,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "A:U:q:k:v:g:Vdh", main_options,
+		opt = getopt_long(argc, argv, "A:q:k:v:g:UVdh", main_options,
 									NULL);
 		if (opt < 0)
 			break;
