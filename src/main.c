@@ -367,7 +367,6 @@ int main(int argc, char *argv[])
 	struct l_dbus *dbus;
 	const char *config_dir;
 	char **config_dirs;
-	uint32_t eap_mtu;
 	int i;
 
 	for (;;) {
@@ -465,9 +464,7 @@ int main(int argc, char *argv[])
 	l_strv_free(config_dirs);
 
 	__eapol_set_config(iwd_config);
-
-	if (!l_settings_get_uint(iwd_config, "EAP", "mtu", &eap_mtu))
-		eap_mtu = 1400; /* on WiFi the real MTU is around 2304 */
+	__eap_set_config(iwd_config);
 
 	exit_status = EXIT_FAILURE;
 
@@ -496,7 +493,7 @@ int main(int argc, char *argv[])
 	l_dbus_set_disconnect_handler(dbus, dbus_disconnected, NULL, NULL);
 	dbus_init(dbus);
 
-	eap_init(eap_mtu);
+	eap_init();
 
 	exit_status = l_main_run_with_signal(signal_handler, NULL);
 	plugin_exit();

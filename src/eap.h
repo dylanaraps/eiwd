@@ -93,5 +93,7 @@ const char *eap_get_identity(struct eap_state *eap);
 
 void eap_rx_packet(struct eap_state *eap, const uint8_t *pkt, size_t len);
 
-void eap_init(uint32_t default_mtu);
+void __eap_set_config(struct l_settings *config);
+
+void eap_init(void);
 void eap_exit(void);
