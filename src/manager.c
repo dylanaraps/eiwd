@@ -643,6 +643,8 @@ static int manager_init(void)
 
 error:
 	l_queue_destroy(pending_wiphys, NULL);
+	pending_wiphys = NULL;
+
 	l_genl_family_free(nl80211);
 	nl80211 = NULL;
 
