@@ -147,6 +147,13 @@ static void nl80211_appeared(const struct l_genl_family_info *info,
 	l_debug("Found nl80211 interface");
 	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
 
+	if (iwd_modules_init() < 0) {
+		l_main_quit();
+		return;
+	}
+
+	plugin_init(plugins, noplugins);
+
 	manager_init(nl80211, interfaces, nointerfaces);
 	anqp_init(nl80211);
 
@@ -482,14 +489,9 @@ int main(int argc, char *argv[])
 	if (!netdev_init())
 		goto fail_netdev;
 
-	if (iwd_modules_init() < 0)
-		goto fail_modules;
-
-	plugin_init(plugins, noplugins);
 	exit_status = l_main_run_with_signal(signal_handler, NULL);
 	plugin_exit();
 
-fail_modules:
 	iwd_modules_exit();
 	netdev_exit();
 fail_netdev:
