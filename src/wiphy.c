@@ -1150,13 +1150,16 @@ static void setup_wiphy_interface(struct l_dbus_interface *interface)
 					NULL);
 }
 
-bool wiphy_init(struct l_genl_family *in)
+static int wiphy_init(void)
 {
+	struct l_genl *genl = iwd_get_genl();
 	const struct l_settings *config = iwd_get_config();
 	const char *s = l_settings_get_value(config, "General",
 							"mac_randomize_bytes");
 	const char *whitelist = iwd_get_phy_whitelist();
 	const char *blacklist = iwd_get_phy_blacklist();
+
+	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
 
 	if (s && !strcmp(s, "nic"))
 		mac_randomize_bytes = 3;
@@ -1169,8 +1172,6 @@ bool wiphy_init(struct l_genl_family *in)
 		l_warn("Destroying existing list of wiphy devices");
 		l_queue_destroy(wiphy_list, NULL);
 	}
-
-	nl80211 = in;
 
 	wiphy_list = l_queue_new();
 
@@ -1191,10 +1192,10 @@ bool wiphy_init(struct l_genl_family *in)
 	if (blacklist)
 		blacklist_filter = l_strsplit(blacklist, ',');
 
-	return true;
+	return 0;
 }
 
-bool wiphy_exit(void)
+static void wiphy_exit(void)
 {
 	l_strfreev(whitelist_filter);
 	l_strfreev(blacklist_filter);
@@ -1202,12 +1203,14 @@ bool wiphy_exit(void)
 	l_queue_destroy(wiphy_list, wiphy_free);
 	wiphy_list = NULL;
 
+	l_genl_family_free(nl80211);
 	nl80211 = NULL;
 	mac_randomize_bytes = 6;
 
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_WIPHY_INTERFACE);
 
 	l_hwdb_unref(hwdb);
-
-	return true;
 }
+
+IWD_MODULE(wiphy, wiphy_init, wiphy_exit);
+IWD_MODULE_DEPENDS(wiphy, rfkill);

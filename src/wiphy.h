@@ -81,6 +81,3 @@ uint32_t wiphy_state_watch_add(struct wiphy *wiphy,
 				wiphy_state_watch_func_t func, void *user_data,
 				wiphy_destroy_func_t destroy);
 bool wiphy_state_watch_remove(struct wiphy *wiphy, uint32_t id);
-
-bool wiphy_init(struct l_genl_family *in);
-bool wiphy_exit(void);

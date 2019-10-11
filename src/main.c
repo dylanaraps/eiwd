@@ -46,7 +46,6 @@
 #include "src/backtrace.h"
 
 static struct l_genl *genl;
-static struct l_genl_family *nl80211;
 static struct l_settings *iwd_config;
 static struct l_timeout *timeout;
 static const char *interfaces;
@@ -57,6 +56,7 @@ static const char *plugins;
 static const char *noplugins;
 static const char *debugopt;
 static bool terminating;
+static bool nl80211_complete;
 
 static void main_loop_quit(struct l_timeout *timeout, void *user_data)
 {
@@ -70,7 +70,7 @@ static void iwd_shutdown(void)
 
 	terminating = true;
 
-	if (!nl80211) {
+	if (!nl80211_complete) {
 		l_main_quit();
 		return;
 	}
@@ -165,7 +165,8 @@ static void nl80211_appeared(const struct l_genl_family_info *info,
 							void *user_data)
 {
 	l_debug("Found nl80211 interface");
-	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
+
+	nl80211_complete = true;
 
 	if (iwd_modules_init() < 0) {
 		l_main_quit();
@@ -173,9 +174,6 @@ static void nl80211_appeared(const struct l_genl_family_info *info,
 	}
 
 	plugin_init(plugins, noplugins);
-
-	if (!wiphy_init(nl80211))
-		l_error("Unable to init wiphy functionality");
 }
 
 static void request_name_callback(struct l_dbus *dbus, bool success,
@@ -506,11 +504,6 @@ int main(int argc, char *argv[])
 	iwd_modules_exit();
 
 	eap_exit();
-
-	if (nl80211) {
-		wiphy_exit();
-		l_genl_family_free(nl80211);
-	}
 
 	dbus_exit();
 	l_dbus_destroy(dbus);
