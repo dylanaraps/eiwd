@@ -159,8 +159,6 @@ static void nl80211_appeared(const struct l_genl_family_info *info,
 
 	if (!wiphy_init(nl80211, phys, nophys))
 		l_error("Unable to init wiphy functionality");
-
-	netdev_set_nl80211(nl80211);
 }
 
 static void request_name_callback(struct l_dbus *dbus, bool success,
@@ -486,15 +484,11 @@ int main(int argc, char *argv[])
 	eap_init(eap_mtu);
 	eapol_init();
 
-	if (!netdev_init())
-		goto fail_netdev;
-
 	exit_status = l_main_run_with_signal(signal_handler, NULL);
 	plugin_exit();
 
 	iwd_modules_exit();
-	netdev_exit();
-fail_netdev:
+
 	eapol_exit();
 	eap_exit();
 

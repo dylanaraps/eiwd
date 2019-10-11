@@ -4755,20 +4755,22 @@ bool netdev_watch_remove(uint32_t id)
 	return watchlist_remove(&netdev_watches, id);
 }
 
-bool netdev_init(void)
+static int netdev_init(void)
 {
 	struct l_genl *genl = iwd_get_genl();
 	const struct l_settings *settings = iwd_get_config();
 
+	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
+
 	if (rtnl)
-		return false;
+		return -EALREADY;
 
 	l_debug("Opening route netlink socket");
 
 	rtnl = l_netlink_new(NETLINK_ROUTE);
 	if (!rtnl) {
 		l_error("Failed to open route netlink socket");
-		return false;
+		return -EIO;
 	}
 
 	if (getenv("IWD_RTNL_DEBUG"))
@@ -4778,7 +4780,7 @@ bool netdev_init(void)
 				netdev_link_notify, NULL, NULL)) {
 		l_error("Failed to register for RTNL link notifications");
 		l_netlink_destroy(rtnl);
-		return false;
+		return -EIO;
 	}
 
 	if (!l_settings_get_int(settings, "General", "roam_rssi_threshold",
@@ -4801,19 +4803,14 @@ bool netdev_init(void)
 	if (!unicast_watch)
 		l_error("Registering for unicast notification failed");
 
-	return true;
-}
-
-void netdev_set_nl80211(struct l_genl_family *in)
-{
-	nl80211 = in;
-
 	if (!l_genl_family_register(nl80211, "mlme", netdev_mlme_notify,
 								NULL, NULL))
 		l_error("Registering for MLME notification failed");
+
+	return 0;
 }
 
-void netdev_exit(void)
+static void netdev_exit(void)
 {
 	struct l_genl *genl = iwd_get_genl();
 
@@ -4823,6 +4820,8 @@ void netdev_exit(void)
 	l_genl_remove_unicast_watch(genl, unicast_watch);
 
 	watchlist_destroy(&netdev_watches);
+
+	l_genl_family_free(nl80211);
 	nl80211 = NULL;
 
 	l_debug("Closing route netlink socket");
@@ -4840,3 +4839,5 @@ void netdev_shutdown(void)
 	l_queue_destroy(netdev_list, netdev_free);
 	netdev_list = NULL;
 }
+
+IWD_MODULE(netdev, netdev_init, netdev_exit);
