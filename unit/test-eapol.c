@@ -2912,7 +2912,7 @@ static void eapol_sm_test_tls(struct eapol_8021x_tls_test_state *s,
 	aa = ap_address;
 	spa = sta_address;
 
-	eap_init(0);
+	eap_init();
 	eapol_init();
 	__handshake_set_get_nonce_func(test_nonce);
 
@@ -3375,7 +3375,7 @@ static void eapol_sm_test_eap_nak(const void *data)
 	aa = ap_address;
 	spa = sta_address;
 
-	eap_init(0);
+	eap_init();
 	eapol_init();
 	__handshake_set_get_nonce_func(test_nonce);
 
