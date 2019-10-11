@@ -512,6 +512,10 @@ AM_CFLAGS = $(ell_cflags) -fvisibility=hidden \
 				-DUNITDIR=\""$(top_srcdir)/unit/"\" \
 				-DCERTDIR=\""$(top_builddir)/unit/"\"
 
+if MAINTAINER_MODE
+AM_CFLAGS += -DHAVE_PKCS8_SUPPORT
+endif
+
 CLEANFILES = src/iwd.service wired/ead.service
 
 DISTCHECK_CONFIGURE_FLAGS = --disable-dbus-policy --disable-systemd-service \

@@ -3511,6 +3511,12 @@ static void eapol_ft_handshake_test(const void *data)
 	eapol_exit();
 }
 
+#define IS_ENABLED(config_macro) _IS_ENABLED1(config_macro)
+#define _IS_ENABLED1(config_macro) _IS_ENABLED2(_XXXX##config_macro)
+#define _XXXX1 _YYYY,
+#define _IS_ENABLED2(one_or_two_args) _IS_ENABLED3(one_or_two_args true, false)
+#define _IS_ENABLED3(ignore_this, val, ...) val
+
 int main(int argc, char *argv[])
 {
 	l_test_init(&argc, &argv);
@@ -3622,10 +3628,11 @@ int main(int argc, char *argv[])
 	l_test_add("EAPoL/WPA2 Retransmit Test",
 			&eapol_sm_wpa2_retransmit_test, NULL);
 
-	if (l_cipher_is_supported(L_CIPHER_DES3_EDE_CBC) &&
+	if (IS_ENABLED(HAVE_PKCS8_SUPPORT) &&
+			l_cipher_is_supported(L_CIPHER_DES3_EDE_CBC) &&
 			l_cipher_is_supported(L_CIPHER_AES_CBC) &&
 			l_key_is_supported(L_KEY_FEATURE_RESTRICT |
-							L_KEY_FEATURE_CRYPTO)) {
+						L_KEY_FEATURE_CRYPTO)) {
 		l_test_add("EAPoL/8021x EAP-TLS & 4-Way Handshake",
 					&eapol_sm_test_eap_tls, NULL);
 
