@@ -46,7 +46,7 @@ static void dbus_ready(struct l_dbus *dbus, void *user_data)
 
 	l_info("System ready");
 
-	eap_init(0);
+	eap_init();
 	network_init();
 	ethdev_init(opts->interfaces, opts->nointerfaces);
 }
