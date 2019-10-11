@@ -584,8 +584,9 @@ static void manager_config_notify(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
-bool manager_init(struct l_genl_family *in)
+static int manager_init(void)
 {
+	struct l_genl *genl = iwd_get_genl();
 	const struct l_settings *config = iwd_get_config();
 	struct l_genl_msg *msg;
 	unsigned int wiphy_dump;
@@ -594,7 +595,7 @@ bool manager_init(struct l_genl_family *in)
 	const char *if_whitelist = iwd_get_iface_whitelist();
 	const char *if_blacklist = iwd_get_iface_blacklist();
 
-	nl80211 = in;
+	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
 
 	if (if_whitelist)
 		whitelist_filter = l_strsplit(if_whitelist, ',');
@@ -607,7 +608,7 @@ bool manager_init(struct l_genl_family *in)
 	if (!l_genl_family_register(nl80211, "config", manager_config_notify,
 					NULL, NULL)) {
 		l_error("Registering for config notifications failed");
-		return false;
+		goto error;
 	}
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_GET_WIPHY, 128);
@@ -618,7 +619,7 @@ bool manager_init(struct l_genl_family *in)
 	if (!wiphy_dump) {
 		l_error("Initial wiphy information dump failed");
 		l_genl_msg_unref(msg);
-		return false;
+		goto error;
 	}
 
 	msg = l_genl_msg_new(NL80211_CMD_GET_INTERFACE);
@@ -630,7 +631,7 @@ bool manager_init(struct l_genl_family *in)
 		l_error("Initial interface information dump failed");
 		l_genl_msg_unref(msg);
 		l_genl_family_cancel(nl80211, wiphy_dump);
-		return false;
+		goto error;
 	}
 
 	randomize_str =
@@ -638,10 +639,17 @@ bool manager_init(struct l_genl_family *in)
 	if (randomize_str && !strcmp(randomize_str, "once"))
 		randomize = true;
 
-	return true;
+	return 0;
+
+error:
+	l_queue_destroy(pending_wiphys, NULL);
+	l_genl_family_free(nl80211);
+	nl80211 = NULL;
+
+	return -EIO;
 }
 
-void manager_exit(void)
+static void manager_exit(void)
 {
 	l_strfreev(whitelist_filter);
 	l_strfreev(blacklist_filter);
@@ -649,6 +657,9 @@ void manager_exit(void)
 	l_queue_destroy(pending_wiphys, wiphy_setup_state_free);
 	pending_wiphys = NULL;
 
+	l_genl_family_free(nl80211);
 	nl80211 = NULL;
 	randomize = false;
 }
+
+IWD_MODULE(manager, manager_init, manager_exit);

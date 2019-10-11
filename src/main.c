@@ -164,8 +164,6 @@ static void nl80211_appeared(const struct l_genl_family_info *info,
 
 	plugin_init(plugins, noplugins);
 
-	manager_init(nl80211);
-
 	if (!wiphy_init(nl80211, phys, nophys))
 		l_error("Unable to init wiphy functionality");
 }
@@ -500,7 +498,6 @@ int main(int argc, char *argv[])
 	eap_exit();
 
 	if (nl80211) {
-		manager_exit();
 		wiphy_exit();
 		l_genl_family_free(nl80211);
 	}
