@@ -30,9 +30,11 @@ struct l_genl *iwd_get_genl(void);
 
 void netdev_shutdown(void);
 
-bool manager_init(struct l_genl_family *in,
-			const char *if_whitelist, const char *if_blacklist);
+bool manager_init(struct l_genl_family *in);
 void manager_exit(void);
+
+const char *iwd_get_iface_whitelist(void);
+const char *iwd_get_iface_blacklist(void);
 
 struct iwd_module_desc {
 	const char *name;

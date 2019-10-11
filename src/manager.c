@@ -584,14 +584,15 @@ static void manager_config_notify(struct l_genl_msg *msg, void *user_data)
 	}
 }
 
-bool manager_init(struct l_genl_family *in,
-			const char *if_whitelist, const char *if_blacklist)
+bool manager_init(struct l_genl_family *in)
 {
 	const struct l_settings *config = iwd_get_config();
 	struct l_genl_msg *msg;
 	unsigned int wiphy_dump;
 	unsigned int interface_dump;
 	const char *randomize_str;
+	const char *if_whitelist = iwd_get_iface_whitelist();
+	const char *if_blacklist = iwd_get_iface_blacklist();
 
 	nl80211 = in;
 
