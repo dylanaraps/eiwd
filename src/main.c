@@ -482,14 +482,12 @@ int main(int argc, char *argv[])
 	dbus_init(dbus);
 
 	eap_init(eap_mtu);
-	eapol_init();
 
 	exit_status = l_main_run_with_signal(signal_handler, NULL);
 	plugin_exit();
 
 	iwd_modules_exit();
 
-	eapol_exit();
 	eap_exit();
 
 	if (nl80211) {

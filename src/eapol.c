@@ -40,6 +40,7 @@
 #include "src/handshake.h"
 #include "src/watchlist.h"
 #include "src/erp.h"
+#include "src/iwd.h"
 
 static struct l_queue *state_machines;
 static struct l_queue *preauths;
@@ -2705,16 +2706,16 @@ void __eapol_set_config(struct l_settings *config)
 		eapol_4way_handshake_time = 5;
 }
 
-bool eapol_init()
+int eapol_init(void)
 {
 	state_machines = l_queue_new();
 	preauths = l_queue_new();
 	watchlist_init(&frame_watches, &eapol_frame_watch_ops);
 
-	return true;
+	return 0;
 }
 
-bool eapol_exit()
+void eapol_exit(void)
 {
 	if (!l_queue_isempty(state_machines))
 		l_warn("stale eapol state machines found");
@@ -2727,6 +2728,6 @@ bool eapol_exit()
 	l_queue_destroy(preauths, preauth_sm_destroy);
 
 	watchlist_destroy(&frame_watches);
-
-	return true;
 }
+
+IWD_MODULE(eapol, eapol_init, eapol_exit);

@@ -128,5 +128,5 @@ struct preauth_sm *eapol_preauth_start(const uint8_t *aa,
 					eapol_preauth_destroy_func_t destroy);
 void eapol_preauth_cancel(uint32_t ifindex);
 
-bool eapol_init();
-bool eapol_exit();
+int eapol_init(void);
+void eapol_exit(void);

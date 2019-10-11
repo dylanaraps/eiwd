@@ -4850,3 +4850,4 @@ void netdev_shutdown(void)
 }
 
 IWD_MODULE(netdev, netdev_init, netdev_exit);
+IWD_MODULE_DEPENDS(netdev, eapol);
