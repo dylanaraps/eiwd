@@ -112,6 +112,16 @@ const char *iwd_get_iface_blacklist(void)
 	return nointerfaces;
 }
 
+const char *iwd_get_phy_whitelist(void)
+{
+	return phys;
+}
+
+const char *iwd_get_phy_blacklist(void)
+{
+	return nophys;
+}
+
 static void usage(void)
 {
 	printf("iwd - Wireless daemon\n"
@@ -164,7 +174,7 @@ static void nl80211_appeared(const struct l_genl_family_info *info,
 
 	plugin_init(plugins, noplugins);
 
-	if (!wiphy_init(nl80211, phys, nophys))
+	if (!wiphy_init(nl80211))
 		l_error("Unable to init wiphy functionality");
 }
 

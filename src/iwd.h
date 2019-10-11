@@ -33,6 +33,9 @@ void netdev_shutdown(void);
 const char *iwd_get_iface_whitelist(void);
 const char *iwd_get_iface_blacklist(void);
 
+const char *iwd_get_phy_whitelist(void);
+const char *iwd_get_phy_blacklist(void);
+
 struct iwd_module_desc {
 	const char *name;
 	int (*init)(void);

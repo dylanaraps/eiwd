@@ -1150,12 +1150,13 @@ static void setup_wiphy_interface(struct l_dbus_interface *interface)
 					NULL);
 }
 
-bool wiphy_init(struct l_genl_family *in, const char *whitelist,
-							const char *blacklist)
+bool wiphy_init(struct l_genl_family *in)
 {
 	const struct l_settings *config = iwd_get_config();
 	const char *s = l_settings_get_value(config, "General",
 							"mac_randomize_bytes");
+	const char *whitelist = iwd_get_phy_whitelist();
+	const char *blacklist = iwd_get_phy_blacklist();
 
 	if (s && !strcmp(s, "nic"))
 		mac_randomize_bytes = 3;
