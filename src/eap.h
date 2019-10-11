@@ -95,5 +95,5 @@ void eap_rx_packet(struct eap_state *eap, const uint8_t *pkt, size_t len);
 
 void __eap_set_config(struct l_settings *config);
 
-void eap_init(void);
+int eap_init(void);
 void eap_exit(void);

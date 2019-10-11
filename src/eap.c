@@ -33,6 +33,7 @@
 #include "src/missing.h"
 #include "src/eap.h"
 #include "src/eap-private.h"
+#include "src/iwd.h"
 
 static uint32_t default_mtu;
 static struct l_queue *eap_methods;
@@ -721,7 +722,7 @@ static void __eap_method_disable(struct eap_method_desc *start,
 extern struct eap_method_desc __start___eap[];
 extern struct eap_method_desc __stop___eap[];
 
-void eap_init(void)
+int eap_init(void)
 {
 	eap_methods = l_queue_new();
 	__eap_method_enable(__start___eap, __stop___eap);
@@ -733,6 +734,8 @@ void eap_init(void)
 	 */
 	if (default_mtu == 0)
 		default_mtu = 1020;
+
+	return 0;
 }
 
 void eap_exit(void)
@@ -740,3 +743,5 @@ void eap_exit(void)
 	__eap_method_disable(__start___eap, __stop___eap);
 	l_queue_destroy(eap_methods, NULL);
 }
+
+IWD_MODULE(eap, eap_init, eap_exit);

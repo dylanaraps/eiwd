@@ -493,14 +493,10 @@ int main(int argc, char *argv[])
 	l_dbus_set_disconnect_handler(dbus, dbus_disconnected, NULL, NULL);
 	dbus_init(dbus);
 
-	eap_init();
-
 	exit_status = l_main_run_with_signal(signal_handler, NULL);
 	plugin_exit();
 
 	iwd_modules_exit();
-
-	eap_exit();
 
 	dbus_exit();
 	l_dbus_destroy(dbus);
