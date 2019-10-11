@@ -4760,8 +4760,6 @@ static int netdev_init(void)
 	struct l_genl *genl = iwd_get_genl();
 	const struct l_settings *settings = iwd_get_config();
 
-	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
-
 	if (rtnl)
 		return -EALREADY;
 
@@ -4779,8 +4777,13 @@ static int netdev_init(void)
 	if (!l_netlink_register(rtnl, RTNLGRP_LINK,
 				netdev_link_notify, NULL, NULL)) {
 		l_error("Failed to register for RTNL link notifications");
-		l_netlink_destroy(rtnl);
-		return -EIO;
+		goto fail_netlink;
+	}
+
+	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
+	if (!nl80211) {
+		l_error("Failed to obtain nl80211");
+		goto fail_netlink;
 	}
 
 	if (!l_settings_get_int(settings, "General", "roam_rssi_threshold",
@@ -4808,6 +4811,12 @@ static int netdev_init(void)
 		l_error("Registering for MLME notification failed");
 
 	return 0;
+
+fail_netlink:
+	l_netlink_destroy(rtnl);
+	rtnl = NULL;
+
+	return -EIO;
 }
 
 static void netdev_exit(void)
