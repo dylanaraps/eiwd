@@ -37,8 +37,6 @@ typedef void (*agent_request_user_name_passwd_func_t) (enum agent_result result,
 					void *user_data);
 typedef void (*agent_request_destroy_func_t)(void *user_data);
 
-bool agent_init(struct l_dbus *dbus);
-bool agent_exit(struct l_dbus *dbus);
 void agent_shutdown(void);
 
 unsigned int agent_request_passphrase(const char *path,

@@ -210,12 +210,11 @@ struct l_dbus *dbus_get_bus(void)
 bool dbus_init(struct l_dbus *dbus)
 {
 	g_dbus = dbus;
-	return agent_init(dbus);
+	return true;
 }
 
 void dbus_exit(void)
 {
-	agent_exit(g_dbus);
 	g_dbus = NULL;
 }
 

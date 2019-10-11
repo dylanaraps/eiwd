@@ -29,6 +29,7 @@
 #include <ell/ell.h>
 #include "src/dbus.h"
 #include "src/agent.h"
+#include "src/iwd.h"
 
 static unsigned int next_request_id = 0;
 
@@ -619,8 +620,10 @@ static bool release_agent(void *data, void *user_data)
 	return true;
 }
 
-bool agent_init(struct l_dbus *dbus)
+static int agent_init(void)
 {
+	struct l_dbus *dbus = dbus_get_bus();
+
 	agents = l_queue_new();
 
 	if (!l_dbus_register_interface(dbus, IWD_AGENT_MANAGER_INTERFACE,
@@ -628,7 +631,7 @@ bool agent_init(struct l_dbus *dbus)
 						NULL, false)) {
 		l_info("Unable to register %s interface",
 				IWD_AGENT_MANAGER_INTERFACE);
-		return false;
+		return -EIO;
 	}
 
 	if (!l_dbus_object_add_interface(dbus, IWD_AGENT_MANAGER_PATH,
@@ -637,24 +640,26 @@ bool agent_init(struct l_dbus *dbus)
 		l_info("Unable to register the agent manager object on '%s'",
 				IWD_AGENT_MANAGER_PATH);
 		l_dbus_unregister_interface(dbus, IWD_AGENT_MANAGER_INTERFACE);
-		return false;
+		return -EIO;
 	}
 
-	return true;
+	return 0;
 }
 
-bool agent_exit(struct l_dbus *dbus)
+static void agent_exit(void)
 {
+	struct l_dbus *dbus = dbus_get_bus();
+
 	l_dbus_unregister_object(dbus, IWD_AGENT_MANAGER_PATH);
 	l_dbus_unregister_interface(dbus, IWD_AGENT_MANAGER_INTERFACE);
 
 	l_queue_destroy(agents, agent_free);
 	agents = NULL;
-
-	return true;
 }
 
 void agent_shutdown(void)
 {
 	l_queue_foreach_remove(agents, release_agent, NULL);
 }
+
+IWD_MODULE(agent, agent_init, agent_exit);
