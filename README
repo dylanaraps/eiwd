@@ -61,7 +61,9 @@ Manual pages
 
 The manual pages are generated from reStructuredText markup source files
 during the normal build process. The generation requires the rst2man utility
-from Python Docutils project.
+from Python Docutils project. If rst2man is for some reason not available,
+using --disable-manual-pages will skip the manual pages generation and
+installation.
 
 When building from the tarballs, a copy of the generated manual pages is
 included and the rst2man utility is actually not needed.
