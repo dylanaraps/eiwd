@@ -153,8 +153,11 @@ systemd_modload_DATA = src/pkcs8.conf
 endif
 
 if MANUAL_PAGES
-dist_man_MANS =
+man_MANS =
 endif
+
+manual_pages = src/iwd.8 src/iwd.conf.5 client/iwctl.1 monitor/iwmon.1 \
+		wired/ead.8 tools/hwsim.1
 
 eap_sources = src/eap.c src/eap.h src/eap-private.h \
 				src/eap-wsc.c src/eap-wsc.h \
@@ -248,7 +251,7 @@ dbus_bus_DATA += src/net.connman.iwd.service
 endif
 
 if MANUAL_PAGES
-dist_man_MANS += src/iwd.8 src/iwd.conf.5
+man_MANS += src/iwd.8 src/iwd.conf.5
 endif
 endif
 
@@ -272,7 +275,7 @@ client_iwctl_SOURCES = client/main.c \
 client_iwctl_LDADD = $(ell_ldadd) -lreadline
 
 if MANUAL_PAGES
-dist_man_MANS += client/iwctl.1
+man_MANS += client/iwctl.1
 endif
 endif
 
@@ -297,7 +300,7 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 monitor_iwmon_LDADD = $(ell_ldadd)
 
 if MANUAL_PAGES
-dist_man_MANS += monitor/iwmon.1
+man_MANS += monitor/iwmon.1
 endif
 endif
 
@@ -322,7 +325,7 @@ dbus_bus_DATA += wired/net.connman.ead.service
 endif
 
 if MANUAL_PAGES
-dist_man_MANS += wired/ead.8
+man_MANS += wired/ead.8
 endif
 endif
 
@@ -340,7 +343,7 @@ dist_dbus_data_DATA += tools/hwsim-dbus.conf
 endif
 
 if MANUAL_PAGES
-dist_man_MANS += tools/hwsim.1
+man_MANS += tools/hwsim.1
 endif
 endif
 
@@ -504,9 +507,10 @@ TESTS = $(unit_tests)
 
 EXTRA_DIST = src/genbuiltin src/iwd.service.in src/net.connman.iwd.service \
 			wired/ead.service.in wired/net.connman.ead.service \
-			src/pkcs8.conf src/iwd.rst wired/ead.rst \
+			src/iwd.rst src/iwd.conf.rst wired/ead.rst \
 			client/iwctl.rst monitor/iwmon.rst tools/hwsim.rst \
-			doc/main.conf unit/gencerts.cnf
+			src/pkcs8.conf doc/main.conf unit/gencerts.cnf \
+			$(manual_pages)
 
 AM_CFLAGS = $(ell_cflags) -fvisibility=hidden \
 				-DUNITDIR=\""$(top_srcdir)/unit/"\" \
@@ -525,7 +529,7 @@ DISTCHECK_CONFIGURE_FLAGS = --disable-dbus-policy --disable-systemd-service \
 				--enable-hwsim \
 				--enable-tools
 
-DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests) $(dist_man_MANS)
+DISTCLEANFILES = $(BUILT_SOURCES) $(unit_tests) $(manual_pages)
 
 MAINTAINERCLEANFILES = Makefile.in configure config.h.in aclocal.m4
 
