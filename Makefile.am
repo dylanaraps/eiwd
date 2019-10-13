@@ -507,10 +507,10 @@ TESTS = $(unit_tests)
 
 EXTRA_DIST = src/genbuiltin src/iwd.service.in src/net.connman.iwd.service \
 			wired/ead.service.in wired/net.connman.ead.service \
-			src/iwd.rst src/iwd.conf.rst wired/ead.rst \
-			client/iwctl.rst monitor/iwmon.rst tools/hwsim.rst \
 			src/pkcs8.conf doc/main.conf unit/gencerts.cnf \
-			$(manual_pages)
+			$(manual_pages) $(patsubst %.1,%.rst, \
+					$(patsubst %.5,%.rst, \
+					$(patsubst %.8,%.rst,$(manual_pages))))
 
 AM_CFLAGS = $(ell_cflags) -fvisibility=hidden \
 				-DUNITDIR=\""$(top_srcdir)/unit/"\" \
