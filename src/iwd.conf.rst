@@ -21,7 +21,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-The /etc/iwd/main.conf file configures the systemd-wide settings for iwd(8)
+The /etc/iwd/main.conf file configures the system-wide settings for iwd(8).
 
 SEE ALSO
 ========
