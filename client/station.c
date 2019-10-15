@@ -338,7 +338,6 @@ static void ordered_networks_display(struct l_queue *ordered_networks)
 {
 	char *dbms = NULL;
 	const struct l_queue_entry *entry;
-	bool is_first;
 
 	display_table_header("Available networks", "%s%-*s%-*s%-*s%*s",
 					MARGIN, 2, "", 32, "Network name",
@@ -351,7 +350,7 @@ static void ordered_networks_display(struct l_queue *ordered_networks)
 		return;
 	}
 
-	for (is_first = true, entry = l_queue_get_entries(ordered_networks);
+	for (entry = l_queue_get_entries(ordered_networks);
 						entry; entry = entry->next) {
 		struct ordered_network *network = entry->data;
 		const struct proxy_interface *network_i =
@@ -362,24 +361,17 @@ static void ordered_networks_display(struct l_queue *ordered_networks)
 		if (display_signal_as_dbms)
 			dbms = l_strdup_printf("%d", network->signal_strength);
 
-		if (is_first && network_is_connected(network_i)) {
-			display("%s%-*s%-*s%-*s%-*s\n", MARGIN,
-				2, COLOR_BOLDGRAY "> " COLOR_OFF,
-				32, network_name, 10, network_type,
-				6, display_signal_as_dbms ? dbms :
-					dbms_tostars(network->signal_strength));
+		display("%s%-*s%-*s%-*s%-*s\n", MARGIN, 2,
+			network_is_connected(network_i) ?
+				COLOR_BOLDGRAY "> " COLOR_OFF : "",
+			32, network_name, 10, network_type,
+			6, display_signal_as_dbms ? dbms :
+				dbms_tostars(network->signal_strength));
 
+		if (display_signal_as_dbms) {
 			l_free(dbms);
-			is_first = false;
-			continue;
+			dbms = NULL;
 		}
-
-		display("%s%-*s%-*s%-*s%-*s\n", MARGIN, 2, "",
-				32, network_name, 10, network_type,
-				6, display_signal_as_dbms ? dbms :
-					dbms_tostars(network->signal_strength));
-
-		l_free(dbms);
 	}
 
 	display_table_footer();
