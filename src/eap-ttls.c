@@ -1089,7 +1089,7 @@ static bool eap_ttls_settings_load(struct eap_state *eap,
 						struct l_settings *settings,
 						const char *prefix)
 {
-	struct phase2_method *phase2 = l_new(struct phase2_method, 1);
+	struct phase2_method *phase2;
 	const char *phase2_method_name;
 	char setting[72];
 	uint8_t i;
@@ -1099,6 +1099,8 @@ static bool eap_ttls_settings_load(struct eap_state *eap,
 								setting);
 	if (!phase2_method_name)
 		return false;
+
+	phase2 = l_new(struct phase2_method, 1);
 
 	snprintf(setting, sizeof(setting), "%sTTLS-Phase2-", prefix);
 
