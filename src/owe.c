@@ -165,8 +165,10 @@ static bool owe_compute_keys(struct owe_sm *owe, const void *public_key,
 	l_ecc_point_free(other_public);
 
 	nbytes = l_ecc_scalar_get_data(shared_secret, ss_buf, sizeof(ss_buf));
-
 	l_ecc_scalar_free(shared_secret);
+
+	if (nbytes < 0)
+		return false;
 
 	ptr += l_ecc_point_get_x(owe->public_key, ptr, sizeof(key));
 	memcpy(ptr, public_key, nbytes);
