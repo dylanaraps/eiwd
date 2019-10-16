@@ -246,7 +246,7 @@ static int owe_rx_associate(struct auth_proto *ap, const uint8_t *frame,
 	size_t owe_dh_len = 0;
 	const uint8_t *owe_dh = NULL;
 	struct ie_rsn_info info;
-	bool akm_found;
+	bool akm_found = false;
 	const void *data;
 
 	mpdu = mpdu_validate(frame, len);
