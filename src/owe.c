@@ -159,6 +159,7 @@ static bool owe_compute_keys(struct owe_sm *owe, const void *public_key,
 
 	if (!l_ecdh_generate_shared_secret(owe->private, other_public,
 						&shared_secret)) {
+		l_ecc_point_free(other_public);
 		return false;
 	}
 
