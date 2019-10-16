@@ -827,12 +827,12 @@ int ie_parse_osen(struct ie_tlv_iter *iter, struct ie_rsn_info *out_info)
 	if (!is_ie_wfa_ie(iter->data, iter->len, IE_WFA_OI_OSEN))
 		return -EPROTOTYPE;
 
-	RSNE_ADVANCE(data, len, 4);
-
 	memset(&info, 0, sizeof(info));
 	info.group_cipher = IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC;
 	info.pairwise_ciphers = IE_RSN_CIPHER_SUITE_CCMP;
 	info.akm_suites = IE_RSN_AKM_SUITE_8021X;
+
+	RSNE_ADVANCE(data, len, 4);
 
 	if (parse_ciphers(data, len, ie_parse_osen_akm_suite, &info) < 0)
 		return -EBADMSG;
