@@ -1106,7 +1106,8 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 	pmkid = handshake_util_find_pmkid_kde(EAPOL_KEY_DATA(ek, sm->mic_len),
 					EAPOL_KEY_DATA_LEN(ek, sm->mic_len));
 
-	ie_parse_rsne_from_data(own_ie, own_ie[1] + 2, &rsn_info);
+	if (ie_parse_rsne_from_data(own_ie, own_ie[1] + 2, &rsn_info) < 0)
+		goto error_unspecified;
 
 	/*
 	 * Require the PMKID KDE whenever we've sent a list of PMKIDs in
@@ -1557,7 +1558,8 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 		const uint8_t *mde = sm->handshake->mde;
 		const uint8_t *fte = sm->handshake->fte;
 
-		ie_parse_rsne_from_data(rsne, rsne[1] + 2, &ie_info);
+		if (ie_parse_rsne_from_data(rsne, rsne[1] + 2, &ie_info) < 0)
+			goto error_ie_different;
 
 		if (ie_info.num_pmkids != 1 || memcmp(ie_info.pmkids,
 						sm->handshake->pmk_r1_name, 16))
