@@ -498,6 +498,9 @@ static int sae_process_commit(struct sae_sm *sm, const uint8_t *from,
 
 	l_ecc_point_free(k_point);
 
+	if (klen < 0)
+		goto reject;
+
 	/* keyseed = H(<0>32, k) */
 	hmac_sha256(zero_key, 32, k, klen, keyseed, 32);
 
