@@ -423,6 +423,8 @@ static void hs20_dir_watch_cb(const char *filename,
 
 		l_queue_push_head(hs20_settings, config);
 
+		l_settings_free(new);
+
 		break;
 	case L_DIR_WATCH_EVENT_REMOVED:
 		config = l_queue_remove_if(hs20_settings, match_filename,
@@ -452,6 +454,8 @@ static void hs20_dir_watch_cb(const char *filename,
 		}
 
 		known_network_update(&config->super, new, connected_time);
+
+		l_settings_free(new);
 
 		break;
 	case L_DIR_WATCH_EVENT_ACCESSED:
