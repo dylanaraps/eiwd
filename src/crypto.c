@@ -706,6 +706,7 @@ bool hkdf_extract(enum l_checksum_type type, const uint8_t *key,
 	}
 
 	if (!l_checksum_updatev(hmac, iov, num_args)) {
+		l_checksum_free(hmac);
 		va_end(va);
 		return false;
 	}
