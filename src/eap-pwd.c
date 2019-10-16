@@ -115,8 +115,10 @@ static bool kdf(uint8_t *key, size_t key_len, const char *label,
 		iov[iov_pos].iov_base = &L;
 		iov[iov_pos++].iov_len = 2;
 
-		if (!l_checksum_updatev(hmac, iov, iov_pos))
+		if (!l_checksum_updatev(hmac, iov, iov_pos)) {
+			l_checksum_free(hmac);
 			return false;
+		}
 
 		l_checksum_get_digest(hmac, out + len, minsize(olen - len, 32));
 		l_checksum_free(hmac);
