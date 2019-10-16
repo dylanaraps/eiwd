@@ -1912,9 +1912,9 @@ static int ie_parse_vht_capability(struct ie_tlv_iter *vht_iter,
 	uint8_t rx_mcs_map[2];
 	uint8_t tx_mcs_map[2];
 	unsigned int max_rx_mcs = 0;
-	unsigned int rx_nss;
+	unsigned int rx_nss = 1;
 	unsigned int max_tx_mcs = 0;
-	unsigned int tx_nss;
+	unsigned int tx_nss = 1;
 	uint8_t ht_cap;
 	bool short_gi_20mhz;
 	bool short_gi_40mhz;
