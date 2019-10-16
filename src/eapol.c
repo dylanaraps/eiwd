@@ -886,9 +886,9 @@ struct eapol_sm *eapol_sm_new(struct handshake_state *hs)
 
 void eapol_sm_free(struct eapol_sm *sm)
 {
-	eapol_sm_destroy(sm);
-
 	l_queue_remove(state_machines, sm);
+
+	eapol_sm_destroy(sm);
 }
 
 void eapol_sm_set_listen_interval(struct eapol_sm *sm, uint16_t interval)
