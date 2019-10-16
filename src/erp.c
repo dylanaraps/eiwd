@@ -509,8 +509,9 @@ int erp_rx_packet(struct erp_state *erp, const uint8_t *pkt, size_t len)
 	l_put_be16(64, ptr);
 	ptr += 2;
 
-	hkdf_expand(L_CHECKSUM_SHA256, erp->r_rk, erp->cache->emsk_len,
-			info, ptr - info, erp->rmsk, erp->cache->emsk_len);
+	if (!hkdf_expand(L_CHECKSUM_SHA256, erp->r_rk, erp->cache->emsk_len,
+			info, ptr - info, erp->rmsk, erp->cache->emsk_len))
+		goto eap_failed;
 
 	return 0;
 
