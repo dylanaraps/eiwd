@@ -217,7 +217,6 @@ static bool owe_compute_keys(struct owe_sm *owe, const void *public_key,
 
 failed:
 	memset(ss_buf, 0, sizeof(ss_buf));
-	l_ecc_scalar_free(shared_secret);
 	return false;
 }
 
