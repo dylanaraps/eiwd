@@ -342,7 +342,12 @@ static struct hs20_config *hs20_config_new(struct l_settings *settings,
 	config = l_new(struct hs20_config, 1);
 
 	if (hessid_str) {
-		util_string_to_address(hessid_str, config->hessid);
+		if (!util_string_to_address(hessid_str, config->hessid)) {
+			l_error("Invalid HESSID in settings");
+			l_free(config);
+			goto free_values;
+		}
+
 		l_free(hessid_str);
 	}
 
