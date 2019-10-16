@@ -43,6 +43,7 @@
 #include "src/network.h"
 #include "src/knownnetworks.h"
 #include "src/nl80211cmd.h"
+#include "src/nl80211util.h"
 #include "src/util.h"
 #include "src/scan.h"
 
@@ -1359,10 +1360,8 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 	uint16_t type, len;
 	const void *data;
 	uint8_t cmd;
-	uint64_t uninitialized_var(attr_wdev_id);
-	bool have_wdev_id;
-	uint32_t uninitialized_var(attr_wiphy);
-	bool have_wiphy;
+	uint64_t wdev_id;
+	uint32_t wiphy_id;
 	struct scan_context *sc;
 	bool active_scan = false;
 
@@ -1370,48 +1369,25 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 
 	l_debug("Scan notification %s(%u)", nl80211cmd_to_string(cmd), cmd);
 
+	if (nl80211_parse_attrs(msg, NL80211_ATTR_WDEV, &wdev_id,
+					NL80211_ATTR_WIPHY, &wiphy_id,
+					NL80211_ATTR_UNSPEC) < 0)
+		return;
+
+	sc = l_queue_find(scan_contexts, scan_context_match, &wdev_id);
+	if (!sc)
+		return;
+
 	if (!l_genl_attr_init(&attr, msg))
 		return;
 
 	while (l_genl_attr_next(&attr, &type, &len, &data)) {
 		switch (type) {
-		case NL80211_ATTR_WIPHY:
-			if (len != sizeof(uint32_t)) {
-				l_warn("Invalid wiphy attribute");
-				return;
-			}
-
-			have_wiphy = true;
-			attr_wiphy = *((uint32_t *) data);
-			break;
-		case NL80211_ATTR_WDEV:
-			if (len != sizeof(uint64_t)) {
-				l_warn("Invalid wdev index attribute");
-				return;
-			}
-
-			have_wdev_id = true;
-			attr_wdev_id = *((uint64_t *) data);
-			break;
 		case NL80211_ATTR_SCAN_SSIDS:
 			active_scan = true;
 			break;
 		}
 	}
-
-	if (!have_wiphy) {
-		l_warn("Scan results do not contain wiphy attribute");
-		return;
-	}
-
-	if (!have_wdev_id) {
-		l_warn("Scan results do not contain wdev attribute");
-		return;
-	}
-
-	sc = l_queue_find(scan_contexts, scan_context_match, &attr_wdev_id);
-	if (!sc)
-		return;
 
 	switch (cmd) {
 	case NL80211_CMD_NEW_SCAN_RESULTS:
