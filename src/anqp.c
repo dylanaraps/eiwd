@@ -287,6 +287,9 @@ uint32_t anqp_request(uint32_t ifindex, const uint8_t *addr,
 	uint32_t duration = 300;
 	struct netdev *netdev = netdev_find(ifindex);
 
+	if (!netdev)
+		return 0;
+
 	/*
 	 * TODO: Netdev dependencies will eventually be removed so we need
 	 * another way to figure out wiphy capabilities.
