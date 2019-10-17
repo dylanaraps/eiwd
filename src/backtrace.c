@@ -130,6 +130,9 @@ void __iwd_backtrace_print(unsigned int offset)
 		}
 
 		ptr = strchr(pos, '\n');
+		if (!ptr)
+			continue;
+
 		*ptr++ = '\0';
 
 		if (strncmp(pos, program_path, pathlen) == 0)
