@@ -3677,7 +3677,6 @@ static void print_authentication_mgmt_frame(unsigned int level,
 {
 	const char *str;
 	const struct mmpdu_authentication *body;
-	struct ie_tlv_iter iter;
 
 	if (!mmpdu)
 		return;
