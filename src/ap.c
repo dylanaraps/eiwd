@@ -951,7 +951,7 @@ bad_frame:
 	 *
 	 * For now, we need to drop the RSNA.
 	 */
-	if (sta && sta->associated && sta->rsna)
+	if (sta->associated && sta->rsna)
 		ap_drop_rsna(sta);
 
 	if (rates)
