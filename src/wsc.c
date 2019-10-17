@@ -481,6 +481,7 @@ static void wsc_connect(struct wsc *wsc)
 					wsc_eapol_event, wsc) < 0) {
 		dbus_pending_reply(&wsc->pending,
 					dbus_error_failed(wsc->pending));
+		handshake_state_free(hs);
 		return;
 	}
 
