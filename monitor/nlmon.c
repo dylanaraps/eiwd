@@ -3013,8 +3013,9 @@ static void print_p2p_channel_list(unsigned int level, const char *label,
 
 	while (size) {
 		uint8_t channels;
-		char str[128];
-		int pos = 0;
+		struct l_string *string;
+		char *str;
+		bool first = true;
 
 		if (size < 2 || size < 2 + bytes[1]) {
 			printf("malformed P2P %s\n", label);
@@ -3025,11 +3026,18 @@ static void print_p2p_channel_list(unsigned int level, const char *label,
 		channels = *bytes++;
 		size -= 2 + channels;
 
-		while (channels--)
-			snprintf(str + pos, sizeof(str) - pos, "%s%u",
-					pos ? ", " : "", (int) *bytes++);
+		string = l_string_new(128);
 
+		while (channels--) {
+			l_string_append_printf(string, "%s%u",
+						first ? "" : ", ",
+						(int ) *bytes++);
+			first = false;
+		}
+
+		str = l_string_unwrap(string);
 		print_attr(level + 2, "%s", str);
+		l_free(str);
 	}
 }
 
