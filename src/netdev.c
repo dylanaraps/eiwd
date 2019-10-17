@@ -1668,6 +1668,8 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 	if (!status_code || *status_code != 0)
 		goto error;
 
+	if (!ies)
+		goto process_resp_ies;
 	/*
 	 * The driver may have modified the IEs we passed to CMD_CONNECT
 	 * before sending them out, the actual IE sent is reflected in the
@@ -1696,6 +1698,7 @@ static void netdev_connect_event(struct l_genl_msg *msg, struct netdev *netdev)
 		}
 	}
 
+process_resp_ies:
 	if (resp_ies) {
 		const uint8_t *fte = NULL;
 		const uint8_t *qos_set = NULL;
