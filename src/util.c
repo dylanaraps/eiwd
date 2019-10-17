@@ -112,9 +112,10 @@ const char *util_address_to_string(const uint8_t *addr)
 	return str;
 }
 
-bool util_string_to_address(const char *str, uint8_t *addr)
+bool util_string_to_address(const char *str, uint8_t *out_addr)
 {
 	unsigned int i;
+	uint8_t addr[6];
 
 	if (!str)
 		return false;
@@ -139,9 +140,12 @@ bool util_string_to_address(const char *str, uint8_t *addr)
 	if (!l_ascii_isxdigit(str[i + 1]))
 		return false;
 
-	sscanf(str, "%2hhx:%2hhx:%2hhx:%2hhx:%2hhx:%2hhx",
+	if (sscanf(str, "%2hhx:%2hhx:%2hhx:%2hhx:%2hhx:%2hhx",
 			&addr[0], &addr[1], &addr[2],
-			&addr[3], &addr[4], &addr[5]);
+			&addr[3], &addr[4], &addr[5]) != 6)
+		return false;
+
+	memcpy(out_addr, addr, sizeof(addr));
 
 	return true;
 }
