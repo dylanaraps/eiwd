@@ -1523,7 +1523,7 @@ uint8_t scan_freq_to_channel(uint32_t freq, enum scan_band *out_band)
 	}
 
 	if (freq >= 5005 && freq < 5900) {
-		if (channel % 5)
+		if (freq % 5)
 			return 0;
 
 		channel = (freq - 5000) / 5;
@@ -1535,7 +1535,7 @@ uint8_t scan_freq_to_channel(uint32_t freq, enum scan_band *out_band)
 	}
 
 	if (freq >= 4905 && freq < 5000) {
-		if (channel % 5)
+		if (freq % 5)
 			return 0;
 
 		channel = (freq - 4000) / 5;
