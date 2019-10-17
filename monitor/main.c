@@ -250,7 +250,6 @@ static struct l_netlink *rtm_interface_send_message(struct l_netlink *rtnl,
 	linkinfo_rta->rta_len = rta_buf - (void *) linkinfo_rta;
 
 	switch (rtm_msg_type) {
-
 	case RTM_NEWLINK:
 		rtmmsg->ifi_flags = IFF_UP | IFF_ALLMULTI | IFF_NOARP;
 
@@ -275,8 +274,8 @@ static struct l_netlink *rtm_interface_send_message(struct l_netlink *rtnl,
 
 	default:
 		l_netlink_destroy(rtnl);
-		l_free(rtmmsg);
-		return NULL;
+		rtnl = NULL;
+		break;
 	}
 
 	l_free(rtmmsg);
