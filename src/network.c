@@ -253,14 +253,15 @@ const uint8_t *network_get_psk(struct network *network)
 	if (network->psk)
 		return network->psk;
 
-	if (!network->passphrase)
-		return NULL;
-
 	network->psk = l_malloc(32);
 
-	crypto_psk_from_passphrase(network->passphrase,
+	if (crypto_psk_from_passphrase(network->passphrase,
 					(unsigned char *)network->ssid,
-					strlen(network->ssid), network->psk);
+					strlen(network->ssid),
+					network->psk) < 0) {
+		l_free(network->psk);
+		network->psk = NULL;
+	}
 
 	return network->psk;
 }
