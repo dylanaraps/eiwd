@@ -176,7 +176,7 @@ const char *util_get_domain(const char *identity)
 			memcpy(domain, identity, c - identity);
 			return domain;
 		case '@':
-			strcpy(domain, c + 1);
+			l_strlcpy(domain, c + 1, sizeof(domain));
 			return domain;
 		default:
 			continue;
@@ -197,7 +197,7 @@ const char *util_get_username(const char *identity)
 	for (c = identity; *c; c++) {
 		switch (*c) {
 		case '\\':
-			strcpy(username, c + 1);
+			l_strlcpy(username, c + 1, sizeof(username));
 			return username;
 		case '@':
 			memcpy(username, identity, c - identity);
