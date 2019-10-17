@@ -1106,8 +1106,11 @@ static void eapol_handle_ptk_1_of_4(struct eapol_sm *sm,
 	pmkid = handshake_util_find_pmkid_kde(EAPOL_KEY_DATA(ek, sm->mic_len),
 					EAPOL_KEY_DATA_LEN(ek, sm->mic_len));
 
-	if (ie_parse_rsne_from_data(own_ie, own_ie[1] + 2, &rsn_info) < 0)
-		goto error_unspecified;
+	if (!sm->handshake->wpa_ie) {
+		if (ie_parse_rsne_from_data(own_ie, own_ie[1] + 2,
+						&rsn_info) < 0)
+			goto error_unspecified;
+	}
 
 	/*
 	 * Require the PMKID KDE whenever we've sent a list of PMKIDs in
