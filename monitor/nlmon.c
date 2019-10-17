@@ -3718,13 +3718,8 @@ static void print_authentication_mgmt_frame(unsigned int level,
 			L_LE16_TO_CPU(body->transaction_sequence) > 3)
 		return;
 
-	ie_tlv_iter_init(&iter, body->ies, (const uint8_t *) mmpdu + size -
-				body->ies);
-	ie_tlv_iter_next(&iter);
-
-	print_attr(level + 1, "Challenge text: \"%s\" (%u)",
-				ie_tlv_iter_get_data(&iter),
-				ie_tlv_iter_get_length(&iter));
+	print_ie(level + 1, "IEs", body->ies,
+			(const uint8_t *) mmpdu + size - body->ies);
 }
 
 static void print_deauthentication_mgmt_frame(unsigned int level,
