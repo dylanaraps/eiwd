@@ -554,7 +554,7 @@ static uint32_t rtnl_route_ipv6_change(struct l_netlink *rtnl,
 	bufsize = NLMSG_ALIGN(sizeof(struct rtmsg)) +
 			RTA_SPACE(sizeof(uint32_t)) +
 			(priority_offset ? RTA_SPACE(sizeof(uint32_t)) : 0) +
-			(gateway ? RTA_SPACE(sizeof(struct in6_addr)) : 0);
+			RTA_SPACE(sizeof(struct in6_addr));
 
 	rtmmsg = l_malloc(bufsize);
 	memset(rtmmsg, 0, bufsize);
