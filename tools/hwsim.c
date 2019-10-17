@@ -914,8 +914,8 @@ static void del_radio_event(struct l_genl_msg *msg)
 	l_queue_foreach_remove(interface_info, interface_info_destroy_by_radio,
 				radio);
 	l_dbus_unregister_object(dbus, radio_get_path(radio));
-	radio_free(radio);
 	l_queue_remove(radio_info, radio);
+	radio_free(radio);
 }
 
 static void del_interface_event(struct l_genl_msg *msg)
@@ -949,8 +949,8 @@ static void del_interface_event(struct l_genl_msg *msg)
 		return;
 
 	l_dbus_unregister_object(dbus, interface_get_path(interface));
-	interface_free(interface);
 	l_queue_remove(interface_info, interface);
+	interface_free(interface);
 }
 
 static void hwsim_config(struct l_genl_msg *msg, void *user_data)
