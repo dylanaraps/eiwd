@@ -720,7 +720,7 @@ static int p2p_parse_attrs(const uint8_t *pdu, size_t len, int type, ...)
 		entry = e->data;
 
 		if (!entry->present && (entry->flags & ATTR_FLAG_REQUIRED)) {
-			parse_error = true;
+			have_required = false;
 			goto done;
 		}
 	}
