@@ -240,7 +240,7 @@ static struct l_dbus_message *request_user_password_command_option(
 						struct l_dbus_message *message)
 {
 	struct l_dbus_message *reply;
-	const char *password;
+	const char *password = NULL;
 
 	command_option_get(COMMAND_OPTION_PASSWORD, &password);
 	if (!password)
