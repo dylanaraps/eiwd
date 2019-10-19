@@ -243,6 +243,23 @@ following the group definition.
        method's negotiation is encrypted, a secure identity string can be
        provided.
 
+ENVIRONMENT
+===========
+
+*$STATE_DIRECTORY* is used for network configuration files.  See section
+*NETWORK CONFIGURATION* for details.
+
+*$CONFIGURATION_DIRECTORY* is used for daemon configuration settings.  Only
+the file **main.conf** is currently read from this directory.
+
+*$IWD_RTNL_DEBUG* set to ``1`` enables RTNL debugging.
+
+*$IWD_DHCP_DEBUG* set to ``1`` enables DHCP debugging.
+
+*$IWD_TLS_DEBUG* set to ``1`` enables TLS debugging.
+
+*$IWD_WSC_DEBUG_KEYS* set to ``1`` enables WSC debug keys.
+
 SEE ALSO
 ========
 
