@@ -27,11 +27,11 @@ DESCRIPTION
 Daemon for managing Wireless devices on Linux.
 
 The iNet Wireless Daemon (iwd) project aims to provide a comprehensive
-Wi-Fi connectivity solution for Linux based devices. The core goal of
+Wi-Fi connectivity solution for Linux based devices.  The core goal of
 the project is to optimize resource utilization: storage, runtime memory
-and link-time costs. This is accomplished by not depending on any external
+and link-time costs.  This is accomplished by not depending on any external
 libraries and utilizes features provided by the Linux Kernel to the maximum
-extent possible. The result is a self-contained environment that only
+extent possible.  The result is a self-contained environment that only
 depends on the Linux Kernel and the runtime C library.
 
 OPTIONS
@@ -45,10 +45,13 @@ NETWORK CONFIGURATION
 
 **iwd** stores information on known networks, and reads information on
 pre-provisioned networks, from small text configuration files.  Those files
-live in *$LIBDIR/iwd*, which by default is */var/lib/iwd*.  You can create,
-modify or remove those files.  **iwd** monitors the directory for changes and
-will update its state accordingly.  **iwd** will also modify these files in
-the course of network connections or as a result of D-Bus API invocations.
+live in the state directory specified by the environment variable
+*$STATE_DIRECTORY*, which is normally provided by **systemd**.  In the absence
+of such an environment variable it defaults to *$LIBDIR/iwd*, which normally
+is set to */var/lib/iwd*.  You can create, modify or remove those files.
+**iwd** monitors the directory for changes and will update its state
+accordingly.  **iwd** will also modify these files in the course of network
+connections or as a result of D-Bus API invocations.
 
 FILE FORMAT
 -----------
@@ -104,36 +107,31 @@ categories.  Each category has a group associated with it which is given at
 the beginning of each sub-section.  Recognized keys and valid values are listed
 following the group definition.
 
-GENERAL SETTINGS
-^^^^^^^^^^^^^^^^
-
-Group: **[Settings]**
-
-.. list-table::
+.. list-table:: General Settings / Group: ``[Settings]``
    :header-rows: 1
    :stub-columns: 1
-   :widths: 20, 80
+   :widths: 20 80
+   :align: left
 
+   * - Key
+     - Description
    * - Autoconnect
-     - | Values: **true**, false
+     - Values: **true**, false
 
        Whether the network can be connected to automatically
    * - Hidden
-     - | Values: true, **false**
+     - Values: true, **false**
 
        Whether the network is hidden, i.e. its SSID must be included in an
        active scan request
 
-NETWORK AUTHENTICATION SETTINGS
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Group: **[Security]**
-
-.. list-table::
+.. list-table:: Network Authentication Settings / Group: ``[Security]``
    :header-rows: 1
    :stub-columns: 1
+   :widths: 20 80
+   :align: left
 
-   * - Setting Key
+   * - Key
      - Description
    * - Passphrase
      - 8..63 character string
@@ -149,7 +147,9 @@ Group: **[Security]**
        Processed passphrase for this network in the form of a hex-encoded 32
        byte pre-shared key.  Must be provided if *Passphrase* is omitted.
    * - EAP-Method
-     - AKA, AKA', GTC, MD5, MSCHAPV2, PEAP, PWD, SIM, TLS, TTLS
+     - one of the following methods:
+
+       AKA, AKA', GTC, MD5, MSCHAPV2, PEAP, PWD, SIM, TLS, TTLS
    * - EAP-Identity
      - string
 
@@ -170,7 +170,9 @@ Group: **[Security]**
 
        Some EAP methods can accept a pre-hashed version of the password.  For
        MSCHAPV2, a MD4 hash of the password can be given here.
-   * - EAP-TLS-CACert, EAP-TTLS-CACert, EAP-PEAP-CACert
+   * - | EAP-TLS-CACert,
+       | EAP-TTLS-CACert,
+       | EAP-PEAP-CACert
      - absolute file path or embedded pem
 
        Path to a PEM-formatted X.509 root certificate list to use for trust
@@ -195,12 +197,9 @@ Group: **[Security]**
        Decryption key for the client private key file.  This is used if the
        private key given by *EAP-TLS-ClientKey* is encrypted.  If not provided,
        then the agent is asked for the passphrase at connection time.
-   * - | EAP-TLS-
-       | ServerDomainMask,
-       | EAP-TTLS-
-       | ServerDomainMask,
-       | EAP-PEAP-
-       | ServerDomainMask
+   * - | EAP-TLS-ServerDomainMask,
+       | EAP-TTLS-ServerDomainMask,
+       | EAP-PEAP-ServerDomainMask
      - string
 
        A mask for the domain names contained in the server's certificate. At
@@ -212,8 +211,7 @@ Group: **[Security]**
        domain name. An asterisk segment in the mask matches any label.  An
        asterisk segment at the beginning of the mask matches one or more
        consecutive labels from the beginning of the domain string.
-   * - | EAP-TTLS-
-       | Phase2-Method
+   * - | EAP-TTLS-Phase2-Method
      - | The following values are allowed:
        |    Tunneled-CHAP,
        |    Tunneled-MSCHAP,
@@ -225,13 +223,11 @@ Group: **[Security]**
        TTLS-specific non-EAP methods (Tunneled-\*), or any EAP method
        documented here.  The following two settings are used if any of the
        non-EAP methods is used.
-   * - | EAP-TTLS-
-       | Phase2-Identity
+   * - | EAP-TTLS-Phase2-Identity
      - The secure identity/username string for the TTLS non-EAP Phase 2
        methods.  If not provided IWD will request a username at connection
        time.
-   * - | EAP-TTLS-
-       | Phase2-Password
+   * - | EAP-TTLS-Phase2-Password
      - Password string for the TTLS non-EAP Phase 2 methods. If not provided
        IWD will request a passphrase at connection time.
    * - EAP-TTLS-Phase2-*
@@ -250,6 +246,6 @@ Group: **[Security]**
 SEE ALSO
 ========
 
-iwctl(1), iwmon(1), hwsim(1), ead(8)
+iwctl(1), iwmon(1), hwsim(1), ead(8), systemd.exec(5)
 
 http://iwd.wiki.kernel.org
