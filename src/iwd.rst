@@ -263,6 +263,6 @@ the file **main.conf** is currently read from this directory.
 SEE ALSO
 ========
 
-iwctl(1), iwmon(1), hwsim(1), ead(8), systemd.exec(5)
+iwd.conf(5), iwctl(1), iwmon(1), hwsim(1), ead(8), systemd.exec(5)
 
 http://iwd.wiki.kernel.org
