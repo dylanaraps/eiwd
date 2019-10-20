@@ -21,6 +21,7 @@ ell
 src/iwd
 src/iwd.8
 src/iwd.conf.5
+src/iwd.network.5
 src/iwd.service
 client/iwctl
 client/iwctl.1

@@ -1,6 +1,6 @@
-===========
- main.conf
-===========
+=====
+ iwd
+=====
 
 --------------------------------------
 Configuration file for wireless daemon
@@ -16,7 +16,7 @@ Configuration file for wireless daemon
 SYNOPSIS
 ========
 
-**main.conf**
+Configuration file **main.conf**
 
 DESCRIPTION
 ===========
@@ -27,6 +27,11 @@ environment variable *$CONFIGURATION_DIRECTORY*, which is normally provided
 by **systemd**.  In the absence of such an environment variable it defaults
 to */etc/iwd*.  If no *main.conf* is present, then default values are
 chosen.  The presence of *main.conf* is not required.
+
+FILE FORMAT
+===========
+
+See *iwd.network* for details on the file format.
 
 SETTINGS
 ========
@@ -74,4 +79,4 @@ The group ``[General]`` contains general settings.
 SEE ALSO
 ========
 
-iwd(8)
+iwd(8), iwd.network(5)

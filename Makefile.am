@@ -156,8 +156,8 @@ if MANUAL_PAGES
 man_MANS =
 endif
 
-manual_pages = src/iwd.8 src/iwd.conf.5 client/iwctl.1 monitor/iwmon.1 \
-		wired/ead.8 tools/hwsim.1
+manual_pages = src/iwd.8 src/iwd.conf.5 src/iwd.network.5 \
+		client/iwctl.1 monitor/iwmon.1 wired/ead.8 tools/hwsim.1
 
 eap_sources = src/eap.c src/eap.h src/eap-private.h \
 				src/eap-wsc.c src/eap-wsc.h \
@@ -251,7 +251,7 @@ dbus_bus_DATA += src/net.connman.iwd.service
 endif
 
 if MANUAL_PAGES
-man_MANS += src/iwd.8 src/iwd.conf.5
+man_MANS += src/iwd.8 src/iwd.conf.5 src/iwd.network.5
 endif
 endif
 
