@@ -66,6 +66,7 @@ struct wiphy {
 	uint32_t feature_flags;
 	uint8_t ext_features[(NUM_NL80211_EXT_FEATURES + 7) / 8];
 	uint8_t max_num_ssids_per_scan;
+	uint32_t max_roc_duration;
 	uint16_t supported_iftypes;
 	uint16_t supported_ciphers;
 	struct scan_freq_set *supported_freqs;
@@ -353,6 +354,11 @@ bool wiphy_has_ext_feature(struct wiphy *wiphy, uint32_t feature)
 uint8_t wiphy_get_max_num_ssids_per_scan(struct wiphy *wiphy)
 {
 	return wiphy->max_num_ssids_per_scan;
+}
+
+uint32_t wiphy_get_max_roc_duration(struct wiphy *wiphy)
+{
+	return wiphy->max_roc_duration;
 }
 
 bool wiphy_supports_adhoc_rsn(struct wiphy *wiphy)
@@ -768,6 +774,12 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 				break;
 
 			parse_iftype_extended_capabilities(wiphy, &nested);
+			break;
+		case NL80211_ATTR_MAX_REMAIN_ON_CHANNEL_DURATION:
+			if (len != 4)
+				l_warn("Invalid MAX_ROC_DURATION attribute");
+			else
+				wiphy->max_roc_duration = *((uint32_t *) data);
 			break;
 		}
 	}
