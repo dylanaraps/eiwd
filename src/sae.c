@@ -1040,10 +1040,10 @@ static int sae_rx_authenticate(struct auth_proto *ap,
 	switch (L_LE16_TO_CPU(auth->transaction_sequence)) {
 	case SAE_STATE_COMMITTED:
 		return sae_process_commit(sm, hdr->address_2, auth->ies,
-						len - 2);
+						len - 6);
 	case SAE_STATE_CONFIRMED:
 		return sae_process_confirm(sm, hdr->address_2, auth->ies,
-						len - 2);
+						len - 6);
 	default:
 		l_error("invalid transaction sequence %u",
 				L_LE16_TO_CPU(auth->transaction_sequence));
