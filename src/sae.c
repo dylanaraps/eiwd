@@ -1024,11 +1024,6 @@ static int sae_rx_authenticate(struct auth_proto *ap,
 
 	auth = mmpdu_body(hdr);
 
-	if (!auth) {
-		l_debug("Auth frame body did not validate");
-		goto reject;
-	}
-
 	len -= mmpdu_header_len(hdr);
 
 	ret = sae_verify_packet(sm, L_LE16_TO_CPU(auth->transaction_sequence),
