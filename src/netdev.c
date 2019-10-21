@@ -1467,12 +1467,14 @@ void netdev_handshake_failed(struct handshake_state *hs, uint16_t reason_code)
 
 	switch (netdev->type) {
 	case NL80211_IFTYPE_STATION:
+	case NL80211_IFTYPE_P2P_CLIENT:
 		msg = netdev_build_cmd_disconnect(netdev, reason_code);
 		netdev->disconnect_cmd_id = l_genl_family_send(nl80211, msg,
 							netdev_disconnect_cb,
 							netdev, NULL);
 		break;
 	case NL80211_IFTYPE_AP:
+	case NL80211_IFTYPE_P2P_GO:
 		msg = netdev_build_cmd_del_station(netdev, nhs->super.spa,
 				reason_code, false);
 		if (!l_genl_family_send(nl80211, msg, NULL, NULL, NULL))
@@ -2462,7 +2464,8 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 	struct eapol_sm *sm = NULL;
 	bool is_rsn = hs->supplicant_ie != NULL;
 
-	if (netdev->type != NL80211_IFTYPE_STATION)
+	if (netdev->type != NL80211_IFTYPE_STATION &&
+			netdev->type != NL80211_IFTYPE_P2P_CLIENT)
 		return -ENOTSUP;
 
 	if (netdev->connected)
@@ -2518,7 +2521,8 @@ int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
 	size_t ie_len;
 	struct eapol_sm *sm;
 
-	if (netdev->type != NL80211_IFTYPE_STATION)
+	if (netdev->type != NL80211_IFTYPE_STATION &&
+			netdev->type != NL80211_IFTYPE_P2P_CLIENT)
 		return -ENOTSUP;
 
 	if (netdev->connected)
@@ -2561,7 +2565,8 @@ int netdev_disconnect(struct netdev *netdev,
 {
 	struct l_genl_msg *disconnect;
 
-	if (netdev->type != NL80211_IFTYPE_STATION)
+	if (netdev->type != NL80211_IFTYPE_STATION &&
+			netdev->type != NL80211_IFTYPE_P2P_CLIENT)
 		return -ENOTSUP;
 
 	if (!netdev->connected)
@@ -3438,10 +3443,8 @@ static void netdev_mlme_notify(struct l_genl_msg *msg, void *user_data)
 		}
 	}
 
-	if (!netdev) {
-		l_warn("MLME notification is missing ifindex attribute");
+	if (!netdev)
 		return;
-	}
 
 	switch (cmd) {
 	case NL80211_CMD_AUTHENTICATE:
@@ -4362,6 +4365,11 @@ static void netdev_getlink_cb(int error, uint16_t type, const void *data,
 	bytes = len - NLMSG_ALIGN(sizeof(struct ifinfomsg));
 
 	netdev_newlink_notify(ifi, bytes);
+
+	/* Don't do anything automatically for P2P interfaces */
+	if (netdev->type == NL80211_IFTYPE_P2P_CLIENT ||
+			netdev->type == NL80211_IFTYPE_P2P_GO)
+		return;
 
 	/*
 	 * If the interface is UP, reset it to ensure a clean state.
