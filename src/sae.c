@@ -938,7 +938,7 @@ static int sae_verify_confirmed(struct sae_sm *sm, uint16_t trans,
 /*
  * 802.11-2016 - 12.4.8.6.6 Protocol instance behavior - Accepted state
  */
-static bool sae_verify_accepted(struct sae_sm *sm, uint16_t trans,
+static int sae_verify_accepted(struct sae_sm *sm, uint16_t trans,
 					uint16_t status, const uint8_t *frame,
 					size_t len)
 {
@@ -947,14 +947,14 @@ static bool sae_verify_accepted(struct sae_sm *sm, uint16_t trans,
 	/* spec does not specify what to do here, so print and discard */
 	if (trans != SAE_STATE_CONFIRMED) {
 		l_error("received transaction %u in accepted state", trans);
-		return false;
+		return -EBADMSG;
 	}
 
 	if (sm->sync > SAE_SYNC_MAX)
-		return false;
+		return -EBADMSG;
 
 	if (len < 2)
-		return false;
+		return -EBADMSG;
 
 	sc = l_get_le16(frame);
 
@@ -964,14 +964,14 @@ static bool sae_verify_accepted(struct sae_sm *sm, uint16_t trans,
 	 * silently discarded.
 	 */
 	if (sc <= sm->rc || sc == 0xffff)
-		return false;
+		return -EBADMSG;
 
 	/*
 	 * If the verification fails, the received frame shall be silently
 	 * discarded.
 	 */
 	if (!sae_verify_confirm(sm, frame))
-		return false;
+		return -EBADMSG;
 
 	/*
 	 * If the verification succeeds, the Rc variable shall be set to the
@@ -984,11 +984,7 @@ static bool sae_verify_accepted(struct sae_sm *sm, uint16_t trans,
 
 	sae_send_confirm(sm);
 
-	/*
-	 * Since the confirmed needed special processing because of accepted
-	 * state we don't want the standard code path to execute.
-	 */
-	return false;
+	return 0;
 }
 
 static int sae_verify_packet(struct sae_sm *sm, uint16_t trans,
