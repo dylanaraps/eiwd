@@ -408,3 +408,4 @@ struct mmpdu_deauthentication {
 
 const struct mmpdu_header *mpdu_validate(const uint8_t *frame, int len);
 const void *mmpdu_body(const struct mmpdu_header *mpdu);
+size_t mmpdu_header_len(const struct mmpdu_header *mmpdu);

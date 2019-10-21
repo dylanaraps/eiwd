@@ -623,7 +623,7 @@ const struct mmpdu_header *mpdu_validate(const uint8_t *frame, int len)
 	}
 }
 
-static size_t mmpdu_header_len(const struct mmpdu_header *mmpdu)
+size_t mmpdu_header_len(const struct mmpdu_header *mmpdu)
 {
 	return mmpdu->fc.order == 0 ? 24 : 28;
 }
