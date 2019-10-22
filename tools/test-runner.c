@@ -2413,6 +2413,8 @@ next:
 		l_free(unit_test_abs_path);
 	}
 
+	closedir(d);
+
 exit:
 	l_strfreev(unit_tests);
 }
