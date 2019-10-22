@@ -2674,7 +2674,8 @@ static void run_tests(void)
 		test_action_str = ptr + 4;
 
 		ptr = strchr(test_action_str, '\'');
-		*ptr = '\0';
+		if (ptr)
+			*ptr = '\0';
 
 		if (!strcmp(test_action_str, "virtual"))
 			native_hw = false;
