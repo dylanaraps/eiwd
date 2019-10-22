@@ -1961,8 +1961,8 @@ static void create_network_and_run_tests(void *data, void *user_data)
 						HW_CONFIG_SETUP_TMPFS_EXTRAS,
 									':');
 
-	sim_keys = l_settings_get_string(hw_settings, HW_CONFIG_GROUP_SETUP,
-			"sim_keys");
+	sim_keys = l_settings_get_value(hw_settings, HW_CONFIG_GROUP_SETUP,
+								"sim_keys");
 
 	if (sim_keys) {
 		if (!strcmp(sim_keys, "ofono")) {
