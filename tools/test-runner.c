@@ -1089,6 +1089,8 @@ static bool add_path(const char *path, int level, struct l_queue *config_queue)
 		l_queue_insert(config_queue, entry, insert_test_entry, NULL);
 	}
 
+	l_queue_destroy(py_test_queue, l_free);
+
 	closedir(dir);
 	return true;
 }
