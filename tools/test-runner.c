@@ -1636,7 +1636,7 @@ static void print_test_status(char *test_name, enum test_status ts,
 
 	interval_str = l_malloc(int_len);
 	memset(interval_str, ' ', int_len);
-	interval_str[int_len] = '\0';
+	interval_str[int_len - 1] = '\0';
 
 	if (interval > 0)
 		sprintf(interval_str, "%.3f sec", interval);
