@@ -524,6 +524,9 @@ static pid_t execute_program(char *argv[], char *envp[], bool wait,
 							S_IRUSR | S_IWUSR);
 			}
 
+			if (fd == -1)
+				exit(EXIT_FAILURE);
+
 			dup2(fd, 1);
 			dup2(fd, 2);
 
