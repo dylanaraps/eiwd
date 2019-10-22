@@ -2957,9 +2957,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'g':
 			gdb_opt = optarg;
-			if (!(!strcmp(gdb_opt, "iwd") ||
-					!strcmp(gdb_opt, "hostapd") ||
-					!strcmp(gdb_opt, "hwsim"))) {
+			if (!gdb_opt || (strcmp(gdb_opt, "iwd") &&
+					strcmp(gdb_opt, "hostapd") &&
+					strcmp(gdb_opt, "hwsim"))) {
 				l_error("--gdb can only be used with iwd"
 					", hwsim or hostapd");
 				return EXIT_FAILURE;
