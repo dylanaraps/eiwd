@@ -423,13 +423,12 @@ static void hs20_dir_watch_cb(const char *filename,
 		}
 
 		config = hs20_config_new(new, full_path);
-		if (!config)
-			break;
-
-		l_queue_push_head(hs20_settings, config);
-
 		l_settings_free(new);
 
+		if (!config)
+			return;
+
+		l_queue_push_head(hs20_settings, config);
 		break;
 	case L_DIR_WATCH_EVENT_REMOVED:
 		config = l_queue_remove_if(hs20_settings, match_filename,
