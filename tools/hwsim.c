@@ -312,11 +312,12 @@ static void list_callback(struct l_genl_msg *msg, void *user_data)
 			break;
 
 		case HWSIM_ATTR_RADIO_NAME:
-			hwname = l_malloc(len + 1);
-			if (hwname) {
+			if (!hwname) {
+				hwname = l_new(char, len + 1);
+
 				strncpy(hwname, data, len);
-				hwname[len] = '\0';
 			}
+
 			break;
 
 		default:
