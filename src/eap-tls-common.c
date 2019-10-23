@@ -900,16 +900,15 @@ int eap_tls_common_settings_check(struct l_settings *settings,
 			goto done;
 		}
 
-		if (!l_certchain_verify(cert, cacerts, &error_str)) {
-			if (cacerts)
-				l_error("Certificate chain %s is not trusted "
-					"by any CA in %s or fails verification"
-					": %s", client_cert, value, error_str);
-			else
-				l_error("Certificate chain %s fails "
-					"verification: %s",
-					client_cert, error_str);
-
+		/*
+		 * Sanity check that certchain provided is valid.  We do not
+		 * verify the certchain against the provided CA, since the
+		 * CA that issued user certificates might be different from
+		 * the one that is used to verify the peer
+		 */
+		if (!l_certchain_verify(cert, NULL, &error_str)) {
+			l_error("Certificate chain %s fails verification: %s",
+				client_cert, error_str);
 			ret = -EINVAL;
 			goto done;
 		}
