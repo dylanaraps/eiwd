@@ -699,7 +699,16 @@ static void get_managed_objects_callback(struct l_dbus_message *message,
 		return;
 	}
 
-	l_dbus_message_get_arguments(message, "a{oa{sa{sv}}}", &objects);
+	if (!l_dbus_message_get_arguments(message, "a{oa{sa{sv}}}", &objects)) {
+		l_error("Failed to parse IWD dbus objects, quitting...\n");
+
+		if (!command_is_interactive_mode())
+			command_set_exit_status(EXIT_FAILURE);
+
+		l_main_quit();
+
+		return;
+	}
 
 	while (l_dbus_message_iter_next_entry(&objects, &path, &object))
 		proxy_interface_create(path, &object);
