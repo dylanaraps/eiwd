@@ -651,7 +651,9 @@ static void interfaces_added_callback(struct l_dbus_message *message,
 	if (dbus_message_has_error(message))
 		return;
 
-	l_dbus_message_get_arguments(message, "oa{sa{sv}}", &path, &object);
+	if (!l_dbus_message_get_arguments(message, "oa{sa{sv}}", &path,
+								&object))
+		return;
 
 	proxy_interface_create(path, &object);
 }
@@ -667,7 +669,8 @@ static void interfaces_removed_callback(struct l_dbus_message *message,
 	if (dbus_message_has_error(message))
 		return;
 
-	l_dbus_message_get_arguments(message, "oas", &path, &interfaces);
+	if (!l_dbus_message_get_arguments(message, "oas", &path, &interfaces))
+		return;
 
 	while (l_dbus_message_iter_next_entry(&interfaces, &interface)) {
 		proxy = proxy_interface_find(interface, path);
