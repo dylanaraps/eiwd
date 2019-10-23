@@ -180,7 +180,8 @@ void display_refresh_set_cmd(const char *family, const char *entity,
 		return;
 	}
 
-	if (display_refresh.family && !strcmp(display_refresh.family, family)) {
+	if (display_refresh.family && family &&
+				!strcmp(display_refresh.family, family)) {
 		struct l_string *buf = l_string_new(128);
 		L_AUTO_FREE_VAR(char *, args);
 		char *prompt;
@@ -205,10 +206,10 @@ void display_refresh_set_cmd(const char *family, const char *entity,
 
 		args = l_string_unwrap(buf);
 
-		prompt = l_strdup_printf(IWD_PROMPT"%s%s%s %s %s\n",
-					family ? : "",
-					entity ? " " : "", entity ? : "",
-					cmd->cmd ? : "", args ? : "");
+		prompt = l_strdup_printf(IWD_PROMPT"%s%s%s %s %s\n", family,
+						entity ? " " : "",
+						entity ? : "",
+						cmd->cmd ? : "", args ? : "");
 
 		l_queue_push_tail(display_refresh.redo_entries, prompt);
 		display_refresh.undo_lines++;
