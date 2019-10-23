@@ -624,7 +624,8 @@ static void interfaces_changed_cb(struct l_dbus_message *message,
 	struct l_dbus_message_iter value;
 	const char *key;
 
-	l_dbus_message_get_arguments(message, "sv", &key, &value);
+	if (!l_dbus_message_get_arguments(message, "sv", &key, &value))
+		return;
 
 	if (!strcmp(key, "Interfaces"))
 		parse_interfaces(&value, modem);
@@ -718,10 +719,11 @@ static void get_modems_cb(struct l_dbus_message *reply, void *user_data)
 
 	modems = l_queue_new();
 
-	l_dbus_message_get_arguments(reply, "a(oa{sv})", &modem_list);
-
-	while (l_dbus_message_iter_next_entry(&modem_list, &path, &props))
-		parse_modem(path, &props);
+	if (l_dbus_message_get_arguments(reply, "a(oa{sv})", &modem_list)) {
+		while (l_dbus_message_iter_next_entry(&modem_list, &path,
+									&props))
+			parse_modem(path, &props);
+	}
 
 	/* watch for modems being added/removed */
 	modem_add_watch = l_dbus_add_signal_watch(dbus_get_bus(),
