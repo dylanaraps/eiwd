@@ -320,7 +320,7 @@ static struct hs20_config *hs20_config_new(struct l_settings *settings,
 	char **nai_realms = NULL;
 	const char *rc_str;
 	char *name;
-	bool autoconnect = true;
+	bool autoconnect;
 
 	/* One of HESSID, NAI realms, or Roaming Consortium must be included */
 	hessid_str = l_settings_get_string(settings, "Hotspot", "HESSID");
@@ -330,7 +330,9 @@ static struct hs20_config *hs20_config_new(struct l_settings *settings,
 
 	rc_str = l_settings_get_value(settings, "Hotspot", "RoamingConsortium");
 
-	l_settings_get_bool(settings, "Settings", "Autoconnect", &autoconnect);
+	if (!l_settings_get_bool(settings, "Settings", "Autoconnect",
+								&autoconnect))
+		autoconnect = true;
 
 	name = l_settings_get_string(settings, "Hotspot", "Name");
 
