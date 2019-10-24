@@ -222,6 +222,20 @@ if (test "${enable_systemd_service}" != "no" && test -z "${path_systemd_unitdir}
 fi
 AC_SUBST(SYSTEMD_UNITDIR, [${path_systemd_unitdir}])
 
+AC_ARG_WITH([systemd-networkdir], AC_HELP_STRING([--with-systemd-networkdir=DIR],
+				[path to systemd network directory]),
+					[path_systemd_networkdir=${withval}])
+if (test "${enable_systemd_service}" != "no" && test -z "${path_systemd_networkdir}"); then
+	AC_MSG_CHECKING([systemd network directory])
+	path_systemd_networkdir="`$PKG_CONFIG --variable=systemdutildir systemd`"
+	if (test -z "${path_systemd_networkdir}"); then
+		AC_MSG_ERROR([systemd network directory is required])
+	fi
+	path_systemd_networkdir="${path_systemd_networkdir}/network"
+	AC_MSG_RESULT([${path_systemd_networkdir}])
+fi
+AC_SUBST(SYSTEMD_NETWORKDIR, [${path_systemd_networkdir}])
+
 AC_ARG_WITH([systemd-modloaddir], AC_HELP_STRING([--with-systemd-modloaddir=DIR],
 				[path to systemd modules load directory]),
 					[path_systemd_modloaddir=${withval}])
