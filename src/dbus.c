@@ -86,7 +86,7 @@ struct l_dbus_message *dbus_error_not_available(struct l_dbus_message *msg)
 
 struct l_dbus_message *dbus_error_invalid_args(struct l_dbus_message *msg)
 {
-	return l_dbus_message_new_error(msg, IWD_SERVICE ".InvalidArgs",
+	return l_dbus_message_new_error(msg, IWD_SERVICE ".InvalidArguments",
 					"Argument type is wrong");
 }
 
