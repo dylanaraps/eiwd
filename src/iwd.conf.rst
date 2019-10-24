@@ -76,6 +76,38 @@ The group ``[General]`` contains general settings.
 
        If not specified, ``systemd`` is used as default.
 
+Blacklist
+---------
+
+The group ``[Blacklist]`` contains settings related to blacklisting of BSSes.
+If iwd determines that a connection to a BSS fails for a reason that indicates
+the BSS is currently misbehaving or misconfigured (e.g. timeouts, unexpected
+status/reason codes, etc), then iwd will blacklist this BSS and avoid connecting
+to it for a period of time.  These options let the user control how long
+a misbehaved BSS spends on the blacklist.
+
+.. list-table::
+   :header-rows: 0
+   :stub-columns: 0
+   :widths: 20 80
+   :align: left
+
+   * - InitialTimeout
+     - Values: uint64 value in seconds (default: **60**)
+
+       The initial time that a BSS spends on the blacklist.
+   * - Multiplier
+     - Values: unsigned int value in seconds (default: **30**)
+
+       If the BSS was blacklisted previously and another connection attempt
+       has failed after the initial timeout has expired, then the BSS blacklist
+       time will be extended by a multiple of *Multiplier* for each
+       unsuccessful attempt up to *MaxiumTimeout* time in seconds.
+   * - MaximumTimeout
+     - Values: uint64 value in seconds (default: **86400**)
+
+       Maximum time that a BSS is blacklisted.
+
 SEE ALSO
 ========
 
