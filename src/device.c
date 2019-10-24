@@ -176,67 +176,6 @@ static struct l_dbus_message *device_property_set_powered(struct l_dbus *dbus,
 	return NULL;
 }
 
-static bool device_property_get_4addr(struct l_dbus *dbus,
-					struct l_dbus_message *message,
-					struct l_dbus_message_builder *builder,
-					void *user_data)
-{
-	struct device *device = user_data;
-	bool use_4addr = netdev_get_4addr(device->netdev);
-
-	l_dbus_message_builder_append_basic(builder, 'b', &use_4addr);
-
-	return true;
-}
-
-static void set_4addr_cb(struct netdev *netdev, int result, void *user_data)
-{
-	struct set_generic_cb_data *cb_data = user_data;
-	struct l_dbus_message *reply = NULL;
-
-	if (result < 0)
-		reply = dbus_error_failed(cb_data->message);
-
-	cb_data->complete(cb_data->dbus, cb_data->message, reply);
-	cb_data->message = NULL;
-
-	l_dbus_property_changed(cb_data->dbus,
-				netdev_get_path(cb_data->device->netdev),
-				IWD_DEVICE_INTERFACE, "WDS");
-}
-
-static struct l_dbus_message *device_property_set_4addr(struct l_dbus *dbus,
-					struct l_dbus_message *message,
-					struct l_dbus_message_iter *new_value,
-					l_dbus_property_complete_cb_t complete,
-					void *user_data)
-{
-	struct set_generic_cb_data *cb_data;
-	struct device *device = user_data;
-	bool use_4addr;
-
-	if (!l_dbus_message_iter_get_variant(new_value, "b", &use_4addr))
-		return dbus_error_invalid_args(message);
-
-	if (use_4addr == netdev_get_4addr(device->netdev)) {
-		complete(dbus, message, NULL);
-
-		return NULL;
-	}
-
-	cb_data = l_new(struct set_generic_cb_data, 1);
-	cb_data->device = device;
-	cb_data->dbus = dbus;
-	cb_data->message = message;
-	cb_data->complete = complete;
-
-	if (netdev_set_4addr(device->netdev, use_4addr, set_4addr_cb,
-				cb_data, set_generic_destroy) < 0)
-		return dbus_error_failed(message);
-
-	return NULL;
-}
-
 static bool device_property_get_adapter(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -335,9 +274,6 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 					device_property_get_name, NULL);
 	l_dbus_interface_property(interface, "Address", 0, "s",
 					device_property_get_address, NULL);
-	l_dbus_interface_property(interface, "WDS", 0, "b",
-					device_property_get_4addr,
-					device_property_set_4addr);
 	l_dbus_interface_property(interface, "Powered", 0, "b",
 					device_property_get_powered,
 					device_property_set_powered);
