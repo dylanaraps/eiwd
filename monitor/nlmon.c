@@ -2633,7 +2633,6 @@ static void print_wsc_wfa_ext_attributes(unsigned int level, const char *label,
 
 static void print_wsc_vendor_extension(unsigned int level, const char *label,
 						const void *data, uint16_t size){
-	static const unsigned char wfa_ext[3] = { 0x00, 0x37, 0x2a };
 	const uint8_t *bytes = data;
 
 	if (size < 3) {
@@ -2641,7 +2640,7 @@ static void print_wsc_vendor_extension(unsigned int level, const char *label,
 		return;
 	}
 
-	if (memcmp(data, wfa_ext, sizeof(wfa_ext))) {
+	if (memcmp(data, wsc_wfa_oui, sizeof(wsc_wfa_oui))) {
 		print_attr(level, "%s: OUI: 0x%02x 0x%02x 0x%02x: len %u",
 				label, bytes[0], bytes[1], bytes[2], size);
 		print_hexdump(level + 1, data + 3, size - 3);
@@ -3930,7 +3929,7 @@ static void print_public_action_frame(unsigned int level, const uint8_t *body,
 	if (body_len < 5)
 		return;
 
-	if (!memcmp(oui, wsc_wfa_oui, 3) && oui[3] == 0x09) {
+	if (!memcmp(oui, wifi_alliance_oui, 3) && oui[3] == 0x09) {
 		if (body[0] != 9)
 			return;
 
@@ -4060,7 +4059,7 @@ static void print_action_mgmt_frame(unsigned int level,
 		if (!print_oui(level, oui))
 			return;
 
-		if (!memcmp(oui, wsc_wfa_oui, 3) && oui[3] == 0x09)
+		if (!memcmp(oui, wifi_alliance_oui, 3) && oui[3] == 0x09)
 			print_p2p_action_frame(level + 1, body + 5,
 						body_len - 5);
 	}
