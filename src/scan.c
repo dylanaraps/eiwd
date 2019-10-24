@@ -1928,7 +1928,7 @@ static int scan_init(void)
 
 	scan_contexts = l_queue_new();
 
-	if (!l_settings_get_double(config, "Rank", "rank_5g_factor",
+	if (!l_settings_get_double(config, "Rank", "BandModifier5Ghz",
 					&RANK_5G_FACTOR))
 		RANK_5G_FACTOR = 1.0;
 
