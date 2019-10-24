@@ -48,7 +48,7 @@ class InProgressEx(dbus.DBusException): pass
 class FailedEx(dbus.DBusException): pass
 class AbortedEx(dbus.DBusException): pass
 class NotAvailableEx(dbus.DBusException): pass
-class InvalidArgsEx(dbus.DBusException): pass
+class InvalidArgumentsEx(dbus.DBusException): pass
 class InvalidFormatEx(dbus.DBusException): pass
 class AlreadyExistsEx(dbus.DBusException): pass
 class NotFoundEx(dbus.DBusException): pass
@@ -65,23 +65,23 @@ class CanceledEx(dbus.DBusException):
 
 
 _dbus_ex_to_py = {
-    'Canceled' :        CanceledEx,
-    'InProgress' :      InProgressEx,
-    'Failed' :          FailedEx,
-    'Aborted' :         AbortedEx,
-    'NotAvailable' :    NotAvailableEx,
-    'InvalidArgs' :     InvalidArgsEx,
-    'InvalidFormat' :   InvalidFormatEx,
-    'AlreadyExists' :   AlreadyExistsEx,
-    'NotFound' :        NotFoundEx,
-    'NotSupported' :    NotSupportedEx,
-    'NoAgent' :         NoAgentEx,
-    'NotConnected' :    NotConnectedEx,
-    'NotConfigured' :   NotConfiguredEx,
-    'NotImplemented' :  NotImplementedEx,
-    'ServiceSetOverlap' :  ServiceSetOverlapEx,
-    'AlreadyProvisioned' : AlreadyProvisionedEx,
-    'NotHidden' :       NotHiddenEx,
+    'Canceled' :            CanceledEx,
+    'InProgress' :          InProgressEx,
+    'Failed' :              FailedEx,
+    'Aborted' :             AbortedEx,
+    'NotAvailable' :        NotAvailableEx,
+    'InvalidArguments' :    InvalidArgumentsEx,
+    'InvalidFormat' :       InvalidFormatEx,
+    'AlreadyExists' :       AlreadyExistsEx,
+    'NotFound' :            NotFoundEx,
+    'NotSupported' :        NotSupportedEx,
+    'NoAgent' :             NoAgentEx,
+    'NotConnected' :        NotConnectedEx,
+    'NotConfigured' :       NotConfiguredEx,
+    'NotImplemented' :      NotImplementedEx,
+    'ServiceSetOverlap' :   ServiceSetOverlapEx,
+    'AlreadyProvisioned' :  AlreadyProvisionedEx,
+    'NotHidden' :           NotHiddenEx,
 }
 
 
@@ -445,7 +445,7 @@ class Device(IWDDBusAbstract):
         '''Connect to a hidden network
            Possible exception: BusyEx
                                FailedEx
-                               InvalidArgsEx
+                               InvalidArgumentsEx
                                NotConfiguredEx
                                NotConnectedEx
                                NotFoundEx
