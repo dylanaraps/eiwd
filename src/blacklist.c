@@ -156,7 +156,7 @@ static int blacklist_init(void)
 {
 	const struct l_settings *config = iwd_get_config();
 
-	if (!l_settings_get_uint64(config, "Blacklist", "bss_blacklist_time",
+	if (!l_settings_get_uint64(config, "Blacklist", "InitialTimeout",
 					&blacklist_initial_timeout))
 		blacklist_initial_timeout = BLACKLIST_DEFAULT_TIMEOUT;
 
@@ -164,12 +164,12 @@ static int blacklist_init(void)
 	blacklist_initial_timeout *= 1000000;
 
 	if (!l_settings_get_uint64(config, "Blacklist",
-					"bss_blacklist_multiplier",
+					"Multiplier",
 					&blacklist_multiplier))
 		blacklist_multiplier = BLACKLIST_DEFAULT_MULTIPLIER;
 
 	if (!l_settings_get_uint64(config, "Blacklist",
-					"bss_blacklist_max_time",
+					"MaximumTimeout",
 					&blacklist_max_timeout))
 		blacklist_max_timeout = BLACKLIST_DEFAULT_MAX_TIMEOUT;
 
