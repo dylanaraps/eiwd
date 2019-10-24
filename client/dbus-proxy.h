@@ -31,7 +31,7 @@ struct proxy_interface;
 #define IWD_DEVICE_INTERFACE           "net.connman.iwd.Device"
 #define IWD_KNOWN_NETWORK_INTREFACE    "net.connman.iwd.KnownNetwork"
 #define IWD_NETWORK_INTERFACE          "net.connman.iwd.Network"
-#define IWD_WSC_INTERFACE              "net.connman.iwd.WiFiSimpleConfiguration"
+#define IWD_WSC_INTERFACE              "net.connman.iwd.SimpleConfiguration"
 #define IWD_STATION_INTERFACE          "net.connman.iwd.Station"
 
 typedef bool (*proxy_property_match_func_t) (const void *a, const void *b);
