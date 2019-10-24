@@ -161,27 +161,6 @@ static void update_powered(void *data, struct l_dbus_message_iter *variant)
 	device->powered = value;
 }
 
-static const char *get_wds_tostr(const void *data)
-{
-	const struct device *device = data;
-
-	return device->wds ? "on" : "off";
-}
-
-static void update_wds(void *data, struct l_dbus_message_iter *variant)
-{
-	struct device *device = data;
-	bool value;
-
-	if (!l_dbus_message_iter_get_variant(variant, "b", &value)) {
-		device->wds = false;
-
-		return;
-	}
-
-	device->wds = value;
-}
-
 static void update_adapter(void *data, struct l_dbus_message_iter *variant)
 {
 	struct device *device = data;
@@ -205,9 +184,6 @@ static const struct proxy_interface_property device_properties[] = {
 		properties_on_off_opts },
 	{ "Adapter",  "o", update_adapter },
 	{ "Address",  "s", update_address,  get_address },
-	{ "WDS",      "b", update_wds,      get_wds_tostr,     true,
-		properties_builder_append_on_off_variant,
-		properties_on_off_opts },
 	{ }
 };
 
