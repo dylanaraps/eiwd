@@ -100,9 +100,6 @@ static struct l_dbus_message *request_passphrase_method_call(
 	struct l_dbus_message *reply;
 	const char *path;
 
-	if (dbus_message_has_error(message))
-		return NULL;
-
 	reply = request_passphrase_command_option(message);
 	if (reply)
 		return reply;
@@ -140,9 +137,6 @@ static struct l_dbus_message *request_private_key_passphrase_method_call(
 	const struct proxy_interface *proxy;
 	struct l_dbus_message *reply;
 	const char *path;
-
-	if (dbus_message_has_error(message))
-		return NULL;
 
 	reply = request_passphrase_command_option(message);
 	if (reply)
@@ -203,9 +197,6 @@ static struct l_dbus_message *request_username_and_password_method_call(
 	struct l_dbus_message *reply;
 	const char *path;
 
-	if (dbus_message_has_error(message))
-		return NULL;
-
 	reply = request_username_and_password_command_option(message);
 	if (reply)
 		return reply;
@@ -262,9 +253,6 @@ static struct l_dbus_message *request_user_password_method_call(
 	const char *path;
 	const char *username;
 	char *username_prompt;
-
-	if (dbus_message_has_error(message))
-		return NULL;
 
 	reply = request_user_password_command_option(message);
 	if (reply)
