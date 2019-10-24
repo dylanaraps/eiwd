@@ -20,13 +20,6 @@ Properties	string Name [readonly]
 			radio is powered down and no other actions can
 			be performed on the device.
 
-		boolean WDS [readwrite]
-
-			True if the interface is set to use the 4-address
-			format for the 802.11 packet header. If false, the
-			classic format is used. When activated, the interface
-			can be added to a Layer2 bridge to create a WDS.
-
 		object Adapter [readonly]
 
 			The object path of the adapter the device belongs to.
