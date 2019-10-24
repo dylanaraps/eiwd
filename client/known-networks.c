@@ -166,7 +166,7 @@ static const struct proxy_interface_property known_network_properties[] = {
 	{ "Type",              "s", update_type           },
 	{ "LastConnectedTime", "s", update_last_connected },
 	{ "Hidden",            "b", update_hidden, get_hidden_tostr },
-	{ "Autoconnect",       "b", update_autoconnect, get_autoconnect_tostr,
+	{ "AutoConnect",       "b", update_autoconnect, get_autoconnect_tostr,
 		true, properties_builder_append_yes_no_variant,
 		properties_yes_no_opts },
 	{ },
