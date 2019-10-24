@@ -7,6 +7,9 @@ Configuration file for wireless daemon
 --------------------------------------
 
 :Author: Marcel Holtmann <marcel@holtmann.org>
+:Author: Denis Kenzior <denkenz@gmail.com>
+:Author: Andrew Zaborowski <andrew.zaborowski@intel.com>
+:Author: Tim Kourt <tim.a.kourt@linux.intel.com>
 :Copyright: 2013-2019 Intel Corporation
 :Version: iwd
 :Date: 22 September 2019
