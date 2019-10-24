@@ -129,6 +129,33 @@ autoconnect purposes.
        networks are highly RSSI sensitive, so it is still possible for IWD to
        prefer 2.4Ghz APs in certain circumstances.
 
+Scan
+----
+
+The group ``[Scan]`` contains settings related to scanning functionality.
+No modification from defaults is normally required.
+
+.. list-table::
+   :header-rows: 0
+   :stub-columns: 0
+   :widths: 20 80
+   :align: left
+
+   * - DisablePeriodicScan
+     - Values: true, **false**
+
+       Disable periodic scan. Setting this option to 'true' will prevent iwd
+       from issuing the periodic scans for the available networks while
+       disconnected.  The behavior of the user-initiated scans isn't affected.
+       The periodic scan is enabled by default.
+   * - DisableRoamingScan
+     - Values: trrue, **false**
+
+       Disable roaming scan. Setting this option to 'true' will prevent iwd
+       from trying to scan when roaming decisions are activated.  This can
+       prevent iwd from roaming properly, but can be useful for networks
+       operating under extremely low rssi levels where roaming isn't possible.
+
 SEE ALSO
 ========
 
