@@ -252,7 +252,7 @@ src_iwd_DEPENDENCIES += src/iwd.service
 systemd_unit_DATA += src/iwd.service
 dbus_bus_DATA += src/net.connman.iwd.service
 
-systemd_network_DATA += src/50-iwd.link
+systemd_network_DATA += src/80-iwd.link
 endif
 
 if MANUAL_PAGES
@@ -512,7 +512,7 @@ TESTS = $(unit_tests)
 
 EXTRA_DIST = src/genbuiltin src/iwd.service.in src/net.connman.iwd.service \
 			wired/ead.service.in wired/net.connman.ead.service \
-			src/50-iwd.link src/pkcs8.conf unit/gencerts.cnf \
+			src/80-iwd.link src/pkcs8.conf unit/gencerts.cnf \
 			doc/main.conf \
 			$(manual_pages) $(patsubst %.1,%.rst, \
 					$(patsubst %.5,%.rst, \
