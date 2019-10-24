@@ -101,7 +101,7 @@ The group ``[General]`` contains general settings.
 
    * - Key
      - Description
-   * - Autoconnect
+   * - AutoConnect
      - Values: **true**, false
 
        Whether the network can be connected to automatically
