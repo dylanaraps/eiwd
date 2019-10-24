@@ -238,4 +238,4 @@ authentication configuration.
 SEE ALSO
 ========
 
-iwd(8), iwd.conf(5)
+iwd(8), iwd.config(5)

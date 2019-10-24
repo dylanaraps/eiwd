@@ -159,7 +159,7 @@ if MANUAL_PAGES
 man_MANS =
 endif
 
-manual_pages = src/iwd.8 src/iwd.conf.5 src/iwd.network.5 \
+manual_pages = src/iwd.8 src/iwd.config.5 src/iwd.network.5 \
 		client/iwctl.1 monitor/iwmon.1 wired/ead.8 tools/hwsim.1
 
 eap_sources = src/eap.c src/eap.h src/eap-private.h \
@@ -256,7 +256,7 @@ systemd_network_DATA += src/50-iwd.link
 endif
 
 if MANUAL_PAGES
-man_MANS += src/iwd.8 src/iwd.conf.5 src/iwd.network.5
+man_MANS += src/iwd.8 src/iwd.config.5 src/iwd.network.5
 endif
 endif
 

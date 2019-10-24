@@ -47,7 +47,7 @@ ENVIRONMENT
 *iwd.network* for details.
 
 *$CONFIGURATION_DIRECTORY* is used for daemon configuration settings.  Only
-the file **main.conf** is currently read from this directory.  See *iwd.conf*
+the file **main.conf** is currently read from this directory.  See *iwd.config*
 for details.
 
 *$IWD_RTNL_DEBUG* set to ``1`` enables RTNL debugging.
@@ -61,7 +61,7 @@ for details.
 SEE ALSO
 ========
 
-iwd.conf(5), iwd.network(5), iwctl(1), iwmon(1), hwsim(1), ead(8),
+iwd.config(5), iwd.network(5), iwctl(1), iwmon(1), hwsim(1), ead(8),
 systemd.exec(5)
 
 http://iwd.wiki.kernel.org
