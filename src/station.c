@@ -1975,7 +1975,7 @@ static bool station_cannot_roam(struct station *station)
 	const struct l_settings *config = iwd_get_config();
 	bool disabled;
 
-	if (!l_settings_get_bool(config, "Scan", "disable_roaming_scan",
+	if (!l_settings_get_bool(config, "Scan", "DisableRoamingScan",
 								&disabled))
 		disabled = false;
 

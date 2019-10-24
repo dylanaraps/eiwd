@@ -271,7 +271,7 @@ static bool scan_mac_address_randomization_is_disabled(void)
 	bool disabled;
 
 	if (!l_settings_get_bool(config, "Scan",
-					"disable_mac_address_randomization",
+					"DisableMacAddressRandomization",
 					&disabled))
 		return false;
 
@@ -641,7 +641,7 @@ static bool scan_periodic_is_disabled(void)
 	const struct l_settings *config = iwd_get_config();
 	bool disabled;
 
-	if (!l_settings_get_bool(config, "Scan", "disable_periodic_scan",
+	if (!l_settings_get_bool(config, "Scan", "DisablePeriodicScan",
 								&disabled))
 		return false;
 
