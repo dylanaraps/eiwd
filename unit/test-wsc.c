@@ -2006,7 +2006,6 @@ static void wsc_test_pbc_handshake(const void *data)
 	eapol_sm_set_event_func(sm, verify_credential);
 
 	settings = l_settings_new();
-	l_settings_set_uint(settings, "EAP", "mtu", 1400);
 	l_settings_set_string(settings, "Security", "EAP-Identity",
 					"WFA-SimpleConfig-Enrollee-1-0");
 	l_settings_set_string(settings, "Security", "EAP-Method", "WSC");
@@ -2040,7 +2039,6 @@ static void wsc_test_pbc_handshake(const void *data)
 	l_settings_set_string(settings, "WSC", "IV2",
 					"4e3a4cf088176989e148d4c10b96e8fd");
 
-	__eap_set_config(settings);
 	handshake_state_set_8021x_config(hs, settings);
 	eapol_start(sm);
 
@@ -2116,7 +2114,6 @@ static void wsc_test_retransmission_no_fragmentation(const void *data)
 	eapol_sm_set_event_func(sm, verify_credential);
 
 	settings = l_settings_new();
-	l_settings_set_uint(settings, "EAP", "mtu", 1400);
 	l_settings_set_string(settings, "Security", "EAP-Identity",
 					"WFA-SimpleConfig-Enrollee-1-0");
 	l_settings_set_string(settings, "Security", "EAP-Method", "WSC");
@@ -2150,7 +2147,6 @@ static void wsc_test_retransmission_no_fragmentation(const void *data)
 	l_settings_set_string(settings, "WSC", "IV2",
 					"4e3a4cf088176989e148d4c10b96e8fd");
 
-	__eap_set_config(settings);
 	handshake_state_set_8021x_config(hs, settings);
 	eapol_start(sm);
 
