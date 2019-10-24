@@ -95,7 +95,7 @@ class Test(unittest.TestCase):
         condition = 'not obj.connected'
         wd.wait_for_object_condition(ordered_network.network_object, condition)
 
-        # Now we wait... Autoconnect should take over
+        # Now we wait... AutoConnect should take over
 
         condition = 'obj.state == DeviceState.connecting'
         wd.wait_for_object_condition(device, condition, 15)

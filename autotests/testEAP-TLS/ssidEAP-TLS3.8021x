@@ -6,4 +6,4 @@ EAP-TLS-ClientKey=/tmp/certs/cert-client-key-v2-des-ede3.pem
 EAP-Identity=abc@example.com
 
 [Settings]
-Autoconnect=False
+AutoConnect=False

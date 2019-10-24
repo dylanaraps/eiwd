@@ -6,7 +6,7 @@ import sys
 sys.path.append('../util')
 import iwd
 import validation
-from validation import TestConnectAutoconnect
+from validation import TestConnectAutoConnect
 from iwd import IWD
 
 class Test8021xNetwork(unittest.TestCase):
@@ -14,7 +14,7 @@ class Test8021xNetwork(unittest.TestCase):
     The bellow test cases excesise the following connection scenarios:
 
     Network config is
-    present at start time:  Connect:  Autoconnect:  Result:
+    present at start time:  Connect:  AutoConnect:  Result:
     --------------------------------------------------------------------------
     False                             True          NotConfiguredEx is thrown
     True                              True          Connection succeeds
@@ -23,7 +23,7 @@ class Test8021xNetwork(unittest.TestCase):
        supported by IWD
     '''
     def test_8021x(self):
-        tca = TestConnectAutoconnect()
+        tca = TestConnectAutoConnect()
         tca.validate('ssidEAP-TLS', True, iwd.NotConfiguredEx)
 
         IWD.copy_to_storage('ssidEAP-TLS.8021x')

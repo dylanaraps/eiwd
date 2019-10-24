@@ -6,7 +6,7 @@ import sys
 sys.path.append('../util')
 import iwd
 import validation
-from validation import TestConnectAutoconnect
+from validation import TestConnectAutoConnect
 from iwd import IWD
 
 class TestWpaNetwork(unittest.TestCase):
@@ -14,7 +14,7 @@ class TestWpaNetwork(unittest.TestCase):
     The bellow test cases excesise the following connection scenarios:
 
     Network config is
-    present at start time:  Connect:  Autoconnect:  Result:
+    present at start time:  Connect:  AutoConnect:  Result:
     --------------------------------------------------------------------------
     False                   True                    NotFoundEx raised
     False                   True                    ServiceSetOverlapEx raised
@@ -23,7 +23,7 @@ class TestWpaNetwork(unittest.TestCase):
     '''
 
     def test_wpa(self):
-        tca = TestConnectAutoconnect()
+        tca = TestConnectAutoConnect()
 
         tca.validate('UnExistingNetwork', False, iwd.NotFoundEx)
         tca.validate('ssidOverlap', False, iwd.ServiceSetOverlapEx)

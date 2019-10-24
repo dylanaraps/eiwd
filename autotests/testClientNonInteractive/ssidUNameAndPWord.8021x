@@ -7,4 +7,4 @@ EAP-TTLS-Phase2-Identity=user
 #EAP-TTLS-Phase2-Password=password
 
 [Settings]
-Autoconnect=False
+AutoConnect=False

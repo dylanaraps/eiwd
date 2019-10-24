@@ -9,4 +9,4 @@ EAP-PEAP-Phase2-Identity=domain\\User
 EAP-PEAP-Phase2-Password=Password
 
 [Settings]
-Autoconnect=false
+AutoConnect=false

@@ -9,4 +9,4 @@ EAP-TTLS-Phase2-Identity=abc@example.com
 EAP-TTLS-Phase2-Password=testpasswd
 
 [Settings]
-Autoconnect=False
+AutoConnect=False

@@ -7,4 +7,4 @@ EAP-PEAP-ClientKey=/tmp/certs/cert-client-key-pkcs8.pem
 EAP-PEAP-Phase2-Method=SIM
 
 [Settings]
-Autoconnect=false
+AutoConnect=false

@@ -3,4 +3,4 @@ EAP-Method=PWD
 EAP-Identity=eap-pwd-identity
 
 [Settings]
-Autoconnect=false
+AutoConnect=false

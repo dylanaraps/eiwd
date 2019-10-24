@@ -4,4 +4,4 @@ EAP-Identity=eap-pwd-identity
 EAP-Password=secret123
 
 [Settings]
-Autoconnect=false
+AutoConnect=false

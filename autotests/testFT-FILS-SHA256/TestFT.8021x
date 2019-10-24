@@ -2,4 +2,4 @@
 EAP-Method=PWD
 
 [Settings]
-Autoconnect=False
+AutoConnect=False

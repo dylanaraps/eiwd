@@ -9,4 +9,4 @@ EAP-PEAP-Phase2-Identity=secure@identity.com
 EAP-PEAP-Phase2-Password=testpasswd
 
 [Settings]
-Autoconnect=false
+AutoConnect=false

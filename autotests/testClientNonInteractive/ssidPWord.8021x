@@ -6,4 +6,4 @@ EAP-TTLS-Phase2-Method=Tunneled-MSCHAP
 EAP-TTLS-Phase2-Identity=user
 
 [Settings]
-Autoconnect=False
+AutoConnect=False

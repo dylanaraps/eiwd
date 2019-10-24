@@ -2,4 +2,4 @@
 EAP-Method=AKA
 
 [Settings]
-Autoconnect=false
+AutoConnect=false

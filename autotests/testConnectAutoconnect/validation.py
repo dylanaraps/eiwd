@@ -9,7 +9,7 @@ from iwd import IWD
 from iwd import PSKAgent
 from iwd import NetworkType
 
-class TestConnectAutoconnect(unittest.TestCase):
+class TestConnectAutoConnect(unittest.TestCase):
 
     def check_connect(self, wd, device, ssid, throws):
         ordered_network = device.get_ordered_network(ssid)
