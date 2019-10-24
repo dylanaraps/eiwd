@@ -12,7 +12,7 @@ Methods		void Start(string ssid, string psk)
 
 			Possible errors:	net.connman.iwd.Busy
 						net.connman.iwd.Failed
-						net.connman.iwd.InvalidArgs
+						net.connman.iwd.InvalidArguments
 						net.connman.iwd.AlreadyExists
 
 		void StartOpen(string ssid)
@@ -22,7 +22,7 @@ Methods		void Start(string ssid, string psk)
 
 			Possible errors:	net.connman.iwd.Busy
 						net.connman.iwd.Failed
-						net.connman.iwd.InvalidArgs
+						net.connman.iwd.InvalidArguments
 						net.connman.iwd.AlreadyExists
 
 		void Stop()
@@ -33,7 +33,7 @@ Methods		void Start(string ssid, string psk)
 
 			Possible errors:	net.connman.iwd.Busy
 						net.connman.iwd.Failed
-						net.connman.iwd.InvalidArgs
+						net.connman.iwd.InvalidArguments
 
 Properties	string[] ConnectedPeers [readonly]
 

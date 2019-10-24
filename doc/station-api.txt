@@ -98,7 +98,7 @@ Methods		void Scan()
 
 			Possible errors: net.connman.iwd.Busy
 					 net.connman.iwd.Failed
-					 net.connman.iwd.InvalidArgs
+					 net.connman.iwd.InvalidArguments
 					 net.connman.iwd.NotConfigured
 					 net.connman.iwd.NotConnected
 					 net.connman.iwd.NotFound

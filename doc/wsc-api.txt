@@ -57,7 +57,7 @@ Methods		void PushButton()
 			net.connman.iwd.Aborted
 			net.connman.iwd.Failed
 			net.connman.iwd.Busy
-			net.connman.iwd.InvalidArgs
+			net.connman.iwd.InvalidArguments
 			net.connman.iwd.InvalidFormat
 
 		void Cancel()
