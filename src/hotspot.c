@@ -330,7 +330,7 @@ static struct hs20_config *hs20_config_new(struct l_settings *settings,
 
 	rc_str = l_settings_get_value(settings, "Hotspot", "RoamingConsortium");
 
-	if (!l_settings_get_bool(settings, "Settings", "Autoconnect",
+	if (!l_settings_get_bool(settings, "Settings", "AutoConnect",
 								&autoconnect))
 		autoconnect = true;
 
