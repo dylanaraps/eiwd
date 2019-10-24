@@ -108,6 +108,27 @@ a misbehaved BSS spends on the blacklist.
 
        Maximum time that a BSS is blacklisted.
 
+Rank
+----
+
+The group ``[Rank]`` contains settings related to ranking of networks for
+autoconnect purposes.
+
+.. list-table::
+   :header-rows: 0
+   :stub-columns: 0
+   :widths: 20 80
+   :align: left
+
+   * - BandModifier5Ghz
+     - Values: floating point value (default: **1.0**)
+
+       Increase or decrease the preference for 5GHz access points by increasing
+       or decreasing the value of this modifier.  5GHz networks are already
+       preferred due to their increase throughput / data rate.  However, 5GHz
+       networks are highly RSSI sensitive, so it is still possible for IWD to
+       prefer 2.4Ghz APs in certain circumstances.
+
 SEE ALSO
 ========
 
