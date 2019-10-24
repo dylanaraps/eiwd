@@ -219,7 +219,7 @@ static bool extract_p2p_channel_list(const uint8_t *attr, size_t len,
 		l_queue_push_tail(out->channel_entries, entries);
 
 		attr += entries->n_channels;
-		len -= entries->n_channels;
+		len -= 2 + entries->n_channels;
 	}
 
 	return true;
