@@ -140,7 +140,7 @@ static void known_network_set_autoconnect(struct network_info *network,
 	network->is_autoconnectable = autoconnect;
 
 	l_dbus_property_changed(dbus_get_bus(), known_network_get_path(network),
-				IWD_KNOWN_NETWORK_INTERFACE, "Autoconnect");
+				IWD_KNOWN_NETWORK_INTERFACE, "AutoConnect");
 }
 
 static int known_network_touch(struct network_info *info)
@@ -619,7 +619,7 @@ static void setup_known_network_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_property(interface, "Hidden", 0, "b",
 					known_network_property_get_hidden,
 					NULL);
-	l_dbus_interface_property(interface, "Autoconnect", 0, "b",
+	l_dbus_interface_property(interface, "AutoConnect", 0, "b",
 					known_network_property_get_autoconnect,
 					known_network_property_set_autoconnect);
 	l_dbus_interface_property(interface, "LastConnectedTime", 0, "s",
