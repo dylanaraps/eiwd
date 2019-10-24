@@ -59,7 +59,7 @@ def properties_changed(interface, changed, invalidated, path):
 
 relevant_ifaces = [ "net.connman.iwd.Device",
                     "net.connman.iwd.Adapter",
-                    "net.connman.iwd.WiFiSimpleConfiguration",
+                    "net.connman.iwd.SimpleConfiguration",
                     "net.connman.iwd.AccessPoint",
                     "net.connman.iwd.AdHoc",
                     "net.connman.iwd.Network",

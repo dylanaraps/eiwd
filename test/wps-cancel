@@ -9,5 +9,5 @@ if (len(sys.argv) != 2):
 
 bus = dbus.SystemBus()
 wsc = dbus.Interface(bus.get_object("net.connman.iwd", sys.argv[1]),
-                                    "net.connman.iwd.WiFiSimpleConfiguration")
+                                    "net.connman.iwd.SimpleConfiguration")
 wsc.Cancel()

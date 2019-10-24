@@ -9,7 +9,7 @@ if (len(sys.argv) != 2 and len(sys.argv) != 3):
 
 bus = dbus.SystemBus()
 wsc = dbus.Interface(bus.get_object("net.connman.iwd", sys.argv[1]),
-                                    "net.connman.iwd.WiFiSimpleConfiguration")
+                                    "net.connman.iwd.SimpleConfiguration")
 
 if (len(sys.argv) == 3):
     pin = sys.argv[2]
