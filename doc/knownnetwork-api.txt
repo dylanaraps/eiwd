@@ -40,9 +40,9 @@ Properties	string Name [readonly]
 			but has never been successfully connected to,
 			this property is not visible.
 
-		boolean Autoconnect [readwrite]
+		boolean AutoConnect [readwrite]
 
-			Setting 'Autoconnect' to False prevents this network
+			Setting 'AutoConnect' to False prevents this network
 			from being considered as a candidate for the automatic
 			connection when its BSSIDs are observed in the scan
 			results. The default value is True.
