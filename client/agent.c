@@ -127,7 +127,9 @@ static struct l_dbus_message *request_passphrase_method_call(
 					"'--"COMMAND_OPTION_PASSPHRASE"' "
 						"command-line option.\n");
 
-	l_dbus_message_get_arguments(message, "o", &path);
+	if (!l_dbus_message_get_arguments(message, "o", &path))
+		return agent_reply_failed(message, "Invalid argument");
+
 	if (!path)
 		return agent_reply_failed(message, "Invalid argument");
 
@@ -165,7 +167,9 @@ static struct l_dbus_message *request_private_key_passphrase_method_call(
 					"'--"COMMAND_OPTION_PASSPHRASE"' "
 						"command-line option.\n");
 
-	l_dbus_message_get_arguments(message, "o", &path);
+	if (!l_dbus_message_get_arguments(message, "o", &path))
+		return agent_reply_failed(message, "Invalid argument");
+
 	if (!path)
 		return agent_reply_failed(message, "Invalid argument");
 
@@ -226,7 +230,9 @@ static struct l_dbus_message *request_username_and_password_method_call(
 					"'--"COMMAND_OPTION_PASSWORD"' "
 						"command-line option.\n");
 
-	l_dbus_message_get_arguments(message, "o", &path);
+	if (!l_dbus_message_get_arguments(message, "o", &path))
+		return agent_reply_failed(message, "Invalid argument");
+
 	if (!path)
 		return agent_reply_failed(message, "Invalid argument");
 
@@ -282,7 +288,9 @@ static struct l_dbus_message *request_user_password_method_call(
 					"'--"COMMAND_OPTION_PASSWORD"' "
 					"command-line option.\n");
 
-	l_dbus_message_get_arguments(message, "os", &path, &username);
+	if (!l_dbus_message_get_arguments(message, "os", &path, &username))
+		return agent_reply_failed(message, "Invalid arguments");
+
 	if (!path || !username)
 		return agent_reply_failed(message, "Invalid argument");
 
