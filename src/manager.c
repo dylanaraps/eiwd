@@ -630,10 +630,17 @@ static int manager_init(void)
 		goto error;
 	}
 
-	randomize_str =
-		l_settings_get_value(config, "General", "mac_randomize");
-	if (randomize_str && !strcmp(randomize_str, "once"))
-		randomize = true;
+	randomize_str = l_settings_get_value(config, "General",
+							"AddressRandomization");
+	if (randomize_str) {
+		if (!strcmp(randomize_str, "once"))
+			randomize = true;
+		else if (!strcmp(randomize_str, "disabled"))
+			randomize = false;
+		else
+			l_warn("Invalid [General].AddressRandomization"
+				" value: %s", randomize_str);
+	}
 
 	if (!l_settings_get_bool(config, "General",
 				"UseDefaultInterface", &use_default)) {
