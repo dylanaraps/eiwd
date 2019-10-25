@@ -1376,6 +1376,8 @@ void network_rank_update(struct network *network, bool connected)
 	if (network->info->connected_time != 0) {
 		int n = known_network_offset(network->info);
 
+		L_WARN_ON(n < 0);
+
 		if (n >= (int) L_ARRAY_SIZE(rankmod_table))
 			n = L_ARRAY_SIZE(rankmod_table) - 1;
 
