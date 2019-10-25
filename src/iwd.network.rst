@@ -235,6 +235,33 @@ authentication configuration.
        method's negotiation is encrypted, a secure identity string can be
        provided.
 
+Embedded PEMs
+-------------
+
+Rather than including an absolute path to a PEM file (for certs or keys), the
+PEM itself can be included inside the settings file and referenced directly.
+This allows 8021x network provisioning using a single file without any
+references to certificates/keys on the system.
+
+An embedded PEM can appear anywhere in the settings file using the following
+format (this example the PEM is named 'my_ca_cert'):
+
+.. code-block::
+
+  [@pem@my_ca_cert]
+  ----- BEGIN CERTIFICATE -----
+  <PEM data>
+  ----- END CERTIFICATE -----
+
+After this special group tag its as simple as pasting in a PEM file including
+the BEGIN/END tags. Now 'my_ca_cert' can be used to reference the certificate
+elsewhere in the settings file by prefixing the value with 'embed:'
+
+EAP-TLS-CACert=embed:my_ca_cert
+
+This is not limited to CA Certs either. Client certs, client keys (encrypted
+or not), and certificate chains can be included.
+
 SEE ALSO
 ========
 
