@@ -53,7 +53,7 @@ The group ``[General]`` contains general settings.
    :widths: 20 80
    :align: left
 
-   * - enable_network_config
+   * - EnableNetworkConfiguration
      - Values: true, false (default)
 
        Enable network configuration.
@@ -66,18 +66,9 @@ The group ``[General]`` contains general settings.
        obtain the dynamic addresses from the network through the built-in
        DHCP client.
 
-       The network configuration feature is disabled by default.
-
-   * - dns_resolve_method
-     - Values: resolvconf, systemd (default)
-
-       Indicate a DNS resolution method used by the system.
-
-       This configuration option must be used in conjunction with
-       ``enable_network_config`` and provides the choice of system resolver
-       integration.
-
-       If not specified, ``systemd`` is used as default.
+       The network configuration feature is disabled by default.  See
+       ``[Network]`` settings for additional settings related to network
+       configuration.
 
    * - UseDefaultInterface
      - Values: true, **false**
@@ -155,6 +146,28 @@ The group ``[General]`` contains general settings.
        (freezing or crashes) which is another reason why this has been turned
        off by default.  If you want to easily utilize Hotspot 2.0 networks,
        then setting ``DisableANQP`` to ``false`` is recommended.
+
+Network
+---------
+
+The group ``[Network]`` contains network configuration related settings.
+
+.. list-table::
+   :header-rows: 0
+   :stub-columns: 0
+   :widths: 20 80
+   :align: left
+
+   * - NameResolvingService
+     - Values: resolvconf, **systemd**
+
+       Configures a DNS resolution method used by the system.
+
+       This configuration option must be used in conjunction with
+       ``EnableNetworkConfiguration`` and provides the choice of system
+       resolver integration.
+
+       If not specified, ``systemd`` is used as default.
 
 Blacklist
 ---------
