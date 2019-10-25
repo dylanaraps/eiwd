@@ -4797,7 +4797,7 @@ static int netdev_init(void)
 		goto fail_netlink;
 	}
 
-	if (!l_settings_get_int(settings, "General", "roam_rssi_threshold",
+	if (!l_settings_get_int(settings, "General", "RoamThreshold",
 					&LOW_SIGNAL_THRESHOLD))
 		LOW_SIGNAL_THRESHOLD = -70;
 
