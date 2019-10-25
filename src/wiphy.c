@@ -1166,15 +1166,11 @@ static int wiphy_init(void)
 {
 	struct l_genl *genl = iwd_get_genl();
 	const struct l_settings *config = iwd_get_config();
-	const char *s = l_settings_get_value(config, "General",
-							"mac_randomize_bytes");
 	const char *whitelist = iwd_get_phy_whitelist();
 	const char *blacklist = iwd_get_phy_blacklist();
+	const char *s;
 
 	nl80211 = l_genl_family_new(genl, NL80211_GENL_NAME);
-
-	if (s && !strcmp(s, "nic"))
-		mac_randomize_bytes = 3;
 
 	/*
 	 * This is an extra sanity check so that no memory is leaked
@@ -1203,6 +1199,18 @@ static int wiphy_init(void)
 
 	if (blacklist)
 		blacklist_filter = l_strsplit(blacklist, ',');
+
+	s = l_settings_get_value(config, "General",
+						"AddressRandomizationRange");
+	if (s) {
+		if (!strcmp(s, "nic"))
+			mac_randomize_bytes = 3;
+		else if (!strcmp(s, "full"))
+			mac_randomize_bytes = 6;
+		else
+			l_warn("Invalid [General].AddressRandomizationRange"
+				" value: %s", s);
+	}
 
 	return 0;
 }
