@@ -110,6 +110,7 @@ struct attr_entry {
 	uint16_t type;
 	void *data;
 	attr_handler handler;
+	bool present : 1;
 };
 
 int nl80211_parse_attrs(struct l_genl_msg *msg, int tag, ...)
@@ -158,10 +159,28 @@ int nl80211_parse_attrs(struct l_genl_msg *msg, int tag, ...)
 		if (!e)
 			continue;
 
+		if (entry->present) {
+			ret = -EALREADY;
+			goto done;
+		}
+
 		if (!entry->handler(data, len, entry->data)) {
 			ret = -EINVAL;
 			goto done;
 		}
+
+		entry->present = true;
+	}
+
+	ret = -ENOENT;
+
+	for (e = l_queue_get_entries(entries); e; e = e->next) {
+		entry = e->data;
+
+		if (entry->present)
+			continue;
+
+		goto done;
 	}
 
 	ret = 0;
