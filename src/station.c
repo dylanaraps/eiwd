@@ -56,6 +56,7 @@
 
 static struct l_queue *station_list;
 static uint32_t netdev_watch;
+static uint32_t mfp_setting;
 
 struct station {
 	enum station_state state;
@@ -733,11 +734,9 @@ static int station_build_handshake_rsn(struct handshake_state *hs,
 	bool add_mde = false;
 	bool fils_hint = false;
 
-	const struct l_settings *settings = iwd_get_config();
 	struct ie_rsn_info bss_info;
 	uint8_t rsne_buf[256];
 	struct ie_rsn_info info;
-	uint32_t mfp_setting;
 	uint8_t *ap_ie;
 
 	memset(&info, 0, sizeof(info));
@@ -783,22 +782,6 @@ static int station_build_handshake_rsn(struct handshake_state *hs,
 		info.group_management_cipher =
 					IE_RSN_CIPHER_SUITE_NO_GROUP_TRAFFIC;
 		goto build_ie;
-	}
-
-	if (!l_settings_get_uint(settings, "General",
-					"management_frame_protection",
-					&mfp_setting)) {
-		if (!l_settings_get_uint(settings, "General",
-				"ManagementFrameProtection", &mfp_setting)) {
-			mfp_setting = 1;
-		} else
-			l_warn("ManagementFrameProtection option is deprecated "
-				"use 'management_frame_protection'");
-	}
-
-	if (mfp_setting > 2) {
-		l_error("Invalid MFP value, using default of 1");
-		mfp_setting = 1;
 	}
 
 	switch (mfp_setting) {
@@ -3197,6 +3180,18 @@ static int station_init(void)
 	l_dbus_register_interface(dbus_get_bus(), IWD_STATION_INTERFACE,
 					station_setup_interface,
 					station_destroy_interface, false);
+
+	if (!l_settings_get_uint(iwd_get_config(), "General",
+					"ManagementFrameProtection",
+					&mfp_setting))
+		mfp_setting = 1;
+
+	if (mfp_setting > 2) {
+		l_error("Invalid [General].ManagementFrameProtection value: %d,"
+				" using default of 1", mfp_setting);
+		mfp_setting = 1;
+	}
+
 	return true;
 }
 
