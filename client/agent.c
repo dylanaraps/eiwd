@@ -59,6 +59,14 @@ static struct l_dbus_message *agent_reply_canceled(
 					"Error: %s", text);
 }
 
+static struct l_dbus_message *agent_reply_failed(struct l_dbus_message *message,
+							const char *text)
+{
+	return l_dbus_message_new_error(message,
+					IWD_AGENT_INTERFACE ".Error.Failed",
+					"Error: %s", text);
+}
+
 static struct l_dbus_message *agent_error(struct l_dbus_message *message,
 							const char *text)
 {
@@ -121,11 +129,11 @@ static struct l_dbus_message *request_passphrase_method_call(
 
 	l_dbus_message_get_arguments(message, "o", &path);
 	if (!path)
-		return NULL;
+		return agent_reply_failed(message, "Invalid argument");
 
 	proxy = proxy_interface_find(IWD_NETWORK_INTERFACE, path);
 	if (!proxy)
-		return NULL;
+		return agent_reply_failed(message, "Invalid network object");
 
 	display("Type the network passphrase for %s.\n",
 				proxy_interface_get_identity_str(proxy));
@@ -159,11 +167,11 @@ static struct l_dbus_message *request_private_key_passphrase_method_call(
 
 	l_dbus_message_get_arguments(message, "o", &path);
 	if (!path)
-		return NULL;
+		return agent_reply_failed(message, "Invalid argument");
 
 	proxy = proxy_interface_find(IWD_NETWORK_INTERFACE, path);
 	if (!proxy)
-		return NULL;
+		return agent_reply_failed(message, "Invalid network object");
 
 	display("Type the passphrase for the network encrypted private key for "
 			"%s.\n", proxy_interface_get_identity_str(proxy));
@@ -220,11 +228,11 @@ static struct l_dbus_message *request_username_and_password_method_call(
 
 	l_dbus_message_get_arguments(message, "o", &path);
 	if (!path)
-		return NULL;
+		return agent_reply_failed(message, "Invalid argument");
 
 	proxy = proxy_interface_find(IWD_NETWORK_INTERFACE, path);
 	if (!proxy)
-		return NULL;
+		return agent_reply_failed(message, "Invalid network object");
 
 	display("Type the network credentials for %s.\n",
 				proxy_interface_get_identity_str(proxy));
@@ -276,11 +284,11 @@ static struct l_dbus_message *request_user_password_method_call(
 
 	l_dbus_message_get_arguments(message, "os", &path, &username);
 	if (!path || !username)
-		return NULL;
+		return agent_reply_failed(message, "Invalid argument");
 
 	proxy = proxy_interface_find(IWD_NETWORK_INTERFACE, path);
 	if (!proxy)
-		return NULL;
+		return agent_reply_failed(message, "Invalid network object");
 
 	display("Type the network password for %s.\n",
 				proxy_interface_get_identity_str(proxy));
