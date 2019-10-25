@@ -46,6 +46,7 @@ static struct l_genl_family *nl80211 = NULL;
 static char **whitelist_filter;
 static char **blacklist_filter;
 static bool randomize;
+static bool use_default;
 
 struct wiphy_setup_state {
 	uint32_t id;
@@ -71,7 +72,7 @@ static const char *default_if_driver_list[] = {
 	 * many other drivers are built from the same source code so
 	 * blacklist all of them.  Unfortunately there are in-tree drivers
 	 * that also match these names and may be fine.  Use
-	 * use_default_interface to override.
+	 * UseDefaultInterface to override.
 	 */
 	"rtl81*",
 	"rtl87*",
@@ -333,8 +334,6 @@ static struct wiphy_setup_state *manager_rx_cmd_new_wiphy(
 	uint32_t id;
 	const char *name;
 	const char *driver, **driver_bad;
-	bool use_default;
-	const struct l_settings *settings = iwd_get_config();
 
 	if (nl80211_parse_attrs(msg, NL80211_ATTR_WIPHY, &id,
 					NL80211_ATTR_WIPHY_NAME, &name,
@@ -357,6 +356,8 @@ static struct wiphy_setup_state *manager_rx_cmd_new_wiphy(
 	state = l_new(struct wiphy_setup_state, 1);
 	state->id = id;
 	state->wiphy = wiphy;
+	state->use_default = use_default;
+
 	l_queue_push_tail(pending_wiphys, state);
 
 	driver = wiphy_get_driver(wiphy);
@@ -374,11 +375,6 @@ static struct wiphy_setup_state *manager_rx_cmd_new_wiphy(
 	 */
 	if (whitelist_filter || blacklist_filter)
 		state->use_default = true;
-
-	/* The setting overrides our attempts to ensure things work */
-	if (l_settings_get_bool(settings, "General",
-				"use_default_interface", &use_default))
-		state->use_default = use_default;
 
 	if (state->use_default)
 		l_info("Wiphy %s will only use the default interface", name);
@@ -638,6 +634,16 @@ static int manager_init(void)
 		l_settings_get_value(config, "General", "mac_randomize");
 	if (randomize_str && !strcmp(randomize_str, "once"))
 		randomize = true;
+
+	if (!l_settings_get_bool(config, "General",
+				"UseDefaultInterface", &use_default)) {
+		if (!l_settings_get_bool(config, "General",
+					"use_default_interface", &use_default))
+			use_default = false;
+		else
+			l_warn("[General].use_default_interface is deprecated"
+					", please use UseDefaultInterface");
+	}
 
 	return 0;
 
