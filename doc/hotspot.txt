@@ -43,4 +43,4 @@ IWD which allows the user to disable ANQP. As a result, this will also disable
 any hotspot 2.0 network connections unless the HESSID is provided in the
 configuration file. By default ANQP will be disabled. It can be enabled with:
 
-disable_anqp=0
+DisableANQP=0

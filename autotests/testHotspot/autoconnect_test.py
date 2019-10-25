@@ -111,7 +111,7 @@ class Test(unittest.TestCase):
     def setUpClass(cls):
         IWD.copy_to_hotspot('autoconnect.conf')
         IWD.copy_to_storage('ssidWPA2-1.psk')
-        conf = '[General]\ndisable_anqp=0\n'
+        conf = '[General]\nDisableANQP=0\n'
         os.system('echo "%s" > /tmp/main.conf' % conf)
 
     @classmethod

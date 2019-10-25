@@ -57,6 +57,7 @@
 static struct l_queue *station_list;
 static uint32_t netdev_watch;
 static uint32_t mfp_setting;
+static bool anqp_disabled;
 
 struct station {
 	enum station_state state;
@@ -507,7 +508,6 @@ static bool station_start_anqp(struct station *station, struct network *network,
 	uint8_t anqp[256];
 	uint8_t *ptr = anqp;
 	struct anqp_entry *entry;
-	bool anqp_disabled = true;
 
 	if (!bss->hs20_capable)
 		return false;
@@ -515,9 +515,6 @@ static bool station_start_anqp(struct station *station, struct network *network,
 	/* Network already has ANQP data/HESSID */
 	if (network_get_info(network))
 		return false;
-
-	l_settings_get_bool(iwd_get_config(), "General", "disable_anqp",
-				&anqp_disabled);
 
 	if (anqp_disabled) {
 		l_debug("Not querying AP for ANQP data (disabled)");
@@ -3191,6 +3188,10 @@ static int station_init(void)
 				" using default of 1", mfp_setting);
 		mfp_setting = 1;
 	}
+
+	if (!l_settings_get_bool(iwd_get_config(), "General", "DisableANQP",
+				&anqp_disabled))
+		anqp_disabled = true;
 
 	return true;
 }

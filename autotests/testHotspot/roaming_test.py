@@ -58,7 +58,7 @@ class Test(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         IWD.copy_to_hotspot('roaming.conf')
-        conf = '[General]\ndisable_anqp=1\n'
+        conf = '[General]\nDisableANQP=1\n'
         os.system('echo "%s" > /tmp/main.conf' % conf)
 
     @classmethod

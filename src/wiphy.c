@@ -931,7 +931,7 @@ static void wiphy_set_station_capability_bits(struct wiphy *wiphy)
 
 	ext_capa = wiphy->iftype_extended_capabilities[NL80211_IFTYPE_STATION];
 
-	if (!l_settings_get_bool(iwd_get_config(), "General", "disable_anqp",
+	if (!l_settings_get_bool(iwd_get_config(), "General", "DisableANQP",
 				&anqp_disabled))
 		anqp_disabled = true;
 
