@@ -79,6 +79,83 @@ The group ``[General]`` contains general settings.
 
        If not specified, ``systemd`` is used as default.
 
+   * - UseDefaultInterface
+     - Values: true, **false**
+
+       Do not allow **iwd** to destroy / recreate wireless interfaces at
+       startup, including default interfaces.  Enable this behavior if your
+       wireless card driver is buggy or does not allow such an operation, or
+       if you do not want **iwd** to manage netdevs for another reason.  For
+       most users with an upstream driver it should be safe to omit/disable
+       this setting.
+
+   * - AddressRandomization
+     - Values: **disabled**, once
+
+       If ``AddressRandomization`` is set to ``disabled``, the default kernel
+       behavior is used.  This means the kernel will assign a mac address from
+       the permanent mac address range provided by the hardware / driver.  Thus
+       it is possible for networks to track the user by the mac address which
+       is permanent.
+
+       If ``AddressRandomization`` is set to ``once``, MAC address is
+       randomized a single time when **iwd** starts or when the hardware is
+       detected for the first time (due to hotplug, etc.)
+
+   * - AddressRandomizationRange
+     - Values: **full**, nic
+
+       One can control which part of the address is randomized using this
+       setting.
+
+       When using ``AddressRandomizationRange`` set to ``nic``, only the NIC
+       specific octets (last 3 octets) are randomized.  Note that the
+       randomization range is limited to 00:00:01 to 00:00:FE.  The permanent
+       mac address of the card is used for the initial 3 octets.
+
+       When using ``AddressRandomizationRange`` set to ``full``, all 6 octets
+       of the address are randomized.  The locally-administered bit will be
+       set.
+
+   * - RoamThreshold
+     - Value: rssi dBm value, from -100 to 1, default: **-70**
+
+       This can be used to control how aggressively **iwd** roams.
+
+   * - ManagementFrameProtection
+     - Values: 0, **1** or 2
+
+       When ``ManagementFrameProtection`` is ``0``, MFP is completely turned
+       off, even if the hardware is capable.  This setting is not recommended.
+
+       When ``ManagementFrameProtection`` is ``1``, MFP is enabled if the local
+       hardware and remote AP both support it.
+
+       When ``ManagementFrameProtection`` is ``2``, MFP is always required.
+       This can prevent successful connection establishment on some hardware or
+       to some networks.
+
+   * - ControlPortOverNL80211
+     - Values: false, **true**
+
+       Enable/Disable sending EAPoL packets over NL80211.  Enabled by default
+       if kernel support is available.  Doing so sends all EAPoL traffic over
+       directly to the supplicant process (**iwd**) instead of putting these on
+       the Ethernet device.  Since only the supplicant can usually make
+       sense / decrypt these packets, enabling this option can save some CPU
+       cycles on your system and avoids certain long-standing race conditions.
+
+   * - DisableANQP
+     - Values: false, **true**
+
+       Enable/disable ANQP queries. The way IWD does ANQP queries is dependent
+       on a recent kernel patch (available in Kernel 5.3). If your kernel does
+       not have this functionality this should be disabled (default).  Some
+       drivers also do a terrible job of sending public action frames
+       (freezing or crashes) which is another reason why this has been turned
+       off by default.  If you want to easily utilize Hotspot 2.0 networks,
+       then setting ``DisableANQP`` to ``false`` is recommended.
+
 Blacklist
 ---------
 
