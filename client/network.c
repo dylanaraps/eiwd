@@ -228,6 +228,9 @@ static bool match_by_partial_name(const void *a, const void *b)
 		return false;
 	}
 
+	if (*text)
+		return false;
+
 	return true;
 }
 
