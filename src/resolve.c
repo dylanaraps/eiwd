@@ -399,16 +399,27 @@ static int resolve_init(void)
 	uint8_t i;
 
 	if (!l_settings_get_bool(iwd_get_config(), "General",
-					"enable_network_config", &enabled) ||
-								!enabled)
+					"EnableNetworkConfiguration",
+					&enabled)) {
+		if (!l_settings_get_bool(iwd_get_config(), "General",
+					"enable_network_config", &enabled))
+			enabled = false;
+	}
+
+	if (!enabled)
 		return 0;
 
-	method_name = l_settings_get_value(iwd_get_config(), "General",
+	method_name = l_settings_get_value(iwd_get_config(), "Network",
+						"NameResolvingService");
+	if (!method_name) {
+		method_name = l_settings_get_value(iwd_get_config(), "General",
 							"dns_resolve_method");
-
-	if (!method_name)
-		/* Default to systemd-resolved service. */
-		method_name = "systemd";
+		if (method_name)
+			l_warn("[General].dns_resolve_method is deprecated, "
+				"use [Network].NameResolvingService");
+		else /* Default to systemd-resolved service. */
+			method_name = "systemd";
+	}
 
 	for (i = 0; resolve_method_ops_list[i].name; i++) {
 		if (strcmp(resolve_method_ops_list[i].name, method_name))
@@ -419,8 +430,10 @@ static int resolve_init(void)
 		break;
 	}
 
-	if (!method.ops)
+	if (!method.ops) {
+		l_error("Unknown resolution method: %s", method_name);
 		return -EINVAL;
+	}
 
 	if (method.ops->init)
 		method.data = method.ops->init();

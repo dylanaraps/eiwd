@@ -1126,10 +1126,18 @@ static int netconfig_init(void)
 		return -EALREADY;
 
 	if (!l_settings_get_bool(iwd_get_config(), "General",
-					"enable_network_config", &enabled) ||
-								!enabled) {
-		l_warn("netconfig: Network configuration with the IP addresses "
-								"is disabled.");
+					"EnableNetworkConfiguration",
+					&enabled)) {
+		if (l_settings_get_bool(iwd_get_config(), "General",
+					"enable_network_config", &enabled))
+			l_warn("[General].enable_network_config is deprecated,"
+				" use [General].EnableNetworkConfiguration");
+		else
+			enabled = false;
+	}
+
+	if (!enabled) {
+		l_info("netconfig: Network configuration is disabled.");
 		return 0;
 	}
 
@@ -1172,8 +1180,8 @@ static int netconfig_init(void)
 		goto error;
 	}
 
-	if (!l_settings_get_uint(iwd_get_config(), "General",
-							"route_priority_offset",
+	if (!l_settings_get_uint(iwd_get_config(), "Network",
+							"RoutePriorityOffset",
 							&ROUTE_PRIORITY_OFFSET))
 		ROUTE_PRIORITY_OFFSET = 300;
 
