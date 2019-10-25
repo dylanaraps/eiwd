@@ -50,6 +50,15 @@ static struct pending_op {
 	struct l_queue *saved_input;
 } pending_op;
 
+static struct l_dbus_message *agent_reply_canceled(
+						struct l_dbus_message *message,
+						const char *text)
+{
+	return l_dbus_message_new_error(message,
+					IWD_AGENT_INTERFACE ".Error.Canceled",
+					"Error: %s", text);
+}
+
 static struct l_dbus_message *agent_error(const char *text)
 {
 	display_error(text);
@@ -342,9 +351,8 @@ static void process_input_username_password(const char *prompt)
 	if (l_queue_isempty(pending_op.saved_input)) {
 		/* received username */
 		if (!strlen(prompt)) {
-			reply = l_dbus_message_new_error(pending_message,
-					IWD_AGENT_INTERFACE ".Error.Canceled",
-					"Canceled by user");
+			reply = agent_reply_canceled(pending_message,
+							"Canceled by user");
 			goto send_reply;
 		}
 
@@ -372,9 +380,8 @@ static void process_input_passphrase(const char *prompt)
 	struct l_dbus_message *reply;
 
 	if (!strlen(prompt)) {
-		reply = l_dbus_message_new_error(pending_message,
-					IWD_AGENT_INTERFACE ".Error.Canceled",
-					"Canceled by user");
+		reply = agent_reply_canceled(pending_message,
+							"Canceled by user");
 		goto send_reply;
 	}
 
