@@ -174,6 +174,7 @@ static struct l_netlink *rtnl = NULL;
 static struct l_genl_family *nl80211;
 static struct l_queue *netdev_list;
 static struct watchlist netdev_watches;
+static bool pae_over_nl80211;
 
 static void do_debug(const char *str, void *user_data)
 {
@@ -4538,8 +4539,6 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg, bool random_mac)
 	const uint8_t action_ft_response_prefix[] =  { 0x06, 0x02 };
 	const uint8_t action_qos_map_prefix[] = { 0x01, 0x04 };
 	struct l_io *pae_io = NULL;
-	const struct l_settings *settings = iwd_get_config();
-	bool pae_over_nl80211;
 
 	if (!l_genl_attr_init(&attr, msg))
 		return NULL;
@@ -4618,28 +4617,9 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg, bool random_mac)
 		return NULL;
 	}
 
-	if (!l_settings_get_bool(settings, "General",
-				"control_port_over_nl80211",
-				&pae_over_nl80211)) {
-		if (!l_settings_get_bool(settings, "General",
-					"ControlPortOverNL80211", &pae_over_nl80211)) {
-			pae_over_nl80211 = true;
-			l_info("No control_port_over_nl80211 setting, "
-				"defaulting to %s",
-				pae_over_nl80211 ? "True" : "False");
-		} else
-			l_warn("ControlPortOverNL80211 is deprecated, use "
-				"'control_port_over_nl80211'");
-	}
-
 	if (!wiphy_has_ext_feature(wiphy,
-			NL80211_EXT_FEATURE_CONTROL_PORT_OVER_NL80211)) {
-		l_debug("No Control Port over NL80211 support for ifindex: %u,"
-				" using PAE socket", *ifindex);
-		pae_over_nl80211 = false;
-	}
-
-	if (!pae_over_nl80211) {
+			NL80211_EXT_FEATURE_CONTROL_PORT_OVER_NL80211) ||
+			!pae_over_nl80211) {
 		pae_io = pae_open(*ifindex);
 		if (!pae_io) {
 			l_error("Unable to open PAE interface");
@@ -4655,7 +4635,7 @@ struct netdev *netdev_create_from_genl(struct l_genl_msg *msg, bool random_mac)
 	memcpy(netdev->addr, ifaddr, sizeof(netdev->addr));
 	memcpy(netdev->name, ifname, ifname_len);
 	netdev->wiphy = wiphy;
-	netdev->pae_over_nl80211 = pae_over_nl80211;
+	netdev->pae_over_nl80211 = pae_io == NULL;
 	netdev->mac_randomize_once = random_mac;
 
 	if (pae_io) {
@@ -4800,6 +4780,10 @@ static int netdev_init(void)
 	if (!l_settings_get_int(settings, "General", "RoamThreshold",
 					&LOW_SIGNAL_THRESHOLD))
 		LOW_SIGNAL_THRESHOLD = -70;
+
+	if (!l_settings_get_bool(settings, "General", "ControlPortOverNL80211",
+					&pae_over_nl80211))
+		pae_over_nl80211 = true;
 
 	watchlist_init(&netdev_watches, NULL);
 	netdev_list = l_queue_new();
