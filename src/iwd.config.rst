@@ -54,7 +54,7 @@ The group ``[General]`` contains general settings.
    :align: left
 
    * - EnableNetworkConfiguration
-     - Values: true, false (default)
+     - Values: true, **false**
 
        Enable network configuration.
 
@@ -62,7 +62,7 @@ The group ``[General]`` contains general settings.
        interfaces with the IP addresses.  There are two types IP addressing
        supported by **iwd**: static and dynamic.  The static IP addresses are
        configured through the network configuration files.  If no static IP
-       configuration has been provided for a network, iwd will attempt to
+       configuration has been provided for a network, **iwd** will attempt to
        obtain the dynamic addresses from the network through the built-in
        DHCP client.
 
@@ -173,11 +173,11 @@ Blacklist
 ---------
 
 The group ``[Blacklist]`` contains settings related to blacklisting of BSSes.
-If iwd determines that a connection to a BSS fails for a reason that indicates
-the BSS is currently misbehaving or misconfigured (e.g. timeouts, unexpected
-status/reason codes, etc), then iwd will blacklist this BSS and avoid connecting
-to it for a period of time.  These options let the user control how long
-a misbehaved BSS spends on the blacklist.
+If **iwd** determines that a connection to a BSS fails for a reason that
+indicates the BSS is currently misbehaving or misconfigured (e.g. timeouts,
+unexpected status/reason codes, etc), then **iwd** will blacklist this BSS
+and avoid connecting to it for a period of time.  These options let the user
+control how long a misbehaved BSS spends on the blacklist.
 
 .. list-table::
    :header-rows: 0
@@ -237,16 +237,16 @@ No modification from defaults is normally required.
    * - DisablePeriodicScan
      - Values: true, **false**
 
-       Disable periodic scan. Setting this option to 'true' will prevent iwd
-       from issuing the periodic scans for the available networks while
+       Disable periodic scan. Setting this option to 'true' will prevent
+       **iwd** from issuing the periodic scans for the available networks while
        disconnected.  The behavior of the user-initiated scans isn't affected.
        The periodic scan is enabled by default.
    * - DisableRoamingScan
-     - Values: trrue, **false**
+     - Values: true, **false**
 
-       Disable roaming scan. Setting this option to 'true' will prevent iwd
+       Disable roaming scan. Setting this option to 'true' will prevent **iwd**
        from trying to scan when roaming decisions are activated.  This can
-       prevent iwd from roaming properly, but can be useful for networks
+       prevent **iwd** from roaming properly, but can be useful for networks
        operating under extremely low rssi levels where roaming isn't possible.
 
 SEE ALSO

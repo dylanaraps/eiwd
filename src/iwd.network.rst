@@ -94,13 +94,11 @@ General Settings
 The group ``[General]`` contains general settings.
 
 .. list-table::
-   :header-rows: 1
+   :header-rows: 0
    :stub-columns: 0
    :widths: 20 80
    :align: left
 
-   * - Key
-     - Description
    * - AutoConnect
      - Values: **true**, false
 
@@ -118,13 +116,11 @@ The group ``[Security]`` contains settings for Wi-Fi security and
 authentication configuration.
 
 .. list-table::
-   :header-rows: 1
+   :header-rows: 0
    :stub-columns: 0
    :widths: 20 80
    :align: left
 
-   * - Key
-     - Description
    * - Passphrase
      - 8..63 character string
 
@@ -217,7 +213,7 @@ authentication configuration.
        non-EAP methods is used.
    * - | EAP-TTLS-Phase2-Identity
      - The secure identity/username string for the TTLS non-EAP Phase 2
-       methods.  If not provided IWD will request a username at connection
+       methods.  If not provided **iwd** will request a username at connection
        time.
    * - | EAP-TTLS-Phase2-Password
      - Password string for the TTLS non-EAP Phase 2 methods. If not provided
