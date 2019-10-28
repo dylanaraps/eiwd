@@ -376,6 +376,10 @@ class Device(IWDDBusAbstract):
         for bus_obj in self._station.GetOrderedNetworks():
             ordered_network = OrderedNetwork(bus_obj)
             ordered_networks.append(ordered_network)
+
+        if len(ordered_networks) == 0:
+            return None
+
         return ordered_networks
 
     def get_ordered_network(self, network):
@@ -384,6 +388,9 @@ class Device(IWDDBusAbstract):
            raised, this removes the need to extra asserts in autotests.
         '''
         ordered_networks = self.get_ordered_networks()
+
+        if not ordered_networks:
+            raise Exception('Network %s not found' % network)
 
         for n in ordered_networks:
             if n.name == network:
