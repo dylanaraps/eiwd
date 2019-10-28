@@ -2553,8 +2553,6 @@ int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
 	l_free(ie);
 
 	sm = eapol_sm_new(hs);
-	eapol_sm_set_user_data(sm, user_data);
-	eapol_sm_set_event_func(sm, eapol_cb);
 
 	return netdev_connect_common(netdev, cmd_connect, bss, hs, sm,
 						event_filter, cb, user_data);

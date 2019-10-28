@@ -823,7 +823,6 @@ struct eapol_sm {
 	struct handshake_state *handshake;
 	enum eapol_protocol_version protocol_version;
 	uint64_t replay_counter;
-	eapol_sm_event_func_t event_func;
 	void *user_data;
 	struct l_timeout *timeout;
 	struct l_timeout *eapol_start_timeout;
@@ -899,11 +898,6 @@ void eapol_sm_set_listen_interval(struct eapol_sm *sm, uint16_t interval)
 void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data)
 {
 	sm->user_data = user_data;
-}
-
-void eapol_sm_set_event_func(struct eapol_sm *sm, eapol_sm_event_func_t func)
-{
-	sm->event_func = func;
 }
 
 static void eapol_sm_write(struct eapol_sm *sm, const struct eapol_frame *ef,

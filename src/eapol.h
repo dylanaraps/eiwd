@@ -117,7 +117,6 @@ void eapol_sm_set_use_eapol_start(struct eapol_sm *sm, bool enabled);
 void eapol_sm_set_require_handshake(struct eapol_sm *sm, bool enabled);
 void eapol_sm_set_listen_interval(struct eapol_sm *sm, uint16_t interval);
 void eapol_sm_set_user_data(struct eapol_sm *sm, void *user_data);
-void eapol_sm_set_event_func(struct eapol_sm *sm, eapol_sm_event_func_t func);
 
 void eapol_register(struct eapol_sm *sm);
 bool eapol_start(struct eapol_sm *sm);
