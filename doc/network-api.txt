@@ -3,7 +3,7 @@ Network hierarchy
 
 Service		net.connman.iwd
 Interface	net.connman.iwd.Network [Experimental]
-Object path	/{phy0,phy1,...}/{1,2,...}/Xxx
+Object path	/net/connman/iwd/{phy0,phy1,...}/{1,2,...}/Xxx
 
 Methods		void Connect()
 

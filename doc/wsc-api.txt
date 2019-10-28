@@ -3,7 +3,7 @@ SimpleConfiguration hierarchy
 
 Service		net.connman.iwd
 Interface	net.connman.iwd.SimpleConfiguration
-Object path	/{phy0,phy1,...}/{1,2,...}
+Object path	/net/connman/iwd/{phy0,phy1,...}/{1,2,...}
 
 Methods		void PushButton()
 

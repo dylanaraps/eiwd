@@ -3,7 +3,7 @@ Agent Manager hierarchy
 
 Service		net.connman.iwd
 Interface	net.connman.iwd.AgentManager
-Object path	/
+Object path	/net/connman/iwd
 
 Methods		void RegisterAgent(object path)
 
