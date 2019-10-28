@@ -234,10 +234,10 @@ authentication configuration.
 Embedded PEMs
 -------------
 
-Rather than including an absolute path to a PEM file (for certs or keys), the
-PEM itself can be included inside the settings file and referenced directly.
-This allows 8021x network provisioning using a single file without any
-references to certificates/keys on the system.
+Rather than including an absolute path to a PEM file (for certificates and
+keys), the PEM itself can be included inside the settings file and referenced
+directly. This allows IEEE 802.1x network provisioning using a single file
+without any references to certificates or keys on the system.
 
 An embedded PEM can appear anywhere in the settings file using the following
 format (this example the PEM is named 'my_ca_cert'):
@@ -255,8 +255,8 @@ elsewhere in the settings file by prefixing the value with 'embed:'
 
 EAP-TLS-CACert=embed:my_ca_cert
 
-This is not limited to CA Certs either. Client certs, client keys (encrypted
-or not), and certificate chains can be included.
+This is not limited to CA Certificates either. Client certificates, client keys
+(encrypted or not), and certificate chains can be included.
 
 SEE ALSO
 ========
