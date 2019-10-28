@@ -347,10 +347,46 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 	if (flags)
 		l_genl_msg_append_attr(msg, NL80211_ATTR_SCAN_FLAGS, 4, &flags);
 
-	if (params->no_cck_rates)
+	if (params->no_cck_rates) {
+		static const uint8_t b_rates[] = { 2, 4, 11, 22 };
+		uint8_t *scan_rates;
+		const uint8_t *supported;
+		unsigned int num_supported;
+		unsigned int count;
+		unsigned int i;
+
 		l_genl_msg_append_attr(msg, NL80211_ATTR_TX_NO_CCK_RATE, 0,
 					NULL);
 
+		/*
+		 * Assume if we're sending the probe requests at OFDM bit
+		 * rates we don't want to advertise support for 802.11b rates.
+		 */
+		if (L_WARN_ON(!(supported = wiphy_get_supported_rates(sc->wiphy,
+							NL80211_BAND_2GHZ,
+							&num_supported))))
+			goto done;
+
+		scan_rates = l_malloc(num_supported);
+
+		for (count = 0, i = 0; i < num_supported; i++)
+			if (!memchr(b_rates, supported[i],
+						L_ARRAY_SIZE(b_rates)))
+				scan_rates[count++] = supported[i];
+
+		if (L_WARN_ON(!count)) {
+			l_free(scan_rates);
+			goto done;
+		}
+
+		l_genl_msg_enter_nested(msg, NL80211_ATTR_SCAN_SUPP_RATES);
+		l_genl_msg_append_attr(msg, NL80211_BAND_2GHZ,
+							count, scan_rates);
+		l_genl_msg_leave_nested(msg);
+		l_free(scan_rates);
+	}
+
+done:
 	return msg;
 }
 
