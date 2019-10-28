@@ -23,6 +23,8 @@
 enum l_dbus_bus;
 struct l_dbus;
 
+#define EAD_BASE_PATH "/net/connman/ead"
+
 struct l_dbus *dbus_app_get(void);
 
 typedef void (*dbus_app_destroy_func_t) (void *user_data);

@@ -43,7 +43,7 @@
 #include "wired/ethdev.h"
 
 #define ADAPTER_INTERFACE	"net.connman.ead.Adapter"
-#define ADAPTER_BASEPATH	"/net/connman/ead/adapter"
+#define ADAPTER_BASEPATH	EAD_BASE_PATH "/adapter"
 
 #define PROP_NAME		"Name"
 #define PROP_ADDRESS		"Address"
