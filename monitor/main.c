@@ -176,7 +176,8 @@ static size_t rta_add(void *rta_buf, unsigned short type, uint16_t len,
 
 	rta->rta_len = rta_len;
 	rta->rta_type = type;
-	memcpy(RTA_DATA(rta), data, len);
+	if (len)
+		memcpy(RTA_DATA(rta), data, len);
 
 	return RTA_SPACE(len);
 }
