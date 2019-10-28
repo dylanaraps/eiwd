@@ -402,15 +402,22 @@ static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
 }
 
 static void wsc_handshake_event(struct handshake_state *hs,
-		enum handshake_event event, void *event_data, void *user_data)
+				enum handshake_event event, void *user_data,
+				...)
 {
+	va_list args;
+
+	va_start(args, user_data);
+
 	switch (event) {
 	case HANDSHAKE_EVENT_FAILED:
-		netdev_handshake_failed(hs, l_get_u16(event_data));
+		netdev_handshake_failed(hs, va_arg(args, int));
 		break;
 	default:
 		break;
 	}
+
+	va_end(args);
 }
 
 static inline enum wsc_rf_band freq_to_rf_band(uint32_t freq)

@@ -1094,7 +1094,7 @@ static void try_handshake_complete(struct netdev_handshake_state *nhs)
 	if (nhs->ptk_installed && nhs->gtk_installed && nhs->igtk_installed &&
 			!nhs->complete) {
 		nhs->complete = true;
-		handshake_event(&nhs->super, HANDSHAKE_EVENT_COMPLETE, NULL);
+		handshake_event(&nhs->super, HANDSHAKE_EVENT_COMPLETE);
 
 		netdev_connect_ok(nhs->netdev);
 	}
@@ -1388,7 +1388,7 @@ static void netdev_group_timeout_cb(struct l_timeout *timeout, void *user_data)
 			nhs->netdev->index);
 
 	nhs->complete = true;
-	handshake_event(&nhs->super, HANDSHAKE_EVENT_COMPLETE, NULL);
+	handshake_event(&nhs->super, HANDSHAKE_EVENT_COMPLETE);
 
 	netdev_connect_ok(nhs->netdev);
 }

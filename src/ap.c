@@ -382,16 +382,19 @@ static uint32_t ap_send_mgmt_frame(struct ap_state *ap,
 }
 
 static void ap_handshake_event(struct handshake_state *hs,
-		enum handshake_event event, void *event_data, void *user_data)
+		enum handshake_event event, void *user_data, ...)
 {
 	struct sta_state *sta = user_data;
+	va_list args;
+
+	va_start(args, user_data);
 
 	switch (event) {
 	case HANDSHAKE_EVENT_COMPLETE:
 		ap_new_rsna(sta);
 		break;
 	case HANDSHAKE_EVENT_FAILED:
-		netdev_handshake_failed(hs, l_get_u16(event_data));
+		netdev_handshake_failed(hs, va_arg(args, int));
 		/* fall through */
 	case HANDSHAKE_EVENT_SETTING_KEYS_FAILED:
 		sta->sm = NULL;
@@ -399,6 +402,8 @@ static void ap_handshake_event(struct handshake_state *hs,
 	default:
 		break;
 	}
+
+	va_end(args);
 }
 
 static void ap_start_rsna(struct sta_state *sta, const uint8_t *gtk_rsc)

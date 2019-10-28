@@ -558,7 +558,7 @@ void handshake_state_install_ptk(struct handshake_state *s)
 		uint32_t cipher = ie_rsn_cipher_suite_to_cipher(
 							s->pairwise_cipher);
 
-		handshake_event(s, HANDSHAKE_EVENT_SETTING_KEYS, NULL);
+		handshake_event(s, HANDSHAKE_EVENT_SETTING_KEYS);
 
 		install_tk(s, handshake_get_tk(s), cipher);
 	}
@@ -911,11 +911,4 @@ bool handshake_decode_fte_key(struct handshake_state *s, const uint8_t *wrapped,
 			return false;
 
 	return true;
-}
-
-void handshake_event(struct handshake_state *hs,
-			enum handshake_event event, void *event_data)
-{
-	if (hs->event_func)
-		hs->event_func(hs, event, event_data, hs->user_data);
 }

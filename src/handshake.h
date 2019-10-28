@@ -54,7 +54,7 @@ enum handshake_event {
 
 typedef void (*handshake_event_func_t)(struct handshake_state *hs,
 					enum handshake_event event,
-					void *event_data, void *user_data);
+					void *user_data, ...);
 
 typedef bool (*handshake_get_nonce_func_t)(uint8_t nonce[]);
 typedef void (*handshake_install_tk_func_t)(struct handshake_state *hs,
@@ -129,6 +129,14 @@ struct handshake_state {
 
 	handshake_event_func_t event_func;
 };
+
+#define handshake_event(hs, event, ...)	\
+	do {	\
+		if (!(hs)->event_func)	\
+			break;	\
+	\
+		(hs)->event_func((hs), event, (hs)->user_data, ##__VA_ARGS__); \
+	} while (0)
 
 void handshake_state_free(struct handshake_state *s);
 
@@ -216,6 +224,3 @@ const uint8_t *handshake_util_find_pmkid_kde(const uint8_t *data,
 					size_t data_len);
 void handshake_util_build_gtk_kde(enum crypto_cipher cipher, const uint8_t *key,
 					unsigned int key_index, uint8_t *to);
-
-void handshake_event(struct handshake_state *hs, enum handshake_event event,
-		void *event_data);
