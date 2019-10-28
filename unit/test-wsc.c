@@ -1931,16 +1931,32 @@ struct verify_data {
 	verify.expected_len = sizeof(e)
 
 static void verify_handshake_event(struct handshake_state *hs,
-		enum handshake_event event, void *event_data, void *user_data)
+					enum handshake_event event,
+					void *user_data, ...)
 {
 	struct verify_data *data = user_data;
+	va_list args;
+
+	va_start(args, user_data);
 
 	switch (event) {
 	case HANDSHAKE_EVENT_FAILED:
-		assert(l_get_u16(event_data) ==
-				MMPDU_REASON_CODE_IEEE8021X_FAILED);
+		assert(va_arg(args, int) == MMPDU_REASON_CODE_IEEE8021X_FAILED);
 		data->eapol_failed = true;
 		break;
+	case HANDSHAKE_EVENT_EAP_NOTIFY:
+	{
+		const struct wsc_credential *cred;
+
+		assert(va_arg(args, unsigned int) !=
+			EAP_WSC_EVENT_CREDENTIAL_OBTAINED);
+
+		cred = va_arg(args, const struct wsc_credential *);
+		assert(!memcmp(cred, data->expected_creds + data->cur_cred,
+						sizeof(struct wsc_credential)));
+
+		data->cur_cred += 1;
+	}
 	default:
 		break;
 	}
@@ -1961,22 +1977,6 @@ static int verify_8021x(uint32_t ifindex,
 	data->response_sent = true;
 
 	return 0;
-}
-
-static void verify_credential(unsigned int event, const void *event_data,
-					void *user_data)
-{
-	struct verify_data *data = user_data;
-	const struct wsc_credential *cred;
-
-	if (event != EAP_WSC_EVENT_CREDENTIAL_OBTAINED)
-		assert(false);
-
-	cred = event_data;
-	assert(!memcmp(cred, data->expected_creds + data->cur_cred,
-						sizeof(struct wsc_credential)));
-
-	data->cur_cred += 1;
 }
 
 static void wsc_test_pbc_handshake(const void *data)
@@ -2002,8 +2002,6 @@ static void wsc_test_pbc_handshake(const void *data)
 
 	__eapol_set_tx_packet_func(verify_8021x);
 	__eapol_set_tx_user_data(&verify);
-	eapol_sm_set_user_data(sm, &verify);
-	eapol_sm_set_event_func(sm, verify_credential);
 
 	settings = l_settings_new();
 	l_settings_set_string(settings, "Security", "EAP-Identity",
@@ -2110,8 +2108,6 @@ static void wsc_test_retransmission_no_fragmentation(const void *data)
 
 	__eapol_set_tx_packet_func(verify_8021x);
 	__eapol_set_tx_user_data(&verify);
-	eapol_sm_set_user_data(sm, &verify);
-	eapol_sm_set_event_func(sm, verify_credential);
 
 	settings = l_settings_new();
 	l_settings_set_string(settings, "Security", "EAP-Identity",

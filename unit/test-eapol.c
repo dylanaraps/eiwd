@@ -2871,7 +2871,7 @@ static void eapol_sm_test_tls_test_disconnected(enum l_tls_alert_desc reason,
 
 static void test_handshake_event(struct handshake_state *hs,
 					enum handshake_event event,
-					void *event_data, void *user_data)
+					void *user_data, ...)
 {
 	struct test_handshake_state *ths =
 			l_container_of(hs, struct test_handshake_state, super);
