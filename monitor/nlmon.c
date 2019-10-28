@@ -4523,10 +4523,35 @@ static void print_band_frequencies(unsigned int level, const char *label,
 	}
 }
 
+static const struct attr_entry bitrate_attr_table[] = {
+	{ NL80211_BITRATE_ATTR_RATE, "Bitrate (100kbps multiple)", ATTR_U32 },
+	{ NL80211_BITRATE_ATTR_2GHZ_SHORTPREAMBLE,
+				"2GHZ Short Preamble", ATTR_FLAG },
+	{ }
+};
+static void print_band_rates(unsigned int level, const char *label,
+				const void *data, uint16_t size)
+{
+	const struct nlattr *nla;
+	uint16_t nla_type;
+
+	print_attr(level, "%s: len %u", label, size);
+
+	for (nla = data; NLA_OK(nla, size); nla = NLA_NEXT(nla, size)) {
+		nla_type = nla->nla_type & NLA_TYPE_MASK;
+		print_attr(level + 1, "Bitrate %u: len %u", nla_type,
+							NLA_PAYLOAD(nla));
+
+		print_attributes(level + 2, bitrate_attr_table,
+					NLA_DATA(nla), NLA_PAYLOAD(nla));
+	}
+}
+
 static const struct attr_entry wiphy_bands_table[] = {
 	{ NL80211_BAND_ATTR_FREQS, "Frequencies",
 			ATTR_CUSTOM, { .function = print_band_frequencies } },
-	{ NL80211_BAND_ATTR_RATES, "Rates" },
+	{ NL80211_BAND_ATTR_RATES, "Rates",
+			ATTR_CUSTOM, { .function = print_band_rates } },
 	{ NL80211_BAND_ATTR_HT_MCS_SET, "HT MCS Set" },
 	{ NL80211_BAND_ATTR_HT_CAPA, "HT Capabilities" },
 	{ NL80211_BAND_ATTR_HT_AMPDU_FACTOR, "AMPDU Factor" },
