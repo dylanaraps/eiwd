@@ -19,11 +19,6 @@ class Test(unittest.TestCase):
         devices = wd.list_devices(1)
         device = devices[0]
 
-        try:
-            device.disconnect()
-        except:
-            pass
-
         condition = 'not obj.scanning'
         wd.wait_for_object_condition(device, condition)
 
