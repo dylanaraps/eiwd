@@ -676,6 +676,7 @@ static void station_handshake_event(struct handshake_state *hs,
 		break;
 	case HANDSHAKE_EVENT_COMPLETE:
 	case HANDSHAKE_EVENT_SETTING_KEYS_FAILED:
+	case HANDSHAKE_EVENT_EAP_NOTIFY:
 		/*
 		 * currently we dont care about any other events. The
 		 * netdev_connect_cb will notify us when the connection is

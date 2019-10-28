@@ -50,6 +50,7 @@ enum handshake_event {
 	HANDSHAKE_EVENT_COMPLETE,
 	HANDSHAKE_EVENT_FAILED,
 	HANDSHAKE_EVENT_REKEY_FAILED,
+	HANDSHAKE_EVENT_EAP_NOTIFY,
 };
 
 typedef void (*handshake_event_func_t)(struct handshake_state *hs,

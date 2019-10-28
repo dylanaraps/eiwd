@@ -363,16 +363,7 @@ static void wsc_credential_obtained(struct wsc *wsc,
 static void wsc_eapol_event(uint32_t event, const void *event_data,
 							void *user_data)
 {
-	struct wsc *wsc = user_data;
-
-	switch (event) {
-	case EAP_WSC_EVENT_CREDENTIAL_OBTAINED:
-		wsc_credential_obtained(wsc,
-				(const struct wsc_credential *) event_data);
-		break;
-	default:
-		l_debug("Got event: %d", event);
-	}
+	l_debug("Got event: %d", event);
 }
 
 static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
@@ -405,6 +396,7 @@ static void wsc_handshake_event(struct handshake_state *hs,
 				enum handshake_event event, void *user_data,
 				...)
 {
+	struct wsc *wsc = user_data;
 	va_list args;
 
 	va_start(args, user_data);
@@ -413,6 +405,21 @@ static void wsc_handshake_event(struct handshake_state *hs,
 	case HANDSHAKE_EVENT_FAILED:
 		netdev_handshake_failed(hs, va_arg(args, int));
 		break;
+	case HANDSHAKE_EVENT_EAP_NOTIFY:
+	{
+		unsigned int eap_event = va_arg(args, unsigned int);
+
+		switch (eap_event) {
+		case EAP_WSC_EVENT_CREDENTIAL_OBTAINED:
+			wsc_credential_obtained(wsc,
+				va_arg(args, const struct wsc_credential *));
+			break;
+		default:
+			l_debug("Got event: %d", eap_event);
+		}
+
+		break;
+	}
 	default:
 		break;
 	}

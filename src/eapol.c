@@ -2167,10 +2167,8 @@ static void eapol_eap_event_cb(unsigned int event,
 {
 	struct eapol_sm *sm = user_data;
 
-	if (!sm->event_func)
-		return;
-
-	sm->event_func(event, event_data, sm->user_data);
+	handshake_event(sm->handshake, HANDSHAKE_EVENT_EAP_NOTIFY, event,
+			event_data);
 }
 
 void eapol_sm_set_use_eapol_start(struct eapol_sm *sm, bool enabled)
