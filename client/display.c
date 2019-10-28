@@ -465,6 +465,10 @@ static void readline_callback(char *prompt)
 
 	HIST_ENTRY *previous_prompt;
 
+	if (agent_prompt(masked_input.use_mask ?
+					masked_input.passphrase : prompt))
+		goto done;
+
 	if (!prompt) {
 		display_quit();
 
@@ -472,10 +476,6 @@ static void readline_callback(char *prompt)
 
 		return;
 	}
-
-	if (agent_prompt(masked_input.use_mask ?
-					masked_input.passphrase : prompt))
-		goto done;
 
 	if (!strlen(prompt))
 		goto done;

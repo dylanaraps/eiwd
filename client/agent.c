@@ -366,14 +366,17 @@ static void process_input_username_password(const char *prompt)
 	struct l_dbus_message *reply;
 	char *username;
 
+	if (!prompt || !strlen(prompt)) {
+		reply = agent_reply_canceled(pending_message,
+							"Canceled by user");
+
+		l_queue_clear(pending_op.saved_input, l_free);
+
+		goto send_reply;
+	}
+
 	if (l_queue_isempty(pending_op.saved_input)) {
 		/* received username */
-		if (!strlen(prompt)) {
-			reply = agent_reply_canceled(pending_message,
-							"Canceled by user");
-			goto send_reply;
-		}
-
 		l_queue_push_tail(pending_op.saved_input, l_strdup(prompt));
 
 		display_agent_prompt(PROMPT_PASSWORD, true);
@@ -397,7 +400,7 @@ static void process_input_passphrase(const char *prompt)
 {
 	struct l_dbus_message *reply;
 
-	if (!strlen(prompt)) {
+	if (!prompt || !strlen(prompt)) {
 		reply = agent_reply_canceled(pending_message,
 							"Canceled by user");
 		goto send_reply;
@@ -412,11 +415,18 @@ send_reply:
 
 static void process_input_password(const char *prompt)
 {
-	struct l_dbus_message *reply =
-			l_dbus_message_new_method_return(pending_message);
+	struct l_dbus_message *reply;
 
+	if (!prompt || !strlen(prompt)) {
+		reply = agent_reply_canceled(pending_message,
+							"Canceled by user");
+		goto send_reply;
+	}
+
+	reply = l_dbus_message_new_method_return(pending_message);
 	l_dbus_message_set_arguments(reply, "s", prompt);
 
+send_reply:
 	agent_send_reply(reply);
 }
 
