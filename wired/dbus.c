@@ -71,7 +71,7 @@ static void request_name_callback(struct l_dbus *dbus, bool success,
 		return;
 	}
 
-	if (!l_dbus_object_manager_enable(dbus))
+	if (!l_dbus_object_manager_enable(dbus, "/"))
 		l_warn("Unable to register ObjectManager interface");
 
 	if (info->app->ready)
