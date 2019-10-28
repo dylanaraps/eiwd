@@ -31,7 +31,7 @@
 #include "dbus-proxy.h"
 #include "agent-manager.h"
 
-#define IWD_AGENT_MANAGER_PATH		"/"
+#define IWD_AGENT_MANAGER_PATH		"/net/connman/iwd"
 
 static void check_errors_method_callback(struct l_dbus_message *message,
 								void *user_data)
