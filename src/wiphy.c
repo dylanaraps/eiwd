@@ -267,9 +267,12 @@ check_blacklist:
 
 const char *wiphy_get_path(struct wiphy *wiphy)
 {
-	static char path[15];
+	static char path[256];
 
-	snprintf(path, sizeof(path), "/%d", wiphy->id);
+	L_WARN_ON(snprintf(path, sizeof(path), "%s/%d", IWD_BASE_PATH,
+				wiphy->id) >= (int) sizeof(path));
+	path[sizeof(path) - 1] = '\0';
+
 	return path;
 }
 

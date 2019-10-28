@@ -310,10 +310,13 @@ struct device *netdev_get_device(struct netdev *netdev)
 
 const char *netdev_get_path(struct netdev *netdev)
 {
-	static char path[26];
+	static char path[256];
 
-	snprintf(path, sizeof(path), "%s/%u", wiphy_get_path(netdev->wiphy),
-			netdev->index);
+	L_WARN_ON(snprintf(path, sizeof(path), "%s/%u",
+				wiphy_get_path(netdev->wiphy),
+				netdev->index) >= (int) sizeof(path));
+	path[sizeof(path) - 1] = '\0';
+
 	return path;
 }
 

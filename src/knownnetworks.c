@@ -77,7 +77,8 @@ static const char *known_network_get_path(const struct network_info *network)
 	static char path[256];
 	unsigned int pos = 0, i;
 
-	path[pos++] = '/';
+	L_WARN_ON((pos = snprintf(path, sizeof(path), "%s/",
+					IWD_BASE_PATH)) >= (int) sizeof(path));
 
 	for (i = 0; network->ssid[i] && pos < sizeof(path); i++)
 		pos += snprintf(path + pos, sizeof(path) - pos, "%02x",
@@ -85,6 +86,7 @@ static const char *known_network_get_path(const struct network_info *network)
 
 	snprintf(path + pos, sizeof(path) - pos, "_%s",
 			security_to_str(network->type));
+	path[sizeof(path) - 1] = '\0';
 
 	return path;
 }

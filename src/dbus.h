@@ -36,7 +36,8 @@
 #define IWD_ADHOC_INTERFACE "net.connman.iwd.AdHoc"
 #define IWD_STATION_INTERFACE "net.connman.iwd.Station"
 
-#define IWD_AGENT_MANAGER_PATH "/"
+#define IWD_BASE_PATH "/net/connman/iwd"
+#define IWD_AGENT_MANAGER_PATH IWD_BASE_PATH
 
 struct l_dbus;
 
