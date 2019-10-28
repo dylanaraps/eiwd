@@ -36,7 +36,7 @@ IWD_AP_INTERFACE =              'net.connman.iwd.AccessPoint'
 IWD_ADHOC_INTERFACE =           'net.connman.iwd.AdHoc'
 IWD_STATION_INTERFACE =         'net.connman.iwd.Station'
 
-IWD_AGENT_MANAGER_PATH =        '/'
+IWD_AGENT_MANAGER_PATH =        '/net/connman/iwd'
 IWD_TOP_LEVEL_PATH =            '/'
 
 
