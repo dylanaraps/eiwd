@@ -107,9 +107,6 @@ typedef void (*netdev_watch_func_t)(struct netdev *netdev,
 					enum netdev_watch_event event,
 					void *user_data);
 typedef void (*netdev_destroy_func_t)(void *user_data);
-typedef void (*netdev_eapol_event_func_t)(unsigned int event,
-					const void *event_data,
-					void *user_data);
 typedef void (*netdev_neighbor_report_cb_t)(struct netdev *netdev, int err,
 					const uint8_t *reports,
 					size_t reports_len, void *user_data);
@@ -150,12 +147,6 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 				size_t num_vendor_ies,
 				netdev_event_func_t event_filter,
 				netdev_connect_cb_t cb, void *user_data);
-int netdev_connect_wsc(struct netdev *netdev, struct scan_bss *bss,
-				struct handshake_state *hs,
-				netdev_event_func_t event_filter,
-				netdev_connect_cb_t cb,
-				netdev_eapol_event_func_t eapol_cb,
-				void *user_data);
 int netdev_disconnect(struct netdev *netdev,
 				netdev_disconnect_cb_t cb, void *user_data);
 int netdev_reassociate(struct netdev *netdev, struct scan_bss *target_bss,
