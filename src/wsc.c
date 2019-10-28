@@ -360,12 +360,6 @@ static void wsc_credential_obtained(struct wsc *wsc,
 	wsc->n_creds += 1;
 }
 
-static void wsc_eapol_event(uint32_t event, const void *event_data,
-							void *user_data)
-{
-	l_debug("Got event: %d", event);
-}
-
 static void wsc_netdev_event(struct netdev *netdev, enum netdev_event event,
 					void *event_data, void *user_data)
 {
@@ -448,6 +442,11 @@ static void wsc_connect(struct wsc *wsc)
 	struct handshake_state *hs;
 	struct l_settings *settings = l_settings_new();
 	struct scan_bss *bss = wsc->target;
+	int r;
+	struct wsc_association_request request;
+	uint8_t *pdu;
+	size_t pdu_len;
+	struct iovec ie_iov;
 
 	wsc->target = NULL;
 
@@ -490,16 +489,37 @@ static void wsc_connect(struct wsc *wsc)
 	handshake_state_set_8021x_config(hs, settings);
 	wsc->eap_settings = settings;
 
-	if (netdev_connect_wsc(wsc->netdev, bss, hs,
-					wsc_netdev_event, wsc_connect_cb,
-					wsc_eapol_event, wsc) < 0) {
-		dbus_pending_reply(&wsc->pending,
-					dbus_error_failed(wsc->pending));
-		handshake_state_free(hs);
-		return;
+	request.version2 = true;
+	request.request_type = WSC_REQUEST_TYPE_ENROLLEE_OPEN_8021X;
+
+	pdu = wsc_build_association_request(&request, &pdu_len);
+	if (!pdu) {
+		r = -ENOMEM;
+		goto error;
 	}
 
+	ie_iov.iov_base = ie_tlv_encapsulate_wsc_payload(pdu, pdu_len,
+							&ie_iov.iov_len);
+	l_free(pdu);
+
+	if (!ie_iov.iov_base) {
+		r = -ENOMEM;
+		goto error;
+	}
+
+	r = netdev_connect(wsc->netdev, bss, hs, &ie_iov, 1, wsc_netdev_event,
+				wsc_connect_cb, wsc);
+	l_free(ie_iov.iov_base);
+
+	if (r < 0)
+		goto error;
+
 	wsc->wsc_association = true;
+	return;
+error:
+	handshake_state_free(hs);
+	dbus_pending_reply(&wsc->pending,
+				dbus_error_failed(wsc->pending));
 }
 
 static void station_state_watch(enum station_state state, void *userdata)

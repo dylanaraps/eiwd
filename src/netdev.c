@@ -2502,7 +2502,7 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 		if (!cmd_connect)
 			return -EINVAL;
 
-		if (is_rsn)
+		if (is_rsn || hs->settings_8021x)
 			sm = eapol_sm_new(hs);
 	}
 
