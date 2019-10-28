@@ -184,7 +184,7 @@ static void request_name_callback(struct l_dbus *dbus, bool success,
 		goto fail_exit;
 	}
 
-	if (!l_dbus_object_manager_enable(dbus))
+	if (!l_dbus_object_manager_enable(dbus, "/"))
 		l_warn("Unable to register the ObjectManager");
 
 	/* TODO: Always request nl80211 for now, ignoring auto-loading */
