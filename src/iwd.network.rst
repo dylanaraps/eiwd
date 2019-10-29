@@ -10,6 +10,7 @@ Network configuration for wireless daemon
 :Author: Denis Kenzior <denkenz@gmail.com>
 :Author: Andrew Zaborowski <andrew.zaborowski@intel.com>
 :Author: Tim Kourt <tim.a.kourt@linux.intel.com>
+:Author: James Prestwood <prestwoj@gmail.com>
 :Copyright: 2013-2019 Intel Corporation
 :Version: iwd
 :Date: 22 September 2019
