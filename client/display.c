@@ -408,7 +408,9 @@ static void mask_input(void)
 		return;
 
 	if (rl_end > MAX_PASSPHRASE_LEN) {
-		rl_point = rl_end = MAX_PASSPHRASE_LEN;
+		rl_end = MAX_PASSPHRASE_LEN;
+		rl_point = masked_input.point;
+
 		goto set_mask;
 	}
 
