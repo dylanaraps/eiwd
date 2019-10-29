@@ -23,7 +23,7 @@
 #define COMMAND_OPTION_USERNAME		"username"
 #define COMMAND_OPTION_PASSWORD		"password"
 #define COMMAND_OPTION_PASSPHRASE	"passphrase"
-#define COMMAND_OPTION_DONTASK		"dontask"
+#define COMMAND_OPTION_DONTASK		"dont-ask"
 
 typedef char *(*command_completion_func_t) (const char *text, int state);
 
