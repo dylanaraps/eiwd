@@ -26,12 +26,18 @@ Properties	string Name [readonly]
 
 		boolean Connected [readonly]
 
-			Reflects whether the device is connected to this
-			network.
+			Reflects whether the network is currently connected
+			or actively being connected to.  This is meant for
+			the application to show a check-box or some other
+			means to notify the user which network is currently
+			selected.  Refer to net.connman.iwd.Station
+			documentation for more details if you need to know
+			the actual state of the connection (i.e connecting,
+			connected, etc)
 
 		object Device [readonly]
 
-			The object path of the device the network belongs to.
+			The object path of the station the network belongs to.
 
 		string Type [readonly]
 

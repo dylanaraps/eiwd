@@ -147,11 +147,21 @@ Properties	string State [readonly]
 
 			net.connman.iwd.Network object representing the
 			network the device is currently connected to or to
-			which a connection is in progress.
+			which a connection is in progress.  This property
+			will be updated with the object path of the Network
+			object as soon as the connection process is initiated,
+			and will remain for as long as the connection is in
+			progress, completed and the network has not been
+			disconnected.
+
+			On disconnection this property becomes invalid and
+			disappears from the property list.  Refer to the
+			State property documentation if you need to track
+			the actual state of the connection.
 
 		boolean Scanning [readonly]
 
-			Reflects whether the device is currently scanning
+			Reflects whether the station is currently scanning
 			for networks.  net.connman.iwd.Network objects are
 			updated when this property goes from true to false.
 
