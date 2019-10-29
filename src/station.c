@@ -3021,6 +3021,16 @@ void station_network_foreach(struct station *station,
 	l_hashmap_foreach(station->networks, network_foreach, &data);
 }
 
+struct l_queue *station_get_bss_list(struct station *station)
+{
+	return station->bss_list;
+}
+
+struct scan_bss *station_get_connected_bss(struct station *station)
+{
+	return station->connected_bss;
+}
+
 static struct station *station_create(struct netdev *netdev)
 {
 	struct station *station;

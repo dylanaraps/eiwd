@@ -85,3 +85,5 @@ void station_foreach(station_foreach_func_t func, void *user_data);
 void station_network_foreach(struct station *station,
 				station_network_foreach_func_t func,
 				void *user_data);
+struct l_queue *station_get_bss_list(struct station *station);
+struct scan_bss *station_get_connected_bss(struct station *station);
