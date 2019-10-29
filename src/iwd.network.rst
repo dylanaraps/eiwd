@@ -259,6 +259,77 @@ EAP-TLS-CACert=embed:my_ca_cert
 This is not limited to CA Certificates either. Client certificates, client keys
 (encrypted or not), and certificate chains can be included.
 
+EXAMPLES
+========
+
+The following are some examples of common configurations
+
+Open Network (Hidden)
+---------------------
+
+.. code-block::
+
+   [General]
+   Hidden=true
+
+Pre-Shared Key (PSK)
+--------------------
+
+.. code-block::
+
+   [Security]
+   Passphrase=secret123
+
+PWD
+---
+
+.. code-block::
+
+   [Security]
+   EAP-Method=PWD
+   EAP-Identity=user@domain.com
+   EAP-Password=secret123
+
+TLS
+---
+
+.. code-block::
+
+   [Security]
+   EAP-Method=TLS
+   EAP-TLS-ClientCert=/certs/client-cert.pem
+   EAP-TLS-ClientKey=/certs/client-key.pem
+   EAP-TLS-CACert=/certs/ca-cert.pem
+   EAP-TLS-ServerDomainMask=*.domain.com
+
+TTLS + PAP
+----------
+
+.. code-block::
+
+   [Security]
+   EAP-Method=TTLS
+   EAP-Identity=open@identity.com
+   EAP-TTLS-CACert=/certs/ca-cert.pem
+   EAP-TTLS-Phase2-Method=Tunneled-PAP
+   EAP-TTLS-Phase2-Identity=username
+   EAP-TTLS-Phase2-Password=password
+   EAP-TTLS-ServerDomainMask=*.domain.com
+
+PEAP + MSCHAPv2
+---------------
+
+.. code-block::
+
+   [Security]
+   EAP-Method=PEAP
+   EAP-Identity=open@identity.com
+   EAP-PEAP-CACert=/certs/ca-cert.pem
+   EAP-PEAP-Phase2-Method=MSCHAPV2
+   EAP-PEAP-Phase2-Identity=username
+   EAP-PEAP-Phase2-Password=password
+   EAP-PEAP-ServerDomainMask=*.domain.com
+
 SEE ALSO
 ========
 
