@@ -397,7 +397,7 @@ static void display_completion_matches(char **matches, int num_matches,
 
 static struct masked_input {
 	bool use_mask;
-	char passphrase[MAX_PASSPHRASE_LEN];
+	char passphrase[MAX_PASSPHRASE_LEN + 1];
 	uint8_t point;
 	uint8_t end;
 } masked_input;
@@ -453,7 +453,7 @@ done:
 
 static void reset_masked_input(void)
 {
-	memset(masked_input.passphrase, 0, MAX_PASSPHRASE_LEN);
+	memset(masked_input.passphrase, 0, MAX_PASSPHRASE_LEN + 1);
 	masked_input.point = 0;
 	masked_input.end = 0;
 }
