@@ -338,7 +338,7 @@ void known_network_update(struct network_info *network,
 					struct l_settings *settings,
 					uint64_t connected_time)
 {
-	bool is_hidden = false;
+	bool is_hidden;
 	bool is_autoconnectable;
 
 	if (network->connected_time != connected_time) {
@@ -354,7 +354,8 @@ void known_network_update(struct network_info *network,
 
 	network->connected_time = connected_time;
 
-	l_settings_get_bool(settings, "Settings", "Hidden", &is_hidden);
+	if (!l_settings_get_bool(settings, "Settings", "Hidden", &is_hidden))
+		is_hidden = false;
 
 	if (network->is_hidden != is_hidden) {
 		if (network->is_hidden && !is_hidden)
