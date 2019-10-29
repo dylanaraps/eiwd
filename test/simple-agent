@@ -54,7 +54,8 @@ if __name__ == '__main__':
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
     bus = dbus.SystemBus()
-    manager = dbus.Interface(bus.get_object('net.connman.iwd', "/"),
+    manager = dbus.Interface(bus.get_object('net.connman.iwd',
+                                '/net/connman/iwd'),
                                 'net.connman.iwd.AgentManager')
 
     path = "/test/agent/" + str(randrange(100))
