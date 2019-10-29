@@ -2,7 +2,7 @@ Network hierarchy
 =================
 
 Service		net.connman.iwd
-Interface	net.connman.iwd.Network [Experimental]
+Interface	net.connman.iwd.Network
 Object path	/net/connman/iwd/{phy0,phy1,...}/{1,2,...}/Xxx
 
 Methods		void Connect()

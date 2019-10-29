@@ -2,7 +2,7 @@ Device hierarchy
 ================
 
 Service		net.connman.iwd
-Interface	net.connman.iwd.Device [Experimental]
+Interface	net.connman.iwd.Device
 Object path	/net/connman/iwd/{phy0,phy1,...}/{1,2,...}
 
 Properties	string Name [readonly]

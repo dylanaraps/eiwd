@@ -2,7 +2,7 @@ KnownNetwork hierarchy
 ======================
 
 Service		net.connman.iwd
-Interface	net.connman.iwd.KnownNetwork [Experimental]
+Interface	net.connman.iwd.KnownNetwork
 Object path	/net/connman/iwd/Xxx
 
 Methods		void Forget()

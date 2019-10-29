@@ -2,7 +2,7 @@ Station hierarchy
 =================
 
 Service		net.connman.iwd
-Interface	net.connman.iwd.Station [Experimental]
+Interface	net.connman.iwd.Station
 Object path	/net/connman/iwd/{phy0,phy1,...}/{1,2,...}
 
 Methods		void Scan()
