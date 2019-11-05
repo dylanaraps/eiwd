@@ -564,7 +564,7 @@ static pid_t execute_program(char *argv[], char *envp[], bool wait,
 		int fd = -1;
 		L_AUTO_FREE_VAR(char *, log_file) = NULL;
 
-		verbose = check_verbosity(argv[0]);
+		verbose = check_verbosity(log_name);
 
 		/* No stdout and no logging */
 		if (!verbose && !log)
@@ -1493,6 +1493,7 @@ static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 	L_AUTO_FREE_VAR(char *, fd_option) = NULL;
 
 	if (valgrind) {
+		L_AUTO_FREE_VAR(char *, valgrind_log);
 		int fd;
 
 		argv[idx++] = "valgrind";
@@ -1501,21 +1502,22 @@ static pid_t start_iwd(const char *config_dir, struct l_queue *wiphy_list,
 		/*
 		 * Valgrind needs --log-fd if we want both stderr and stdout
 		 */
-		if (log) {
-			L_AUTO_FREE_VAR(char *, valgrind_log);
-
+		if (log)
 			valgrind_log = l_strdup_printf("%s/%s/valgrind.log",
 							log_dir, test_name);
-			fd = open(valgrind_log, O_WRONLY | O_CREAT | O_APPEND,
+		else
+			valgrind_log = l_strdup("/tmp/valgrind.log");
+
+		fd = open(valgrind_log, O_WRONLY | O_CREAT | O_APPEND,
 					S_IRUSR | S_IWUSR);
 
+		if (log) {
 			if (fchown(fd, log_uid, log_gid) < 0)
 				l_error("chown failed");
+		}
 
-			fd_option = l_strdup_printf("--log-fd=%d", fd);
-			argv[idx++] = fd_option;
-		} else
-			argv[idx++] = "--log-file=/tmp/valgrind.log";
+		fd_option = l_strdup_printf("--log-fd=%d", fd);
+		argv[idx++] = fd_option;
 	}
 
 	if (strcmp(gdb_opt, "iwd") == 0) {
