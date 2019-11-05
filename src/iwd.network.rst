@@ -1,6 +1,6 @@
-=====
- iwd
-=====
+=============
+ iwd.network
+=============
 
 -----------------------------------------
 Network configuration for wireless daemon

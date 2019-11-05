@@ -1,6 +1,6 @@
-=====
- iwd
-=====
+============
+ iwd.config
+============
 
 --------------------------------------
 Configuration file for wireless daemon
