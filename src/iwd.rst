@@ -44,25 +44,19 @@ OPTIONS
 ENVIRONMENT
 ===========
 
-*$STATE_DIRECTORY* is used for network configuration files.  See section
-*iwd.network* for details.
+*$STATE_DIRECTORY* is used for network configuration files.  See *iwd.network*
+for details.
 
 *$CONFIGURATION_DIRECTORY* is used for daemon configuration settings.  Only
 the file **main.conf** is currently read from this directory.  See *iwd.config*
 for details.
 
-*$IWD_RTNL_DEBUG* set to ``1`` enables RTNL debugging.
-
-*$IWD_DHCP_DEBUG* set to ``1`` enables DHCP debugging.
-
-*$IWD_TLS_DEBUG* set to ``1`` enables TLS debugging.
-
-*$IWD_WSC_DEBUG_KEYS* set to ``1`` enables WSC debug keys.
+See *iwd.debug* for further environment variables for debugging.
 
 SEE ALSO
 ========
 
-iwd.config(5), iwd.network(5), iwctl(1), iwmon(1), hwsim(1), ead(8),
-systemd.exec(5)
+iwd.config(5), iwd.network(5), iwd.debug(7), iwctl(1), iwmon(1), hwsim(1),
+ead(8), systemd.exec(5)
 
 http://iwd.wiki.kernel.org
