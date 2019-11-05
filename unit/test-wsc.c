@@ -1948,7 +1948,7 @@ static void verify_handshake_event(struct handshake_state *hs,
 	{
 		const struct wsc_credential *cred;
 
-		assert(va_arg(args, unsigned int) !=
+		assert(va_arg(args, unsigned int) ==
 			EAP_WSC_EVENT_CREDENTIAL_OBTAINED);
 
 		cred = va_arg(args, const struct wsc_credential *);
@@ -1956,10 +1956,13 @@ static void verify_handshake_event(struct handshake_state *hs,
 						sizeof(struct wsc_credential)));
 
 		data->cur_cred += 1;
+		break;
 	}
 	default:
 		break;
 	}
+
+	va_end(args);
 }
 
 static int verify_8021x(uint32_t ifindex,
