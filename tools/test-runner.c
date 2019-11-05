@@ -541,13 +541,17 @@ static pid_t execute_program(char *argv[], char *envp[], bool wait,
 		return -1;
 
 	/*
-	 * We have to special case this. execute_program automatically logs to
-	 * <process>.log, which would put all iwd output into valgrind.log
-	 * rather than iwd.log. Since we are explicitly having valgrind output
-	 * to a log file we can assume any output from this is only IWD, and not
-	 * valgrind.
+	 * We have a few special cases here:
+	 *
+	 * Since execute_program automatically logs to <process>.log this would
+	 * put all iwd output into valgrind.log rather than iwd.log. Since we
+	 * are explicitly having valgrind output to a log file we can assume any
+	 * output from this is only IWD, and not valgrind.
+	 *
+	 * python3 is special cased so that tests which start IWD manually can
+	 * still show IWD output when using -v iwd.
 	 */
-	if (!strcmp(log_name, "valgrind"))
+	if (!strcmp(log_name, "valgrind") || !strcmp(log_name, "python3"))
 		log_name = "iwd";
 
 	str = l_strjoinv(argv, ' ');
