@@ -1592,6 +1592,18 @@ static void terminate_iwd(pid_t iwd_pid)
 	kill_process(iwd_pid);
 }
 
+static pid_t start_monitor(const char *test_name)
+{
+	char *argv[4];
+
+	argv[0] = "iwmon";
+	argv[1] = "--nortnl";
+	argv[2] = "--nowiphy";
+	argv[3] = NULL;
+
+	return execute_program(argv, environ, false, test_name);
+}
+
 static bool create_tmpfs_extra_stuff(char **tmpfs_extra_stuff)
 {
 	size_t i = 0;
@@ -2004,6 +2016,7 @@ static void create_network_and_run_tests(void *data, void *user_data)
 	pid_t medium_pid = -1;
 	pid_t ofono_pid = -1;
 	pid_t phonesim_pid = -1;
+	pid_t monitor_pid = -1;
 	char *config_dir_path;
 	char *iwd_config_dir;
 	char **tmpfs_extra_stuff = NULL;
@@ -2149,6 +2162,9 @@ static void create_network_and_run_tests(void *data, void *user_data)
 		l_queue_foreach(wiphy_list, wiphy_up, NULL);
 	}
 
+	if (log)
+		monitor_pid = start_monitor(test_name);
+
 	if (check_verbosity("tls"))
 		setenv("IWD_TLS_DEBUG", "on", true);
 
@@ -2232,6 +2248,9 @@ static void create_network_and_run_tests(void *data, void *user_data)
 		stop_ofono(ofono_pid);
 		stop_phonesim(phonesim_pid);
 	}
+
+	if (monitor_pid > 0)
+		kill_process(monitor_pid);
 
 exit_hostapd:
 	destroy_hostapd_instances(hostapd_pids);
