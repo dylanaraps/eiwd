@@ -1108,6 +1108,13 @@ static void wsc_add_interface(struct netdev *netdev)
 	struct l_dbus *dbus = dbus_get_bus();
 	struct wsc *wsc;
 
+	if (!wiphy_get_max_scan_ie_len(netdev_get_wiphy(netdev))) {
+		l_debug("Simple Configuration isn't supported by ifindex %u",
+						netdev_get_ifindex(netdev));
+
+		return;
+	}
+
 	wsc = l_new(struct wsc, 1);
 	wsc->netdev = netdev;
 
