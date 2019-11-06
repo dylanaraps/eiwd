@@ -3183,8 +3183,8 @@ int main(int argc, char *argv[])
 			log_uid = atoi(getenv("SUDO_UID"));
 
 			snprintf(log_dir, sizeof(log_dir), "%s/run-%d-%d-%d-%d",
-					optarg, timeinfo->tm_year,
-					timeinfo->tm_mon, timeinfo->tm_mday,
+					optarg, timeinfo->tm_year + 1900,
+					timeinfo->tm_mon + 1, timeinfo->tm_mday,
 					getpid());
 			mkdir(log_dir, 0755);
 
