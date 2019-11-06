@@ -67,6 +67,7 @@ struct wiphy {
 	uint8_t ext_features[(NUM_NL80211_EXT_FEATURES + 7) / 8];
 	uint8_t max_num_ssids_per_scan;
 	uint32_t max_roc_duration;
+	uint16_t max_scan_ie_len;
 	uint16_t supported_iftypes;
 	uint16_t supported_ciphers;
 	struct scan_freq_set *supported_freqs;
@@ -361,6 +362,11 @@ bool wiphy_has_ext_feature(struct wiphy *wiphy, uint32_t feature)
 uint8_t wiphy_get_max_num_ssids_per_scan(struct wiphy *wiphy)
 {
 	return wiphy->max_num_ssids_per_scan;
+}
+
+uint16_t wiphy_get_max_scan_ie_len(struct wiphy *wiphy)
+{
+	return wiphy->max_scan_ie_len;
 }
 
 uint32_t wiphy_get_max_roc_duration(struct wiphy *wiphy)
@@ -833,6 +839,12 @@ static void wiphy_parse_attributes(struct wiphy *wiphy,
 			else
 				wiphy->max_num_ssids_per_scan =
 							*((uint8_t *) data);
+			break;
+		case NL80211_ATTR_MAX_SCAN_IE_LEN:
+			if (len != sizeof(uint16_t))
+				l_warn("Invalid MAX_SCAN_IE_LEN attribute");
+			else
+				wiphy->max_scan_ie_len = *((uint16_t *) data);
 			break;
 		case NL80211_ATTR_SUPPORT_IBSS_RSN:
 			wiphy->support_adhoc_rsn = true;
