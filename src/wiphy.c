@@ -1049,6 +1049,8 @@ static void wiphy_setup_rm_enabled_capabilities(struct wiphy *wiphy)
 
 	wiphy->rm_enabled_capabilities[0] = IE_TYPE_RM_ENABLED_CAPABILITIES;
 	wiphy->rm_enabled_capabilities[1] = 5;
+	/* Bits: Passive (4), Active (5), and Beacon Table (6) capabilities */
+	wiphy->rm_enabled_capabilities[2] = 0x70;
 
 	/*
 	 * TODO: Support at least Link Measurement if TX_POWER_INSERTION is
