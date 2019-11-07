@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2013-2019  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2019  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -20,18 +20,32 @@
  *
  */
 
-#define uninitialized_var(x) x = x
+struct iwd_module_desc {
+	const char *name;
+	int (*init)(void);
+	void (*exit)(void);
+	bool active;
+} __attribute__((aligned(8)));
 
-struct l_genl;
-struct l_genl_family;
+struct iwd_module_depends {
+	const char *self;
+	const char *target;
+};
 
-const struct l_settings *iwd_get_config(void);
-struct l_genl *iwd_get_genl(void);
+#define IWD_MODULE(name, init, exit)					\
+	static struct iwd_module_desc __iwd_module_ ## name		\
+		__attribute__((used, section("__iwd_module"), aligned(8))) = {\
+			#name, init, exit				\
+		};
 
-void netdev_shutdown(void);
+#define IWD_MODULE_DEPENDS(name, dep)					\
+	static struct iwd_module_depends				\
+				__iwd_module__##name_##dep		\
+		__attribute__((used, section("__iwd_module_dep"),       \
+					aligned(8))) = {		\
+			.self = #name,					\
+			.target = #dep,					\
+		};
 
-const char *iwd_get_iface_whitelist(void);
-const char *iwd_get_iface_blacklist(void);
-
-const char *iwd_get_phy_whitelist(void);
-const char *iwd_get_phy_blacklist(void);
+int iwd_modules_init();
+void iwd_modules_exit();

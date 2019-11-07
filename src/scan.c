@@ -37,6 +37,7 @@
 
 #include "linux/nl80211.h"
 #include "src/iwd.h"
+#include "src/module.h"
 #include "src/wiphy.h"
 #include "src/ie.h"
 #include "src/common.h"

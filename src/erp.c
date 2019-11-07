@@ -32,6 +32,7 @@
 
 #include "src/missing.h"
 #include "src/iwd.h"
+#include "src/module.h"
 #include "src/eap-private.h"
 #include "src/erp.h"
 #include "src/crypto.h"

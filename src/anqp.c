@@ -28,6 +28,7 @@
 
 #include <ell/ell.h>
 
+#include "src/module.h"
 #include "src/anqp.h"
 #include "src/util.h"
 #include "src/eap-private.h"

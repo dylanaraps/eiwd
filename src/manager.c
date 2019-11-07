@@ -36,6 +36,7 @@
 
 #include "src/nl80211util.h"
 #include "src/iwd.h"
+#include "src/module.h"
 #include "src/netdev.h"
 #include "src/wiphy.h"
 #include "src/util.h"

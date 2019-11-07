@@ -38,6 +38,7 @@
 #include "linux/nl80211.h"
 
 #include "src/iwd.h"
+#include "src/module.h"
 #include "src/ie.h"
 #include "src/crypto.h"
 #include "src/scan.h"

@@ -29,6 +29,7 @@
 #include "src/blacklist.h"
 #include "src/util.h"
 #include "src/iwd.h"
+#include "src/module.h"
 
 /*
  * The current timeout is multiplied by this value after an entry is blacklisted

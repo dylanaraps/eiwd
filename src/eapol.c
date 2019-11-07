@@ -31,6 +31,7 @@
 #include <ell/ell.h>
 
 #include "src/missing.h"
+#include "src/module.h"
 #include "src/crypto.h"
 #include "src/eapol.h"
 #include "src/ie.h"

@@ -30,6 +30,7 @@
 
 #include <ell/ell.h>
 
+#include "src/module.h"
 #include "src/mpdu.h"
 #include "src/netdev.h"
 #include "src/iwd.h"

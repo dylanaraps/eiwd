@@ -31,6 +31,7 @@
 #include <ell/ell.h>
 
 #include "src/missing.h"
+#include "src/module.h"
 #include "src/eap.h"
 #include "src/eap-private.h"
 #include "src/iwd.h"

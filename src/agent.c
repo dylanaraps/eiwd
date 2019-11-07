@@ -30,6 +30,7 @@
 #include "src/dbus.h"
 #include "src/agent.h"
 #include "src/iwd.h"
+#include "src/module.h"
 
 static unsigned int next_request_id = 0;
 

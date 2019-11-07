@@ -31,6 +31,7 @@
 #include <ell/ell.h>
 
 #include "src/iwd.h"
+#include "src/module.h"
 #include "src/util.h"
 #include "src/wiphy.h"
 #include "src/scan.h"

@@ -33,6 +33,7 @@
 #include <ell/ell.h>
 
 #include "src/iwd.h"
+#include "src/module.h"
 #include "src/dbus.h"
 #include "src/resolve.h"
 

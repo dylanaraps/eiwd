@@ -26,7 +26,7 @@
 #include <errno.h>
 #include <ell/ell.h>
 
-#include "src/iwd.h"
+#include "src/module.h"
 
 struct dependency {
 	struct dependency *next;

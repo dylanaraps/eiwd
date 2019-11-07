@@ -35,6 +35,7 @@
 #include <ell/ell.h>
 
 #include "src/iwd.h"
+#include "src/module.h"
 #include "src/common.h"
 #include "src/rfkill.h"
 

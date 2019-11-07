@@ -33,6 +33,7 @@
 #include <ell/ell.h>
 
 #include "src/missing.h"
+#include "src/module.h"
 #include "src/ie.h"
 #include "src/crypto.h"
 #include "src/iwd.h"
