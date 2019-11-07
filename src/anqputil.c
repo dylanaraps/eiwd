@@ -26,9 +26,9 @@
 
 #include <ell/ell.h>
 
-#include "anqputil.h"
-#include "ie.h"
-#include "util.h"
+#include "src/anqputil.h"
+#include "src/ie.h"
+#include "src/util.h"
 
 void anqp_iter_init(struct anqp_iter *iter, const unsigned char *anqp,
 			unsigned int len)
