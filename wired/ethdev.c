@@ -37,6 +37,7 @@
 #include <arpa/inet.h>
 #include <ell/ell.h>
 
+#include "src/module.h"
 #include "src/eap.h"
 #include "wired/dbus.h"
 #include "wired/network.h"

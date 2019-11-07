@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <ell/ell.h>
 
+#include "src/module.h"
 #include "wired/network.h"
 
 #define STORAGEFILE_SUFFIX	".8021x"
@@ -171,7 +172,7 @@ static void network_storage_watch_destroy(void *user_data)
 	storage_watch = NULL;
 }
 
-bool network_init(void)
+static int network_init(void)
 {
 	DIR *dir;
 	struct dirent *dirent;
@@ -187,7 +188,7 @@ bool network_init(void)
 	state_dirs = l_strsplit(state_dir, ':');
 	if (!state_dirs[0]) {
 		l_strv_free(state_dirs);
-		return false;
+		return -EINVAL;
 	}
 
 	storage_path = l_strdup(state_dirs[0]);
@@ -196,7 +197,7 @@ bool network_init(void)
 	dir = opendir(storage_path);
 	if (!dir) {
 		l_info("Unable to open %s: %s", storage_path, strerror(errno));
-		return false;
+		return -EINVAL;
 	}
 
 	network_list = l_queue_new();
@@ -224,10 +225,10 @@ bool network_init(void)
 					network_storage_watch_cb, NULL,
 					network_storage_watch_destroy);
 
-	return true;
+	return 0;
 }
 
-void network_exit(void)
+static void network_exit(void)
 {
 	l_dir_watch_destroy(storage_watch);
 
@@ -236,3 +237,6 @@ void network_exit(void)
 
 	l_free(storage_path);
 }
+
+IWD_MODULE(network, network_init, network_exit);
+IWD_MODULE_DEPENDS(network, eap);

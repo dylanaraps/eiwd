@@ -30,6 +30,7 @@
 #include <getopt.h>
 #include <ell/ell.h>
 
+#include "src/module.h"
 #include "src/eap.h"
 #include "wired/dbus.h"
 #include "wired/ethdev.h"
@@ -46,8 +47,11 @@ static void dbus_ready(struct l_dbus *dbus, void *user_data)
 
 	l_info("System ready");
 
-	eap_init();
-	network_init();
+	if (iwd_modules_init() < 0) {
+		l_main_quit();
+		return;
+	}
+
 	ethdev_init(opts->interfaces, opts->nointerfaces);
 }
 
@@ -56,8 +60,8 @@ static void dbus_shutdown(struct l_dbus *dbus, void *user_data)
 	l_info("System shutdown");
 
 	ethdev_exit();
-	network_exit();
-	eap_exit();
+
+	iwd_modules_exit();
 
 	dbus_app_shutdown_complete();
 }

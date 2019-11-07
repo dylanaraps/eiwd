@@ -315,7 +315,9 @@ libexec_PROGRAMS += wired/ead
 
 wired_ead_SOURCES = wired/main.c wired/ethdev.h wired/ethdev.c \
 				wired/network.h wired/network.c \
-				wired/dbus.h wired/dbus.c $(eap_sources)
+				wired/dbus.h wired/dbus.c \
+				src/module.h src/module.c \
+				$(eap_sources)
 wired_ead_LDADD = $(ell_ldadd)
 wired_ead_DEPENDENCIES = $(ell_dependencies)
 

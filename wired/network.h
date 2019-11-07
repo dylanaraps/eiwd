@@ -22,7 +22,4 @@
 
 struct l_settings;
 
-bool network_init(void);
-void network_exit(void);
-
 struct l_settings *network_lookup_security(const char *network);
