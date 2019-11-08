@@ -266,33 +266,14 @@ static void scan_build_attr_scan_frequencies(struct l_genl_msg *msg,
 	l_genl_msg_leave_nested(msg);
 }
 
-static bool scan_mac_address_randomization_is_disabled(void)
-{
-	const struct l_settings *config = iwd_get_config();
-	bool disabled;
-
-	if (!l_settings_get_bool(config, "Scan",
-					"DisableMacAddressRandomization",
-					&disabled))
-		return false;
-
-	return disabled;
-}
-
-static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
-					bool ignore_flush_flag, bool is_passive,
+static void scan_build_attr_ie(struct l_genl_msg *msg,
+					struct scan_context *sc,
 					const struct scan_parameters *params)
 {
-	struct l_genl_msg *msg;
-	uint32_t flags = 0;
 	struct iovec iov[3];
 	unsigned int iov_elems = 0;
 	const uint8_t *ext_capa;
 	uint8_t interworking[3];
-
-	msg = l_genl_msg_new(NL80211_CMD_TRIGGER_SCAN);
-
-	l_genl_msg_append_attr(msg, NL80211_ATTR_WDEV, 8, &sc->wdev_id);
 
 	ext_capa = wiphy_get_extended_capabilities(sc->wiphy,
 							NL80211_IFTYPE_STATION);
@@ -325,6 +306,34 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 	}
 
 	l_genl_msg_append_attrv(msg, NL80211_ATTR_IE, iov, iov_elems);
+}
+
+static bool scan_mac_address_randomization_is_disabled(void)
+{
+	const struct l_settings *config = iwd_get_config();
+	bool disabled;
+
+	if (!l_settings_get_bool(config, "Scan",
+					"DisableMacAddressRandomization",
+					&disabled))
+		return false;
+
+	return disabled;
+}
+
+static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
+					bool ignore_flush_flag, bool is_passive,
+					const struct scan_parameters *params)
+{
+	struct l_genl_msg *msg;
+	uint32_t flags = 0;
+
+	msg = l_genl_msg_new(NL80211_CMD_TRIGGER_SCAN);
+
+	l_genl_msg_append_attr(msg, NL80211_ATTR_WDEV, 8, &sc->wdev_id);
+
+	if (wiphy_get_max_scan_ie_len(sc->wiphy))
+		scan_build_attr_ie(msg, sc, params);
 
 	if (params->freqs)
 		scan_build_attr_scan_frequencies(msg, params->freqs);
