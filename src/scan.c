@@ -297,8 +297,8 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 	ext_capa = wiphy_get_extended_capabilities(sc->wiphy,
 							NL80211_IFTYPE_STATION);
 	/*
-	 * XXX: If adding IE's here ensure that ordering is not broken for
-	 * probe requests (IEEE-2016 Table 9-33).
+	 * If adding IE's here ensure that ordering is not broken for
+	 * probe requests (IEEE Std 802.11-2016 Table 9-33).
 	 */
 	/* Order 9 - Extended Capabilities */
 	iov[iov_elems].iov_base = (void *) ext_capa;
