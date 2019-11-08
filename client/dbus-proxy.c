@@ -740,11 +740,17 @@ no_agent:
 	display_enable_cmd_prompt();
 }
 
+static void get_managed_objects(void)
+{
+	l_dbus_method_call(dbus, IWD_SERVICE, IWD_ROOT_PATH,
+					L_DBUS_INTERFACE_OBJECT_MANAGER,
+					"GetManagedObjects", NULL,
+					get_managed_objects_callback,
+					NULL, NULL);
+}
+
 static void service_appeared_callback(struct l_dbus *dbus, void *user_data)
 {
-	if (!command_is_interactive_mode())
-		goto get_objects;
-
 	l_dbus_add_signal_watch(dbus, IWD_SERVICE, IWD_ROOT_PATH,
 					L_DBUS_INTERFACE_OBJECT_MANAGER,
 					"InterfacesAdded", L_DBUS_MATCH_NONE,
@@ -759,12 +765,8 @@ static void service_appeared_callback(struct l_dbus *dbus, void *user_data)
 					L_DBUS_INTERFACE_PROPERTIES,
 					"PropertiesChanged", L_DBUS_MATCH_NONE,
 					properties_changed_callback, NULL);
-get_objects:
-	l_dbus_method_call(dbus, IWD_SERVICE, IWD_ROOT_PATH,
-					L_DBUS_INTERFACE_OBJECT_MANAGER,
-					"GetManagedObjects", NULL,
-					get_managed_objects_callback,
-					NULL, NULL);
+
+	get_managed_objects();
 }
 
 static void service_disappeared_callback(struct l_dbus *dbus,
@@ -834,9 +836,13 @@ bool dbus_proxy_init(void)
 	l_dbus_set_disconnect_handler(dbus, dbus_disconnect_callback, NULL,
 									NULL);
 
-	l_dbus_add_service_watch(dbus, IWD_SERVICE, service_appeared_callback,
+	if (command_is_interactive_mode())
+		l_dbus_add_service_watch(dbus, IWD_SERVICE,
+						service_appeared_callback,
 						service_disappeared_callback,
 						NULL, NULL);
+	else
+		get_managed_objects();
 
 	return true;
 }
