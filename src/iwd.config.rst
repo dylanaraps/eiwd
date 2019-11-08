@@ -170,6 +170,14 @@ The group ``[Network]`` contains network configuration related settings.
 
        If not specified, ``systemd`` is used as default.
 
+   * - RoutePriorityOffset
+     - Values: uint32 value (default: **300**)
+
+       Configures a route priority offset used by the system to prioritize
+       the default routes. The route with lower priority offset is preferred.
+
+       If not specified, ``300`` is used as default.
+
 Blacklist
 ---------
 
