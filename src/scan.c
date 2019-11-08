@@ -305,7 +305,7 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 	iov[iov_elems].iov_len = ext_capa[1] + 2;
 	iov_elems++;
 
-	if (util_is_bit_set(ext_capa[3], 7)) {
+	if (util_is_bit_set(ext_capa[2 + 3], 7)) {
 		/* Order 12 - Interworking */
 		interworking[0] = IE_TYPE_INTERWORKING;
 		interworking[1] = 1;
