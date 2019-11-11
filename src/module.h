@@ -40,7 +40,7 @@ struct iwd_module_depends {
 
 #define IWD_MODULE_DEPENDS(name, dep)					\
 	static struct iwd_module_depends				\
-				__iwd_module__##name_##dep		\
+				__iwd_module__##name##_##dep		\
 		__attribute__((used, section("__iwd_module_dep"),       \
 					aligned(8))) = {		\
 			.self = #name,					\
