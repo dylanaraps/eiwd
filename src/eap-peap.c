@@ -182,13 +182,13 @@ static void eap_extensions_handle_request(struct eap_state *eap,
 
 	eap_peap_phase2_send_response(response, sizeof(response), eap);
 
-	eap_tls_common_tunnel_close(eap);
-
 	eap_discard_success_and_failure(eap, false);
 	eap_tls_common_set_completed(eap);
 
 	if (r != EAP_EXTENSIONS_RESULT_SUCCCESS) {
 		eap_tls_common_set_phase2_failed(eap);
+
+		eap_tls_common_tunnel_close(eap);
 
 		return;
 	}
