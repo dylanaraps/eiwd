@@ -3044,12 +3044,9 @@ static void usage(void)
 					" test is specified\n"
 					"\t\t\t\tthe 'shell' test"
 					" will be used\n"
-		"\t-l, --log [dir]		Directory used for log output. "
-					"If no directory\n"
-					"\t\t\t\tis specified the "
-					"current directory will be used\n"
-					"\t\t\t\tThis option sets --verbose on "
-					"all apps");
+		"\t-l, --log <dir>		Directory used for log output. "
+					"This option sets \n"
+					"\t\t\t\t--verbose on all apps");
 	l_info("Commands:\n"
 		"\t-A, --auto-tests <dirs>	Comma separated list of the "
 						"test configuration\n\t\t\t\t"
@@ -3069,7 +3066,7 @@ static const struct option main_options[] = {
 	{ "valgrind",	no_argument,       NULL, 'V' },
 	{ "hw",		required_argument, NULL, 'w' },
 	{ "shell",	optional_argument, NULL, 's' },
-	{ "log",	optional_argument, NULL, 'l' },
+	{ "log",	required_argument, NULL, 'l' },
 	{ "help",	no_argument,       NULL, 'h' },
 	{ }
 };
@@ -3100,7 +3097,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "A:q:k:v:g:UVldh", main_options,
+		opt = getopt_long(argc, argv, "A:q:k:v:g:l:UVdh", main_options,
 									NULL);
 		if (opt < 0)
 			break;
