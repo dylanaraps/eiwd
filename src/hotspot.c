@@ -524,7 +524,7 @@ static void hotspot_exit(void)
 {
 	l_dir_watch_destroy(hs20_dir_watch);
 
-	l_queue_destroy(hs20_settings, hs20_config_free);
+	l_queue_destroy(hs20_settings, NULL);
 	hs20_settings = NULL;
 }
 
