@@ -2226,9 +2226,13 @@ static void create_network_and_run_tests(void *data, void *user_data)
 		terminate_iwd(iwd_pid);
 
 	/* /tmp/valgrind.log will only exist without logging turned on */
-	if (valgrind && !log)
+	if (valgrind && !log) {
 		if (system("cat /tmp/valgrind.log"))
 			l_info("cat /tmp/valgrind.log failed");
+
+		if (system("echo \"\" > /tmp/valgrind.log"))
+			l_info("Failed to reset /tmp/valgrind.log");
+	}
 
 	if (log) {
 		L_AUTO_FREE_VAR(char *, dmesg);
