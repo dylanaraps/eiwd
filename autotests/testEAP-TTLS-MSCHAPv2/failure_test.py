@@ -11,18 +11,11 @@ from iwd import PSKAgent
 from iwd import NetworkType
 
 from hostapd import HostapdCLI
-from hostapd import hostapd_map
 
 class Test(unittest.TestCase):
 
     def validate_connection(self, wd):
-        hostapd = None
-
-        for hostapd_if in list(hostapd_map.values()):
-            hpd = HostapdCLI(hostapd_if)
-            if hpd.get_config_value('ssid') == 'ssidEAP-TTLS-MSCHAPv2':
-                hostapd = hpd
-                break
+        hostapd = HostapdCLI(config='ssidEAP-TTLS-MSCHAPv2.conf')
 
         self.assertIsNotNone(hostapd)
 
