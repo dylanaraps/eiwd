@@ -940,7 +940,7 @@ static void start_loopback(void)
 	loopback_started = true;
 }
 
-static pid_t start_phonesim(void)
+static pid_t start_phonesim(const char *test_name)
 {
 	char *argv[5];
 
@@ -954,7 +954,7 @@ static pid_t start_phonesim(void)
 
 	setenv("OFONO_PHONESIM_CONFIG", "/tmp/phonesim.conf", true);
 
-	return execute_program(argv, environ, false, NULL);
+	return execute_program(argv, environ, false, test_name);
 }
 
 static void stop_phonesim(pid_t pid)
@@ -962,7 +962,7 @@ static void stop_phonesim(pid_t pid)
 	kill_process(pid);
 }
 
-static pid_t start_ofono(void)
+static pid_t start_ofono(const char *test_name)
 {
 	char *argv[5];
 	bool verbose = check_verbosity(BIN_OFONO);
@@ -980,7 +980,7 @@ static pid_t start_ofono(void)
 
 	start_loopback();
 
-	return execute_program(argv, environ, false, NULL);
+	return execute_program(argv, environ, false, test_name);
 }
 
 static void stop_ofono(pid_t pid)
@@ -2205,8 +2205,8 @@ static void create_network_and_run_tests(void *data, void *user_data)
 	}
 
 	if (ofono_req) {
-		phonesim_pid = start_phonesim();
-		ofono_pid = start_ofono();
+		phonesim_pid = start_phonesim(test_name);
+		ofono_pid = start_ofono(test_name);
 	}
 
 	set_wiphy_list(wiphy_list);
