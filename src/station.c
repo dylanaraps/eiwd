@@ -2751,6 +2751,9 @@ static struct l_dbus_message *station_dbus_scan(struct l_dbus *dbus,
 	if (station->dbus_scan_id)
 		return dbus_error_busy(message);
 
+	if (station->state == STATION_STATE_CONNECTING)
+		return dbus_error_busy(message);
+
 	station->dbus_scan_id = station_scan_trigger(station, NULL,
 						station_dbus_scan_triggered,
 						new_scan_results,
