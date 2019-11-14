@@ -1861,6 +1861,110 @@ static void print_qos_map(unsigned int level, const char *label,
 	print_attr(level, "QoS Map");
 }
 
+static void print_measurement_request_beacon(unsigned int level,
+						const void *data,
+						uint16_t size)
+{
+	uint8_t mode;
+
+	if (size < 13)
+		return;
+
+	print_attr(level, "Operating Class: %u", l_get_u8(data));
+	print_attr(level, "Channel: %u", l_get_u8(data + 1));
+	print_attr(level, "Randomization Interval: %u", l_get_le16(data + 2));
+	print_attr(level, "Duration: %u", l_get_le16(data + 4));
+
+	mode = l_get_u8(data + 6);
+
+	switch (mode) {
+	case 0:
+		print_attr(level, "Measurement: Passive");
+		break;
+	case 1:
+		print_attr(level, "Measurement: Active");
+		break;
+	case 2:
+		print_attr(level, "Measurement: Table");
+		break;
+	default:
+		print_attr(level, "Measurement: Invalid (%u)", mode);
+		return;
+	}
+
+	print_attr(level, "BSSID: "MAC, MAC_STR(((const uint8_t *)data + 7)));
+}
+
+static const char *rrm_measurement_types[] = {
+	[0] = "Basic",
+	[1] = "Clear Channel Assessment",
+	[2] = "Receive Power Indication",
+	[3] = "Channel Load",
+	[4] = "Noise Histogram",
+	[5] = "Beacon",
+	[6] = "Frame",
+	[7] = "STA Statistics",
+	[8] = "LCI",
+	[9] = "Transmit Stream/Category Measurement",
+	[10] = "Multicast Diagnostics",
+	[11] = "Location Civic",
+	[12] = "Location Identifier",
+	[13] = "Directional Channel Quality",
+	[14] = "Directional Measurement",
+	[15] = "Directional Statistics",
+	[16] = "Fine Timing Measurement Range",
+	[255] = "Measurement Pause"
+};
+
+static void print_measurement_request(unsigned int level, const char *label,
+							const void *data,
+							uint16_t size)
+{
+	uint8_t mode;
+	uint8_t type;
+
+	print_attr(level, "Measurement Request");
+
+	if (size < 3)
+		return;
+
+	print_attr(level + 1, "Token: %u", l_get_u8(data));
+
+	mode = l_get_u8(data + 1);
+
+	print_attr(level + 1, "Request Mode: %u", mode);
+
+	if (util_is_bit_set(mode, 0))
+		print_attr(level + 2, "Parallel bit set");
+
+	if (util_is_bit_set(mode, 1))
+		print_attr(level + 2, "Enable bit set");
+
+	if (util_is_bit_set(mode, 2))
+		print_attr(level + 2, "Request bit set");
+
+	if (util_is_bit_set(mode, 3))
+		print_attr(level + 2, "Report bit set");
+
+	if (util_is_bit_set(mode, 4))
+		print_attr(level + 2, "Duration Mandatory set");
+
+	type = l_get_u8(data + 2);
+
+	if (type > 16 && type != 255) {
+		print_attr(level + 1, "Type: Invalid (%u)", type);
+		return;
+	}
+
+	print_attr(level + 1, "Type: %s", rrm_measurement_types[type]);
+
+	switch (type) {
+	case 5:
+		print_measurement_request_beacon(level + 1, data + 3, size - 3);
+		break;
+	}
+}
+
 static struct attr_entry ie_entry[] = {
 	{ IE_TYPE_SSID,				"SSID",
 		ATTR_CUSTOM,	{ .function = print_ie_ssid } },
@@ -1911,6 +2015,8 @@ static struct attr_entry ie_entry[] = {
 		{ .function = print_ie_supported_operating_classes } },
 	{ IE_TYPE_QOS_MAP_SET,			"QoS Map",
 		ATTR_CUSTOM,	{ .function = print_qos_map } },
+	{ IE_TYPE_MEASUREMENT_REQUEST,		"Measurement Request",
+		ATTR_CUSTOM,	{ .function = print_measurement_request } },
 	{ },
 };
 
@@ -3974,6 +4080,18 @@ static void print_public_action_frame(unsigned int level, const uint8_t *body,
 	}
 }
 
+static void print_rm_request(unsigned int level, const uint8_t *body,
+				size_t body_len)
+{
+	if (body_len < 3)
+		return;
+
+	print_attr(level, "Dialog Token: %u", body[0]);
+	print_attr(level, "Repetitions: %u", l_get_le16(body + 1));
+
+	print_ie(level, "IEs", body + 3, body_len - 3);
+}
+
 static void print_rm_action_frame(unsigned int level, const uint8_t *body,
 					size_t body_len)
 {
@@ -3998,6 +4116,12 @@ static void print_rm_action_frame(unsigned int level, const uint8_t *body,
 		category = "Unknown";
 
 	print_attr(level, "Radio Measurement Action: %s (%u)", category, body[0]);
+
+	switch (body[0]) {
+	case 0:
+		print_rm_request(level + 1, body + 1, body_len - 1);
+		break;
+	}
 }
 
 static void print_action_mgmt_frame(unsigned int level,
