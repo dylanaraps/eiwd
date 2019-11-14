@@ -1,3 +1,8 @@
+ver 1.1:
+	Fix issue with simple configuration support checks.
+	Fix issue with handling TLS tunnel and PEAPv0.
+	Add support for radio resource management.
+
 ver 1.0:
 	Add support for stable D-Bus interfaces.
 	Add support for network configuration documentation.
