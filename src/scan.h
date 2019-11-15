@@ -81,9 +81,11 @@ struct scan_parameters {
 	const uint8_t *extra_ie;
 	size_t extra_ie_size;
 	struct scan_freq_set *freqs;
+	uint16_t duration;
 	bool flush : 1;
 	bool randomize_mac_addr_hint : 1;
 	bool no_cck_rates : 1;
+	bool duration_mandatory : 1;
 	const char *ssid;	/* Used for direct probe request */
 };
 

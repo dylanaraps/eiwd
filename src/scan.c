@@ -396,6 +396,19 @@ static struct l_genl_msg *scan_build_cmd(struct scan_context *sc,
 		l_free(scan_rates);
 	}
 
+	if (wiphy_has_ext_feature(sc->wiphy,
+					NL80211_EXT_FEATURE_SET_SCAN_DWELL)) {
+		if (params->duration)
+			l_genl_msg_append_attr(msg,
+					NL80211_ATTR_MEASUREMENT_DURATION,
+					2, &params->duration);
+
+		if (params->duration_mandatory)
+			l_genl_msg_append_attr(msg,
+				NL80211_ATTR_MEASUREMENT_DURATION_MANDATORY,
+				0, NULL);
+	}
+
 done:
 	return msg;
 }
