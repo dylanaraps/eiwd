@@ -556,6 +556,16 @@ uint32_t scan_passive(uint64_t wdev_id, struct scan_freq_set *freqs,
 							userdata, destroy);
 }
 
+uint32_t scan_passive_full(uint64_t wdev_id,
+			const struct scan_parameters *params,
+			scan_trigger_func_t trigger,
+			scan_notify_func_t notify, void *userdata,
+			scan_destroy_func_t destroy)
+{
+	return scan_common(wdev_id, true, params, trigger,
+				notify, userdata, destroy);
+}
+
 uint32_t scan_active(uint64_t wdev_id, uint8_t *extra_ie, size_t extra_ie_size,
 			scan_trigger_func_t trigger,
 			scan_notify_func_t notify, void *userdata,
