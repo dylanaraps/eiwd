@@ -196,7 +196,7 @@ static void rrm_reject_measurement_request(struct rrm_state *rrm,
 	frame[0] = 0x05; /* Category: Radio Measurement */
 	frame[1] = 0x01; /* Action: Radio Measurement Report */
 	frame[2] = info->dialog_token;
-	frame[3] = IE_TYPE_MEASUREMENT_REQUEST;
+	frame[3] = IE_TYPE_MEASUREMENT_REPORT;
 	frame[4] = 3;
 	frame[5] = info->mtoken;
 	frame[6] = mode;
