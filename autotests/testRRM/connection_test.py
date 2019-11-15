@@ -21,6 +21,8 @@ beacon_with_ssid = '51000000000002ffffffffffff02010000077373696452524d'
 beacon_passive = '510b0000000000ffffffffffff020100'
 # Active beacon with wildcard BSSID
 beacon_active = '510b0000000001ffffffffffff020100'
+# Passive beacon with duration set
+beacon_passive_duration = '510b0000c80000ffffffffffff020100'
 
 class Test(unittest.TestCase):
 
@@ -89,6 +91,16 @@ class Test(unittest.TestCase):
 
         # This should active scan on channel 11, returning otherSSID
         hapd.req_beacon(device.address, beacon_active)
+        # TODO: See if we are scanning here (scan not initiated from station)
+
+        event = hapd.wait_for_event('BEACON-RESP-RX')
+        if event:
+            print(event)
+
+        sleep(0.5)
+
+         # This should passive scan on channel 11, returning otherSSID
+        hapd.req_beacon(device.address, beacon_passive_duration)
         # TODO: See if we are scanning here (scan not initiated from station)
 
         event = hapd.wait_for_event('BEACON-RESP-RX')
