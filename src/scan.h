@@ -67,6 +67,7 @@ struct scan_bss {
 	uint8_t hessid[6];
 	uint8_t *rc_ie;		/* Roaming consortium IE */
 	uint8_t hs20_version;
+	uint64_t parent_tsf;
 	bool mde_present : 1;
 	bool cc_present : 1;
 	bool cap_rm_neighbor_report : 1;

@@ -1072,6 +1072,12 @@ static struct scan_bss *scan_parse_attr_bss(struct l_genl_attr *attr)
 								&bss->p2p_size);
 
 			break;
+		case NL80211_BSS_PARENT_TSF:
+			if (len != sizeof(uint64_t))
+				goto fail;
+
+			bss->parent_tsf = l_get_le64(data);
+			break;
 		}
 	}
 
