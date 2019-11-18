@@ -25,7 +25,6 @@
 #endif
 
 #include <stdint.h>
-#include <math.h>
 #include <linux/if_ether.h>
 
 #include <ell/ell.h>
@@ -247,7 +246,6 @@ static size_t build_report_for_bss(struct rrm_beacon_req_info *beacon,
 					uint8_t *to)
 {
 	uint8_t *start = to;
-	double dbms = bss->signal_strength / 100;
 
 	*to++ = beacon->oper_class;
 	*to++ = scan_freq_to_channel(bss->frequency, NULL);
@@ -259,10 +257,10 @@ static size_t build_report_for_bss(struct rrm_beacon_req_info *beacon,
 	*to++ = rrm_phy_type(bss);
 
 	/* 802.11 Table 9-154 - RCPI values */
-	if (dbms < -109.5)
+	if (bss->signal_strength < -10950)
 		*to++ = 0;
-	else if (dbms >= -109.5 && dbms < 0)
-		*to++ = (uint8_t)floor(2 * (dbms + 110));
+	else if (bss->signal_strength >= -10950 && bss->signal_strength < 0)
+		*to++ = (uint8_t)((2 * (bss->signal_strength + 11000)) / 100);
 	else
 		*to++ = 220;
 
