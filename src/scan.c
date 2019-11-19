@@ -75,6 +75,8 @@ struct scan_request {
 	scan_destroy_func_t destroy;
 	bool passive:1; /* Active or Passive scan? */
 	struct l_queue *cmds;
+	/* The time the current scan was started. Reported in TRIGGER_SCAN */
+	uint64_t start_time_tsf;
 };
 
 struct scan_context {
@@ -778,6 +780,25 @@ bool scan_periodic_stop(uint64_t wdev_id)
 	return true;
 }
 
+uint64_t scan_get_triggered_time(uint64_t wdev_id, uint32_t id)
+{
+	struct scan_context *sc;
+	struct scan_request *sr;
+
+	sc = l_queue_find(scan_contexts, scan_context_match, &wdev_id);
+	if (!sc)
+		return 0;
+
+	if (!sc->triggered)
+		return 0;
+
+	sr = l_queue_find(sc->requests, scan_request_match, L_UINT_TO_PTR(id));
+	if (!sr)
+		return 0;
+
+	return sr->start_time_tsf;
+}
+
 static void scan_periodic_timeout(struct l_timeout *timeout, void *user_data)
 {
 	struct scan_context *sc = user_data;
@@ -1439,6 +1460,8 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 	uint32_t wiphy_id;
 	struct scan_context *sc;
 	bool active_scan = false;
+	uint64_t start_time_tsf = 0;
+	struct scan_request *sr;
 
 	cmd = l_genl_msg_get_command(msg);
 
@@ -1461,15 +1484,22 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		case NL80211_ATTR_SCAN_SSIDS:
 			active_scan = true;
 			break;
+		case NL80211_ATTR_SCAN_START_TIME_TSF:
+			if (len != sizeof(uint64_t))
+				return;
+
+			start_time_tsf = l_get_u64(data);
+			break;
 		}
 	}
+
+	sr = l_queue_peek_head(sc->requests);
 
 	switch (cmd) {
 	case NL80211_CMD_NEW_SCAN_RESULTS:
 	{
 		struct l_genl_msg *scan_msg;
 		struct scan_results *results;
-		struct scan_request *sr = l_queue_peek_head(sc->requests);
 		bool send_next = false;
 		bool get_results = false;
 
@@ -1543,12 +1573,11 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		else
 			sc->state = SCAN_STATE_PASSIVE;
 
+		sr->start_time_tsf = start_time_tsf;
+
 		break;
 
 	case NL80211_CMD_SCAN_ABORTED:
-	{
-		struct scan_request *sr = l_queue_peek_head(sc->requests);
-
 		if (sc->state == SCAN_STATE_NOT_RUNNING)
 			break;
 
@@ -1557,8 +1586,7 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		if (sc->triggered) {
 			sc->triggered = false;
 
-			scan_finished(sc, -ECANCELED, NULL,
-					l_queue_peek_head(sc->requests));
+			scan_finished(sc, -ECANCELED, NULL, sr);
 		} else if (sr && !sc->start_cmd_id && !sc->get_scan_cmd_id) {
 			/*
 			 * If this was an external scan that got aborted
@@ -1571,7 +1599,6 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		}
 
 		break;
-	}
 	}
 }
 
