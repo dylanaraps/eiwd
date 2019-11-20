@@ -289,31 +289,48 @@ static void device_netdev_notify(struct netdev *netdev,
 					enum netdev_watch_event event,
 					void *user_data)
 {
-	struct device *device = netdev_get_device(netdev);
+	struct device *device;
 	struct l_dbus *dbus = dbus_get_bus();
+	const char *path = netdev_get_path(netdev);
 
-	if (!device)
+	device = l_dbus_object_get_data(dbus, path, IWD_DEVICE_INTERFACE);
+
+	if (!device && event != NETDEV_WATCH_EVENT_NEW)
 		return;
 
 	switch (event) {
+	case NETDEV_WATCH_EVENT_NEW:
+		if (L_WARN_ON(device))
+			break;
+
+		if (netdev_get_iftype(netdev) == NETDEV_IFTYPE_P2P_CLIENT ||
+				netdev_get_iftype(netdev) ==
+				NETDEV_IFTYPE_P2P_GO)
+			return;
+
+		device_create(netdev_get_wiphy(netdev), netdev);
+		break;
+	case NETDEV_WATCH_EVENT_DEL:
+		l_dbus_unregister_object(dbus, path);
+		break;
 	case NETDEV_WATCH_EVENT_UP:
 		device->powered = true;
 
-		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
+		l_dbus_property_changed(dbus, path,
 					IWD_DEVICE_INTERFACE, "Powered");
 		break;
 	case NETDEV_WATCH_EVENT_DOWN:
 		device->powered = false;
 
-		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
+		l_dbus_property_changed(dbus, path,
 					IWD_DEVICE_INTERFACE, "Powered");
 		break;
 	case NETDEV_WATCH_EVENT_NAME_CHANGE:
-		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
+		l_dbus_property_changed(dbus, path,
 					IWD_DEVICE_INTERFACE, "Name");
 		break;
 	case NETDEV_WATCH_EVENT_ADDRESS_CHANGE:
-		l_dbus_property_changed(dbus, netdev_get_path(device->netdev),
+		l_dbus_property_changed(dbus, path,
 					IWD_DEVICE_INTERFACE, "Address");
 		break;
 	default:
@@ -380,11 +397,7 @@ struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 
 void device_remove(struct device *device)
 {
-	struct l_dbus *dbus = dbus_get_bus();
-
 	l_debug("");
-
-	l_dbus_unregister_object(dbus, netdev_get_path(device->netdev));
 
 	scan_wdev_remove(netdev_get_wdev_id(device->netdev));
 
@@ -394,12 +407,19 @@ void device_remove(struct device *device)
 	l_free(device);
 }
 
+static void destroy_device_interface(void *user_data)
+{
+	struct device *device = user_data;
+
+	device_remove(device);
+}
+
 static int device_init(void)
 {
 	if (!l_dbus_register_interface(dbus_get_bus(),
 					IWD_DEVICE_INTERFACE,
 					setup_device_interface,
-					NULL, false))
+					destroy_device_interface, false))
 		return false;
 
 	netdev_watch = netdev_watch_add(device_netdev_notify, NULL, NULL);

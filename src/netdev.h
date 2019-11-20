@@ -23,7 +23,6 @@
 #include <stdbool.h>
 
 struct netdev;
-struct device;
 struct scan_bss;
 struct handshake_state;
 struct eapol_sm;
@@ -135,7 +134,6 @@ int netdev_set_4addr(struct netdev *netdev, bool use_4addr,
 bool netdev_get_4addr(struct netdev *netdev);
 const char *netdev_get_name(struct netdev *netdev);
 bool netdev_get_is_up(struct netdev *netdev);
-struct device *netdev_get_device(struct netdev *netdev);
 const char *netdev_get_path(struct netdev *netdev);
 
 struct handshake_state *netdev_handshake_state_new(struct netdev *netdev);

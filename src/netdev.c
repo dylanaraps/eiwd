@@ -49,7 +49,6 @@
 #include "src/eapol.h"
 #include "src/handshake.h"
 #include "src/crypto.h"
-#include "src/device.h"
 #include "src/scan.h"
 #include "src/netdev.h"
 #include "src/ft.h"
@@ -88,7 +87,6 @@ struct netdev {
 	char name[IFNAMSIZ];
 	uint32_t type;
 	uint8_t addr[ETH_ALEN];
-	struct device *device;
 	struct wiphy *wiphy;
 	unsigned int ifi_flags;
 	uint32_t frequency;
@@ -149,6 +147,7 @@ struct netdev {
 	bool expect_connect_failure : 1;
 	bool aborting : 1;
 	bool mac_randomize_once : 1;
+	bool events_ready : 1;
 };
 
 struct netdev_preauth_state {
@@ -301,11 +300,6 @@ bool netdev_get_is_up(struct netdev *netdev)
 struct handshake_state *netdev_get_handshake(struct netdev *netdev)
 {
 	return netdev->handshake;
-}
-
-struct device *netdev_get_device(struct netdev *netdev)
-{
-	return netdev->device;
 }
 
 const char *netdev_get_path(struct netdev *netdev)
@@ -653,11 +647,9 @@ static void netdev_free(void *data)
 		netdev->qos_map_cmd_id = 0;
 	}
 
-	if (netdev->device) {
+	if (netdev->events_ready)
 		WATCHLIST_NOTIFY(&netdev_watches, netdev_watch_func_t,
 					netdev, NETDEV_WATCH_EVENT_DEL);
-		device_remove(netdev->device);
-	}
 
 	watchlist_destroy(&netdev->frame_watches);
 	watchlist_destroy(&netdev->station_watches);
@@ -4171,7 +4163,7 @@ static void netdev_newlink_notify(const struct ifinfomsg *ifi, int bytes)
 		}
 	}
 
-	if (!netdev->device) /* Did we send NETDEV_WATCH_EVENT_NEW yet? */
+	if (!netdev->events_ready) /* Did we send NETDEV_WATCH_EVENT_NEW yet? */
 		return;
 
 	new_up = netdev_get_is_up(netdev);
@@ -4237,9 +4229,9 @@ static void netdev_initial_up_cb(int error, uint16_t type, const void *data,
 
 	l_debug("Interface %i initialized", netdev->index);
 
-	netdev->device = device_create(netdev->wiphy, netdev);
 	WATCHLIST_NOTIFY(&netdev_watches, netdev_watch_func_t,
 				netdev, NETDEV_WATCH_EVENT_NEW);
+	netdev->events_ready = true;
 }
 
 static void netdev_set_mac_cb(int error, uint16_t type, const void *data,
