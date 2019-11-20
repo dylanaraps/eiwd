@@ -38,7 +38,6 @@
 #include "src/netdev.h"
 #include "src/dbus.h"
 #include "src/station.h"
-#include "src/device.h"
 
 struct device {
 	uint32_t index;
@@ -285,6 +284,75 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 					device_property_set_mode);
 }
 
+static void device_wiphy_state_changed_event(struct wiphy *wiphy,
+					enum wiphy_state_watch_event event,
+					void *user_data)
+{
+	struct device *device = user_data;
+
+	switch (event) {
+	case WIPHY_STATE_WATCH_EVENT_RFKILLED:
+		break;
+	case WIPHY_STATE_WATCH_EVENT_POWERED:
+		if (device->dbus_powered)
+			netdev_set_powered(device->netdev, true,
+							NULL, NULL, NULL);
+		break;
+	}
+}
+
+static struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
+{
+	struct device *device;
+	struct l_dbus *dbus = dbus_get_bus();
+	uint32_t ifindex = netdev_get_ifindex(netdev);
+	const uint8_t action_ap_roam_prefix[2] = { 0x0a, 0x07 };
+
+	device = l_new(struct device, 1);
+	device->index = ifindex;
+	device->wiphy = wiphy;
+	device->netdev = netdev;
+
+	if (!l_dbus_object_add_interface(dbus, netdev_get_path(device->netdev),
+					IWD_DEVICE_INTERFACE, device))
+		l_info("Unable to register %s interface", IWD_DEVICE_INTERFACE);
+
+	if (!l_dbus_object_add_interface(dbus, netdev_get_path(device->netdev),
+					L_DBUS_INTERFACE_PROPERTIES, device))
+		l_info("Unable to register %s interface",
+				L_DBUS_INTERFACE_PROPERTIES);
+
+	scan_wdev_add(netdev_get_wdev_id(device->netdev));
+
+	/*
+	 * register for AP roam transition watch
+	 */
+	device->ap_roam_watch = netdev_frame_watch_add(netdev, 0x00d0,
+			action_ap_roam_prefix, sizeof(action_ap_roam_prefix),
+			device_ap_roam_frame_event, device);
+
+	device->powered = netdev_get_is_up(netdev);
+
+	device->dbus_powered = true;
+	device->wiphy_rfkill_watch =
+		wiphy_state_watch_add(wiphy, device_wiphy_state_changed_event,
+					device, NULL);
+
+	return device;
+}
+
+static void device_free(struct device *device)
+{
+	l_debug("");
+
+	scan_wdev_remove(netdev_get_wdev_id(device->netdev));
+
+	netdev_frame_watch_remove(device->netdev, device->ap_roam_watch);
+	wiphy_state_watch_remove(device->wiphy, device->wiphy_rfkill_watch);
+
+	l_free(device);
+}
+
 static void device_netdev_notify(struct netdev *netdev,
 					enum netdev_watch_event event,
 					void *user_data)
@@ -338,80 +406,11 @@ static void device_netdev_notify(struct netdev *netdev,
 	}
 }
 
-static void device_wiphy_state_changed_event(struct wiphy *wiphy,
-					enum wiphy_state_watch_event event,
-					void *user_data)
-{
-	struct device *device = user_data;
-
-	switch (event) {
-	case WIPHY_STATE_WATCH_EVENT_RFKILLED:
-		break;
-	case WIPHY_STATE_WATCH_EVENT_POWERED:
-		if (device->dbus_powered)
-			netdev_set_powered(device->netdev, true,
-							NULL, NULL, NULL);
-		break;
-	}
-}
-
-struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
-{
-	struct device *device;
-	struct l_dbus *dbus = dbus_get_bus();
-	uint32_t ifindex = netdev_get_ifindex(netdev);
-	const uint8_t action_ap_roam_prefix[2] = { 0x0a, 0x07 };
-
-	device = l_new(struct device, 1);
-	device->index = ifindex;
-	device->wiphy = wiphy;
-	device->netdev = netdev;
-
-	if (!l_dbus_object_add_interface(dbus, netdev_get_path(device->netdev),
-					IWD_DEVICE_INTERFACE, device))
-		l_info("Unable to register %s interface", IWD_DEVICE_INTERFACE);
-
-	if (!l_dbus_object_add_interface(dbus, netdev_get_path(device->netdev),
-					L_DBUS_INTERFACE_PROPERTIES, device))
-		l_info("Unable to register %s interface",
-				L_DBUS_INTERFACE_PROPERTIES);
-
-	scan_wdev_add(netdev_get_wdev_id(device->netdev));
-
-	/*
-	 * register for AP roam transition watch
-	 */
-	device->ap_roam_watch = netdev_frame_watch_add(netdev, 0x00d0,
-			action_ap_roam_prefix, sizeof(action_ap_roam_prefix),
-			device_ap_roam_frame_event, device);
-
-	device->powered = netdev_get_is_up(netdev);
-
-	device->dbus_powered = true;
-	device->wiphy_rfkill_watch =
-		wiphy_state_watch_add(wiphy, device_wiphy_state_changed_event,
-					device, NULL);
-
-	return device;
-}
-
-void device_remove(struct device *device)
-{
-	l_debug("");
-
-	scan_wdev_remove(netdev_get_wdev_id(device->netdev));
-
-	netdev_frame_watch_remove(device->netdev, device->ap_roam_watch);
-	wiphy_state_watch_remove(device->wiphy, device->wiphy_rfkill_watch);
-
-	l_free(device);
-}
-
 static void destroy_device_interface(void *user_data)
 {
 	struct device *device = user_data;
 
-	device_remove(device);
+	device_free(device);
 }
 
 static int device_init(void)

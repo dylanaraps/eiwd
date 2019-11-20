@@ -34,7 +34,6 @@
 #include "src/iwd.h"
 #include "src/module.h"
 #include "src/scan.h"
-#include "src/device.h"
 #include "src/netdev.h"
 #include "src/wiphy.h"
 #include "src/crypto.h"

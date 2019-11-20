@@ -37,7 +37,6 @@
 #include "src/iwd.h"
 #include "src/module.h"
 #include "src/common.h"
-#include "src/device.h"
 #include "src/watchlist.h"
 #include "src/scan.h"
 #include "src/netdev.h"
