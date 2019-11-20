@@ -109,6 +109,7 @@ struct rrm_beacon_req_info {
 	char ssid[33];		/* Request filtered by SSID */
 	bool has_ssid;
 	uint32_t scan_id;
+	uint64_t scan_start_time;
 };
 
 /* Per-netdev state */
@@ -249,8 +250,7 @@ static size_t build_report_for_bss(struct rrm_beacon_req_info *beacon,
 
 	*to++ = beacon->oper_class;
 	*to++ = scan_freq_to_channel(bss->frequency, NULL);
-	/* skip start time */
-	memset(to, 0, 8);
+	l_put_le64(beacon->scan_start_time, to);
 	to += 8;
 	l_put_le16(beacon->duration, to);
 	to += 2;
@@ -390,11 +390,18 @@ static bool rrm_scan_results(int err, struct l_queue *bss_list, void *userdata)
 static void rrm_scan_triggered(int err, void *userdata)
 {
 	struct rrm_state *rrm = userdata;
+	struct rrm_beacon_req_info *beacon = l_container_of(rrm->pending,
+						struct rrm_beacon_req_info,
+						info);
 
 	if (err < 0) {
 		l_error("Could not start RRM scan");
 		rrm_reject_measurement_request(rrm, REPORT_REJECT_INCAPABLE);
+		return;
 	}
+
+	beacon->scan_start_time = scan_get_triggered_time(rrm->wdev_id,
+							beacon->scan_id);
 }
 
 static void rrm_handle_beacon_scan(struct rrm_state *rrm,
