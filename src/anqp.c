@@ -374,7 +374,9 @@ static void anqp_netdev_watch(struct netdev *netdev,
 {
 	switch (event) {
 	case NETDEV_WATCH_EVENT_NEW:
-		anqp_register_frame(netdev_get_ifindex(netdev));
+		if (netdev_get_iftype(netdev) == NETDEV_IFTYPE_STATION)
+			anqp_register_frame(netdev_get_ifindex(netdev));
+
 		return;
 	default:
 		break;
