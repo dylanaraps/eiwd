@@ -1076,7 +1076,7 @@ static struct scan_bss *scan_parse_attr_bss(struct l_genl_attr *attr)
 			if (len != sizeof(uint64_t))
 				goto fail;
 
-			bss->parent_tsf = l_get_le64(data);
+			bss->parent_tsf = l_get_u64(data);
 			break;
 		}
 	}
