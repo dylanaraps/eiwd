@@ -4283,11 +4283,6 @@ static void netdev_getlink_cb(int error, uint16_t type, const void *data,
 
 	netdev_newlink_notify(ifi, bytes);
 
-	/* Don't do anything automatically for P2P interfaces */
-	if (netdev->type == NL80211_IFTYPE_P2P_CLIENT ||
-			netdev->type == NL80211_IFTYPE_P2P_GO)
-		return;
-
 	/*
 	 * If the interface is UP, reset it to ensure a clean state.
 	 * Otherwise, if we need to set a random mac, do so.  If not, just
