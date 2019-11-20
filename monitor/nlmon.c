@@ -5578,6 +5578,10 @@ static const struct attr_entry attr_table[] = {
 			"FTM Responder" },
 	{ NL80211_ATTR_FTM_RESPONDER_STATS,
 			"FTM Responder Stats" },
+	{ NL80211_ATTR_SCAN_START_TIME_TSF,
+			"Scan Start Time", ATTR_U64 },
+	{ NL80211_ATTR_SCAN_START_TIME_TSF_BSSID,
+			"Scan Start Time BSSID", ATTR_ADDRESS },
 	{ }
 };
 
