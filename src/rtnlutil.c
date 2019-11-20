@@ -25,6 +25,7 @@
 #endif
 
 #include <sys/socket.h>
+#include <linux/if.h>
 #include <linux/rtnetlink.h>
 #include <arpa/inet.h>
 
@@ -124,6 +125,31 @@ uint32_t rtnl_set_mac(struct l_netlink *rtnl, int ifindex,
 
 	id = l_netlink_send(rtnl, RTM_SETLINK, 0, rtmmsg,
 					rta_buf - (void *) rtmmsg,
+					cb, user_data, destroy);
+	l_free(rtmmsg);
+
+	return id;
+}
+
+uint32_t rtnl_set_powered(struct l_netlink *rtnl, int ifindex, bool powered,
+				l_netlink_command_func_t cb, void *user_data,
+				l_netlink_destroy_func_t destroy)
+{
+	struct ifinfomsg *rtmmsg;
+	size_t bufsize;
+	uint32_t id;
+
+	bufsize = NLMSG_ALIGN(sizeof(struct ifinfomsg));
+
+	rtmmsg = l_malloc(bufsize);
+	memset(rtmmsg, 0, bufsize);
+
+	rtmmsg->ifi_family = AF_UNSPEC;
+	rtmmsg->ifi_index = ifindex;
+	rtmmsg->ifi_change = IFF_UP;
+	rtmmsg->ifi_flags = powered ? IFF_UP : 0;
+
+	id = l_netlink_send(rtnl, RTM_SETLINK, 0, rtmmsg, bufsize,
 					cb, user_data, destroy);
 	l_free(rtmmsg);
 

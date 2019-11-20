@@ -340,31 +340,6 @@ static void netdev_set_powered_destroy(void *user_data)
 	netdev->set_powered_user_data = NULL;
 }
 
-static uint32_t rtnl_set_powered(int ifindex, bool powered,
-				l_netlink_command_func_t cb, void *user_data,
-				l_netlink_destroy_func_t destroy)
-{
-	struct ifinfomsg *rtmmsg;
-	size_t bufsize;
-	uint32_t id;
-
-	bufsize = NLMSG_ALIGN(sizeof(struct ifinfomsg));
-
-	rtmmsg = l_malloc(bufsize);
-	memset(rtmmsg, 0, bufsize);
-
-	rtmmsg->ifi_family = AF_UNSPEC;
-	rtmmsg->ifi_index = ifindex;
-	rtmmsg->ifi_change = IFF_UP;
-	rtmmsg->ifi_flags = powered ? IFF_UP : 0;
-
-	id = l_netlink_send(rtnl, RTM_SETLINK, 0, rtmmsg, bufsize,
-					cb, user_data, destroy);
-
-	l_free(rtmmsg);
-	return id;
-}
-
 int netdev_set_powered(struct netdev *netdev, bool powered,
 			netdev_command_cb_t callback, void *user_data,
 			netdev_destroy_func_t destroy)
@@ -374,7 +349,7 @@ int netdev_set_powered(struct netdev *netdev, bool powered,
 		return -EBUSY;
 
 	netdev->set_powered_cmd_id =
-		rtnl_set_powered(netdev->index, powered,
+		rtnl_set_powered(rtnl, netdev->index, powered,
 					netdev_set_powered_result, netdev,
 					netdev_set_powered_destroy);
 	if (!netdev->set_powered_cmd_id)
@@ -664,7 +639,7 @@ static void netdev_shutdown_one(void *data, void *user_data)
 	struct netdev *netdev = data;
 
 	if (netdev_get_is_up(netdev))
-		rtnl_set_powered(netdev->index, false, NULL, NULL, NULL);
+		rtnl_set_powered(rtnl, netdev->index, false, NULL, NULL, NULL);
 }
 
 static bool netdev_match(const void *a, const void *b)
@@ -3917,7 +3892,7 @@ static void netdev_set_iftype_cb(struct l_genl_msg *msg, void *user_data)
 		goto done;
 
 	netdev->set_powered_cmd_id =
-			rtnl_set_powered(netdev->index, true,
+			rtnl_set_powered(rtnl, netdev->index, true,
 					netdev_set_iftype_up_cb, req,
 					netdev_set_iftype_request_destroy);
 	if (!netdev->set_powered_cmd_id) {
@@ -4013,7 +3988,7 @@ int netdev_set_iftype(struct netdev *netdev, enum netdev_iftype type,
 		l_genl_msg_unref(msg);
 	} else {
 		netdev->set_powered_cmd_id =
-			rtnl_set_powered(netdev->index, false,
+			rtnl_set_powered(rtnl, netdev->index, false,
 					netdev_set_iftype_down_cb, req,
 					netdev_set_iftype_request_destroy);
 		if (netdev->set_powered_cmd_id)
@@ -4244,8 +4219,8 @@ static void netdev_set_mac_cb(int error, uint16_t type, const void *data,
 			strerror(-error));
 
 	netdev->set_powered_cmd_id =
-		rtnl_set_powered(netdev->index, true, netdev_initial_up_cb,
-					netdev, NULL);
+		rtnl_set_powered(rtnl, netdev->index, true,
+					netdev_initial_up_cb, netdev, NULL);
 }
 
 static void netdev_initial_down_cb(int error, uint16_t type, const void *data,
@@ -4276,8 +4251,8 @@ static void netdev_initial_down_cb(int error, uint16_t type, const void *data,
 	}
 
 	netdev->set_powered_cmd_id =
-		rtnl_set_powered(netdev->index, true, netdev_initial_up_cb,
-					netdev, NULL);
+		rtnl_set_powered(rtnl, netdev->index, true,
+					netdev_initial_up_cb, netdev, NULL);
 }
 
 static void netdev_getlink_cb(int error, uint16_t type, const void *data,
@@ -4335,7 +4310,8 @@ static void netdev_getlink_cb(int error, uint16_t type, const void *data,
 	cb = powered ? netdev_initial_down_cb : netdev_initial_up_cb;
 
 	netdev->set_powered_cmd_id =
-		rtnl_set_powered(ifi->ifi_index, !powered, cb, netdev, NULL);
+		rtnl_set_powered(rtnl, ifi->ifi_index, !powered, cb, netdev,
+					NULL);
 }
 
 static void netdev_frame_watch_free(struct watchlist_item *item)
@@ -4652,6 +4628,8 @@ static void netdev_link_notify(uint16_t type, const void *data, uint32_t len,
 
 	if (ifi->ifi_type != ARPHRD_ETHER)
 		return;
+
+	l_debug("event %u on ifindex %u", type, ifi->ifi_index);
 
 	bytes = len - NLMSG_ALIGN(sizeof(struct ifinfomsg));
 
