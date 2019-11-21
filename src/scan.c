@@ -47,6 +47,7 @@
 #include "src/nl80211util.h"
 #include "src/util.h"
 #include "src/p2putil.h"
+#include "src/mpdu.h"
 #include "src/scan.h"
 
 #define SCAN_MAX_INTERVAL 320
@@ -1332,6 +1333,32 @@ static void scan_bss_compute_rank(struct scan_bss *bss)
 		bss->rank = USHRT_MAX;
 	else
 		bss->rank = irank;
+}
+
+struct scan_bss *scan_bss_new_from_probe_req(const struct mmpdu_header *mpdu,
+						const uint8_t *body,
+						size_t body_len,
+						uint32_t frequency, int rssi)
+
+{
+	struct scan_bss *bss;
+
+	bss = l_new(struct scan_bss, 1);
+	memcpy(bss->addr, mpdu->address_2, 6);
+	bss->utilization = 127;
+	bss->source_frame = SCAN_BSS_PROBE_REQ;
+	bss->frequency = frequency;
+	bss->signal_strength = rssi;
+
+	if (!scan_parse_bss_information_elements(bss, body, body_len))
+		goto fail;
+
+	scan_bss_compute_rank(bss);
+	return bss;
+
+fail:
+	scan_bss_free(bss);
+	return NULL;
 }
 
 void scan_bss_free(struct scan_bss *bss)

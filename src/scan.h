@@ -43,6 +43,7 @@ struct ie_rsn_info;
 struct p2p_probe_resp;
 struct p2p_probe_req;
 struct p2p_beacon;
+struct mmpdu_header;
 
 enum scan_bss_frame_type {
 	SCAN_BSS_PROBE_RESP,
@@ -143,6 +144,11 @@ void scan_bss_free(struct scan_bss *bss);
 int scan_bss_rank_compare(const void *a, const void *b, void *user);
 
 int scan_bss_get_rsn_info(const struct scan_bss *bss, struct ie_rsn_info *info);
+
+struct scan_bss *scan_bss_new_from_probe_req(const struct mmpdu_header *mpdu,
+						const uint8_t *body,
+						size_t body_len,
+						uint32_t frequency, int rssi);
 
 uint8_t scan_freq_to_channel(uint32_t freq, enum scan_band *out_band);
 uint32_t scan_channel_to_freq(uint8_t channel, enum scan_band band);
