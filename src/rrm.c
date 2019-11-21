@@ -274,7 +274,7 @@ static size_t build_report_for_bss(struct rrm_beacon_req_info *beacon,
 	 * 802.11 9.4.2.22.7 Beacon report
 	 *
 	 * "The Parent TSF field contains the lower 4 octets of the measuring
-	 *  STA’s TSF timer value"
+	 *  STA's TSF timer value"
 	 */
 	l_put_le32((uint32_t)(bss->parent_tsf & 0xffffffff), to);
 	to += 4;
