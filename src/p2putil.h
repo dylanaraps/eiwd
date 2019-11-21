@@ -462,22 +462,22 @@ int p2p_parse_presence_resp(const uint8_t *pdu, size_t len,
 				struct p2p_presence_resp *out);
 int p2p_parse_go_disc_req(const uint8_t *pdu, size_t len);
 
-void p2p_free_beacon(struct p2p_beacon *data);
-void p2p_free_probe_req(struct p2p_probe_req *data);
-void p2p_free_probe_resp(struct p2p_probe_resp *data);
-void p2p_free_association_req(struct p2p_association_req *data);
-void p2p_free_association_resp(struct p2p_association_resp *data);
-void p2p_free_go_negotiation_req(struct p2p_go_negotiation_req *data);
-void p2p_free_go_negotiation_resp(struct p2p_go_negotiation_resp *data);
-void p2p_free_go_negotiation_confirmation(
+void p2p_clear_beacon(struct p2p_beacon *data);
+void p2p_clear_probe_req(struct p2p_probe_req *data);
+void p2p_clear_probe_resp(struct p2p_probe_resp *data);
+void p2p_clear_association_req(struct p2p_association_req *data);
+void p2p_clear_association_resp(struct p2p_association_resp *data);
+void p2p_clear_go_negotiation_req(struct p2p_go_negotiation_req *data);
+void p2p_clear_go_negotiation_resp(struct p2p_go_negotiation_resp *data);
+void p2p_clear_go_negotiation_confirmation(
 				struct p2p_go_negotiation_confirmation *data);
-void p2p_free_invitation_req(struct p2p_invitation_req *data);
-void p2p_free_invitation_resp(struct p2p_invitation_resp *data);
-void p2p_free_provision_disc_req(struct p2p_provision_discovery_req *data);
-void p2p_free_provision_disc_resp(struct p2p_provision_discovery_resp *data);
-void p2p_free_notice_of_absence(struct p2p_notice_of_absence *data);
-void p2p_free_presence_req(struct p2p_presence_req *data);
-void p2p_free_presence_resp(struct p2p_presence_resp *data);
+void p2p_clear_invitation_req(struct p2p_invitation_req *data);
+void p2p_clear_invitation_resp(struct p2p_invitation_resp *data);
+void p2p_clear_provision_disc_req(struct p2p_provision_discovery_req *data);
+void p2p_clear_provision_disc_resp(struct p2p_provision_discovery_resp *data);
+void p2p_clear_notice_of_absence(struct p2p_notice_of_absence *data);
+void p2p_clear_presence_req(struct p2p_presence_req *data);
+void p2p_clear_presence_resp(struct p2p_presence_resp *data);
 
 uint8_t *p2p_build_beacon(const struct p2p_beacon *data, size_t *out_len);
 uint8_t *p2p_build_probe_req(const struct p2p_probe_req *data, size_t *out_len);
