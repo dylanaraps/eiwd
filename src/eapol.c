@@ -1616,7 +1616,7 @@ static void eapol_handle_ptk_3_of_4(struct eapol_sm *sm,
 		 * pairwise cipher suite which is advertised by an AP, but
 		 * which policy disallows for this particular STA. An
 		 * Authenticator may, therefore, insert a second RSNE to
-		 * overrule the STA’s selection. An Authenticator’s SME shall
+		 * overrule the STA's selection. An Authenticator’s SME shall
 		 * insert the second RSNE, after the first RSNE, only for this
 		 * purpose. The pairwise cipher suite in the second RSNE
 		 * included shall be one of the ciphers advertised by the
