@@ -40,6 +40,15 @@ typedef void (*scan_freq_set_func_t)(uint32_t freq, void *userdata);
 
 struct scan_freq_set;
 struct ie_rsn_info;
+struct p2p_probe_resp;
+struct p2p_probe_req;
+struct p2p_beacon;
+
+enum scan_bss_frame_type {
+	SCAN_BSS_PROBE_RESP,
+	SCAN_BSS_PROBE_REQ,
+	SCAN_BSS_BEACON,
+};
 
 struct scan_bss {
 	uint8_t addr[6];
@@ -51,8 +60,12 @@ struct scan_bss {
 	uint8_t *osen;
 	uint8_t *wsc;		/* Concatenated WSC IEs */
 	ssize_t wsc_size;	/* Size of Concatenated WSC IEs */
-	uint8_t *p2p;		/* Concatenated P2P IEs */
-	ssize_t p2p_size;	/* Size of Concatenated P2P IEs */
+	enum scan_bss_frame_type source_frame;
+	union {
+		struct p2p_probe_resp *p2p_probe_resp_info;
+		struct p2p_probe_req *p2p_probe_req_info;
+		struct p2p_beacon *p2p_beacon_info;
+	};
 	uint8_t mde[3];
 	uint8_t ssid[32];
 	uint8_t ssid_len;
