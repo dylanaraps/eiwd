@@ -589,7 +589,7 @@ static pid_t execute_program(char *argv[], char *envp[], bool wait,
 			fd = open(log_file, O_WRONLY | O_CREAT | O_APPEND,
 					S_IRUSR | S_IWUSR);
 			if (fchown(fd, log_uid, log_gid) < 0)
-				l_error("fchown failed");
+				l_error("failed to fchown %s", log_file);
 		}
 
 		if (fd > -1) {
@@ -3190,7 +3190,7 @@ int main(int argc, char *argv[])
 			mkdir(log_dir, 0755);
 
 			if (chown(log_dir, log_uid, log_gid) < 0)
-				l_error("fchown failed");
+				l_error("failed to fchown %s", log_dir);
 
 			break;
 		case 'h':
