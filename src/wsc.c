@@ -831,7 +831,7 @@ static bool pin_scan_results(int err, struct l_queue *bss_list, void *userdata)
 		 * channels and then order PIN attempts with prospective APs
 		 * as follows:
 		 * 1. WSC 2.0 AP with the Selected Registrar attribute TRUE
-		 * and the Enrollee’s MAC address in the AuthorizedMACs
+		 * and the Enrollee's MAC address in the AuthorizedMACs
 		 * sub-element in Beacons and Probe Responses.
 		 * 2. WSC 2.0 APs with the Selected Registrar attribute TRUE
 		 * and the wildcard MAC address in the AuthorizedMACs
