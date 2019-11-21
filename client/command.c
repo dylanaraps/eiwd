@@ -516,7 +516,7 @@ static void list_cmd_options(void)
 	display(MARGIN "--%-*s%s\n", 48, COMMAND_OPTION_PASSPHRASE,
 					"Provide passphrase");
 	display(MARGIN "--%-*s%s\n", 48, COMMAND_OPTION_DONTASK,
-					"Don’t ask for missing\n"
+					"Don't ask for missing\n"
 					"\t\t\t\t\t\t    credentials");
 	display(MARGIN "--%-*s%s\n", 48, "help", "Display help");
 }
