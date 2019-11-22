@@ -246,7 +246,7 @@ static uint8_t mdb_to_rcpi(int32_t mdb)
 	if (mdb <= 10950)
 		return 0;
 	else if (mdb >= -10950 && mdb < 0)
-		return (uint8_t)((2 * (mdb + 11000)) / 100);
+		return (2 * (mdb + 11000)) / 100;
 	else
 		return 220;
 }
@@ -293,7 +293,7 @@ static size_t build_report_for_bss(struct rrm_beacon_req_info *beacon,
 	 * "The Parent TSF field contains the lower 4 octets of the measuring
 	 *  STA's TSF timer value"
 	 */
-	report->parent_tsf = L_CPU_TO_LE32((uint32_t) bss->parent_tsf);
+	report->parent_tsf = L_CPU_TO_LE32(bss->parent_tsf);
 
 	/*
 	 * TODO: Support optional subelements
