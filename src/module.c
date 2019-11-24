@@ -91,7 +91,7 @@ static int module_topological_order(struct module *module,
 	return 0;
 }
 
-int iwd_modules_init()
+int iwd_modules_init(void)
 {
 	struct iwd_module_desc *desc;
 	struct iwd_module_depends *dep;
@@ -162,7 +162,7 @@ int iwd_modules_init()
 	return 0;
 }
 
-void iwd_modules_exit()
+void iwd_modules_exit(void)
 {
 	struct iwd_module_desc *desc;
 	unsigned int i;
