@@ -1703,7 +1703,8 @@ static void scan_notify(struct l_genl_msg *msg, void *user_data)
 		else
 			sc->state = SCAN_STATE_PASSIVE;
 
-		sr->start_time_tsf = start_time_tsf;
+		if (sr)
+			sr->start_time_tsf = start_time_tsf;
 
 		break;
 
