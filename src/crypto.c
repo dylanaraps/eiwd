@@ -581,6 +581,70 @@ bool prf_sha1(const void *key, size_t key_len,
 	return true;
 }
 
+bool prf_plus_sha1(const void *key, size_t key_len,
+					const void *label, size_t label_len,
+					const void *seed, size_t seed_len,
+					void *output, size_t size)
+{
+	/*
+	 * PRF+ (K, S, LEN) = T1 | T2 | T3 | T4 | ... where:
+	 *
+	 * T1 = HMAC-SHA1 (K, S | LEN | 0x01 | 0x00 | 0x00)
+	 *
+	 * T2 = HMAC-SHA1 (K, T1 | S | LEN | 0x02 | 0x00 | 0x00)
+	 *
+	 * T3 = HMAC-SHA1 (K, T2 | S | LEN | 0x03 | 0x00 | 0x00)
+	 *
+	 * T4 = HMAC-SHA1 (K, T3 | S | LEN | 0x04 | 0x00 | 0x00)
+	 *
+	 * ...
+	 */
+
+	static const uint8_t SHA1_MAC_LEN = 20;
+	static const uint8_t nil_bytes[2] = { 0, 0 };
+	struct l_checksum *hmac;
+	uint8_t t[SHA1_MAC_LEN];
+	uint8_t counter;
+	struct iovec iov[5] = {
+		[0] = { .iov_base = (void *) t, .iov_len = 0 },
+		[1] = { .iov_base = (void *) label, .iov_len = label_len },
+		[2] = { .iov_base = (void *) seed, .iov_len = seed_len },
+		[3] = { .iov_base = &counter, .iov_len = 1 },
+		[4] = { .iov_base = (void *) nil_bytes, .iov_len = 2 },
+	};
+
+	hmac = l_checksum_new_hmac(L_CHECKSUM_SHA1, key, key_len);
+	if (!hmac)
+		return false;
+
+	/* PRF processes in 160-bit chunks (20 bytes) */
+	for (counter = 1;; counter++) {
+		size_t len;
+
+		if (size > SHA1_MAC_LEN)
+			len = SHA1_MAC_LEN;
+		else
+			len = size;
+
+		l_checksum_updatev(hmac, iov, 5);
+		l_checksum_get_digest(hmac, t, len);
+
+		memcpy(output, t, len);
+
+		size -= len;
+
+		if (!size)
+			break;
+
+		output += len;
+		iov[0].iov_len = len;
+	}
+
+	l_checksum_free(hmac);
+
+	return true;
+}
+
 /* Defined in 802.11-2012, Section 11.6.1.7.2 Key derivation function (KDF) */
 bool kdf_sha256(const void *key, size_t key_len,
 		const void *prefix, size_t prefix_len,
