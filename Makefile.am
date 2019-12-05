@@ -202,7 +202,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h src/missing.h \
 					src/agent.h src/agent.c \
 					src/storage.h src/storage.c \
 					src/network.h src/network.c \
-					src/wsc.c \
+					src/wsc.h src/wsc.c \
 					src/backtrace.h src/backtrace.c \
 					src/knownnetworks.h \
 					src/knownnetworks.c \

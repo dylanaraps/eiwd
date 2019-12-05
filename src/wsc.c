@@ -45,6 +45,7 @@
 #include "src/storage.h"
 #include "src/iwd.h"
 #include "src/network.h"
+#include "src/wsc.h"
 
 #define WALK_TIME 120
 
@@ -61,16 +62,7 @@ struct wsc {
 	uint32_t scan_id;
 	struct scan_bss *target;
 	uint32_t station_state_watch;
-	struct {
-		char ssid[33];
-		enum security security;
-		union {
-			uint8_t psk[32];
-			char passphrase[64];
-		};
-		uint8_t addr[6];
-		bool has_passphrase;
-	} creds[3];
+	struct wsc_credentials_info creds[3];
 	uint32_t n_creds;
 	struct l_settings *eap_settings;
 
