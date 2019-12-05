@@ -2763,9 +2763,25 @@ static void print_wsc_wfa_ext_version2(unsigned int level, const char *label,
 	print_attr(level, "%s: %x.%x", label, bytes[0] >> 4, bytes[0] & 0xf);
 }
 
+static void print_wsc_wfa_ext_authorized_macs(unsigned int level,
+						const char *label,
+						const void *data, uint16_t size)
+{
+	if (size > 30 || size % 6 != 0) {
+		printf("malformed packet\n");
+		return;
+	}
+
+	for (; size; size -= 6, data += 6)
+		print_attr(level, "%s: %s", label, util_address_to_string(data));
+}
+
 static struct attr_entry wsc_wfa_ext_attr_entry[] = {
 	{ WSC_WFA_EXTENSION_VERSION2,			"Version2",
 		ATTR_CUSTOM,	{ .function = print_wsc_wfa_ext_version2 } },
+	{ WSC_WFA_EXTENSION_AUTHORIZED_MACS,		"Authorized MAC",
+		ATTR_CUSTOM,
+		{ .function = print_wsc_wfa_ext_authorized_macs } },
 	{ WSC_WFA_EXTENSION_NETWORK_KEY_SHAREABLE,
 						"Network Key Shareable",
 		ATTR_CUSTOM,	{ .function = print_wsc_bool } },
