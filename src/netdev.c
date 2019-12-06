@@ -626,6 +626,8 @@ static void netdev_free(void *data)
 		WATCHLIST_NOTIFY(&netdev_watches, netdev_watch_func_t,
 					netdev, NETDEV_WATCH_EVENT_DEL);
 
+	scan_wdev_remove(netdev->wdev_id);
+
 	watchlist_destroy(&netdev->frame_watches);
 	watchlist_destroy(&netdev->station_watches);
 
@@ -4203,6 +4205,8 @@ static void netdev_initial_up_cb(int error, uint16_t type, const void *data,
 	netdev_set_4addr(netdev, netdev->use_4addr, NULL, NULL, NULL);
 
 	l_debug("Interface %i initialized", netdev->index);
+
+	scan_wdev_add(netdev->wdev_id);
 
 	WATCHLIST_NOTIFY(&netdev_watches, netdev_watch_func_t,
 				netdev, NETDEV_WATCH_EVENT_NEW);

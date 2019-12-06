@@ -322,8 +322,6 @@ static struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 		l_info("Unable to register %s interface",
 				L_DBUS_INTERFACE_PROPERTIES);
 
-	scan_wdev_add(netdev_get_wdev_id(device->netdev));
-
 	/*
 	 * register for AP roam transition watch
 	 */
@@ -344,8 +342,6 @@ static struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 static void device_free(struct device *device)
 {
 	l_debug("");
-
-	scan_wdev_remove(netdev_get_wdev_id(device->netdev));
 
 	netdev_frame_watch_remove(device->netdev, device->ap_roam_watch);
 	wiphy_state_watch_remove(device->wiphy, device->wiphy_rfkill_watch);
