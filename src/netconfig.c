@@ -382,12 +382,19 @@ static char **netconfig_ipv6_get_dns(struct netconfig *netconfig, uint8_t proto)
 {
 	struct in6_addr in6_addr;
 	char **dns_list;
-	char **p;
 
-	p = dns_list = l_settings_get_string_list(netconfig->active_settings,
-							"IPv6", "dns", ' ');
+	dns_list = l_settings_get_string_list(netconfig->active_settings,
+							"IPv6", "DNS", ' ');
+
+	if (!dns_list)
+		dns_list = l_settings_get_string_list(
+						netconfig->active_settings,
+						"IPv6", "dns", ' ');
+
 	if (dns_list && *dns_list) {
-		for (; *p; p++) {
+		char **p;
+
+		for (p = dns_list; *p; p++) {
 			if (inet_pton(AF_INET6, *p, &in6_addr) == 1)
 				continue;
 
