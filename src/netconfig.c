@@ -351,7 +351,11 @@ static char *netconfig_ipv6_get_gateway(struct netconfig *netconfig)
 	switch (netconfig->rtm_v6_protocol) {
 	case RTPROT_STATIC:
 		gateway = l_settings_get_string(netconfig->active_settings,
-							"IPv6", "gateway");
+							"IPv6", "Gateway");
+		if (!gateway)
+			gateway = l_settings_get_string(
+						netconfig->active_settings,
+						"IPv6", "gateway");
 
 		if (inet_pton(AF_INET6, gateway, &in6_addr) < 1) {
 			l_error("netconfig: Invalid IPv6 gateway address %s is "
