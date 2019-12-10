@@ -204,12 +204,18 @@ static struct netconfig_ifaddr *netconfig_ipv4_get_ifaddr(
 static char *netconfig_ipv4_get_gateway(struct netconfig *netconfig)
 {
 	const struct l_dhcp_lease *lease;
+	char *gateway;
 
 	switch (netconfig->rtm_protocol) {
 	case RTPROT_STATIC:
+		gateway = l_settings_get_string(netconfig->active_settings,
+							"IPv4", "Gateway");
+		if (!gateway)
+			gateway = l_settings_get_string(
+						netconfig->active_settings,
+						"IPv4", "gateway");
 
-		return l_settings_get_string(netconfig->active_settings,
-							"IPv4", "gateway");
+		return gateway;
 
 	case RTPROT_DHCP:
 		lease = l_dhcp_client_get_lease(netconfig->dhcp_client);
