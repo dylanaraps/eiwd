@@ -233,12 +233,18 @@ static char **netconfig_ipv4_get_dns(struct netconfig *netconfig, uint8_t proto)
 	const struct l_dhcp_lease *lease;
 	struct in_addr in_addr;
 	char **dns_list;
-	char **p;
 
-	p = dns_list = l_settings_get_string_list(netconfig->active_settings,
-							"IPv4", "dns", ' ');
+	dns_list = l_settings_get_string_list(netconfig->active_settings,
+							"IPv4", "DNS", ' ');
+	if (!dns_list)
+		dns_list = l_settings_get_string_list(
+						netconfig->active_settings,
+						"IPv4", "dns", ' ');
+
 	if (dns_list && *dns_list) {
-		for (; *p; p++) {
+		char **p;
+
+		for (p = dns_list; *p; p++) {
 			if (inet_pton(AF_INET, *p, &in_addr) == 1)
 				continue;
 
