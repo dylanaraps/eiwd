@@ -290,9 +290,13 @@ static struct netconfig_ifaddr *netconfig_ipv6_get_ifaddr(
 	switch (proto) {
 	case RTPROT_STATIC:
 		ip = l_settings_get_string(netconfig->active_settings, "IPv6",
-									"ip");
-		if (!ip)
-			return NULL;
+								"Address");
+		if (!ip) {
+			ip = l_settings_get_string(netconfig->active_settings,
+								"IPv6", "ip");
+			if (!ip)
+				return NULL;
+		}
 
 		ifaddr = l_new(struct netconfig_ifaddr, 1);
 		ifaddr->ip = ip;
