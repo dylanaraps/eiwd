@@ -131,15 +131,24 @@ static struct netconfig_ifaddr *netconfig_ipv4_get_ifaddr(
 	case RTPROT_STATIC:
 
 		ip = l_settings_get_string(netconfig->active_settings, "IPv4",
-									"ip");
-		if (!ip)
-			return NULL;
+								"Address");
+		if (!ip) {
+			ip = l_settings_get_string(netconfig->active_settings,
+							"IPv4", "ip");
+			if (!ip)
+				return NULL;
+		}
 
 		ifaddr = l_new(struct netconfig_ifaddr, 1);
 		ifaddr->ip = ip;
 
 		netmask = l_settings_get_string(netconfig->active_settings,
-							"IPv4", "netmask");
+							"IPv4", "Netmask");
+		if (!netmask)
+			netmask = l_settings_get_string(
+						netconfig->active_settings,
+						"IPv4", "netmask");
+
 		if (netmask && inet_pton(AF_INET, netmask, &in_addr) > 0)
 			ifaddr->prefix_len = __builtin_popcountl(
 						L_BE32_TO_CPU(in_addr.s_addr));
@@ -150,7 +159,13 @@ static struct netconfig_ifaddr *netconfig_ipv4_get_ifaddr(
 
 		ifaddr->broadcast =
 			l_settings_get_string(netconfig->active_settings,
-							"IPv4", "broadcast");
+							"IPv4", "Broadcast");
+		if (!ifaddr->broadcast)
+			ifaddr->broadcast =
+				l_settings_get_string(
+						netconfig->active_settings,
+						"IPv4", "broadcast");
+
 		ifaddr->family = AF_INET;
 
 		return ifaddr;
