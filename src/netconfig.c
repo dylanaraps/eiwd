@@ -278,6 +278,28 @@ static char **netconfig_ipv4_get_dns(struct netconfig *netconfig, uint8_t proto)
 	return NULL;
 }
 
+static char *netconfig_ipv4_get_domain_name(struct netconfig *netconfig,
+								uint8_t proto)
+{
+	const struct l_dhcp_lease *lease;
+	char *domain_name;
+
+	domain_name = l_settings_get_string(netconfig->active_settings,
+							"IPv4", "DomainName");
+	if (domain_name)
+		/* Allow to override the DHCP domain name with setting entry. */
+		return domain_name;
+
+	if (proto != RTPROT_DHCP)
+		return NULL;
+
+	lease = l_dhcp_client_get_lease(netconfig->dhcp_client);
+	if (!lease)
+		return NULL;
+
+	return l_dhcp_lease_get_domain_name(lease);
+}
+
 static struct netconfig_ifaddr *netconfig_ipv6_get_ifaddr(
 						struct netconfig *netconfig,
 						uint8_t proto)
@@ -727,6 +749,7 @@ static void netconfig_ipv4_ifaddr_add_cmd_cb(int error, uint16_t type,
 	struct netconfig *netconfig = user_data;
 	struct netconfig_ifaddr *ifaddr;
 	char **dns;
+	char *domain_name;
 
 	if (error && error != -EEXIST) {
 		l_error("netconfig: Failed to add IP address. "
@@ -751,11 +774,20 @@ static void netconfig_ipv4_ifaddr_add_cmd_cb(int error, uint16_t type,
 	dns = netconfig_ipv4_get_dns(netconfig, netconfig->rtm_protocol);
 	if (!dns) {
 		l_error("netconfig: Failed to obtain DNS addresses.");
-		goto done;
+		goto domain_name;
 	}
 
 	resolve_add_dns(netconfig->ifindex, ifaddr->family, dns);
 	l_strv_free(dns);
+
+domain_name:
+	domain_name = netconfig_ipv4_get_domain_name(netconfig,
+						netconfig->rtm_protocol);
+	if (!domain_name)
+		goto done;
+
+	resolve_add_domain_name(netconfig->ifindex, domain_name);
+	l_free(domain_name);
 
 done:
 	netconfig_ifaddr_destroy(ifaddr);
