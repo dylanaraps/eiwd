@@ -21,4 +21,5 @@
  */
 
 void resolve_add_dns(uint32_t ifindex, uint8_t type, char **dns_list);
+void resolve_add_domain_name(uint32_t ifindex, const char *domain_name);
 void resolve_remove(uint32_t ifindex);

@@ -42,6 +42,8 @@ struct resolve_method_ops {
 	void (*exit)(void *data);
 	void (*add_dns)(uint32_t ifindex, uint8_t type, char **dns_list,
 								void *data);
+	void (*add_domain_name)(uint32_t ifindex, const char *domain_name,
+								void *data);
 	void (*remove)(uint32_t ifindex, void *data);
 };
 
@@ -177,6 +179,57 @@ static void resolve_systemd_add_dns(uint32_t ifindex, uint8_t type,
 								state, NULL);
 }
 
+static void systemd_link_add_domains_reply(struct l_dbus_message *message,
+								void *user_data)
+{
+	const char *name;
+	const char *text;
+
+	if (!l_dbus_message_is_error(message))
+		return;
+
+	l_dbus_message_get_error(message, &name, &text);
+
+	l_error("resolve-systemd: Failed to modify the domain entries. %s: %s",
+								name, text);
+}
+
+static void resolve_systemd_add_domain_name(uint32_t ifindex,
+							const char *domain_name,
+							void *data)
+{
+	struct systemd_state *state = data;
+	struct l_dbus_message *message;
+	bool routing_domain;
+
+	l_debug("ifindex: %u", ifindex);
+
+	if (!state->is_ready) {
+		l_error("resolve-systemd: Failed to add domain name. "
+				"Is 'systemd-resolved' service running?");
+
+		return;
+	}
+
+	message =
+		l_dbus_message_new_method_call(dbus_get_bus(),
+					SYSTEMD_RESOLVED_SERVICE,
+					SYSTEMD_RESOLVED_MANAGER_PATH,
+					SYSTEMD_RESOLVED_MANAGER_INTERFACE,
+					"SetLinkDomains");
+
+	if (!message)
+		return;
+
+	routing_domain = true;
+
+	l_dbus_message_set_arguments(message, "ia(sb)", ifindex,
+						1, domain_name, routing_domain);
+
+	l_dbus_send_with_reply(dbus_get_bus(), message,
+				systemd_link_add_domains_reply, state, NULL);
+}
+
 static void resolve_systemd_remove(uint32_t ifindex, void *data)
 {
 	struct systemd_state *state = data;
@@ -249,6 +302,7 @@ static const struct resolve_method_ops resolve_method_systemd = {
 	.init = resolve_systemd_init,
 	.exit = resolve_systemd_exit,
 	.add_dns = resolve_systemd_add_dns,
+	.add_domain_name = resolve_systemd_add_domain_name,
 	.remove = resolve_systemd_remove,
 };
 
@@ -374,6 +428,17 @@ void resolve_add_dns(uint32_t ifindex, uint8_t type, char **dns_list)
 		return;
 
 	method.ops->add_dns(ifindex, type, dns_list, method.data);
+}
+
+void resolve_add_domain_name(uint32_t ifindex, const char *domain_name)
+{
+	if (!domain_name)
+		return;
+
+	if (!method.ops || !method.ops->add_dns)
+		return;
+
+	method.ops->add_domain_name(ifindex, domain_name, method.data);
 }
 
 void resolve_remove(uint32_t ifindex)
