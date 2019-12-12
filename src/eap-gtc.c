@@ -56,11 +56,9 @@ static void eap_gtc_handle_request(struct eap_state *eap,
 	size_t secret_len = strlen(gtc->password);
 	uint8_t response[5 + secret_len];
 
-	if (len < 8)
-		goto error;
-
-	if (strncmp((const char *)pkt, "Password", 8))
-		goto error;
+	if (len < 8 || strncmp((const char *)pkt, "Password", 8))
+		l_warn("GTC request not understood, proceeding anyway: %.*s",
+				(int) len, (const char *) pkt);
 
 	memcpy(response + 5, gtc->password, secret_len);
 
@@ -69,10 +67,6 @@ static void eap_gtc_handle_request(struct eap_state *eap,
 	eap_method_success(eap);
 
 	return;
-
-error:
-	l_error("invalid GTC request");
-	eap_method_error(eap);
 }
 
 static int eap_gtc_check_settings(struct l_settings *settings,
