@@ -1082,7 +1082,7 @@ static void netdev_set_station_cb(struct l_genl_msg *msg, void *user_data)
 		return;
 
 	err = l_genl_msg_get_error(msg);
-	if (err == -ENOTSUPP)
+	if (err == -EOPNOTSUPP)
 		goto done;
 
 	if (err < 0) {
