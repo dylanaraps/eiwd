@@ -170,6 +170,8 @@ static int eap_extensions_handle_cryptobinding_tlv(struct eap_state *eap,
 	uint8_t buf[61];
 	uint8_t imck[60];
 
+	l_debug();
+
 	if (tlv_value_len != cryptobinding_val_len)
 		return -EBADMSG;
 
@@ -405,8 +407,11 @@ static void eap_extensions_handle_request(struct eap_state *eap,
 					&response[EAP_EXTENSIONS_HEADER_LEN],
 					&result);
 
-	if (response_len < 0)
+	if (response_len < 0) {
+		l_debug("PEAP: Failed to process TLVs %d", response_len);
+
 		return;
+	}
 
 	response_len += EAP_EXTENSIONS_HEADER_LEN;
 
