@@ -232,6 +232,51 @@ authentication configuration.
        method's negotiation is encrypted, a secure identity string can be
        provided.
 
+Network Configuration Settings
+-------------------------------
+
+The group ``[IPv4]`` contains settings for Internet Protocol version 4 (IPv4)
+network configuration with the static addresses.
+
+.. list-table::
+   :header-rows: 0
+   :stub-columns: 0
+   :widths: 20 80
+   :align: left
+
+   * - Address
+     - IPv4 address string
+
+       The IPv4 address to assign. This field is `required` for the static
+       configuration.
+   * - Gateway
+     - IPv4 address string
+
+       The IPv4 address of the gateway (router). This field is `required` for
+       the static configuration.
+   * - DNS
+     - IPv4 address string
+
+       The IPv4 address of the Domain Name System (DNS). This field is
+       `optional`. DNS setting can be used to override the DNS entries received
+       from the DHCP server.
+   * - Netmask
+     - IPv4 address string
+
+       The IPv4 address of the subnet. This field is `optional`. 255.255.255.0
+       is used as default Netmask.
+   * - Broadcast
+     - IPv4 address string
+
+       The IPv4 address to be used for the broadcast. This field is `optional`.
+   * - DomainName
+     - string
+
+       The DomainName is the name of the local Internet domain. This field is
+       `optional`. DomainName setting can be used to override the DomainName
+       value obtained from the DHCP server.
+
+
 Embedded PEMs
 -------------
 
