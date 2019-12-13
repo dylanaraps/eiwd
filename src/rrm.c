@@ -243,7 +243,7 @@ static void rrm_build_measurement_report(struct rrm_request_info *info,
 /* 802.11 Table 9-154 */
 static uint8_t mdb_to_rcpi(int32_t mdb)
 {
-	if (mdb <= 10950)
+	if (mdb <= -10950)
 		return 0;
 	else if (mdb >= -10950 && mdb < 0)
 		return (2 * (mdb + 11000)) / 100;
