@@ -28,9 +28,9 @@
 #include <signal.h>
 #include <ell/ell.h>
 
-#include "command.h"
-#include "display.h"
-#include "dbus-proxy.h"
+#include "client/command.h"
+#include "client/display.h"
+#include "client/dbus-proxy.h"
 
 static void signal_handler(uint32_t signo, void *user_data)
 {

@@ -26,10 +26,10 @@
 
 #include <ell/ell.h>
 
-#include "agent.h"
-#include "dbus-proxy.h"
-#include "display.h"
-#include "command.h"
+#include "client/agent.h"
+#include "client/dbus-proxy.h"
+#include "client/display.h"
+#include "client/command.h"
 
 #define IWD_AGENT_INTERFACE "net.connman.iwd.Agent"
 

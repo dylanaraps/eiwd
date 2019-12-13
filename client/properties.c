@@ -26,7 +26,7 @@
 
 #include <ell/ell.h>
 
-#include "properties.h"
+#include "client/properties.h"
 
 const char *properties_on_off_opts[3] = { "on", "off", NULL };
 const char *properties_yes_no_opts[3] = { "yes", "no", NULL };

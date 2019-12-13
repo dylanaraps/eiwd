@@ -31,8 +31,8 @@
 #include <ell/ell.h>
 #include <readline/readline.h>
 
-#include "command.h"
-#include "display.h"
+#include "client/command.h"
+#include "client/display.h"
 
 static struct l_queue *command_families;
 static struct l_queue *command_options;

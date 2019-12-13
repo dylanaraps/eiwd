@@ -32,9 +32,9 @@
 #include <readline/readline.h>
 #include <ell/ell.h>
 
-#include "agent.h"
-#include "command.h"
-#include "display.h"
+#include "client/agent.h"
+#include "client/command.h"
+#include "client/display.h"
 
 #define IWD_PROMPT COLOR_GREEN "[iwd]" COLOR_OFF "# "
 #define LINE_LEN 81

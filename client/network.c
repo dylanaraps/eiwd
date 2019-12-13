@@ -26,9 +26,9 @@
 
 #include <ell/ell.h>
 
-#include "dbus-proxy.h"
-#include "display.h"
-#include "network.h"
+#include "client/dbus-proxy.h"
+#include "client/display.h"
+#include "client/network.h"
 
 struct network {
 	bool connected;

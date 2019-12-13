@@ -29,11 +29,11 @@
 #include <time.h>
 #include <ell/ell.h>
 
-#include "command.h"
-#include "dbus-proxy.h"
-#include "display.h"
-#include "properties.h"
-#include "network.h"
+#include "client/command.h"
+#include "client/dbus-proxy.h"
+#include "client/display.h"
+#include "client/properties.h"
+#include "client/network.h"
 
 struct known_network {
 	char *identity;

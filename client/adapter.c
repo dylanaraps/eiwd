@@ -26,10 +26,10 @@
 
 #include <ell/ell.h>
 
-#include "command.h"
-#include "dbus-proxy.h"
-#include "display.h"
-#include "properties.h"
+#include "client/command.h"
+#include "client/dbus-proxy.h"
+#include "client/display.h"
+#include "client/properties.h"
 
 struct adapter {
 	bool powered;

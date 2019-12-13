@@ -27,11 +27,11 @@
 #include <stdio.h>
 #include <ell/ell.h>
 
-#include "agent-manager.h"
-#include "dbus-proxy.h"
-#include "display.h"
-#include "command.h"
-#include "properties.h"
+#include "client/agent-manager.h"
+#include "client/dbus-proxy.h"
+#include "client/display.h"
+#include "client/command.h"
+#include "client/properties.h"
 
 #define IWD_SERVICE		"net.connman.iwd"
 #define IWD_ROOT_PATH		"/"

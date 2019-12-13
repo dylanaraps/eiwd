@@ -26,10 +26,10 @@
 
 #include <ell/ell.h>
 
-#include "command.h"
-#include "dbus-proxy.h"
-#include "device.h"
-#include "display.h"
+#include "client/command.h"
+#include "client/dbus-proxy.h"
+#include "client/device.h"
+#include "client/display.h"
 
 static struct proxy_interface_type wsc_interface_type = {
 	.interface = IWD_WSC_INTERFACE,

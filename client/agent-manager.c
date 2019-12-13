@@ -27,9 +27,9 @@
 #include <ell/ell.h>
 #include <unistd.h>
 
-#include "agent.h"
-#include "dbus-proxy.h"
-#include "agent-manager.h"
+#include "client/agent.h"
+#include "client/dbus-proxy.h"
+#include "client/agent-manager.h"
 
 #define IWD_AGENT_MANAGER_PATH		"/net/connman/iwd"
 

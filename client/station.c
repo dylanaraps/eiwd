@@ -26,11 +26,11 @@
 
 #include <ell/ell.h>
 
-#include "command.h"
-#include "dbus-proxy.h"
-#include "device.h"
-#include "network.h"
-#include "display.h"
+#include "client/command.h"
+#include "client/dbus-proxy.h"
+#include "client/device.h"
+#include "client/network.h"
+#include "client/display.h"
 
 struct station {
 	bool scanning;

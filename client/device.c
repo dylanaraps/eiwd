@@ -26,12 +26,12 @@
 
 #include <ell/ell.h>
 
-#include "command.h"
-#include "dbus-proxy.h"
-#include "device.h"
-#include "display.h"
-#include "network.h"
-#include "properties.h"
+#include "client/command.h"
+#include "client/dbus-proxy.h"
+#include "client/device.h"
+#include "client/display.h"
+#include "client/network.h"
+#include "client/properties.h"
 
 struct device {
 	bool powered;
