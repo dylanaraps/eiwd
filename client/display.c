@@ -27,6 +27,7 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <signal.h>
+#include <sys/stat.h>
 
 #include <readline/history.h>
 #include <readline/readline.h>
@@ -636,18 +637,37 @@ static char *history_path;
 
 void display_init(void)
 {
-	const char *home_path;
+	const char *data_home;
+	char *data_path;
 
 	display_refresh.redo_entries = l_queue_new();
 
 	stifle_history(24);
 
-	home_path = getenv("HOME");
-	if (home_path)
-		history_path = l_strdup_printf("%s/%s", home_path,
-							".iwctl_history");
+	data_home = getenv("XDG_DATA_HOME");
+	if (!data_home || *data_home != '/') {
+		const char *home_path;
 
-	read_history(history_path);
+		home_path = getenv("HOME");
+		if (home_path)
+			data_path = l_strdup_printf("%s/%s/iwctl",
+						home_path, ".local/share");
+		else
+			data_path = NULL;
+	} else {
+		data_path = l_strdup_printf("%s/iwctl", data_home);
+	}
+
+	if (data_path) {
+		mkdir(data_path, 0700);
+
+		history_path = l_strdup_printf("%s/history", data_path);
+		read_history(history_path);
+
+		l_free(data_path);
+	} else {
+		history_path = NULL;
+	}
 
 	setlinebuf(stdout);
 
@@ -683,7 +703,9 @@ void display_exit(void)
 
 	l_signal_remove(resize_signal);
 
-	write_history(history_path);
+	if (history_path)
+		write_history(history_path);
+
 	l_free(history_path);
 
 	display_quit();
