@@ -36,7 +36,7 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 
-#include "display.h"
+#include "monitor/display.h"
 
 #define FALLBACK_TERMINAL_WIDTH 80
 
