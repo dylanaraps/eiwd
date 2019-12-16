@@ -200,7 +200,6 @@ static void resolve_systemd_add_domain_name(uint32_t ifindex,
 {
 	struct systemd_state *state = data;
 	struct l_dbus_message *message;
-	bool routing_domain;
 
 	l_debug("ifindex: %u", ifindex);
 
@@ -221,10 +220,8 @@ static void resolve_systemd_add_domain_name(uint32_t ifindex,
 	if (!message)
 		return;
 
-	routing_domain = true;
-
 	l_dbus_message_set_arguments(message, "ia(sb)", ifindex,
-						1, domain_name, routing_domain);
+						1, domain_name, false);
 
 	l_dbus_send_with_reply(dbus_get_bus(), message,
 				systemd_link_add_domains_reply, state, NULL);
