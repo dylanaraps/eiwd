@@ -432,7 +432,7 @@ void resolve_add_domain_name(uint32_t ifindex, const char *domain_name)
 	if (!domain_name)
 		return;
 
-	if (!method.ops || !method.ops->add_dns)
+	if (!method.ops || !method.ops->add_domain_name)
 		return;
 
 	method.ops->add_domain_name(ifindex, domain_name, method.data);
