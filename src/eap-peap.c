@@ -170,7 +170,7 @@ static int eap_extensions_handle_cryptobinding_tlv(struct eap_state *eap,
 	uint8_t buf[61];
 	uint8_t imck[60];
 
-	l_debug();
+	l_debug("");
 
 	if (tlv_value_len != cryptobinding_val_len)
 		return -EBADMSG;

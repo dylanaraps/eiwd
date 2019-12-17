@@ -1179,7 +1179,7 @@ void netconfig_destroy(struct netconfig *netconfig)
 	if (!netconfig_list)
 		return;
 
-	l_debug();
+	l_debug("");
 
 	l_queue_remove(netconfig_list, netconfig);
 
