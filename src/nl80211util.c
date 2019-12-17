@@ -63,6 +63,17 @@ static bool extract_name(const void *data, uint16_t len, void *o)
 	return true;
 }
 
+static bool extract_mac(const void *data, uint16_t len, void *o)
+{
+	const uint8_t **out = o;
+
+	if (len != 6)
+		return false;
+
+	*out = data;
+	return true;
+}
+
 static bool extract_uint64(const void *data, uint16_t len, void *o)
 {
 	uint64_t *out = o;
@@ -99,6 +110,8 @@ static attr_handler handler_for_type(enum nl80211_attrs type)
 	case NL80211_ATTR_IFNAME:
 	case NL80211_ATTR_WIPHY_NAME:
 		return extract_name;
+	case NL80211_ATTR_MAC:
+		return extract_mac;
 	default:
 		break;
 	}
