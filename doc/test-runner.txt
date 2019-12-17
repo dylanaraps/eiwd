@@ -389,6 +389,68 @@ if __name__ == '__main__':
 	unittest.main()
 #~~~~~~~~~~~~~~~~~~ end of alwaysFailingTest.py ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Using hardware passthrough
+---------------------------
+
+The --hw, -w flag lets you pass in a config file containing USB/PCI adapter
+addresses, which can then be used as radios inside the test/VM just as the
+virtual mac80211_hwsim radios are used. Note: physical radios cannot be used at
+the same time as mac80211_hwsim radios.
+
+Using this option, in some cases, does require some pre-configuration that won't
+be described in this document. Specifically, PCI adapters are very involved to
+get setup, and require special kernel boot options (on the host), BIOS changes,
+and most likely a lot of time to get the system working reliably. Because of
+this only USB adapters will be discussed in this document.
+
+If PCI passthrough is something you need, it would be best to follow this guide:
+
+https://wiki.archlinux.org/index.php/PCI_passthrough_via_OVMF
+
+First, whatever kernel you are using must contain the adapters driver and, if
+required, firmware built in. The driver can be built in using 'make menuconfig'
+and finding the correct driver for your adapter:
+
+Device Driver -> Network Device Support -> Wireless LAN
+
+Enable [*] the driver(s) you need, save, and exit.
+
+The firmware also needs to be built in, and this will require you finding the
+right firmware file (/lib/firmware/) required for your adapter and adding it to
+CONFIG_EXTRA_FIRMWARE in your .config file. It is sometimes not very obvious
+what firmware you need. I have found that during the kernel boot some adapters
+will print out if the firmware was not found, and the name of the firmware file
+they expect. If you are having trouble finding the firmware file try continuing
+on and see what happens when test-runner starts. Google is also your friend.
+
+Once you have the kernel built you can write your hardware config file for
+test-runner. Find the USB bus and device for the adapter:
+
+$ lsusb
+
+You should see your device listed with a 'Bus' and 'Device' number:
+
+$ Bus 001 Device 002: ........
+
+Put these into your passthrough config file under a 'USBAdapters' group:
+
+[USBAdapters]
+rad0=1,2
+
+Note: The 'rad#' does not matter at this time. These named keys will not
+correspond to rad0, rad1, etc in your test config file. This may change in the
+future.
+
+You can then run test-runner using this config file:
+
+./test-runner -k <kernel> --hw passthrough.conf ...
+
+If running specific tests you need to ensure you have enough adapters defined
+in the config file, and that the adapters support the features you expect. For
+example, some adapters cannot go into AP mode, or use certain channels. If your
+test expects these features and the adapters do not support them, the test will
+fail in sometimes unexpected ways.
+
 Using the 'shell' feature
 ---------------------------
 
