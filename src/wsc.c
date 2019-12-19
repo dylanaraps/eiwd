@@ -113,20 +113,21 @@ static struct l_dbus_message *wsc_error_time_expired(struct l_dbus_message *msg)
 					"No APs in PIN mode found in "
 					"the alloted time");
 }
-static void wsc_try_credentials(struct wsc *wsc)
+static void wsc_try_credentials(struct wsc *wsc,
+					struct wsc_credentials_info *creds,
+					unsigned int n_creds)
 {
 	unsigned int i;
 	struct network *network;
 	struct scan_bss *bss;
 
-	for (i = 0; i < wsc->n_creds; i++) {
-		network = station_network_find(wsc->station,
-						wsc->creds[i].ssid,
-						wsc->creds[i].security);
+	for (i = 0; i < n_creds; i++) {
+		network = station_network_find(wsc->station, creds[i].ssid,
+						creds[i].security);
 		if (!network)
 			continue;
 
-		bss = network_bss_find_by_addr(network, wsc->creds[i].addr);
+		bss = network_bss_find_by_addr(network, creds[i].addr);
 
 		if (!bss)
 			bss = network_bss_select(network, true);
@@ -134,7 +135,7 @@ static void wsc_try_credentials(struct wsc *wsc)
 		if (!bss)
 			continue;
 
-		if (wsc->creds[i].security == SECURITY_PSK) {
+		if (creds[i].security == SECURITY_PSK) {
 			bool ret;
 
 			/*
@@ -142,12 +143,11 @@ static void wsc_try_credentials(struct wsc *wsc)
 			 * WPA2 and WPA3 since the PSK can always be generated
 			 * if needed
 			 */
-			if (wsc->creds[i].has_passphrase)
+			if (creds[i].has_passphrase)
 				ret = network_set_passphrase(network,
-						wsc->creds[i].passphrase);
+							creds[i].passphrase);
 			else
-				ret = network_set_psk(network,
-						wsc->creds[i].psk);
+				ret = network_set_psk(network, creds[i].psk);
 
 			if (!ret)
 				continue;
@@ -166,21 +166,22 @@ static void wsc_try_credentials(struct wsc *wsc)
 	station_set_autoconnect(wsc->station, true);
 }
 
-static void wsc_store_credentials(struct wsc *wsc)
+static void wsc_store_credentials(struct wsc_credentials_info *creds,
+					unsigned int n_creds)
 {
 	unsigned int i;
 
-	for (i = 0; i < wsc->n_creds; i++) {
-		enum security security = wsc->creds[i].security;
-		const char *ssid = wsc->creds[i].ssid;
+	for (i = 0; i < n_creds; i++) {
+		enum security security = creds[i].security;
+		const char *ssid = creds[i].ssid;
 		struct l_settings *settings = l_settings_new();
 
 		l_debug("Storing credential for '%s(%s)'", ssid,
 						security_to_str(security));
 
 		if (security == SECURITY_PSK) {
-			char *hex = l_util_hexstring(wsc->creds[i].psk,
-						sizeof(wsc->creds[i].psk));
+			char *hex = l_util_hexstring(creds[i].psk,
+						sizeof(creds[i].psk));
 
 			l_settings_set_value(settings, "Security",
 							"PreSharedKey", hex);
@@ -563,8 +564,8 @@ static void wsc_dbus_done_cb(int err, struct wsc_credentials_info *creds,
 		return;
 	}
 
-	wsc_store_credentials(wsc);
-	wsc_try_credentials(wsc);
+	wsc_store_credentials(creds, n_creds);
+	wsc_try_credentials(wsc, creds, n_creds);
 }
 
 static void station_state_watch(enum station_state state, void *userdata)
