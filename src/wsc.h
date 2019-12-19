@@ -30,3 +30,6 @@ struct wsc_credentials_info {
 	uint8_t addr[6];
 	bool has_passphrase;
 };
+
+typedef void (*wsc_done_cb_t)(int err, struct wsc_credentials_info *creds,
+				unsigned int n_creds, void *user_data);
