@@ -199,5 +199,6 @@ uint32_t netdev_station_watch_add(struct netdev *netdev,
 
 bool netdev_station_watch_remove(struct netdev *netdev, uint32_t id);
 
-struct netdev *netdev_create_from_genl(struct l_genl_msg *msg, bool random_mac);
+struct netdev *netdev_create_from_genl(struct l_genl_msg *msg,
+					const uint8_t *set_mac);
 bool netdev_destroy(struct netdev *netdev);

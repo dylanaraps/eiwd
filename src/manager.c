@@ -102,6 +102,9 @@ static void wiphy_setup_state_destroy(struct wiphy_setup_state *state)
 
 static bool manager_use_default(struct wiphy_setup_state *state)
 {
+	uint8_t addr_buf[6];
+	uint8_t *addr = NULL;
+
 	l_debug("");
 
 	if (!state->default_if_msg) {
@@ -110,13 +113,20 @@ static bool manager_use_default(struct wiphy_setup_state *state)
 		return false;
 	}
 
-	netdev_create_from_genl(state->default_if_msg, randomize);
+	if (randomize) {
+		wiphy_generate_random_address(state->wiphy, addr_buf);
+		addr = addr_buf;
+	}
+
+	netdev_create_from_genl(state->default_if_msg, addr);
 	return true;
 }
 
 static void manager_new_interface_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct wiphy_setup_state *state = user_data;
+	uint8_t addr_buf[6];
+	uint8_t *addr = NULL;
 
 	l_debug("");
 
@@ -134,9 +144,13 @@ static void manager_new_interface_cb(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-	netdev_create_from_genl(msg, randomize &&
-					!wiphy_has_feature(state->wiphy,
-						NL80211_FEATURE_MAC_ON_CREATE));
+	if (randomize && !wiphy_has_feature(state->wiphy,
+					NL80211_FEATURE_MAC_ON_CREATE)) {
+		wiphy_generate_random_address(state->wiphy, addr_buf);
+		addr = addr_buf;
+	}
+
+	netdev_create_from_genl(msg, addr);
 }
 
 static void manager_new_interface_done(void *user_data)
