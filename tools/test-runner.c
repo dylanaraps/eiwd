@@ -1398,6 +1398,9 @@ static bool configure_hostapd_instances(struct l_settings *hw_settings,
 			goto done;
 		}
 
+		if (!strcmp(hostap_keys[i], "radius_server"))
+			continue;
+
 		for (wiphy_entry = l_queue_get_entries(wiphy_list);
 					wiphy_entry;
 					wiphy_entry = wiphy_entry->next,
