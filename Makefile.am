@@ -227,6 +227,7 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h src/missing.h \
 					src/p2putil.h src/p2putil.c \
 					src/module.h src/module.c \
 					src/rrm.c \
+					src/frame-xchg.h src/frame-xchg.c \
 					$(eap_sources) \
 					$(builtin_sources)
 
