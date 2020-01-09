@@ -638,6 +638,10 @@ uint8_t *wsc_build_m7_encrypted_settings(
 				size_t *out_len);
 uint8_t *wsc_build_m8(const struct wsc_m8 *m8, const uint8_t *encrypted,
 			size_t encrypted_len, size_t *out_len);
+uint8_t *wsc_build_m8_encrypted_settings(
+				const struct wsc_m8_encrypted_settings *in,
+				const struct wsc_credential *creds,
+				unsigned int creds_cnt, size_t *out_len);
 
 uint8_t *wsc_build_wsc_ack(const struct wsc_ack *ack, size_t *out_len);
 uint8_t *wsc_build_wsc_nack(const struct wsc_nack *nack, size_t *out_len);
