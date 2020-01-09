@@ -1766,6 +1766,13 @@ static void build_association_state(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_u16(builder, state);
 }
 
+static void build_authentication_type(struct wsc_attr_builder *builder,
+							uint16_t auth_type)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_AUTHENTICATION_TYPE);
+	wsc_attr_builder_put_u16(builder, auth_type);
+}
+
 static void build_authentication_type_flags(struct wsc_attr_builder *builder,
 					uint16_t auth_type_flags)
 {
@@ -1814,6 +1821,13 @@ static void build_device_password_id(struct wsc_attr_builder *builder,
 {
 	wsc_attr_builder_start_attr(builder, WSC_ATTR_DEVICE_PASSWORD_ID);
 	wsc_attr_builder_put_u16(builder, id);
+}
+
+static void build_encryption_type(struct wsc_attr_builder *builder,
+						uint16_t encryption_type)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_ENCRYPTION_TYPE);
+	wsc_attr_builder_put_u16(builder, encryption_type);
 }
 
 static void build_encryption_type_flags(struct wsc_attr_builder *builder,
@@ -1900,6 +1914,20 @@ static void build_model_number(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_string(builder, model_number);
 }
 
+static void build_network_index(struct wsc_attr_builder *builder,
+							uint8_t network_index)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_NETWORK_INDEX);
+	wsc_attr_builder_put_u8(builder, network_index);
+}
+
+static void build_network_key(struct wsc_attr_builder *builder,
+					const uint8_t *key, size_t key_len)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_NETWORK_KEY);
+	wsc_attr_builder_put_bytes(builder, key, key_len);
+}
+
 static void build_os_version(struct wsc_attr_builder *builder,
 							uint32_t os_version)
 {
@@ -1979,6 +2007,13 @@ static void build_r_snonce2(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_bytes(builder, nonce, 16);
 }
 
+static void build_ssid(struct wsc_attr_builder *builder, const uint8_t *ssid,
+							size_t ssid_len)
+{
+	wsc_attr_builder_start_attr(builder, WSC_ATTR_SSID);
+	wsc_attr_builder_put_bytes(builder, ssid, ssid_len);
+}
+
 static void build_serial_number(struct wsc_attr_builder *builder,
 						const char *serial_number)
 {
@@ -2017,6 +2052,25 @@ static void build_wsc_state(struct wsc_attr_builder *builder,
 	wsc_attr_builder_put_u8(builder, WSC_WFA_EXTENSION_VERSION2);	\
 	wsc_attr_builder_put_u8(builder, 1);				\
 	wsc_attr_builder_put_u8(builder, 0x20)
+
+uint8_t *wsc_build_credential(const struct wsc_credential *in, size_t *out_len)
+{
+	struct wsc_attr_builder *builder;
+	uint8_t *ret;
+
+	builder = wsc_attr_builder_new(128);
+	build_network_index(builder, 1);
+	build_ssid(builder, in->ssid, in->ssid_len);
+	build_authentication_type(builder, in->auth_type);
+	build_encryption_type(builder, in->encryption_type);
+	build_network_key(builder, in->network_key, in->network_key_len);
+	build_mac_address(builder, in->addr);
+
+	/* TODO: Append EAP attrs & Network Key Shareable inside WFA EXT */
+
+	ret = wsc_attr_builder_free(builder, false, out_len);
+	return ret;
+}
 
 uint8_t *wsc_build_probe_request(const struct wsc_probe_request *probe_request,
 							size_t *out_len)
