@@ -42,3 +42,16 @@ struct wsc_enrollee *wsc_enrollee_new(struct netdev *netdev,
 					wsc_done_cb_t done_cb, void *user_data);
 void wsc_enrollee_cancel(struct wsc_enrollee *wsce, bool defer_cb);
 void wsc_enrollee_destroy(struct wsc_enrollee *wsce);
+
+struct wsc_dbus {
+	struct l_dbus_message *pending_connect;
+	struct l_dbus_message *pending_cancel;
+
+	const char *(*get_path)(struct wsc_dbus *wsc);
+	void (*connect)(struct wsc_dbus *wsc, const char *pin);
+	void (*cancel)(struct wsc_dbus *wsc);
+	void (*remove)(struct wsc_dbus *wsc);
+};
+
+bool wsc_dbus_add_interface(struct wsc_dbus *wsc);
+void wsc_dbus_remove_interface(struct wsc_dbus *wsc);
