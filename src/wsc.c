@@ -324,7 +324,8 @@ static inline enum wsc_rf_band freq_to_rf_band(uint32_t freq)
 }
 
 static int wsc_enrollee_connect(struct wsc_enrollee *wsce, struct scan_bss *bss,
-					const char *pin)
+					const char *pin, struct iovec *ies,
+					unsigned int ies_num)
 {
 	struct handshake_state *hs;
 	struct l_settings *settings = l_settings_new();
@@ -332,7 +333,7 @@ static int wsc_enrollee_connect(struct wsc_enrollee *wsce, struct scan_bss *bss,
 	struct wsc_association_request request;
 	uint8_t *pdu;
 	size_t pdu_len;
-	struct iovec ie_iov;
+	struct iovec ie_iov[1 + ies_num];
 
 	hs = netdev_handshake_state_new(wsce->netdev);
 
@@ -376,19 +377,22 @@ static int wsc_enrollee_connect(struct wsc_enrollee *wsce, struct scan_bss *bss,
 		goto error;
 	}
 
-	ie_iov.iov_base = ie_tlv_encapsulate_wsc_payload(pdu, pdu_len,
-							&ie_iov.iov_len);
+	ie_iov[0].iov_base = ie_tlv_encapsulate_wsc_payload(pdu, pdu_len,
+							&ie_iov[0].iov_len);
 	l_free(pdu);
 
-	if (!ie_iov.iov_base) {
+	if (!ie_iov[0].iov_base) {
 		r = -ENOMEM;
 		goto error;
 	}
 
-	r = netdev_connect(wsce->netdev, bss, hs, &ie_iov, 1,
+	if (ies_num)
+		memcpy(ie_iov + 1, ies, sizeof(struct iovec) * ies_num);
+
+	r = netdev_connect(wsce->netdev, bss, hs, ie_iov, 1 + ies_num,
 				wsc_enrollee_netdev_event,
 				wsc_enrollee_connect_cb, wsce);
-	l_free(ie_iov.iov_base);
+	l_free(ie_iov[0].iov_base);
 
 	if (r == 0)
 		return 0;
@@ -401,6 +405,7 @@ error:
 struct wsc_enrollee *wsc_enrollee_new(struct netdev *netdev,
 					struct scan_bss *target,
 					const char *pin,
+					struct iovec *ies, unsigned int ies_num,
 					wsc_done_cb_t done_cb, void *user_data)
 {
 	struct wsc_enrollee *wsce;
@@ -410,7 +415,7 @@ struct wsc_enrollee *wsc_enrollee_new(struct netdev *netdev,
 	wsce->done_cb = done_cb;
 	wsce->done_data = user_data;
 
-	if (wsc_enrollee_connect(wsce, target, pin) == 0)
+	if (wsc_enrollee_connect(wsce, target, pin, ies, ies_num) == 0)
 		return wsce;
 
 	wsc_enrollee_free(wsce);
@@ -617,7 +622,7 @@ static void wsc_connect(struct wsc_station_dbus *wsc)
 		l_dbus_message_get_arguments(wsc->super.pending_connect, "s",
 						&pin);
 
-	wsc->enrollee = wsc_enrollee_new(wsc->netdev, wsc->target, pin,
+	wsc->enrollee = wsc_enrollee_new(wsc->netdev, wsc->target, pin, NULL, 0,
 						wsc_dbus_done_cb, wsc);
 	if (wsc->enrollee)
 		return;
