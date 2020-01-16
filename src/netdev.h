@@ -112,10 +112,6 @@ typedef void (*netdev_neighbor_report_cb_t)(struct netdev *netdev, int err,
 typedef void (*netdev_preauthenticate_cb_t)(struct netdev *netdev,
 					enum netdev_result result,
 					const uint8_t *pmk, void *user_data);
-typedef void (*netdev_frame_watch_func_t)(struct netdev *netdev,
-					const struct mmpdu_header *frame,
-					const void *body, size_t body_len,
-					void *user_data);
 typedef void (*netdev_station_watch_func_t)(struct netdev *netdev,
 					const uint8_t *mac, bool added,
 					void *user_data);
@@ -179,12 +175,6 @@ int netdev_neighbor_report_req(struct netdev *netdev,
 
 int netdev_set_rssi_report_levels(struct netdev *netdev, const int8_t *levels,
 					size_t levels_num);
-
-uint32_t netdev_frame_watch_add(struct netdev *netdev, uint16_t frame_type,
-				const uint8_t *prefix, size_t prefix_len,
-				netdev_frame_watch_func_t handler,
-				void *user_data);
-bool netdev_frame_watch_remove(struct netdev *netdev, uint32_t id);
 
 void netdev_handshake_failed(struct handshake_state *hs, uint16_t reason_code);
 
