@@ -31,5 +31,14 @@ struct wsc_credentials_info {
 	bool has_passphrase;
 };
 
+struct wsc_enrollee;
+
 typedef void (*wsc_done_cb_t)(int err, struct wsc_credentials_info *creds,
 				unsigned int n_creds, void *user_data);
+
+struct wsc_enrollee *wsc_enrollee_new(struct netdev *netdev,
+					struct scan_bss *target,
+					const char *pin,
+					wsc_done_cb_t done_cb, void *user_data);
+void wsc_enrollee_cancel(struct wsc_enrollee *wsce, bool defer_cb);
+void wsc_enrollee_destroy(struct wsc_enrollee *wsce);
