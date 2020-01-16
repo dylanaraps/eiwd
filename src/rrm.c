@@ -39,6 +39,7 @@
 #include "src/scan.h"
 #include "src/nl80211util.h"
 #include "src/wiphy.h"
+#include "src/frame-xchg.h"
 
 #include "linux/nl80211.h"
 
@@ -658,10 +659,9 @@ static void rrm_station_watch_cb(enum station_state state, void *userdata)
 	}
 }
 
-static void rrm_frame_watch_cb(struct netdev *netdev,
-				const struct mmpdu_header *mpdu,
+static void rrm_frame_watch_cb(const struct mmpdu_header *mpdu,
 				const void *body, size_t body_len,
-				void *user_data)
+				int rssi, void *user_data)
 {
 	struct rrm_state *rrm = user_data;
 	const uint8_t *request = body;
@@ -769,8 +769,8 @@ static void rrm_new_state(struct netdev *netdev)
 	rrm->ifindex = netdev_get_ifindex(netdev);
 	rrm->wdev_id = netdev_get_wdev_id(netdev);
 
-	netdev_frame_watch_add(netdev, frame_type, prefix, sizeof(prefix),
-					rrm_frame_watch_cb, rrm);
+	frame_watch_add(rrm->wdev_id, 0, frame_type, prefix, sizeof(prefix),
+					rrm_frame_watch_cb, rrm, NULL);
 
 	l_queue_push_head(states, rrm);
 }
@@ -794,6 +794,12 @@ static void rrm_netdev_watch(struct netdev *netdev,
 		rrm_new_state(netdev);
 		return;
 	case NETDEV_WATCH_EVENT_DEL:
+		/*
+		 * This event is triggered by the netdev being removed, which
+		 * causes all frame watches to be unregistered by the kernel.
+		 * Given the above, there's no need to unregister anything
+		 * manually.
+		 */
 		rrm = l_queue_remove_if(states, match_ifindex,
 						L_UINT_TO_PTR(ifindex));
 		if (rrm) {
