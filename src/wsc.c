@@ -539,15 +539,6 @@ static void wsc_store_credentials(struct wsc_credentials_info *creds,
 
 		storage_network_sync(security, ssid, settings);
 		l_settings_free(settings);
-
-		/*
-		 * TODO: Mark this network as known.  We might be getting
-		 * multiple credentials from WSC, so there is a possibility
-		 * that the network is not known and / or not in scan results.
-		 * In both cases, the network should be considered for
-		 * auto-connect.  Note, since we sync the settings, the next
-		 * reboot will put the network on the known list.
-		 */
 	}
 }
 
@@ -1258,8 +1249,7 @@ static void wsc_dbus_free(void *user_data)
 
 	if (wsc->pending_connect)
 		dbus_pending_reply(&wsc->pending_connect,
-					dbus_error_not_available(
-						wsc->pending_connect));
+				dbus_error_not_available(wsc->pending_connect));
 
 	if (wsc->pending_cancel)
 		dbus_pending_reply(&wsc->pending_cancel,
