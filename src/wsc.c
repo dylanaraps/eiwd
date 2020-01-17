@@ -461,6 +461,16 @@ struct wsc_station_dbus {
 	uint32_t station_state_watch;
 };
 
+#define CONNECT_REPLY(wsc, message)					\
+	if ((wsc)->super.pending_connect)				\
+		dbus_pending_reply(&(wsc)->super.pending_connect,	\
+				message((wsc)->super.pending_connect))	\
+
+#define CANCEL_REPLY(wsc, message)					\
+	if ((wsc)->super.pending_cancel)				\
+		dbus_pending_reply(&(wsc)->super.pending_cancel,	\
+				message((wsc)->super.pending_cancel))	\
+
 static void wsc_try_credentials(struct wsc_station_dbus *wsc,
 				struct wsc_credentials_info *creds,
 				unsigned int n_creds)
@@ -509,8 +519,7 @@ static void wsc_try_credentials(struct wsc_station_dbus *wsc,
 		return;
 	}
 
-	dbus_pending_reply(&wsc->super.pending_connect,
-			wsc_error_not_reachable(wsc->super.pending_connect));
+	CONNECT_REPLY(wsc, wsc_error_not_reachable);
 	station_set_autoconnect(wsc->station, true);
 }
 
@@ -560,31 +569,17 @@ static void wsc_dbus_done_cb(int err, struct wsc_credentials_info *creds,
 		break;
 	case -ECANCELED:
 		/* Send reply if we haven't already sent one e.g. in Cancel() */
-		if (wsc->super.pending_connect)
-			dbus_pending_reply(&wsc->super.pending_connect,
-					dbus_error_aborted(
-						wsc->super.pending_connect));
-
-		if (wsc->super.pending_cancel)
-			dbus_pending_reply(&wsc->super.pending_cancel,
-					l_dbus_message_new_method_return(
-						wsc->super.pending_cancel));
-
+		CONNECT_REPLY(wsc, dbus_error_aborted);
+		CANCEL_REPLY(wsc, l_dbus_message_new_method_return);
 		return;
 	case -ENOKEY:
-		dbus_pending_reply(&wsc->super.pending_connect,
-					wsc_error_no_credentials(
-						wsc->super.pending_connect));
+		CONNECT_REPLY(wsc, wsc_error_no_credentials);
 		return;
 	case -EBUSY:
-		dbus_pending_reply(&wsc->super.pending_connect,
-					dbus_error_busy(
-						wsc->super.pending_connect));
+		CONNECT_REPLY(wsc, dbus_error_busy);
 		return;
 	default:
-		dbus_pending_reply(&wsc->super.pending_connect,
-					dbus_error_failed(
-						wsc->super.pending_connect));
+		CONNECT_REPLY(wsc, dbus_error_failed);
 		return;
 	}
 
@@ -660,8 +655,7 @@ static void wsc_check_can_connect(struct wsc_station_dbus *wsc,
 	}
 error:
 	wsc->target = NULL;
-	dbus_pending_reply(&wsc->super.pending_connect,
-				dbus_error_failed(wsc->super.pending_connect));
+	CONNECT_REPLY(wsc, dbus_error_failed);
 }
 
 static void wsc_cancel_scan(struct wsc_station_dbus *wsc)
@@ -685,11 +679,7 @@ static void walk_timeout(struct l_timeout *timeout, void *user_data)
 	struct wsc_station_dbus *wsc = user_data;
 
 	wsc_cancel_scan(wsc);
-
-	if (wsc->super.pending_connect)
-		dbus_pending_reply(&wsc->super.pending_connect,
-				wsc_error_walk_time_expired(
-						wsc->super.pending_connect));
+	CONNECT_REPLY(wsc, wsc_error_walk_time_expired);
 }
 
 static void pin_timeout(struct l_timeout *timeout, void *user_data)
@@ -697,11 +687,7 @@ static void pin_timeout(struct l_timeout *timeout, void *user_data)
 	struct wsc_station_dbus *wsc = user_data;
 
 	wsc_cancel_scan(wsc);
-
-	if (wsc->super.pending_connect)
-		dbus_pending_reply(&wsc->super.pending_connect,
-				wsc_error_time_expired(
-						wsc->super.pending_connect));
+	CONNECT_REPLY(wsc, wsc_error_time_expired);
 }
 
 static bool push_button_scan_results(int err, struct l_queue *bss_list,
@@ -718,8 +704,7 @@ static bool push_button_scan_results(int err, struct l_queue *bss_list,
 
 	if (err) {
 		wsc_cancel_scan(wsc);
-		dbus_pending_reply(&wsc->super.pending_connect,
-				dbus_error_failed(wsc->super.pending_connect));
+		CONNECT_REPLY(wsc, dbus_error_failed);
 
 		return false;
 	}
@@ -820,8 +805,7 @@ static bool push_button_scan_results(int err, struct l_queue *bss_list,
 
 session_overlap:
 	wsc_cancel_scan(wsc);
-	dbus_pending_reply(&wsc->super.pending_connect,
-			wsc_error_session_overlap(wsc->super.pending_connect));
+	CONNECT_REPLY(wsc, wsc_error_session_overlap);
 
 	return false;
 }
@@ -872,8 +856,7 @@ static bool pin_scan_results(int err, struct l_queue *bss_list, void *userdata)
 
 	if (err) {
 		wsc_cancel_scan(wsc);
-		dbus_pending_reply(&wsc->super.pending_connect,
-				dbus_error_failed(wsc->super.pending_connect));
+		CONNECT_REPLY(wsc, dbus_error_failed);
 
 		return false;
 	}
@@ -1047,9 +1030,7 @@ static void wsc_station_dbus_connect(struct wsc_dbus *super,
 
 	wsc->station = station_find(netdev_get_ifindex(wsc->netdev));
 	if (!wsc->station) {
-		dbus_pending_reply(&wsc->super.pending_connect,
-					dbus_error_not_available(
-						wsc->super.pending_connect));
+		CONNECT_REPLY(wsc, dbus_error_not_available);
 		return;
 	}
 
@@ -1066,9 +1047,7 @@ static void wsc_station_dbus_connect(struct wsc_dbus *super,
 	}
 
 	if (!wsc_initiate_scan(wsc, dpid, scan_callback)) {
-		dbus_pending_reply(&wsc->super.pending_connect,
-					dbus_error_failed(
-						wsc->super.pending_connect));
+		CONNECT_REPLY(wsc, dbus_error_failed);
 		return;
 	}
 
@@ -1094,15 +1073,12 @@ static void wsc_station_dbus_cancel(struct wsc_dbus *super)
 		wsc->target = NULL;
 	}
 
-	dbus_pending_reply(&wsc->super.pending_connect,
-				dbus_error_aborted(wsc->super.pending_connect));
+	CONNECT_REPLY(wsc, dbus_error_aborted);
 
 	if (wsc->enrollee)
 		wsc_enrollee_cancel(wsc->enrollee, true);
 	else
-		dbus_pending_reply(&wsc->super.pending_cancel,
-					l_dbus_message_new_method_return(
-						wsc->super.pending_cancel));
+		CANCEL_REPLY(wsc, l_dbus_message_new_method_return);
 }
 
 static void wsc_station_dbus_remove(struct wsc_dbus *super)
