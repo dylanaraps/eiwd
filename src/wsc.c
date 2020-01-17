@@ -101,13 +101,6 @@ static struct l_dbus_message *wsc_error_time_expired(struct l_dbus_message *msg)
 					"the alloted time");
 }
 
-static void wsc_enrollee_free(struct wsc_enrollee *wsce)
-{
-	l_settings_free(wsce->eap_settings);
-	explicit_bzero(wsce->creds, sizeof(wsce->creds));
-	l_free(wsce);
-}
-
 static void wsc_enrollee_connect_cb(struct netdev *netdev,
 					enum netdev_result result,
 					void *event_data, void *user_data)
@@ -448,16 +441,11 @@ void wsc_enrollee_cancel(struct wsc_enrollee *wsce, bool defer_cb)
 	}
 }
 
-/* To be called instead of wsc_enrollee_cancel if we know the netdev is gone */
-void wsc_enrollee_destroy(struct wsc_enrollee *wsce)
+void wsc_enrollee_free(struct wsc_enrollee *wsce)
 {
-	/*
-	 * Note: wsc_enrollee_cancel(wsce, true) may have been called before
-	 * but since the netdev is going away wsc_enrollee_disconnect_cb
-	 * is not happening anymore.
-	 */
-	wsce->done_cb(-ECANCELED, NULL, 0, wsce->done_data);
-	wsc_enrollee_free(wsce);
+	l_settings_free(wsce->eap_settings);
+	explicit_bzero(wsce->creds, sizeof(wsce->creds));
+	l_free(wsce);
 }
 
 struct wsc_station_dbus {
@@ -1140,7 +1128,7 @@ static void wsc_station_dbus_remove(struct wsc_dbus *super)
 	}
 
 	if (wsc->enrollee)
-		wsc_enrollee_destroy(wsc->enrollee);
+		wsc_enrollee_free(wsc->enrollee);
 
 	l_free(wsc);
 }

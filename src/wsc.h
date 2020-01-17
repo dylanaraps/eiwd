@@ -42,7 +42,7 @@ struct wsc_enrollee *wsc_enrollee_new(struct netdev *netdev,
 					struct iovec *ies, unsigned int ies_num,
 					wsc_done_cb_t done_cb, void *user_data);
 void wsc_enrollee_cancel(struct wsc_enrollee *wsce, bool defer_cb);
-void wsc_enrollee_destroy(struct wsc_enrollee *wsce);
+void wsc_enrollee_free(struct wsc_enrollee *wsce);
 
 struct wsc_dbus {
 	struct l_dbus_message *pending_connect;
