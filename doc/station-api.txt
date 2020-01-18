@@ -187,7 +187,7 @@ Methods		void Release(object device)
 			changes enough to go from one level to another out
 			of the N ranges defined by the array of (N-1)
 			threshold values passed to
-			net.connman.iwd.Device.RegisterSignalLevelAgent
+			net.connman.iwd.Station.RegisterSignalLevelAgent
 			(see device-api.txt.)  The level parameter is in
 			the range from 0 to N, 0 being the strongest
 			signal or above the first threshold value in the
