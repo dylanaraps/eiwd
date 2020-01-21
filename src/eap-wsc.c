@@ -986,7 +986,7 @@ static void eap_wsc_handle_request(struct eap_state *eap,
 					wsc->rx_pdu_buf_len >
 							EAP_WSC_PDU_MAX_LEN) {
 				l_warn("Fragmented pkt size is outside of "
-					"alowed boundaries [1, %u]",
+					"allowed boundaries [1, %u]",
 					EAP_WSC_PDU_MAX_LEN);
 				return;
 			}

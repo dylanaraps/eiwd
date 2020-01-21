@@ -552,7 +552,7 @@ int network_autoconnect(struct network *network, struct scan_bss *bss)
 
 	if (!wiphy_select_cipher(wiphy, rsn.pairwise_ciphers) ||
 			!wiphy_select_cipher(wiphy, rsn.group_cipher)) {
-		l_debug("Cipher mis-match");
+		l_debug("Cipher mismatch");
 		ret = -ENETUNREACH;
 		goto close_settings;
 	}

@@ -879,7 +879,7 @@ static bool scan_parse_vendor_specific(struct scan_bss *bss, const void *data,
 
 /*
  * Fully parses the Advertisement Protocol Element. The only thing being looked
- * for is the ANQP protocol ID, but this could be burried behind several other
+ * for is the ANQP protocol ID, but this could be buried behind several other
  * advertisement tuples so the entire IE may need to be parsed.
  */
 static bool scan_parse_advertisement_protocol(struct scan_bss *bss,

@@ -87,7 +87,7 @@ typedef void (*netdev_connect_cb_t)(struct netdev *netdev,
  * Notify function for netdev events. Depending on the event type, event_data
  * will have different meanings:
  *
- * NETDEV_EVENT_AUTHENTICATING - unsused
+ * NETDEV_EVENT_AUTHENTICATING - unused
  * NETDEV_EVENT_ASSOCIATING - unused
  * NETDEV_EVENT_LOST_BEACON - unused
  * NETDEV_EVENT_DISCONNECT_BY_AP - MMPDU_REASON_CODE

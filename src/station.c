@@ -678,7 +678,7 @@ static void station_handshake_event(struct handshake_state *hs,
 	case HANDSHAKE_EVENT_SETTING_KEYS_FAILED:
 	case HANDSHAKE_EVENT_EAP_NOTIFY:
 		/*
-		 * currently we dont care about any other events. The
+		 * currently we don't care about any other events. The
 		 * netdev_connect_cb will notify us when the connection is
 		 * complete.
 		 */
@@ -2068,7 +2068,7 @@ void station_ap_directed_roam(struct station *station,
 
 
 	if (req_mode & WNM_REQUEST_MODE_PREFERRED_CANDIDATE_LIST) {
-		l_debug("roam: AP sent a preffered candidate list");
+		l_debug("roam: AP sent a preferred candidate list");
 		station_neighbor_report_cb(station->netdev, 0, body + pos,
 				body_len - pos,station);
 	} else {
@@ -2162,7 +2162,7 @@ static bool station_retry_with_reason(struct station *station,
 					uint16_t reason_code)
 {
 	/*
-	 * We dont want to cause a retry and blacklist if the password was
+	 * We don't want to cause a retry and blacklist if the password was
 	 * incorrect. Otherwise we would just continue to fail.
 	 *
 	 * Other reason codes can be added here if its decided we want to

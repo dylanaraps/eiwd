@@ -467,7 +467,7 @@ static void handle_challenge(struct eap_state *eap, const uint8_t *pkt,
 		case EAP_SIM_AT_IV:
 		case EAP_SIM_AT_ENCR_DATA:
 		case EAP_SIM_AT_MAC:
-			/* need a case for these so the default wont get hit */
+			/* need a case for these so the default won't get hit */
 			break;
 
 		default:

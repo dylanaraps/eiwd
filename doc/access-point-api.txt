@@ -1,4 +1,4 @@
-Access Point hiearchy
+Access Point hierarchy
 =====================
 
 Service		net.connman.iwd

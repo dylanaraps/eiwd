@@ -148,7 +148,7 @@ struct pcap *pcap_create(const char *pathname)
 	}
 
 	if (len != PCAP_HDR_SIZE) {
-		fprintf(stderr, "Written PCAP header size mimatch\n");
+		fprintf(stderr, "Written PCAP header size mismatch\n");
 		goto failed;
 	}
 

@@ -1,4 +1,4 @@
-Ad-Hoc hiearchy
+Ad-Hoc hierarchy
 ===============
 
 Service		net.connman.iwd

@@ -78,7 +78,7 @@ static const unsigned char beacon_frame[] = {
 	0xff, 0xff, 0xc8, 0xd7, 0x19, 0x39, 0xbe, 0x77,
 	0xc8, 0xd7, 0x19, 0x39, 0xbe, 0x77, 0x50, 0xa2,
 
-	/* IEEE 802.11 wireless LAN managment frame
+	/* IEEE 802.11 wireless LAN management frame
 	 * - Fixed parameters (12 bytes)
 	 */
 	0x87, 0x81, 0x31, 0xe6, 0x29, 0x02, 0x00, 0x00,
@@ -742,11 +742,11 @@ int main(int argc, char *argv[])
 				ie_test_wpa_build_compact_info,
 				&ie_wpa_info_test_5);
 
-	l_test_add("/ie/Concatentation/WSC/Test Case 1",
+	l_test_add("/ie/Concatenation/WSC/Test Case 1",
 				ie_test_concat_wsc, &ie_tlv_concat_test_data_1);
-	l_test_add("/ie/Concatentation/WSC/Test Case 2",
+	l_test_add("/ie/Concatenation/WSC/Test Case 2",
 				ie_test_concat_wsc, &ie_tlv_concat_test_data_2);
-	l_test_add("/ie/Concatentation/WSC/Test Case 3",
+	l_test_add("/ie/Concatenation/WSC/Test Case 3",
 				ie_test_concat_wsc, &ie_tlv_concat_test_data_3);
 
 	l_test_add("/ie/Encapsulation/WSC/Test Case 1",

@@ -354,7 +354,7 @@ static bool sae_build_commit(struct sae_sm *sm, const uint8_t *addr1,
 
 	/*
 	 * Several cases require retransmitting the same commit message. The
-	 * anti-clogging code path requires this as well as the retransmition
+	 * anti-clogging code path requires this as well as the retransmission
 	 * timeout.
 	 */
 old_commit:

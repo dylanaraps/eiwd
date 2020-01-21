@@ -212,7 +212,7 @@ static const uint8_t *hotspot_match_roaming_consortium(
 						&rc3, &rc3_len) < 0)
 		return NULL;
 
-	/* rc1 is guarenteed to be set if the above returns success */
+	/* rc1 is guaranteed to be set if the above returns success */
 	if (rc1_len == config->rc_len && !memcmp(rc1, config->rc, rc1_len)) {
 		if (rc_len_out)
 			*rc_len_out = rc1_len;

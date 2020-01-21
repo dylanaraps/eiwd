@@ -2994,7 +2994,7 @@ static void print_p2p_status(unsigned int level, const char *label,
 		{ P2P_STATUS_FAIL_LIMIT_REACHED, "Fail; limit reached" },
 		{ P2P_STATUS_FAIL_INVALID_PARAMS, "Fail; invalid parameters" },
 		{ P2P_STATUS_FAIL_UNABLE_TO_ACCOMMODATE_REQUEST, "Fail; unable "
-			"to accomodate request" },
+			"to accommodate request" },
 		{ P2P_STATUS_FAIL_PREV_PROTOCOL_ERROR, "Fail; previous protocol"
 			" error, or distruptive behavior" },
 		{ P2P_STATUS_FAIL_NO_COMMON_CHANNELS, "Fail; no common "
@@ -3519,7 +3519,7 @@ static void print_p2p_advertised_svc_info(unsigned int level, const char *label,
 
 		print_attr(level, "%s:", label);
 
-		print_attr(level, "Servce advertisement: ID 0x%08x",
+		print_attr(level, "Service advertisement: ID 0x%08x",
 				l_get_le32(bytes + 0));
 		print_wsc_utf8_string(level + 1, "Service Name",
 					bytes + 6, bytes[6], 255);
@@ -4096,7 +4096,7 @@ static void print_public_action_frame(unsigned int level, const uint8_t *body,
 		[22] = "HCCA TXOP Advertisement",
 		[23] = "HCCA TXOP Response",
 		[24] = "Public Key",
-		[25] = "Channel Availabilty Query",
+		[25] = "Channel Availability Query",
 		[26] = "Channel Schedule Management",
 		[27] = "Contact Verification Signal",
 		[28] = "GDD Enablement Request",

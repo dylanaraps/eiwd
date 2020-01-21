@@ -1585,7 +1585,7 @@ int ie_parse_bss_load_from_data(const uint8_t *data, uint8_t len,
 }
 
 /*
- * We have to store this mapping since basic rates dont come with a convenient
+ * We have to store this mapping since basic rates don't come with a convenient
  * MCS index. Rates are stored as they are encoded in the Supported Rates IE.
  * This does not include non 802.11g data rates, e.g. 1/2/4Mbps. This data was
  * taken from 802.11 Section 17.3.10.2 and Table 10-7.
@@ -1994,7 +1994,7 @@ static int ie_parse_vht_capability(struct ie_tlv_iter *vht_iter,
 	 * combinations (width, MCS, NSS), saving the highest data rate we find.
 	 *
 	 * We could calculate a maximum data rate separately for TX/RX, but
-	 * since this is only used for BSS ranking, the minumum between the
+	 * since this is only used for BSS ranking, the minimum between the
 	 * two should be good enough.
 	 */
 	for (width = sizeof(vht_width_map[0]) - 1; width >= 0; width--) {

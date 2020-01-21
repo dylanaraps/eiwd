@@ -1353,7 +1353,7 @@ static bool interface_info_match_dst(const void *a, const void *b)
 /*
  * Process frames in a similar way to how the kernel built-in hwsim medium
  * does this, with an additional optimization for unicast frames and
- * additonal modifications to frames decided by user-configurable rules.
+ * additional modifications to frames decided by user-configurable rules.
  */
 static void process_frame(struct hwsim_frame *frame)
 {

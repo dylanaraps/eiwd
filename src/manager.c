@@ -275,7 +275,7 @@ static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 		return;
 
 	if (wiphy != state->id) {
-		l_debug("Wiphy attribute mis-match, wanted: %u, got %u",
+		l_debug("Wiphy attribute mismatch, wanted: %u, got %u",
 				state->id, wiphy);
 		return;
 	}
@@ -515,7 +515,7 @@ static void manager_new_wiphy_event(struct l_genl_msg *msg)
 	/*
 	 * Until fixed, a NEW_WIPHY event will not include all the information
 	 * that may be available, but a dump will. Because of this we do both
-	 * GET_WIPHY/GET_INTERFACE, same as we would during initalization.
+	 * GET_WIPHY/GET_INTERFACE, same as we would during initialization.
 	 */
 	msg = l_genl_msg_new_sized(NL80211_CMD_GET_WIPHY, 128);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SPLIT_WIPHY_DUMP, 0, NULL);

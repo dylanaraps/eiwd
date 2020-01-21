@@ -49,4 +49,4 @@ Properties	string Name [readonly]
 			Contains the path of the KnownNetwork object
 			corresponding to this Network.  If the network
 			is not provisioned or has not been connected to
-			before, the property is ommitted.
+			before, the property is omitted.

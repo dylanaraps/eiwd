@@ -481,7 +481,7 @@ static void eap_pwd_handle_confirm(struct eap_state *eap,
 
 	/*
 	 * We just need to store clen/plen once. Since all these buffers are
-	 * created with enough bytes in mind we know these wont fail. Also, all
+	 * created with enough bytes in mind we know these won't fail. Also, all
 	 * scalar/point objects were created with the same curve, so it can be
 	 * safe to assume the return values will not change from what clen/plen
 	 * already are.

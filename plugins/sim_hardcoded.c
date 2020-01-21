@@ -51,7 +51,7 @@ static struct hardcoded_sim *sim;
  * to - result of XOR array
  * a - array 1
  * b - array 2
- * len - size of aray
+ * len - size of array
  */
 #define XOR(to, a, b, len) \
 	for (i = 0; i < len; i++) { \

@@ -77,7 +77,7 @@ struct mschapv2_response {
 } __attribute__((packed));
 
 /**
- * Generate the asymetric start keys from our mschapv2 master key for MPPE
+ * Generate the asymmetric start keys from our mschapv2 master key for MPPE
  * This function is specified in:
  * https://tools.ietf.org/html/draft-ietf-pppext-mschapv2-keys-02
  *

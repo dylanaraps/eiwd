@@ -71,7 +71,7 @@ on open networks, by using ECDH to negotiate a PMK.
 
 - IWD supports SAE (Simultaneous Authentication of Equals). SAE is required for
 the WPA3 certification. SAE uses a Diffie-Hellman key exchange to produce the
-PMK thats used in the 4-way handshake. Support for hybrid WPA3/WPA2 AP's is
+PMK that's used in the 4-way handshake. Support for hybrid WPA3/WPA2 AP's is
 also implemented, where WPA3 is preferred.
 
 Wireless monitor

@@ -120,7 +120,7 @@ Methods		void Scan()
 			order.  The number and distance between requested
 			threshold values is a compromise between resolution
 			and the frequency of system wakeups and
-			context-switches that are going to be occuring to
+			context-switches that are going to be occurring to
 			update the client's signal meter.  Only one agent
 			can be registered at any time.
 

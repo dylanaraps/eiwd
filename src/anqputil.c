@@ -148,9 +148,9 @@ char **anqp_parse_nai_realms(const unsigned char *anqp, unsigned int len)
 		/*
 		 * The method list is a variable field, so the only way to
 		 * reliably increment anqp is by realm_len at the very end since
-		 * we dont know how many bytes parse_eap advanced (it does
+		 * we don't know how many bytes parse_eap advanced (it does
 		 * internal length checking so it should not overflow). We
-		 * cant incrementally advance anqp/len, hence the hardcoded
+		 * can't incrementally advance anqp/len, hence the hardcoded
 		 * length and pointer adjustments.
 		 */
 

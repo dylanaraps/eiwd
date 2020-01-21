@@ -227,7 +227,7 @@ struct handshake_state *netdev_handshake_state_new(struct netdev *netdev)
 	nhs->netdev = netdev;
 	/*
 	 * Since GTK/IGTK are optional (NO_GROUP_TRAFFIC), we set them as
-	 * 'installed' upon initalization. If/When the gtk/igtk callback is
+	 * 'installed' upon initialization. If/When the gtk/igtk callback is
 	 * called they will get set to false until we have received a successful
 	 * callback from nl80211. From these callbacks we can check that all
 	 * the keys have been installed, and only then trigger the handshake
@@ -1536,7 +1536,7 @@ static void netdev_qos_map_cb(struct l_genl_msg *msg, void *user_data)
  * to let the kernel know is to receive the IE, then give it right back...
  *
  * The kernel/driver/firmware *could* simply obtain this information as the
- * frame comes in and not require userspace to forward it back... but thats a
+ * frame comes in and not require userspace to forward it back... but that's a
  * battle for another day.
  */
 static void netdev_send_qos_map_set(struct netdev *netdev,
@@ -2401,7 +2401,7 @@ static int netdev_connect_common(struct netdev *netdev,
 	netdev->handshake = hs;
 	netdev->sm = sm;
 	netdev->frequency = bss->frequency;
-	netdev->cur_rssi_low = false; /* Gets udpated on the 1st CQM event */
+	netdev->cur_rssi_low = false; /* Gets updated on the 1st CQM event */
 	netdev->cur_rssi = bss->signal_strength / 100;
 	netdev_rssi_level_init(netdev);
 

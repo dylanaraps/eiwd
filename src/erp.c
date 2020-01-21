@@ -296,7 +296,7 @@ static bool erp_derive_emsk_name(const uint8_t *session_id, size_t session_len,
 /*
  * RFC 6696 - Section 4.1 and 4.3 - rRK and rIK derivation
  *
- * All reauth keys form a hiearchy, and all ultimately are derived from the
+ * All reauth keys form a hierarchy, and all ultimately are derived from the
  * EMSK. All keys follow the rule:
  *
  * "The length of the <key> MUST be equal to the length of the parent key used

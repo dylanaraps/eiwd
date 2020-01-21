@@ -1,5 +1,5 @@
 #! /usr/bin/python3
-# Rougly based on wpa_supplicant's mac80211_hwsim/tools/hwsim_test.c utility.
+# Roughly based on wpa_supplicant's mac80211_hwsim/tools/hwsim_test.c utility.
 import socket
 import fcntl
 import struct

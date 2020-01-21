@@ -369,7 +369,7 @@ static void test_malformed_commit(const void *arg)
 
 	len = setup_auth_frame(frame, aa, 1, 0, aa_commit, sizeof(aa_commit));
 
-	/* dont send entire commit */
+	/* don't send entire commit */
 	assert(auth_proto_rx_authenticate(ap, (uint8_t *)frame, len - 20) != 0);
 
 	test_destruct(td);
@@ -394,7 +394,7 @@ static void test_malformed_confirm(const void *arg)
 	frame = alloca(sizeof(struct authenticate_frame) + sizeof(aa_confirm));
 	len = setup_auth_frame(frame, aa, 2, 0, aa_confirm, sizeof(aa_confirm));
 
-	/* dont send entire confirm */
+	/* don't send entire confirm */
 	assert(auth_proto_rx_authenticate(ap, (uint8_t *)frame, len - 10) != 0);
 
 	test_destruct(td);

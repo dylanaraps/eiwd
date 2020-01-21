@@ -90,7 +90,7 @@ static struct l_dbus_message *wsc_error_walk_time_expired(
 	return l_dbus_message_new_error(msg,
 					IWD_WSC_INTERFACE ".WalkTimeExpired",
 					"No APs in PushButton mode found in "
-					"the alloted time");
+					"the allotted time");
 }
 
 static struct l_dbus_message *wsc_error_time_expired(struct l_dbus_message *msg)
@@ -98,7 +98,7 @@ static struct l_dbus_message *wsc_error_time_expired(struct l_dbus_message *msg)
 	return l_dbus_message_new_error(msg,
 					IWD_WSC_INTERFACE ".TimeExpired",
 					"No APs in PIN mode found in "
-					"the alloted time");
+					"the allotted time");
 }
 
 static void wsc_enrollee_connect_cb(struct netdev *netdev,

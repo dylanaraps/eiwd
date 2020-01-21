@@ -145,8 +145,8 @@ static bool handshake_state_setup_own_ciphers(struct handshake_state *s,
 	s->group_management_cipher = info->group_management_cipher;
 
 	/*
-	 * Dont set MFP for OSEN otherwise EAPoL will attempt to negotiate a
-	 * iGTK which is not allowe for OSEN.
+	 * Don't set MFP for OSEN otherwise EAPoL will attempt to negotiate a
+	 * iGTK which is not allowed for OSEN.
 	 */
 	if (!s->osen_ie)
 		s->mfp = info->mfpc;

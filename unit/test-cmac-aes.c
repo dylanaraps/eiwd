@@ -149,8 +149,8 @@ int main(int argc, char *argv[])
 
 	l_test_add("/cmac-aes/Example 1", cmac_test, &example_1);
 	l_test_add("/cmac-aes/Example 2", cmac_test, &example_2);
-	l_test_add("/cmac-aes/Exmaple 3", cmac_test, &example_3);
-	l_test_add("/cmac-aes/Exmaple 4", cmac_test, &example_4);
+	l_test_add("/cmac-aes/Example 3", cmac_test, &example_3);
+	l_test_add("/cmac-aes/Example 4", cmac_test, &example_4);
 
 done:
 	return l_test_run();

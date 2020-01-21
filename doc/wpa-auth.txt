@@ -91,7 +91,7 @@ Overall Process
   AP.
 
 - Once Message 3 is received from the AP, the STA sanity checks certain
-  paremeters (Key Replay Counter, ANonce, MIC).  The RSN received from the AP
+  parameters (Key Replay Counter, ANonce, MIC).  The RSN received from the AP
   is also checked against the one received in Message 3.  If everything checks
   out, then Message 4 is constructed and sent to the AP.
 
