@@ -28,8 +28,9 @@ enum security;
 ssize_t read_file(void *buffer, size_t len, const char *path_fmt, ...)
 	__attribute__((format(printf, 3, 4)));
 
-ssize_t write_file(const void *buffer, size_t len, const char *path_fmt, ...)
-	__attribute__((format(printf, 3, 4)));
+ssize_t write_file(const void *buffer, size_t len, bool preserve_times,
+			const char *path_fmt, ...)
+	__attribute__((format(printf, 4, 5)));
 
 bool storage_create_dirs(void);
 void storage_cleanup_dirs(void);

@@ -112,7 +112,7 @@ static void hotspot_network_sync(struct network_info *info,
 							super);
 
 	data = l_settings_to_data(settings, &length);
-	write_file(data, length, "%s", config->filename);
+	write_file(data, length, true, "%s", config->filename);
 	l_free(data);
 }
 

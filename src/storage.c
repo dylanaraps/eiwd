@@ -120,7 +120,7 @@ ssize_t read_file(void *buffer, size_t len, const char *path_fmt, ...)
  * file with a temporary name and when closed, it is renamed to the
  * specified name (@path_fmt+args).
  */
-ssize_t write_file(const void *buffer, size_t len,
+ssize_t write_file(const void *buffer, size_t len, bool preserve_times,
 			const char *path_fmt, ...)
 {
 	va_list ap;
@@ -148,6 +148,18 @@ ssize_t write_file(const void *buffer, size_t len,
 	if (r != (ssize_t) len) {
 		r = -1;
 		goto error_write;
+	}
+
+	if (preserve_times) {
+		struct stat st;
+
+		if (stat(path, &st) == 0) {
+			struct timespec times[2];
+
+			times[0] = st.st_atim;
+			times[1] = st.st_mtim;
+			utimensat(0, tmp_path, times, 0);
+		}
 	}
 
 	/*
@@ -372,7 +384,7 @@ void storage_network_sync(enum security type, const char *ssid,
 
 	path = storage_get_network_file_path(type, ssid);
 	data = l_settings_to_data(settings, &length);
-	write_file(data, length, "%s", path);
+	write_file(data, length, true, "%s", path);
 	l_free(data);
 	l_free(path);
 }
@@ -420,7 +432,7 @@ void storage_known_frequencies_sync(struct l_settings *known_freqs)
 	known_freq_file_path = storage_get_path("/%s", KNOWN_FREQ_FILENAME);
 
 	data = l_settings_to_data(known_freqs, &len);
-	write_file(data, len, "%s", known_freq_file_path);
+	write_file(data, len, false, "%s", known_freq_file_path);
 	l_free(data);
 
 	l_free(known_freq_file_path);
