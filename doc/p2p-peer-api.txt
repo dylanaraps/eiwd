@@ -1,0 +1,45 @@
+P2PPeer hierarchy
+=================
+
+Service		net.connman.iwd
+Interface	net.connman.iwd.p2p.Peer [Experimental]
+Object path	/net/connman/iwd/{phy0,phy1,...}/p2p_peers/{aa_bb_cc_dd_ee_ff}
+
+Methods		Disconnect()
+
+			If connected, disconnect from this peer.
+			Connections are established by calling methods on
+			the net.connman.iwd.SimpleConfiguration interface
+			on the same object -- see wsc-api.txt.
+
+			Possible errors: [service].Failed
+					 [service].NotConnected
+
+Properties	string Name [readonly]
+
+			P2P Peer's display name
+
+		string DeviceCategory [readonly]
+
+			The category part of the peer's declared
+			Primary Device Type.
+
+		string DeviceSubcategory [readonly, optional]
+
+			The Sub Category part of the peer's declared
+			Primary Device Type.
+
+		object Device [readonly]
+
+			The object with a net.connman.iwd.p2p.Device
+			interface that discovered this peer -- see
+			p2p-api.txt.
+
+		boolean Connected [readonly]
+
+			Whether there's currently an active connection
+			to this peer.  This property is read-only and
+			changes as a result of method calls on the
+			net.connman.iwd.SimpleConfiguration interface
+			on the same object -- see wsc-api.txt -- and
+			calls to Disconnect on this interface.

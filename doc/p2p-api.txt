@@ -1,0 +1,97 @@
+P2P hierarchy
+=============
+
+Service		net.connman.iwd
+Interface	net.connman.iwd.p2p.Device [Experimental]
+Object path	/net/connman/iwd/{phy0,phy1,...}
+
+Methods		array(on) GetPeers()
+
+			Returns a list (possibly empty) of detected P2P peers.
+			Each record returned contains a tuple of the following
+			values.
+
+			object Object
+
+				The net.connman.iwd.p2p.Peer object
+				representing the peer device.
+
+			int16 SignalStrength
+
+				Peer's signal strength expressed in 100 * dBm.
+				The value is the range of 0 (strongest signal)
+				to -10000 (weakest signal.)
+
+		void RequestDiscovery()
+
+			Starts device discovery if not already happening and
+			registers the calling D-Bus client as requiring device
+			discovery.  The discovery phase will be active until
+			all registered clients have called ReleaseDiscovery()
+			or disconnected from D-Bus.
+
+			Possible errors: [service].Error.AlreadyExists
+
+		void ReleaseDiscovery()
+
+			Unregisters the calling client as requiring device
+			discovery.  Clients should do this as soon as they
+			stop displaying or otherwise using the list of
+			discovered peer devices to avoid keeping the Wi-Fi
+			adapter occupied unnecessarily.
+
+			Possible errors: [service].Error.NotAvailable
+
+		void RegisterSignalLevelAgent(object path,
+						 array(int16) levels)
+
+			Register the agent object to receive signal strength
+			level change notifications on the
+			net.connman.iwd.Station.SignalLevelAgent interface,
+			see station-api.txt.  The "levels" parameter decides
+			the thresholds in dBm that will generate a call to
+			the agent's Changed method whenever current RSSI
+			crosses any of the values.  The values must be
+			passed in descending order.  The number and distance
+			between requested threshold values is a compromise
+			between resolution and the frequency of system
+			wakeups and context-switches that are going to be
+			occuring to update the client's signal meter.  Only
+			one agent can be registered at any time.
+
+			Possible errors: [service].Error.InvalidArguments
+					 [service].Error.Failed
+					 [service].Error.AlreadyExists
+					 [service].Error.NotSupported
+
+		void UnregisterSignalLevelAgent(object path)
+
+			Unregister an existing agent.
+
+			Possible errors: [service].Error.InvalidArguments
+					 [service].Error.NotFound
+
+Properties	boolean Enabled [readwrite]
+
+			Whether local P2P device is started and ready to
+			start device discovery, become discoverable by peers
+			and connect to peers.
+
+		string Name [readwrite]
+
+			Sets local P2P device name as it is going to be
+			presented on other devices that we will connect to
+			or ones that discover us in scanning.
+
+		uint16 AvailableConnections [readonly]
+
+			Minimum number of peers the hardware is capable of
+			connecting to in the current configuration and in
+			addition to any connections already established.
+			Often 1 while idle and 0 if connected to a peer,
+			connecting, disconnecting or otherwise busy.
+
+			A non-zero number is to be interpreted as meaning
+			that the device is capable of making *at least*
+			that many new connections as the final number may
+			depend on parameters negotiated with future peers.
