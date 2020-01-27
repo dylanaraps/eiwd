@@ -20,8 +20,8 @@
  *
  */
 
-const char *properties_on_off_opts[3];
-const char *properties_yes_no_opts[3];
+extern const char *properties_on_off_opts[3];
+extern const char *properties_yes_no_opts[3];
 
 bool properties_builder_append_on_off_variant(
 					struct l_dbus_message_builder *builder,
