@@ -470,9 +470,9 @@ static void manager_interface_dump_callback(struct l_genl_msg *msg,
 	manager_get_interface_cb(msg, state);
 }
 
-static bool manager_check_create_interfaces(const void *a, const void *b)
+static bool manager_check_create_interfaces(void *data, void *user_data)
 {
-	struct wiphy_setup_state *state = (void *) a;
+	struct wiphy_setup_state *state = data;
 
 	wiphy_create_complete(state->wiphy);
 
@@ -491,7 +491,7 @@ static bool manager_check_create_interfaces(const void *a, const void *b)
 
 static void manager_interface_dump_done(void *user_data)
 {
-	l_queue_remove_if(pending_wiphys,
+	l_queue_foreach_remove(pending_wiphys,
 				manager_check_create_interfaces, NULL);
 }
 
