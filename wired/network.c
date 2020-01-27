@@ -161,6 +161,7 @@ static void network_storage_watch_cb(const char *filename,
 		network_reload(name);
 		break;
 	case L_DIR_WATCH_EVENT_ACCESSED:
+	case L_DIR_WATCH_EVENT_ATTRIB:
 		break;
 	}
 
