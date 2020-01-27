@@ -460,12 +460,24 @@ static void hs20_dir_watch_cb(const char *filename,
 			return;
 		}
 
-		known_network_update(&config->super, new, connected_time);
+		known_network_set_connected_time(&config->super,
+							connected_time);
+		known_network_update(&config->super, new);
 
 		l_settings_free(new);
 
 		break;
 	case L_DIR_WATCH_EVENT_ACCESSED:
+		break;
+	case L_DIR_WATCH_EVENT_ATTRIB:
+		config = l_queue_find(hs20_settings, match_filename, full_path);
+		if (!config)
+			return;
+
+		connected_time = l_path_get_mtime(full_path);
+		known_network_set_connected_time(&config->super,
+							connected_time);
+
 		break;
 	}
 }

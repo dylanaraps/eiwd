@@ -335,25 +335,28 @@ bool network_info_match_nai_realm(const struct network_info *info,
 	return info->ops->match_nai_realms(info, nai_realms);
 }
 
-void known_network_update(struct network_info *network,
-					struct l_settings *settings,
+void known_network_set_connected_time(struct network_info *network,
 					uint64_t connected_time)
+{
+	if (network->connected_time == connected_time)
+		return;
+
+	network->connected_time = connected_time;
+
+	l_dbus_property_changed(dbus_get_bus(),
+				known_network_get_path(network),
+				IWD_KNOWN_NETWORK_INTERFACE,
+				"LastConnectedTime");
+
+	l_queue_remove(known_networks, network);
+	l_queue_insert(known_networks, network, connected_time_compare, NULL);
+}
+
+void known_network_update(struct network_info *network,
+					struct l_settings *settings)
 {
 	bool is_hidden;
 	bool is_autoconnectable;
-
-	if (network->connected_time != connected_time) {
-		l_dbus_property_changed(dbus_get_bus(),
-					known_network_get_path(network),
-					IWD_KNOWN_NETWORK_INTERFACE,
-					"LastConnectedTime");
-
-		l_queue_remove(known_networks, network);
-		l_queue_insert(known_networks, network, connected_time_compare,
-				NULL);
-	}
-
-	network->connected_time = connected_time;
 
 	if (!l_settings_get_bool(settings, "Settings", "Hidden", &is_hidden))
 		is_hidden = false;
@@ -753,10 +756,11 @@ static void known_networks_watch_cb(const char *filename,
 		if (settings) {
 			connected_time = l_path_get_mtime(full_path);
 
-			if (network_before)
-				known_network_update(network_before, settings,
+			if (network_before) {
+				known_network_set_connected_time(network_before,
 							connected_time);
-			else
+				known_network_update(network_before, settings);
+			} else
 				known_network_new(ssid, security, settings,
 							connected_time);
 		} else if (network_before)
@@ -766,6 +770,14 @@ static void known_networks_watch_cb(const char *filename,
 
 		break;
 	case L_DIR_WATCH_EVENT_ACCESSED:
+		break;
+	case L_DIR_WATCH_EVENT_ATTRIB:
+		if (network_before) {
+			connected_time = l_path_get_mtime(full_path);
+			known_network_set_connected_time(network_before,
+								connected_time);
+		}
+
 		break;
 	}
 }

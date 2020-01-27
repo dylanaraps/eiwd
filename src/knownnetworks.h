@@ -125,6 +125,7 @@ bool network_info_match_nai_realm(const struct network_info *info,
 
 void known_networks_add(struct network_info *info);
 void known_network_update(struct network_info *info,
-					struct l_settings *settings,
+					struct l_settings *settings);
+void known_network_set_connected_time(struct network_info *network,
 					uint64_t connected_time);
 void known_networks_remove(struct network_info *info);
