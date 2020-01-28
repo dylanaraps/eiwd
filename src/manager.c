@@ -54,6 +54,7 @@ struct wiphy_setup_state {
 	struct wiphy *wiphy;
 	unsigned int pending_cmd_count;
 	bool aborted;
+	bool retry;
 
 	/*
 	 * Data we may need if the driver does not seem to support interface
@@ -127,15 +128,29 @@ static void manager_new_interface_cb(struct l_genl_msg *msg, void *user_data)
 	struct wiphy_setup_state *state = user_data;
 	uint8_t addr_buf[6];
 	uint8_t *addr = NULL;
+	int error;
 
 	l_debug("");
 
 	if (state->aborted)
 		return;
 
-	if (l_genl_msg_get_error(msg) < 0) {
+	error = l_genl_msg_get_error(msg);
+	if (error < 0) {
 		l_error("NEW_INTERFACE failed: %s",
 			strerror(-l_genl_msg_get_error(msg)));
+
+		/*
+		 * If we receive an EBUSY most likely the wiphy is still
+		 * initializing, the default interface has not been created
+		 * yet and the wiphy needs some time.  Retry when we
+		 * receive a NEW_INTERFACE event.
+		 */
+		if (error == -EBUSY) {
+			state->retry = true;
+			return;
+		}
+
 		/*
 		 * Nothing we can do to use this wiphy since by now we
 		 * will have successfully deleted any default interface
@@ -158,7 +173,9 @@ static void manager_new_interface_done(void *user_data)
 	struct wiphy_setup_state *state = user_data;
 
 	state->pending_cmd_count--;
-	wiphy_setup_state_destroy(state);
+
+	if (!state->pending_cmd_count && !state->retry)
+		wiphy_setup_state_destroy(state);
 }
 
 static void manager_create_interfaces(struct wiphy_setup_state *state)
@@ -218,18 +235,23 @@ static void manager_create_interfaces(struct wiphy_setup_state *state)
 	state->pending_cmd_count++;
 }
 
+static bool manager_wiphy_check_setup_done(struct wiphy_setup_state *state)
+{
+	if (state->pending_cmd_count || state->retry)
+		return false;
+
+	manager_create_interfaces(state);
+
+	return !state->pending_cmd_count && !state->retry;
+}
+
 static void manager_setup_cmd_done(void *user_data)
 {
 	struct wiphy_setup_state *state = user_data;
 
 	state->pending_cmd_count--;
 
-	if (state->pending_cmd_count)
-		return;
-
-	manager_create_interfaces(state);
-
-	if (!state->pending_cmd_count)
+	if (manager_wiphy_check_setup_done(state))
 		wiphy_setup_state_destroy(state);
 }
 
@@ -279,7 +301,6 @@ static void manager_get_interface_cb(struct l_genl_msg *msg, void *user_data)
 				state->id, wiphy);
 		return;
 	}
-
 
 	if (nl80211_parse_attrs(msg, NL80211_ATTR_IFINDEX, &ifindex,
 					NL80211_ATTR_IFNAME, &ifname,
@@ -476,15 +497,10 @@ static bool manager_check_create_interfaces(void *data, void *user_data)
 
 	wiphy_create_complete(state->wiphy);
 
-	if (state->pending_cmd_count)
+	if (!manager_wiphy_check_setup_done(state))
 		return false;
 
-	/* If we are here, then there are no interfaces for this phy */
-	manager_create_interfaces(state);
-
-	if (state->pending_cmd_count)
-		return false;
-
+	/* If we are here, there were no interfaces for this phy */
 	wiphy_setup_state_free(state);
 	return true;
 }
@@ -561,6 +577,7 @@ static void manager_config_notify(struct l_genl_msg *msg, void *user_data)
 {
 	uint8_t cmd;
 	struct netdev *netdev;
+	struct wiphy_setup_state *state;
 
 	cmd = l_genl_msg_get_command(msg);
 
@@ -578,11 +595,24 @@ static void manager_config_notify(struct l_genl_msg *msg, void *user_data)
 
 	case NL80211_CMD_NEW_INTERFACE:
 		/*
-		 * TODO: Until NEW_WIPHY contains all required information we
-		 * are stuck always having to do a full dump. This specific
-		 * interface must also be dumped, and this is taken care of
-		 * in manager_new_wiphy_event.
+		 * Interfaces are normally dumped on the NEW_WIPHY events and
+		 * and we have nothing to do here.  But check if by any chance
+		 * we've queried this wiphy and it was still busy initialising,
+		 * in that case retry the setup now that an interface, likely
+		 * the initial default one, has been added.
 		 */
+		state = manager_find_pending(manager_parse_wiphy_id(msg));
+
+		if (state && state->retry) {
+			state->retry = false;
+			l_debug("Retrying setup of wiphy %u", state->id);
+
+			manager_get_interface_cb(msg, state);
+
+			if (manager_wiphy_check_setup_done(state))
+				wiphy_setup_state_destroy(state);
+		}
+
 		break;
 
 	case NL80211_CMD_DEL_INTERFACE:
