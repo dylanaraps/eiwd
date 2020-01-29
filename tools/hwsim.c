@@ -2151,25 +2151,32 @@ static void setup_rule_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Remove", 0, rule_remove, "", "");
 
-	l_dbus_interface_property(interface, "Source", 0, "s",
+	l_dbus_interface_property(interface, "Source",
+					L_DBUS_PROPERTY_FLAG_AUTO_EMIT, "s",
 					rule_property_get_source,
 					rule_property_set_source);
-	l_dbus_interface_property(interface, "Destination", 0, "s",
+	l_dbus_interface_property(interface, "Destination",
+					L_DBUS_PROPERTY_FLAG_AUTO_EMIT, "s",
 					rule_property_get_destination,
 					rule_property_set_destination);
-	l_dbus_interface_property(interface, "Bidirectional", 0, "b",
+	l_dbus_interface_property(interface, "Bidirectional",
+					L_DBUS_PROPERTY_FLAG_AUTO_EMIT, "b",
 					rule_property_get_bidirectional,
 					rule_property_set_bidirectional);
-	l_dbus_interface_property(interface, "Frequency", 0, "u",
+	l_dbus_interface_property(interface, "Frequency",
+					L_DBUS_PROPERTY_FLAG_AUTO_EMIT, "u",
 					rule_property_get_frequency,
 					rule_property_set_frequency);
-	l_dbus_interface_property(interface, "Priority", 0, "n",
+	l_dbus_interface_property(interface, "Priority",
+					L_DBUS_PROPERTY_FLAG_AUTO_EMIT, "n",
 					rule_property_get_priority,
 					rule_property_set_priority);
-	l_dbus_interface_property(interface, "SignalStrength", 0, "n",
+	l_dbus_interface_property(interface, "SignalStrength",
+					L_DBUS_PROPERTY_FLAG_AUTO_EMIT, "n",
 					rule_property_get_signal,
 					rule_property_set_signal);
-	l_dbus_interface_property(interface, "Drop", 0, "b",
+	l_dbus_interface_property(interface, "Drop",
+					L_DBUS_PROPERTY_FLAG_AUTO_EMIT, "b",
 					rule_property_get_drop,
 					rule_property_set_drop);
 }
