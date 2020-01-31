@@ -244,11 +244,7 @@ static int eap_extensions_handle_cryptobinding_tlv(struct eap_state *eap,
 					cryptobinding_compound_mac_len)) {
 		l_error("PEAP: Generated compound MAC and server compound MAC "
 							"don't match.");
-		/*
-		 * Ignore the Crypto-Binding TLV in the case of unmatched
-		 * compound MACs.
-		 */
-		return 0;
+		return -EIO;
 	}
 
 	/* Build response Crypto-Binding TLV */
