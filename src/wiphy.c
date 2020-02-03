@@ -283,6 +283,11 @@ const char *wiphy_get_path(struct wiphy *wiphy)
 	return path;
 }
 
+uint32_t wiphy_get_id(struct wiphy *wiphy)
+{
+	return wiphy->id;
+}
+
 uint32_t wiphy_get_supported_bands(struct wiphy *wiphy)
 {
 	if (!wiphy->supported_freqs)
