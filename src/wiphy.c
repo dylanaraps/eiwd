@@ -89,6 +89,8 @@ struct wiphy {
 	bool soft_rfkill : 1;
 	bool hard_rfkill : 1;
 	bool offchannel_tx_ok : 1;
+	bool blacklisted : 1;
+	bool registered : 1;
 };
 
 static struct l_queue *wiphy_list = NULL;
@@ -238,6 +240,11 @@ static bool wiphy_match(const void *a, const void *b)
 struct wiphy *wiphy_find(int wiphy_id)
 {
 	return l_queue_find(wiphy_list, wiphy_match, L_UINT_TO_PTR(wiphy_id));
+}
+
+bool wiphy_is_blacklisted(const struct wiphy *wiphy)
+{
+	return wiphy->blacklisted;
 }
 
 static bool wiphy_is_managed(const char *phy)
@@ -978,37 +985,49 @@ static void wiphy_register(struct wiphy *wiphy)
 		l_info("Unable to add the %s interface to %s",
 				L_DBUS_INTERFACE_PROPERTIES,
 				wiphy_get_path(wiphy));
+
+	wiphy->registered = true;
 }
 
 struct wiphy *wiphy_create(uint32_t wiphy_id, const char *name)
 {
 	struct wiphy *wiphy;
 
-	if (!wiphy_is_managed(name))
-		return NULL;
-
 	wiphy = wiphy_new(wiphy_id);
 	l_strlcpy(wiphy->name, name, sizeof(wiphy->name));
 	l_queue_push_head(wiphy_list, wiphy);
 
-	wiphy_register(wiphy);
+	if (!wiphy_is_managed(name))
+		wiphy->blacklisted = true;
+
 	return wiphy;
 }
 
-void wiphy_update_from_genl(struct wiphy *wiphy, const char *name,
-				struct l_genl_msg *msg)
+void wiphy_update_from_genl(struct wiphy *wiphy, struct l_genl_msg *msg)
 {
+	if (wiphy->blacklisted)
+		return;
+
 	l_debug("");
 
+	wiphy_parse_attributes(wiphy, msg);
+}
+
+void wiphy_update_name(struct wiphy *wiphy, const char *name)
+{
+	bool updated = false;
+
 	if (strncmp(wiphy->name, name, sizeof(wiphy->name))) {
+		l_strlcpy(wiphy->name, name, sizeof(wiphy->name));
+		updated = true;
+	}
+
+	if (updated && wiphy->registered) {
 		struct l_dbus *dbus = dbus_get_bus();
 
-		l_strlcpy(wiphy->name, name, sizeof(wiphy->name));
 		l_dbus_property_changed(dbus, wiphy_get_path(wiphy),
 					IWD_WIPHY_INTERFACE, "Name");
 	}
-
-	wiphy_parse_attributes(wiphy, msg);
 }
 
 static void wiphy_set_station_capability_bits(struct wiphy *wiphy)
@@ -1067,6 +1086,8 @@ static void wiphy_setup_rm_enabled_capabilities(struct wiphy *wiphy)
 
 void wiphy_create_complete(struct wiphy *wiphy)
 {
+	wiphy_register(wiphy);
+
 	if (util_mem_is_zero(wiphy->permanent_addr, 6)) {
 		int err = wiphy_get_permanent_addr_from_sysfs(wiphy);
 
@@ -1088,7 +1109,8 @@ bool wiphy_destroy(struct wiphy *wiphy)
 	if (!l_queue_remove(wiphy_list, wiphy))
 		return false;
 
-	l_dbus_unregister_object(dbus_get_bus(), wiphy_get_path(wiphy));
+	if (wiphy->registered)
+		l_dbus_unregister_object(dbus_get_bus(), wiphy_get_path(wiphy));
 
 	wiphy_free(wiphy);
 	return true;

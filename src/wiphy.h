@@ -44,12 +44,13 @@ enum ie_rsn_akm_suite wiphy_select_akm(struct wiphy *wiphy,
 					bool fils_capable_hint);
 
 struct wiphy *wiphy_find(int wiphy_id);
+bool wiphy_is_blacklisted(const struct wiphy *wiphy);
 
 struct wiphy *wiphy_create(uint32_t wiphy_id, const char *name);
+void wiphy_update_name(struct wiphy *wiphy, const char *name);
 void wiphy_create_complete(struct wiphy *wiphy);
 bool wiphy_destroy(struct wiphy *wiphy);
-void wiphy_update_from_genl(struct wiphy *wiphy, const char *name,
-				struct l_genl_msg *msg);
+void wiphy_update_from_genl(struct wiphy *wiphy, struct l_genl_msg *msg);
 
 bool wiphy_constrain_freq_set(const struct wiphy *wiphy,
 						struct scan_freq_set *set);
