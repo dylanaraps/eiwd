@@ -27,3 +27,13 @@ static inline void explicit_bzero(void *s, size_t n)
         __asm__ __volatile__ ("" : : "r"(s) : "memory");
 }
 #endif
+
+#ifndef HAVE_RAWMEMCHR
+static inline void *rawmemchr(const void *s, int c)
+{
+_Pragma("GCC diagnostic push")
+_Pragma("GCC diagnostic ignored \"-Wstringop-overflow=\"")
+	return memchr(s, c, (size_t) -1);
+_Pragma("GCC diagnostic pop")
+}
+#endif

@@ -37,6 +37,7 @@
 
 #include "linux/nl80211.h"
 
+#include "src/missing.h"
 #include "src/iwd.h"
 #include "src/module.h"
 #include "src/ie.h"
