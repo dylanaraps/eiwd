@@ -375,8 +375,7 @@ static bool frame_watch_group_remove_wdev(void *data, void *user_data)
 	 * internals.
 	 */
 	l_queue_foreach_remove(group->watches.items,
-				frame_watch_item_remove_wdev,
-				&wdev_id);
+				frame_watch_item_remove_wdev, user_data);
 	return false;
 }
 
