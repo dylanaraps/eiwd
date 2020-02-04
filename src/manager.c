@@ -650,7 +650,8 @@ static void manager_config_notify(struct l_genl_msg *msg, void *user_data)
 		 * in that case retry the setup now that an interface, likely
 		 * the initial default one, has been added.
 		 */
-		state = manager_find_pending(manager_parse_wiphy_id(msg));
+		wiphy_id = manager_parse_wiphy_id(msg);
+		state = manager_find_pending(wiphy_id);
 
 		if (state && state->retry) {
 			state->retry = false;
