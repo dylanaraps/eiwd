@@ -362,8 +362,10 @@ static bool frame_watch_group_remove_wdev(void *data, void *user_data)
 	struct watch_group *group = data;
 	const uint64_t *wdev_id = user_data;
 
-	if (group->wdev_id == *wdev_id)
+	if (group->wdev_id == *wdev_id) {
+		frame_watch_group_destroy(group);
 		return true;
+	}
 
 	if (group->id != 0)
 		return false;
