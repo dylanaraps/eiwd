@@ -438,32 +438,6 @@ static void manager_interface_dump_callback(struct l_genl_msg *msg,
 static bool manager_check_create_interfaces(void *data, void *user_data)
 {
 	struct wiphy_setup_state *state = data;
-	wiphy_create_complete(state->wiphy);
-
-	state->use_default = use_default;
-
-	/*
-	 * If whitelist/blacklist were given only try to use existing
-	 * interfaces same as when the driver does not support NEW_INTERFACE
-	 * or DEL_INTERFACE, otherwise the interface names will become
-	 * meaningless after we've created our own interface(s).  Optimally
-	 * phy name white/blacklists should be used.
-	 */
-	if (whitelist_filter || blacklist_filter)
-		state->use_default = true;
-
-	if (!state->use_default) {
-		const char *driver = wiphy_get_driver(state->wiphy);
-		const char **e;
-
-		for (e = default_if_driver_list; *e; e++)
-			if (fnmatch(*e, driver, 0) == 0)
-				state->use_default = true;
-	}
-
-	if (state->use_default)
-		l_info("Wiphy %s will only use the default interface",
-				wiphy_get_name(state->wiphy));
 
 	if (!manager_wiphy_check_setup_done(state))
 		return false;
@@ -526,6 +500,41 @@ static void manager_wiphy_filtered_dump_callback(struct l_genl_msg *msg,
 	wiphy_update_from_genl(state->wiphy, msg);
 }
 
+static void manager_wiphy_dump_done(void *user_data)
+{
+	const struct l_queue_entry *e;
+
+	for (e = l_queue_get_entries(pending_wiphys); e; e = e->next) {
+		struct wiphy_setup_state *state = e->data;
+
+		wiphy_create_complete(state->wiphy);
+		state->use_default = use_default;
+
+		/* If whitelist/blacklist were given only try to use existing
+		 * interfaces same as when the driver does not support
+		 * NEW_INTERFACE or DEL_INTERFACE, otherwise the interface
+		 * names will become meaningless after we've created our own
+		 * interface(s).  Optimally phy name white/blacklists should
+		 * be used.
+		 */
+		if (whitelist_filter || blacklist_filter)
+			state->use_default = true;
+
+		if (!state->use_default) {
+			const char *driver = wiphy_get_driver(state->wiphy);
+			const char **e;
+
+			for (e = default_if_driver_list; *e; e++)
+				if (fnmatch(*e, driver, 0) == 0)
+					state->use_default = true;
+		}
+
+		if (state->use_default)
+			l_info("Wiphy %s will only use the default interface",
+				wiphy_get_name(state->wiphy));
+	}
+}
+
 static int manager_wiphy_filtered_dump(uint32_t wiphy_id,
 						l_genl_msg_func_t cb,
 						void *user_data)
@@ -543,7 +552,8 @@ static int manager_wiphy_filtered_dump(uint32_t wiphy_id,
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SPLIT_WIPHY_DUMP, 0, NULL);
 	l_genl_msg_append_attr(msg, NL80211_ATTR_WIPHY, 4, &wiphy_id);
 
-	wiphy_cmd_id = l_genl_family_dump(nl80211, msg, cb, user_data, NULL);
+	wiphy_cmd_id = l_genl_family_dump(nl80211, msg, cb, user_data,
+						manager_wiphy_dump_done);
 	if (!wiphy_cmd_id) {
 		l_error("Could not dump wiphy %u", wiphy_id);
 		l_genl_msg_unref(msg);
@@ -722,7 +732,8 @@ static int manager_init(void)
 	l_genl_msg_append_attr(msg, NL80211_ATTR_SPLIT_WIPHY_DUMP, 0, NULL);
 	wiphy_dump = l_genl_family_dump(nl80211, msg,
 						manager_wiphy_dump_callback,
-						NULL, NULL);
+						NULL,
+						manager_wiphy_dump_done);
 	if (!wiphy_dump) {
 		l_error("Initial wiphy information dump failed");
 		l_genl_msg_unref(msg);
