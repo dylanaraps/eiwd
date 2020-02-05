@@ -112,6 +112,7 @@ static bool manager_use_default(struct wiphy_setup_state *state)
 	if (!state->default_if_msg) {
 		l_error("No default interface for wiphy %u",
 			(unsigned int) state->id);
+		state->retry = true;
 		return false;
 	}
 
