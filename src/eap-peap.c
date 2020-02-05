@@ -357,6 +357,8 @@ static int eap_extensions_process_tlvs(struct eap_state *eap,
 	int response_len = 0;
 	uint16_t tlv_type;
 	uint16_t tlv_value_len;
+	bool seen_result_tlv = false;
+	bool seen_cryptobinding_tlv = false;
 
 	while (data_len >= EAP_EXTENSIONS_TLV_HEADER_LEN) {
 		int response_tlv_len = 0;
@@ -374,12 +376,22 @@ static int eap_extensions_process_tlvs(struct eap_state *eap,
 
 		switch (tlv_type) {
 		case EAP_EXTENSIONS_TLV_TYPE_RESULT:
+			if (seen_result_tlv)
+				return -EBADMSG;
+
+			seen_result_tlv = true;
+
 			response_tlv_len = eap_extensions_handle_result_tlv(eap,
 						data, tlv_value_len, response,
 						result);
 
 			break;
 		case EAP_EXTENSIONS_TLV_TYPE_CRYPTOBINDING:
+			if (seen_cryptobinding_tlv)
+				return -EBADMSG;
+
+			seen_cryptobinding_tlv = true;
+
 			response_tlv_len =
 				eap_extensions_handle_cryptobinding_tlv(eap,
 						data, tlv_value_len, response);
