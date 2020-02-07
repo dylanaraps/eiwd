@@ -258,16 +258,19 @@ err:
 static struct watch_group *frame_watch_group_get(uint64_t wdev_id, uint32_t id)
 {
 	const struct l_queue_entry *entry;
+	struct watch_group *group;
 
 	for (entry = l_queue_get_entries(watch_groups); entry;
 			entry = entry->next) {
-		struct watch_group *group = entry->data;
+		group = entry->data;
 
 		if (group->id == id && (id == 0 || group->wdev_id == wdev_id))
 			return group;
 	}
 
-	return frame_watch_group_new(wdev_id, id);
+	group = frame_watch_group_new(wdev_id, id);
+	l_queue_push_tail(watch_groups, group);
+	return group;
 }
 
 static void frame_watch_register_cb(struct l_genl_msg *msg, void *user_data)
