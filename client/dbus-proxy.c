@@ -511,6 +511,33 @@ static bool is_ignorable(const char *interface)
 	return false;
 }
 
+static void proxy_interfaces_update_properties(const char *path,
+					struct l_dbus_message_iter *interfaces)
+{
+	const char *interface;
+	struct l_dbus_message_iter properties;
+	struct proxy_interface *proxy;
+	struct proxy_interface_type *interface_type;
+
+	if (!path)
+		return;
+
+	while (l_dbus_message_iter_next_entry(interfaces, &interface,
+								&properties)) {
+		interface_type = l_queue_find(proxy_interface_types,
+						interface_match_by_type_name,
+						interface);
+		if (!interface_type)
+			continue;
+
+		proxy = proxy_interface_find(interface_type->interface, path);
+		if (!proxy)
+			continue;
+
+		interface_update_properties(proxy, &properties, NULL);
+	}
+}
+
 static void proxy_interface_create(const char *path,
 					struct l_dbus_message_iter *interfaces)
 {
@@ -538,21 +565,15 @@ static void proxy_interface_create(const char *path,
 
 		proxy = proxy_interface_find(interface_type->interface, path);
 
-		if (proxy) {
-			interface_update_properties(proxy, &properties, NULL);
-
+		if (proxy)
 			continue;
-		}
 
 		proxy = l_new(struct proxy_interface, 1);
 		proxy->path = l_strdup(path);
 		proxy->type = interface_type;
 
-		if (interface_type->ops && interface_type->ops->create) {
+		if (interface_type->ops && interface_type->ops->create)
 			proxy->data = interface_type->ops->create();
-
-			interface_update_properties(proxy, &properties, NULL);
-		}
 
 		l_queue_push_tail(proxy_interfaces, proxy);
 	}
@@ -656,6 +677,12 @@ static void interfaces_added_callback(struct l_dbus_message *message,
 		return;
 
 	proxy_interface_create(path, &object);
+
+	if (!l_dbus_message_get_arguments(message, "oa{sa{sv}}", &path,
+								&object))
+		return;
+
+	proxy_interfaces_update_properties(path, &object);
 }
 
 static void interfaces_removed_callback(struct l_dbus_message *message,
@@ -692,52 +719,52 @@ static void get_managed_objects_callback(struct l_dbus_message *message,
 	const char *path;
 
 	if (dbus_message_has_error(message)) {
-		l_error("Failed to retrieve IWD dbus objects, quitting...\n");
+		display_error("Failed to retrieve IWD dbus objects, "
+							"quitting...\n");
 
-		if (!command_is_interactive_mode())
-			command_set_exit_status(EXIT_FAILURE);
-
-		l_main_quit();
-
-		return;
+		goto error;
 	}
 
 	if (!l_dbus_message_get_arguments(message, "a{oa{sa{sv}}}", &objects)) {
-		l_error("Failed to parse IWD dbus objects, quitting...\n");
+		display_error("Failed to parse IWD dbus objects, "
+							"quitting...\n");
 
-		if (!command_is_interactive_mode())
-			command_set_exit_status(EXIT_FAILURE);
-
-		l_main_quit();
-
-		return;
+		goto error;
 	}
 
 	while (l_dbus_message_iter_next_entry(&objects, &path, &object))
 		proxy_interface_create(path, &object);
 
-	if (command_needs_no_agent())
-		goto no_agent;
+	if (!l_dbus_message_get_arguments(message, "a{oa{sa{sv}}}", &objects))
+		/*
+		 * Shouldn't happen since we parsed it above, but check return
+		 * anyway.
+		 */
+		goto error;
 
-	if (!agent_manager_register_agent()) {
-		display_error("Failed to register Agent.\n");
+	while (l_dbus_message_iter_next_entry(&objects, &path, &object))
+		proxy_interfaces_update_properties(path, &object);
 
-		if (!command_is_interactive_mode())
-			command_set_exit_status(EXIT_FAILURE);
+	if (!command_needs_no_agent()) {
+		if (!agent_manager_register_agent()) {
+			display_error("Failed to register Agent.\n");
 
-		l_main_quit();
-
-		return;
+			goto error;
+		}
 	}
 
-no_agent:
-	if (!command_is_interactive_mode()) {
+	if (command_is_interactive_mode())
+		display_enable_cmd_prompt();
+	else
 		command_noninteractive_trigger();
 
-		return;
-	}
+	return;
 
-	display_enable_cmd_prompt();
+error:
+	if (!command_is_interactive_mode())
+		command_set_exit_status(EXIT_FAILURE);
+
+	l_main_quit();
 }
 
 static void get_managed_objects(void)
