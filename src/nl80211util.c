@@ -96,6 +96,14 @@ static bool extract_uint32(const void *data, uint16_t len, void *o)
 	return true;
 }
 
+static bool extract_flag(const void *data, uint16_t len, void *o)
+{
+	if (len != 0)
+		return false;
+
+	return true;
+}
+
 static attr_handler handler_for_type(enum nl80211_attrs type)
 {
 	switch (type) {
@@ -112,6 +120,8 @@ static attr_handler handler_for_type(enum nl80211_attrs type)
 		return extract_name;
 	case NL80211_ATTR_MAC:
 		return extract_mac;
+	case NL80211_ATTR_ACK:
+		return extract_flag;
 	default:
 		break;
 	}
@@ -189,6 +199,11 @@ int nl80211_parse_attrs(struct l_genl_msg *msg, int tag, ...)
 
 	for (e = l_queue_get_entries(entries); e; e = e->next) {
 		entry = e->data;
+
+		if (entry->handler == extract_flag) {
+			*(bool *) entry->data = entry->present;
+			continue;
+		}
 
 		if (entry->present)
 			continue;
