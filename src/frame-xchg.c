@@ -323,19 +323,24 @@ bool frame_watch_add(uint64_t wdev_id, uint32_t group_id, uint16_t frame_type,
 	return true;
 }
 
+struct watch_group_match_info {
+	uint64_t wdev_id;
+	uint32_t id;
+};
+
 static bool frame_watch_group_match(const void *a, const void *b)
 {
 	const struct watch_group *group = a;
-	uint32_t id = L_PTR_TO_UINT(b);
+	const struct watch_group_match_info *info = b;
 
-	return group->id == id;
+	return group->wdev_id == info->wdev_id && group->id == info->id;
 }
 
 bool frame_watch_group_remove(uint64_t wdev_id, uint32_t group_id)
 {
+	struct watch_group_match_info info = { wdev_id, group_id };
 	struct watch_group *group = l_queue_remove_if(watch_groups,
-						frame_watch_group_match,
-						L_UINT_TO_PTR(group_id));
+						frame_watch_group_match, &info);
 
 	if (!group)
 		return false;
