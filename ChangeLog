@@ -1,3 +1,9 @@
+ver 1.5:
+	Fix issue with handling missing NEW_WIPHY events.
+	Fix issue with interface creation and NEW_WIPHY events.
+	Fix issue with handling LastConnectedTime property change.
+	Fix issue with PEAPv0 interoperability with Windows.
+
 ver 1.4:
 	Fix issue with handling Crypto-Binding and invalid MACs.
 	Fix issue with handling change station error results.
