@@ -2055,6 +2055,8 @@ static void netdev_cmd_connect_cb(struct l_genl_msg *msg, void *user_data)
 
 	/* Wait for connect event */
 	if (l_genl_msg_get_error(msg) >= 0) {
+		netdev->connected = true;
+
 		if (netdev->event_filter)
 			netdev->event_filter(netdev,
 						NETDEV_EVENT_ASSOCIATING,
@@ -2397,7 +2399,6 @@ static int netdev_connect_common(struct netdev *netdev,
 	netdev->event_filter = event_filter;
 	netdev->connect_cb = cb;
 	netdev->user_data = user_data;
-	netdev->connected = true;
 	netdev->handshake = hs;
 	netdev->sm = sm;
 	netdev->frequency = bss->frequency;
@@ -2432,7 +2433,7 @@ int netdev_connect(struct netdev *netdev, struct scan_bss *bss,
 			netdev->type != NL80211_IFTYPE_P2P_CLIENT)
 		return -ENOTSUP;
 
-	if (netdev->connected)
+	if (netdev->connected || netdev->connect_cmd_id)
 		return -EISCONN;
 
 	switch (hs->akm_suite) {
