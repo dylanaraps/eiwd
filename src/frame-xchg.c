@@ -26,6 +26,8 @@
 
 #include <errno.h>
 #include <stdarg.h>
+#include <sys/socket.h>
+#include <linux/genetlink.h>
 
 #include <ell/ell.h>
 
@@ -57,8 +59,10 @@ struct watch_group {
 	uint32_t id;
 	uint64_t wdev_id;
 	uint32_t unicast_watch_id;
-	struct l_genl *genl;
-	struct l_genl_family *nl80211;
+	struct l_io *io;
+	uint32_t nl_pid;
+	uint32_t nl_seq;
+	struct l_queue *write_queue;
 	struct watchlist watches;
 };
 
@@ -113,6 +117,7 @@ struct frame_xchg_watch_data {
 
 static struct l_queue *frame_xchgs;
 static struct l_genl_family *nl80211;
+static uint32_t nl80211_id;
 
 struct frame_prefix_info {
 	uint16_t frame_type;
@@ -226,15 +231,12 @@ static void frame_watch_group_destroy(void *data)
 	struct watch_group *group = data;
 
 	if (group->unicast_watch_id)
-		l_genl_remove_unicast_watch(group->genl,
+		l_genl_remove_unicast_watch(iwd_get_genl(),
 						group->unicast_watch_id);
 
-	if (group->genl)
-		l_genl_unref(group->genl);
-
-	if (group->nl80211)
-		l_genl_family_free(group->nl80211);
-
+	l_io_destroy(group->io);
+	l_queue_destroy(group->write_queue,
+			(l_queue_destroy_func_t) l_genl_msg_unref);
 	watchlist_destroy(&group->watches);
 	l_free(group);
 }
@@ -252,40 +254,194 @@ static const struct watchlist_ops frame_watch_ops = {
 	.item_free = frame_watch_free,
 };
 
+static bool frame_watch_group_io_write(struct l_io *io, void *user_data)
+{
+	struct watch_group *group = user_data;
+	struct l_genl_msg *msg;
+	const void *msg_data;
+	size_t msg_size;
+	ssize_t bytes_written;
+
+	msg = l_queue_pop_head(group->write_queue);
+	if (!msg)
+		return false;
+
+	msg_data = l_genl_msg_to_data(msg, nl80211_id, NLM_F_REQUEST,
+					++group->nl_seq, group->nl_pid,
+					&msg_size);
+	bytes_written = send(l_io_get_fd(group->io), msg_data, msg_size, 0);
+	l_genl_msg_unref(msg);
+
+	if (bytes_written < 0) {
+		l_error("Frame watch group socket write error: %s (%i)",
+			strerror(errno), errno);
+
+		l_queue_push_head(group->write_queue, msg);
+		return false;
+	}
+
+	return !l_queue_isempty(group->write_queue);
+}
+
+static bool frame_watch_group_io_read(struct l_io *io, void *user_data)
+{
+	struct watch_group *group = user_data;
+	struct cmsghdr *cmsg;
+	struct msghdr msg;
+	struct iovec iov;
+	unsigned char buf[8192];
+	unsigned char control[32];
+	ssize_t bytes_read;
+	struct nlmsghdr *nlmsg;
+	size_t nlmsg_len;
+	uint32_t nlmsg_group = 0;
+
+	memset(&iov, 0, sizeof(iov));
+	iov.iov_base = buf;
+	iov.iov_len = sizeof(buf);
+
+	memset(&msg, 0, sizeof(msg));
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+	msg.msg_control = control;
+	msg.msg_controllen = sizeof(control);
+
+	bytes_read = recvmsg(l_io_get_fd(group->io), &msg, 0);
+	if (bytes_read < 0) {
+		if (errno != EAGAIN && errno != EINTR) {
+			l_error("Frame watch group socket read error: %s (%i)",
+				strerror(errno), errno);
+			return false;
+		}
+
+		return true;
+	}
+
+	nlmsg_len = bytes_read;
+
+	for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL;
+					cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+		struct nl_pktinfo pktinfo;
+
+		if (cmsg->cmsg_level != SOL_NETLINK)
+			continue;
+
+		if (cmsg->cmsg_type != NETLINK_PKTINFO)
+			continue;
+
+		memcpy(&pktinfo, CMSG_DATA(cmsg), sizeof(pktinfo));
+
+		nlmsg_group = pktinfo.group;
+	}
+
+	if (nlmsg_group) /* Ignore multicast */
+		return true;
+
+	for (nlmsg = iov.iov_base; NLMSG_OK(nlmsg, nlmsg_len);
+				nlmsg = NLMSG_NEXT(nlmsg, nlmsg_len)) {
+		struct l_genl_msg *genl_msg;
+
+		if (nlmsg->nlmsg_type != nl80211_id) /* Ignore other families */
+			continue;
+
+		if (nlmsg->nlmsg_seq)	/* Ignore responses */
+			continue;
+
+		genl_msg = l_genl_msg_new_from_data((void *) nlmsg,
+							nlmsg->nlmsg_len);
+		if (!genl_msg)
+			continue;
+
+		frame_watch_unicast_notify(genl_msg, group);
+		l_genl_msg_unref(genl_msg);
+	}
+
+	return true;
+}
+
+static void frame_watch_group_io_destroy(void *user_data)
+{
+	struct watch_group *group = user_data;
+
+	group->io = NULL;
+
+	if (l_queue_remove(watch_groups, group)) {
+		l_error("Frame watch group socket closed");
+
+		frame_watch_group_destroy(group);
+	}
+}
+
 static struct watch_group *frame_watch_group_new(uint64_t wdev_id, uint32_t id)
 {
 	struct watch_group *group = l_new(struct watch_group, 1);
+	struct sockaddr_nl addr;
+	socklen_t addrlen = sizeof(addr);
+	int fd = -1, pktinfo = 1;
 
 	group->id = id;
 	group->wdev_id = wdev_id;
 	watchlist_init(&group->watches, &frame_watch_ops);
 
-	if (id == 0)
-		group->genl = l_genl_ref(iwd_get_genl());
-	else {
-		group->genl = l_genl_new();
-		if (!group->genl)
-			goto err;
-	}
-
-	group->unicast_watch_id = l_genl_add_unicast_watch(group->genl,
+	if (id == 0) {
+		group->unicast_watch_id = l_genl_add_unicast_watch(
+						iwd_get_genl(),
 						NL80211_GENL_NAME,
 						frame_watch_unicast_notify,
 						group, NULL);
-	if (!group->unicast_watch_id) {
-		l_error("Registering for unicast notification failed");
-		goto err;
+		if (unlikely(!group->unicast_watch_id)) {
+			l_error("Registering for unicast notification failed");
+			goto err;
+		}
+
+		return group;
 	}
 
-	group->nl80211 = l_genl_family_new(group->genl, NL80211_GENL_NAME);
-	if (!group->nl80211) {
-		l_error("Failed to obtain nl80211");
+	/*
+	 * If we need to add groups using genl sockets other than our main
+	 * genl socket (iwd_get_genl()), use raw io instead of l_genl.  This
+	 * way we don't have to query the genl families -- we already know
+	 * nl80211 is present -- and the handling is simpler, and l_genl,
+	 * while it would work, is not meant to have multiple instances
+	 * per program.
+	 */
+	fd = socket(PF_NETLINK,
+			SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK,
+			NETLINK_GENERIC);
+	if (unlikely(fd < 0))
 		goto err;
-	}
+
+	memset(&addr, 0, sizeof(addr));
+	addr.nl_family = AF_NETLINK;
+	addr.nl_pid = 0;
+
+	if (unlikely(bind(fd, (struct sockaddr *) &addr, sizeof(addr)) < 0))
+		goto err;
+
+	if (unlikely(getsockname(fd, (struct sockaddr *) &addr, &addrlen) < 0))
+		goto err;
+
+	group->nl_pid = addr.nl_pid;
+
+	if (unlikely(setsockopt(fd, SOL_NETLINK, NETLINK_PKTINFO,
+					&pktinfo, sizeof(pktinfo)) < 0))
+		goto err;
+
+	group->io = l_io_new(fd);
+	if (unlikely(!group->io))
+		goto err;
+
+	l_io_set_close_on_destroy(group->io, true);
+	l_io_set_read_handler(group->io, frame_watch_group_io_read, group,
+				frame_watch_group_io_destroy);
+	group->write_queue = l_queue_new();
 
 	return group;
 
 err:
+	if (fd > -1)
+		close(fd);
+
 	frame_watch_group_destroy(group);
 	return NULL;
 }
@@ -410,8 +566,14 @@ bool frame_watch_add(uint64_t wdev_id, uint32_t group_id, uint16_t frame_type,
 	l_genl_msg_append_attr(msg, NL80211_ATTR_FRAME_MATCH,
 				prefix_len, prefix);
 
-	l_genl_family_send(group->nl80211, msg, frame_watch_register_cb,
-				L_UINT_TO_PTR(frame_type), NULL);
+	if (group->id == 0)
+		l_genl_family_send(nl80211, msg, frame_watch_register_cb,
+					L_UINT_TO_PTR(frame_type), NULL);
+	else {
+		l_queue_push_tail(group->write_queue, msg);
+		l_io_set_write_handler(group->io, frame_watch_group_io_write,
+					group, NULL);
+	}
 
 	return true;
 }
@@ -1054,46 +1216,66 @@ static void frame_xchg_config_notify(struct l_genl_msg *msg, void *user_data)
 
 static int frame_xchg_init(void)
 {
-	struct watch_group *default_group = frame_watch_group_new(0, 0);
+	struct watch_group *default_group;
+	const struct l_genl_family_info *info;
 
-	if (!default_group)
-		return -EIO;
-
-	if (!l_genl_family_register(default_group->nl80211, "config",
-					frame_xchg_config_notify,
-					NULL, NULL)) {
-		l_error("Registering for config notifications failed");
-		frame_watch_group_destroy(default_group);
-		default_group = NULL;
+	nl80211 = l_genl_family_new(iwd_get_genl(), NL80211_GENL_NAME);
+	if (!nl80211) {
+		l_error("Failed to obtain nl80211");
 		return -EIO;
 	}
 
-	if (!l_genl_family_register(default_group->nl80211, "mlme",
-					frame_xchg_mlme_notify, NULL, NULL)) {
+	info = l_genl_family_get_info(nl80211);
+	nl80211_id = l_genl_family_info_get_id(info);
+
+	default_group = frame_watch_group_new(0, 0);
+	if (!default_group)
+		goto error;
+
+	if (!l_genl_family_register(nl80211, "config", frame_xchg_config_notify,
+					NULL, NULL)) {
+		l_error("Registering for config notifications failed");
+		goto error;
+	}
+
+	if (!l_genl_family_register(nl80211, "mlme", frame_xchg_mlme_notify,
+					NULL, NULL)) {
 		l_error("Registering for MLME notification failed");
-		frame_watch_group_destroy(default_group);
-		default_group = NULL;
-		return -EIO;
+		goto error;
 	}
 
 	watch_groups = l_queue_new();
 	l_queue_push_tail(watch_groups, default_group);
-	nl80211 = default_group->nl80211;
 
 	return 0;
+
+error:
+	if (nl80211) {
+		l_genl_family_free(nl80211);
+		nl80211 = NULL;
+	}
+
+	if (default_group)
+		frame_watch_group_destroy(default_group);
+
+	return -EIO;
 }
 
 static void frame_xchg_exit(void)
 {
-	l_queue_destroy(watch_groups, frame_watch_group_destroy);
+	struct l_queue *groups = watch_groups;
+
+	l_queue_destroy(frame_xchgs, frame_xchg_cancel);
+	frame_xchgs = NULL;
+
 	watch_groups = NULL;
+	l_queue_destroy(groups, frame_watch_group_destroy);
+
+	l_genl_family_free(nl80211);
 	nl80211 = NULL;
 
 	l_queue_destroy(wdevs, l_free);
 	wdevs = NULL;
-
-	l_queue_destroy(frame_xchgs, frame_xchg_cancel);
-	frame_xchgs = NULL;
 }
 
 IWD_MODULE(frame_xchg, frame_xchg_init, frame_xchg_exit);
