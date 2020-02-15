@@ -60,7 +60,6 @@
 #include "src/owe.h"
 #include "src/fils.h"
 #include "src/auth-proto.h"
-#include "src/rtnlutil.h"
 #include "src/frame-xchg.h"
 
 #ifndef ENOTSUPP

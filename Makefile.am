@@ -39,6 +39,7 @@ ell_headers = ell/util.h \
 			ell/netlink.h \
 			ell/genl.h \
 			ell/dbus.h \
+			ell/rtnl.h \
 			ell/dbus-service.h \
 			ell/dbus-client.h \
 			ell/hwdb.h \
@@ -84,6 +85,7 @@ ell_sources = ell/private.h \
 			ell/netlink.c \
 			ell/genl-private.h \
 			ell/genl.c \
+			ell/rtnl.c \
 			ell/dbus-private.h \
 			ell/dbus.c \
 			ell/dbus-message.c \
@@ -217,7 +219,6 @@ src_iwd_SOURCES = src/main.c linux/nl80211.h src/iwd.h src/missing.h \
 					src/manager.c \
 					src/erp.h src/erp.c \
 					src/fils.h src/fils.c \
-					src/rtnlutil.h src/rtnlutil.c \
 					src/auth-proto.h \
 					src/anqp.h src/anqp.c \
 					src/anqputil.h src/anqputil.c \

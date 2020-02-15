@@ -39,7 +39,6 @@
 #include "src/station.h"
 #include "src/common.h"
 #include "src/network.h"
-#include "src/rtnlutil.h"
 #include "src/resolve.h"
 #include "src/netconfig.h"
 
