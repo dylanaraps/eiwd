@@ -36,6 +36,41 @@ class Agent(dbus.service.Object):
         return passphrase
 
     @dbus.service.method("net.connman.iwd.Agent",
+                            in_signature='o',
+                            out_signature='s')
+    def RequestPrivateKeyPassphrase(self, path):
+        print("RequestPrivateKeyPassphrase (%s)" % (path))
+
+        print("Service credentials requested, type cancel to cancel")
+        passphrase = input('Answer: ')
+
+        if not passphrase or passphrase == 'cancel':
+            raise Canceled("canceled")
+
+        print("returning (%s)" % (passphrase))
+        return passphrase
+
+    @dbus.service.method("net.connman.iwd.Agent",
+                            in_signature='o',
+                            out_signature='ss')
+    def RequestUserNameAndPassword(self, path):
+        print("RequestPrivateKeyPassphrase (%s)" % (path))
+
+        print("Service credentials requested, type cancel to cancel")
+        user = input('User name: ')
+
+        if not user or user == 'cancel':
+            raise Canceled("canceled")
+
+        passwd = input('User password: ')
+
+        if not passwd or passwd == 'cancel':
+            raise Canceled("canceled")
+
+        print("returning (%s, %s)" % (user, passwd))
+        return (user, passwd)
+
+    @dbus.service.method("net.connman.iwd.Agent",
                             in_signature='s', out_signature='')
     def Cancel(self, reason):
         print("Cancel: " + reason)
