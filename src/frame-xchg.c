@@ -280,6 +280,60 @@ static void frame_watch_register_cb(struct l_genl_msg *msg, void *user_data)
 			L_PTR_TO_UINT(user_data), l_genl_msg_get_error(msg));
 }
 
+struct frame_duplicate_info {
+	uint64_t wdev_id;
+	uint16_t frame_type;
+	const uint8_t *prefix;
+	size_t prefix_len;
+	frame_watch_cb_t handler;
+	void *user_data;
+	bool duplicate : 1;
+	bool registered : 1;
+};
+
+static bool frame_watch_check_duplicate(void *data, void *user_data)
+{
+	struct watchlist_item *super = data;
+	struct frame_watch *watch =
+		l_container_of(super, struct frame_watch, super);
+	struct frame_duplicate_info *info = user_data;
+	int common_len = info->prefix_len < watch->prefix_len ?
+		info->prefix_len : watch->prefix_len;
+
+	if (info->wdev_id != watch->wdev_id ||
+			info->frame_type != watch->frame_type ||
+			(common_len &&
+			 memcmp(info->prefix, watch->prefix, common_len)))
+		/* No match */
+		return false;
+
+	if (info->prefix_len >= watch->prefix_len)
+		/*
+		 * A matching shorter prefix is already registered with
+		 * the kernel, no need to register the new prefix.
+		 */
+		info->registered = true;
+
+	if (info->handler != watch->super.notify ||
+			info->user_data != watch->super.notify_data)
+		return false;
+
+	/*
+	 * If we already have a watch with the exact same callback and
+	 * user_data and a matching prefix (longer or shorter), drop
+	 * either the existing watch, or the new watch, so as to preserve
+	 * the set of frames that trigger the callback but avoid
+	 * calling back twice with the same user_data.
+	 */
+	if (info->prefix_len >= watch->prefix_len) {
+		info->duplicate = true;
+		return false;
+	}
+
+	/* Drop the existing watch as a duplicate of the new one */
+	return true;
+}
+
 bool frame_watch_add(uint64_t wdev_id, uint32_t group_id, uint16_t frame_type,
 			const uint8_t *prefix, size_t prefix_len,
 			frame_watch_cb_t handler, void *user_data,
@@ -288,15 +342,19 @@ bool frame_watch_add(uint64_t wdev_id, uint32_t group_id, uint16_t frame_type,
 	struct watch_group *group = frame_watch_group_get(wdev_id, group_id);
 	struct frame_watch *watch;
 	struct l_genl_msg *msg;
-	struct frame_prefix_info info = { frame_type, prefix, prefix_len, wdev_id };
-	bool registered;
+	struct frame_duplicate_info info = {
+		wdev_id, frame_type, prefix, prefix_len,
+		handler, user_data, false, false
+	};
 
 	if (!group)
 		return false;
 
-	registered = l_queue_find(group->watches.items,
-					frame_watch_match_prefix,
-					&info);
+	l_queue_foreach_remove(group->watches.items,
+				frame_watch_check_duplicate, &info);
+
+	if (info.duplicate)
+		return true;
 
 	watch = l_new(struct frame_watch, 1);
 	watch->frame_type = frame_type;
@@ -307,7 +365,7 @@ bool frame_watch_add(uint64_t wdev_id, uint32_t group_id, uint16_t frame_type,
 	watchlist_link(&group->watches, &watch->super, handler, user_data,
 			destroy);
 
-	if (registered)
+	if (info.registered)
 		return true;
 
 	msg = l_genl_msg_new_sized(NL80211_CMD_REGISTER_FRAME, 32 + prefix_len);
