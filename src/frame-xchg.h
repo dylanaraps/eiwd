@@ -25,7 +25,16 @@ struct mmpdu_header;
 typedef void (*frame_watch_cb_t)(const struct mmpdu_header *frame,
 					const void *body, size_t body_len,
 					int rssi, void *user_data);
+typedef bool (*frame_xchg_resp_cb_t)(const struct mmpdu_header *frame,
+					const void *body, size_t body_len,
+					int rssi, void *user_data);
+typedef void (*frame_xchg_cb_t)(int err, void *user_data);
 typedef void (*frame_xchg_destroy_func_t)(void *user_data);
+
+struct frame_xchg_prefix {
+	const uint8_t *data;
+	size_t len;
+};
 
 bool frame_watch_add(uint64_t wdev_id, uint32_t group, uint16_t frame_type,
 			const uint8_t *prefix, size_t prefix_len,
@@ -33,3 +42,9 @@ bool frame_watch_add(uint64_t wdev_id, uint32_t group, uint16_t frame_type,
 			frame_xchg_destroy_func_t destroy);
 bool frame_watch_group_remove(uint64_t wdev_id, uint32_t group);
 bool frame_watch_wdev_remove(uint64_t wdev_id);
+
+void frame_xchg_startv(uint64_t wdev_id, struct iovec *frame, uint32_t freq,
+			unsigned int retry_interval, unsigned int resp_timeout,
+			uint32_t group_id, frame_xchg_cb_t cb, void *user_data,
+			va_list resp_args);
+void frame_xchg_stop(uint64_t wdev_id);
