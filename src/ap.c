@@ -57,6 +57,7 @@ struct ap_state {
 	struct l_uintset *rates;
 	uint8_t pmk[32];
 	uint32_t start_stop_cmd_id;
+	uint32_t mlme_watch;
 	uint8_t gtk[CRYPTO_MAX_GTK_LEN];
 	uint8_t gtk_index;
 
@@ -1393,6 +1394,26 @@ static struct l_genl_msg *ap_build_cmd_start_ap(struct ap_state *ap)
 	return cmd;
 }
 
+static void ap_mlme_notify(struct l_genl_msg *msg, void *user_data)
+{
+	struct ap_state *ap = user_data;
+	uint32_t ifindex;
+
+	if (nl80211_parse_attrs(msg, NL80211_ATTR_IFINDEX, &ifindex,
+				NL80211_ATTR_UNSPEC) < 0 ||
+			ifindex != netdev_get_ifindex(ap->netdev))
+		return;
+
+	switch (l_genl_msg_get_command(msg)) {
+	case NL80211_CMD_STOP_AP:
+		if (ap->start_stop_cmd_id)
+			break;
+
+		ap_reset(ap);
+		break;
+	}
+}
+
 static int ap_start(struct ap_state *ap, const char *ssid, const char *psk,
 		struct l_dbus_message *message)
 {
@@ -1447,6 +1468,11 @@ static int ap_start(struct ap_state *ap, const char *ssid, const char *psk,
 				(MPDU_MANAGEMENT_SUBTYPE_DEAUTHENTICATION << 4),
 				NULL, 0, ap_deauth_cb, ap, NULL))
 		goto error;
+
+	ap->mlme_watch = l_genl_family_register(ap->nl80211, "mlme",
+						ap_mlme_notify, ap, NULL);
+	if (!ap->mlme_watch)
+		l_error("Registering for MLME notification failed");
 
 	cmd = ap_build_cmd_start_ap(ap);
 	if (!cmd)
@@ -1513,6 +1539,9 @@ static int ap_stop(struct ap_state *ap, struct l_dbus_message *message)
 
 	if (ap->start_stop_cmd_id)
 		l_genl_family_cancel(ap->nl80211, ap->start_stop_cmd_id);
+
+	if (ap->mlme_watch)
+		l_genl_family_unregister(ap->nl80211, ap->mlme_watch);
 
 	ap->start_stop_cmd_id = l_genl_family_send(ap->nl80211, cmd, ap_stop_cb,
 							ap, NULL);
