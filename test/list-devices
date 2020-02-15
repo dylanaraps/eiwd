@@ -21,7 +21,8 @@ for path in objects:
         node = node.children[subpath]
     node.interfaces.update(objects[path])
 
-for path, phy in tree.children.items():
+root = tree.children['/net'].children['/net/connman'].children['/net/connman/iwd']
+for path, phy in root.children.items():
     if 'net.connman.iwd.Adapter' not in phy.interfaces:
         continue
 
