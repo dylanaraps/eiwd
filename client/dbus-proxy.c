@@ -572,10 +572,10 @@ static void proxy_interface_create(const char *path,
 		proxy->path = l_strdup(path);
 		proxy->type = interface_type;
 
+		l_queue_push_tail(proxy_interfaces, proxy);
+
 		if (interface_type->ops && interface_type->ops->create)
 			proxy->data = interface_type->ops->create();
-
-		l_queue_push_tail(proxy_interfaces, proxy);
 	}
 }
 
