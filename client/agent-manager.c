@@ -2,7 +2,7 @@
  *
  *  Wireless daemon for Linux
  *
- *  Copyright (C) 2017-2019  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2017-2020  Intel Corporation. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -30,6 +30,7 @@
 #include "client/agent.h"
 #include "client/dbus-proxy.h"
 #include "client/agent-manager.h"
+#include "client/command.h"
 
 #define IWD_AGENT_MANAGER_PATH		"/net/connman/iwd"
 
@@ -39,18 +40,16 @@ static void check_errors_method_callback(struct l_dbus_message *message,
 	dbus_message_has_error(message);
 }
 
-bool agent_manager_register_agent(void)
+static bool agent_manager_register_agent(const char *path)
 {
-	const char *path;
-	const struct proxy_interface *proxy =
-		proxy_interface_find(IWD_AGENT_MANAGER_INTERFACE,
-							IWD_AGENT_MANAGER_PATH);
+	const struct proxy_interface *proxy;
 
-	if (!proxy)
+	if (!path)
 		return false;
 
-	path = proxy_interface_get_data(proxy);
-	if (!path)
+	proxy = proxy_interface_find(IWD_AGENT_MANAGER_INTERFACE,
+							IWD_AGENT_MANAGER_PATH);
+	if (!proxy)
 		return false;
 
 	proxy_interface_method_call(proxy, "RegisterAgent", "o",
@@ -81,9 +80,16 @@ bool agent_manager_unregister_agent(void)
 
 static void *agent_manager_create(void)
 {
-	char *path = l_strdup_printf("/agent/%i", getpid());
+	char *path;
+
+	if (command_needs_no_agent())
+		return NULL;
+
+	path = l_strdup_printf("/agent/%i", getpid());
 
 	agent_init(path);
+
+	agent_manager_register_agent(path);
 
 	return path;
 }
@@ -91,6 +97,9 @@ static void *agent_manager_create(void)
 static void agent_manager_destroy(void *data)
 {
 	char *path = data;
+
+	if (!path)
+		return;
 
 	agent_exit(path);
 
