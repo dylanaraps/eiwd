@@ -892,7 +892,15 @@ static void eap_password_callback(enum agent_result result, const char *value,
 	struct eap_secret_request *req = user_data;
 
 	req->network->agent_request = 0;
-	req->secret->value = l_strdup(value);
+
+	if (value) {
+		if (strlen(value) < IWD_MAX_PASSWORD_LEN)
+			req->secret->value = l_strdup(value);
+		else {
+			l_error("EAP password too long");
+			result = AGENT_RESULT_FAILED;
+		}
+	}
 
 	req->callback(result, message, req);
 }
@@ -910,11 +918,18 @@ static void eap_user_password_callback(enum agent_result result,
 		size_t len1 = strlen(user) + 1;
 		size_t len2 = strlen(passwd) + 1;
 
+		if (len2 > IWD_MAX_PASSWORD_LEN) {
+			l_error("EAP password too long");
+			result = AGENT_RESULT_FAILED;
+			goto done;
+		}
+
 		req->secret->value = l_malloc(len1 + len2);
 		memcpy(req->secret->value, user, len1);
 		memcpy(req->secret->value + len1, passwd, len2);
 	}
 
+done:
 	req->callback(result, message, req);
 }
 
