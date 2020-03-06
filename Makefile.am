@@ -631,8 +631,9 @@ SED_PROCESS = $(AM_V_GEN)$(MKDIR_P) $(dir $@) && $(SED) \
 		< $< > $@
 
 if RUN_RST2MAN
-RST2MAN_PROCESS = $(AM_V_GEN)$(RST2MAN) --strict --no-raw --no-generator \
-			--no-datestamp $< $@
+RST2MAN_PROCESS = $(AM_V_GEN)$(MKDIR_P) $(dir $@) && \
+			$(AM_V_GEN)$(RST2MAN) --strict --no-raw \
+			--no-generator --no-datestamp $< $@
 else
 RST2MAN_PROCESS = $(AM_V_GEN)test -f $@ || \
 		{ echo "Generated manual page $@ does not exist"; false; }
