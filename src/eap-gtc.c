@@ -32,6 +32,8 @@
 #include "src/eap.h"
 #include "src/eap-private.h"
 
+#define EAP_GTC_MAX_PASSWORD_LEN	2048
+
 struct eap_gtc_state {
 	char *password;
 };
@@ -146,6 +148,14 @@ static bool eap_gtc_load_settings(struct eap_state *eap,
 								password_key);
 		if (!password)
 			return false;
+	}
+
+	/*
+	 * Limit length to prevent a stack overflow
+	 */
+	if (strlen(password) > EAP_GTC_MAX_PASSWORD_LEN) {
+		l_free(password);
+		return false;
 	}
 
 	gtc = l_new(struct eap_gtc_state, 1);
