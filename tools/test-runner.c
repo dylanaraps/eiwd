@@ -3104,7 +3104,7 @@ int main(int argc, char *argv[])
 	for (;;) {
 		int opt;
 
-		opt = getopt_long(argc, argv, "A:q:k:v:g:l:UVdh", main_options,
+		opt = getopt_long(argc, argv, "A:q:k:v:g:sl:UVdh", main_options,
 									NULL);
 		if (opt < 0)
 			break;
