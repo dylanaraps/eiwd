@@ -408,7 +408,7 @@ static bool start_qemu(void)
 			"mac80211_hwsim.radios=0 init=%s TESTHOME=%s "
 			"TESTVERBOUT=\'%s\' DEBUG_FILTER=\'%s\'"
 			"TEST_ACTION=%u TEST_ACTION_PARAMS=\'%s\' "
-			"TESTARGS=\'%s\' PATH=\'%s\' VALGRIND=%u"
+			"TESTARGS=\'%s\' PATH=\'%s\' VALGRIND=%u "
 			"GDB=\'%s\' HW=\'%s\' SHELL=%u "
 			"LOG_PATH=\'%s\' LOG_UID=\'%d\' LOG_GID=\'%d\'",
 			check_verbosity("kernel") ? "ignore_loglevel" : "quiet",
