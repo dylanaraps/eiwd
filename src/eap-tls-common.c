@@ -1138,7 +1138,7 @@ bool eap_tls_common_settings_load(struct eap_state *eap,
 	if (value) {
 		eap_tls->client_cert = eap_tls_load_client_cert(settings,
 								value);
-		if (!eap_tls->ca_cert) {
+		if (!eap_tls->client_cert) {
 			l_error("Could not load ClientCert %s", value);
 			goto load_error;
 		}
