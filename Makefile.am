@@ -526,6 +526,10 @@ AM_CFLAGS = $(ell_cflags) -fvisibility=hidden \
 				-DUNITDIR=\""$(top_srcdir)/unit/"\" \
 				-DCERTDIR=\""$(top_builddir)/unit/"\"
 
+if DBUS
+AM_CFLAGS += -DHAVE_DBUS
+endif
+
 if MAINTAINER_MODE
 AM_CFLAGS += -DHAVE_PKCS8_SUPPORT
 endif

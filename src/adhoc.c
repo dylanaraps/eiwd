@@ -114,7 +114,7 @@ static void adhoc_remove_sta(struct sta_state *sta)
 		sta->gtk_query_cmd_id = 0;
 	}
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	/* signal station has been removed */
 	if (sta->authenticated) {
 		l_dbus_property_changed(dbus_get_bus(),
@@ -128,7 +128,7 @@ static void adhoc_remove_sta(struct sta_state *sta)
 
 static void adhoc_reset(struct adhoc_state *adhoc)
 {
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	if (adhoc->pending)
 		dbus_pending_reply(&adhoc->pending,
 				dbus_error_aborted(adhoc->pending));
@@ -142,7 +142,7 @@ static void adhoc_reset(struct adhoc_state *adhoc)
 
 	adhoc->started = false;
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(adhoc->netdev),
 						IWD_ADHOC_INTERFACE, "Started");
 #endif
@@ -201,7 +201,7 @@ static void adhoc_handshake_event(struct handshake_state *hs,
 				!sta->authenticated) {
 			sta->authenticated = true;
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 			l_dbus_property_changed(dbus_get_bus(),
 					netdev_get_path(adhoc->netdev),
 					IWD_ADHOC_INTERFACE, "ConnectedPeers");
@@ -405,7 +405,7 @@ static void adhoc_new_station(struct adhoc_state *adhoc, const uint8_t *mac)
 	/* with open networks nothing else is required */
 	if (sta->adhoc->open) {
 		sta->authenticated = true;
-#ifdef DBUS
+#ifdef HAVE_DBUS
 		l_dbus_property_changed(dbus_get_bus(),
 					netdev_get_path(adhoc->netdev),
 					IWD_ADHOC_INTERFACE, "ConnectedPeers");
@@ -461,7 +461,7 @@ static void adhoc_join_cb(struct netdev *netdev, int result, void *user_data)
 {
 	struct adhoc_state *adhoc = user_data;
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	struct l_dbus_message *reply;
 
 	if (result < 0) {
@@ -475,14 +475,14 @@ static void adhoc_join_cb(struct netdev *netdev, int result, void *user_data)
 	adhoc->sta_watch_id = netdev_station_watch_add(netdev,
 			adhoc_station_changed_cb, adhoc);
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	reply = l_dbus_message_new_method_return(adhoc->pending);
 	dbus_pending_reply(&adhoc->pending, reply);
 #endif
 
 	adhoc->started = true;
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(adhoc->netdev),
 						IWD_ADHOC_INTERFACE, "Started");
 #endif
@@ -568,7 +568,7 @@ static void adhoc_leave_cb(struct netdev *netdev, int result, void *user_data)
 {
 	struct adhoc_state *adhoc = user_data;
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	if (result < 0) {
 		l_error("Failed to leave adhoc network, %i", result);
 		dbus_pending_reply(&adhoc->pending,
@@ -675,7 +675,7 @@ static void adhoc_add_interface(struct netdev *netdev)
 	adhoc->nl80211 = l_genl_family_new(iwd_get_genl(), NL80211_GENL_NAME);
 
 	/* setup adhoc dbus interface */
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_object_add_interface(dbus_get_bus(),
 			netdev_get_path(netdev), IWD_ADHOC_INTERFACE, adhoc);
 #endif
@@ -683,7 +683,7 @@ static void adhoc_add_interface(struct netdev *netdev)
 
 static void adhoc_remove_interface(struct netdev *netdev)
 {
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_object_remove_interface(dbus_get_bus(),
 			netdev_get_path(netdev), IWD_ADHOC_INTERFACE);
 #endif
@@ -712,7 +712,7 @@ static int adhoc_init(void)
 {
 	netdev_watch = netdev_watch_add(adhoc_netdev_watch, NULL, NULL);
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_register_interface(dbus_get_bus(), IWD_ADHOC_INTERFACE,
 			adhoc_setup_interface, adhoc_destroy_interface, false);
 #endif
@@ -724,7 +724,7 @@ static void adhoc_exit(void)
 {
 	netdev_watch_remove(netdev_watch);
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_ADHOC_INTERFACE);
 #endif
 }

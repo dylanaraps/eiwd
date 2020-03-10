@@ -76,7 +76,7 @@ static void iwd_shutdown(void)
 		return;
 	}
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	dbus_shutdown();
 #endif
 	netdev_shutdown();
@@ -131,7 +131,7 @@ static void usage(void)
 		"Usage:\n");
 	printf("\tiwd [options]\n");
 	printf("Options:\n"
-#ifdef DBUS
+#ifdef HAVE_DBUS
 		"\t-B, --dbus-debug       Enable D-Bus debugging\n"
 #endif
 		"\t-i, --interfaces       Interfaces to manage\n"
@@ -146,7 +146,7 @@ static void usage(void)
 }
 
 static const struct option main_options[] = {
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	{ "dbus-debug",   no_argument,       NULL, 'B' },
 #endif
 	{ "version",      no_argument,       NULL, 'v' },
@@ -203,7 +203,7 @@ fail_exit:
 	l_main_quit();
 }
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 static void dbus_ready(void *user_data)
 {
 	struct l_dbus *dbus = user_data;
@@ -371,11 +371,11 @@ done:
 
 int main(int argc, char *argv[])
 {
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	bool enable_dbus_debug = false;
 #endif
 	int exit_status;
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	struct l_dbus *dbus;
 #endif
 	const char *config_dir;
@@ -391,7 +391,7 @@ int main(int argc, char *argv[])
 			break;
 
 		switch (opt) {
-#ifdef DBUS
+#ifdef HAVE_DBUS
 		case 'B':
 			enable_dbus_debug = true;
 			break;
@@ -495,7 +495,7 @@ int main(int argc, char *argv[])
 	if (getenv("IWD_GENL_DEBUG"))
 		l_genl_set_debug(genl, do_debug, "[GENL] ", NULL);
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	dbus = l_dbus_new_default(L_DBUS_SYSTEM_BUS);
 	if (!dbus) {
 		l_error("Failed to initialize D-Bus");
@@ -518,7 +518,7 @@ int main(int argc, char *argv[])
 
 	iwd_modules_exit();
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	dbus_exit();
 	l_dbus_destroy(dbus);
 #endif

@@ -163,9 +163,9 @@ AC_ARG_ENABLE([monitor], AC_HELP_STRING([--disable-monitor],
 AM_CONDITIONAL(MONITOR, test "${enable_monitor}" != "no")
 
 AC_ARG_ENABLE([dbus], AC_HELP_STRING([--disable-dbus],
-				[disable dbus]),
-					[enable_dbus=${enableval}])
-AM_CONDITIONAL(DBUS, test "${enable_dbus}" != "no")
+				[disable dbus in daemon]),
+					[disable_dbus=${enableval}])
+AM_CONDITIONAL(DBUS, test "${disable_dbus}" != "no")
 
 AC_ARG_ENABLE([dbus-policy], AC_HELP_STRING([--disable-dbus-policy],
 				[don't install D-Bus system policy files]),

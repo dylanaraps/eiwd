@@ -1287,7 +1287,7 @@ static int wsc_init(void)
 {
 	l_debug("");
 	netdev_watch = netdev_watch_add(wsc_netdev_watch, NULL, NULL);
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_register_interface(dbus_get_bus(), IWD_WSC_INTERFACE,
 					setup_wsc_interface,
 					wsc_dbus_free, false);
@@ -1298,7 +1298,7 @@ static int wsc_init(void)
 static void wsc_exit(void)
 {
 	l_debug("");
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_WSC_INTERFACE);
 #endif
 	netdev_watch_remove(netdev_watch);

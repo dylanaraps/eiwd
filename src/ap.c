@@ -117,7 +117,7 @@ static void ap_reset(struct ap_state *ap)
 	if (!ap->started)
 		return;
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	if (ap->pending)
 		dbus_pending_reply(&ap->pending,
 				dbus_error_aborted(ap->pending));
@@ -139,7 +139,7 @@ static void ap_reset(struct ap_state *ap)
 
 	ap->started = false;
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(ap->netdev),
 						IWD_AP_INTERFACE, "Started");
 #endif
@@ -1315,7 +1315,7 @@ static void ap_start_cb(struct l_genl_msg *msg, void *user_data)
 	if (l_genl_msg_get_error(msg) < 0) {
 		l_error("START_AP failed: %i", l_genl_msg_get_error(msg));
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 		dbus_pending_reply(&ap->pending,
 				dbus_error_invalid_args(ap->pending));
 #endif
@@ -1324,14 +1324,14 @@ static void ap_start_cb(struct l_genl_msg *msg, void *user_data)
 		return;
 	}
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	dbus_pending_reply(&ap->pending,
 			l_dbus_message_new_method_return(ap->pending));
 #endif
 
 	ap->started = true;
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(ap->netdev),
 						IWD_AP_INTERFACE, "Started");
 #endif
@@ -1495,7 +1495,7 @@ static int ap_start(struct ap_state *ap, const char *ssid, const char *psk,
 		goto error;
 	}
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	ap->pending = l_dbus_message_ref(message);
 #endif
 
@@ -1518,14 +1518,14 @@ static void ap_stop_cb(struct l_genl_msg *msg, void *user_data)
 
 	if (l_genl_msg_get_error(msg) < 0) {
 		l_error("STOP_AP failed: %i", l_genl_msg_get_error(msg));
-#ifdef DBUS
+#ifdef HAVE_DBUS
 		dbus_pending_reply(&ap->pending,
 				dbus_error_failed(ap->pending));
 #endif
 		goto end;
 	}
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	dbus_pending_reply(&ap->pending,
 			l_dbus_message_new_method_return(ap->pending));
 #endif
@@ -1579,7 +1579,7 @@ static int ap_stop(struct ap_state *ap, struct l_dbus_message *message)
 		}
 	}
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	ap->pending = l_dbus_message_ref(message);
 #endif
 
@@ -1669,7 +1669,7 @@ static void ap_add_interface(struct netdev *netdev)
 	ap->nl80211 = l_genl_family_new(iwd_get_genl(), NL80211_GENL_NAME);
 
 	/* setup ap dbus interface */
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_object_add_interface(dbus_get_bus(),
 			netdev_get_path(netdev), IWD_AP_INTERFACE, ap);
 #endif
@@ -1677,7 +1677,7 @@ static void ap_add_interface(struct netdev *netdev)
 
 static void ap_remove_interface(struct netdev *netdev)
 {
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_object_remove_interface(dbus_get_bus(),
 			netdev_get_path(netdev), IWD_AP_INTERFACE);
 #endif
@@ -1706,7 +1706,7 @@ static int ap_init(void)
 {
 	netdev_watch = netdev_watch_add(ap_netdev_watch, NULL, NULL);
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_register_interface(dbus_get_bus(), IWD_AP_INTERFACE,
 			ap_setup_interface, ap_destroy_interface, false);
 #endif
@@ -1718,7 +1718,7 @@ static void ap_exit(void)
 {
 	netdev_watch_remove(netdev_watch);
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_AP_INTERFACE);
 #endif
 }

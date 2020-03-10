@@ -121,7 +121,7 @@ int known_network_offset(const struct network_info *target)
 
 static void known_network_register_dbus(struct network_info *network)
 {
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	const char *path = known_network_get_path(network);
 
 	if (!l_dbus_object_add_interface(dbus_get_bus(), path,
@@ -144,7 +144,7 @@ static void known_network_set_autoconnect(struct network_info *network,
 
 	network->is_autoconnectable = autoconnect;
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_property_changed(dbus_get_bus(), known_network_get_path(network),
 				IWD_KNOWN_NETWORK_INTERFACE, "AutoConnect");
 #endif
@@ -347,7 +347,7 @@ void known_network_set_connected_time(struct network_info *network,
 
 	network->connected_time = connected_time;
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_property_changed(dbus_get_bus(),
 				known_network_get_path(network),
 				IWD_KNOWN_NETWORK_INTERFACE,
@@ -373,7 +373,7 @@ void known_network_update(struct network_info *network,
 		else if (!network->is_hidden && is_hidden)
 			num_known_hidden_networks++;
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 		l_dbus_property_changed(dbus_get_bus(),
 					known_network_get_path(network),
 					IWD_KNOWN_NETWORK_INTERFACE,
@@ -655,7 +655,7 @@ void known_networks_remove(struct network_info *network)
 		num_known_hidden_networks--;
 
 	l_queue_remove(known_networks, network);
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_unregister_object(dbus_get_bus(),
 					known_network_get_path(network));
 #endif
@@ -678,7 +678,7 @@ void known_networks_remove(struct network_info *network)
 void known_networks_add(struct network_info *network)
 {
 	l_queue_insert(known_networks, network, connected_time_compare, NULL);
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	known_network_register_dbus(network);
 #endif
 
@@ -995,7 +995,7 @@ void known_networks_watch_remove(uint32_t id)
 
 static int known_networks_init(void)
 {
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 #endif
 	DIR *dir;
@@ -1003,7 +1003,7 @@ static int known_networks_init(void)
 
 	L_AUTO_FREE_VAR(char *, storage_dir) = storage_get_path(NULL);
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	if (!l_dbus_register_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE,
 						setup_known_network_interface,
 						NULL, false)) {
@@ -1016,7 +1016,7 @@ static int known_networks_init(void)
 	dir = opendir(storage_dir);
 	if (!dir) {
 		l_info("Unable to open %s: %s", storage_dir, strerror(errno));
-#ifdef DBUS
+#ifdef HAVE_DBUS
 		l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE);
 #endif
 		return -ENOENT;
@@ -1065,7 +1065,7 @@ static int known_networks_init(void)
 
 static void known_networks_exit(void)
 {
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 #endif
 
@@ -1074,7 +1074,7 @@ static void known_networks_exit(void)
 	l_queue_destroy(known_networks, network_info_free);
 	known_networks = NULL;
 
-#ifdef DBUS
+#ifdef HAVE_DBUS
 	l_dbus_unregister_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE);
 #endif
 
