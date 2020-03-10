@@ -9,10 +9,12 @@ Makefile.in
 aclocal.m4
 config.h
 config.h.in
+config.h.in~
 config.log
 config.status
 config.sub
 configure
+genl-private.h
 libtool
 stamp-h1
 build-aux
