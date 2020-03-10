@@ -1217,7 +1217,6 @@ static void station_roam_state_clear(struct station *station)
 static void station_reset_connection_state(struct station *station)
 {
 	struct network *network = station->connected_network;
-
 #ifdef DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 #endif
@@ -2857,11 +2856,9 @@ static void signal_agent_free(void *data)
 
 	l_free(agent->owner);
 	l_free(agent->path);
-
 #ifdef DBUS
 	l_dbus_remove_watch(dbus_get_bus(), agent->disconnect_watch);
 #endif
-
 	l_free(agent);
 }
 
@@ -3078,7 +3075,6 @@ struct scan_bss *station_get_connected_bss(struct station *station)
 static struct station *station_create(struct netdev *netdev)
 {
 	struct station *station;
-
 #ifdef DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 #endif
@@ -3243,7 +3239,6 @@ static int station_init(void)
 {
 	station_list = l_queue_new();
 	netdev_watch = netdev_watch_add(station_netdev_watch, NULL, NULL);
-
 #ifdef DBUS
 	l_dbus_register_interface(dbus_get_bus(), IWD_STATION_INTERFACE,
 					station_setup_interface,
@@ -3273,7 +3268,6 @@ static void station_exit(void)
 #ifdef DBUS
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_STATION_INTERFACE);
 #endif
-
 	netdev_watch_remove(netdev_watch);
 	l_queue_destroy(station_list, NULL);
 	station_list = NULL;
