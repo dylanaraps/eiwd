@@ -373,9 +373,11 @@ int main(int argc, char *argv[])
 {
 #ifdef DBUS
 	bool enable_dbus_debug = false;
-	struct l_dbus *dbus;
 #endif
 	int exit_status;
+#ifdef DBUS
+	struct l_dbus *dbus;
+#endif
 	const char *config_dir;
 	char **config_dirs;
 	int i;
@@ -520,7 +522,6 @@ int main(int argc, char *argv[])
 	dbus_exit();
 	l_dbus_destroy(dbus);
 #endif
-
 	storage_cleanup_dirs();
 fail_dbus:
 	l_genl_unref(genl);
