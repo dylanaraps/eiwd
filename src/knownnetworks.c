@@ -121,7 +121,6 @@ int known_network_offset(const struct network_info *target)
 
 static void known_network_register_dbus(struct network_info *network)
 {
-#ifdef HAVE_DBUS
 	const char *path = known_network_get_path(network);
 
 	if (!l_dbus_object_add_interface(dbus_get_bus(), path,
@@ -133,7 +132,6 @@ static void known_network_register_dbus(struct network_info *network)
 					L_DBUS_INTERFACE_PROPERTIES, network))
 		l_info("Unable to register %s interface",
 						L_DBUS_INTERFACE_PROPERTIES);
-#endif
 }
 
 static void known_network_set_autoconnect(struct network_info *network,

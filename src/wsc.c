@@ -1200,6 +1200,7 @@ static void setup_wsc_interface(struct l_dbus_interface *interface)
 
 bool wsc_dbus_add_interface(struct wsc_dbus *wsc)
 {
+#ifdef HAVE_DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 
 	if (!l_dbus_object_add_interface(dbus, wsc->get_path(wsc),
@@ -1207,16 +1208,19 @@ bool wsc_dbus_add_interface(struct wsc_dbus *wsc)
 		l_info("Unable to register %s interface", IWD_WSC_INTERFACE);
 		return false;
 	}
+#endif
 
 	return true;
 }
 
 void wsc_dbus_remove_interface(struct wsc_dbus *wsc)
 {
+#ifdef HAVE_DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 
 	l_dbus_object_remove_interface(dbus, wsc->get_path(wsc),
 					IWD_WSC_INTERFACE);
+#endif
 }
 
 static void wsc_dbus_free(void *user_data)

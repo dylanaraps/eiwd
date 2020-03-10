@@ -623,7 +623,9 @@ static bool release_agent(void *data, void *user_data)
 
 static int agent_init(void)
 {
+#ifdef HAVE_DBUS
 	struct l_dbus *dbus = dbus_get_bus();
+#endif
 
 	agents = l_queue_new();
 
@@ -651,12 +653,14 @@ static int agent_init(void)
 
 static void agent_exit(void)
 {
+#ifdef HAVE_DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 
 	l_dbus_unregister_object(dbus, IWD_AGENT_MANAGER_PATH);
 	l_dbus_unregister_interface(dbus, IWD_AGENT_MANAGER_INTERFACE);
 
 	l_queue_destroy(agents, agent_free);
+#endif
 	agents = NULL;
 }
 
