@@ -1128,11 +1128,9 @@ static void wiphy_rfkill_cb(unsigned int wiphy_id, bool soft, bool hard,
 				void *user_data)
 {
 	struct wiphy *wiphy = wiphy_find(wiphy_id);
-
 #ifdef DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 #endif
-
 	bool old_powered, new_powered;
 	enum wiphy_state_watch_event event;
 

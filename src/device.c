@@ -371,10 +371,9 @@ static void device_netdev_notify(struct netdev *netdev,
 					void *user_data)
 {
 	struct device *device = NULL;
-
 #ifdef DBUS
-	const char *path = netdev_get_path(netdev);
 	struct l_dbus *dbus = dbus_get_bus();
+	const char *path = netdev_get_path(netdev);
 
 	device = l_dbus_object_get_data(dbus, path, IWD_DEVICE_INTERFACE);
 
