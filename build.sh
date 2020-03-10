@@ -7,12 +7,7 @@ make clean
 ./configure \
     --prefix=/usr \
     --localstatedir=/var \
-    --disable-client \
-    --disable-dbus-policy \
     --disable-dbus \
-    --disable-systemd-service \
-    --disable-monitor \
-    --disable-manual-pages \
-    --disable-wired
+    --disable-manual-pages
 
 make
