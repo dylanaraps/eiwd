@@ -975,6 +975,7 @@ static void wiphy_register(struct wiphy *wiphy)
 
 	wiphy_get_driver_name(wiphy);
 
+#ifdef DBUS
 	if (!l_dbus_object_add_interface(dbus, wiphy_get_path(wiphy),
 					IWD_WIPHY_INTERFACE, wiphy))
 		l_info("Unable to add the %s interface to %s",
@@ -985,6 +986,7 @@ static void wiphy_register(struct wiphy *wiphy)
 		l_info("Unable to add the %s interface to %s",
 				L_DBUS_INTERFACE_PROPERTIES,
 				wiphy_get_path(wiphy));
+#endif
 
 	wiphy->registered = true;
 }

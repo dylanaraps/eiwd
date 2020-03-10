@@ -1200,6 +1200,7 @@ static void setup_wsc_interface(struct l_dbus_interface *interface)
 
 bool wsc_dbus_add_interface(struct wsc_dbus *wsc)
 {
+#ifdef DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 
 	if (!l_dbus_object_add_interface(dbus, wsc->get_path(wsc),
@@ -1207,6 +1208,7 @@ bool wsc_dbus_add_interface(struct wsc_dbus *wsc)
 		l_info("Unable to register %s interface", IWD_WSC_INTERFACE);
 		return false;
 	}
+#endif
 
 	return true;
 }

@@ -1298,6 +1298,7 @@ static bool network_property_get_known_network(struct l_dbus *dbus,
 
 bool network_register(struct network *network, const char *path)
 {
+#ifdef DBUS
 	if (!l_dbus_object_add_interface(dbus_get_bus(), path,
 					IWD_NETWORK_INTERFACE, network)) {
 		l_info("Unable to register %s interface",
@@ -1309,6 +1310,7 @@ bool network_register(struct network *network, const char *path)
 					L_DBUS_INTERFACE_PROPERTIES, network))
 		l_info("Unable to register %s interface",
 						L_DBUS_INTERFACE_PROPERTIES);
+#endif
 
 	network->object_path = l_strdup(path);
 
@@ -1509,10 +1511,12 @@ static void setup_network_interface(struct l_dbus_interface *interface)
 
 static int network_init(void)
 {
+#ifdef DBUS
 	if (!l_dbus_register_interface(dbus_get_bus(), IWD_NETWORK_INTERFACE,
 					setup_network_interface, NULL, false))
 		l_error("Unable to register %s interface",
 						IWD_NETWORK_INTERFACE);
+#endif
 
 	known_networks_watch =
 		known_networks_watch_add(known_networks_changed, NULL, NULL);

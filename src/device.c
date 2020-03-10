@@ -302,7 +302,11 @@ static void device_wiphy_state_changed_event(struct wiphy *wiphy,
 static struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 {
 	struct device *device;
+
+#ifdef DBUS
 	struct l_dbus *dbus = dbus_get_bus();
+#endif
+
 	uint32_t ifindex = netdev_get_ifindex(netdev);
 	const uint8_t action_ap_roam_prefix[2] = { 0x0a, 0x07 };
 
@@ -311,6 +315,7 @@ static struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	device->wiphy = wiphy;
 	device->netdev = netdev;
 
+#ifdef DBUS
 	if (!l_dbus_object_add_interface(dbus, netdev_get_path(device->netdev),
 					IWD_DEVICE_INTERFACE, device))
 		l_info("Unable to register %s interface", IWD_DEVICE_INTERFACE);
@@ -319,6 +324,7 @@ static struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 					L_DBUS_INTERFACE_PROPERTIES, device))
 		l_info("Unable to register %s interface",
 				L_DBUS_INTERFACE_PROPERTIES);
+#endif
 
 	/*
 	 * register for AP roam transition watch

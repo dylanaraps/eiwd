@@ -627,6 +627,7 @@ static int agent_init(void)
 
 	agents = l_queue_new();
 
+#ifdef DBUS
 	if (!l_dbus_register_interface(dbus, IWD_AGENT_MANAGER_INTERFACE,
 						setup_agent_interface,
 						NULL, false)) {
@@ -643,6 +644,7 @@ static int agent_init(void)
 		l_dbus_unregister_interface(dbus, IWD_AGENT_MANAGER_INTERFACE);
 		return -EIO;
 	}
+#endif
 
 	return 0;
 }

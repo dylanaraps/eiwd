@@ -121,6 +121,7 @@ int known_network_offset(const struct network_info *target)
 
 static void known_network_register_dbus(struct network_info *network)
 {
+#ifdef DBUS
 	const char *path = known_network_get_path(network);
 
 	if (!l_dbus_object_add_interface(dbus_get_bus(), path,
@@ -132,6 +133,7 @@ static void known_network_register_dbus(struct network_info *network)
 					L_DBUS_INTERFACE_PROPERTIES, network))
 		l_info("Unable to register %s interface",
 						L_DBUS_INTERFACE_PROPERTIES);
+#endif
 }
 
 static void known_network_set_autoconnect(struct network_info *network,
@@ -989,6 +991,7 @@ static int known_networks_init(void)
 
 	L_AUTO_FREE_VAR(char *, storage_dir) = storage_get_path(NULL);
 
+#ifdef DBUS
 	if (!l_dbus_register_interface(dbus, IWD_KNOWN_NETWORK_INTERFACE,
 						setup_known_network_interface,
 						NULL, false)) {
@@ -996,6 +999,7 @@ static int known_networks_init(void)
 				IWD_KNOWN_NETWORK_INTERFACE);
 		return -EPERM;
 	}
+#endif
 
 	dir = opendir(storage_dir);
 	if (!dir) {
