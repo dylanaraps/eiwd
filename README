@@ -22,13 +22,7 @@ BUILDING WITHOUT DBUS
     ./configure \
         --prefix=/usr \
         --localstatedir=/var \
-        --disable-client \
-        --disable-dbus-policy \
-        --disable-dbus \
-        --disable-systemd-service \
-        --disable-monitor \
-        --disable-manual-pages \
-        --disable-wired
+        --disable-dbus
 
     make
     make DESTDIR="BLA BLA" install
