@@ -364,14 +364,17 @@ static void device_netdev_notify(struct netdev *netdev,
 					enum netdev_watch_event event,
 					void *user_data)
 {
-	struct device *device;
-	struct l_dbus *dbus = dbus_get_bus();
+	struct device *device = NULL;
+
+#ifdef DBUS
 	const char *path = netdev_get_path(netdev);
+	struct l_dbus *dbus = dbus_get_bus();
 
 	device = l_dbus_object_get_data(dbus, path, IWD_DEVICE_INTERFACE);
 
 	if (!device && event != NETDEV_WATCH_EVENT_NEW)
 		return;
+#endif
 
 	switch (event) {
 	case NETDEV_WATCH_EVENT_NEW:
@@ -386,27 +389,37 @@ static void device_netdev_notify(struct netdev *netdev,
 		device_create(netdev_get_wiphy(netdev), netdev);
 		break;
 	case NETDEV_WATCH_EVENT_DEL:
+#ifdef DBUS
 		l_dbus_unregister_object(dbus, path);
+#endif
 		break;
 	case NETDEV_WATCH_EVENT_UP:
 		device->powered = true;
 
+#ifdef DBUS
 		l_dbus_property_changed(dbus, path,
 					IWD_DEVICE_INTERFACE, "Powered");
+#endif
 		break;
 	case NETDEV_WATCH_EVENT_DOWN:
 		device->powered = false;
 
+#ifdef DBUS
 		l_dbus_property_changed(dbus, path,
 					IWD_DEVICE_INTERFACE, "Powered");
+#endif
 		break;
 	case NETDEV_WATCH_EVENT_NAME_CHANGE:
+#ifdef DBUS
 		l_dbus_property_changed(dbus, path,
 					IWD_DEVICE_INTERFACE, "Name");
+#endif
 		break;
 	case NETDEV_WATCH_EVENT_ADDRESS_CHANGE:
+#ifdef DBUS
 		l_dbus_property_changed(dbus, path,
 					IWD_DEVICE_INTERFACE, "Address");
+#endif
 		break;
 	default:
 		break;
