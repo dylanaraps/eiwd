@@ -1,18 +1,42 @@
-iwd without dbus (serious edition)
+iwd without dbus 
+----------------
 
-./configure \
-    --prefix=/usr \
-    --localstatedir=/var \
-    --disable-client \
-    --disable-dbus-policy \
-    --disable-dbus \
-    --disable-systemd-service \
-    --disable-monitor \
-    --disable-manual-pages \
-    --disable-wired
+This is a complete rewrite of the original eiwd with
+the new focus being to modify as little as possible
+from upstream.
 
-make
-make DESTDIR="$1" install
+All that has changed in the iwd code is the insertion
+of ifdefs to block away dbus code when desired.
+
+
+CHANGES
+
+- ell is included in this repository as a submodule.
+- dbus has been made optional in the iwd daemon via
+  --disable-dbus.
+- Fixed non-posix ln usage in Makefile.
+
+
+BUILDING WITHOUT DBUS
+
+    ./configure \
+        --prefix=/usr \
+        --localstatedir=/var \
+        --disable-client \
+        --disable-dbus-policy \
+        --disable-dbus \
+        --disable-systemd-service \
+        --disable-monitor \
+        --disable-manual-pages \
+        --disable-wired
+
+    make
+    make DESTDIR="BLA BLA" install
+
+
+FUTURE
+
+- [ ] Add a non-dbus client.
 
 -------------------------------
 
