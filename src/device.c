@@ -130,7 +130,6 @@ static void set_powered_cb(struct netdev *netdev, int result, void *user_data)
 {
 #ifdef DBUS
 	struct set_generic_cb_data *cb_data = user_data;
-
 	struct l_dbus_message *reply = NULL;
 
 	if (result < 0)

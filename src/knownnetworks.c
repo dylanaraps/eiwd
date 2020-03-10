@@ -655,7 +655,6 @@ void known_networks_remove(struct network_info *network)
 		num_known_hidden_networks--;
 
 	l_queue_remove(known_networks, network);
-
 #ifdef DBUS
 	l_dbus_unregister_object(dbus_get_bus(),
 					known_network_get_path(network));
@@ -679,7 +678,6 @@ void known_networks_remove(struct network_info *network)
 void known_networks_add(struct network_info *network)
 {
 	l_queue_insert(known_networks, network, connected_time_compare, NULL);
-
 #ifdef DBUS
 	known_network_register_dbus(network);
 #endif
