@@ -1,14 +1,15 @@
 iwd without dbus (serious edition)
 
 ./configure \
-    --prefix=/usr
+    --prefix=/usr \
+    --localstatedir=/var \
     --disable-client \
     --disable-dbus-policy \
+    --disable-dbus \
     --disable-systemd-service \
     --disable-monitor \
     --disable-manual-pages \
-    --disable-wired \
-    --disable-hwmon
+    --disable-wired
 
 make
 make DESTDIR="$1" install
