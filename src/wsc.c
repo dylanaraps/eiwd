@@ -513,13 +513,17 @@ static void wsc_try_credentials(struct wsc_station_dbus *wsc,
 
 		station_connect_network(wsc->station, network, bss,
 						wsc->super.pending_connect);
+#ifdef HAVE_DBUS
 		l_dbus_message_unref(wsc->super.pending_connect);
+#endif
 		wsc->super.pending_connect = NULL;
 
 		return;
 	}
 
+#ifdef HAVE_DBUS
 	CONNECT_REPLY(wsc, wsc_error_not_reachable);
+#endif
 	station_set_autoconnect(wsc->station, true);
 }
 
@@ -569,17 +573,25 @@ static void wsc_dbus_done_cb(int err, struct wsc_credentials_info *creds,
 		break;
 	case -ECANCELED:
 		/* Send reply if we haven't already sent one e.g. in Cancel() */
+#ifdef HAVE_DBUS
 		CONNECT_REPLY(wsc, dbus_error_aborted);
 		CANCEL_REPLY(wsc, l_dbus_message_new_method_return);
+#endif
 		return;
 	case -ENOKEY:
+#ifdef HAVE_DBUS
 		CONNECT_REPLY(wsc, wsc_error_no_credentials);
+#endif
 		return;
 	case -EBUSY:
+#ifdef HAVE_DBUS
 		CONNECT_REPLY(wsc, dbus_error_busy);
+#endif
 		return;
 	default:
+#ifdef HAVE_DBUS
 		CONNECT_REPLY(wsc, dbus_error_failed);
+#endif
 		return;
 	}
 
@@ -591,10 +603,12 @@ static void wsc_connect(struct wsc_station_dbus *wsc)
 {
 	const char *pin = NULL;
 
+#ifdef HAVE_DBUS
 	if (!strcmp(l_dbus_message_get_member(wsc->super.pending_connect),
 			"StartPin"))
 		l_dbus_message_get_arguments(wsc->super.pending_connect, "s",
 						&pin);
+#endif
 
 	wsc->enrollee = wsc_enrollee_new(wsc->netdev, wsc->target, pin, NULL, 0,
 						wsc_dbus_done_cb, wsc);
@@ -655,7 +669,11 @@ static void wsc_check_can_connect(struct wsc_station_dbus *wsc,
 	}
 error:
 	wsc->target = NULL;
+#ifdef HAVE_DBUS
 	CONNECT_REPLY(wsc, dbus_error_failed);
+#else
+    return;
+#endif
 }
 
 static void wsc_cancel_scan(struct wsc_station_dbus *wsc)
@@ -849,6 +867,7 @@ static bool pin_scan_results(int err, struct l_queue *bss_list, void *userdata)
 {
 	static const uint8_t wildcard_address[] =
 					{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+
 	struct wsc_station_dbus *wsc = userdata;
 	struct scan_bss *target = NULL;
 	const struct l_queue_entry *bss_entry;
@@ -856,7 +875,9 @@ static bool pin_scan_results(int err, struct l_queue *bss_list, void *userdata)
 
 	if (err) {
 		wsc_cancel_scan(wsc);
+#ifdef HAVE_DBUS
 		CONNECT_REPLY(wsc, dbus_error_failed);
+#endif
 
 		return false;
 	}
@@ -1200,7 +1221,6 @@ static void setup_wsc_interface(struct l_dbus_interface *interface)
 
 bool wsc_dbus_add_interface(struct wsc_dbus *wsc)
 {
-#ifdef HAVE_DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 
 	if (!l_dbus_object_add_interface(dbus, wsc->get_path(wsc),
@@ -1208,7 +1228,6 @@ bool wsc_dbus_add_interface(struct wsc_dbus *wsc)
 		l_info("Unable to register %s interface", IWD_WSC_INTERFACE);
 		return false;
 	}
-#endif
 
 	return true;
 }
@@ -1240,7 +1259,9 @@ static void wsc_dbus_free(void *user_data)
 
 static void wsc_add_station(struct netdev *netdev)
 {
+#ifdef HAVE_DBUS
 	struct wsc_station_dbus *wsc;
+#endif
 
 	if (!wiphy_get_max_scan_ie_len(netdev_get_wiphy(netdev))) {
 		l_debug("Simple Configuration isn't supported by ifindex %u",
@@ -1249,6 +1270,7 @@ static void wsc_add_station(struct netdev *netdev)
 		return;
 	}
 
+#ifdef HAVE_DBUS
 	wsc = l_new(struct wsc_station_dbus, 1);
 	wsc->netdev = netdev;
 	wsc->super.get_path = wsc_station_dbus_get_path;
@@ -1258,14 +1280,17 @@ static void wsc_add_station(struct netdev *netdev)
 
 	if (!wsc_dbus_add_interface(&wsc->super))
 		wsc_station_dbus_remove(&wsc->super);
+#endif
 }
 
 static void wsc_remove_station(struct netdev *netdev)
 {
+#ifdef HAVE_DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 
 	l_dbus_object_remove_interface(dbus, netdev_get_path(netdev),
 					IWD_WSC_INTERFACE);
+#endif
 }
 
 static void wsc_netdev_watch(struct netdev *netdev,
