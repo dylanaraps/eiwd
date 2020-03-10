@@ -114,21 +114,25 @@ static void adhoc_remove_sta(struct sta_state *sta)
 		sta->gtk_query_cmd_id = 0;
 	}
 
+#ifdef DBUS
 	/* signal station has been removed */
 	if (sta->authenticated) {
 		l_dbus_property_changed(dbus_get_bus(),
 				netdev_get_path(sta->adhoc->netdev),
 				IWD_ADHOC_INTERFACE, "ConnectedPeers");
 	}
+#endif
 
 	adhoc_sta_free(sta);
 }
 
 static void adhoc_reset(struct adhoc_state *adhoc)
 {
+#ifdef DBUS
 	if (adhoc->pending)
 		dbus_pending_reply(&adhoc->pending,
 				dbus_error_aborted(adhoc->pending));
+#endif
 
 	l_free(adhoc->ssid);
 
@@ -138,8 +142,10 @@ static void adhoc_reset(struct adhoc_state *adhoc)
 
 	adhoc->started = false;
 
+#ifdef DBUS
 	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(adhoc->netdev),
 						IWD_ADHOC_INTERFACE, "Started");
+#endif
 }
 
 static void adhoc_set_rsn_info(struct adhoc_state *adhoc,
@@ -194,9 +200,12 @@ static void adhoc_handshake_event(struct handshake_state *hs,
 		if ((sta->hs_auth_done && sta->hs_sta_done) &&
 				!sta->authenticated) {
 			sta->authenticated = true;
+
+#ifdef DBUS
 			l_dbus_property_changed(dbus_get_bus(),
 					netdev_get_path(adhoc->netdev),
 					IWD_ADHOC_INTERFACE, "ConnectedPeers");
+#endif
 		}
 		break;
 	default:
@@ -396,9 +405,11 @@ static void adhoc_new_station(struct adhoc_state *adhoc, const uint8_t *mac)
 	/* with open networks nothing else is required */
 	if (sta->adhoc->open) {
 		sta->authenticated = true;
+#ifdef DBUS
 		l_dbus_property_changed(dbus_get_bus(),
 					netdev_get_path(adhoc->netdev),
 					IWD_ADHOC_INTERFACE, "ConnectedPeers");
+#endif
 		return;
 	}
 
@@ -449,6 +460,8 @@ static void adhoc_station_changed_cb(struct netdev *netdev,
 static void adhoc_join_cb(struct netdev *netdev, int result, void *user_data)
 {
 	struct adhoc_state *adhoc = user_data;
+
+#ifdef DBUS
 	struct l_dbus_message *reply;
 
 	if (result < 0) {
@@ -457,17 +470,22 @@ static void adhoc_join_cb(struct netdev *netdev, int result, void *user_data)
 					dbus_error_failed(adhoc->pending));
 		return;
 	}
+#endif
 
 	adhoc->sta_watch_id = netdev_station_watch_add(netdev,
 			adhoc_station_changed_cb, adhoc);
 
+#ifdef DBUS
 	reply = l_dbus_message_new_method_return(adhoc->pending);
 	dbus_pending_reply(&adhoc->pending, reply);
+#endif
 
 	adhoc->started = true;
 
+#ifdef DBUS
 	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(adhoc->netdev),
 						IWD_ADHOC_INTERFACE, "Started");
+#endif
 }
 
 static struct l_dbus_message *adhoc_dbus_start(struct l_dbus *dbus,
@@ -550,6 +568,7 @@ static void adhoc_leave_cb(struct netdev *netdev, int result, void *user_data)
 {
 	struct adhoc_state *adhoc = user_data;
 
+#ifdef DBUS
 	if (result < 0) {
 		l_error("Failed to leave adhoc network, %i", result);
 		dbus_pending_reply(&adhoc->pending,
@@ -559,6 +578,7 @@ static void adhoc_leave_cb(struct netdev *netdev, int result, void *user_data)
 
 	dbus_pending_reply(&adhoc->pending,
 			l_dbus_message_new_method_return(adhoc->pending));
+#endif
 
 	adhoc_reset(adhoc);
 }
@@ -655,14 +675,18 @@ static void adhoc_add_interface(struct netdev *netdev)
 	adhoc->nl80211 = l_genl_family_new(iwd_get_genl(), NL80211_GENL_NAME);
 
 	/* setup adhoc dbus interface */
+#ifdef DBUS
 	l_dbus_object_add_interface(dbus_get_bus(),
 			netdev_get_path(netdev), IWD_ADHOC_INTERFACE, adhoc);
+#endif
 }
 
 static void adhoc_remove_interface(struct netdev *netdev)
 {
+#ifdef DBUS
 	l_dbus_object_remove_interface(dbus_get_bus(),
 			netdev_get_path(netdev), IWD_ADHOC_INTERFACE);
+#endif
 }
 
 static void adhoc_netdev_watch(struct netdev *netdev,
@@ -687,8 +711,11 @@ static void adhoc_netdev_watch(struct netdev *netdev,
 static int adhoc_init(void)
 {
 	netdev_watch = netdev_watch_add(adhoc_netdev_watch, NULL, NULL);
+
+#ifdef DBUS
 	l_dbus_register_interface(dbus_get_bus(), IWD_ADHOC_INTERFACE,
 			adhoc_setup_interface, adhoc_destroy_interface, false);
+#endif
 
 	return 0;
 }
@@ -696,7 +723,10 @@ static int adhoc_init(void)
 static void adhoc_exit(void)
 {
 	netdev_watch_remove(netdev_watch);
+
+#ifdef DBUS
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_ADHOC_INTERFACE);
+#endif
 }
 
 IWD_MODULE(adhoc, adhoc_init, adhoc_exit)

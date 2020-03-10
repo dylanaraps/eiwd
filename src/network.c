@@ -489,8 +489,10 @@ void network_set_info(struct network *network, struct network_info *info)
 		network->info = NULL;
 	}
 
+#ifdef DBUS
 	l_dbus_property_changed(dbus_get_bus(), network_get_path(network),
 					IWD_NETWORK_INTERFACE, "KnownNetwork");
+#endif
 }
 
 static inline bool __bss_is_sae(const struct scan_bss *bss,
@@ -1319,12 +1321,16 @@ bool network_register(struct network *network, const char *path)
 
 static void network_unregister(struct network *network, int reason)
 {
+#ifdef DBUS
 	struct l_dbus *dbus = dbus_get_bus();
+#endif
 
 	agent_request_cancel(network->agent_request, reason);
 	network_settings_close(network);
 
+#ifdef DBUS
 	l_dbus_unregister_object(dbus, network->object_path);
+#endif
 
 	l_free(network->object_path);
 	network->object_path = NULL;
@@ -1529,7 +1535,9 @@ static void network_exit(void)
 	known_networks_watch_remove(known_networks_watch);
 	known_networks_watch = 0;
 
+#ifdef DBUS
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_NETWORK_INTERFACE);
+#endif
 }
 
 IWD_MODULE(network, network_init, network_exit)

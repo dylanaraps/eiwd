@@ -2357,12 +2357,14 @@ static void station_disconnect_onconnect(struct station *station,
 					struct scan_bss *bss,
 					struct l_dbus_message *message)
 {
+#ifdef DBUS
 	if (netdev_disconnect(station->netdev, station_disconnect_onconnect_cb,
 								station) < 0) {
 		l_dbus_send(dbus_get_bus(),
 					dbus_error_from_errno(-EIO, message));
 		return;
 	}
+#endif
 
 	if (station->netconfig)
 		netconfig_reset(station->netconfig);
@@ -2374,14 +2376,18 @@ static void station_disconnect_onconnect(struct station *station,
 	station->connect_pending_network = network;
 	station->connect_pending_bss = bss;
 
+#ifdef DBUS
 	station->connect_pending = l_dbus_message_ref(message);
+#endif
 }
 
 void station_connect_network(struct station *station, struct network *network,
 				struct scan_bss *bss,
 				struct l_dbus_message *message)
 {
+#ifdef DBUS
 	struct l_dbus *dbus = dbus_get_bus();
+#endif
 	int err;
 
 	if (station_is_busy(station)) {
@@ -2396,13 +2402,19 @@ void station_connect_network(struct station *station, struct network *network,
 
 	station_enter_state(station, STATION_STATE_CONNECTING);
 
+#ifdef DBUS
 	station->connect_pending = l_dbus_message_ref(message);
+#endif
 	station->autoconnect = true;
 
 	return;
 
 error:
+#ifdef DBUS
 	l_dbus_send(dbus, dbus_error_from_errno(err, message));
+#else
+    return;
+#endif
 }
 
 static void station_hidden_network_scan_triggered(int err, void *user_data)
@@ -2414,10 +2426,8 @@ static void station_hidden_network_scan_triggered(int err, void *user_data)
 	if (!err)
 		return;
 
-#ifdef DBUS
 	dbus_pending_reply(&station->connect_pending,
 				dbus_error_failed(station->connect_pending));
-#endif
 }
 
 static bool station_hidden_network_scan_results(int err,

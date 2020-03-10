@@ -116,17 +116,21 @@ static void set_generic_destroy(void *user_data)
 {
 	struct set_generic_cb_data *cb_data = user_data;
 
+#ifdef DBUS
 	/* Message hasn't been replied to, generate an Aborted error */
 	if (cb_data->message)
 		cb_data->complete(cb_data->dbus, cb_data->message,
 					dbus_error_aborted(cb_data->message));
+#endif
 
 	l_free(cb_data);
 }
 
 static void set_powered_cb(struct netdev *netdev, int result, void *user_data)
 {
+#ifdef DBUS
 	struct set_generic_cb_data *cb_data = user_data;
+
 	struct l_dbus_message *reply = NULL;
 
 	if (result < 0)
@@ -134,6 +138,7 @@ static void set_powered_cb(struct netdev *netdev, int result, void *user_data)
 
 	cb_data->complete(cb_data->dbus, cb_data->message, reply);
 	cb_data->message = NULL;
+#endif
 }
 
 static struct l_dbus_message *device_property_set_powered(struct l_dbus *dbus,
@@ -206,6 +211,7 @@ static bool device_property_get_mode(struct l_dbus *dbus,
 
 static void set_mode_cb(struct netdev *netdev, int result, void *user_data)
 {
+#ifdef DBUS
 	struct set_generic_cb_data *cb_data = user_data;
 	struct l_dbus_message *reply = NULL;
 
@@ -218,6 +224,7 @@ static void set_mode_cb(struct netdev *netdev, int result, void *user_data)
 	l_dbus_property_changed(cb_data->dbus,
 				netdev_get_path(cb_data->device->netdev),
 				IWD_DEVICE_INTERFACE, "Mode");
+#endif
 }
 
 static struct l_dbus_message *device_property_set_mode(struct l_dbus *dbus,
@@ -435,11 +442,13 @@ static void destroy_device_interface(void *user_data)
 
 static int device_init(void)
 {
+#ifdef DBUS
 	if (!l_dbus_register_interface(dbus_get_bus(),
 					IWD_DEVICE_INTERFACE,
 					setup_device_interface,
 					destroy_device_interface, false))
 		return false;
+#endif
 
 	netdev_watch = netdev_watch_add(device_netdev_notify, NULL, NULL);
 
@@ -450,7 +459,9 @@ static void device_exit(void)
 {
 	netdev_watch_remove(netdev_watch);
 
+#ifdef DBUS
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_DEVICE_INTERFACE);
+#endif
 }
 
 IWD_MODULE(device, device_init, device_exit)

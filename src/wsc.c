@@ -1200,7 +1200,6 @@ static void setup_wsc_interface(struct l_dbus_interface *interface)
 
 bool wsc_dbus_add_interface(struct wsc_dbus *wsc)
 {
-#ifdef DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 
 	if (!l_dbus_object_add_interface(dbus, wsc->get_path(wsc),
@@ -1208,7 +1207,6 @@ bool wsc_dbus_add_interface(struct wsc_dbus *wsc)
 		l_info("Unable to register %s interface", IWD_WSC_INTERFACE);
 		return false;
 	}
-#endif
 
 	return true;
 }
@@ -1289,16 +1287,24 @@ static int wsc_init(void)
 {
 	l_debug("");
 	netdev_watch = netdev_watch_add(wsc_netdev_watch, NULL, NULL);
+
+#ifdef DBUS
 	l_dbus_register_interface(dbus_get_bus(), IWD_WSC_INTERFACE,
 					setup_wsc_interface,
 					wsc_dbus_free, false);
+#endif
+
 	return 0;
 }
 
 static void wsc_exit(void)
 {
 	l_debug("");
+
+#ifdef DBUS
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_WSC_INTERFACE);
+#endif
+
 	netdev_watch_remove(netdev_watch);
 }
 

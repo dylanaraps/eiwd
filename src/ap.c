@@ -117,9 +117,11 @@ static void ap_reset(struct ap_state *ap)
 	if (!ap->started)
 		return;
 
+#ifdef DBUS
 	if (ap->pending)
 		dbus_pending_reply(&ap->pending,
 				dbus_error_aborted(ap->pending));
+#endif
 
 	l_free(ap->ssid);
 
@@ -137,8 +139,10 @@ static void ap_reset(struct ap_state *ap)
 
 	ap->started = false;
 
+#ifdef DBUS
 	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(ap->netdev),
 						IWD_AP_INTERFACE, "Started");
+#endif
 }
 
 static void ap_free(void *data)
@@ -1311,20 +1315,26 @@ static void ap_start_cb(struct l_genl_msg *msg, void *user_data)
 	if (l_genl_msg_get_error(msg) < 0) {
 		l_error("START_AP failed: %i", l_genl_msg_get_error(msg));
 
+#ifdef DBUS
 		dbus_pending_reply(&ap->pending,
 				dbus_error_invalid_args(ap->pending));
+#endif
 		ap_reset(ap);
 
 		return;
 	}
 
+#ifdef DBUS
 	dbus_pending_reply(&ap->pending,
 			l_dbus_message_new_method_return(ap->pending));
+#endif
 
 	ap->started = true;
 
+#ifdef DBUS
 	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(ap->netdev),
 						IWD_AP_INTERFACE, "Started");
+#endif
 }
 
 static struct l_genl_msg *ap_build_cmd_start_ap(struct ap_state *ap)
@@ -1485,7 +1495,9 @@ static int ap_start(struct ap_state *ap, const char *ssid, const char *psk,
 		goto error;
 	}
 
+#ifdef DBUS
 	ap->pending = l_dbus_message_ref(message);
+#endif
 
 	return 0;
 
@@ -1506,13 +1518,17 @@ static void ap_stop_cb(struct l_genl_msg *msg, void *user_data)
 
 	if (l_genl_msg_get_error(msg) < 0) {
 		l_error("STOP_AP failed: %i", l_genl_msg_get_error(msg));
+#ifdef DBUS
 		dbus_pending_reply(&ap->pending,
 				dbus_error_failed(ap->pending));
+#endif
 		goto end;
 	}
 
+#ifdef DBUS
 	dbus_pending_reply(&ap->pending,
 			l_dbus_message_new_method_return(ap->pending));
+#endif
 
 end:
 	ap_reset(ap);
@@ -1563,7 +1579,9 @@ static int ap_stop(struct ap_state *ap, struct l_dbus_message *message)
 		}
 	}
 
+#ifdef DBUS
 	ap->pending = l_dbus_message_ref(message);
+#endif
 
 	return 0;
 }
@@ -1651,14 +1669,18 @@ static void ap_add_interface(struct netdev *netdev)
 	ap->nl80211 = l_genl_family_new(iwd_get_genl(), NL80211_GENL_NAME);
 
 	/* setup ap dbus interface */
+#ifdef DBUS
 	l_dbus_object_add_interface(dbus_get_bus(),
 			netdev_get_path(netdev), IWD_AP_INTERFACE, ap);
+#endif
 }
 
 static void ap_remove_interface(struct netdev *netdev)
 {
+#ifdef DBUS
 	l_dbus_object_remove_interface(dbus_get_bus(),
 			netdev_get_path(netdev), IWD_AP_INTERFACE);
+#endif
 }
 
 static void ap_netdev_watch(struct netdev *netdev,
@@ -1684,8 +1706,10 @@ static int ap_init(void)
 {
 	netdev_watch = netdev_watch_add(ap_netdev_watch, NULL, NULL);
 
+#ifdef DBUS
 	l_dbus_register_interface(dbus_get_bus(), IWD_AP_INTERFACE,
 			ap_setup_interface, ap_destroy_interface, false);
+#endif
 
 	return 0;
 }
@@ -1693,7 +1717,10 @@ static int ap_init(void)
 static void ap_exit(void)
 {
 	netdev_watch_remove(netdev_watch);
+
+#ifdef DBUS
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_AP_INTERFACE);
+#endif
 }
 
 IWD_MODULE(ap, ap_init, ap_exit)
