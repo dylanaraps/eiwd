@@ -1,3 +1,23 @@
+iwd without dbus (serious edition)
+
+./configure \
+    --prefix=/usr
+    --disable-client \
+    --disable-dbus-policy \
+    --disable-systemd-service \
+    --disable-monitor \
+    --disable-manual-pages \
+    --disable-wired \
+    --disable-hwmon
+
+make
+make DESTDIR="$1" install
+
+-------------------------------
+
+ORIGINAL README STARTS HERE
+
+
 Wireless daemon for Linux
 *************************
 
