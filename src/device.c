@@ -308,11 +308,9 @@ static void device_wiphy_state_changed_event(struct wiphy *wiphy,
 static struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 {
 	struct device *device;
-
 #ifdef DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 #endif
-
 	uint32_t ifindex = netdev_get_ifindex(netdev);
 	const uint8_t action_ap_roam_prefix[2] = { 0x0a, 0x07 };
 
