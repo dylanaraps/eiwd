@@ -151,9 +151,11 @@ static void station_property_set_scanning(struct station *station,
 
 	station->scanning = scanning;
 
+#ifdef DBUS
 	l_dbus_property_changed(dbus_get_bus(),
 				netdev_get_path(station->netdev),
 					IWD_STATION_INTERFACE, "Scanning");
+#endif
 }
 
 static void station_enter_state(struct station *station,
@@ -1114,19 +1116,23 @@ static void station_enter_state(struct station *station,
 						enum station_state state)
 {
 	uint64_t id = netdev_get_wdev_id(station->netdev);
+#ifdef DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 	bool disconnected;
+#endif
 
 	l_debug("Old State: %s, new state: %s",
 			station_state_to_string(station->state),
 			station_state_to_string(state));
 
+#ifdef DBUS
 	disconnected = !station_is_busy(station);
 
 	if ((disconnected && state > STATION_STATE_AUTOCONNECT_FULL) ||
 			(!disconnected && state != station->state))
 		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
 					IWD_STATION_INTERFACE, "State");
+#endif
 
 	switch (state) {
 	case STATION_STATE_AUTOCONNECT_QUICK:
@@ -1137,11 +1143,13 @@ static void station_enter_state(struct station *station,
 					new_scan_results, station);
 		break;
 	case STATION_STATE_CONNECTING:
+#ifdef DBUS
 		l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
 				IWD_STATION_INTERFACE, "ConnectedNetwork");
 		l_dbus_property_changed(dbus,
 				network_get_path(station->connected_network),
 				IWD_NETWORK_INTERFACE, "Connected");
+#endif
 		/* fall through */
 	case STATION_STATE_DISCONNECTED:
 	case STATION_STATE_CONNECTED:
@@ -1209,7 +1217,10 @@ static void station_roam_state_clear(struct station *station)
 static void station_reset_connection_state(struct station *station)
 {
 	struct network *network = station->connected_network;
+
+#ifdef DBUS
 	struct l_dbus *dbus = dbus_get_bus();
+#endif
 
 	if (!network)
 		return;
@@ -1224,10 +1235,12 @@ static void station_reset_connection_state(struct station *station)
 	station->connected_bss = NULL;
 	station->connected_network = NULL;
 
+#ifdef DBUS
 	l_dbus_property_changed(dbus, netdev_get_path(station->netdev),
 				IWD_STATION_INTERFACE, "ConnectedNetwork");
 	l_dbus_property_changed(dbus, network_get_path(network),
 				IWD_NETWORK_INTERFACE, "Connected");
+#endif
 }
 
 static void station_disassociated(struct station *station)
@@ -2209,6 +2222,7 @@ static bool station_retry_with_status(struct station *station,
 static void station_connect_dbus_reply(struct station *station,
 					enum netdev_result result)
 {
+#ifdef DBUS
 	struct l_dbus_message *reply;
 
 	switch (result) {
@@ -2225,6 +2239,7 @@ static void station_connect_dbus_reply(struct station *station,
 	}
 
 	dbus_pending_reply(&station->connect_pending, reply);
+#endif
 }
 
 static void station_connect_cb(struct netdev *netdev, enum netdev_result result,
@@ -2255,8 +2270,10 @@ static void station_connect_cb(struct netdev *netdev, enum netdev_result result,
 		break;
 	}
 
+#ifdef DBUS
 	if (station->connect_pending)
 		station_connect_dbus_reply(station, result);
+#endif
 
 	if (result != NETDEV_RESULT_OK) {
 		if (result != NETDEV_RESULT_ABORTED) {
@@ -2323,12 +2340,14 @@ static void station_disconnect_onconnect_cb(struct netdev *netdev, bool success,
 	station->connect_pending_network = NULL;
 	station->connect_pending_bss = NULL;
 
+#ifdef DBUS
 	if (err < 0) {
 		l_dbus_send(dbus_get_bus(),
 				dbus_error_from_errno(err,
 						station->connect_pending));
 		return;
 	}
+#endif
 
 	station_enter_state(station, STATION_STATE_CONNECTING);
 }
@@ -2395,8 +2414,10 @@ static void station_hidden_network_scan_triggered(int err, void *user_data)
 	if (!err)
 		return;
 
+#ifdef DBUS
 	dbus_pending_reply(&station->connect_pending,
 				dbus_error_failed(station->connect_pending));
+#endif
 }
 
 static bool station_hidden_network_scan_results(int err,
@@ -2550,6 +2571,7 @@ static void station_disconnect_cb(struct netdev *netdev, bool success,
 	l_debug("%u, success: %d",
 			netdev_get_ifindex(station->netdev), success);
 
+#ifdef DBUS
 	if (station->disconnect_pending) {
 		struct l_dbus_message *reply;
 
@@ -2564,6 +2586,7 @@ static void station_disconnect_cb(struct netdev *netdev, bool success,
 		dbus_pending_reply(&station->disconnect_pending, reply);
 
 	}
+#endif
 
 	station_enter_state(station, STATION_STATE_DISCONNECTED);
 
@@ -2775,6 +2798,7 @@ struct signal_agent {
 static void station_signal_agent_notify(struct signal_agent *agent,
 					const char *device_path, uint8_t level)
 {
+#ifdef DBUS
 	struct l_dbus_message *msg;
 
 	msg = l_dbus_message_new_method_call(dbus_get_bus(),
@@ -2785,6 +2809,7 @@ static void station_signal_agent_notify(struct signal_agent *agent,
 	l_dbus_message_set_no_reply(msg, true);
 
 	l_dbus_send(dbus_get_bus(), msg);
+#endif
 }
 
 static void station_rssi_level_changed(struct station *station,
@@ -2802,6 +2827,7 @@ static void station_rssi_level_changed(struct station *station,
 static void station_signal_agent_release(struct signal_agent *agent,
 						const char *device_path)
 {
+#ifdef DBUS
 	struct l_dbus_message *msg;
 
 	msg = l_dbus_message_new_method_call(dbus_get_bus(),
@@ -2812,6 +2838,7 @@ static void station_signal_agent_release(struct signal_agent *agent,
 	l_dbus_message_set_no_reply(msg, true);
 
 	l_dbus_send(dbus_get_bus(), msg);
+#endif
 }
 
 static void signal_agent_free(void *data)
@@ -2820,7 +2847,11 @@ static void signal_agent_free(void *data)
 
 	l_free(agent->owner);
 	l_free(agent->path);
+
+#ifdef DBUS
 	l_dbus_remove_watch(dbus_get_bus(), agent->disconnect_watch);
+#endif
+
 	l_free(agent);
 }
 
@@ -3037,7 +3068,10 @@ struct scan_bss *station_get_connected_bss(struct station *station)
 static struct station *station_create(struct netdev *netdev)
 {
 	struct station *station;
+
+#ifdef DBUS
 	struct l_dbus *dbus = dbus_get_bus();
+#endif
 
 	station = l_new(struct station, 1);
 	watchlist_init(&station->state_watches, NULL);
@@ -3057,8 +3091,10 @@ static struct station *station_create(struct netdev *netdev)
 
 	station_set_autoconnect(station, true);
 
+#ifdef DBUS
 	l_dbus_object_add_interface(dbus, netdev_get_path(netdev),
 					IWD_STATION_INTERFACE, station);
+#endif
 
 	station->netconfig = netconfig_new(netdev_get_ifindex(netdev));
 
@@ -3090,6 +3126,7 @@ static void station_free(struct station *station)
 		signal_agent_free(station->signal_agent);
 	}
 
+#ifdef DBUS
 	if (station->connect_pending)
 		dbus_pending_reply(&station->connect_pending,
 				dbus_error_aborted(station->connect_pending));
@@ -3105,6 +3142,7 @@ static void station_free(struct station *station)
 	if (station->dbus_scan_id)
 		scan_cancel(netdev_get_wdev_id(station->netdev),
 				station->dbus_scan_id);
+#endif
 
 	if (station->quick_scan_id)
 		scan_cancel(netdev_get_wdev_id(station->netdev),
@@ -3180,9 +3218,11 @@ static void station_netdev_watch(struct netdev *netdev,
 		break;
 	case NETDEV_WATCH_EVENT_DOWN:
 	case NETDEV_WATCH_EVENT_DEL:
+#ifdef DBUS
 		l_dbus_object_remove_interface(dbus_get_bus(),
 						netdev_get_path(netdev),
 						IWD_STATION_INTERFACE);
+#endif
 		break;
 	default:
 		break;
@@ -3193,9 +3233,12 @@ static int station_init(void)
 {
 	station_list = l_queue_new();
 	netdev_watch = netdev_watch_add(station_netdev_watch, NULL, NULL);
+
+#ifdef DBUS
 	l_dbus_register_interface(dbus_get_bus(), IWD_STATION_INTERFACE,
 					station_setup_interface,
 					station_destroy_interface, false);
+#endif
 
 	if (!l_settings_get_uint(iwd_get_config(), "General",
 					"ManagementFrameProtection",
@@ -3217,7 +3260,10 @@ static int station_init(void)
 
 static void station_exit(void)
 {
+#ifdef DBUS
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_STATION_INTERFACE);
+#endif
+
 	netdev_watch_remove(netdev_watch);
 	l_queue_destroy(station_list, NULL);
 	station_list = NULL;
