@@ -1,3 +1,0 @@
-[submodule "ell"]
-	path = ell-src
-	url = https://git.kernel.org/pub/scm/libs/ell/ell.git
