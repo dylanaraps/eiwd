@@ -38,7 +38,9 @@
 #include "src/eapol.h"
 #include "src/handshake.h"
 #include "src/mpdu.h"
+#ifdef HAVE_DBUS
 #include "src/dbus.h"
+#endif
 #include "src/nl80211util.h"
 
 struct adhoc_state {
@@ -49,7 +51,9 @@ struct adhoc_state {
 	struct l_queue *sta_states;
 	uint32_t sta_watch_id;
 	uint32_t netdev_watch_id;
+#ifdef HAVE_DBUS
 	struct l_dbus_message *pending;
+#endif
 	uint32_t ciphers;
 	uint32_t group_cipher;
 	uint8_t gtk[CRYPTO_MAX_GTK_LEN];
@@ -488,6 +492,7 @@ static void adhoc_join_cb(struct netdev *netdev, int result, void *user_data)
 #endif
 }
 
+#ifdef HAVE_DBUS
 static struct l_dbus_message *adhoc_dbus_start(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -664,6 +669,7 @@ static void adhoc_destroy_interface(void *user_data)
 
 	adhoc_free(adhoc);
 }
+#endif
 
 static void adhoc_add_interface(struct netdev *netdev)
 {
@@ -674,8 +680,8 @@ static void adhoc_add_interface(struct netdev *netdev)
 	adhoc->netdev = netdev;
 	adhoc->nl80211 = l_genl_family_new(iwd_get_genl(), NL80211_GENL_NAME);
 
-	/* setup adhoc dbus interface */
 #ifdef HAVE_DBUS
+	/* setup adhoc dbus interface */
 	l_dbus_object_add_interface(dbus_get_bus(),
 			netdev_get_path(netdev), IWD_ADHOC_INTERFACE, adhoc);
 #endif
