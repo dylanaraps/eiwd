@@ -1651,8 +1651,8 @@ static void ap_add_interface(struct netdev *netdev)
 	ap->netdev = netdev;
 	ap->nl80211 = l_genl_family_new(iwd_get_genl(), NL80211_GENL_NAME);
 
-	/* setup ap dbus interface */
 #ifdef HAVE_DBUS
+	/* setup ap dbus interface */
 	l_dbus_object_add_interface(dbus_get_bus(),
 			netdev_get_path(netdev), IWD_AP_INTERFACE, ap);
 #endif

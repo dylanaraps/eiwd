@@ -62,6 +62,7 @@ struct agent {
 
 static struct l_queue *agents;
 
+#ifdef HAVE_DBUS
 /*
  * How long we wait for user to input things.
  * Return value is in seconds.
@@ -74,7 +75,6 @@ static unsigned int agent_timeout_input_request(void)
 	return 120;
 }
 
-#ifdef HAVE_DBUS
 static void send_request(struct agent *agent, const char *request)
 {
 	struct l_dbus_message *message;
@@ -315,6 +315,7 @@ static void agent_send_next_request(struct agent *agent)
 	return;
 }
 
+#ifdef HAVE_DBUS
 static unsigned int agent_queue_request(struct agent *agent,
 					enum agent_request_type type,
 					struct l_dbus_message *message,
@@ -494,6 +495,7 @@ unsigned int agent_request_user_password(const char *path, const char *user,
 					message, agent_timeout_input_request(),
 					callback, trigger, user_data, destroy);
 }
+#endif
 
 static bool find_request(const void *a, const void *b)
 {
