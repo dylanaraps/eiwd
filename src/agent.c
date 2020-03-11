@@ -74,6 +74,7 @@ static unsigned int agent_timeout_input_request(void)
 	return 120;
 }
 
+#ifdef HAVE_DBUS
 static void send_request(struct agent *agent, const char *request)
 {
 	struct l_dbus_message *message;
@@ -91,6 +92,7 @@ static void send_request(struct agent *agent, const char *request)
 
 	l_dbus_send(dbus_get_bus(), message);
 }
+#endif
 
 static void send_cancel_request(void *user_data, int reason)
 {
@@ -616,7 +618,9 @@ static bool release_agent(void *data, void *user_data)
 {
 	struct agent *agent = data;
 
+#ifdef HAVE_DBUS
 	send_request(agent, "Release");
+#endif
 
 	agent_free(agent);
 

@@ -1124,6 +1124,7 @@ error:
 	return reply;
 }
 
+#ifdef HAVE_DBUS
 static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -1166,6 +1167,7 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 		return dbus_error_not_supported(message);
 	}
 }
+#endif
 
 void network_connect_new_hidden_network(struct network *network,
 						struct l_dbus_message *message)
@@ -1226,6 +1228,7 @@ const struct iovec *network_get_extra_ies(struct network *network,
 	return network_info_get_extra_ies(network->info, bss, num_elems);
 }
 
+#ifdef HAVE_DBUS
 static bool network_property_get_name(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -1297,6 +1300,7 @@ static bool network_property_get_known_network(struct l_dbus *dbus,
 
 	return true;
 }
+#endif
 
 bool network_register(struct network *network, const char *path)
 {
@@ -1492,6 +1496,7 @@ static void known_networks_changed(enum known_networks_event event,
 	}
 }
 
+#ifdef HAVE_DBUS
 static void setup_network_interface(struct l_dbus_interface *interface)
 {
 	l_dbus_interface_method(interface, "Connect", 0,
@@ -1514,6 +1519,7 @@ static void setup_network_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_property(interface, "KnownNetwork", 0, "o",
 				network_property_get_known_network, NULL);
 }
+#endif
 
 static int network_init(void)
 {
