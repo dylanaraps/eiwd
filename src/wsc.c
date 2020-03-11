@@ -1025,6 +1025,7 @@ static bool wsc_initiate_scan(struct wsc_station_dbus *wsc,
 	return true;
 }
 
+#ifdef HAVE_DBUS
 static const char *wsc_station_dbus_get_path(struct wsc_dbus *super)
 {
 	struct wsc_station_dbus *wsc =
@@ -1112,6 +1113,7 @@ static void wsc_station_dbus_remove(struct wsc_dbus *super)
 
 	l_free(wsc);
 }
+#endif
 
 static struct l_dbus_message *wsc_push_button(struct l_dbus *dbus,
 						struct l_dbus_message *message,

@@ -1167,7 +1167,6 @@ static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 		return dbus_error_not_supported(message);
 	}
 }
-#endif
 
 void network_connect_new_hidden_network(struct network *network,
 						struct l_dbus_message *message)
@@ -1214,6 +1213,7 @@ void network_connect_new_hidden_network(struct network *network,
 reply_error:
 	dbus_pending_reply(&message, error);
 }
+#endif
 
 void network_blacklist_add(struct network *network, struct scan_bss *bss)
 {

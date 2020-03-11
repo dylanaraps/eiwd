@@ -149,6 +149,7 @@ static void agent_request_free(void *user_data)
 	l_free(request);
 }
 
+#ifdef HAVE_DBUS
 static void passphrase_reply(struct l_dbus_message *reply,
 					struct agent_request *request)
 {
@@ -191,6 +192,7 @@ done:
 	user_callback(result, username, passwd,
 			request->trigger, request->user_data);
 }
+#endif
 
 static void agent_finalize_pending(struct agent *agent,
 						struct l_dbus_message *reply)
@@ -206,10 +208,14 @@ static void agent_finalize_pending(struct agent *agent,
 
 	switch (pending->type) {
 	case AGENT_REQUEST_TYPE_PASSPHRASE:
+#ifdef HAVE_DBUS
 		passphrase_reply(reply, pending);
+#endif
 		break;
 	case AGENT_REQUEST_TYPE_USER_NAME_PASSWD:
+#ifdef HAVE_DBUS
 		user_name_passwd_reply(reply, pending);
+#endif
 		break;
 	}
 
@@ -295,10 +301,12 @@ static void agent_send_next_request(struct agent *agent)
 
 	l_debug("send request to %s %s", agent->owner, agent->path);
 
+#ifdef HAVE_DBUS
 	agent->pending_id = l_dbus_send_with_reply(dbus_get_bus(),
 							pending->message,
 							agent_receive_reply,
 							agent, NULL);
+#endif
 
 	pending->message = NULL;
 
