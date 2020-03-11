@@ -196,9 +196,11 @@ static void adhoc_handshake_event(struct handshake_state *hs,
 				!sta->authenticated) {
 			sta->authenticated = true;
 
+#ifdef HAVE_DBUS
 			l_dbus_property_changed(dbus_get_bus(),
 					netdev_get_path(adhoc->netdev),
 					IWD_ADHOC_INTERFACE, "ConnectedPeers");
+#endif
 		}
 		break;
 	default:
@@ -398,9 +400,11 @@ static void adhoc_new_station(struct adhoc_state *adhoc, const uint8_t *mac)
 	/* with open networks nothing else is required */
 	if (sta->adhoc->open) {
 		sta->authenticated = true;
+#ifdef HAVE_DBUS
 		l_dbus_property_changed(dbus_get_bus(),
 					netdev_get_path(adhoc->netdev),
 					IWD_ADHOC_INTERFACE, "ConnectedPeers");
+#endif
 		return;
 	}
 
@@ -452,27 +456,36 @@ static void adhoc_join_cb(struct netdev *netdev, int result, void *user_data)
 {
 	struct adhoc_state *adhoc = user_data;
 
+#ifdef HAVE_DBUS
 	struct l_dbus_message *reply;
+#endif
 
 	if (result < 0) {
 		l_error("Failed to join adhoc network, %i", result);
+#ifdef HAVE_DBUS
 		dbus_pending_reply(&adhoc->pending,
 					dbus_error_failed(adhoc->pending));
+#endif
 		return;
 	}
 
 	adhoc->sta_watch_id = netdev_station_watch_add(netdev,
 			adhoc_station_changed_cb, adhoc);
 
+#ifdef HAVE_DBUS
 	reply = l_dbus_message_new_method_return(adhoc->pending);
 	dbus_pending_reply(&adhoc->pending, reply);
+#endif
 
 	adhoc->started = true;
 
+#ifdef HAVE_DBUS
 	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(adhoc->netdev),
 						IWD_ADHOC_INTERFACE, "Started");
+#endif
 }
 
+#ifdef HAVE_DBUS
 static struct l_dbus_message *adhoc_dbus_start(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -548,6 +561,7 @@ static struct l_dbus_message *adhoc_dbus_start_open(struct l_dbus *dbus,
 
 	return NULL;
 }
+#endif
 
 static void adhoc_leave_cb(struct netdev *netdev, int result, void *user_data)
 {
@@ -568,6 +582,7 @@ static void adhoc_leave_cb(struct netdev *netdev, int result, void *user_data)
 	adhoc_reset(adhoc);
 }
 
+#ifdef HAVE_DBUS
 static struct l_dbus_message *adhoc_dbus_stop(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -642,6 +657,7 @@ static void adhoc_setup_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_property(interface, "Started", 0, "b",
 					adhoc_property_get_started, NULL);
 }
+#endif
 
 static void adhoc_destroy_interface(void *user_data)
 {
