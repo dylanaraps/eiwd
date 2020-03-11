@@ -519,6 +519,7 @@ bool agent_request_cancel(unsigned int req_id, int reason)
 	return true;
 }
 
+#ifdef HAVE_DBUS
 static void agent_disconnect(struct l_dbus *dbus, void *user_data)
 {
 	struct agent *agent = user_data;
@@ -609,6 +610,7 @@ static void setup_agent_interface(struct l_dbus_interface *interface)
 				agent_unregister,
 				"", "o", "path");
 }
+#endif
 
 static bool release_agent(void *data, void *user_data)
 {
