@@ -66,6 +66,7 @@ static void device_ap_roam_frame_event(const struct mmpdu_header *hdr,
 	station_ap_directed_roam(station, hdr, body, body_len);
 }
 
+#ifdef HAVE_DBUS
 static bool device_property_get_name(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -116,19 +117,16 @@ static void set_generic_destroy(void *user_data)
 {
 	struct set_generic_cb_data *cb_data = user_data;
 
-#ifdef HAVE_DBUS
 	/* Message hasn't been replied to, generate an Aborted error */
 	if (cb_data->message)
 		cb_data->complete(cb_data->dbus, cb_data->message,
 					dbus_error_aborted(cb_data->message));
-#endif
 
 	l_free(cb_data);
 }
 
 static void set_powered_cb(struct netdev *netdev, int result, void *user_data)
 {
-#ifdef HAVE_DBUS
 	struct set_generic_cb_data *cb_data = user_data;
 	struct l_dbus_message *reply = NULL;
 
@@ -137,7 +135,6 @@ static void set_powered_cb(struct netdev *netdev, int result, void *user_data)
 
 	cb_data->complete(cb_data->dbus, cb_data->message, reply);
 	cb_data->message = NULL;
-#endif
 }
 
 static struct l_dbus_message *device_property_set_powered(struct l_dbus *dbus,
@@ -210,7 +207,6 @@ static bool device_property_get_mode(struct l_dbus *dbus,
 
 static void set_mode_cb(struct netdev *netdev, int result, void *user_data)
 {
-#ifdef HAVE_DBUS
 	struct set_generic_cb_data *cb_data = user_data;
 	struct l_dbus_message *reply = NULL;
 
@@ -223,7 +219,6 @@ static void set_mode_cb(struct netdev *netdev, int result, void *user_data)
 	l_dbus_property_changed(cb_data->dbus,
 				netdev_get_path(cb_data->device->netdev),
 				IWD_DEVICE_INTERFACE, "Mode");
-#endif
 }
 
 static struct l_dbus_message *device_property_set_mode(struct l_dbus *dbus,
@@ -287,6 +282,7 @@ static void setup_device_interface(struct l_dbus_interface *interface)
 					device_property_get_mode,
 					device_property_set_mode);
 }
+#endif
 
 static void device_wiphy_state_changed_event(struct wiphy *wiphy,
 					enum wiphy_state_watch_event event,
@@ -347,6 +343,7 @@ static struct device *device_create(struct wiphy *wiphy, struct netdev *netdev)
 	return device;
 }
 
+#ifdef HAVE_DBUS
 static void device_free(struct device *device)
 {
 	l_debug("");
@@ -363,6 +360,7 @@ static void device_free(struct device *device)
 
 	l_free(device);
 }
+#endif
 
 static void device_netdev_notify(struct netdev *netdev,
 					enum netdev_watch_event event,
@@ -429,12 +427,14 @@ static void device_netdev_notify(struct netdev *netdev,
 	}
 }
 
+#ifdef HAVE_DBUS
 static void destroy_device_interface(void *user_data)
 {
 	struct device *device = user_data;
 
 	device_free(device);
 }
+#endif
 
 static int device_init(void)
 {
