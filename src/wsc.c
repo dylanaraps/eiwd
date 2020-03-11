@@ -61,6 +61,7 @@ struct wsc_enrollee {
 	bool disconnecting : 1;
 };
 
+#ifdef HAVE_DBUS
 static struct l_dbus_message *wsc_error_session_overlap(
 						struct l_dbus_message *msg)
 {
@@ -100,6 +101,7 @@ static struct l_dbus_message *wsc_error_time_expired(struct l_dbus_message *msg)
 					"No APs in PIN mode found in "
 					"the allotted time");
 }
+#endif
 
 static void wsc_enrollee_connect_cb(struct netdev *netdev,
 					enum netdev_result result,
@@ -461,6 +463,7 @@ struct wsc_station_dbus {
 	uint32_t station_state_watch;
 };
 
+#ifdef HAVE_DBUS
 #define CONNECT_REPLY(wsc, message)					\
 	if ((wsc)->super.pending_connect)				\
 		dbus_pending_reply(&(wsc)->super.pending_connect,	\
@@ -470,6 +473,11 @@ struct wsc_station_dbus {
 	if ((wsc)->super.pending_cancel)				\
 		dbus_pending_reply(&(wsc)->super.pending_cancel,	\
 				message((wsc)->super.pending_cancel))	\
+
+#else
+#define CONNECT_REPLY(wsc, message) do {} while(0)
+#define CANCEL_REPLY(wsc, message)  do {} while(0)
+#endif
 
 static void wsc_try_credentials(struct wsc_station_dbus *wsc,
 				struct wsc_credentials_info *creds,
@@ -521,9 +529,7 @@ static void wsc_try_credentials(struct wsc_station_dbus *wsc,
 		return;
 	}
 
-#ifdef HAVE_DBUS
 	CONNECT_REPLY(wsc, wsc_error_not_reachable);
-#endif
 	station_set_autoconnect(wsc->station, true);
 }
 
@@ -573,25 +579,17 @@ static void wsc_dbus_done_cb(int err, struct wsc_credentials_info *creds,
 		break;
 	case -ECANCELED:
 		/* Send reply if we haven't already sent one e.g. in Cancel() */
-#ifdef HAVE_DBUS
 		CONNECT_REPLY(wsc, dbus_error_aborted);
 		CANCEL_REPLY(wsc, l_dbus_message_new_method_return);
-#endif
 		return;
 	case -ENOKEY:
-#ifdef HAVE_DBUS
 		CONNECT_REPLY(wsc, wsc_error_no_credentials);
-#endif
 		return;
 	case -EBUSY:
-#ifdef HAVE_DBUS
 		CONNECT_REPLY(wsc, dbus_error_busy);
-#endif
 		return;
 	default:
-#ifdef HAVE_DBUS
 		CONNECT_REPLY(wsc, dbus_error_failed);
-#endif
 		return;
 	}
 
@@ -669,11 +667,7 @@ static void wsc_check_can_connect(struct wsc_station_dbus *wsc,
 	}
 error:
 	wsc->target = NULL;
-#ifdef HAVE_DBUS
 	CONNECT_REPLY(wsc, dbus_error_failed);
-#else
-    return;
-#endif
 }
 
 static void wsc_cancel_scan(struct wsc_station_dbus *wsc)
@@ -875,9 +869,7 @@ static bool pin_scan_results(int err, struct l_queue *bss_list, void *userdata)
 
 	if (err) {
 		wsc_cancel_scan(wsc);
-#ifdef HAVE_DBUS
 		CONNECT_REPLY(wsc, dbus_error_failed);
-#endif
 
 		return false;
 	}
