@@ -44,7 +44,11 @@
 #include "src/crypto.h"
 #include "src/scan.h"
 #include "src/netdev.h"
+#ifdef HAVE_DBUS
 #include "src/dbus.h"
+#else
+#define IWD_BASE_PATH "/net/connman/iwd"
+#endif
 #include "src/rfkill.h"
 #include "src/wiphy.h"
 #include "src/storage.h"

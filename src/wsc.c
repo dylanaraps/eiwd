@@ -30,7 +30,9 @@
 
 #include "src/missing.h"
 #include "src/module.h"
+#ifdef HAVE_DBUS
 #include "src/dbus.h"
+#endif
 #include "src/netdev.h"
 #include "src/wiphy.h"
 #include "src/station.h"

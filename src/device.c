@@ -36,7 +36,9 @@
 #include "src/wiphy.h"
 #include "src/scan.h"
 #include "src/netdev.h"
+#ifdef HAVE_DBUS
 #include "src/dbus.h"
+#endif
 #include "src/frame-xchg.h"
 #include "src/station.h"
 

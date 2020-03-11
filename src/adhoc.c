@@ -38,7 +38,9 @@
 #include "src/eapol.h"
 #include "src/handshake.h"
 #include "src/mpdu.h"
+#ifdef HAVE_DBUS
 #include "src/dbus.h"
+#endif
 #include "src/nl80211util.h"
 
 struct adhoc_state {

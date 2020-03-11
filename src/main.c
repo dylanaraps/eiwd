@@ -36,7 +36,9 @@
 #include "src/iwd.h"
 #include "src/module.h"
 #include "src/wiphy.h"
+#ifdef HAVE_DBUS
 #include "src/dbus.h"
+#endif
 #include "src/eap.h"
 #include "src/eapol.h"
 #include "src/rfkill.h"

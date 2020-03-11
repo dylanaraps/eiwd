@@ -42,7 +42,9 @@
 #include "src/util.h"
 #include "src/eapol.h"
 #include "src/handshake.h"
+#ifdef HAVE_DBUS
 #include "src/dbus.h"
+#endif
 #include "src/nl80211util.h"
 #include "src/frame-xchg.h"
 

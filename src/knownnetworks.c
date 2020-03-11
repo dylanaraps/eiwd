@@ -39,7 +39,11 @@
 #include "src/storage.h"
 #include "src/common.h"
 #include "src/network.h"
+#ifdef HAVE_DBUS
 #include "src/dbus.h"
+#else
+#define IWD_BASE_PATH "/net/connman/iwd"
+#endif
 #include "src/knownnetworks.h"
 #include "src/scan.h"
 #include "src/util.h"

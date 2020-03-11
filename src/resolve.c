@@ -34,7 +34,9 @@
 
 #include "src/iwd.h"
 #include "src/module.h"
+#ifdef HAVE_DBUS
 #include "src/dbus.h"
+#endif
 #include "src/resolve.h"
 
 struct resolve_method_ops {

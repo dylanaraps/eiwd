@@ -40,7 +40,9 @@
 #include "src/common.h"
 #include "src/storage.h"
 #include "src/scan.h"
+#ifdef HAVE_DBUS
 #include "src/dbus.h"
+#endif
 #include "src/agent.h"
 #include "src/netdev.h"
 #include "src/wiphy.h"

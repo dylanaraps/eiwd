@@ -27,7 +27,9 @@
 #include <errno.h>
 
 #include <ell/ell.h>
+#ifdef HAVE_DBUS
 #include "src/dbus.h"
+#endif
 #include "src/agent.h"
 #include "src/iwd.h"
 #include "src/module.h"
