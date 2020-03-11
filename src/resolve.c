@@ -64,6 +64,7 @@ struct systemd_state {
 	bool is_ready:1;
 };
 
+#ifdef HAVE_DBUS
 static void systemd_link_dns_reply(struct l_dbus_message *message,
 								void *user_data)
 {
@@ -302,6 +303,7 @@ static const struct resolve_method_ops resolve_method_systemd = {
 	.add_domain_name = resolve_systemd_add_domain_name,
 	.remove = resolve_systemd_remove,
 };
+#endif
 
 static void resolve_resolvconf_add_dns(uint32_t ifindex, uint8_t type,
 						char **dns_list, void *data)
@@ -450,7 +452,9 @@ static const struct {
 	const char *name;
 	const struct resolve_method_ops *method_ops;
 } resolve_method_ops_list[] = {
+#ifdef HAVE_DBUS
 	{ "systemd", &resolve_method_systemd },
+#endif
 	{ "resolvconf", &resolve_method_resolvconf },
 	{ }
 };
@@ -481,7 +485,11 @@ static int resolve_init(void)
 			l_warn("[General].dns_resolve_method is deprecated, "
 				"use [Network].NameResolvingService");
 		else /* Default to systemd-resolved service. */
+#ifdef HAVE_DBUS
 			method_name = "systemd";
+#else
+            method_name = "resolvconf";
+#endif
 	}
 
 	for (i = 0; resolve_method_ops_list[i].name; i++) {
