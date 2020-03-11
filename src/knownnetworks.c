@@ -119,6 +119,7 @@ int known_network_offset(const struct network_info *target)
 	return -ENOENT;
 }
 
+#ifdef HAVE_DBUS
 static void known_network_register_dbus(struct network_info *network)
 {
 	const char *path = known_network_get_path(network);
@@ -133,6 +134,7 @@ static void known_network_register_dbus(struct network_info *network)
 		l_info("Unable to register %s interface",
 						L_DBUS_INTERFACE_PROPERTIES);
 }
+#endif
 
 static void known_network_set_autoconnect(struct network_info *network,
 							bool autoconnect)
@@ -507,6 +509,7 @@ int known_network_add_frequency(struct network_info *info, uint32_t frequency)
 	return 0;
 }
 
+#ifdef HAVE_DBUS
 static struct l_dbus_message *known_network_forget(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -646,6 +649,7 @@ static void setup_known_network_interface(struct l_dbus_interface *interface)
 				known_network_property_get_last_connected,
 				NULL);
 }
+#endif
 
 void known_networks_remove(struct network_info *network)
 {
