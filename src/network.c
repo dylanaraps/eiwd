@@ -875,6 +875,7 @@ struct eap_secret_request {
 				struct eap_secret_request *req);
 };
 
+#ifdef HAVE_DBUS
 static void eap_secret_request_free(void *data)
 {
 	struct eap_secret_request *req = data;
@@ -1128,7 +1129,6 @@ error:
 	return reply;
 }
 
-#ifdef HAVE_DBUS
 static struct l_dbus_message *network_connect(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
