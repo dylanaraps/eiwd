@@ -522,7 +522,7 @@ EXTRA_DIST = src/genbuiltin src/iwd.service.in src/net.connman.iwd.service \
 					$(patsubst %.5,%.rst, \
 					$(patsubst %.8,%.rst,$(manual_pages))))
 
-AM_CFLAGS = $(ell_cflags) -Wall -Wextra -pedantic -Wno-unused-parameter \
+AM_CFLAGS = $(ell_cflags) -fvisibility=hidden \
 				-DUNITDIR=\""$(top_srcdir)/unit/"\" \
 				-DCERTDIR=\""$(top_builddir)/unit/"\"
 
