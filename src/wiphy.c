@@ -48,6 +48,28 @@
 #include "src/dbus.h"
 #else
 #define IWD_BASE_PATH "/net/connman/iwd"
+
+const char *dbus_iftype_to_string(uint32_t iftype)
+{
+	switch (iftype) {
+	case NL80211_IFTYPE_ADHOC:
+		return "ad-hoc";
+	case NL80211_IFTYPE_STATION:
+		return "station";
+	case NL80211_IFTYPE_AP:
+		return "ap";
+	case NL80211_IFTYPE_P2P_CLIENT:
+		return "p2p-client";
+	case NL80211_IFTYPE_P2P_GO:
+		return "p2p-go";
+	case NL80211_IFTYPE_P2P_DEVICE:
+		return "p2p-device";
+	default:
+		break;
+	}
+
+	return NULL;
+}
 #endif
 #include "src/rfkill.h"
 #include "src/wiphy.h"
