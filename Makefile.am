@@ -157,9 +157,7 @@ systemd_modloaddir = @SYSTEMD_MODLOADDIR@
 systemd_modload_DATA = src/pkcs8.conf
 endif
 
-if MANUAL_PAGES
 man_MANS =
-endif
 
 manual_pages = src/iwd.8 src/iwd.debug.7 src/iwd.config.5 src/iwd.network.5 \
 		client/iwctl.1 monitor/iwmon.1 wired/ead.8 tools/hwsim.1
@@ -258,9 +256,7 @@ dbus_bus_DATA += src/net.connman.iwd.service
 systemd_network_DATA += src/80-iwd.link
 endif
 
-if MANUAL_PAGES
 man_MANS += src/iwd.8 src/iwd.debug.7 src/iwd.config.5 src/iwd.network.5
-endif
 endif
 
 if CLIENT

@@ -20,10 +20,6 @@ stamp-h1
 build-aux
 autom4te.cache
 src/iwd
-src/iwd.8
-src/iwd.debug.7
-src/iwd.config.5
-src/iwd.network.5
 src/iwd.service
 client/iwctl
 client/iwctl.1

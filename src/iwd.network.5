@@ -1,0 +1,515 @@
+.\" Man page generated from reStructuredText.
+.
+.TH IWD.NETWORK 5 "22 September 2019" "iwd" "Linux Connectivity"
+.SH NAME
+iwd.network \- Network configuration for wireless daemon
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.SH SYNOPSIS
+.sp
+Network configuration files \fB\&.open\fP, \fB\&.psk\fP and \fB\&.8021x\fP
+.SH DESCRIPTION
+.sp
+\fBiwd\fP stores information on known networks, and reads information on
+pre\-provisioned networks, from small text configuration files.  Those files
+live in the state directory specified by the environment variable
+\fI$STATE_DIRECTORY\fP, which is normally provided by \fBsystemd\fP\&.  In the absence
+of such an environment variable it defaults to \fI$LIBDIR/iwd\fP, which normally
+is set to \fI/var/lib/iwd\fP\&.  You can create, modify or remove those files.
+\fBiwd\fP monitors the directory for changes and will update its state
+accordingly.  \fBiwd\fP will also modify these files in the course of network
+connections or as a result of D\-Bus API invocations.
+.SH FILE FORMAT
+.sp
+The syntax is similar to that of GNOME keyfile syntax (which is based on the
+format defined in the Desktop Entry Specification, see
+\fIhttp://freedesktop.org/Standards/desktop\-entry\-spec\fP).  The recognized groups
+as well as keys and values in each group are documented here.  Defaults are
+written in bold.
+.sp
+For completeness we include the description of the file syntax here. This is
+the syntax that the ell library\(aqs l_settings class implements. The syntax is
+based on lines and lines are delimited by newline characters.
+.sp
+Empty lines are ignored and whitespace at the beginning of a line is ignored.
+Comment lines have \fB#\fP as their first non\-whitespace character.
+.sp
+Key\-value lines contain a setting key, an equal sign and the value of the
+setting.  Whitespace preceding the key, the equal sign or the value, is
+ignored.  The key must be a continuous string of alphanumeric and underscore
+characters and minus signs only.  The value starts at the first non\-whitespace
+character after the first equal sign on the line and ends at the end of the
+line and must be correctly UTF\-8\-encoded. A boolean value can be \fBtrue\fP or
+\fBfalse\fP but \fB0\fP or \fB1\fP are also allowed.  Integer values are written
+in base 10.  String values, including file paths and hexstrings, are written
+as is except for five characters that may be backslash\-escaped: space,
+\fB\et\fP, \fB\er\fP, \fB\en\fP and backslash itself.  The latter three must be
+escaped.  A space character must be escaped if it is the first character
+in the value string and is written as \fB\es\fP\&.
+.sp
+Settings are interpreted depending on the group they are in.  A group starts
+with a group header line and contains all settings until the next group\(aqs
+header line.  A group header line contains a \fB[\fP character followed by
+the group name and a \fB]\fP character.  Whitespace is allowed before the
+\fB[\fP and after the \fB]\fP\&.  A group name consists of printable characters
+other than \fB[\fP and \fB]\fP\&.
+.SH NAMING
+.sp
+File names are based on the network\(aqs SSID and security type: Open,
+PSK\-protected or 802.1x. The name consist of the encoding of the SSID
+followed by \fB\&.open\fP, \fB\&.psk\fP or \fB\&.8021x\fP\&.  The SSID appears verbatim
+in the name if it contains only alphanumeric characters, spaces, underscores
+or minus signs.  Otherwise it is encoded as an equal sign followed by the
+lower\-case hex encoding of the name.
+.SH SETTINGS
+.sp
+The settings below are split into several sections and grouped into broad
+categories.  Each category has a group associated with it which is given at
+the beginning of each sub\-section.  Recognized keys and valid values are listed
+following the group definition.
+.SS General Settings
+.sp
+The group \fB[Settings]\fP contains general settings.
+.TS
+center;
+|l|l|.
+_
+T{
+AutoConnect
+T}	T{
+Values: \fBtrue\fP, false
+.sp
+Whether the network can be connected to automatically
+T}
+_
+T{
+Hidden
+T}	T{
+Values: true, \fBfalse\fP
+.sp
+Whether the network is hidden, i.e. its SSID must be included in an
+active scan request
+T}
+_
+.TE
+.SS Network Authentication Settings
+.sp
+The group \fB[Security]\fP contains settings for Wi\-Fi security and
+authentication configuration.
+.TS
+center;
+|l|l|.
+_
+T{
+Passphrase
+T}	T{
+8..63 character string
+.sp
+Passphrase to be used when connecting to WPA\-Personal networks.
+Required when connecting to WPA3\-Personal (SAE) networks.  Also
+required if the \fIPreSharedKey\fP is not provided.  If not provided in
+settings, the agent will be asked for the passphrase at connection
+time.
+T}
+_
+T{
+PreSharedKey
+T}	T{
+64 character hex string
+.sp
+Processed passphrase for this network in the form of a hex\-encoded 32
+byte pre\-shared key.  Must be provided if \fIPassphrase\fP is omitted.
+T}
+_
+T{
+EAP\-Method
+T}	T{
+one of the following methods:
+.sp
+AKA, AKA\(aq, GTC, MD5, MSCHAPV2, PEAP, PWD, SIM, TLS, TTLS
+T}
+_
+T{
+EAP\-Identity
+T}	T{
+string
+.sp
+Identity string transmitted in plaintext.  Depending on the EAP method,
+this value can be optional or mandatory.  GTC, MD5, MSCHAPV2, PWD
+require an identity, so if not provided, the agent will be asked for it
+at connection time.  TLS based methods (PEAP, TLS, TTLS) might still
+require an \fIEAP\-Identity\fP to be set, depending on the RADIUS server
+configuration.
+T}
+_
+T{
+EAP\-Password
+T}	T{
+string
+.sp
+Password to be provided for WPA\-Enterprise authentication.  If not
+provided, the agent will be asked for the password at connection time.
+Required by: GTC, MD5, MSCHAPV2, PWD.
+T}
+_
+T{
+EAP\-Password\-Hash
+T}	T{
+hex string
+.sp
+Some EAP methods can accept a pre\-hashed version of the password.  For
+MSCHAPV2, a MD4 hash of the password can be given here.
+T}
+_
+T{
+.nf
+EAP\-TLS\-CACert,
+EAP\-TTLS\-CACert,
+EAP\-PEAP\-CACert
+.fi
+T}	T{
+absolute file path or embedded pem
+.sp
+Path to a PEM\-formatted X.509 root certificate list to use for trust
+verification of the authenticator.  The authenticator\(aqs server\(aqs
+certificate chain must be verified by at least one CA in the list for
+the authentication to succeed.  If omitted, then authenticator\(aqs
+certificate chain will not be verified (not recommended.)
+T}
+_
+T{
+EAP\-TLS\-ClientCert
+T}	T{
+absolute file path or embedded pem
+.sp
+Path to a PEM\-formatted client X.509 certificate or certificate chain
+to send on server request.
+T}
+_
+T{
+EAP\-TLS\-ClientKey
+T}	T{
+absolute file path or embedded pem
+.sp
+Path to a PEM\-formatted client PKCS#8 private key corresponding to the
+public key provided in \fIEAP\-TLS\-ClientCert\fP\&.
+T}
+_
+T{
+.nf
+EAP\-TLS\-
+ClientKeyPassphrase
+.fi
+T}	T{
+string
+.sp
+Decryption key for the client private key file.  This is used if the
+private key given by \fIEAP\-TLS\-ClientKey\fP is encrypted.  If not provided,
+then the agent is asked for the passphrase at connection time.
+T}
+_
+T{
+.nf
+EAP\-TLS\-ServerDomainMask,
+EAP\-TTLS\-ServerDomainMask,
+EAP\-PEAP\-ServerDomainMask
+.fi
+T}	T{
+string
+.sp
+A mask for the domain names contained in the server\(aqs certificate. At
+least one of the domain names present in the certificate\(aqs Subject
+Alternative Name extension\(aqs DNS Name fields or the Common Name has to
+match at least one mask, or authentication will fail.  Multiple masks
+can be given separated by semicolons.  The masks are split into segments
+at the dots.  Each segment has to match its corresponding label in the
+domain name. An asterisk segment in the mask matches any label.  An
+asterisk segment at the beginning of the mask matches one or more
+consecutive labels from the beginning of the domain string.
+T}
+_
+T{
+.nf
+EAP\-TTLS\-Phase2\-Method
+.fi
+T}	T{
+.nf
+The following values are allowed:
+.in +2
+Tunneled\-CHAP,
+Tunneled\-MSCHAP,
+Tunneled\-MSCHAPv2,
+Tunneled\-PAP or
+a valid EAP method name (see \fIEAP\-Method\fP)
+.in -2
+.fi
+.sp
+.sp
+Phase 2 authentication method for EAP\-TTLS.  Can be either one of the
+TTLS\-specific non\-EAP methods (Tunneled\-*), or any EAP method
+documented here.  The following two settings are used if any of the
+non\-EAP methods is used.
+T}
+_
+T{
+.nf
+EAP\-TTLS\-Phase2\-Identity
+.fi
+T}	T{
+The secure identity/username string for the TTLS non\-EAP Phase 2
+methods.  If not provided \fBiwd\fP will request a username at connection
+time.
+T}
+_
+T{
+.nf
+EAP\-TTLS\-Phase2\-Password
+.fi
+T}	T{
+Password string for the TTLS non\-EAP Phase 2 methods. If not provided
+IWD will request a passphrase at connection time.
+T}
+_
+T{
+EAP\-TTLS\-Phase2\-*
+T}	T{
+Any settings to be used for the inner EAP method if one was specified
+as \fIEAP\-TTLS\-Phase2\-Method\fP, rather than a TTLS\-specific method. The
+prefix \fIEAP\-TTLS\-Phase2\-\fP replaces the \fIEAP\-\fP prefix in the setting
+keys and their usage is unchanged.  Since the inner method\(aqs
+negotiation is encrypted, a secure identity string can be provided.
+T}
+_
+T{
+EAP\-PEAP\-Phase2\-*
+T}	T{
+Any settings to be used for the inner EAP method with EAP\-PEAP as the
+outer method. The prefix \fIEAP\-PEAP\-Phase2\-\fP replaces the \fIEAP\-\fP prefix
+in the setting keys and their usage is unchanged. Since the inner
+method\(aqs negotiation is encrypted, a secure identity string can be
+provided.
+T}
+_
+.TE
+.SS Network Configuration Settings
+.sp
+The group \fB[IPv4]\fP contains settings for Internet Protocol version 4 (IPv4)
+network configuration with the static addresses.
+.TS
+center;
+|l|l|.
+_
+T{
+Address
+T}	T{
+IPv4 address string
+.sp
+The IPv4 address to assign. This field is \fIrequired\fP for the static
+configuration.
+T}
+_
+T{
+Gateway
+T}	T{
+IPv4 address string
+.sp
+The IPv4 address of the gateway (router). This field is \fIrequired\fP for
+the static configuration.
+T}
+_
+T{
+DNS
+T}	T{
+IPv4 address string
+.sp
+The IPv4 address of the Domain Name System (DNS). This field is
+\fIoptional\fP\&. DNS setting can be used to override the DNS entries received
+from the DHCP server.
+T}
+_
+T{
+Netmask
+T}	T{
+IPv4 address string
+.sp
+The IPv4 address of the subnet. This field is \fIoptional\fP\&. 255.255.255.0
+is used as default Netmask.
+T}
+_
+T{
+Broadcast
+T}	T{
+IPv4 address string
+.sp
+The IPv4 address to be used for the broadcast. This field is \fIoptional\fP\&.
+T}
+_
+T{
+DomainName
+T}	T{
+string
+.sp
+The DomainName is the name of the local Internet domain. This field is
+\fIoptional\fP\&. DomainName setting can be used to override the DomainName
+value obtained from the DHCP server.
+T}
+_
+.TE
+.SS Embedded PEMs
+.sp
+Rather than including an absolute path to a PEM file (for certificates and
+keys), the PEM itself can be included inside the settings file and referenced
+directly. This allows IEEE 802.1x network provisioning using a single file
+without any references to certificates or keys on the system.
+.sp
+An embedded PEM can appear anywhere in the settings file using the following
+format (this example the PEM is named \(aqmy_ca_cert\(aq):
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+[@pem@my_ca_cert]
+\-\-\-\-\- BEGIN CERTIFICATE \-\-\-\-\-
+<PEM data>
+\-\-\-\-\- END CERTIFICATE \-\-\-\-\-
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+After this special group tag its as simple as pasting in a PEM file including
+the BEGIN/END tags. Now \(aqmy_ca_cert\(aq can be used to reference the certificate
+elsewhere in the settings file by prefixing the value with \(aqembed:\(aq
+.sp
+EAP\-TLS\-CACert=embed:my_ca_cert
+.sp
+This is not limited to CA Certificates either. Client certificates, client keys
+(encrypted or not), and certificate chains can be included.
+.SH EXAMPLES
+.sp
+The following are some examples of common configurations
+.SS Open Network (Hidden)
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+[Settings]
+Hidden=true
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS Pre\-Shared Key (PSK)
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+[Security]
+Passphrase=secret123
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS PWD
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+[Security]
+EAP\-Method=PWD
+EAP\-Identity=user@domain.com
+EAP\-Password=secret123
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS TLS
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+[Security]
+EAP\-Method=TLS
+EAP\-TLS\-ClientCert=/certs/client\-cert.pem
+EAP\-TLS\-ClientKey=/certs/client\-key.pem
+EAP\-TLS\-CACert=/certs/ca\-cert.pem
+EAP\-TLS\-ServerDomainMask=*.domain.com
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS TTLS + PAP
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+[Security]
+EAP\-Method=TTLS
+EAP\-Identity=open@identity.com
+EAP\-TTLS\-CACert=/certs/ca\-cert.pem
+EAP\-TTLS\-Phase2\-Method=Tunneled\-PAP
+EAP\-TTLS\-Phase2\-Identity=username
+EAP\-TTLS\-Phase2\-Password=password
+EAP\-TTLS\-ServerDomainMask=*.domain.com
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS PEAP + MSCHAPv2
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+[Security]
+EAP\-Method=PEAP
+EAP\-Identity=open@identity.com
+EAP\-PEAP\-CACert=/certs/ca\-cert.pem
+EAP\-PEAP\-Phase2\-Method=MSCHAPV2
+EAP\-PEAP\-Phase2\-Identity=username
+EAP\-PEAP\-Phase2\-Password=password
+EAP\-PEAP\-ServerDomainMask=*.domain.com
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH SEE ALSO
+.sp
+iwd(8), iwd.config(5)
+.SH AUTHOR
+Marcel Holtmann <marcel@holtmann.org>, Denis Kenzior <denkenz@gmail.com>, Andrew Zaborowski <andrew.zaborowski@intel.com>, Tim Kourt <tim.a.kourt@linux.intel.com>, James Prestwood <prestwoj@gmail.com>
+.SH COPYRIGHT
+2013-2019 Intel Corporation
+.\" Generated by docutils manpage writer.
+.

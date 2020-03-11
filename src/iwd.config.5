@@ -1,0 +1,310 @@
+.\" Man page generated from reStructuredText.
+.
+.TH IWD.CONFIG 5 "22 September 2019" "iwd" "Linux Connectivity"
+.SH NAME
+iwd.config \- Configuration file for wireless daemon
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.SH SYNOPSIS
+.sp
+Configuration file \fBmain.conf\fP
+.SH DESCRIPTION
+.sp
+The \fImain.conf\fP configuration file configures the system\-wide settings for
+\fBiwd\fP\&.  This file lives in the configuration directory specified by the
+environment variable \fI$CONFIGURATION_DIRECTORY\fP, which is normally provided
+by \fBsystemd\fP\&.  In the absence of such an environment variable it defaults
+to \fI/etc/iwd\fP\&.  If no \fImain.conf\fP is present, then default values are
+chosen.  The presence of \fImain.conf\fP is not required.
+.SH FILE FORMAT
+.sp
+See \fIiwd.network\fP for details on the file format.
+.SH SETTINGS
+.sp
+The settings are split into several categories.  Each category has a group
+associated with it and described in separate tables below.
+.SS General Settings
+.sp
+The group \fB[General]\fP contains general settings.
+.TS
+center;
+|l|l|.
+_
+T{
+EnableNetworkConfiguration
+T}	T{
+Values: true, \fBfalse\fP
+.sp
+Enable network configuration.
+.sp
+Setting this option to \fItrue\fP enables \fBiwd\fP to configure the network
+interfaces with the IP addresses.  There are two types IP addressing
+supported by \fBiwd\fP: static and dynamic.  The static IP addresses are
+configured through the network configuration files.  If no static IP
+configuration has been provided for a network, \fBiwd\fP will attempt to
+obtain the dynamic addresses from the network through the built\-in
+DHCP client.
+.sp
+The network configuration feature is disabled by default.  See
+\fB[Network]\fP settings for additional settings related to network
+configuration.
+T}
+_
+T{
+UseDefaultInterface
+T}	T{
+Values: true, \fBfalse\fP
+.sp
+Do not allow \fBiwd\fP to destroy / recreate wireless interfaces at
+startup, including default interfaces.  Enable this behavior if your
+wireless card driver is buggy or does not allow such an operation, or
+if you do not want \fBiwd\fP to manage netdevs for another reason.  For
+most users with an upstream driver it should be safe to omit/disable
+this setting.
+T}
+_
+T{
+AddressRandomization
+T}	T{
+Values: \fBdisabled\fP, once
+.sp
+If \fBAddressRandomization\fP is set to \fBdisabled\fP, the default kernel
+behavior is used.  This means the kernel will assign a mac address from
+the permanent mac address range provided by the hardware / driver.  Thus
+it is possible for networks to track the user by the mac address which
+is permanent.
+.sp
+If \fBAddressRandomization\fP is set to \fBonce\fP, MAC address is
+randomized a single time when \fBiwd\fP starts or when the hardware is
+detected for the first time (due to hotplug, etc.)
+T}
+_
+T{
+AddressRandomizationRange
+T}	T{
+Values: \fBfull\fP, nic
+.sp
+One can control which part of the address is randomized using this
+setting.
+.sp
+When using \fBAddressRandomizationRange\fP set to \fBnic\fP, only the NIC
+specific octets (last 3 octets) are randomized.  Note that the
+randomization range is limited to 00:00:01 to 00:00:FE.  The permanent
+mac address of the card is used for the initial 3 octets.
+.sp
+When using \fBAddressRandomizationRange\fP set to \fBfull\fP, all 6 octets
+of the address are randomized.  The locally\-administered bit will be
+set.
+T}
+_
+T{
+RoamThreshold
+T}	T{
+Value: rssi dBm value, from \-100 to 1, default: \fB\-70\fP
+.sp
+This can be used to control how aggressively \fBiwd\fP roams.
+T}
+_
+T{
+ManagementFrameProtection
+T}	T{
+Values: 0, \fB1\fP or 2
+.sp
+When \fBManagementFrameProtection\fP is \fB0\fP, MFP is completely turned
+off, even if the hardware is capable.  This setting is not recommended.
+.sp
+When \fBManagementFrameProtection\fP is \fB1\fP, MFP is enabled if the local
+hardware and remote AP both support it.
+.sp
+When \fBManagementFrameProtection\fP is \fB2\fP, MFP is always required.
+This can prevent successful connection establishment on some hardware or
+to some networks.
+T}
+_
+T{
+ControlPortOverNL80211
+T}	T{
+Values: false, \fBtrue\fP
+.sp
+Enable/Disable sending EAPoL packets over NL80211.  Enabled by default
+if kernel support is available.  Doing so sends all EAPoL traffic over
+directly to the supplicant process (\fBiwd\fP) instead of putting these on
+the Ethernet device.  Since only the supplicant can usually make
+sense / decrypt these packets, enabling this option can save some CPU
+cycles on your system and avoids certain long\-standing race conditions.
+T}
+_
+T{
+DisableANQP
+T}	T{
+Values: false, \fBtrue\fP
+.sp
+Enable/disable ANQP queries. The way IWD does ANQP queries is dependent
+on a recent kernel patch (available in Kernel 5.3). If your kernel does
+not have this functionality this should be disabled (default).  Some
+drivers also do a terrible job of sending public action frames
+(freezing or crashes) which is another reason why this has been turned
+off by default.  If you want to easily utilize Hotspot 2.0 networks,
+then setting \fBDisableANQP\fP to \fBfalse\fP is recommended.
+T}
+_
+.TE
+.SS Network
+.sp
+The group \fB[Network]\fP contains network configuration related settings.
+.TS
+center;
+|l|l|.
+_
+T{
+NameResolvingService
+T}	T{
+Values: resolvconf, \fBsystemd\fP
+.sp
+Configures a DNS resolution method used by the system.
+.sp
+This configuration option must be used in conjunction with
+\fBEnableNetworkConfiguration\fP and provides the choice of system
+resolver integration.
+.sp
+If not specified, \fBsystemd\fP is used as default.
+T}
+_
+T{
+RoutePriorityOffset
+T}	T{
+Values: uint32 value (default: \fB300\fP)
+.sp
+Configures a route priority offset used by the system to prioritize
+the default routes. The route with lower priority offset is preferred.
+.sp
+If not specified, \fB300\fP is used as default.
+T}
+_
+.TE
+.SS Blacklist
+.sp
+The group \fB[Blacklist]\fP contains settings related to blacklisting of BSSes.
+If \fBiwd\fP determines that a connection to a BSS fails for a reason that
+indicates the BSS is currently misbehaving or misconfigured (e.g. timeouts,
+unexpected status/reason codes, etc), then \fBiwd\fP will blacklist this BSS
+and avoid connecting to it for a period of time.  These options let the user
+control how long a misbehaved BSS spends on the blacklist.
+.TS
+center;
+|l|l|.
+_
+T{
+InitialTimeout
+T}	T{
+Values: uint64 value in seconds (default: \fB60\fP)
+.sp
+The initial time that a BSS spends on the blacklist.
+T}
+_
+T{
+Multiplier
+T}	T{
+Values: unsigned int value in seconds (default: \fB30\fP)
+.sp
+If the BSS was blacklisted previously and another connection attempt
+has failed after the initial timeout has expired, then the BSS blacklist
+time will be extended by a multiple of \fIMultiplier\fP for each
+unsuccessful attempt up to \fIMaxiumTimeout\fP time in seconds.
+T}
+_
+T{
+MaximumTimeout
+T}	T{
+Values: uint64 value in seconds (default: \fB86400\fP)
+.sp
+Maximum time that a BSS is blacklisted.
+T}
+_
+.TE
+.SS Rank
+.sp
+The group \fB[Rank]\fP contains settings related to ranking of networks for
+autoconnect purposes.
+.TS
+center;
+|l|l|.
+_
+T{
+BandModifier5Ghz
+T}	T{
+Values: floating point value (default: \fB1.0\fP)
+.sp
+Increase or decrease the preference for 5GHz access points by increasing
+or decreasing the value of this modifier.  5GHz networks are already
+preferred due to their increase throughput / data rate.  However, 5GHz
+networks are highly RSSI sensitive, so it is still possible for IWD to
+prefer 2.4Ghz APs in certain circumstances.
+T}
+_
+.TE
+.SS Scan
+.sp
+The group \fB[Scan]\fP contains settings related to scanning functionality.
+No modification from defaults is normally required.
+.TS
+center;
+|l|l|.
+_
+T{
+DisablePeriodicScan
+T}	T{
+Values: true, \fBfalse\fP
+.sp
+Disable periodic scan. Setting this option to \(aqtrue\(aq will prevent
+\fBiwd\fP from issuing the periodic scans for the available networks while
+disconnected.  The behavior of the user\-initiated scans isn\(aqt affected.
+The periodic scan is enabled by default.
+T}
+_
+T{
+DisableRoamingScan
+T}	T{
+Values: true, \fBfalse\fP
+.sp
+Disable roaming scan. Setting this option to \(aqtrue\(aq will prevent \fBiwd\fP
+from trying to scan when roaming decisions are activated.  This can
+prevent \fBiwd\fP from roaming properly, but can be useful for networks
+operating under extremely low rssi levels where roaming isn\(aqt possible.
+T}
+_
+.TE
+.SH SEE ALSO
+.sp
+iwd(8), iwd.network(5)
+.SH AUTHOR
+Marcel Holtmann <marcel@holtmann.org>, Denis Kenzior <denkenz@gmail.com>, Andrew Zaborowski <andrew.zaborowski@intel.com>, Tim Kourt <tim.a.kourt@linux.intel.com>, James Prestwood <prestwoj@gmail.com>
+.SH COPYRIGHT
+2013-2019 Intel Corporation
+.\" Generated by docutils manpage writer.
+.
