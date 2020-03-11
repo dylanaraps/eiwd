@@ -92,7 +92,6 @@ static void send_request(struct agent *agent, const char *request)
 
 	l_dbus_send(dbus_get_bus(), message);
 }
-#endif
 
 static void send_cancel_request(void *user_data, int reason)
 {
@@ -130,11 +129,13 @@ static void send_cancel_request(void *user_data, int reason)
 
 	l_dbus_send(dbus_get_bus(), message);
 }
+#endif
 
 static void agent_request_free(void *user_data)
 {
 	struct agent_request *request = user_data;
 
+#ifdef HAVE_DBUS
 	l_dbus_message_unref(request->message);
 
 	if (request->trigger)
@@ -143,6 +144,7 @@ static void agent_request_free(void *user_data)
 
 	if (request->destroy)
 		request->destroy(request->user_data);
+#endif
 
 	l_free(request);
 }
@@ -211,10 +213,12 @@ static void agent_finalize_pending(struct agent *agent,
 		break;
 	}
 
+#ifdef HAVE_DBUS
 	if (pending->trigger) {
 		l_dbus_message_unref(pending->trigger);
 		pending->trigger = NULL;
 	}
+#endif
 
 	agent_request_free(pending);
 }
@@ -228,13 +232,17 @@ static void agent_free(void *data)
 	if (agent->timeout)
 		l_timeout_remove(agent->timeout);
 
+#ifdef HAVE_DBUS
 	if (agent->pending_id)
 		l_dbus_cancel(dbus_get_bus(), agent->pending_id);
+#endif
 
 	l_queue_destroy(agent->requests, agent_request_free);
 
+#ifdef HAVE_DBUS
 	if (agent->disconnect_watch)
 		l_dbus_remove_watch(dbus_get_bus(), agent->disconnect_watch);
+#endif
 
 	l_free(agent->owner);
 	l_free(agent->path);
@@ -247,9 +255,11 @@ static void request_timeout(struct l_timeout *timeout, void *user_data)
 {
 	struct agent *agent = user_data;
 
+#ifdef HAVE_DBUS
 	l_dbus_cancel(dbus_get_bus(), agent->pending_id);
 
 	send_cancel_request(agent, -ETIMEDOUT);
+#endif
 
 	agent_finalize_pending(agent, NULL);
 
@@ -502,9 +512,11 @@ bool agent_request_cancel(unsigned int req_id, int reason)
 		return false;
 
 	if (!request->message) {
+#ifdef HAVE_DBUS
 		send_cancel_request(agent, reason);
 
 		l_dbus_cancel(dbus_get_bus(), agent->pending_id);
+#endif
 
 		agent->pending_id = 0;
 
