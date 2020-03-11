@@ -1019,6 +1019,7 @@ void wiphy_update_from_genl(struct wiphy *wiphy, struct l_genl_msg *msg)
 
 void wiphy_update_name(struct wiphy *wiphy, const char *name)
 {
+#ifdef HAVE_DBUS
 	bool updated = false;
 
 	if (strncmp(wiphy->name, name, sizeof(wiphy->name))) {
@@ -1026,7 +1027,6 @@ void wiphy_update_name(struct wiphy *wiphy, const char *name)
 		updated = true;
 	}
 
-#ifdef HAVE_DBUS
 	if (updated && wiphy->registered) {
 		struct l_dbus *dbus = dbus_get_bus();
 
@@ -1158,6 +1158,7 @@ static void wiphy_rfkill_cb(unsigned int wiphy_id, bool soft, bool hard,
 #endif
 }
 
+#ifdef HAVE_DBUS
 static bool wiphy_property_get_powered(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -1295,6 +1296,7 @@ static void setup_wiphy_interface(struct l_dbus_interface *interface)
 					wiphy_property_get_supported_modes,
 					NULL);
 }
+#endif
 
 static int wiphy_init(void)
 {
