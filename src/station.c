@@ -224,12 +224,14 @@ static void bss_free(void *data)
 }
 
 #ifdef HAVE_CONFIG_H
+#ifdef HAVE_DBUS
 static void network_free(void *data)
 {
 	struct network *network = data;
 
 	network_remove(network, -ESHUTDOWN);
 }
+#endif
 #endif
 
 static bool process_network(const void *key, void *data, void *user_data)

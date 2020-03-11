@@ -504,6 +504,7 @@ static inline bool __bss_is_sae(const struct scan_bss *bss,
 	return false;
 }
 
+#ifdef HAVE_DBUS
 static bool bss_is_sae(const struct scan_bss *bss)
 {
 	struct ie_rsn_info rsn;
@@ -513,6 +514,7 @@ static bool bss_is_sae(const struct scan_bss *bss)
 
 	return __bss_is_sae(bss, &rsn);
 }
+#endif
 
 int network_autoconnect(struct network *network, struct scan_bss *bss)
 {
@@ -746,6 +748,7 @@ struct scan_bss *network_bss_select(struct network *network,
 	return NULL;
 }
 
+#ifdef HAVE_DBUS
 static void passphrase_callback(enum agent_result result,
 				const char *passphrase,
 				struct l_dbus_message *message,
@@ -861,6 +864,7 @@ static struct l_dbus_message *network_connect_psk(struct network *network,
 
 	return NULL;
 }
+#endif
 
 struct eap_secret_request {
 	struct network *network;

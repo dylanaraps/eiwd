@@ -272,6 +272,7 @@ static void request_timeout(struct l_timeout *timeout, void *user_data)
 	agent_send_next_request(agent);
 }
 
+#ifdef HAVE_DBUS
 static void agent_receive_reply(struct l_dbus_message *message,
 							void *user_data)
 {
@@ -286,6 +287,7 @@ static void agent_receive_reply(struct l_dbus_message *message,
 	if (!agent->pending_id)
 		agent_send_next_request(agent);
 }
+#endif
 
 static void agent_send_next_request(struct agent *agent)
 {

@@ -183,6 +183,7 @@ static void nl80211_appeared(const struct l_genl_family_info *info,
 	plugin_init(plugins, noplugins);
 }
 
+#ifdef HAVE_DBUS
 static void request_name_callback(struct l_dbus *dbus, bool success,
 					bool queued, void *user_data)
 {
@@ -203,7 +204,6 @@ fail_exit:
 	l_main_quit();
 }
 
-#ifdef HAVE_DBUS
 static void dbus_ready(void *user_data)
 {
 	struct l_dbus *dbus = user_data;

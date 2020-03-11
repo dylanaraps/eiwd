@@ -479,6 +479,7 @@ struct wsc_station_dbus {
 #define CANCEL_REPLY(wsc, message)  do {} while(0)
 #endif
 
+#ifdef HAVE_DBUS
 static void wsc_try_credentials(struct wsc_station_dbus *wsc,
 				struct wsc_credentials_info *creds,
 				unsigned int n_creds)
@@ -521,9 +522,7 @@ static void wsc_try_credentials(struct wsc_station_dbus *wsc,
 
 		station_connect_network(wsc->station, network, bss,
 						wsc->super.pending_connect);
-#ifdef HAVE_DBUS
 		l_dbus_message_unref(wsc->super.pending_connect);
-#endif
 		wsc->super.pending_connect = NULL;
 
 		return;
@@ -601,12 +600,10 @@ static void wsc_connect(struct wsc_station_dbus *wsc)
 {
 	const char *pin = NULL;
 
-#ifdef HAVE_DBUS
 	if (!strcmp(l_dbus_message_get_member(wsc->super.pending_connect),
 			"StartPin"))
 		l_dbus_message_get_arguments(wsc->super.pending_connect, "s",
 						&pin);
-#endif
 
 	wsc->enrollee = wsc_enrollee_new(wsc->netdev, wsc->target, pin, NULL, 0,
 						wsc_dbus_done_cb, wsc);
@@ -1025,7 +1022,6 @@ static bool wsc_initiate_scan(struct wsc_station_dbus *wsc,
 	return true;
 }
 
-#ifdef HAVE_DBUS
 static const char *wsc_station_dbus_get_path(struct wsc_dbus *super)
 {
 	struct wsc_station_dbus *wsc =
@@ -1113,7 +1109,6 @@ static void wsc_station_dbus_remove(struct wsc_dbus *super)
 
 	l_free(wsc);
 }
-#endif
 
 static struct l_dbus_message *wsc_push_button(struct l_dbus *dbus,
 						struct l_dbus_message *message,
@@ -1212,6 +1207,7 @@ static void setup_wsc_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "Cancel", 0,
 				wsc_cancel, "", "");
 }
+#endif
 
 bool wsc_dbus_add_interface(struct wsc_dbus *wsc)
 {
@@ -1236,6 +1232,7 @@ void wsc_dbus_remove_interface(struct wsc_dbus *wsc)
 #endif
 }
 
+#ifdef HAVE_DBUS
 static void wsc_dbus_free(void *user_data)
 {
 	struct wsc_dbus *wsc = user_data;
@@ -1250,6 +1247,7 @@ static void wsc_dbus_free(void *user_data)
 
 	wsc->remove(wsc);
 }
+#endif
 
 static void wsc_add_station(struct netdev *netdev)
 {

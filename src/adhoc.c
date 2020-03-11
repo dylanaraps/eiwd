@@ -74,6 +74,7 @@ struct sta_state {
 
 static uint32_t netdev_watch;
 
+#ifdef HAVE_DBUS
 static void adhoc_sta_free(void *data)
 {
 	struct sta_state *sta = data;
@@ -114,25 +115,21 @@ static void adhoc_remove_sta(struct sta_state *sta)
 		sta->gtk_query_cmd_id = 0;
 	}
 
-#ifdef HAVE_DBUS
 	/* signal station has been removed */
 	if (sta->authenticated) {
 		l_dbus_property_changed(dbus_get_bus(),
 				netdev_get_path(sta->adhoc->netdev),
 				IWD_ADHOC_INTERFACE, "ConnectedPeers");
 	}
-#endif
 
 	adhoc_sta_free(sta);
 }
 
 static void adhoc_reset(struct adhoc_state *adhoc)
 {
-#ifdef HAVE_DBUS
 	if (adhoc->pending)
 		dbus_pending_reply(&adhoc->pending,
 				dbus_error_aborted(adhoc->pending));
-#endif
 
 	l_free(adhoc->ssid);
 
@@ -142,10 +139,8 @@ static void adhoc_reset(struct adhoc_state *adhoc)
 
 	adhoc->started = false;
 
-#ifdef HAVE_DBUS
 	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(adhoc->netdev),
 						IWD_ADHOC_INTERFACE, "Started");
-#endif
 }
 
 static void adhoc_set_rsn_info(struct adhoc_state *adhoc,
@@ -201,11 +196,9 @@ static void adhoc_handshake_event(struct handshake_state *hs,
 				!sta->authenticated) {
 			sta->authenticated = true;
 
-#ifdef HAVE_DBUS
 			l_dbus_property_changed(dbus_get_bus(),
 					netdev_get_path(adhoc->netdev),
 					IWD_ADHOC_INTERFACE, "ConnectedPeers");
-#endif
 		}
 		break;
 	default:
@@ -405,11 +398,9 @@ static void adhoc_new_station(struct adhoc_state *adhoc, const uint8_t *mac)
 	/* with open networks nothing else is required */
 	if (sta->adhoc->open) {
 		sta->authenticated = true;
-#ifdef HAVE_DBUS
 		l_dbus_property_changed(dbus_get_bus(),
 					netdev_get_path(adhoc->netdev),
 					IWD_ADHOC_INTERFACE, "ConnectedPeers");
-#endif
 		return;
 	}
 
@@ -457,7 +448,6 @@ static void adhoc_station_changed_cb(struct netdev *netdev,
 		adhoc_del_station(adhoc, mac);
 }
 
-#ifdef HAVE_DBUS
 static void adhoc_join_cb(struct netdev *netdev, int result, void *user_data)
 {
 	struct adhoc_state *adhoc = user_data;
@@ -578,7 +568,6 @@ static void adhoc_leave_cb(struct netdev *netdev, int result, void *user_data)
 	adhoc_reset(adhoc);
 }
 
-#ifdef HAVE_DBUS
 static struct l_dbus_message *adhoc_dbus_stop(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -653,7 +642,6 @@ static void adhoc_setup_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_property(interface, "Started", 0, "b",
 					adhoc_property_get_started, NULL);
 }
-#endif
 
 static void adhoc_destroy_interface(void *user_data)
 {
