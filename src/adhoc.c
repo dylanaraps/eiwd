@@ -38,9 +38,7 @@
 #include "src/eapol.h"
 #include "src/handshake.h"
 #include "src/mpdu.h"
-#ifdef HAVE_DBUS
 #include "src/dbus.h"
-#endif
 #include "src/nl80211util.h"
 
 struct adhoc_state {
@@ -51,9 +49,7 @@ struct adhoc_state {
 	struct l_queue *sta_states;
 	uint32_t sta_watch_id;
 	uint32_t netdev_watch_id;
-#ifdef HAVE_DBUS
 	struct l_dbus_message *pending;
-#endif
 	uint32_t ciphers;
 	uint32_t group_cipher;
 	uint8_t gtk[CRYPTO_MAX_GTK_LEN];
@@ -461,11 +457,11 @@ static void adhoc_station_changed_cb(struct netdev *netdev,
 		adhoc_del_station(adhoc, mac);
 }
 
+#ifdef HAVE_DBUS
 static void adhoc_join_cb(struct netdev *netdev, int result, void *user_data)
 {
 	struct adhoc_state *adhoc = user_data;
 
-#ifdef HAVE_DBUS
 	struct l_dbus_message *reply;
 
 	if (result < 0) {
@@ -474,25 +470,19 @@ static void adhoc_join_cb(struct netdev *netdev, int result, void *user_data)
 					dbus_error_failed(adhoc->pending));
 		return;
 	}
-#endif
 
 	adhoc->sta_watch_id = netdev_station_watch_add(netdev,
 			adhoc_station_changed_cb, adhoc);
 
-#ifdef HAVE_DBUS
 	reply = l_dbus_message_new_method_return(adhoc->pending);
 	dbus_pending_reply(&adhoc->pending, reply);
-#endif
 
 	adhoc->started = true;
 
-#ifdef HAVE_DBUS
 	l_dbus_property_changed(dbus_get_bus(), netdev_get_path(adhoc->netdev),
 						IWD_ADHOC_INTERFACE, "Started");
-#endif
 }
 
-#ifdef HAVE_DBUS
 static struct l_dbus_message *adhoc_dbus_start(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -588,6 +578,7 @@ static void adhoc_leave_cb(struct netdev *netdev, int result, void *user_data)
 	adhoc_reset(adhoc);
 }
 
+#ifdef HAVE_DBUS
 static struct l_dbus_message *adhoc_dbus_stop(struct l_dbus *dbus,
 						struct l_dbus_message *message,
 						void *user_data)
@@ -662,6 +653,7 @@ static void adhoc_setup_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_property(interface, "Started", 0, "b",
 					adhoc_property_get_started, NULL);
 }
+#endif
 
 static void adhoc_destroy_interface(void *user_data)
 {
