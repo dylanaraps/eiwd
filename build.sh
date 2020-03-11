@@ -1,6 +1,6 @@
 #!/bin/sh
 
-[ "$1" ] && autoreconf -fis
+[ "$1" ] && autoreconf -fi
 
 make clean
 
