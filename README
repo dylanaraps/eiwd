@@ -31,7 +31,7 @@ BUILDING WITHOUT DBUS
 FUTURE
 
 - [ ] Add a non-dbus client.
-- [ ] Pre-generate manual pages for dist tarballs.
+- [x] Pre-generate manual pages for dist tarballs.
 
 -------------------------------
 
