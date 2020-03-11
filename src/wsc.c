@@ -1207,7 +1207,6 @@ static void setup_wsc_interface(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "Cancel", 0,
 				wsc_cancel, "", "");
 }
-#endif
 
 bool wsc_dbus_add_interface(struct wsc_dbus *wsc)
 {
@@ -1224,15 +1223,12 @@ bool wsc_dbus_add_interface(struct wsc_dbus *wsc)
 
 void wsc_dbus_remove_interface(struct wsc_dbus *wsc)
 {
-#ifdef HAVE_DBUS
 	struct l_dbus *dbus = dbus_get_bus();
 
 	l_dbus_object_remove_interface(dbus, wsc->get_path(wsc),
 					IWD_WSC_INTERFACE);
-#endif
 }
 
-#ifdef HAVE_DBUS
 static void wsc_dbus_free(void *user_data)
 {
 	struct wsc_dbus *wsc = user_data;
