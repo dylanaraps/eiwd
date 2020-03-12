@@ -165,7 +165,7 @@ AM_CONDITIONAL(CLIENT, test "${enable_client}" != "no" && test "${disable_dbus}"
 AC_ARG_ENABLE([monitor], AC_HELP_STRING([--disable-monitor],
 				[don't install iwmon monitor utility]),
 					[enable_monitor=${enableval}])
-AM_CONDITIONAL(MONITOR, test "${enable_monitor}" != "no" && test "${disable_dbus}" != "no")
+AM_CONDITIONAL(MONITOR, test "${enable_monitor}" != "no")
 
 AC_ARG_ENABLE([dbus-policy], AC_HELP_STRING([--disable-dbus-policy],
 				[don't install D-Bus system policy files]),
