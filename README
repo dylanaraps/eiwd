@@ -28,6 +28,20 @@ BUILDING WITHOUT DBUS
     make DESTDIR="BLA BLA" install
 
 
+WHAT FUNCTIONALITY IS LOST?
+
+The only working utlities are iwd and iwmon. iwd is
+fully functional via its configuration files.
+
+A new client will be written at some stage to allow
+finer control over what is available via the iwd
+configuration files.
+
+Think of eiwd's iwd daemon usage as wpa_supplicant
+without the use of wpa_cli. Just a daemon which is
+configured via config files (set and forget).
+
+
 FUTURE
 
 - [ ] Add a non-dbus client.
