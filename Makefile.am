@@ -307,9 +307,7 @@ monitor_iwmon_SOURCES = monitor/main.c linux/nl80211.h \
 					src/anqputil.h src/anqputil.c
 monitor_iwmon_LDADD = $(ell_ldadd)
 
-if MANUAL_PAGES
 man_MANS += monitor/iwmon.1
-endif
 endif
 
 if WIRED
@@ -536,7 +534,7 @@ AM_CFLAGS = $(ell_cflags) -fvisibility=hidden \
 				-DCERTDIR=\""$(top_builddir)/unit/"\"
 
 if DBUS
-AM_CFLAGS += -DHAVE_DBUS 
+AM_CFLAGS += -DHAVE_DBUS
 endif
 
 if MAINTAINER_MODE
