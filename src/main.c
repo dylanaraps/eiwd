@@ -540,20 +540,17 @@ int main(int argc, char *argv[])
 	l_dbus_destroy(dbus);
 #endif
 failed_dbus:
-
 	l_netlink_destroy(rtnl);
+
 failed_rtnl:
-
 	l_genl_unref(genl);
+
 failed_genl:
-
 	storage_cleanup_dirs();
+
 failed_dirs:
-
 	l_settings_free(iwd_config);
-
 	l_timeout_remove(timeout);
-
 	l_main_exit();
 
 	return exit_status;
