@@ -445,7 +445,7 @@ static int device_init(void)
 					IWD_DEVICE_INTERFACE,
 					setup_device_interface,
 					destroy_device_interface, false))
-		return false;
+		return -EPERM;
 #endif
 
 	netdev_watch = netdev_watch_add(device_netdev_notify, NULL, NULL);
