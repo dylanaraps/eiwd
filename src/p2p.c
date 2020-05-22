@@ -117,7 +117,9 @@ static void p2p_peer_put(void *user_data)
 {
 	struct p2p_peer *peer = user_data;
 
+#ifdef HAVE_DBUS
 	l_dbus_unregister_object(dbus_get_bus(), p2p_peer_get_path(peer));
+#endif
 	p2p_peer_free(peer);
 }
 
@@ -206,12 +208,13 @@ struct p2p_device *p2p_device_update_from_genl(struct l_genl_msg *msg,
 
 	l_debug("Created P2P device %" PRIx64, dev->wdev_id);
 
+#ifdef HAVE_DBUS
 	if (!l_dbus_object_add_interface(dbus_get_bus(),
 						p2p_device_get_path(dev),
 						IWD_P2P_INTERFACE, dev))
 		l_info("Unable to add the %s interface to %s",
 			IWD_P2P_INTERFACE, p2p_device_get_path(dev));
-
+#endif
 	return dev;
 }
 
@@ -219,7 +222,9 @@ static void p2p_device_free(void *user_data)
 {
 	struct p2p_device *dev = user_data;
 
+#ifdef HAVE_DBUS
 	l_dbus_unregister_object(dbus_get_bus(), p2p_device_get_path(dev));
+#endif
 	l_queue_destroy(dev->peer_list, p2p_peer_put);
 	l_free(dev);
 }
@@ -285,10 +290,12 @@ static struct l_dbus_message *p2p_device_get_peers(struct l_dbus *dbus,
 
 static void p2p_interface_setup(struct l_dbus_interface *interface)
 {
+#ifdef HAVE_DBUS
 	l_dbus_interface_property(interface, "AvailableConnections", 0, "q",
 					p2p_device_get_avail_conns, NULL);
 	l_dbus_interface_method(interface, "GetPeers", 0,
 				p2p_device_get_peers, "a(on)", "", "peers");
+#endif
 }
 
 static bool p2p_peer_get_name(struct l_dbus *dbus,
@@ -355,6 +362,7 @@ static bool p2p_peer_get_connected(struct l_dbus *dbus,
 
 static void p2p_peer_interface_setup(struct l_dbus_interface *interface)
 {
+#ifdef HAVE_DBUS
 	l_dbus_interface_property(interface, "Name", 0, "s",
 					p2p_peer_get_name, NULL);
 	l_dbus_interface_property(interface, "DeviceCategory", 0, "s",
@@ -363,10 +371,12 @@ static void p2p_peer_interface_setup(struct l_dbus_interface *interface)
 					p2p_peer_get_subcategory, NULL);
 	l_dbus_interface_property(interface, "Connected", 0, "b",
 					p2p_peer_get_connected, NULL);
+#endif
 }
 
 static int p2p_init(void)
 {
+#ifdef HAVE_DBUS
 	if (!l_dbus_register_interface(dbus_get_bus(),
 					IWD_P2P_INTERFACE,
 					p2p_interface_setup,
@@ -380,7 +390,7 @@ static int p2p_init(void)
 					NULL, false))
 		l_error("Unable to register the %s interface",
 			IWD_P2P_PEER_INTERFACE);
-
+#endif
 	p2p_device_list = l_queue_new();
 
 	return 0;
@@ -388,8 +398,10 @@ static int p2p_init(void)
 
 static void p2p_exit(void)
 {
+#ifdef HAVE_DBUS
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_P2P_INTERFACE);
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_P2P_PEER_INTERFACE);
+#endif
 	l_queue_destroy(p2p_device_list, p2p_device_free);
 	p2p_device_list = NULL;
 }
