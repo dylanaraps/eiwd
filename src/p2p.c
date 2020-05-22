@@ -65,8 +65,10 @@ struct p2p_device {
 	struct p2p_capability_attr capability;
 	struct p2p_device_info_attr device_info;
 	uint32_t start_stop_cmd_id;
+#ifdef HAVE_DBUS
 	l_dbus_property_complete_cb_t pending_complete;
 	struct l_dbus_message *pending_message;
+#endif
 
 	uint8_t listen_country[3];
 	uint8_t listen_oper_class;
@@ -179,8 +181,10 @@ static void p2p_discovery_user_free(void *data)
 {
 	struct p2p_discovery_user *user = data;
 
+#ifdef HAVE_DBUS
 	if (user->disconnect_watch)
 		l_dbus_remove_watch(dbus_get_bus(), user->disconnect_watch);
+#endif
 
 	l_free(user->client);
 	l_free(user);
@@ -227,8 +231,10 @@ static void p2p_peer_put(void *user_data)
 {
 	struct p2p_peer *peer = user_data;
 
+#ifdef HAVE_DBUS
 	/* Removes both interfaces, no need to call wsc_dbus_remove_interface */
 	l_dbus_unregister_object(dbus_get_bus(), p2p_peer_get_path(peer));
+#endif
 	p2p_peer_free(peer);
 }
 
@@ -325,8 +331,10 @@ static void p2p_connection_reset(struct p2p_device *dev)
 		dev->conn_pin = NULL;
 	}
 
+#ifdef HAVE_DBUS
 	l_dbus_property_changed(dbus_get_bus(), p2p_device_get_path(dev),
 				IWD_P2P_INTERFACE, "AvailableConnections");
+#endif
 
 	l_timeout_remove(dev->config_timeout);
 	l_timeout_remove(dev->go_neg_req_timeout);
@@ -410,9 +418,11 @@ static void p2p_connect_failed(struct p2p_device *dev)
 	if (dev->scan_id)
 		scan_cancel(dev->wdev_id, dev->scan_id);
 
+#ifdef HAVE_DBUS
 	if (peer->wsc.pending_connect)
 		dbus_pending_reply(&peer->wsc.pending_connect,
 				dbus_error_failed(peer->wsc.pending_connect));
+#endif
 
 	p2p_connection_reset(dev);
 }
@@ -511,12 +521,14 @@ static void p2p_netconfig_event_handler(enum netconfig_event event,
 	case NETCONFIG_EVENT_CONNECTED:
 		l_timeout_remove(dev->conn_dhcp_timeout);
 
+#ifdef HAVE_DBUS
 		dbus_pending_reply(&peer->wsc.pending_connect,
 					l_dbus_message_new_method_return(
 						peer->wsc.pending_connect));
 		l_dbus_property_changed(dbus_get_bus(),
 					p2p_peer_get_path(dev->conn_peer),
 					IWD_P2P_PEER_INTERFACE, "Connected");
+#endif
 
 		break;
 	default:
@@ -630,9 +642,11 @@ static void p2p_netdev_event(struct netdev *netdev, enum netdev_event event,
 			break;
 		}
 
+#ifdef HAVE_DBUS
 		l_dbus_property_changed(dbus_get_bus(),
 					p2p_peer_get_path(dev->conn_peer),
 					IWD_P2P_PEER_INTERFACE, "Connected");
+#endif
 		p2p_connection_reset(dev);
 		break;
 	default:
@@ -683,9 +697,11 @@ static void p2p_peer_provision_done(int err, struct wsc_credentials_info *creds,
 
 	if (err < 0) {
 		if (err == -ECANCELED && peer->wsc.pending_cancel) {
+#ifdef HAVE_DBUS
 			dbus_pending_reply(&peer->wsc.pending_cancel,
 				l_dbus_message_new_method_return(
 						peer->wsc.pending_cancel));
+#endif
 
 			p2p_connection_reset(dev);
 		} else
@@ -1396,6 +1412,7 @@ static void p2p_device_go_negotiation_req_cb(const struct mmpdu_header *mpdu,
 		l_error("Can't negotiate client role and GO operation not "
 			"supported");
 
+#ifdef HAVE_DBUS
 		if (peer->wsc.pending_connect) {
 			struct l_dbus_message *reply =
 				dbus_error_not_supported(
@@ -1403,6 +1420,7 @@ static void p2p_device_go_negotiation_req_cb(const struct mmpdu_header *mpdu,
 
 			dbus_pending_reply(&peer->wsc.pending_connect, reply);
 		}
+#endif
 
 		p2p_connect_failed(dev);
 		status = P2P_STATUS_FAIL_INCOMPATIBLE_PARAMS;
@@ -1410,6 +1428,7 @@ static void p2p_device_go_negotiation_req_cb(const struct mmpdu_header *mpdu,
 	}
 
 	if (req_info.capability.group_caps & P2P_GROUP_CAP_PERSISTENT_GROUP) {
+#ifdef HAVE_DBUS
 		if (peer->wsc.pending_connect) {
 			struct l_dbus_message *reply =
 				dbus_error_not_supported(
@@ -1417,6 +1436,7 @@ static void p2p_device_go_negotiation_req_cb(const struct mmpdu_header *mpdu,
 
 			dbus_pending_reply(&peer->wsc.pending_connect, reply);
 		}
+#endif
 
 		p2p_connect_failed(dev);
 		l_error("Persistent groups not supported");
@@ -1930,11 +1950,15 @@ static void p2p_peer_connect(struct p2p_peer *peer, const char *pin)
 	struct p2p_device *dev = peer->dev;
 	uint16_t wsc_config_methods;
 	struct p2p_capability_attr *capability;
+#ifdef HAVE_DBUS
 	struct l_dbus_message *message = peer->wsc.pending_connect;
 	struct l_dbus_message *reply;
+#endif
 
 	if (dev->conn_peer) {
+#ifdef HAVE_DBUS
 		reply = dbus_error_busy(message);
+#endif
 		goto send_error;
 	}
 
@@ -1943,7 +1967,9 @@ static void p2p_peer_connect(struct p2p_peer *peer, const char *pin)
 	 * and check other flags to make sure a connection is possible.
 	 */
 	if (!p2p_peer_get_info(peer, &wsc_config_methods, &capability)) {
+#ifdef HAVE_DBUS
 		reply = dbus_error_failed(message);
+#endif
 		goto send_error;
 	}
 
@@ -1956,22 +1982,30 @@ static void p2p_peer_connect(struct p2p_peer *peer, const char *pin)
 		WSC_DEVICE_PASSWORD_ID_PUSH_BUTTON;
 
 	if (!(wsc_config_methods & dev->conn_config_method)) {
+#ifdef HAVE_DBUS
 		reply = dbus_error_not_supported(message);
+#endif
 		goto send_error;
 	}
 
 	if (capability->device_caps & P2P_DEVICE_CAP_DEVICE_LIMIT) {
+#ifdef HAVE_DBUS
 		reply = dbus_error_not_supported(message);
+#endif
 		goto send_error;
 	}
 
 	if (capability->group_caps & P2P_GROUP_CAP_GROUP_LIMIT) {
+#ifdef HAVE_DBUS
 		reply = dbus_error_not_supported(message);
+#endif
 		goto send_error;
 	}
 
 	if (capability->group_caps & P2P_GROUP_CAP_GROUP_FORMATION) {
+#ifdef HAVE_DBUS
 		reply = dbus_error_busy(message);
+#endif
 		goto send_error;
 	}
 
@@ -1983,8 +2017,10 @@ static void p2p_peer_connect(struct p2p_peer *peer, const char *pin)
 	dev->conn_peer = peer; /* No ref counting so just set the pointer */
 	dev->conn_pin = l_strdup(pin);
 	dev->connections_left--;
+#ifdef HAVE_DBUS
 	l_dbus_property_changed(dbus_get_bus(), p2p_device_get_path(dev),
 				IWD_P2P_INTERFACE, "AvailableConnections");
+#endif
 
 	/*
 	 * Step 2, if peer is already a GO then send the Provision Discovery
@@ -2001,7 +2037,9 @@ static void p2p_peer_connect(struct p2p_peer *peer, const char *pin)
 	return;
 
 send_error:
+#ifdef HAVE_DBUS
 	dbus_pending_reply(&peer->wsc.pending_connect, reply);
+#endif
 }
 
 static void p2p_peer_disconnect_cb(struct netdev *netdev, bool result,
@@ -2013,9 +2051,11 @@ static void p2p_peer_disconnect_cb(struct netdev *netdev, bool result,
 	if (!peer->wsc.pending_cancel || !dev->disconnecting)
 		return;
 
+#ifdef HAVE_DBUS
 	dbus_pending_reply(&peer->wsc.pending_cancel,
 				l_dbus_message_new_method_return(
 						peer->wsc.pending_cancel));
+#endif
 
 	/* Independent of the result this will just drop the whole netdev */
 	p2p_connection_reset(dev);
@@ -2024,26 +2064,33 @@ static void p2p_peer_disconnect_cb(struct netdev *netdev, bool result,
 static void p2p_peer_disconnect(struct p2p_peer *peer)
 {
 	struct p2p_device *dev = peer->dev;
+#ifdef HAVE_DBUS
 	struct l_dbus_message *message = peer->wsc.pending_cancel;
 	struct l_dbus_message *reply;
+#endif
 
 	if (dev->conn_peer != peer) {
+#ifdef HAVE_DBUS
 		reply = dbus_error_not_connected(message);
+#endif
 		goto send_reply;
 	}
 
 	if (dev->disconnecting) {
+#ifdef HAVE_DBUS
 		reply = dbus_error_busy(message);
+#endif
 		goto send_reply;
 	}
 
+#ifdef HAVE_DBUS
 	if (peer->wsc.pending_connect)
 		dbus_pending_reply(&peer->wsc.pending_connect,
 				dbus_error_aborted(peer->wsc.pending_connect));
-
 	if (p2p_peer_operational(peer))
 		l_dbus_property_changed(dbus_get_bus(), p2p_peer_get_path(peer),
 					IWD_P2P_PEER_INTERFACE, "Connected");
+#endif
 
 	dev->disconnecting = true;
 
@@ -2062,10 +2109,14 @@ static void p2p_peer_disconnect(struct p2p_peer *peer)
 	}
 
 	p2p_connection_reset(dev);
+#ifdef HAVE_DBUS
 	reply = l_dbus_message_new_method_return(message);
+#endif
 
 send_reply:
+#ifdef HAVE_DBUS
 	dbus_pending_reply(&peer->wsc.pending_cancel, reply);
+#endif
 }
 
 #define SCAN_INTERVAL_MAX	3
@@ -2304,6 +2355,7 @@ static bool p2p_device_peer_add(struct p2p_device *dev, struct p2p_peer *peer)
 		return false;
 	}
 
+#ifdef HAVE_DBUS
 	if (!l_dbus_object_add_interface(dbus_get_bus(),
 						p2p_peer_get_path(peer),
 						IWD_P2P_PEER_INTERFACE, peer)) {
@@ -2322,17 +2374,20 @@ static bool p2p_device_peer_add(struct p2p_device *dev, struct p2p_peer *peer)
 			L_DBUS_INTERFACE_PROPERTIES, p2p_peer_get_path(peer));
 		return false;
 	}
+#endif
 
 	peer->wsc.get_path = p2p_peer_wsc_get_path;
 	peer->wsc.connect = p2p_peer_wsc_connect;
 	peer->wsc.cancel = p2p_peer_wsc_cancel;
 	peer->wsc.remove = p2p_peer_wsc_remove;
 
+#ifdef HAVE_DBUS
 	if (!wsc_dbus_add_interface(&peer->wsc)) {
 		l_dbus_unregister_object(dbus_get_bus(),
 						p2p_peer_get_path(peer));
 		return false;
 	}
+#endif
 
 	l_queue_push_tail(dev->peer_list, peer);
 
@@ -2864,7 +2919,9 @@ static void p2p_device_enable_cb(struct l_genl_msg *msg, void *user_data)
 {
 	struct p2p_device *dev = user_data;
 	int error = l_genl_msg_get_error(msg);
+#ifdef HAVE_DBUS
 	struct l_dbus_message *message = dev->pending_message;
+#endif
 
 	l_debug("START/STOP_P2P_DEVICE: %s (%i)", strerror(-error), -error);
 
@@ -2877,16 +2934,20 @@ static void p2p_device_enable_cb(struct l_genl_msg *msg, void *user_data)
 		p2p_device_discovery_start(dev);
 
 done:
+#ifdef HAVE_DBUS
 	dev->pending_complete(dbus_get_bus(), message,
 				error ? dbus_error_failed(message) :
 				NULL);
+#endif
 	dev->pending_message = NULL;
 	dev->pending_complete = NULL;
 
+#ifdef HAVE_DBUS
 	if (!error)
 		l_dbus_property_changed(dbus_get_bus(),
 					p2p_device_get_path(dev),
 					IWD_P2P_INTERFACE, "Enabled");
+#endif
 }
 
 static void p2p_device_enable_destroy(void *user_data)
@@ -2926,7 +2987,9 @@ static void p2p_device_start_stop(struct p2p_device *dev,
 						p2p_device_enable_destroy);
 	if (!dev->start_stop_cmd_id) {
 		l_genl_msg_unref(cmd);
+#ifdef HAVE_DBUS
 		complete(dbus_get_bus(), message, dbus_error_failed(message));
+#endif
 		return;
 	}
 
@@ -3168,11 +3231,13 @@ struct p2p_device *p2p_device_update_from_genl(struct l_genl_msg *msg,
 					p2p_mlme_notify, dev, NULL))
 		l_error("Registering for MLME notifications failed");
 
+#ifdef HAVE_DBUS
 	if (!l_dbus_object_add_interface(dbus_get_bus(),
 						p2p_device_get_path(dev),
 						IWD_P2P_INTERFACE, dev))
 		l_info("Unable to add the %s interface to %s",
 			IWD_P2P_INTERFACE, p2p_device_get_path(dev));
+#endif
 
 	return dev;
 }
@@ -3182,18 +3247,22 @@ static void p2p_device_free(void *user_data)
 	struct p2p_device *dev = user_data;
 
 	if (dev->pending_message) {
+#ifdef HAVE_DBUS
 		struct l_dbus_message *reply =
 			dbus_error_aborted(dev->pending_message);
 
 		dev->pending_complete(dbus_get_bus(),
 					dev->pending_message, reply);
+#endif
 		dev->pending_message = NULL;
 		dev->pending_complete = NULL;
 	}
 
 	p2p_device_discovery_stop(dev);
 	p2p_connection_reset(dev);
+#ifdef HAVE_DBUS
 	l_dbus_unregister_object(dbus_get_bus(), p2p_device_get_path(dev));
+#endif
 	l_queue_destroy(dev->peer_list, p2p_peer_put);
 	l_queue_destroy(dev->discovery_users, p2p_discovery_user_free);
 	l_genl_family_free(dev->nl80211); /* Cancels dev->start_stop_cmd_id */
@@ -3210,6 +3279,7 @@ bool p2p_device_destroy(struct p2p_device *dev)
 	return true;
 }
 
+#ifdef HAVE_DBUS
 static bool p2p_device_get_enabled(struct l_dbus *dbus,
 					struct l_dbus_message *message,
 					struct l_dbus_message_builder *builder,
@@ -3538,9 +3608,11 @@ static void p2p_peer_interface_setup(struct l_dbus_interface *interface)
 	l_dbus_interface_method(interface, "Disconnect", 0,
 				p2p_peer_dbus_disconnect, "", "");
 }
+#endif
 
 static int p2p_init(void)
 {
+#ifdef HAVE_DBUS
 	if (!l_dbus_register_interface(dbus_get_bus(),
 					IWD_P2P_INTERFACE,
 					p2p_interface_setup,
@@ -3554,6 +3626,7 @@ static int p2p_init(void)
 					NULL, false))
 		l_error("Unable to register the %s interface",
 			IWD_P2P_PEER_INTERFACE);
+#endif
 
 	p2p_dhcp_settings = l_settings_new();
 	p2p_device_list = l_queue_new();
@@ -3563,8 +3636,10 @@ static int p2p_init(void)
 
 static void p2p_exit(void)
 {
+#ifdef HAVE_DBUS
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_P2P_INTERFACE);
 	l_dbus_unregister_interface(dbus_get_bus(), IWD_P2P_PEER_INTERFACE);
+#endif
 	l_queue_destroy(p2p_device_list, p2p_device_free);
 	p2p_device_list = NULL;
 	l_settings_free(p2p_dhcp_settings);
