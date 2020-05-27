@@ -49,6 +49,7 @@
 #include "src/backtrace.h"
 
 static struct l_genl *genl;
+static struct l_netlink *rtnl;
 static struct l_settings *iwd_config;
 static struct l_timeout *timeout;
 static const char *interfaces;
