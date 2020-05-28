@@ -1953,12 +1953,9 @@ static void p2p_peer_connect(struct p2p_peer *peer, const char *pin)
 #ifdef HAVE_DBUS
 	struct l_dbus_message *message = peer->wsc.pending_connect;
 	struct l_dbus_message *reply;
-#endif
 
 	if (dev->conn_peer) {
-#ifdef HAVE_DBUS
 		reply = dbus_error_busy(message);
-#endif
 		goto send_error;
 	}
 
@@ -1967,9 +1964,7 @@ static void p2p_peer_connect(struct p2p_peer *peer, const char *pin)
 	 * and check other flags to make sure a connection is possible.
 	 */
 	if (!p2p_peer_get_info(peer, &wsc_config_methods, &capability)) {
-#ifdef HAVE_DBUS
 		reply = dbus_error_failed(message);
-#endif
 		goto send_error;
 	}
 
@@ -1982,30 +1977,22 @@ static void p2p_peer_connect(struct p2p_peer *peer, const char *pin)
 		WSC_DEVICE_PASSWORD_ID_PUSH_BUTTON;
 
 	if (!(wsc_config_methods & dev->conn_config_method)) {
-#ifdef HAVE_DBUS
 		reply = dbus_error_not_supported(message);
-#endif
 		goto send_error;
 	}
 
 	if (capability->device_caps & P2P_DEVICE_CAP_DEVICE_LIMIT) {
-#ifdef HAVE_DBUS
 		reply = dbus_error_not_supported(message);
-#endif
 		goto send_error;
 	}
 
 	if (capability->group_caps & P2P_GROUP_CAP_GROUP_LIMIT) {
-#ifdef HAVE_DBUS
 		reply = dbus_error_not_supported(message);
-#endif
 		goto send_error;
 	}
 
 	if (capability->group_caps & P2P_GROUP_CAP_GROUP_FORMATION) {
-#ifdef HAVE_DBUS
 		reply = dbus_error_busy(message);
-#endif
 		goto send_error;
 	}
 
@@ -2017,10 +2004,8 @@ static void p2p_peer_connect(struct p2p_peer *peer, const char *pin)
 	dev->conn_peer = peer; /* No ref counting so just set the pointer */
 	dev->conn_pin = l_strdup(pin);
 	dev->connections_left--;
-#ifdef HAVE_DBUS
 	l_dbus_property_changed(dbus_get_bus(), p2p_device_get_path(dev),
 				IWD_P2P_INTERFACE, "AvailableConnections");
-#endif
 
 	/*
 	 * Step 2, if peer is already a GO then send the Provision Discovery
@@ -2037,7 +2022,6 @@ static void p2p_peer_connect(struct p2p_peer *peer, const char *pin)
 	return;
 
 send_error:
-#ifdef HAVE_DBUS
 	dbus_pending_reply(&peer->wsc.pending_connect, reply);
 #endif
 }
@@ -2067,30 +2051,23 @@ static void p2p_peer_disconnect(struct p2p_peer *peer)
 #ifdef HAVE_DBUS
 	struct l_dbus_message *message = peer->wsc.pending_cancel;
 	struct l_dbus_message *reply;
-#endif
 
 	if (dev->conn_peer != peer) {
-#ifdef HAVE_DBUS
 		reply = dbus_error_not_connected(message);
-#endif
 		goto send_reply;
 	}
 
 	if (dev->disconnecting) {
-#ifdef HAVE_DBUS
 		reply = dbus_error_busy(message);
-#endif
 		goto send_reply;
 	}
 
-#ifdef HAVE_DBUS
 	if (peer->wsc.pending_connect)
 		dbus_pending_reply(&peer->wsc.pending_connect,
 				dbus_error_aborted(peer->wsc.pending_connect));
 	if (p2p_peer_operational(peer))
 		l_dbus_property_changed(dbus_get_bus(), p2p_peer_get_path(peer),
 					IWD_P2P_PEER_INTERFACE, "Connected");
-#endif
 
 	dev->disconnecting = true;
 
@@ -2109,12 +2086,9 @@ static void p2p_peer_disconnect(struct p2p_peer *peer)
 	}
 
 	p2p_connection_reset(dev);
-#ifdef HAVE_DBUS
 	reply = l_dbus_message_new_method_return(message);
-#endif
 
 send_reply:
-#ifdef HAVE_DBUS
 	dbus_pending_reply(&peer->wsc.pending_cancel, reply);
 #endif
 }
@@ -2921,7 +2895,6 @@ static void p2p_device_enable_cb(struct l_genl_msg *msg, void *user_data)
 	int error = l_genl_msg_get_error(msg);
 #ifdef HAVE_DBUS
 	struct l_dbus_message *message = dev->pending_message;
-#endif
 
 	l_debug("START/STOP_P2P_DEVICE: %s (%i)", strerror(-error), -error);
 
@@ -2934,15 +2907,12 @@ static void p2p_device_enable_cb(struct l_genl_msg *msg, void *user_data)
 		p2p_device_discovery_start(dev);
 
 done:
-#ifdef HAVE_DBUS
 	dev->pending_complete(dbus_get_bus(), message,
 				error ? dbus_error_failed(message) :
 				NULL);
-#endif
 	dev->pending_message = NULL;
 	dev->pending_complete = NULL;
 
-#ifdef HAVE_DBUS
 	if (!error)
 		l_dbus_property_changed(dbus_get_bus(),
 					p2p_device_get_path(dev),
@@ -2993,8 +2963,10 @@ static void p2p_device_start_stop(struct p2p_device *dev,
 		return;
 	}
 
+#ifdef HAVE_DBUS
 	dev->pending_message = message;
 	dev->pending_complete = complete;
+#endif
 
 	if (dev->enabled) {
 		/*
@@ -3246,17 +3218,17 @@ static void p2p_device_free(void *user_data)
 {
 	struct p2p_device *dev = user_data;
 
-	if (dev->pending_message) {
 #ifdef HAVE_DBUS
+	if (dev->pending_message) {
 		struct l_dbus_message *reply =
 			dbus_error_aborted(dev->pending_message);
 
 		dev->pending_complete(dbus_get_bus(),
 					dev->pending_message, reply);
-#endif
 		dev->pending_message = NULL;
 		dev->pending_complete = NULL;
 	}
+#endif
 
 	p2p_device_discovery_stop(dev);
 	p2p_connection_reset(dev);
